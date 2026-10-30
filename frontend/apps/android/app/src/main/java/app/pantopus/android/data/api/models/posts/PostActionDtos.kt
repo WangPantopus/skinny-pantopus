@@ -16,6 +16,7 @@ data class PostShareRequest(
     @Json(name = "shareType") val shareType: String,
     /** The repost state the person chose, so a re-sent request can't flip it back; omitted for external shares. */
     @Json(name = "reposted") val reposted: Boolean? = null,
+    @Json(name = "checkOnly") val checkOnly: Boolean? = null,
 )
 
 /** `POST /:id/like` and the comment like body: the state the person chose (a re-send can't flip it back). */
@@ -34,6 +35,7 @@ data class PostSaveStateRequest(
 @JsonClass(generateAdapter = true)
 data class PostShareResponse(
     val shared: Boolean? = null,
+    val canShare: Boolean? = null,
     val reposted: Boolean? = null,
     @Json(name = "shareCount") val shareCount: Int? = null,
 )

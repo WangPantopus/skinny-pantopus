@@ -18,10 +18,10 @@ import PostMediaLightbox from './PostMediaLightbox';
 import { PostLinkContent } from './LinkPreviewCard';
 import LinkPreviewCard from './LinkPreviewCard';
 import PostMetadata from './PostMetadata';
-import { sharePostLink } from './sharePostLink';
+import { canSharePost, sharePostLink } from './sharePostLink';
 import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
 import { chosenUsername } from '@pantopus/utils';
-import { removePostFromFeedCaches } from '@/hooks/useFeedData';
+import { patchPostInFeedCaches, removePostFromFeedCaches } from '@/hooks/useFeedData';
 import { usePostDetail } from '@/hooks/usePostDetail';
 import type { Post, PostComment as PostCommentType } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
@@ -35,11 +35,6 @@ function typeIcon(type: string): ReactNode {
   const name = POST_TYPE_ICONS_LUCIDE[type] || 'Pencil';
   const Icon = LUCIDE_MAP[name] || PenLine;
   return <Icon className="w-4 h-4" />;
-}
-
-function statusOf(err: unknown): number | undefined {
-  const status = (err as { statusCode?: unknown } | null)?.statusCode;
-  return typeof status === 'number' ? status : undefined;
 }
 
 interface PostDetailPanelProps {
@@ -71,7 +66,7 @@ export default function PostDetailPanel({
   const detail = usePostDetail(postId, { enabled: open, seed: initialPost });
   const post: Post | null = open ? detail.post : null;
   const comments: PostCommentType[] = open ? detail.comments : [];
-  const { setPost, setComments, postQuery, commentsQuery } = detail;
+  const { setPost, setComments, postQuery, commentsQuery, unavailable } = detail;
   const loading = open && postQuery.isFetching;
   const [commentPosting, setCommentPosting] = useState(false);
   const [toast, setToast] = useState('');
@@ -95,15 +90,23 @@ export default function PostDetailPanel({
     }, 2500);
   };
 
+  const refreshCommentState = async () => {
+    const [updated] = await Promise.all([postQuery.refetch(), commentsQuery.refetch()]);
+    const count = updated.data?.post?.comment_count;
+    if (postId && typeof count === 'number' && !updated.isError) {
+      patchPostInFeedCaches(queryClient, postId, { comment_count: count });
+      onPostChange?.(postId, { comment_count: count });
+    }
+  };
+
   // Deleted, or no longer visible to you: say so rather than showing the card's
   // copy as a live post, and stop the feed listing it.
-  const postStatus = statusOf(postQuery.error);
   useEffect(() => {
-    if (open && postId && (postStatus === 404 || postStatus === 403)) removePostFromFeedCaches(queryClient, postId);
-  }, [open, postId, postStatus, queryClient]);
+    if (open && postId && unavailable) removePostFromFeedCaches(queryClient, postId);
+  }, [open, postId, unavailable, queryClient]);
 
   // A refresh of the comments that failed keeps the ones shown and says so.
-  const commentsRefreshFailed = open && commentsQuery.isError && commentsQuery.data !== undefined;
+  const commentsRefreshFailed = open && !unavailable && commentsQuery.isError && commentsQuery.data !== undefined;
   useEffect(() => {
     if (commentsRefreshFailed) showToast('Could not refresh comments. Close and reopen this post to retry.');
   }, [commentsRefreshFailed, commentsQuery.errorUpdatedAt]);
@@ -155,18 +158,19 @@ export default function PostDetailPanel({
 
       if (target !== targetVersion.current) return false;
       const alreadyAdded = comments.some((comment) => comment.id === nextComment.id);
-      const nextCommentCount = comments.length + (alreadyAdded ? 0 : 1);
+      const nextCommentCount = (post?.comment_count ?? comments.length) + (alreadyAdded ? 0 : 1);
       setComments((prev) => prev.some((comment) => comment.id === nextComment.id)
         ? prev.map((comment) => comment.id === nextComment.id ? nextComment : comment)
         : [...prev, nextComment]);
       setPost((prev) => prev ? { ...prev, comment_count: nextCommentCount } : prev);
       onPostChange?.(postId, { comment_count: nextCommentCount });
+      void refreshCommentState();
       showToast(uploadFailed ? 'Comment posted; images not confirmed. Send to retry or Clear to discard draft.' : 'Comment posted');
       return !uploadFailed;
     } catch (err) {
       if (target !== targetVersion.current) return false;
       console.warn('Failed to add comment', err);
-      showToast('Failed to add comment');
+      showToast(err instanceof Error ? err.message : 'Failed to add comment');
       return false;
     } finally {
       if (target === targetVersion.current) setCommentPosting(false);
@@ -179,10 +183,12 @@ export default function PostDetailPanel({
     try {
       await api.posts.deleteComment(postId, commentId);
       if (target !== targetVersion.current) return;
-      const nextCommentCount = comments.filter((comment) => !deletedIds.has(comment.id)).length;
+      const nextCommentCount = Math.max(0, (post?.comment_count ?? comments.length) - deletedIds.size);
       setComments((prev) => prev.filter((comment) => !deletedIds.has(comment.id)));
       setPost((prev) => prev ? { ...prev, comment_count: nextCommentCount } : prev);
       onPostChange?.(postId, { comment_count: nextCommentCount });
+      // A cascade can also remove replies hidden from this viewer.
+      void refreshCommentState();
       showToast('Comment deleted');
     } catch (err) {
       if (target !== targetVersion.current) return;
@@ -194,13 +200,14 @@ export default function PostDetailPanel({
   // Each request carries the state the person chose, so a re-send can't flip it back.
   const likeMutation = useMutation({
     mutationFn: ({ postId, liked }: { postId: string; liked: boolean }) => api.posts.toggleLike(postId, liked),
+    onMutate: () => ({ target: targetVersion.current }),
     onSuccess: (res, { postId }) => {
-      setPost((prev) => prev ? { ...prev, userHasLiked: res.liked, like_count: res.likeCount } : prev);
+      patchPostInFeedCaches(queryClient, postId, { userHasLiked: res.liked, like_count: res.likeCount });
       onPostChange?.(postId, { userHasLiked: res.liked, like_count: res.likeCount });
     },
-    onError: (err) => {
+    onError: (err, _vars, context) => {
       console.warn('Failed to toggle like', err);
-      showToast('Failed to update like');
+      if (context?.target === targetVersion.current) showToast('Failed to update like');
     },
   });
 
@@ -211,6 +218,7 @@ export default function PostDetailPanel({
 
   const handleCommentLike = async (commentId: string) => {
     if (!postId) return;
+    const target = targetVersion.current;
     try {
       const comment = comments.find((c) => c.id === commentId);
       const res = await api.posts.toggleCommentLike(postId, commentId, !(comment?.userHasLiked ?? false));
@@ -221,25 +229,26 @@ export default function PostDetailPanel({
       );
     } catch (err) {
       console.warn('Failed to toggle comment like', err);
+      if (target === targetVersion.current) showToast('Failed to update comment like. Please try again.');
     }
   };
 
   const saveMutation = useMutation({
     mutationFn: ({ postId, saved }: { postId: string; saved: boolean }) => api.posts.toggleSave(postId, saved),
-    onMutate: () => {
+    onMutate: ({ postId, saved }) => {
       const prevSaved = post?.userHasSaved ?? false;
-      setPost((prev) => prev ? { ...prev, userHasSaved: !prevSaved } : prev);
-      return { prevSaved };
+      patchPostInFeedCaches(queryClient, postId, { userHasSaved: saved });
+      return { prevSaved, target: targetVersion.current };
     },
-    onSuccess: (res, { postId }) => {
-      setPost((prev) => prev ? { ...prev, userHasSaved: res.saved } : prev);
+    onSuccess: (res, { postId }, context) => {
+      patchPostInFeedCaches(queryClient, postId, { userHasSaved: res.saved });
       onPostChange?.(postId, { userHasSaved: res.saved });
-      showToast(res.saved ? 'Post saved' : 'Removed from saved');
+      if (context?.target === targetVersion.current) showToast(res.saved ? 'Post saved' : 'Removed from saved');
     },
-    onError: (err, _vars, context) => {
-      if (context) setPost((prev) => prev ? { ...prev, userHasSaved: context.prevSaved } : prev);
+    onError: (err, { postId }, context) => {
+      if (context) patchPostInFeedCaches(queryClient, postId, { userHasSaved: context.prevSaved });
       console.warn('Failed to toggle save', err);
-      showToast('Failed to update save');
+      if (context?.target === targetVersion.current) showToast('Failed to update save');
     },
   });
 
@@ -257,34 +266,34 @@ export default function PostDetailPanel({
 
   const handleRepost = async () => {
     if (!post) return;
+    const target = targetVersion.current;
     try {
       const res = await api.posts.repostPost(post.id, !post.userHasReposted);
       const patch = {
         userHasReposted: res.reposted,
         share_count: res.shareCount,
       };
-      setPost((prev) => prev ? {
-        ...prev,
-        ...patch,
-      } : prev);
+      patchPostInFeedCaches(queryClient, post.id, patch);
       onPostChange?.(post.id, patch);
-      showToast(res.reposted ? 'Post reposted' : 'Repost removed');
+      if (target === targetVersion.current) showToast(res.reposted ? 'Post reposted' : 'Repost removed');
     } catch (err) {
       console.warn('Failed to repost post', err);
-      showToast('Failed to update repost');
+      if (target === targetVersion.current) showToast('Failed to update repost');
     }
   };
 
   const handleShare = async () => {
     if (!post) return;
+    const target = targetVersion.current;
     try {
       if (!await sharePostLink(post)) return;
 
       const res = await api.posts.sharePost(post.id);
-      setPost((prev) => prev ? { ...prev, share_count: res.shareCount } : prev);
+      patchPostInFeedCaches(queryClient, post.id, { share_count: res.shareCount });
       onPostChange?.(post.id, { share_count: res.shareCount });
-      showToast('Post link shared');
+      if (target === targetVersion.current) showToast('Post link shared');
     } catch (err) {
+      if (target !== targetVersion.current) return;
       // A post that isn't public is never counted as shared, but the link is already copied and opens for people who can see the post.
       if ((err as { code?: string } | null)?.code === 'SHARE_NOT_ALLOWED') {
         showToast('Post link shared. Only people who can see this post in Pantopus can open it.');
@@ -377,6 +386,13 @@ export default function PostDetailPanel({
           {loading && !post ? (
             <div className="flex h-40 items-center justify-center">
               <div className="h-6 w-6 rounded-full border-2 border-app border-t-primary-500 animate-spin" />
+            </div>
+          ) : !post && postQuery.isError && !detail.unavailable ? (
+            <div role="alert" className="flex h-40 flex-col items-center justify-center gap-3 px-5 text-sm text-app-muted">
+              <span>Couldn&apos;t load this post. Please try again.</span>
+              <button onClick={() => void postQuery.refetch()} className="font-medium text-primary-600 hover:text-primary-700">
+                Try again
+              </button>
             </div>
           ) : post ? (
             <div>
@@ -487,7 +503,7 @@ export default function PostDetailPanel({
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-2 border-y border-app px-5 py-3 sm:grid-cols-5">
+              <div className={`grid grid-cols-2 gap-2 border-y border-app px-5 py-3 ${canSharePost(post) ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
                 <button
                   type="button"
                   aria-label={post.userHasLiked ? 'Unlike post' : 'Like post'}
@@ -502,7 +518,7 @@ export default function PostDetailPanel({
                 </button>
                 <div className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-app-muted">
                   <MessageCircle className="h-4 w-4" />
-                  <span>{comments.length}</span>
+                  <span>{post.comment_count ?? comments.length}</span>
                 </div>
                 <button
                   onClick={handleSave}
@@ -522,19 +538,30 @@ export default function PostDetailPanel({
                   <Repeat2 className="h-4 w-4" />
                   <span>{post.userHasReposted ? 'Reposted' : 'Repost'}</span>
                 </button>
-                <button
-                  type="button"
-                  aria-label="Share post"
-                  onClick={handleShare}
-                  className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-app-muted transition hover-bg-app"
-                >
-                  <Share2 className="h-4 w-4" />
-                  <span>{post.share_count || 0}</span>
-                </button>
+                {canSharePost(post) && (
+                  <button
+                    type="button"
+                    aria-label="Share post"
+                    onClick={handleShare}
+                    className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-app-muted transition hover-bg-app"
+                  >
+                    <Share2 className="h-4 w-4" />
+                    <span>{post.share_count || 0}</span>
+                  </button>
+                )}
               </div>
 
               <div className="px-2">
+                {detail.commentsFailed && (
+                  <div role="alert" className="flex items-center justify-between gap-3 px-3 py-3 text-sm text-app-muted">
+                    <span>Couldn&apos;t load comments.</span>
+                    <button onClick={() => void commentsQuery.refetch()} className="font-medium text-primary-600 hover:text-primary-700">
+                      Try again
+                    </button>
+                  </div>
+                )}
                 <CommentThread
+                  key={`${postId}:${currentUserId}`}
                   comments={comments}
                   onAddComment={handleAddComment}
                   onDeleteComment={handleDeleteComment}
@@ -543,6 +570,7 @@ export default function PostDetailPanel({
                   isPosting={commentPosting}
                   canCompose={canComment}
                   composeDisabledMessage={commentDisabledMessage}
+                  emptyText={detail.commentsFailed || commentsQuery.isPending ? null : undefined}
                 />
               </div>
             </div>

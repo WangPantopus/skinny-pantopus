@@ -782,16 +782,19 @@ class PulseFeedViewModel
         /** Authorize on the server before handing a link to another app, including from an older saved feed. */
         fun shareExternally(
             postId: String,
-            onReady: (String) -> Unit,
+            onReady: (String, () -> Unit) -> Boolean,
         ) {
             val actor = viewerId ?: return
             if (loadedPosts.firstOrNull { it.id == postId }?.canShareExternally != true || !sharingPosts.add(postId)) return
             viewModelScope.launch {
                 try {
-                    when (val result = repo.share(postId, shareType = "external")) {
+                    when (val result = repo.share(postId, shareType = "external", checkOnly = true)) {
                         is NetworkResult.Success -> {
                             if (viewerId == actor && loadedPosts.firstOrNull { it.id == postId }?.canShareExternally == true) {
-                                onReady("https://www.pantopus.com/posts/$postId")
+                                val opened =
+                                    result.data.canShare == true &&
+                                        onReady("https://www.pantopus.com/posts/$postId") { recordCompletedShare(postId, actor) }
+                                if (!opened) _toastMessage.value = "Couldn't share this post. Try again."
                             }
                         }
                         is NetworkResult.Failure ->
@@ -799,6 +802,20 @@ class PulseFeedViewModel
                     }
                 } finally {
                     sharingPosts.remove(postId)
+                }
+            }
+        }
+
+        private fun recordCompletedShare(
+            postId: String,
+            actor: String,
+        ) {
+            if (viewerId != actor) return
+            viewModelScope.launch {
+                when (repo.share(postId, shareType = "external")) {
+                    is NetworkResult.Success -> Unit
+                    is NetworkResult.Failure ->
+                        if (viewerId == actor) _toastMessage.value = "Couldn't update the share count."
                 }
             }
         }
@@ -1414,7 +1431,7 @@ class PulseFeedViewModel
                 chipLabel = intent.chipLabelFor(post.lostFoundType),
                 isVisitor = post.isVisitorPost,
                 origin = post.origin,
-                title = if (intent == PulseIntent.Event) post.title else null,
+                title = post.title,
                 body = post.content.orEmpty(),
                 event =
                     pulseEventDetails(

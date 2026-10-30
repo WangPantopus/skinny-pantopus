@@ -167,8 +167,12 @@ public enum PostsEndpoints {
     /// (`shareType: "external"`) or toggles a repost (`"repost"`);
     /// returns `{shared|reposted, shareCount}`. Route
     /// `backend/routes/posts.js:2829`.
-    public static func share(id: String, shareType: String = "external", reposted: Bool? = nil) -> Endpoint {
-        Endpoint(method: .post, path: "/api/posts/\(id)/share", body: PostShareRequest(shareType: shareType, reposted: reposted))
+    public static func share(id: String, shareType: String = "external", reposted: Bool? = nil, checkOnly: Bool? = nil) -> Endpoint {
+        Endpoint(
+            method: .post,
+            path: "/api/posts/\(id)/share",
+            body: PostShareRequest(shareType: shareType, reposted: reposted, checkOnly: checkOnly)
+        )
     }
 
     /// `POST /api/posts/:id/report` — files a report with one of the

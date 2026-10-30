@@ -17,8 +17,8 @@ extension PulsePostDetailViewModel {
         isPreparingShare = true
         defer { isPreparingShare = false }
         do {
-            let response: PostShareResponse = try await client.request(PostsEndpoints.share(id: postId))
-            guard response.shared == true, !Task.isCancelled, canSharePost,
+            let response: PostShareResponse = try await client.request(PostsEndpoints.share(id: postId, checkOnly: true))
+            guard response.canShare == true, !Task.isCancelled, canSharePost,
                   sessionId == AuthManager.shared.sessionId,
                   case let .signedIn(currentUser) = AuthManager.shared.state,
                   user.id == currentUser.id else { return false }
@@ -27,6 +27,15 @@ extension PulsePostDetailViewModel {
             showToast(Self.refusal(in: error) ?? "Couldn't share this post. Try again.")
             if conversation != nil { await reconcileAfterRefusal(error) }
             return false
+        }
+    }
+
+    func recordCompletedShare(sessionId: String?) async {
+        guard sessionId == AuthManager.shared.sessionId, canSharePost else { return }
+        do {
+            let _: PostShareResponse = try await client.request(PostsEndpoints.share(id: postId))
+        } catch {
+            showToast("The link was shared, but its count couldn't update.")
         }
     }
 

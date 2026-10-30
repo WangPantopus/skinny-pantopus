@@ -2,7 +2,7 @@
 
 /** Shared Pulse and Beacon viewer for images, Live Photos, videos, and PDFs. */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import FeedMediaImage from './FeedMediaImage';
 import LivePhotoTile from './LivePhotoTile';
@@ -28,6 +28,7 @@ export default function PostMediaLightbox({
   onIndexChange,
   onClose,
 }: PostMediaLightboxProps) {
+  const [imageAttempt, setImageAttempt] = useState(0);
   const count = urls.length;
   const isOpen = index !== null && count > 0 && index >= 0 && index < count;
 
@@ -134,7 +135,7 @@ export default function PostMediaLightbox({
         ) : slot.kind === 'document' ? (
           <object key={index} data={urls[index]} type="application/pdf" aria-label="PDF document"
             className="h-[85vh] w-[min(90vw,1100px)] bg-white rounded-lg">
-            <p className="p-6">This browser cannot display the PDF. <a href={urls[index]} target="_blank" rel="noopener noreferrer">Open PDF</a></p>
+            <p className="p-6 text-gray-900">This browser cannot display the PDF. <a className="underline" href={urls[index]} target="_blank" rel="noopener noreferrer">Open PDF</a></p>
           </object>
         ) : slot.kind === 'video' ? (
           <video
@@ -147,12 +148,25 @@ export default function PostMediaLightbox({
           />
         ) : (
           <FeedMediaImage
+            key={`${index}:${imageAttempt}`}
             src={urls[index]}
             alt=""
             width={1920}
             height={1080}
             className="max-h-[min(92vh,1080px)] w-auto max-w-full object-contain"
             priority
+            errorFallback={
+              <div role="alert" className="rounded-lg bg-white/10 p-6 text-center text-white">
+                <p>This image couldn&apos;t load.</p>
+                <button
+                  type="button"
+                  onClick={() => setImageAttempt((attempt) => attempt + 1)}
+                  className="mt-4 rounded-lg border border-white/40 px-4 py-2 hover:bg-white/10"
+                >
+                  Try again
+                </button>
+              </div>
+            }
           />
         )}
       </div>
