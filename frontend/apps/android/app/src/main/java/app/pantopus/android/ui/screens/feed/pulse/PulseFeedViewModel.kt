@@ -1382,7 +1382,7 @@ class PulseFeedViewModel
                 chipLabel = intent.chipLabelFor(post.lostFoundType),
                 isVisitor = post.isVisitorPost,
                 origin = post.origin,
-                title = if (intent == PulseIntent.Event) post.title else null,
+                title = post.title,
                 body = post.content.orEmpty(),
                 event =
                     pulseEventDetails(

@@ -13,6 +13,7 @@ import SwiftUI
 public struct PulsePostDetailView: View {
     @State private var viewModel: PulsePostDetailViewModel
     @State private var showsShareSheet = false
+    @State private var shareSessionId: String?
     @State private var showsReportDialog = false
     @State private var showsDeleteConfirm = false
     @State private var commentPendingDelete: String?
@@ -155,11 +156,7 @@ public struct PulsePostDetailView: View {
                 }
                 Button("Cancel", role: .cancel) { commentPendingDelete = nil }
             }
-            .sheet(isPresented: $showsShareSheet) {
-                if let url = viewModel.shareURL {
-                    SystemShareSheet(items: [url])
-                }
-            }
+            .sheet(isPresented: $showsShareSheet) { shareSheet }
             .sheet(isPresented: $showsOfferRequests) {
                 PulseOfferRequestsSheet(viewModel: viewModel)
             }
@@ -326,6 +323,25 @@ public struct PulsePostDetailView: View {
 }
 
 extension PulsePostDetailView {
+    @ViewBuilder
+    private var shareSheet: some View {
+        if let url = viewModel.shareURL {
+            let sessionId = shareSessionId
+            SystemShareSheet(items: [url]) {
+                Task { await viewModel.recordCompletedShare(sessionId: sessionId) }
+            }
+        }
+    }
+
+    private func requestShare() {
+        Task {
+            if await viewModel.authorizeShare(), isVisible, scenePhase == .active {
+                shareSessionId = AuthManager.shared.sessionId
+                showsShareSheet = true
+            }
+        }
+    }
+
     /// Ask Pantopus about this post; nothing to ask about one a moderator took down.
     private func askAction(_ post: PostDetailDTO) -> (@MainActor () -> Void)? {
         guard !post.isRemovedByModerator else { return nil }
@@ -371,14 +387,6 @@ extension PulsePostDetailView {
     private var canPollReplies: Bool {
         isVisible && scenePhase == .active && !showsFollowSettings && !showsReadScopeConfirm && !showsWhy
             && !showsOfferRequests && !showsShareSheet && privateMessage == nil
-    }
-
-    private func requestShare() {
-        Task {
-            if await viewModel.authorizeShare(), isVisible, scenePhase == .active {
-                showsShareSheet = true
-            }
-        }
     }
 
     /// `reportPostSchema` reasons (`backend/routes/posts.js:339`).

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -69,6 +71,7 @@ import app.pantopus.android.ui.screens.shared.content_detail.headers.PostAuthorH
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
+import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.delay
@@ -273,7 +276,7 @@ fun PulsePostDetailScreen(
                         text = message,
                         kind = if (message in POST_DETAIL_SUCCESS_TOASTS) ToastKind.Success else ToastKind.Error,
                     ),
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).imePadding().padding(bottom = 100.dp),
             )
         }
     }
@@ -532,6 +535,18 @@ fun PulsePostDetailLoadedContent(
                         status = status,
                         postId = content.post.id,
                         modifier = Modifier.padding(horizontal = Spacing.s4),
+                    )
+                }
+                content.post.title?.trim()?.takeIf { it.isNotEmpty() }?.let { title ->
+                    Text(
+                        text = title,
+                        style = PantopusTextStyle.h3,
+                        color = PantopusColors.appText,
+                        modifier =
+                            Modifier
+                                .padding(horizontal = Spacing.s4)
+                                .semantics { heading() }
+                                .testTag("pulsePostDetail-title"),
                     )
                 }
                 if (actionPending) {
