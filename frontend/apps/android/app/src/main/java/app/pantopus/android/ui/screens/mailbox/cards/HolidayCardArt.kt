@@ -126,7 +126,7 @@ object HolidayCardArt {
 object HolidayCardTimes {
     private val shortDayFormat = DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US)
     private val longDayFormat = DateTimeFormatter.ofPattern("EEEE, MMMM d", Locale.US)
-    private val mediumDateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)
+    private val fullDateFormat = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.US)
     private val postmarkFormat = DateTimeFormatter.ofPattern("MMM d", Locale.US)
 
     fun zone(timeZone: String?): ZoneId = timeZone?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
@@ -167,11 +167,11 @@ object HolidayCardTimes {
             else -> "in $days days"
         }
 
-    /** "Dec 10, 2026", from a time or a calendar day. */
-    fun mediumDate(
+    /** "October 30, 2026" (as the email's link page prints it), from a time or a calendar day. */
+    fun fullDate(
         value: String?,
         zone: ZoneId,
-    ): String = localDay(value, zone)?.format(mediumDateFormat).orEmpty()
+    ): String = localDay(value, zone)?.format(fullDateFormat).orEmpty()
 
     /** "7 a.m.", "7:30 a.m.". */
     fun clockTime(

@@ -214,7 +214,7 @@ private fun EmailLook(
     }
     val envelope = lookEnvelope(preview, to.email, card)
     val state = if (sealed) "sealed until Christmas morning" else "in its envelope"
-    val spoken = "Christmas card from ${from.removeSuffix(".")} to ${to.email}, $state."
+    val spoken = "Christmas card from $from to ${to.email}, $state."
     LookSection("After they join with that address", horizontal = Spacing.s3) {
         MailboxFrame("In their Mailbox") {
             Box(modifier = Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = spoken }) { MailPiece(envelope) }
@@ -302,7 +302,7 @@ private fun CardFront(
             modifier
                 .shadow(6.dp, shape)
                 .clip(shape)
-                .clearAndSetSemantics { contentDescription = "The picture side, from ${from.removeSuffix(".")}: $caption" },
+                .clearAndSetSemantics { contentDescription = "The picture side, from $from: $caption" },
     )
 }
 
@@ -586,7 +586,7 @@ private fun LinkPagePicture(
                 color = PantopusColors.appTextSecondary,
                 modifier = Modifier.padding(top = Spacing.s1),
             )
-            HolidayCardTimes.mediumDate(page.sentOn, zone).takeIf { it.isNotEmpty() }?.let {
+            HolidayCardTimes.fullDate(page.sentOn, zone).takeIf { it.isNotEmpty() }?.let {
                 Text("Sent $it", fontSize = 12.sp, lineHeight = 16.sp, color = PantopusColors.appTextMuted, modifier = Modifier.padding(top = 10.dp))
             }
         }
