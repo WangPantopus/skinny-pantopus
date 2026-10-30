@@ -636,6 +636,8 @@ export interface SentHolidayCard {
   arrival: HolidayCardArrival;
   /** When it goes into their mailbox; null by email (when they open the email). */
   arrives_at: string | null;
+  /** The day it goes into their mailbox, by their clock ("2026-10-31"); null by email. */
+  arrives_on?: string | null;
   /** Sealed until then. */
   opens_at: string | null;
   /** The carrier's next 7 a.m. pickup; null by email (until they open it). */
@@ -666,6 +668,19 @@ export interface HolidayCards {
 /** GET /api/mailbox/cards */
 export async function getHolidayCards(): Promise<HolidayCards> {
   return get<HolidayCards>('/api/mailbox/cards');
+}
+
+/** When a card to one person can come, by their clock rather than yours. */
+export interface HolidayCardArrivalsFor {
+  /** The arrivals open to them now. */
+  arrivals: HolidayCardArrival[];
+  /** The day of their next 7 a.m. mail where they live ("2026-10-31"). */
+  next_round_on: string;
+}
+
+/** GET /api/mailbox/cards/arrivals?to=<user_id>: the same checks as sending them a card. */
+export async function getHolidayCardArrivals(userId: string): Promise<HolidayCardArrivalsFor> {
+  return get<HolidayCardArrivalsFor>('/api/mailbox/cards/arrivals', { to: userId });
 }
 
 /** POST /api/mailbox/cards: send today's card, to one person found by name or by email to someone not on Pantopus. */

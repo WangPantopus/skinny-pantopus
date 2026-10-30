@@ -48,6 +48,15 @@ data class HolidayCardArrivals(
     val email: List<String> = emptyList(),
 )
 
+/** `GET /api/mailbox/cards/arrivals?to=`: when a card to one person can come, by their clock rather than the sender's. */
+@JsonClass(generateAdapter = true)
+data class HolidayCardArrivalsFor(
+    /** The arrivals open to them now. */
+    val arrivals: List<String> = emptyList(),
+    /** The day of their next 7 a.m. mail where they live ("2026-10-31"). */
+    @Json(name = "next_round_on") val nextRoundOn: String? = null,
+)
+
 /** A card as its sender sees it: today's card, and the answer to sending one. */
 @JsonClass(generateAdapter = true)
 data class SentHolidayCard(
@@ -59,6 +68,8 @@ data class SentHolidayCard(
     val arrival: String? = null,
     /** When it goes into their mailbox (their 7 a.m. mail); null by email. */
     @Json(name = "arrives_at") val arrivesAt: String? = null,
+    /** The day it goes into their mailbox by their clock ("2026-10-31"); null by email. */
+    @Json(name = "arrives_on") val arrivesOn: String? = null,
     /** Sealed until then. */
     @Json(name = "opens_at") val opensAt: String? = null,
     /** The carrier's 7 a.m. pickup; null by email (until they open it). */

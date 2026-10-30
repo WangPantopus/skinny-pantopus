@@ -8,7 +8,7 @@
 // ============================================================
 
 import { get, post, uploadFile, apiRequest, mailbox, mailCompose } from '@pantopus/api';
-import type { DeletedMail, HolidayCards, HolidayCardArrival, SentHolidayCard, RecipientSearchResult } from '@pantopus/api';
+import type { DeletedMail, HolidayCards, HolidayCardArrival, HolidayCardArrivalsFor, SentHolidayCard, RecipientSearchResult } from '@pantopus/api';
 
 /** PATCH helper — not barrel-exported from @pantopus/api */
 function patch<T>(url: string, data?: Record<string, any>): Promise<T> {
@@ -123,6 +123,10 @@ async function call<T>(fn: () => Promise<T>): Promise<T> {
 
 export async function getHolidayCards(): Promise<HolidayCards> {
   return call(() => mailbox.getHolidayCards());
+}
+
+export async function getHolidayCardArrivals(userId: string): Promise<HolidayCardArrivalsFor> {
+  return call(() => mailbox.getHolidayCardArrivals(userId));
 }
 
 export async function sendHolidayCard(data: {

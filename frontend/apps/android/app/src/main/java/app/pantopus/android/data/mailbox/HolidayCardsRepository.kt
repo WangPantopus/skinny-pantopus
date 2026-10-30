@@ -1,6 +1,7 @@
 package app.pantopus.android.data.mailbox
 
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
+import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
 import app.pantopus.android.data.api.models.mailbox.HolidayCardRecipient
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardBody
@@ -42,6 +43,9 @@ class HolidayCardsRepository
             }
             return result
         }
+
+        /** `GET /api/mailbox/cards/arrivals?to=`: when a card to this person can come, by their clock. */
+        suspend fun arrivalsFor(userId: String): NetworkResult<HolidayCardArrivalsFor> = safeApiCall { api.arrivals(userId) }
 
         /** `POST /api/mailbox/cards`: today's card, to a person by their user id or by email. */
         suspend fun send(

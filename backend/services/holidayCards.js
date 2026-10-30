@@ -155,6 +155,8 @@ function sentSummary(mail, now = new Date()) {
     by_email: byEmail,
     arrival: card.arrival || null,
     arrives_at: byEmail ? null : mail.delivered_at,
+    // The day it reaches them by their clock (cards sent before this was kept: null; the apps read arrives_at).
+    arrives_on: byEmail ? null : card.arrives_on || null,
     opens_at: card.sealed_until || null,
     take_back_until: takeBackUntil,
     can_take_back: canTakeBack,

@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.mailbox.cards
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
+import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SentHolidayCard
 import app.pantopus.android.data.api.net.NetworkError
@@ -15,6 +16,7 @@ import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.ui.screens.mailbox.components.mailMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -97,6 +99,8 @@ data class SendCardForm(
     val design: String? = null,
     val message: String = "",
     val arrival: String? = null,
+    /** When a card to the person chosen can come, by their clock; null until read (the sender's next morning stands in). */
+    val theirs: HolidayCardArrivalsFor? = null,
     /** The card just sent ("On its way"). */
     val sent: SentHolidayCard? = null,
     val sending: Boolean = false,
@@ -207,9 +211,15 @@ class SendCardViewModel
             _form.update { it.copy(email = text) }
         }
 
+        private var theirsJob: Job? = null
+
         /** Step 1 done: a person from the search, or the address typed. */
         fun choose(to: CardRecipient) {
-            _form.update { it.copy(to = to, step = SendCardStep.Pick, tookBack = false, arrival = arrivalFor(to, it.arrival)) }
+            _form.update {
+                val theirs = it.theirs.takeIf { _ -> it.to == to }
+                it.copy(to = to, step = SendCardStep.Pick, tookBack = false, theirs = theirs, arrival = arrivalFor(to, it.arrival, theirs))
+            }
+            readTheirs()
         }
 
         fun chooseEmail() {
@@ -227,6 +237,23 @@ class SendCardViewModel
             _form.update { it.copy(message = text.takeLetters(limit)) }
         }
 
+        /** When a card to the person chosen can come, by their clock. A failure keeps the sender's next morning. */
+        private fun readTheirs() {
+            val person = _form.value.to as? CardRecipient.Person ?: return
+            theirsJob?.cancel()
+            theirsJob =
+                viewModelScope.launch {
+                    val theirs = (repo.arrivalsFor(person.userId) as? NetworkResult.Success)?.data ?: return@launch
+                    _form.update { form ->
+                        if (form.to != person) {
+                            form
+                        } else {
+                            form.copy(theirs = theirs, arrival = arrivalFor(person, form.arrival, theirs))
+                        }
+                    }
+                }
+        }
+
         fun chooseArrival(arrival: String) {
             _form.update { it.copy(arrival = arrival, sendError = null) }
         }
@@ -240,6 +267,8 @@ class SendCardViewModel
                     else -> form
                 }
             }
+            // Read their day again on the last step: it moves on at 7 a.m. where they live.
+            if (_form.value.step == SendCardStep.Seal) readTheirs()
         }
 
         /** The back arrow: the step before; false when there's none (leave the flow). */
@@ -295,13 +324,17 @@ class SendCardViewModel
             }
         }
 
-        /** The arrival choices depend on who it's for; keep the chosen one when it's open, else the first. */
+        /**
+         * The arrival choices depend on who it's for (a person's by their clock once read); keep the chosen one when it's
+         * open, else the first.
+         */
         private fun arrivalFor(
             to: CardRecipient,
             current: String?,
+            theirs: HolidayCardArrivalsFor?,
         ): String? {
             val arrivals = cards.value?.arrivals ?: return current
-            val options = if (to is CardRecipient.Email) arrivals.email else arrivals.person
+            val options = if (to is CardRecipient.Email) arrivals.email else (theirs?.arrivals ?: arrivals.person)
             return current?.takeIf { it in options } ?: options.firstOrNull()
         }
 
