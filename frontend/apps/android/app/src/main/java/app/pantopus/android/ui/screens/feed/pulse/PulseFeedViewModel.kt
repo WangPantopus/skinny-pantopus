@@ -329,6 +329,8 @@ class PulseFeedViewModel
         private var overrides: Map<String, PulsePostOverride> = emptyMap()
         private val liking = mutableSetOf<String>()
         private val saving = mutableSetOf<String>()
+        private val reposting = mutableSetOf<String>()
+        private var actionRevision = 0
 
         /**
          * Posts removed client-side by *this* surface (deleted / dismissed).
@@ -657,6 +659,7 @@ class PulseFeedViewModel
         fun tapReaction(postId: String) {
             val post = loadedPosts.firstOrNull { it.id == postId } ?: return
             if (!liking.add(postId)) return
+            actionRevision++
             val original = effectiveHasReacted(post)
             val originalCount = effectiveLikeCount(post)
             val toggled = !original
@@ -678,6 +681,7 @@ class PulseFeedViewModel
                     }
                 } finally {
                     liking.remove(postId)
+                    actionRevision++
                     rebuildLoadedState()
                 }
             }
@@ -692,6 +696,7 @@ class PulseFeedViewModel
         fun toggleSave(postId: String) {
             val post = loadedPosts.firstOrNull { it.id == postId } ?: return
             if (!saving.add(postId)) return
+            actionRevision++
             val original = effectiveIsSaved(post)
             putOverride(postId) { it.copy(isSaved = !original) }
             rebuildLoadedState()
@@ -709,6 +714,7 @@ class PulseFeedViewModel
                     }
                 } finally {
                     saving.remove(postId)
+                    actionRevision++
                     rebuildLoadedState()
                 }
             }
@@ -721,6 +727,8 @@ class PulseFeedViewModel
          */
         fun toggleRepost(postId: String) {
             val post = loadedPosts.firstOrNull { it.id == postId } ?: return
+            if (!reposting.add(postId)) return
+            actionRevision++
             val original = effectiveIsReposted(post)
             val originalCount = effectiveShareCount(post)
             putOverride(postId) {
@@ -731,21 +739,41 @@ class PulseFeedViewModel
             }
             rebuildLoadedState()
             viewModelScope.launch {
-                when (val result = repo.share(postId, shareType = "repost", reposted = !original)) {
-                    is NetworkResult.Success -> {
-                        val reposted = result.data.reposted ?: !original
-                        putOverride(postId) {
-                            it.copy(isReposted = reposted, shareCount = result.data.shareCount ?: originalCount)
+                try {
+                    when (val result = repo.share(postId, shareType = "repost", reposted = !original)) {
+                        is NetworkResult.Success -> {
+                            val reposted = result.data.reposted ?: !original
+                            putOverride(postId) {
+                                it.copy(isReposted = reposted, shareCount = result.data.shareCount ?: originalCount)
+                            }
+                            _toastMessage.value =
+                                if (reposted) "Reposted to your network." else "Repost removed."
                         }
-                        _toastMessage.value =
-                            if (reposted) "Reposted to your network." else "Repost removed."
+                        is NetworkResult.Failure -> {
+                            putOverride(postId) { it.copy(isReposted = original, shareCount = originalCount) }
+                            _toastMessage.value = "Could not update repost."
+                        }
                     }
-                    is NetworkResult.Failure -> {
-                        putOverride(postId) { it.copy(isReposted = original, shareCount = originalCount) }
-                        _toastMessage.value = "Could not update repost."
-                    }
+                } finally {
+                    reposting.remove(postId)
+                    actionRevision++
+                    rebuildLoadedState()
                 }
-                rebuildLoadedState()
+            }
+        }
+
+        /** A confirmed read replaces settled action values; an older read cannot undo a newer tap. */
+        private fun reconcileActions(
+            posts: List<FeedPost>,
+            revision: Int,
+        ) {
+            if (revision != actionRevision) return
+            posts.forEach { post ->
+                if (post.id in liking || post.id in saving || post.id in reposting) return@forEach
+                if (post.id !in overrides) return@forEach
+                putOverride(post.id) {
+                    it.copy(hasReacted = null, likeCount = null, isSaved = null, isReposted = null, shareCount = null)
+                }
             }
         }
 
@@ -1064,6 +1092,7 @@ class PulseFeedViewModel
                     if (generation != fetchGeneration) return@launch
                     area.viewingLocation?.let(onViewingAreaResolved)
                     val query = feedQuery(area)
+                    val revision = actionRevision
                     val stored = repo.feedFirstPageStored(query, force = isRefresh)
                     // A newer fetch (e.g. a filter tapped meanwhile) owns the list.
                     if (generation != fetchGeneration) return@launch
@@ -1071,7 +1100,10 @@ class PulseFeedViewModel
                     val failure = stored.failure
                     when {
                         response != null -> {
-                            if (failure == null && repo.feedFirstPageIsCurrent(query)) acceptRestoredAsks(response.posts, generation)
+                            if (failure == null && repo.feedFirstPageIsCurrent(query)) {
+                                acceptRestoredAsks(response.posts, generation)
+                                reconcileActions(response.posts, revision)
+                            }
                             applyFirstPage(response, area, query, inPlace = !isRefresh)
                         }
                         failure.refusesStoredCopy -> {
