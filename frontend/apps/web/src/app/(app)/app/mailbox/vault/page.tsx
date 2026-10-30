@@ -1,14 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Archive, ChevronRight, Plus, Search, X } from 'lucide-react';
 import type { MailItemV2, VaultFolder } from '@/types/mailbox';
 import { useCreateVaultFolder, useDrawerTab, useMailboxDrawers, useMailSearch, useVaultFolders } from '@/lib/mailbox-queries';
 import { VaultFolderCard } from '@/components/mailbox';
 import { DRAWER_LABELS, isMailboxDrawer, type MailboxDrawer } from '@/components/mailbox/MailboxHeader';
+import { isMailRead } from '@/components/mailbox/MailItemCard';
 import MailRow from '@/components/mailbox/MailRow';
 import { pieceKind } from '@/components/mailbox/MailPiece';
+import { cardPicture } from '@/components/mailbox/cards/cardArt';
 import { mailLoadMessage } from '@/components/mailbox/mailLoadMessage';
 import useMailAddressee from '@/components/mailbox/useMailAddressee';
 import ErrorState from '@/components/ui/ErrorState';
@@ -18,6 +20,13 @@ type Drawer = Exclude<MailboxDrawer, 'earn'>;
 
 // The paper colour of each kind's small swatch in the filed list.
 const PAPER: Record<string, string> = { letter: '#fbf6ea', postcard: '#fffdf7', parcel: '#d9b98a', booklet: '#f1f5f9' };
+
+// A Christmas card's swatch is its picture once it's been opened, and its red envelope before that or while sealed.
+function swatchStyle(item: MailItemV2): CSSProperties {
+  if (!item.card) return { background: PAPER[pieceKind(item)] ?? '#ffffff' };
+  if (item.card.sealed || !isMailRead(item)) return { background: '#9f2f28' };
+  return { backgroundImage: `url(${cardPicture(item.card.design, 'thumb')})`, backgroundSize: 'cover', backgroundPosition: 'center 28%' };
+}
 
 function shortDate(iso: string | null | undefined): string {
   if (!iso) return '';
@@ -245,7 +254,7 @@ export default function VaultPage() {
                     {filedItems.map((item) => (
                       <li key={item.id} className="border-b border-app-border-subtle last:border-b-0">
                         <button type="button" onClick={() => openPiece(item)} className="flex min-h-[56px] w-full items-center gap-3 px-3.5 py-2 text-left hover:bg-app-hover">
-                          <span aria-hidden="true" className="h-6 w-[34px] flex-shrink-0 rounded-[3px] border border-[#e2dccd] shadow-sm" style={{ background: PAPER[pieceKind(item)] ?? '#ffffff' }} />
+                          <span aria-hidden="true" className="h-6 w-[34px] flex-shrink-0 rounded-[3px] border border-[#e2dccd] shadow-sm" style={swatchStyle(item)} />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-semibold text-app-text">{item.display_title || item.subject || 'Mail'}</span>
                             <span className="block truncate text-xs text-app-text-secondary">
