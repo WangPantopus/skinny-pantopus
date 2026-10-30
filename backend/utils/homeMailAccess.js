@@ -483,6 +483,14 @@ async function homeMailAudience(mail, excludeUserId) {
 const MAIL_RESTORE_DAYS = 30;
 
 /**
+ * Whether a deleted letter's days to restore it are over. The nightly purge then erases it, except a card a person sent,
+ * which stays stored for its sender's Sent (jobs/mailDeletedPurge); for everyone it reached, it's gone either way.
+ */
+function restoreWindowOver(mail, now = new Date()) {
+  return Boolean(mail?.deleted_at) && now.getTime() - Date.parse(mail.deleted_at) > MAIL_RESTORE_DAYS * 24 * 60 * 60 * 1000;
+}
+
+/**
  * What the Restore banner and notice need about a deleted or dismissed letter,
  * or null when it is neither: action, when, who (name) and until when.
  */
@@ -593,6 +601,6 @@ module.exports = { hasVerifiedSenderHome, canSendToMailHome, MAIL_TRUSTED_VERIFI
   mailReaderIdsOrThrow, householdHomeIds, mailHomesOrThrow, homeMailNeedsProof, sendMailUnavailable, onlyDelivered,
   isDeliveredMail,
   MAIL_HOME_NEEDS_PROOF, MAIL_NOT_FOUND, canAccessMail, readableMail, restorableMail,
-  isDeletedMail, removedMailInfo, homeMailAudience, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS,
+  isDeletedMail, removedMailInfo, homeMailAudience, sendHomeMailRemovedNotice, MAIL_RESTORE_DAYS, restoreWindowOver,
   homeMailVisibilityClauses, homeMailFilter, homesMailFilter, visibleMailFilter, visibleMailIds,
 };
