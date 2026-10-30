@@ -367,12 +367,12 @@ function WriteStep({
 
 // ── Step 4: seal it for the day ──────────────────────────────
 
+// Their mail comes at 7 a.m. where they live: never turned into this clock's time.
 function arrivalChoice(arrival: HolidayCardArrival, cards: HolidayCards, name: string): { title: string; detail: string } {
   const day = shortDay(cards.next_round_at);
-  const at = clockTime(cards.next_round_at);
   switch (arrival) {
     case 'next_morning':
-      return { title: 'With the morning mail', detail: `${day}, about ${at} where ${name} lives. They can open it right away.` };
+      return { title: 'With the morning mail', detail: `${day}, about 7 a.m. where ${name} lives. They can open it right away.` };
     case 'sealed_christmas':
       return {
         title: 'Sealed until Christmas',
@@ -444,9 +444,10 @@ function SealStep({
         </div>
       </fieldset>
       <p className="mx-auto mt-3.5 max-w-[420px] rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-3 text-[13px] leading-[18px] text-[#374151]">
+        {/* Before it's sent we don't know their clock; the sent card says the time on this one. */}
         {to.kind === 'email'
           ? 'You can take it back until they open it.'
-          : `You can take it back until about ${clockTime(cards.next_round_at)} ${shortDay(cards.next_round_at)}, when the carrier picks it up.`}
+          : 'You can take it back until the carrier picks it up at 7 a.m. their time.'}
       </p>
       {error ? <p role="alert" className="mx-auto mt-3 max-w-[420px] text-[14px] font-medium text-[#a81a1a]">{error}</p> : null}
       <div className="mx-auto mt-5 max-w-[420px] pb-4">

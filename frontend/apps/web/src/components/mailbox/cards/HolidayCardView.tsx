@@ -52,6 +52,9 @@ export default function HolidayCardView({
 }) {
   const card = piece.card!;
   const from = piece.sender_display || 'Someone';
+  // The caption as a sentence for screen readers: most end in a full stop or a question mark already.
+  const caption = card.caption || 'A Christmas picture';
+  const captionSentence = /[.!?]$/.test(caption) ? caption : `${caption}.`;
   const reduced = useReducedMotion();
   const [stage, setStage] = useState<'envelope' | 'opening' | 'card'>(firstOpen ? 'envelope' : 'card');
   const [showBack, setShowBack] = useState(false);
@@ -144,7 +147,7 @@ export default function HolidayCardView({
             </button>
           </div>
           {/* The note for screen readers, whichever side is up */}
-          <p className="sr-only">{`Card from ${from}: ${card.caption || 'a Christmas picture'}. On the back: ${piece.content || ''}`}</p>
+          <p className="sr-only">{`Card from ${from}: ${captionSentence} On the back: ${piece.content || ''}`}</p>
         </div>
       )}
     </div>
