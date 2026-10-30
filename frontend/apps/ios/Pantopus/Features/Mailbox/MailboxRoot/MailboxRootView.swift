@@ -211,6 +211,12 @@ private struct MailboxPieceList: View {
             .padding(.top, Spacing.s5)
         } else {
             VStack(alignment: .leading, spacing: Spacing.s0) {
+                // Christmas cards (holiday_cards): the way in, at the top of your own mail.
+                if viewModel.showsChristmasCardRow, let cards = viewModel.christmasCards {
+                    HolidayCardRow(cards: cards) { viewModel.openChristmasCards() }
+                        .padding(.horizontal, Spacing.s4)
+                        .padding(.top, Spacing.s4)
+                }
                 if viewModel.isLive, viewModel.selectedDrawer == .home, let waiting = viewModel.homesWaitingForProof.first {
                     MailHomeWaitingBanner(home: waiting) { viewModel.onVerifyHome?(waiting.homeId) }
                         .padding(.horizontal, Spacing.s4)

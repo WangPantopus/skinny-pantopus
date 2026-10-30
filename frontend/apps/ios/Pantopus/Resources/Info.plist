@@ -78,6 +78,10 @@
 	<string>$(SENTRY_DSN)</string>
 	<key>StripePublishableKey</key>
 	<string>$(STRIPE_PUBLISHABLE_KEY)</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>NothingYouCouldDo.ttf</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

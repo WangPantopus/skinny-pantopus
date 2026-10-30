@@ -43,6 +43,9 @@ struct MailLetter: Hashable {
     /// The drawer it's in (`personal`, `home`, `business`), for its folders.
     let drawer: String
     private(set) var trail: [MailTrailStep]
+    /// A Christmas card (`holiday_cards`): the card page instead of the
+    /// letter. Nil for anything else.
+    var card: HolidayCardLetter?
 
     /// Pay shows while the invoice is owed (contract: sent, viewed, overdue).
     var payable: MailInvoiceRef? {
@@ -77,6 +80,17 @@ struct MailLetter: Hashable {
     }
 }
 
+/// A Christmas card on its page: the card, the note on its back (a sealed
+/// card's note stays on the server until Christmas morning), its envelope
+/// still shut, and the day it was mailed for the postmark.
+struct HolidayCardLetter: Hashable {
+    let card: MailCard
+    let note: String
+    let envelope: MailPieceModel
+    /// "OCT 30".
+    let mailedOn: String
+}
+
 /// One step of a piece's trail: postmarked, delivered, opened, then where it
 /// stands now.
 struct MailTrailStep: Hashable, Identifiable {
@@ -105,6 +119,14 @@ extension MailLetter {
         let piece = MailPieceModel(mail: row, recipient: recipient, opened: true, clock: clock)
         let posted = item.postmark?.date.flatMap(MailDates.parseDay)
             ?? MailDates.parse(item.deliveredAt) ?? MailDates.parse(item.createdAt) ?? clock.now
+        let card = item.card.map { card in
+            HolidayCardLetter(
+                card: card,
+                note: (detail.contentText ?? item.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
+                envelope: MailPieceModel(mail: row, recipient: recipient, opened: false, clock: clock),
+                mailedOn: piece.postmarkDate
+            )
+        }
         return MailLetter(
             piece: piece,
             kind: piece.kind,
@@ -125,7 +147,8 @@ extension MailLetter {
             isAcknowledged: item.acknowledgedAt != nil || (item.ackStatus ?? "").lowercased() == "acknowledged",
             homeId: item.recipientHomeId,
             drawer: drawer,
-            trail: trail(item: item, posted: posted, homes: homes, clock: clock)
+            trail: trail(item: item, posted: posted, homes: homes, clock: clock),
+            card: card
         )
     }
 
@@ -189,13 +212,18 @@ extension MailLetter {
             isReaders: false
         ))
         let opened = [item.firstOpenedAt, item.openedAt, item.viewedAt].lazy.compactMap { MailDates.parse($0) }.first
-        steps.append(MailTrailStep(
-            id: "opened",
-            title: "Opened",
-            detail: opened.map { stampMoment($0, calendar: clock.calendar) },
-            isDone: true,
-            isReaders: true
-        ))
+        if item.card?.sealed == true {
+            // A sealed Christmas card isn't opened before Christmas morning.
+            steps.append(MailTrailStep(id: "opened", title: "Opens Christmas morning", detail: nil, isDone: false, isReaders: false))
+        } else {
+            steps.append(MailTrailStep(
+                id: "opened",
+                title: "Opened",
+                detail: opened.map { stampMoment($0, calendar: clock.calendar) },
+                isDone: true,
+                isReaders: true
+            ))
+        }
         if let acknowledged = MailDates.parse(item.acknowledgedAt) {
             steps.append(MailTrailStep(
                 id: "acknowledged",

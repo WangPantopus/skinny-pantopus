@@ -107,10 +107,13 @@ struct MailLetterActions: View {
                     // Filed mail comes back to Incoming before the counter.
                     tile(.unfile, icon: .undo2, title: "Take out of the Vault", isPressed: false)
                 } else {
-                    if letter.onCounter {
-                        tile(.done, icon: .inbox, title: "On the counter", isPressed: true)
-                    } else {
-                        tile(.counter, icon: .inbox, title: "Put on the counter", isPressed: false)
+                    // A Christmas card is nothing to do: no counter for it.
+                    if letter.card == nil {
+                        if letter.onCounter {
+                            tile(.done, icon: .inbox, title: "On the counter", isPressed: true)
+                        } else {
+                            tile(.counter, icon: .inbox, title: "Put on the counter", isPressed: false)
+                        }
                     }
                     tile(.file, icon: .archive, title: "File in the Vault", isPressed: false)
                 }
