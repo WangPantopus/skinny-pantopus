@@ -99,6 +99,7 @@ async function isStaff(userId) {
 // Nobody else's Share tap widens who can read a post.
 function isPubliclyShareable(post) {
   if (post.audience === 'household') return false;
+  if (post.read_scope == null && post.visibility === 'private') return false;
   const isPublic = post.read_scope != null ? post.read_scope === 'public'
     : post.visibility === 'public' || post.audience === 'public';
   return isPublic && post.allow_external_share !== false;
@@ -176,6 +177,11 @@ async function canReadPost(post, userId, scopeAccess) {
     if (!userId || !homeId) return false;
     return (await checkHomePermission(homeId, userId)).hasAccess;
   }
+
+  // A legacy post can retain older distribution/audience fields after a visibility edit.
+  // Explicit private visibility must not inherit those broader grants. Household access
+  // above and the newer read_scope contract keep their own authoritative rules.
+  if (post.read_scope == null && post.visibility === 'private') return false;
 
   if (!userId) {
     // Direct-link views from outside the app only work for posts that are already public.

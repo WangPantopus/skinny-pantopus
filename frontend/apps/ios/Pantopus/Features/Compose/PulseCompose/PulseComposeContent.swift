@@ -266,7 +266,7 @@ public struct PulseComposeContent: View {
                 locationSection
             }
             // The audience is fixed after posting (edits don't send it), so edit mode shows no selector, like web.
-            if !state.isIntentLocked, !state.isFlowMode || state.visibility != .connections {
+            if !state.isIntentLocked, !state.isFlowMode || !state.isNetworkTarget {
                 visibilitySection
             }
         }

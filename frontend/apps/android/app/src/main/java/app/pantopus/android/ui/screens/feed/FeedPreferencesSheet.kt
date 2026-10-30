@@ -141,8 +141,14 @@ fun FeedPreferencesSheet(
                             viewModel.setShowPolitics(it)
                             onPrefsChanged()
                         },
-                        mutedTopics = mutedTopics,
-                        onUnmuteTopic = viewModel::unmuteTopic,
+                        mutedTopicsContent = {
+                            MutedTopicsSection(
+                                state = mutedTopics,
+                                onUnmute = viewModel::unmuteTopic,
+                                enabled = !isSaving,
+                                onRetry = viewModel::refresh,
+                            )
+                        },
                     )
             }
             toast?.let { message ->
@@ -224,8 +230,7 @@ private fun PreferencesLoaded(
     onShowDeals: (Boolean) -> Unit,
     onShowAlerts: (Boolean) -> Unit,
     onShowPolitics: (Boolean) -> Unit,
-    mutedTopics: MutedTopicsUiState = MutedTopicsUiState.Loaded(emptyList()),
-    onUnmuteTopic: (MutedTopicUi) -> Unit = {},
+    mutedTopicsContent: @Composable () -> Unit = {},
 ) {
     Column(modifier = Modifier.fillMaxWidth().testTag("pulsePreferencesLoaded")) {
         SectionLabel("PLACE FEED")
@@ -256,8 +261,7 @@ private fun PreferencesLoaded(
             testTag = "pulsePreferencesShowPolitics",
             onCheckedChange = onShowPolitics,
         )
-        // Topic mutes came with the Pulse redesign (S4); the October 13 sheet has none.
-        if (LaunchFeatures.pulseRedesign) MutedTopicsSection(state = mutedTopics, onUnmute = onUnmuteTopic)
+        mutedTopicsContent()
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = Spacing.s5),
             verticalAlignment = Alignment.CenterVertically,
@@ -286,23 +290,25 @@ private fun PreferencesLoaded(
 private fun MutedTopicsSection(
     state: MutedTopicsUiState,
     onUnmute: (MutedTopicUi) -> Unit,
+    enabled: Boolean,
+    onRetry: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth().testTag("pulsePreferencesMutedTopics")) {
-        SectionLabel("MUTED TOPICS")
+        SectionLabel(if (LaunchFeatures.pulseRedesign) "MUTED TOPICS & CATEGORIES" else "MUTED CATEGORIES")
         when (state) {
             MutedTopicsUiState.Loading -> Shimmer(width = 320.dp, height = 44.dp, cornerRadius = Radii.sm)
             MutedTopicsUiState.Error ->
-                Text(text = "Couldn't load your muted topics.", fontSize = 13.sp, color = PantopusColors.appTextSecondary)
+                PreferencesError(message = "Couldn't load your mutes.", onRetry = onRetry)
             is MutedTopicsUiState.Loaded ->
                 if (state.items.isEmpty()) {
                     Text(
-                        text = "No muted topics.",
+                        text = if (LaunchFeatures.pulseRedesign) "No muted topics or categories." else "No muted categories.",
                         fontSize = 13.sp,
                         color = PantopusColors.appTextSecondary,
                         modifier = Modifier.padding(bottom = Spacing.s2),
                     )
                 } else {
-                    state.items.forEach { item -> MutedTopicRow(item = item, onUnmute = { onUnmute(item) }) }
+                    state.items.forEach { item -> MutedTopicRow(item = item, onUnmute = { onUnmute(item) }, enabled = enabled) }
                 }
         }
     }
@@ -312,8 +318,9 @@ private fun MutedTopicsSection(
 private fun MutedTopicRow(
     item: MutedTopicUi,
     onUnmute: () -> Unit,
+    enabled: Boolean,
 ) {
-    Column(modifier = Modifier.fillMaxWidth().testTag("pulsePreferencesMutedTopic_${item.topic.key}")) {
+    Column(modifier = Modifier.fillMaxWidth().testTag("pulsePreferencesMutedTopic_${item.key}")) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -321,13 +328,20 @@ private fun MutedTopicRow(
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    text = item.topic.label,
+                    text = item.label,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = PantopusColors.appText,
                 )
                 Text(
-                    text = if (item.areaId == null) "Everywhere" else "In one area",
+                    text =
+                        if (item.topic == null) {
+                            "Post category · Unmute in all feeds"
+                        } else if (item.areaId == null) {
+                            "Everywhere"
+                        } else {
+                            "In one area"
+                        },
                     fontSize = 12.sp,
                     color = PantopusColors.appTextSecondary,
                 )
@@ -337,9 +351,9 @@ private fun MutedTopicRow(
                     Modifier
                         .clip(RoundedCornerShape(Radii.pill))
                         .border(1.dp, PantopusColors.appBorderStrong, RoundedCornerShape(Radii.pill))
-                        .testTag("pulsePreferencesUnmuteTopic_${item.topic.key}")
-                        .clickable(role = Role.Button, onClick = onUnmute)
-                        .clearAndSetSemantics { contentDescription = "Unmute ${item.topic.label}" }
+                        .testTag("pulsePreferencesUnmuteTopic_${item.key}")
+                        .clickable(enabled = enabled, role = Role.Button, onClick = onUnmute)
+                        .clearAndSetSemantics { contentDescription = "Unmute ${item.label}" }
                         .heightIn(min = 44.dp)
                         .padding(horizontal = Spacing.s4),
                 contentAlignment = Alignment.Center,

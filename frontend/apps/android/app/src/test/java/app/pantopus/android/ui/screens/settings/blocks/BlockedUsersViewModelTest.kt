@@ -13,6 +13,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.blocks.BlocksRepository
 import app.pantopus.android.data.feed.FeedActionsRepository
+import app.pantopus.android.data.feed.FeedModerationStore
 import app.pantopus.android.data.privacy.PrivacyRepository
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimScopeTestFixture
 import app.pantopus.android.ui.screens.homes.claim_review.claimScopeFactory
@@ -58,7 +59,7 @@ class BlockedUsersViewModelTest {
     }
 
     private fun viewModel(session: HomeClaimScopeTestFixture = HomeClaimScopeTestFixture()): BlockedUsersViewModel =
-        BlockedUsersViewModel(privacy, blocks, feedActions, auth, claimScopeFactory(session))
+        BlockedUsersViewModel(privacy, blocks, feedActions, auth, claimScopeFactory(session), FeedModerationStore())
 
     /** `GET /api/users/blocked` — flattened UserBlock rows (blocks.js:145). */
     private val twoPersonal =

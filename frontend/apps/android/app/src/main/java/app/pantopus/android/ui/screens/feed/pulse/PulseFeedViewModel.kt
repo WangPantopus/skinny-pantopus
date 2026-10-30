@@ -231,6 +231,7 @@ class PulseFeedViewModel
         /** Which surface this feed renders (Nearby / Connections / Beacons). */
         private val _surface = MutableStateFlow(FeedSurface.Pulse)
         val surface: StateFlow<FeedSurface> = _surface.asStateFlow()
+        private var surfaceConfigured = false
 
         /**
          * True when the Nearby / Connections toggle row should render. The
@@ -339,12 +340,6 @@ class PulseFeedViewModel
         private var removedPostIds: Set<String> = emptySet()
 
         /**
-         * Muted topics stay local: `POST /api/posts/mute/topic` is scoped to
-         * a surface, so a topic muted on Nearby is not muted on Beacons.
-         */
-        private var mutedPostTypes: Set<String> = emptySet()
-
-        /**
          * Pulse topics muted from a card here, hidden at once; the server leaves them out of every later read. A topic
          * unmuted from the preferences sheet leaves this set ([topicUnmuted]).
          */
@@ -368,6 +363,10 @@ class PulseFeedViewModel
 
         /** Select the surface (Pulse vs Connections vs Beacons) before the first load. */
         fun configureSurface(surface: FeedSurface) {
+            // The screen enters composition again after a post, composer, or tab visit. Its route default must
+            // not replace the person's selected surface while the retained VM still holds that surface's rows.
+            if (surfaceConfigured) return
+            surfaceConfigured = true
             _surface.value = surface
             _showsSurfaceToggle.value = surface in FeedSurface.toggleSurfaces
         }
@@ -921,14 +920,15 @@ class PulseFeedViewModel
             if (isOwner(post) || post.isSeeded) return
             val postType = post.postType?.takeIf { it.isNotEmpty() } ?: return
             val label = PulseIntent.fromPostType(postType).cardChipLabel
-            mutedPostTypes = mutedPostTypes + postType
+            val targetSurface = _surface.value
+            moderation.addPostTypeMute(postType, targetSurface.backendSurface)
             rebuildLoadedState()
             viewModelScope.launch {
-                when (feedActions.muteTopic(postType, _surface.value.backendSurface)) {
+                when (feedActions.muteTopic(postType, targetSurface.backendSurface)) {
                     is NetworkResult.Success ->
-                        _toastMessage.value = "Muted $label on ${_surface.value.toggleLabel}."
+                        _toastMessage.value = "Muted $label on ${targetSurface.toggleLabel}."
                     is NetworkResult.Failure -> {
-                        mutedPostTypes = mutedPostTypes - postType
+                        moderation.removePostTypeMute(postType, targetSurface.backendSurface)
                         _toastMessage.value = "Couldn't mute $label."
                         rebuildLoadedState()
                     }
@@ -1066,7 +1066,7 @@ class PulseFeedViewModel
                         userId = post.userId,
                         businessAuthorId = post.businessAuthorId,
                     ) &&
-                    (post.postType == null || post.postType !in mutedPostTypes) &&
+                    !moderation.isPostTypeMuted(post.postType, _surface.value.backendSurface) &&
                     (post.topic == null || post.topic !in mutedTopicKeys)
             }
 
@@ -1074,7 +1074,13 @@ class PulseFeedViewModel
             val visible = visiblePosts()
             if (visible.isEmpty()) {
                 if (loadedPosts.isEmpty()) return
-                _state.value = topicEmptyState() ?: PulseFeedUiState.Empty(content = _surface.value.emptyContent(scopeLabel = scopeLabel))
+                _state.value = topicEmptyState() ?: PulseFeedUiState.Empty(
+                    content =
+                        _surface.value.emptyContent(
+                            scopeLabel = scopeLabel,
+                            hasActiveFilter = _activeIntent.value != PulseIntent.All,
+                        ),
+                )
                 return
             }
             val query = _searchText.value.trim().lowercase()
@@ -1309,7 +1315,13 @@ class PulseFeedViewModel
          */
         private fun emptyState(noAreaSearched: Boolean): PulseFeedUiState.Empty {
             if (!noAreaSearched) {
-                return topicEmptyState() ?: PulseFeedUiState.Empty(content = _surface.value.emptyContent(scopeLabel = scopeLabel))
+                return topicEmptyState() ?: PulseFeedUiState.Empty(
+                    content =
+                        _surface.value.emptyContent(
+                            scopeLabel = scopeLabel,
+                            hasActiveFilter = _activeIntent.value != PulseIntent.All,
+                        ),
+                )
             }
             _radiusSuggestion.value = null
             return PulseFeedUiState.Empty(content = FeedSurface.noAreaContent(), needsArea = true)

@@ -1226,7 +1226,7 @@ private struct FeedPostActionSurfaces: ViewModifier {
                 .accessibilityIdentifier("pulseFeedMuteConfirm")
                 Button("Cancel", role: .cancel) { viewModel.mutingPostId = nil }
             } message: {
-                Text("You won't see their posts in any feed. You can undo this from their profile.")
+                Text("You won't see their posts in any feed. You can undo this in Settings → Blocked users.")
             }
             .alert("Close this question?", isPresented: presentingCloseAsk) {
                 Button("Close", role: .destructive) {
