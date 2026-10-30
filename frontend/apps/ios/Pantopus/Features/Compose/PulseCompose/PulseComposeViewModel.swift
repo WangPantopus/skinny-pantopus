@@ -290,8 +290,8 @@ public final class PulseComposeViewModel {
     /// Lost & Found contact preference. `.phone` requires `contactPhone`.
     public var lostFoundContactPref: PulseLostFoundContactPref = .dm
 
-    /// Deal expiry — required by the backend for `postType == deal`.
-    public var dealExpiresAt = Date().addingTimeInterval(7 * 86400)
+    /// New Deals default to one week; existing network posts can omit expiry.
+    public var dealExpiresAt: Date? = Date().addingTimeInterval(7 * 86400)
 
     /// Place-eligibility warning surfaced as a banner on the draft step.
     public private(set) var eligibilityWarning: String?
@@ -398,6 +398,7 @@ public final class PulseComposeViewModel {
     private var baselineAnnounceAudience: PulseAnnounceAudience = .neighbors
     private var baselineAskCategory: PulseAskCategory? = .handyman
     private var baselineRecommendRating: Int = 5
+    private var baselineDealExpiresAt: Date?
 
     private let createCommandId = UUID().uuidString
     private let api: APIClient
@@ -412,7 +413,7 @@ public final class PulseComposeViewModel {
     public let postingTarget: PulsePostingTarget?
 
     /// Step 2 purpose — nil for connections-only posts.
-    public let composePurpose: PulseComposePurpose?
+    public private(set) var composePurpose: PulseComposePurpose?
 
     /// C2 — when non-nil the create submit goes to
     /// `POST /api/businesses/:businessId/posts` instead of `POST /api/posts`,
@@ -492,6 +493,7 @@ public final class PulseComposeViewModel {
         }
         baselineIdentity = self.identity
         baselineVisibility = visibility
+        baselineDealExpiresAt = dealExpiresAt
     }
 
     /// A Pantopus AI post card's other fields, as current values like its
@@ -629,6 +631,7 @@ public final class PulseComposeViewModel {
         if !isEditing, selectedPlaceTag != nil { return true }
         if identity != baselineIdentity { return true }
         if visibility != baselineVisibility { return true }
+        if composePurpose == .deal, dealExpiresAt != baselineDealExpiresAt { return true }
         for field in fieldsActiveForCurrentIntent() where fields[field]?.isDirty ?? false {
             return true
         }
@@ -935,6 +938,12 @@ public final class PulseComposeViewModel {
     /// the form starts in a non-dirty pose.
     private func apply(prefill post: PostDetailDTO) {
         let intent = PulseComposeIntent.from(feedIntent: PulseIntent.from(postType: post.postType))
+        if post.postType == "deal" {
+            composePurpose = .deal
+            seedField(.dealBusinessName, value: post.dealBusinessName ?? "")
+            dealExpiresAt = Self.dealPickerFormatter().date(from: String(formatEventDateForPicker(post.dealExpiresAt).prefix(10)))
+            baselineDealExpiresAt = dealExpiresAt
+        }
         activeIntent = intent
         // Web's default "general" posts have no title and open on the Announcement form.
         titleOptional = (post.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -1144,7 +1153,7 @@ public final class PulseComposeViewModel {
                 visibility: announceVis,
                 postAs: postAs,
                 safetyAlertKind: postType == "alert" ? safetyAlertKind.rawValue : nil,
-                dealExpiresAt: isDeal ? isoTimestamp(from: dealExpiresAt) : nil,
+                dealExpiresAt: isDeal ? dealExpiresAt.map(dealExpiryTimestamp(from:)) : nil,
                 businessName: isDeal && !dealBusiness.isEmpty ? dealBusiness : nil,
                 audience: audience,
                 purpose: purposeTag
@@ -1174,10 +1183,18 @@ public final class PulseComposeViewModel {
         request.geocodePlaceId = tag.placeId
     }
 
-    private func isoTimestamp(from date: Date) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.string(from: date)
+    /// A Deal's last calendar day, like the web date input; the archive job gives that day its grace period.
+    private func dealExpiryTimestamp(from date: Date) -> String {
+        Self.dealPickerFormatter().string(from: date) + "T00:00:00Z"
+    }
+
+    private static func dealPickerFormatter() -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .iso8601)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
     }
 
     var effectivePostType: String {
@@ -1530,7 +1547,10 @@ public final class PulseComposeViewModel {
         case .announce:
             return PostUpdateRequest(
                 content: bodyValue,
-                title: titleValue.isEmpty ? nil : titleValue
+                title: titleValue.isEmpty ? nil : titleValue,
+                dealBusinessName: composePurpose == .deal ? trimmedValue(.dealBusinessName) : nil,
+                dealExpiresAt: composePurpose == .deal && dealExpiresAt != baselineDealExpiresAt
+                    ? dealExpiresAt.map(dealExpiryTimestamp(from:)) : nil
             )
         }
     }

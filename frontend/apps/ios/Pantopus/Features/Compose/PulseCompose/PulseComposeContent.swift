@@ -25,7 +25,7 @@ public struct PulseComposeContentState: Equatable {
     public var safetyAlertKind: PulseSafetyAlertKind
     public var askCategory: PulseAskCategory?
     public var recommendRating: Int
-    public var dealExpiresAt: Date
+    public var dealExpiresAt: Date?
     public var eligibilityWarning: String?
     /// Soft nudge from `POST /api/posts/precheck` — dismissible.
     public var precheckNudge: String?
@@ -69,7 +69,7 @@ public struct PulseComposeContentState: Equatable {
         safetyAlertKind: PulseSafetyAlertKind = .hazard,
         askCategory: PulseAskCategory? = .handyman,
         recommendRating: Int = 5,
-        dealExpiresAt: Date = Date().addingTimeInterval(7 * 86400),
+        dealExpiresAt: Date? = Date().addingTimeInterval(7 * 86400),
         eligibilityWarning: String? = nil,
         precheckNudge: String? = nil,
         precheckCooldown: String? = nil,
@@ -797,26 +797,34 @@ public struct PulseComposeContent: View {
             Text("Deal ends")
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
-            DatePicker(
-                "Deal ends",
-                selection: Binding(
-                    get: { state.dealExpiresAt },
-                    set: { actions.onSelectDealExpires($0) }
-                ),
-                in: Date()...,
-                displayedComponents: [.date, .hourAndMinute]
-            )
-            .labelsHidden()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(Spacing.s3)
-            .frame(minHeight: 44)
-            .background(Theme.Color.appSurface)
-            .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                    .stroke(Theme.Color.appBorder, lineWidth: 1)
-            )
-            .accessibilityIdentifier("composePulseField_dealExpires")
+            if let expires = state.dealExpiresAt {
+                DatePicker(
+                    "Deal ends",
+                    selection: Binding(
+                        get: { expires },
+                        set: { actions.onSelectDealExpires($0) }
+                    ),
+                    in: min(Date(), expires)...,
+                    displayedComponents: [.date]
+                )
+                .labelsHidden()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Spacing.s3)
+                .frame(minHeight: 44)
+                .background(Theme.Color.appSurface)
+                .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+                        .stroke(Theme.Color.appBorder, lineWidth: 1)
+                )
+                .accessibilityIdentifier("composePulseField_dealExpires")
+            } else {
+                Button("Add expiry") {
+                    actions.onSelectDealExpires(Date().addingTimeInterval(7 * 86400))
+                }
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("composePulseField_dealExpires")
+            }
         }
     }
 

@@ -28,6 +28,7 @@ import app.pantopus.android.data.businesses.BusinessPostsRepository
 import app.pantopus.android.data.location.LocationProvider
 import app.pantopus.android.data.location.UserCoordinate
 import app.pantopus.android.data.network.NetworkMonitor
+import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.posts.PostPrecheckRepository
 import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.posts.PulsePostsRefreshNotifier
@@ -300,13 +301,13 @@ class PulseComposeViewModel
         private val _lostFoundContactPref = MutableStateFlow(PulseLostFoundContactPref.Dm)
         val lostFoundContactPref: StateFlow<PulseLostFoundContactPref> = _lostFoundContactPref.asStateFlow()
 
-        /** Deal expiry — required by the backend for `postType == deal`. */
+        /** New Deals default to one week; existing network posts can omit expiry. */
         private val _dealExpiresAt =
-            MutableStateFlow(
+            MutableStateFlow<LocalDateTime?>(
                 prefillDraft?.dealExpiresAt?.let { PulseComposeDraftFields.localEnd(it) }
                     ?: LocalDateTime.now().plusDays(DEAL_DEFAULT_EXPIRY_DAYS),
             )
-        val dealExpiresAt: StateFlow<LocalDateTime> = _dealExpiresAt.asStateFlow()
+        val dealExpiresAt: StateFlow<LocalDateTime?> = _dealExpiresAt.asStateFlow()
 
         /** Place-eligibility warning surfaced as a banner on the draft step. */
         private val _eligibilityWarning = MutableStateFlow<String?>(null)
@@ -461,6 +462,7 @@ class PulseComposeViewModel
         private var baselineAnnounceAudience: PulseAnnounceAudience = PulseAnnounceAudience.Neighbors
         private var baselineAskCategory: PulseAskCategory? = PulseAskCategory.Handyman
         private var baselineRecommendRating: Int = DEFAULT_RECOMMEND_RATING
+        private var baselineDealExpiresAt = _dealExpiresAt.value
 
         private var postingTarget: PulsePostingTarget? = null
         private var composePurpose: PulseComposePurpose? = null
@@ -773,6 +775,7 @@ class PulseComposeViewModel
                 if (!isEditing && _selectedPlaceTag.value != null) return true
                 if (_identity.value != baselineIdentity) return true
                 if (_visibility.value != baselineVisibility) return true
+                if (composePurpose == PulseComposePurpose.Deal && _dealExpiresAt.value != baselineDealExpiresAt) return true
                 if (activeIntentFields().any { (_fields.value[it]?.isDirty == true) }) return true
                 return when (_activeIntent.value) {
                     PulseComposeIntent.Ask -> _askCategory.value != baselineAskCategory
@@ -1418,6 +1421,12 @@ class PulseComposeViewModel
         @Suppress("CyclomaticComplexMethod", "LongMethod")
         private fun applyPrefill(post: PostDetailDto) {
             val intent = PulseComposeIntent.fromFeedIntent(PulseIntent.fromPostType(post.postType))
+            if (post.postType == "deal") {
+                composePurpose = PulseComposePurpose.Deal
+                seedField(PulseComposeField.DealBusinessName, post.dealBusinessName.orEmpty())
+                _dealExpiresAt.value = PlanFormat.instant(post.dealExpiresAt)?.atOffset(java.time.ZoneOffset.UTC)?.toLocalDateTime()
+                baselineDealExpiresAt = _dealExpiresAt.value
+            }
             _activeIntent.value = intent
             // Web's default "general" posts have no title and open on the Announcement form.
             titleOptional = post.title.isNullOrBlank()
@@ -1622,6 +1631,14 @@ class PulseComposeViewModel
                     PostUpdateRequest(
                         content = bodyValue,
                         title = titleValue.ifEmpty { null },
+                        dealBusinessName =
+                            if (composePurpose == PulseComposePurpose.Deal) trimmedValue(PulseComposeField.DealBusinessName) else null,
+                        dealExpiresAt =
+                            if (composePurpose == PulseComposePurpose.Deal && _dealExpiresAt.value != baselineDealExpiresAt) {
+                                _dealExpiresAt.value?.let { "${it.toLocalDate()}T00:00:00Z" }
+                            } else {
+                                null
+                            },
                     )
             }
         }
@@ -1723,7 +1740,7 @@ class PulseComposeViewModel
                                 } else {
                                     null
                                 },
-                            dealExpiresAt = if (isDeal) isoTimestamp(_dealExpiresAt.value) else null,
+                            dealExpiresAt = if (isDeal) _dealExpiresAt.value?.let { "${it.toLocalDate()}T00:00:00Z" } else null,
                             businessName = if (isDeal && dealBusiness.isNotEmpty()) dealBusiness else null,
                         )
                     }
@@ -1868,14 +1885,6 @@ class PulseComposeViewModel
         /** The `yyyy-MM-dd HH:mm` shape the date-and-time pickers write. */
         private fun pickerDateTime(value: LocalDateTime): String =
             "%04d-%02d-%02d %02d:%02d".format(value.year, value.monthValue, value.dayOfMonth, value.hour, value.minute)
-
-        /** Encode a local date-time as an ISO-8601 UTC instant. */
-        private fun isoTimestamp(value: LocalDateTime): String =
-            value
-                .atZone(java.time.ZoneId.systemDefault())
-                .toInstant()
-                .truncatedTo(java.time.temporal.ChronoUnit.SECONDS)
-                .toString()
 
         companion object {
             const val INTENT_KEY = "intent"

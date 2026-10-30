@@ -59,7 +59,7 @@ internal data class PulseComposeAssistSnapshot(
     val lostFoundKind: PulseLostFoundKind,
     val safetyAlertKind: PulseSafetyAlertKind,
     val askCategory: PulseAskCategory?,
-    val dealExpiresAt: LocalDateTime,
+    val dealExpiresAt: LocalDateTime?,
 )
 
 /**

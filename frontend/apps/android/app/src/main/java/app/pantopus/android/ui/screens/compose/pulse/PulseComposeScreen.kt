@@ -506,7 +506,7 @@ internal data class PulseComposeContentState(
     val visibility: PulseComposeVisibility = PulseComposeVisibility.Neighbors,
     val lostFoundKind: PulseLostFoundKind = PulseLostFoundKind.Lost,
     val lostFoundContactPref: PulseLostFoundContactPref = PulseLostFoundContactPref.Dm,
-    val dealExpiresAt: LocalDateTime = LocalDateTime.now().plusDays(7),
+    val dealExpiresAt: LocalDateTime? = LocalDateTime.now().plusDays(7),
     val eligibilityWarning: String? = null,
     /** Soft nudge from `POST /api/posts/precheck` — dismissible. */
     val precheckNudge: String? = null,
@@ -1402,7 +1402,7 @@ private fun announceSectionTitle(purpose: PulseComposePurpose?): String =
 @Composable
 private fun DealSection(
     fields: Map<PulseComposeField, FormFieldState>,
-    dealExpiresAt: LocalDateTime,
+    dealExpiresAt: LocalDateTime?,
     onUpdateField: (PulseComposeField, String) -> Unit,
     onSelectDealExpires: (LocalDateTime) -> Unit,
 ) {
@@ -1431,13 +1431,13 @@ private fun DealSection(
     }
 }
 
-/** Required deal-expiry date+time picker — defaults to now + 7 days. */
+/** A Deal's last calendar day. Existing network posts without one can add it. */
 @Composable
 private fun DealExpiryRow(
-    value: LocalDateTime,
+    value: LocalDateTime?,
     onSelect: (LocalDateTime) -> Unit,
 ) {
-    var showPicker by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
         Text(
             text = "Deal ends",
@@ -1452,27 +1452,27 @@ private fun DealExpiryRow(
                     .clip(RoundedCornerShape(Radii.md))
                     .background(PantopusColors.appSurface)
                     .border(width = 1.dp, color = PantopusColors.appBorder, shape = RoundedCornerShape(Radii.md))
-                    .clickable { showPicker = true }
+                    .clickable {
+                        val today = LocalDate.now()
+                        val shown = (value?.toLocalDate() ?: today.plusDays(7)).coerceAtLeast(today)
+                        DatePickerDialog(
+                            context,
+                            { _, year, month, day -> onSelect(LocalDate.of(year, month + 1, day).atStartOfDay()) },
+                            shown.year,
+                            shown.monthValue - 1,
+                            shown.dayOfMonth,
+                        ).apply { datePicker.minDate = System.currentTimeMillis() }.show()
+                    }
                     .padding(horizontal = Spacing.s3)
                     .testTag("composePulseField_dealExpires"),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = formatPickerDateTime(value),
+                text = value?.toLocalDate()?.toString() ?: "Add expiry",
                 style = PantopusTextStyle.body,
                 color = PantopusColors.appText,
             )
         }
-    }
-    if (showPicker) {
-        FutureDateTimePickerDialogs(
-            initial = value,
-            onPicked = { picked ->
-                showPicker = false
-                onSelect(picked)
-            },
-            onDismiss = { showPicker = false },
-        )
     }
 }
 

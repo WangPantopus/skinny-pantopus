@@ -29,7 +29,7 @@ struct PulseComposeAssistSnapshot {
     let lostFoundKind: PulseLostFoundKind
     let safetyAlertKind: PulseSafetyAlertKind
     let askCategory: PulseAskCategory?
-    let dealExpiresAt: Date
+    let dealExpiresAt: Date?
 }
 
 /// How many photos a suggestion reads (`postSuggestion.MAX_PHOTOS` on the server).
