@@ -486,7 +486,11 @@ private fun EmailPicture(
             lineHeight = 16.sp,
             color = PantopusColors.appTextMuted,
             textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().background(PantopusColors.appSurfaceRaised).padding(horizontal = Spacing.s4, vertical = 10.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(PantopusColors.appSurfaceRaised)
+                    .padding(horizontal = Spacing.s4, vertical = 10.dp),
         )
     }
 }
@@ -561,8 +565,19 @@ private fun LinkPagePicture(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        PantopusIconImage(icon = PantopusIcon.ShieldCheck, contentDescription = null, size = 14.dp, tint = PantopusColors.success)
-                        Text("Verified neighbor", fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.success)
+                        PantopusIconImage(
+                            icon = PantopusIcon.ShieldCheck,
+                            contentDescription = null,
+                            size = 14.dp,
+                            tint = PantopusColors.success,
+                        )
+                        Text(
+                            "Verified neighbor",
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = PantopusColors.success,
+                        )
                     }
                 }
             }
@@ -587,7 +602,13 @@ private fun LinkPagePicture(
                 modifier = Modifier.padding(top = Spacing.s1),
             )
             HolidayCardTimes.fullDate(page.sentOn, zone).takeIf { it.isNotEmpty() }?.let {
-                Text("Sent $it", fontSize = 12.sp, lineHeight = 16.sp, color = PantopusColors.appTextMuted, modifier = Modifier.padding(top = 10.dp))
+                Text(
+                    "Sent $it",
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    color = PantopusColors.appTextMuted,
+                    modifier = Modifier.padding(top = 10.dp),
+                )
             }
         }
         Column(modifier = Modifier.padding(top = Spacing.s4), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -707,8 +728,12 @@ private fun lookEnvelope(
     val row = preview.piece.asRow(card, preview.sealed)
     val morning = theirMorning(preview.piece.deliveredAt, preview.arrivesOn)
     return MailPieceMapper
-        .piece(row, MailAddressBook(personName = toName), zone = morning?.first ?: ZoneId.systemDefault(), now = morning?.second ?: Instant.now())
-        .copy(to = toName, toLine = null)
+        .piece(
+            row = row,
+            book = MailAddressBook(personName = toName),
+            zone = morning?.first ?: ZoneId.systemDefault(),
+            now = morning?.second ?: Instant.now(),
+        ).copy(to = toName, toLine = null)
 }
 
 /**
