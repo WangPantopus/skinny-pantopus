@@ -38,6 +38,8 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
     public let userHasLiked: Bool
     public let userHasSaved: Bool
     public let userHasReposted: Bool
+    /// Connections list only: which of the viewer's connections reposted the post.
+    public let repostedBy: FeedRepostedBy?
     /// Lifecycle state — `open` / `solved` (`feedService.js:234`).
     public let state: String?
     /// Server-derived authorship: `user`, `curator` or `system`.
@@ -92,6 +94,7 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case userHasLiked
         case userHasSaved
         case userHasReposted
+        case repostedBy = "reposted_by"
         case state, origin, topic, resolution
         case expiresAt = "expires_at"
         case claimMode = "claim_mode"
@@ -132,6 +135,7 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         userHasLiked = c.lenient(Bool.self, forKey: .userHasLiked) ?? false
         userHasSaved = c.lenient(Bool.self, forKey: .userHasSaved) ?? false
         userHasReposted = c.lenient(Bool.self, forKey: .userHasReposted) ?? false
+        repostedBy = c.lenient(FeedRepostedBy.self, forKey: .repostedBy)
         state = c.lenient(String.self, forKey: .state)
         origin = c.lenient(String.self, forKey: .origin)
         topic = c.lenient(String.self, forKey: .topic)
@@ -153,6 +157,24 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         mediaTypes = c.lenient([String].self, forKey: .mediaTypes) ?? []
         mediaLiveURLs = c.lenient([String].self, forKey: .mediaLiveURLs) ?? []
         creator = c.lenient(PostCreatorDTO.self, forKey: .creator)
+    }
+}
+
+/// The viewer's connections who reposted a Connections post (`feedService.js` repostedByLines).
+public struct FeedRepostedBy: Decodable, Sendable, Hashable {
+    /// The latest reposters' names, at most two.
+    public let names: [String]
+    /// How many of the viewer's connections reposted it.
+    public let count: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case names, count
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        names = c.lenient([String].self, forKey: .names) ?? []
+        count = c.lenient(Int.self, forKey: .count) ?? 0
     }
 }
 

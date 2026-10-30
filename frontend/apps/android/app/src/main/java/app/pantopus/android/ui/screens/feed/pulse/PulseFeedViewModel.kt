@@ -14,6 +14,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.feed.FeedMuteEntityType
 import app.pantopus.android.data.api.models.feed.FeedPost
+import app.pantopus.android.data.api.models.feed.FeedRepostedBy
 import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.location.ViewingLocationDto
 import app.pantopus.android.data.api.models.sports.ActiveSportsEventDto
@@ -1502,7 +1503,21 @@ class PulseFeedViewModel
                         canCloseAsk = openAsk,
                     ),
                 status = statusFor(post),
+                repostedBy = repostedByText(post.repostedBy),
             )
+        }
+
+        /** Connections: "Ben C. reposted", "Ben C. and Eve H. reposted", "Ben C. and 2 others reposted" (as on web). */
+        private fun repostedByText(repostedBy: FeedRepostedBy?): String? {
+            val first = repostedBy?.names?.firstOrNull()
+            val second = repostedBy?.names?.getOrNull(1)
+            val others = (repostedBy?.count ?: 0) - 1
+            return when {
+                first == null || others < 0 -> null
+                others == 0 -> "$first reposted"
+                others == 1 && second != null -> "$first and $second reposted"
+                else -> "$first and $others ${if (others == 1) "other" else "others"} reposted"
+            }
         }
 
         /** The asker's own open Ask: Keep open and Close (S7). The October 13 card (the Pulse redesign off) has neither. */

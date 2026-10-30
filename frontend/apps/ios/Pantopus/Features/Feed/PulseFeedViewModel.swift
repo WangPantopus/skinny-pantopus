@@ -1212,8 +1212,18 @@ public final class PulseFeedViewModel {
             origin: post.origin,
             // Topics on cards are the redesign's (Pulse S4, launch cut #11).
             pulseTopic: LaunchFeatures.pulseRedesign ? PulseTopic(stored: post.topic) : nil,
-            status: Self.status(of: post, solved: isSolved, going: likeCount, expiresAt: expiresAt)
+            status: Self.status(of: post, solved: isSolved, going: likeCount, expiresAt: expiresAt),
+            repostedBy: Self.repostedByText(post.repostedBy)
         )
+    }
+
+    /// Connections: "Ben C. reposted", "Ben C. and Eve H. reposted", "Ben C. and 2 others reposted" (as on web).
+    private static func repostedByText(_ repostedBy: FeedRepostedBy?) -> String? {
+        guard let repostedBy, let first = repostedBy.names.first, repostedBy.count >= 1 else { return nil }
+        if repostedBy.count == 1 { return "\(first) reposted" }
+        if repostedBy.count == 2, repostedBy.names.count >= 2 { return "\(first) and \(repostedBy.names[1]) reposted" }
+        let others = repostedBy.count - 1
+        return "\(first) and \(others) \(others == 1 ? "other" : "others") reposted"
     }
 
     /// How the post ended, or when a Heads-up ends (Pulse S7); none while the

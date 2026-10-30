@@ -139,6 +139,8 @@ data class PulsePostCardContent(
     val savePending: Boolean = false,
     /** How the post ended, or when a heads-up ends (S7): "Answered", "Gone", "Ends Wed 4pm"; null shows none. */
     val status: PostStatus? = null,
+    /** Connections: "Ben C. and 2 others reposted", the line above the author; null when no connection reposted it. */
+    val repostedBy: String? = null,
 ) {
     val isCurator: Boolean get() = origin == "curator"
 
@@ -190,6 +192,7 @@ fun PulsePostCard(
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
         Column(modifier = Modifier.padding(horizontal = Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            content.repostedBy?.let { RepostedByLine(text = it, postId = content.id) }
             CardHeader(
                 content = content,
                 onOverflow = onOverflow,
@@ -305,6 +308,34 @@ private fun CardHeader(
             content = content,
             onOverflow = onOverflow,
             onDismissSeeded = onDismissSeeded,
+        )
+    }
+}
+
+/** Who among the viewer's connections reposted the post (Connections), above the author; plain text. */
+@Composable
+private fun RepostedByLine(
+    text: String,
+    postId: String,
+) {
+    Row(
+        modifier = Modifier.testTag("pulsePostRepostedBy_$postId"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+    ) {
+        PantopusIconImage(
+            icon = PantopusIcon.ArrowsRepeat,
+            contentDescription = null,
+            size = 11.dp,
+            tint = PantopusColors.appTextSecondary,
+        )
+        Text(
+            text = text,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = PantopusColors.appTextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -714,6 +745,7 @@ internal fun PulseIntent.tintColors(): Pair<Color, Color> =
 
 private fun buildA11yLabel(content: PulsePostCardContent): String {
     val parts = mutableListOf<String>()
+    content.repostedBy?.let { parts.add(it) }
     parts.add(content.authorName)
     if (content.likePending || content.savePending) parts.add("Pending")
     if (content.chipLabel.isNotEmpty()) parts.add(content.chipLabel)
