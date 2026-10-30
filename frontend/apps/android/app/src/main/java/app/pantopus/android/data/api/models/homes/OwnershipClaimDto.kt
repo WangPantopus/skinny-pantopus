@@ -28,10 +28,16 @@ data class OwnershipClaimDto(
     @Json(name = "has_evidence") val hasEvidence: Boolean? = null,
     /** What a claim in review still needs before it can be approved; null otherwise. */
     val approval: ClaimApprovalProgressDto? = null,
+    /** What a Pantopus reviewer asked for while the claim waits (Request info); null when nothing is asked. */
+    @Json(name = "info_request") val infoRequest: ClaimInfoRequestDto? = null,
 ) {
     /** Still in review: the server shows every open claim as `under_review`. */
     val isInReview: Boolean
         get() = status == "under_review"
+
+    /** A reviewer's request for more that no document has answered yet. */
+    val openInfoRequest: ClaimInfoRequestDto?
+        get() = infoRequest?.takeIf { isInReview && it.respondedAt == null }
 
     /** The claimed Home's address lines. */
     @JsonClass(generateAdapter = true)
@@ -58,6 +64,18 @@ data class OwnershipClaimDto(
             get() = listOfNotNull(city, state).map { it.trim() }.filter { it.isNotEmpty() }.joinToString(", ").ifEmpty { null }
     }
 }
+
+/**
+ * A Pantopus reviewer's request for more on a claim in review (Request info): their note (null when they wrote none),
+ * when they asked, and when the claimant's first document after it came in (null until then). Mirrors iOS
+ * `ClaimInfoRequestDTO` and the web `ClaimInfoRequest`.
+ */
+@JsonClass(generateAdapter = true)
+data class ClaimInfoRequestDto(
+    val note: String? = null,
+    @Json(name = "requested_at") val requestedAt: String,
+    @Json(name = "responded_at") val respondedAt: String? = null,
+)
 
 /**
  * The claimant's approval checklist: approval needs a confirmed identity (a Stripe

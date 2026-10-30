@@ -335,17 +335,24 @@ data class WaitingRoomContent(
             )
         }
 
+        /** The design's sample note, shown before the claim loads (the seeded frame). */
+        const val SAMPLE_NOTE = "Please upload a property tax bill with your name on it."
+
         /**
-         * More info requested · review paused — `We need one more thing`,
-         * static warning halo, a reviewer-note card, the timeline paused on
-         * "Under review" (current node shows `alert-circle`), the "Paused ·
-         * respond within 7 days" ETA pill, and "Update evidence" promoted to
-         * primary. The dock follows [canOpenHome] as in [active].
+         * More info requested · review paused: a Pantopus reviewer asked for something (Request info) and no
+         * document has answered it yet. `We need one more thing`, static warning halo, the reviewer's [note]
+         * (asked on [askedOn]), the timeline paused on "Under review" (current node shows `alert-circle`), the
+         * "Paused · waiting for you" pill and the upload promoted to primary. The identity checklist stays, and the
+         * dock follows [canOpenHome] as in [active]. Mirrors iOS `WaitingRoomContent.moreInfoRequested`.
          */
         fun moreInfoRequested(
             address: String = SAMPLE_ADDRESS,
             claimRef: String = SAMPLE_CLAIM_REF,
             submittedOn: String? = "Oct 24",
+            note: String? = SAMPLE_NOTE,
+            askedOn: String? = "Oct 26",
+            residency: Boolean = false,
+            approval: ClaimApprovalProgressDto? = null,
             canOpenHome: Boolean = true,
         ): WaitingRoomContent =
             WaitingRoomContent(
@@ -353,16 +360,16 @@ data class WaitingRoomContent(
                 halo = StatusHalo(tone = HaloCircleTone.Warning, icon = PantopusIcon.FileWarning),
                 headline = "We need one more thing",
                 subcopy =
-                    "Your utility bill is older than 90 days. " +
-                        "Upload one from the last 60 days to continue the review.",
+                    "A Pantopus reviewer asked for something before they can finish your claim. " +
+                        "Upload it and the review continues.",
                 address = address,
                 claimRef = claimRef,
                 reviewerNote =
                     WaitingRoomReviewerNote(
-                        eyebrow = "Note from reviewer · Maya K.",
+                        eyebrow = askedOn?.let { "Note from Pantopus · $it" } ?: "Note from Pantopus",
                         body =
-                            "“The PG&E bill you uploaded is dated July 14. Please upload one from " +
-                                "August or later — anything within the last 60 days works.”",
+                            note?.trim()?.takeIf { it.isNotEmpty() }?.let { "\u201C$it\u201D" }
+                                ?: "A reviewer needs another document before they can finish your claim.",
                     ),
                 timeline =
                     listOf(
@@ -373,7 +380,7 @@ data class WaitingRoomContent(
                 timelinePaused = true,
                 etaPill =
                     StatusWaitingPill(
-                        text = "Paused · respond within 7 days",
+                        text = "Paused · waiting for you",
                         icon = PantopusIcon.AlertCircle,
                         tone = StatusPillTone.Warning,
                     ),
@@ -382,7 +389,7 @@ data class WaitingRoomContent(
                     listOf(
                         WaitingRoomInlineAction(
                             id = "updateEvidence",
-                            label = "Update evidence",
+                            label = "Upload documents",
                             icon = PantopusIcon.FilePlus2,
                             tone = WaitingRoomActionTone.Primary,
                             actionKey = "update_evidence",
@@ -391,6 +398,7 @@ data class WaitingRoomContent(
                     ),
                 primaryCta = viewClaim,
                 secondaryCta = if (canOpenHome) backToHome else backToMyHomes,
+                approvalSteps = WaitingRoomApproval.steps(approval, residency),
             )
     }
 }
