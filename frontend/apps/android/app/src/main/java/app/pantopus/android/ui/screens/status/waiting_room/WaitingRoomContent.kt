@@ -345,6 +345,7 @@ data class WaitingRoomContent(
          * "Paused · waiting for you" pill and the upload promoted to primary. The identity checklist stays, and the
          * dock follows [canOpenHome] as in [active]. Mirrors iOS `WaitingRoomContent.moreInfoRequested`.
          */
+        @Suppress("LongParameterList")
         fun moreInfoRequested(
             address: String = SAMPLE_ADDRESS,
             claimRef: String = SAMPLE_CLAIM_REF,
