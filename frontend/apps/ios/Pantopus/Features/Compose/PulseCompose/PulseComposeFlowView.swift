@@ -133,9 +133,9 @@ public struct PulseComposeFlowView: View {
         if let purpose = prefillDraft?.purpose, PulseComposePurpose.allowed(for: target).contains(purpose) {
             return purpose
         }
-        guard let feedIntent = prefillFeedIntent, feedIntent != .all else { return nil }
-        let candidate = PulseComposePurpose.allCases.first { $0.legacyIntent == PulseComposeIntent.from(feedIntent: feedIntent) }
-        guard let candidate else { return nil }
+        // A filtered feed opens its own type's form (Deals opens Deal), not the first form of its family.
+        guard let postType = prefillFeedIntent?.postType,
+              let candidate = PulseComposePurpose.allCases.first(where: { $0.postType == postType }) else { return nil }
         return PulseComposePurpose.allowed(for: target).contains(candidate) ? candidate : nil
     }
 
