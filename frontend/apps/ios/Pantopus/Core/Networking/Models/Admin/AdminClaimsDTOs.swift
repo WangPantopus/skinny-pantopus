@@ -84,6 +84,8 @@ public struct AdminClaimDTO: Decodable, Sendable, Hashable, Identifiable {
     public let createdAt: String
     public let updatedAt: String?
     public let evidenceCount: Int
+    /// On a claim waiting on the claimant (Request info): documents they sent after the request.
+    public var documentsSinceRequest: Int?
     public let home: AdminClaimHomeDTO?
     public let claimant: AdminClaimUserDTO?
 
@@ -96,6 +98,7 @@ public struct AdminClaimDTO: Decodable, Sendable, Hashable, Identifiable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case evidenceCount = "evidence_count"
+        case documentsSinceRequest = "documents_since_request"
         case home, claimant
     }
 }
