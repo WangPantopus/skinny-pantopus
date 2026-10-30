@@ -117,6 +117,14 @@ async function autoArchivePosts() {
     logger.info('[autoArchive] Marked solved Asks answered', { count: answered.length });
   }
 
+  // 0b) Right now events neighbors stopped reporting end, with the Heads-ups waiting on them (§2.16).
+  try {
+    const quiet = await require('../services/pulse/rightNow').endQuiet(now);
+    if (quiet) logger.info('[autoArchive] Ended quiet Right now events', { count: quiet });
+  } catch (err) {
+    logger.error('[autoArchive] Error ending quiet Right now events', { error: err.message });
+  }
+
   // 1) Posts whose own end time has passed
   totalArchived += await endMatching('posts past their end time', (query) => query
     .not('expires_at', 'is', null)
