@@ -584,7 +584,7 @@ export function useFeedData({
         // The author's user id, as PostCard reads it: post.creator.id is their public profile id.
         : (p.author_user_id || p.user_id) === target.entityId, target.entityType === 'persona');
       if (target.entityType === 'user') {
-        // Reposts don't expose the reposter's identity. Re-read Connections to remove
+        // A repost names its reposters but carries no ids. Re-read Connections to remove
         // posts that reached this viewer only through the person they just muted.
         await queryClient.resetQueries({ queryKey: ['feed', 'connections'] });
       }

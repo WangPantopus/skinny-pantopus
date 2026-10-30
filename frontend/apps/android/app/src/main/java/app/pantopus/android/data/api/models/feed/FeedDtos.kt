@@ -27,6 +27,8 @@ data class FeedPost(
     @Json(name = "userHasLiked") val userHasLiked: Boolean = false,
     @Json(name = "userHasSaved") val userHasSaved: Boolean = false,
     @Json(name = "userHasReposted") val userHasReposted: Boolean = false,
+    /** Connections list only: which of the viewer's connections reposted the post. */
+    @Json(name = "reposted_by") val repostedBy: FeedRepostedBy? = null,
     /** Lifecycle state — `open` / `solved` (`backend/services/feedService.js:234`). */
     val state: String? = null,
     /**
@@ -72,6 +74,15 @@ data class FeedPost(
         get() =
             !isSeeded && permitsExternalPostShare(readScope, visibility, audience, allowExternalShare, moderationState)
 }
+
+/** The viewer's connections who reposted a Connections post (`feedService.js` repostedByLines). */
+@JsonClass(generateAdapter = true)
+data class FeedRepostedBy(
+    /** The latest reposters' names, at most two. */
+    val names: List<String> = emptyList(),
+    /** How many of the viewer's connections reposted it. */
+    val count: Int = 0,
+)
 
 /**
  * Author projection on a feed post. Mirrors the iOS `PostCreatorDTO`

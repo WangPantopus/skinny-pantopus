@@ -146,6 +146,8 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
     public let pulseTopic: PulseTopic?
     /// How the post ended, or when a Heads-up ends (Pulse S7).
     public let status: PulsePostStatus?
+    /// Connections: "Ben C. and 2 others reposted", the line above the author; nil when no connection reposted it.
+    public let repostedBy: String?
     public var isCurator: Bool {
         origin == "curator"
     }
@@ -177,7 +179,8 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         isVisitor: Bool = false,
         origin: String? = nil,
         pulseTopic: PulseTopic? = nil,
-        status: PulsePostStatus? = nil
+        status: PulsePostStatus? = nil,
+        repostedBy: String? = nil
     ) {
         self.id = id
         self.authorName = authorName
@@ -200,6 +203,7 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         self.origin = origin
         self.pulseTopic = pulseTopic
         self.status = status
+        self.repostedBy = repostedBy
     }
 }
 
@@ -478,6 +482,7 @@ public struct PulsePostCard: View {
 
     private var a11yLabel: String {
         var parts = [content.authorName, content.chipLabel]
+        if let repostedBy = content.repostedBy { parts.insert(repostedBy, at: 0) }
         if content.isCurator { parts.append("Pantopus curator") }
         if content.isVisitor { parts.append("Visitor") }
         if let topic = content.pulseTopic { parts.append(topic.label) }
@@ -522,6 +527,18 @@ private extension PulsePostCard {
             .font(.system(size: 10.5))
             .foregroundStyle(Theme.Color.appTextSecondary)
             .lineLimit(1)
+    }
+
+    /// Who among the viewer's connections reposted the post (Connections), above the author; plain text.
+    func repostedByLine(_ text: String) -> some View {
+        HStack(spacing: Spacing.s1) {
+            Icon(.arrowsRepeat, size: 11, color: Theme.Color.appTextSecondary)
+            Text(text)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .lineLimit(1)
+        }
+        .accessibilityIdentifier("pulsePostRepostedBy_\(content.id)")
     }
 
     /// An Event's when and where, under its text (as on the web card).
@@ -671,6 +688,10 @@ public struct PulseIntentChip: View {
 private extension PulsePostCard {
     var card: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
+            if let repostedBy = content.repostedBy {
+                repostedByLine(repostedBy)
+                    .padding(.horizontal, Spacing.s4)
+            }
             header
                 .padding(.horizontal, Spacing.s4)
             if let title = content.title, !title.isEmpty {

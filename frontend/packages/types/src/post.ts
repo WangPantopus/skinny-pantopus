@@ -187,6 +187,8 @@ export interface Post {
   userHasLiked?: boolean;
   userHasSaved?: boolean;
   userHasReposted?: boolean;
+  /** Connections list only: the viewer's connections who reposted the post, the latest first (at most two names). */
+  reposted_by?: { names: string[]; count: number } | null;
   comments?: PostComment[];
   // Organic match fields
   matched_business_ids?: string[] | null;
