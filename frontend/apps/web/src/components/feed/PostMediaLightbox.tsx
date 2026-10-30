@@ -135,7 +135,7 @@ export default function PostMediaLightbox({
         ) : slot.kind === 'document' ? (
           <object key={index} data={urls[index]} type="application/pdf" aria-label="PDF document"
             className="h-[85vh] w-[min(90vw,1100px)] bg-white rounded-lg">
-            <p className="p-6">This browser cannot display the PDF. <a href={urls[index]} target="_blank" rel="noopener noreferrer">Open PDF</a></p>
+            <p className="p-6 text-gray-900">This browser cannot display the PDF. <a className="underline" href={urls[index]} target="_blank" rel="noopener noreferrer">Open PDF</a></p>
           </object>
         ) : slot.kind === 'video' ? (
           <video
