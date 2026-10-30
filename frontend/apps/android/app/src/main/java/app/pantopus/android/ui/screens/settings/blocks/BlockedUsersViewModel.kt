@@ -12,6 +12,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.blocks.BlocksRepository
 import app.pantopus.android.data.feed.FeedActionsRepository
+import app.pantopus.android.data.feed.FeedModerationStore
 import app.pantopus.android.data.privacy.PrivacyRepository
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
@@ -67,6 +68,7 @@ class BlockedUsersViewModel
         private val feedActions: FeedActionsRepository,
         private val auth: AuthRepository,
         sessionFactory: HomeClaimSessionScopeFactory,
+        private val moderation: FeedModerationStore,
     ) : ViewModel() {
         val title: String = "Blocked users"
 
@@ -285,6 +287,7 @@ class BlockedUsersViewModel
                 pending = null
                 when (result) {
                     is NetworkResult.Success -> {
+                        moderation.removeMute(type, entityId)
                         request++
                         _toast.value = ToastMessage("${removed.name} unmuted", ToastKind.Success)
                     }

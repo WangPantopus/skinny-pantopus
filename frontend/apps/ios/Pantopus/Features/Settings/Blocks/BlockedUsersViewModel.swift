@@ -60,6 +60,7 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
 
     private let api: APIClient
     private let auth: AuthManager
+    private let moderation: FeedModerationStore
     private let sessionScope: HomeClaimSessionScope
     private var active = true
     private var request = 0
@@ -97,9 +98,15 @@ public final class BlockedUsersViewModel: ListOfRowsDataSource {
         let origin: Origin
     }
 
-    init(api: APIClient = .shared, auth: AuthManager = .shared, sessionIdentity: (() -> String?)? = nil) {
+    init(
+        api: APIClient = .shared,
+        auth: AuthManager = .shared,
+        moderation: FeedModerationStore = .shared,
+        sessionIdentity: (() -> String?)? = nil
+    ) {
         self.api = api
         self.auth = auth
+        self.moderation = moderation
         sessionScope = HomeClaimSessionScope(api: api, identity: sessionIdentity)
     }
 
@@ -402,6 +409,8 @@ extension BlockedUsersViewModel {
             let entityType = FeedMuteEntityType(rawValue: removed.entityType) ?? .user
             _ = try await api.request(FeedActionsEndpoints.unmute(entityType: entityType, entityId: entityId))
             guard current(), action == mutation else { return }
+            moderation.removeMute(entityType: entityType, entityId: entityId)
+            PulsePostsRefresh.notifyPostsDidChange()
             pending = nil
             request += 1
             rebuild()
