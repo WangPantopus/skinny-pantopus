@@ -19,6 +19,7 @@ import {
   summarizeText,
 } from '@/lib/publicShare';
 import OpenInAppButton from '@/components/public-share/OpenInAppButton';
+import JustInstalledHint from '@/components/public-share/JustInstalledHint';
 import { authPageHref } from '@/lib/auth-utils';
 
 export async function generateMetadata({
@@ -247,6 +248,7 @@ export default async function PublicPostPage({
               Back To Pantopus
             </Link>
           </div>
+          {storeCta ? <div className="mt-4"><JustInstalledHint what="this post" /></div> : null}
         </div>
       </div>
     </main>
