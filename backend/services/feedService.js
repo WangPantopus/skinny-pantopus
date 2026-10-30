@@ -844,11 +844,118 @@ async function loadConnectionIds(userId) {
   ).filter(Boolean);
 }
 
-function connectionPostsQuery(query, authorIds) {
+// The reposts embed holds only reposts by these people.
+function withConnectionReposts(query, authorIds) {
   return query
     .eq('connection_reposts.share_type', 'repost')
-    .in('connection_reposts.user_id', authorIds)
+    .in('connection_reposts.user_id', authorIds);
+}
+
+function connectionPostsQuery(query, authorIds) {
+  return withConnectionReposts(query, authorIds)
     .or(`and(user_id.in.(${authorIds.join(',')}),distribution_targets.ov.{connections},or(post_as.is.null,post_as.neq.business)),connection_reposts.not.is.null`);
+}
+
+// ---------------------------------------------------------------------------
+// Connections order: each post at the time it reached the viewer
+// ---------------------------------------------------------------------------
+
+// A PostgREST timestamp in microseconds since the epoch, so two times in the same millisecond still compare.
+function timestampMicros(value) {
+  const text = String(value || '');
+  const millis = Date.parse(text.replace(/\.\d+/, ''));
+  if (Number.isNaN(millis)) return null;
+  const fraction = /\.(\d+)/.exec(text)?.[1] || '';
+  return millis * 1000 + Number(fraction.padEnd(6, '0').slice(0, 6));
+}
+
+// When a Connections post reached the viewer: when a connection wrote it for Connections, or the latest repost by
+// one of their connections (the embed holds no one else's), whichever is later. Null for a row that is neither.
+function reachedConnectionsAt(row, authorIdSet) {
+  const written = authorIdSet.has(row.user_id) && (row.distribution_targets || []).includes('connections')
+    && row.post_as !== 'business';
+  let latest = written ? { at: row.created_at, micros: timestampMicros(row.created_at) } : null;
+  for (const share of row.connection_reposts || []) {
+    const micros = timestampMicros(share.created_at);
+    if (micros != null && (!latest || micros > latest.micros)) latest = { at: share.created_at, micros };
+  }
+  return latest?.micros == null ? null : latest;
+}
+
+// Newest first, then by id, the order the list's cursor follows.
+function byReachedDesc(a, b) {
+  return (b.reached.micros - a.reached.micros) || (a.row.id < b.row.id ? 1 : a.row.id > b.row.id ? -1 : 0);
+}
+
+// Whether a post that reached the viewer at `reached` lies below `upper`: { at, id } is a cursor, which leaves out
+// that post and everything above it; { at } alone keeps everything at that time.
+function belowUpper(row, reached, upper) {
+  if (!upper) return true;
+  const upperMicros = timestampMicros(upper.at);
+  if (reached.micros !== upperMicros) return reached.micros < upperMicros;
+  return upper.id == null || row.id < upper.id;
+}
+
+// The oldest time in a full batch, below which that read may still hold rows; null when the batch was the last.
+function batchFloor(times, batch) {
+  if (times.length < batch) return null;
+  return times.reduce((oldest, at) => (timestampMicros(at) < timestampMicros(oldest) ? at : oldest));
+}
+
+// One round of unpinned Connections rows below `upper`, newest first by when they reached the viewer. The posts
+// connections wrote for Connections and the reposts by connections are each read newest first, a batch at a time.
+// A post is listed only once it is newer than both batches' floors: above them neither read can still hold a later
+// time for it, so no post is cut off or listed twice. The next round starts at `floor` (null: nothing is left).
+async function connectionRows({ posts, authorIds, authorIdSet, upper, batch }) {
+  let written = withConnectionReposts(posts(), authorIds)
+    .in('user_id', authorIds)
+    .overlaps('distribution_targets', ['connections'])
+    .or('post_as.is.null,post_as.neq.business');
+  if (upper) {
+    written = upper.id == null ? written.lte('created_at', upper.at) : applyCursorCondition(written, upper.at, upper.id);
+  }
+  let shares = supabaseAdmin.from('PostShare').select('post_id, created_at')
+    .eq('share_type', 'repost')
+    .in('user_id', authorIds);
+  if (upper) shares = shares.lte('created_at', upper.at);
+  const [writtenRead, sharesRead] = await Promise.all([
+    written.order('created_at', { ascending: false }).order('id', { ascending: false }).limit(batch),
+    shares.order('created_at', { ascending: false }).order('id', { ascending: false }).limit(batch),
+  ]);
+  if (writtenRead.error) throw new Error(`Feed query failed: ${writtenRead.error.message}`);
+  if (sharesRead.error) throw new Error(`Feed query failed: ${sharesRead.error.message}`);
+  const writtenRows = writtenRead.data || [];
+  const shareRows = sharesRead.data || [];
+  const floor = [
+    batchFloor(writtenRows.map((row) => row.created_at), batch),
+    batchFloor(shareRows.map((share) => share.created_at), batch),
+  ].filter(Boolean).reduce((higher, at) => (higher && timestampMicros(higher) >= timestampMicros(at) ? higher : at), null);
+
+  const listed = new Set(writtenRows.map((row) => row.id));
+  const repostedIds = [...new Set(shareRows.map((share) => share.post_id))].filter((id) => !listed.has(id));
+  let repostedRows = [];
+  if (repostedIds.length) {
+    const { data, error } = await withConnectionReposts(posts(), authorIds).in('id', repostedIds);
+    if (error) throw new Error(`Feed query failed: ${error.message}`);
+    repostedRows = data || [];
+  }
+  const floorMicros = floor && timestampMicros(floor);
+  const rows = [...writtenRows, ...repostedRows]
+    .map((row) => ({ row, reached: reachedConnectionsAt(row, authorIdSet) }))
+    .filter(({ row, reached }) => reached && belowUpper(row, reached, upper)
+      && (floor == null || reached.micros > floorMicros))
+    .sort(byReachedDesc);
+  return { rows, floor };
+}
+
+// The pinned Connections posts below `upper`, newest first by when they reached the viewer: few, so read at once.
+async function pinnedConnectionRows({ posts, authorIds, authorIdSet, upper }) {
+  const { data, error } = await connectionPostsQuery(posts(), authorIds).limit(100);
+  if (error) throw new Error(`Feed query failed: ${error.message}`);
+  return (data || [])
+    .map((row) => ({ row, reached: reachedConnectionsAt(row, authorIdSet) }))
+    .filter(({ row, reached }) => reached && belowUpper(row, reached, upper))
+    .sort(byReachedDesc);
 }
 
 // "Ben C. and 2 others reposted": a Connections post that some of the viewer's connections reposted names the latest
@@ -1169,64 +1276,94 @@ async function getListFeed({
   let dbExhausted = false;
   // Connections: the reposts each fetched post carries, for its "reposted" line.
   const repostsByPostId = new Map();
+  // Connections lists pinned posts first, then the rest, each newest first by when the post reached the viewer
+  // (connectionRows): a repost at the moment it was reposted. Its cursor carries that time; the cursor post's pin
+  // state says which of the two it is in.
+  const authorIdSet = new Set(authorIds || []);
+  const hasCursor = Boolean(cursorCreatedAt && cursorId);
+  let connectionsPinned = !hasCursor || initialCursorPinned === true;
+  let connectionsUpper = hasCursor ? { at: cursorCreatedAt, id: cursorId } : null;
+  const reachedAtById = new Map();
 
-  for (let round = 0; round < MAX_ROUNDS && accumulated.length < parsedLimit && !dbExhausted; round++) {
-    // 5. Build base query
+  // The posts every round reads: shown (with includeEnded, ended but not removed), in this viewer's scope, and of the
+  // asked type, topic and tags.
+  const surfacePosts = () => {
     const rows = supabaseAdmin.from('Post').select(surface === 'connections' ? CONNECTION_POST_SELECT : FEED_POST_SELECT);
     let query = scopeAccess.query(includeEnded
       ? rows.eq('moderation_state', 'live').or('archive_reason.is.null,archive_reason.neq.moderation')
-      : onlyShownPosts(rows.is('archived_at', null)))
-      .order('is_pinned', { ascending: false })
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(overFetchLimit);
-
-    // Distribution target filter
-    if (surface === 'place') {
-      query = query.contains('distribution_targets', ['place']);
-    } else if (surface === 'personas') {
-      query = query
-        .in('identity_context_id', authorIds)
-        .eq('identity_context_type', 'persona')
-        .overlaps('distribution_targets', [distributionTarget]);
-    } else {
-      // Business posts reach a connection only through an explicit repost, not their writer.
-      query = connectionPostsQuery(query, authorIds);
-    }
-
-    // Place bounding-box filter
-    // Use OR to fall back to latitude/longitude when effective_* columns are NULL
-    // (can happen if PostgREST schema cache is stale after migration 20260308130000)
-    if (surface === 'place') {
-      query = withoutOthersUnplacedPosts(query.or(
-        `and(effective_latitude.gte.${box.south},effective_latitude.lte.${box.north},effective_longitude.gte.${box.west},effective_longitude.lte.${box.east}),` +
-        `and(effective_latitude.is.null,latitude.gte.${box.south},latitude.lte.${box.north},longitude.gte.${box.west},longitude.lte.${box.east})`
-      ), userId);
-    }
-
+      : onlyShownPosts(rows.is('archived_at', null)));
     // 6. postType and topic filters (topic=sports is its own lane, above)
     if (postType) query = query.eq('post_type', postType);
     if (topic) query = query.eq('topic', topic);
-
     // 7. tags filter
     if (tags?.length) query = query.overlaps('tags', tags);
+    return query;
+  };
 
-    // Cursor pagination
-    query = applyPinnedCursorCondition(query, loopCursorCreatedAt, loopCursorId, loopCursorPinned);
+  for (let round = 0; round < MAX_ROUNDS && accumulated.length < parsedLimit && !dbExhausted; round++) {
+    let rawRows;
+    if (surface === 'connections') {
+      // Business posts reach a connection only through an explicit repost, not their writer (connectionRows).
+      const read = {
+        posts: () => surfacePosts().eq('is_pinned', connectionsPinned), authorIds, authorIdSet, upper: connectionsUpper,
+      };
+      let ordered;
+      if (connectionsPinned) {
+        ordered = await pinnedConnectionRows(read);
+        connectionsPinned = false;
+        connectionsUpper = null;
+      } else {
+        const { rows, floor } = await connectionRows({ ...read, batch: overFetchLimit });
+        ordered = rows;
+        connectionsUpper = floor && { at: floor };
+        dbExhausted = !floor;
+      }
+      rawRows = ordered.map(({ row }) => row);
+      for (const { row, reached } of ordered) reachedAtById.set(row.id, reached.at);
+    } else {
+      // 5. Build base query
+      let query = surfacePosts()
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(overFetchLimit);
 
-    const { data, error } = await query;
+      // Distribution target filter
+      if (surface === 'place') {
+        query = query.contains('distribution_targets', ['place']);
+      } else {
+        query = query
+          .in('identity_context_id', authorIds)
+          .eq('identity_context_type', 'persona')
+          .overlaps('distribution_targets', [distributionTarget]);
+      }
+
+      // Place bounding-box filter
+      // Use OR to fall back to latitude/longitude when effective_* columns are NULL
+      // (can happen if PostgREST schema cache is stale after migration 20260308130000)
+      if (surface === 'place') {
+        query = withoutOthersUnplacedPosts(query.or(
+          `and(effective_latitude.gte.${box.south},effective_latitude.lte.${box.north},effective_longitude.gte.${box.west},effective_longitude.lte.${box.east}),` +
+          `and(effective_latitude.is.null,latitude.gte.${box.south},latitude.lte.${box.north},longitude.gte.${box.west},longitude.lte.${box.east})`
+        ), userId);
+      }
+
+      // Cursor pagination
+      query = applyPinnedCursorCondition(query, loopCursorCreatedAt, loopCursorId, loopCursorPinned);
+
+      const { data, error } = await query;
+      if (error) {
+        logger.error('Feed query failed', { error: error.message, userId, surface });
+        throw new Error(`Feed query failed: ${error.message}`);
+      }
+      rawRows = data || [];
+      if (rawRows.length < overFetchLimit) {
+        dbExhausted = true;
+      }
+    }
     // Loaded once (filtersRead above) and reused across fetch iterations.
     const filters = await outcome(filtersRead);
     const filterPolitics = !filters.feedPreferences?.[politicsPrefKey(surface)];
-    if (error) {
-      logger.error('Feed query failed', { error: error.message, userId, surface });
-      throw new Error(`Feed query failed: ${error.message}`);
-    }
-
-    const rawRows = data || [];
-    if (rawRows.length < overFetchLimit) {
-      dbExhausted = true;
-    }
     if (surface === 'connections') {
       for (const row of rawRows) repostsByPostId.set(row.id, row.connection_reposts || []);
     }
@@ -1279,8 +1416,8 @@ async function getListFeed({
 
     accumulated.push(...posts);
 
-    // Advance cursor to the last raw row for the next round
-    if (rawRows.length > 0) {
+    // Advance cursor to the last raw row for the next round (Connections keeps its own, above)
+    if (surface !== 'connections' && rawRows.length > 0) {
       const lastRaw = rawRows[rawRows.length - 1];
       loopCursorCreatedAt = lastRaw.created_at;
       loopCursorId = lastRaw.id;
@@ -1289,7 +1426,7 @@ async function getListFeed({
   }
 
   // 11. Trim to limit. Query order already matches the display order:
-  // pinned first, then newest-first within each pin bucket.
+  // pinned first, then newest-first within each pin bucket (Connections: by when each post reached the viewer).
   const hasMore = !dbExhausted || accumulated.length > parsedLimit;
   let posts = accumulated.slice(0, parsedLimit);
 
@@ -1317,12 +1454,13 @@ async function getListFeed({
     ? enriched.map((post) => (repostLines.has(post.id) ? { ...post, reposted_by: repostLines.get(post.id) } : post))
     : enriched;
 
-  // 14–15. Build pagination and return
+  // 14–15. Build pagination and return. A Connections cursor carries when its post reached the viewer, which apps send
+  // back unchanged as cursorCreatedAt.
   const lastPost = shown.length > 0 ? shown[shown.length - 1] : null;
   return {
     posts: shown,
     pagination: {
-      nextCursor: lastPost ? { createdAt: lastPost.created_at, id: lastPost.id } : null,
+      nextCursor: lastPost ? { createdAt: reachedAtById.get(lastPost.id) || lastPost.created_at, id: lastPost.id } : null,
       hasMore,
     },
   };
