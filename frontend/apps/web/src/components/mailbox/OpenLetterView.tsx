@@ -23,8 +23,12 @@ type Letter = EscrowedMailView['mail'];
 type ClosedCode = Extract<EscrowClaimErrorCode, 'MAIL_LINK_INVALID' | 'MAIL_CLAIMED' | 'MAIL_EXPIRED' | 'MAIL_WITHDRAWN'> | 'UNAVAILABLE';
 type ViewState =
   | { phase: 'loading' }
-  | { phase: 'closed'; code: ClosedCode }
+  | { phase: 'closed'; code: ClosedCode; card?: boolean }
   | { phase: 'ready'; letter: Letter };
+
+// A Christmas card (holiday_cards) closes in card words: the server marks its answer `card: true`.
+const closedForCard = (err: unknown): boolean => Boolean((err as { data?: { card?: unknown } } | null)?.data?.card);
+const cardWords = (text: string) => text.replace(/\bletter\b/g, 'card').replace(/\bread\b/g, 'open');
 
 const CLOSED: Record<ClosedCode, { title: string; detail: string; icon: LucideIcon }> = {
   MAIL_LINK_INVALID: {
@@ -123,7 +127,7 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
     setState({ phase: 'loading' });
     api.mailCompose.getEscrowedMailPublic(mailId, token)
       .then((res) => { if (!cancelled) setState({ phase: 'ready', letter: res.mail }); })
-      .catch((err: unknown) => { if (!cancelled) setState({ phase: 'closed', code: closedCode(err) }); });
+      .catch((err: unknown) => { if (!cancelled) setState({ phase: 'closed', code: closedCode(err), card: closedForCard(err) }); });
     return () => { cancelled = true; };
   }, [mailId, token, attempt]);
 
@@ -136,7 +140,7 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
     } catch (err: unknown) {
       const code = (err as { code?: unknown } | null)?.code;
       if (typeof code === 'string' && CLOSED_CODES.has(code)) {
-        setState({ phase: 'closed', code: code as ClosedCode });
+        setState({ phase: 'closed', code: code as ClosedCode, card: closedForCard(err) || Boolean(state.phase === 'ready' && state.letter.card) });
       } else if (code === 'MAIL_CONTACT_MISMATCH') {
         setWrongAccount(true);
         api.users.getMyProfile().then((profile) => setAccount(profile.email || '')).catch(() => setAccount(''));
@@ -180,7 +184,8 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
   }
 
   if (state.phase === 'closed') {
-    const closed = CLOSED[state.code];
+    const words = state.card ? cardWords : (text: string) => text;
+    const closed = { ...CLOSED[state.code], title: words(CLOSED[state.code].title), detail: words(CLOSED[state.code].detail) };
     const Icon = closed.icon;
     return (
       <Shell>
@@ -209,8 +214,11 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
   }
 
   const { letter } = state;
+  // A Christmas card says only that it is one: no picture, no note, until it's in their mailbox.
+  const card = letter.card ?? null;
+  const noun = card ? 'card' : 'letter';
   const byNumber = !letter.sentTo.includes('@');
-  const sentToLabel = `${letter.sentTo}, the ${byNumber ? 'number' : 'address'} this letter was sent to`;
+  const sentToLabel = `${letter.sentTo}, the ${byNumber ? 'number' : 'address'} this ${noun} was sent to`;
 
   return (
     <Shell>
@@ -219,7 +227,7 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
           <Mail size={24} strokeWidth={2} className="text-app-text-secondary" />
         </span>
         <div className="min-w-0">
-          <p className="text-[12px] font-semibold tracking-[0.08em] uppercase text-app-text-muted">A letter for you</p>
+          <p className="text-[12px] font-semibold tracking-[0.08em] uppercase text-app-text-muted">{card ? 'A Christmas card for you' : 'A letter for you'}</p>
           <h1 className="text-[19px] font-bold text-app-text -tracking-[0.01em] mt-0.5 break-words">From {letter.senderName}</h1>
           {letter.senderVerified && (
             <p className="inline-flex items-center gap-1.5 rounded-full bg-app-success-light px-2.5 py-1 mt-2 text-[12px] font-semibold text-app-success">
@@ -230,8 +238,13 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
         </div>
       </div>
 
-      <section aria-label="Letter preview" className="mt-5 rounded-xl border border-app-border-subtle bg-app-surface-raised p-4">
+      <section aria-label={card ? 'Card' : 'Letter preview'} className="mt-5 rounded-xl border border-app-border-subtle bg-app-surface-raised p-4">
         {letter.subject && <h2 className="text-[15px] font-semibold text-app-text break-words">{letter.subject}</h2>}
+        {card ? (
+          <p className="text-[14px] text-app-text-secondary leading-[21px] mt-1">
+            {card.sealed ? 'It’s sealed until Christmas morning. ' : ''}You’ll see the card once it’s in your mailbox.
+          </p>
+        ) : null}
         {letter.previewText && (
           <p className="text-[14px] text-app-text-secondary leading-[21px] mt-1 break-words line-clamp-3">{letter.previewText}</p>
         )}
@@ -242,7 +255,7 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
 
       {signedIn === false && (
         <div className="mt-5 flex flex-col gap-2.5">
-          <Link href={loginHref} className={primaryButton}>Sign in to read it</Link>
+          <Link href={loginHref} className={primaryButton}>{card ? 'Sign in to open it' : 'Sign in to read it'}</Link>
           <Link href={`/register?redirectTo=${encodeURIComponent(here)}`} className={secondaryButton}>Create a free account</Link>
           <p className="text-[13px] text-app-text-secondary leading-[19px] text-center mt-1">
             Use {sentToLabel}.
@@ -253,9 +266,9 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
       {signedIn === true && wrongAccount && (
         <div className="mt-5 flex flex-col gap-2.5">
           <div role="alert" className="rounded-xl border border-app-border bg-app-surface-sunken p-3.5 text-[13px] text-app-text leading-[19px]">
-            This letter was sent to {letter.sentTo}
+            This {noun} was sent to {letter.sentTo}
             {account ? <>, and you’re signed in as <span className="font-semibold break-all">{account}</span></> : null}.
-            {' '}Sign in or create an account with that {byNumber ? 'number' : 'address'} to read it.
+            {' '}Sign in or create an account with that {byNumber ? 'number' : 'address'} to {card ? 'open' : 'read'} it.
           </div>
           <button type="button" onClick={() => void switchAccount()} disabled={switching} className={primaryButton}>
             {switching && <Loader2 size={18} className="animate-spin" />}
@@ -273,19 +286,19 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
         <div className="mt-5 flex flex-col gap-2.5">
           <button type="button" onClick={() => void claim()} disabled={claiming} className={primaryButton}>
             {claiming ? <Loader2 size={18} className="animate-spin" /> : <MailCheck size={18} strokeWidth={2.25} />}
-            Read the letter
+            {card ? 'Open the card' : 'Read the letter'}
           </button>
           <p className="text-[13px] text-app-text-secondary leading-[19px] text-center">
-            It goes into your Pantopus mailbox, where only you can read it.
+            It goes into your Pantopus mailbox, where only you can {card ? 'open' : 'read'} it.
           </p>
           {problem === 'MAIL_OWN_LETTER' && (
             <div role="alert" className="rounded-xl border border-app-border bg-app-surface-sunken p-3.5 text-[13px] text-app-text leading-[19px]">
-              You sent this letter. It’s waiting for the person you wrote to.
+              You sent this {noun}. It’s waiting for the person you wrote to.
             </div>
           )}
           {problem === 'FAILED' && (
             <p role="alert" className="text-[13px] text-app-error leading-[19px] text-center">
-              Couldn’t add the letter to your mailbox. Check your connection and try again.
+              Couldn’t add the {noun} to your mailbox. Check your connection and try again.
             </p>
           )}
         </div>

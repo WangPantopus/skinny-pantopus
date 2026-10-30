@@ -113,9 +113,27 @@ export interface MailItemV2 {
   first_opened_at?: string | null;
   sender_address?: string | null;
   page_count?: number | null;
+  /** A Christmas card (launch key holiday_cards): its picture, caption and year, and whether it's still sealed. */
+  card?: MailCard | null;
+  /** Detail only: this load opened it (the first time). */
+  just_opened?: boolean;
 }
 
 export type MailKind = 'letter' | 'bill' | 'notice' | 'postcard' | 'booklet' | 'parcel' | 'bundle';
+
+/** A Christmas card on a piece. The apps carry the picture (by `design`) and print the caption, year and postmark. */
+export interface MailCard {
+  design: string;
+  number: number | null;
+  caption: string | null;
+  paper: string;
+  holiday: string;
+  year: number;
+  arrival: string | null;
+  /** Sealed until Christmas morning: its note stays on the server until then. */
+  sealed_until: string | null;
+  sealed: boolean;
+}
 
 export interface MailPackage {
   id: string;

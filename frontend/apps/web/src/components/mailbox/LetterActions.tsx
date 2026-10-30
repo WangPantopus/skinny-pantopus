@@ -134,9 +134,9 @@ export default function LetterActions({ piece }: { piece: MailItemV2 }) {
             </div>
           </div>
         ) : (
-          <div className={`grid gap-2 ${filed || archived ? 'grid-cols-2' : 'grid-cols-3'}`}>
-            {/* Filed or archived mail isn't on the counter; bring it back first. */}
-            {filed || archived ? null : piece.on_counter ? (
+          <div className={`grid gap-2 ${filed || archived || piece.card ? 'grid-cols-2' : 'grid-cols-3'}`}>
+            {/* Filed or archived mail isn't on the counter; bring it back first. A Christmas card is nothing to do. */}
+            {filed || archived || piece.card ? null : piece.on_counter ? (
               <button type="button" onClick={() => run('done')} disabled={busy} className={secondary}>
                 <Check className="h-[18px] w-[18px]" aria-hidden />
                 <span>Done</span>

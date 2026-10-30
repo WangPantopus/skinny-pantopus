@@ -83,11 +83,15 @@ export default function MailRow({ item, recipientName, recipientLine, timeZone, 
   const kind = pieceKind(item);
   const when = whenLine(item, timeZone);
   const due = dueLine(item, timeZone);
-  const bits = [
+  const bits = (item.card ? [
+    when,
+    'Christmas card',
+    item.card.sealed ? 'Opens Christmas morning' : read ? 'Opened' : null,
+  ] : [
     when,
     kind === 'postcard' ? 'Postcard' : kind === 'booklet' ? 'Booklet' : read && kind !== 'parcel' ? 'Opened' : null,
     item.on_counter ? 'On the Counter' : null,
-  ].filter(Boolean) as string[];
+  ]).filter(Boolean) as string[];
   const sentence = [pieceSentence(item, read), when ? `Came ${when}` : null, due?.text, item.on_counter ? 'On the Counter' : null]
     .filter(Boolean).join('. ').replace(/\.\./g, '.');
   const style: CSSProperties | undefined = slideInDelayMs != null ? { animationDelay: `${slideInDelayMs}ms` } : undefined;

@@ -14,6 +14,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { MailItemV2 } from '@/types/mailbox';
 import { PantopusMark } from '@/components/brand/PantopusMark';
+import { cardPicture } from './cards/cardArt';
 
 export type PieceKind = 'letter' | 'bill' | 'notice' | 'postcard' | 'booklet' | 'parcel' | 'bundle';
 
@@ -73,6 +74,10 @@ function shortDate(iso: string | undefined | null, opts: Intl.DateTimeFormatOpti
  */
 export function pieceSentence(item: MailItemV2, opened: boolean): string {
   const kind = pieceKind(item);
+  if (item.card) {
+    const state = item.card.sealed ? ', sealed until Christmas morning' : opened ? ', opened' : ', in its envelope';
+    return `Christmas card from ${item.sender_display || 'someone'}${state}`;
+  }
   const what = item.special_delivery ? `Special delivery ${KIND_WORDS[kind].toLowerCase()}` : KIND_WORDS[kind];
   const from = item.sender_display || 'an unknown sender';
   // Pantopus's own mail is already "from Pantopus": no trust words after it.
@@ -179,6 +184,21 @@ function TrustLine({ trust, className = '' }: { trust: Trust; className?: string
   );
 }
 
+/** A Christmas card's seal while it waits for Christmas morning. */
+function ChristmasSeal({ className = '' }: { className?: string }) {
+  return (
+    <svg width="58" height="58" viewBox="0 0 58 58" className={className}>
+      <circle cx="29" cy="29" r="27" fill="#fdf2e3" stroke="#7a1414" strokeWidth="2" />
+      <circle cx="29" cy="29" r="22.5" fill="none" stroke="#7a1414" strokeWidth="0.8" strokeDasharray="2 2" />
+      <g fill="#7a1414" fontFamily={MONO} fontWeight="700" textAnchor="middle">
+        <text x="29" y="23" fontSize="6.4">DO NOT OPEN</text>
+        <text x="29" y="31.5" fontSize="6.4">UNTIL</text>
+        <text x="29" y="40" fontSize="6.4">CHRISTMAS</text>
+      </g>
+    </svg>
+  );
+}
+
 // The torn top edge of an opened envelope.
 const TORN = 'polygon(0 7px, 3% 3px, 6% 8px, 9% 2px, 12% 7px, 15% 3px, 18% 8px, 21% 2px, 24% 6px, 27% 3px, 30% 8px, 33% 2px, 36% 7px, 39% 3px, 42% 8px, 45% 2px, 48% 6px, 51% 3px, 54% 8px, 57% 2px, 60% 7px, 63% 3px, 66% 8px, 69% 2px, 72% 6px, 75% 3px, 78% 8px, 81% 2px, 84% 7px, 87% 3px, 90% 8px, 93% 2px, 96% 6px, 100% 3px, 100% 100%, 0 100%)';
 
@@ -208,7 +228,8 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
     .replace(',', '').toUpperCase();
   const title = item.display_title || item.subject || '';
   const envelope = kind === 'letter' || kind === 'bill' || kind === 'notice' || kind === 'bundle' || item.special_delivery;
-  const torn = opened && envelope;
+  // A sealed Christmas card stays shut until Christmas morning, whatever an older app marked.
+  const torn = opened && envelope && !item.card?.sealed;
   const person = !trust.mark;
 
   let body: ReactNode;
@@ -232,6 +253,37 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
           </div>
           {postDate ? <div className="absolute bottom-2 left-3"><Postmark town={town} date={postDate} size={40} lines={false} /></div> : null}
         </div>
+      </div>
+    );
+  } else if (item.card) {
+    // A Christmas card: a red envelope addressed in cream ink, a stamp cancelled by the postmark, and the
+    // "Do not open until Christmas" seal while it's sealed.
+    body = (
+      <div
+        className="relative h-[150px] rounded-md"
+        style={{
+          backgroundColor: '#9f2f28',
+          backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1.3px)',
+          backgroundSize: '6px 6px',
+          boxShadow: SHADOW,
+          clipPath: torn ? TORN : undefined,
+        }}
+      >
+        <div className="absolute left-4 top-4 max-w-[48%] text-[13px] italic leading-[17px] text-[#fdf2e3]" style={{ fontFamily: SERIF }}>
+          <div className="truncate">{from}</div>
+          {town ? <div className="truncate">{town}</div> : null}
+        </div>
+        <div className="absolute right-3.5 top-3"><Stamp design={stampFor(item.id)} /></div>
+        {postDate ? <div className="absolute right-2 top-4"><Postmark town={town} date={postDate} size={46} /></div> : null}
+        <div className="absolute left-[38%] right-3 top-[72px] text-[16px] italic leading-[21px] text-[#fffaf0]" style={{ fontFamily: SERIF }}>
+          <div className="truncate">{recipientName}</div>
+          {recipientLine ? <div className="truncate">{recipientLine}</div> : null}
+        </div>
+        {item.card.sealed ? (
+          <ChristmasSeal className="absolute bottom-2 left-3" />
+        ) : (
+          <div className="absolute bottom-3 left-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#fde7c8]">Christmas card</div>
+        )}
       </div>
     );
   } else if (kind === 'bill' || kind === 'notice' || kind === 'bundle') {
@@ -361,7 +413,13 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
       className="relative w-full [@media(prefers-color-scheme:dark)]:brightness-[0.94]"
       style={{ paddingTop: torn ? 14 : 0, opacity: fade }}
     >
-      {torn ? (
+      {torn && item.card ? (
+        // The card's picture peeking out of its torn envelope.
+        <div
+          className="absolute left-5 right-5 top-0 h-[30px] rounded-[2px] border border-[#e7dcc6]"
+          style={{ backgroundImage: `url(${cardPicture(item.card.design, 'thumb')})`, backgroundSize: 'cover', backgroundPosition: 'center 28%', boxShadow: '0 1px 2px rgba(15, 23, 42, 0.1)' }}
+        />
+      ) : torn ? (
         // The letter peeking out of a torn envelope.
         <div className="absolute left-5 right-5 top-0 h-[30px] rounded-[2px] border border-[#e2e8f0] bg-white" style={{ boxShadow: '0 1px 2px rgba(15, 23, 42, 0.06)' }}>
           <div className="mx-3.5 mt-[7px] h-0.5 w-[46%] bg-[#cbd5e1]" />

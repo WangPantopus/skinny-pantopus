@@ -607,3 +607,78 @@ export async function seedMailboxTestData(options?: {
 }): Promise<MailboxSeedResult> {
   return post<MailboxSeedResult>('/api/mailbox/seed/test-data', options || {});
 }
+
+// ============ CHRISTMAS CARDS (launch key holiday_cards) ============
+
+/** One of the season's pictures. The apps carry the picture itself, by id. */
+export interface HolidayCardDesign {
+  id: string;
+  number: number;
+  /** Printed under the picture. */
+  caption: string;
+  /** The card's paper colour, for the strip the app prints under the picture. */
+  paper: string;
+}
+
+/**
+ * When a card comes: with the next 7 a.m. mail, the next morning sealed until Christmas morning, or on Christmas
+ * morning. A card by email comes when they open it (`now`), sealed until Christmas or not.
+ */
+export type HolidayCardArrival = 'next_morning' | 'sealed_christmas' | 'christmas_morning' | 'now';
+
+/** A card as its sender sees it: today's card, and the answer to sending one. */
+export interface SentHolidayCard {
+  id: string;
+  design: string;
+  /** Their name as they show it, or the masked email address. */
+  to_name: string | null;
+  by_email: boolean;
+  arrival: HolidayCardArrival;
+  /** When it goes into their mailbox; null by email (when they open the email). */
+  arrives_at: string | null;
+  /** Sealed until then. */
+  opens_at: string | null;
+  /** The carrier's next 7 a.m. pickup; null by email (until they open it). */
+  take_back_until: string | null;
+  can_take_back: boolean;
+  status: 'waiting' | 'delivered' | 'claimed' | 'expired' | 'withdrawn';
+  sent_at: string | null;
+}
+
+export interface HolidayCards {
+  /** Sending is open (until December 31 ends where you are). */
+  open: boolean;
+  holiday: string;
+  year: number;
+  closes_on: string;
+  message_limit: number;
+  designs: HolidayCardDesign[];
+  /** The arrivals open now, to a person and by email. */
+  arrivals: { person: HolidayCardArrival[]; email: HolidayCardArrival[] };
+  /** Your next 7 a.m. round and Christmas morning, where you are. */
+  next_round_at: string;
+  christmas_morning_at: string;
+  time_zone: string;
+  /** Today's card, once you've sent it (one a day). */
+  today: SentHolidayCard | null;
+}
+
+/** GET /api/mailbox/cards */
+export async function getHolidayCards(): Promise<HolidayCards> {
+  return get<HolidayCards>('/api/mailbox/cards');
+}
+
+/** POST /api/mailbox/cards: send today's card, to one person found by name or by email to someone not on Pantopus. */
+export async function sendHolidayCard(data: {
+  design: string;
+  message: string;
+  arrival: HolidayCardArrival;
+  to: { user_id: string } | { email: string };
+}): Promise<{ card: SentHolidayCard }> {
+  return post<{ card: SentHolidayCard }>('/api/mailbox/cards', data);
+}
+
+/** POST /api/mailbox/cards/:id/take-back: before the 7 a.m. pickup (by email: before they open it). */
+export async function takeBackHolidayCard(cardId: string): Promise<{ taken_back: true }> {
+  return post<{ taken_back: true }>(`/api/mailbox/cards/${encodeURIComponent(cardId)}/take-back`);
+}

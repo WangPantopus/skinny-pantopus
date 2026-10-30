@@ -7,8 +7,8 @@
 // Every function throws MailboxApiError on failure.
 // ============================================================
 
-import { get, post, uploadFile, apiRequest, mailbox } from '@pantopus/api';
-import type { DeletedMail } from '@pantopus/api';
+import { get, post, uploadFile, apiRequest, mailbox, mailCompose } from '@pantopus/api';
+import type { DeletedMail, HolidayCards, HolidayCardArrival, SentHolidayCard, RecipientSearchResult } from '@pantopus/api';
 
 /** PATCH helper — not barrel-exported from @pantopus/api */
 function patch<T>(url: string, data?: Record<string, any>): Promise<T> {
@@ -115,6 +115,32 @@ async function call<T>(fn: () => Promise<T>): Promise<T> {
       typeof e.data?.code === 'string' ? e.data.code : undefined,
     );
   }
+}
+
+// ============================================================
+// CHRISTMAS CARDS (launch key holiday_cards)
+// ============================================================
+
+export async function getHolidayCards(): Promise<HolidayCards> {
+  return call(() => mailbox.getHolidayCards());
+}
+
+export async function sendHolidayCard(data: {
+  design: string;
+  message: string;
+  arrival: HolidayCardArrival;
+  to: { user_id: string } | { email: string };
+}): Promise<{ card: SentHolidayCard }> {
+  return call(() => mailbox.sendHolidayCard(data));
+}
+
+export async function takeBackHolidayCard(cardId: string): Promise<{ taken_back: true }> {
+  return call(() => mailbox.takeBackHolidayCard(cardId));
+}
+
+/** People only (no businesses): a card goes to a person. */
+export async function searchCardRecipients(query: string): Promise<RecipientSearchResult[]> {
+  return call(() => mailCompose.searchRecipients(query, undefined, { peopleOnly: true }));
 }
 
 // ============================================================

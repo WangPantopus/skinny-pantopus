@@ -25,7 +25,7 @@ import * as api from '@/lib/mailbox-api';
 import { MailboxApiError } from '@/lib/mailbox-api';
 import { businesses as businessesApi, mailboxV2P2 as mailboxV2P2Api } from '@pantopus/api';
 import type { AssetFullDetail } from '@/lib/mailbox-api';
-import type { DeletedMail } from '@pantopus/api';
+import type { DeletedMail, HolidayCards, SentHolidayCard, RecipientSearchResult } from '@pantopus/api';
 
 import type {
   DrawerMeta,
@@ -69,6 +69,9 @@ export const mailboxKeys = {
     [...mailboxKeys.all, 'drawer', drawer, params] as const,
   itemDetail: (itemId: string) =>
     [...mailboxKeys.all, 'item', itemId] as const,
+  // Christmas cards: the season's pictures and today's card; the card search.
+  holidayCards: () => [...mailboxKeys.all, 'holiday-cards'] as const,
+  cardRecipients: (query: string) => [...mailboxKeys.all, 'card-recipients', query] as const,
   deleted: () => [...mailboxKeys.all, 'deleted'] as const,
 
   // Counter
@@ -162,6 +165,47 @@ export function useDrawerMeta(
 }
 
 /** The whole drawers reply (the delivery and the Homes for the hero); shares the drawers request. */
+// ── Christmas cards (launch key holiday_cards) ─────────────────
+
+/** The season's pictures, the arrivals open now and today's card (null until it's sent). */
+export function useHolidayCards(
+  options?: Omit<UseQueryOptions<HolidayCards, MailboxApiError>, 'queryKey' | 'queryFn'>,
+) {
+  return useQuery<HolidayCards, MailboxApiError>({
+    queryKey: mailboxKeys.holidayCards(),
+    queryFn: api.getHolidayCards,
+    staleTime: STALE_30S,
+    ...options,
+  });
+}
+
+/** People a card can go to, by name (two letters or more). */
+export function useCardRecipients(query: string) {
+  const q = query.trim();
+  return useQuery<RecipientSearchResult[], MailboxApiError>({
+    queryKey: mailboxKeys.cardRecipients(q.toLowerCase()),
+    queryFn: () => api.searchCardRecipients(q),
+    enabled: q.length >= 2,
+    staleTime: STALE_30S,
+  });
+}
+
+export function useSendHolidayCard() {
+  const qc = useQueryClient();
+  return useMutation<{ card: SentHolidayCard }, MailboxApiError, Parameters<typeof api.sendHolidayCard>[0]>({
+    mutationFn: api.sendHolidayCard,
+    onSettled: () => { void qc.invalidateQueries({ queryKey: mailboxKeys.holidayCards() }); },
+  });
+}
+
+export function useTakeBackHolidayCard() {
+  const qc = useQueryClient();
+  return useMutation<{ taken_back: true }, MailboxApiError, string>({
+    mutationFn: api.takeBackHolidayCard,
+    onSettled: () => { void qc.invalidateQueries({ queryKey: mailboxKeys.holidayCards() }); },
+  });
+}
+
 export function useMailboxDrawers(
   options?: Omit<UseQueryOptions<MailboxDrawers, MailboxApiError>, 'queryKey' | 'queryFn'>,
 ) {

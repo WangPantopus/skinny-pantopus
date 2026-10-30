@@ -18,6 +18,7 @@ import { mailLoadMessage } from '@/components/mailbox/mailLoadMessage';
 import useMailAddressee, { type Addressee } from '@/components/mailbox/useMailAddressee';
 import { useMailboxContext } from '@/contexts/MailboxContext';
 import ErrorState from '@/components/ui/ErrorState';
+import SendCardRow from '@/components/mailbox/cards/SendCardRow';
 
 // ── Types ────────────────────────────────────────────────────
 type DrawerParam = MailboxDrawer;
@@ -246,6 +247,8 @@ export default function DrawerLayout({
 
         {/* Item list */}
         <div className="md:flex-1 md:overflow-y-auto">
+          {/* Christmas cards (holiday_cards): the way in, at the top of your own mail */}
+          {drawer === 'personal' ? <SendCardRow /> : null}
           {!homeLocked ? lockedHomes.map((home) => <HomeLockedBox key={home.home_id} home={home} compact />) : null}
           {homeLocked ? (
             <HomeLockedBox home={lockedHomes[0]} />
