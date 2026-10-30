@@ -278,12 +278,19 @@ class WaitingRoomViewModel
             val home = homeContext(claim.home)
             val canOpenHome = opensHomeScreen()
             _leavesToMyHomes.value = !canOpenHome
+            // A Pantopus reviewer's open request (Request info) shows with their note; the seeded frame only
+            // fills the room until the claim loads.
+            val request = claim.openInfoRequest
             _content.value =
-                if (seedState == WaitingRoomState.MoreInfoRequested) {
+                if (request != null) {
                     WaitingRoomContent.moreInfoRequested(
                         address = home.address,
                         claimRef = ref,
                         submittedOn = dayCaption(claim.createdAt),
+                        note = request.note,
+                        askedOn = dayCaption(request.requestedAt),
+                        residency = claimIsResidency,
+                        approval = claim.approval,
                         canOpenHome = canOpenHome,
                     )
                 } else {
