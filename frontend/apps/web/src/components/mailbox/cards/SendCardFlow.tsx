@@ -338,7 +338,7 @@ function WriteStep({
               id="card-note"
               value={message}
               onChange={(event) => onMessage([...event.target.value].slice(0, limit).join(''))}
-              placeholder={`Dear ${toFirstName},`}
+              placeholder={`Dear ${toFirstName || 'friend'},`}
               className="h-full w-full resize-none border-0 bg-transparent p-0 placeholder:text-[#2c4a8a]/45 focus:outline-none focus:ring-0"
               style={{ ...BACK_TEXT, ...RULED }}
               tabIndex={showBack ? 0 : -1}

@@ -3212,7 +3212,13 @@ router.patch('/:id/view', verifyToken, async (req, res) => {
     // them), as on every other mailbox route; a deleted letter (recoverable) can't be read or marked until restored.
     // mark_mail_viewed decided by the mailbox.view permission, which only owners have by default, so a household member
     // opening a household letter got 400 and it stayed unread.
-    if (!(await readableMail(id, userId))) return res.status(404).json({ error: 'Mail not found' });
+    const mail = await readableMail(id, userId);
+    if (!mail) return res.status(404).json({ error: 'Mail not found' });
+    // A sealed Christmas card isn't read before Christmas morning. Phone builds before cards mark a letter read when it
+    // opens; this keeps the card unopened, so it still opens from its envelope then (they leave it unread on an error).
+    if (holidayCards.isSealed(mail)) {
+      return res.status(423).json({ error: 'This card opens on Christmas morning.', code: 'CARD_SEALED' });
+    }
 
     const { data, error } = await supabaseAdmin.rpc('mark_mail_viewed_by_reader', {
       p_mail_id: id,
