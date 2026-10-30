@@ -126,6 +126,7 @@ object HolidayCardArt {
 object HolidayCardTimes {
     private val shortDayFormat = DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US)
     private val longDayFormat = DateTimeFormatter.ofPattern("EEEE, MMMM d", Locale.US)
+    private val mediumDateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)
     private val postmarkFormat = DateTimeFormatter.ofPattern("MMM d", Locale.US)
 
     fun zone(timeZone: String?): ZoneId = timeZone?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
@@ -152,11 +153,25 @@ object HolidayCardTimes {
             parse(value)?.atZone(zone)?.toLocalDate()
         }
 
-    /** "Friday, December 25". */
+    /** "Friday, December 25", from a time or a calendar day ("2026-12-25"). */
     fun longDay(
         value: String?,
         zone: ZoneId,
-    ): String = parse(value)?.atZone(zone)?.format(longDayFormat).orEmpty()
+    ): String = localDay(value, zone)?.format(longDayFormat).orEmpty()
+
+    /** "in 14 days", "tomorrow", "today": a count of days, as [inDays] says it. */
+    fun inDays(days: Int): String =
+        when {
+            days <= 0 -> "today"
+            days == 1 -> "tomorrow"
+            else -> "in $days days"
+        }
+
+    /** "Dec 10, 2026", from a time or a calendar day. */
+    fun mediumDate(
+        value: String?,
+        zone: ZoneId,
+    ): String = localDay(value, zone)?.format(mediumDateFormat).orEmpty()
 
     /** "7 a.m.", "7:30 a.m.". */
     fun clockTime(

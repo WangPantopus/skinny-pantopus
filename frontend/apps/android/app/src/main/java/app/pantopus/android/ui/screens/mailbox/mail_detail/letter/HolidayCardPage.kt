@@ -46,6 +46,7 @@ import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardBack
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardFlip
 import app.pantopus.android.ui.screens.mailbox.cards.HolidayCardFront
 import app.pantopus.android.ui.screens.mailbox.components.MailPiece
+import app.pantopus.android.ui.screens.mailbox.components.MailPieceModel
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Spacing
 import app.pantopus.android.ui.theme.rememberReduceMotion
@@ -97,7 +98,14 @@ internal fun HolidayCardPage(
             )
         } else {
             var showBack by rememberSaveable(letter.envelope.id) { mutableStateOf(false) }
-            OutOfTheEnvelope(letter, card, from, showBack, opening = stage == CardStage.Opening, onOut = { stage = CardStage.Card })
+            HolidayCardOutOfEnvelope(
+                envelope = letter.envelope,
+                card = card,
+                from = from,
+                showBack = showBack,
+                opening = stage == CardStage.Opening,
+                onOut = { stage = CardStage.Card },
+            )
             Row(
                 modifier = Modifier.padding(top = Spacing.s4),
                 horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
@@ -123,10 +131,13 @@ internal fun HolidayCardPage(
     }
 }
 
-/** The card, and while it's [opening], the torn envelope it rises out of falling away under it. */
+/**
+ * The card, and while it's [opening], the torn [envelope] it rises out of falling away under it: the card page's first
+ * open, and step 5 of sending one ("Open it again") showing it before it's sent.
+ */
 @Composable
-private fun OutOfTheEnvelope(
-    letter: MailLetter,
+internal fun HolidayCardOutOfEnvelope(
+    envelope: MailPieceModel,
     card: MailLetterCard,
     from: String,
     showBack: Boolean,
@@ -197,7 +208,7 @@ private fun OutOfTheEnvelope(
                             translationY = away.value * 0.55f * size.height
                             alpha = 1f - away.value
                         }.clearAndSetSemantics {},
-            ) { MailPiece(letter.envelope.copy(opened = true)) }
+            ) { MailPiece(envelope.copy(opened = true)) }
         }
     }
 }
@@ -215,37 +226,51 @@ private fun SealedCard(
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         CardEnvelope(letter, "Christmas card from $from, sealed until Christmas morning", onEnvelope)
-        val shape = RoundedCornerShape(16.dp)
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clip(shape)
-                    .background(PantopusColors.cardNotePaper)
-                    .border(1.dp, PantopusColors.cardNoteEdge, shape)
-                    .padding(horizontal = 20.dp, vertical = Spacing.s4)
-                    .semantics(mergeDescendants = true) {},
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                "Do not open until Christmas",
-                fontFamily = FontFamily.Serif,
-                fontSize = 22.sp,
-                lineHeight = 28.sp,
-                color = PantopusColors.cardWax,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.semantics { heading() },
-            )
-            val day = card.opensOn ?: "December 25"
-            Text(
-                "$from sealed this card. It opens on Christmas morning, $day${card.opensIn?.let { ", $it" }.orEmpty()}.",
-                fontSize = 15.sp,
-                lineHeight = 22.sp,
-                color = PantopusColors.cardTextBody,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = Spacing.s2),
-            )
-        }
+        HolidayCardSealedNotice(from = from, opensOn = card.opensOn, opensIn = card.opensIn)
+    }
+}
+
+/**
+ * "Do not open until Christmas" and when it opens ("Friday, December 25", "in 14 days"): a sealed card's page, and step
+ * 5 of sending one showing it before it's sent.
+ */
+@Composable
+internal fun HolidayCardSealedNotice(
+    from: String,
+    opensOn: String?,
+    opensIn: String?,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(PantopusColors.cardNotePaper)
+                .border(1.dp, PantopusColors.cardNoteEdge, shape)
+                .padding(horizontal = 20.dp, vertical = Spacing.s4)
+                .semantics(mergeDescendants = true) {},
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            "Do not open until Christmas",
+            fontFamily = FontFamily.Serif,
+            fontSize = 22.sp,
+            lineHeight = 28.sp,
+            color = PantopusColors.cardWax,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.semantics { heading() },
+        )
+        val day = opensOn ?: "December 25"
+        Text(
+            "$from sealed this card. It opens on Christmas morning, $day${opensIn?.let { ", $it" }.orEmpty()}.",
+            fontSize = 15.sp,
+            lineHeight = 22.sp,
+            color = PantopusColors.cardTextBody,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = Spacing.s2),
+        )
     }
 }
 

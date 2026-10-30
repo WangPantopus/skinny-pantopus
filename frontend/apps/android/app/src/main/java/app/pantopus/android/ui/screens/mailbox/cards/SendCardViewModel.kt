@@ -2,10 +2,12 @@
 
 package app.pantopus.android.ui.screens.mailbox.cards
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
 import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
+import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SentHolidayCard
 import app.pantopus.android.data.api.net.NetworkError
@@ -24,9 +26,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import javax.inject.Inject
 
-/** The four steps, and the card on its way. */
+/** The five steps, and the card on its way. */
 enum class SendCardStep(
     val title: String,
 ) {
@@ -34,11 +37,12 @@ enum class SendCardStep(
     Pick("Pick a card"),
     Write("Write on the back"),
     Seal("Seal it for the day"),
+    Look("Look it over"),
     Sent("On its way"),
     ;
 
     companion object {
-        val steps = listOf(To, Pick, Write, Seal)
+        val steps = listOf(To, Pick, Write, Seal, Look)
     }
 }
 
@@ -101,9 +105,16 @@ data class SendCardForm(
     val arrival: String? = null,
     /** When a card to the person chosen can come, by their clock; null until read (the sender's next morning stands in). */
     val theirs: HolidayCardArrivalsFor? = null,
+    /** Step 5: the card exactly as the other person will see it. */
+    val preview: HolidayCardPreview? = null,
+    /** Step 4's "Look it over" is reading the preview. */
+    val previewing: Boolean = false,
+    /** Why step 4 couldn't go on: the preview's refusal, or a choice that closed while the card was being looked over. */
+    val sealError: String? = null,
     /** The card just sent ("On its way"). */
     val sent: SentHolidayCard? = null,
     val sending: Boolean = false,
+    /** Why "Seal and send" didn't send it (shown on step 5). */
     val sendError: String? = null,
     val takingBack: Boolean = false,
     val takeBackError: String? = null,
@@ -113,11 +124,13 @@ data class SendCardForm(
 
 /**
  * Send a Christmas card (launch keys `holiday_cards` + `mailbox`; Draft 1's flow around the founder's pictures): who
- * it's for → pick a card → write on the back → seal it for the day. One card a day: once it's sent, this shows today's
- * card, which can be taken back until the 7 a.m. pickup (by email: until they open it).
+ * it's for → pick a card → write on the back → seal it for the day → look it over, exactly as the other person will see
+ * it, and seal and send it from there. One card a day: once it's sent, this shows today's card, which can be taken back
+ * until the 7 a.m. pickup (by email: until they open it). What's chosen so far outlives the screen (Android letting go
+ * of it in the background, or of the whole app): the flow comes back on the same step.
  *
- * Reads `GET /api/mailbox/cards`; searches `GET /api/mailbox/compose/recipients?people=1`; sends `POST
- * /api/mailbox/cards`; takes back `POST /api/mailbox/cards/:id/take-back`.
+ * Reads `GET /api/mailbox/cards`; searches `GET /api/mailbox/compose/recipients?people=1`; looks it over with `POST
+ * /api/mailbox/cards/preview`; sends `POST /api/mailbox/cards`; takes back `POST /api/mailbox/cards/:id/take-back`.
  */
 @HiltViewModel
 class SendCardViewModel
@@ -127,6 +140,7 @@ class SendCardViewModel
         private val auth: AuthRepository,
         private val network: NetworkMonitor,
         private val localProfiles: LocalProfileRepository,
+        private val saved: SavedStateHandle,
     ) : ViewModel() {
         /** The season and today's card, as last read (shared with the Mailbox's row). */
         val cards: StateFlow<HolidayCardsResponse?> = repo.latest
@@ -134,7 +148,7 @@ class SendCardViewModel
         private val _load = MutableStateFlow<SendCardLoad>(SendCardLoad.Loading)
         val load: StateFlow<SendCardLoad> = _load.asStateFlow()
 
-        private val _form = MutableStateFlow(SendCardForm())
+        private val _form = MutableStateFlow(restoredForm())
         val form: StateFlow<SendCardForm> = _form.asStateFlow()
 
         private val _query = MutableStateFlow("")
@@ -153,6 +167,8 @@ class SendCardViewModel
          * carries to the person it's for; the account's name until that's read.
          */
         val fromName: StateFlow<String> = _fromName.asStateFlow()
+
+        private var theirsJob: Job? = null
 
         init {
             viewModelScope.launch {
@@ -177,7 +193,13 @@ class SendCardViewModel
                         }
                 }
             }
+            // Back after Android let go of the screen on step 5: it's read again from step 4.
+            val lookAgain = saved.get<String>(KEY_STEP) == SendCardStep.Look.name
+            // What's chosen so far, kept with the screen's saved state.
+            viewModelScope.launch { _form.collect { save(it) } }
             reload()
+            readTheirs()
+            if (lookAgain) look()
         }
 
         /** Read the cards again (and Try again). */
@@ -210,8 +232,6 @@ class SendCardViewModel
         fun onEmailChange(text: String) {
             _form.update { it.copy(email = text) }
         }
-
-        private var theirsJob: Job? = null
 
         /** Step 1 done: a person from the search, or the address typed. */
         fun choose(to: CardRecipient) {
@@ -255,7 +275,7 @@ class SendCardViewModel
         }
 
         fun chooseArrival(arrival: String) {
-            _form.update { it.copy(arrival = arrival, sendError = null) }
+            _form.update { it.copy(arrival = arrival, sendError = null, sealError = null) }
         }
 
         /** "Write on this card", "Seal it": the next step once this one is done. */
@@ -271,16 +291,55 @@ class SendCardViewModel
             if (_form.value.step == SendCardStep.Seal) readTheirs()
         }
 
-        /** The back arrow: the step before; false when there's none (leave the flow). */
+        /** The back arrow: the step before, with everything chosen kept; false when there's none (leave the flow). */
         fun back(): Boolean {
             val form = _form.value
             val index = SendCardStep.steps.indexOf(form.step)
             if (index <= 0) return false
-            _form.value = form.copy(step = SendCardStep.steps[index - 1], sendError = null)
+            _form.value = form.copy(step = SendCardStep.steps[index - 1], preview = null, sendError = null, sealError = null)
             return true
         }
 
-        /** Seal and send. */
+        /**
+         * Step 4's "Look it over": the card exactly as the other person will see it, after every check sending runs
+         * (nothing is sent). A refusal stays on step 4 with the server's sentence.
+         */
+        fun look() {
+            val form = _form.value
+            val to = form.to ?: return
+            val design = form.design ?: return
+            val arrival = form.arrival ?: return
+            if (form.previewing || form.sending || form.message.isBlank()) return
+            _form.value = form.copy(previewing = true, sealError = null)
+            viewModelScope.launch {
+                val result =
+                    repo.preview(
+                        design = design,
+                        message = form.message.trim(),
+                        arrival = arrival,
+                        toUserId = (to as? CardRecipient.Person)?.userId,
+                        toEmail = (to as? CardRecipient.Email)?.email,
+                    )
+                _form.update {
+                    val same = it.step == SendCardStep.Seal && it.to == to && it.design == design && it.arrival == arrival
+                    when {
+                        // Back, or another choice, while it was read: only an answer for what's chosen now counts.
+                        !same || it.message != form.message -> it.copy(previewing = false)
+                        result is NetworkResult.Success ->
+                            it.copy(previewing = false, preview = result.data, step = SendCardStep.Look, sendError = null)
+                        result is NetworkResult.Failure ->
+                            it.copy(previewing = false, sealError = sendMessage(result.error, doing = "show how your card will look"))
+                        else -> it
+                    }
+                }
+                if ((result as? NetworkResult.Failure)?.error?.serverCode() == ARRIVAL_CLOSED) readTheirs()
+            }
+        }
+
+        /**
+         * Step 5's "Seal and send". A refusal stays on step 5 with the server's sentence; a choice that closed meanwhile
+         * (their 7 a.m. came) goes back to step 4 with why, and their day is read again.
+         */
         fun send() {
             val form = _form.value
             val to = form.to ?: return
@@ -297,12 +356,18 @@ class SendCardViewModel
                         toUserId = (to as? CardRecipient.Person)?.userId,
                         toEmail = (to as? CardRecipient.Email)?.email,
                     )
+                val closed = (result as? NetworkResult.Failure)?.error?.serverCode() == ARRIVAL_CLOSED
                 _form.update {
-                    when (result) {
-                        is NetworkResult.Success -> it.copy(sending = false, sent = result.data, step = SendCardStep.Sent)
-                        is NetworkResult.Failure -> it.copy(sending = false, sendError = sendMessage(result.error))
+                    when {
+                        result is NetworkResult.Success ->
+                            it.copy(sending = false, sent = result.data, step = SendCardStep.Sent, preview = null)
+                        result is NetworkResult.Failure && closed ->
+                            it.copy(sending = false, step = SendCardStep.Seal, preview = null, sealError = sendMessage(result.error))
+                        result is NetworkResult.Failure -> it.copy(sending = false, sendError = sendMessage(result.error))
+                        else -> it
                     }
                 }
+                if (closed) readTheirs()
             }
         }
 
@@ -339,12 +404,65 @@ class SendCardViewModel
         }
 
         /** The server's own sentence when it sent one (a card that can't go yet, a limit), else what went wrong. */
-        private fun sendMessage(error: NetworkError): String =
+        private fun sendMessage(
+            error: NetworkError,
+            doing: String = "send your card",
+        ): String =
             when (error) {
                 is NetworkError.NotFound -> "We couldn’t find that person. Search for them again."
                 is NetworkError.Forbidden -> error.reason ?: "You can’t send a card to this person."
-                else -> error.mailMessage(online = network.isOnline.value, doing = "send your card")
+                else -> error.mailMessage(online = network.isOnline.value, doing = doing)
             }
+
+        /**
+         * The flow as it was saved with the screen: the same step, or the step before it when that step needs what isn't
+         * saved (step 5 is read again from step 4; a card just sent shows as today's card).
+         */
+        private fun restoredForm(): SendCardForm {
+            val email = saved.get<String>(KEY_EMAIL).orEmpty()
+            val to =
+                saved.get<String>(KEY_TO_USER)?.let { CardRecipient.Person(it, saved.get<String>(KEY_TO_NAME).orEmpty()) }
+                    ?: saved.get<String>(KEY_TO_EMAIL)?.let { CardRecipient.Email(it) }
+            val design = saved.get<String>(KEY_DESIGN)
+            val message = saved.get<String>(KEY_MESSAGE).orEmpty()
+            val step =
+                when (saved.get<String>(KEY_STEP)) {
+                    SendCardStep.Pick.name -> SendCardStep.Pick
+                    SendCardStep.Write.name -> SendCardStep.Write
+                    SendCardStep.Seal.name, SendCardStep.Look.name -> SendCardStep.Seal
+                    else -> SendCardStep.To
+                }
+            val reachable =
+                when {
+                    to == null -> SendCardStep.To
+                    design == null -> minOf(step, SendCardStep.Pick)
+                    message.isBlank() -> minOf(step, SendCardStep.Write)
+                    else -> step
+                }
+            return SendCardForm(
+                step = reachable,
+                byEmail = saved.get<Boolean>(KEY_BY_EMAIL) == true,
+                email = email,
+                to = to.takeIf { reachable != SendCardStep.To },
+                design = design,
+                message = message,
+                arrival = saved.get<String>(KEY_ARRIVAL),
+            )
+        }
+
+        private fun save(form: SendCardForm) {
+            // A card on its way isn't a draft any more: the server's today's card shows it.
+            val step = if (form.step == SendCardStep.Sent) SendCardStep.To else form.step
+            saved[KEY_STEP] = step.name
+            saved[KEY_BY_EMAIL] = form.byEmail
+            saved[KEY_EMAIL] = form.email
+            saved[KEY_TO_USER] = (form.to as? CardRecipient.Person)?.userId
+            saved[KEY_TO_NAME] = (form.to as? CardRecipient.Person)?.name
+            saved[KEY_TO_EMAIL] = (form.to as? CardRecipient.Email)?.email
+            saved[KEY_DESIGN] = form.design.takeIf { form.step != SendCardStep.Sent }
+            saved[KEY_MESSAGE] = form.message.takeIf { form.step != SendCardStep.Sent }
+            saved[KEY_ARRIVAL] = form.arrival.takeIf { form.step != SendCardStep.Sent }
+        }
 
         private fun takeBackMessage(error: NetworkError): String =
             when (error) {
@@ -358,8 +476,32 @@ class SendCardViewModel
 
             private const val SEARCH_PAUSE_MS = 250L
             private const val DEFAULT_LIMIT = 300
+
+            /** The arrival chosen closed meanwhile (their 7 a.m. came): step 4 offers what's open now. */
+            private const val ARRIVAL_CLOSED = "CARD_ARRIVAL_CLOSED"
+
+            private const val KEY_STEP = "sendCard.step"
+            private const val KEY_BY_EMAIL = "sendCard.byEmail"
+            private const val KEY_EMAIL = "sendCard.email"
+            private const val KEY_TO_USER = "sendCard.toUser"
+            private const val KEY_TO_NAME = "sendCard.toName"
+            private const val KEY_TO_EMAIL = "sendCard.toEmail"
+            private const val KEY_DESIGN = "sendCard.design"
+            private const val KEY_MESSAGE = "sendCard.message"
+            private const val KEY_ARRIVAL = "sendCard.arrival"
         }
     }
+
+/** The machine code a refusal carried (`{ error, code }`), when the server sent one. */
+private fun NetworkError.serverCode(): String? {
+    val body =
+        when (this) {
+            is NetworkError.ClientError -> body
+            is NetworkError.Server -> body
+            else -> null
+        } ?: return null
+    return runCatching { JSONObject(body).optString("code") }.getOrNull()?.takeIf { it.isNotBlank() }
+}
 
 /** How many letters [this] has, counting an emoji or an accented letter once (the server counts the same way). */
 fun String.letterCount(): Int = codePointCount(0, length)

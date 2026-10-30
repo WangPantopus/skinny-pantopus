@@ -108,7 +108,8 @@ object MailPieceMapper {
             postmarkTown = row.postmark?.town?.takeIf { it.isNotBlank() },
             postmarkDay = postmarkDate?.format(shortDate)?.uppercase(Locale.US) ?: "",
             postmarkYear = postmarkDate?.year?.toString() ?: "",
-            stamp = MailStamp.forPiece(row.id),
+            // A Christmas card's stamp goes with its picture, so the one its sender looked over is the one that comes.
+            stamp = MailStamp.forPiece(row.card?.design ?: row.id),
             note = note(kind, row, title),
             meta = meta(row, kind, whenWords, dueWords),
             accessibilityLabel =

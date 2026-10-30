@@ -308,6 +308,9 @@ object PantopusColors {
     val cardTextQuiet = Color(0xFF4E5563)
     val cardTextProblem = Color(0xFFA81A1A)
 
+    /** A small heading on the desk ("WHEN MAYA OPENS IT", step 5) — `#6B5A3E`. */
+    val cardSectionInk = Color(0xFF6B5A3E)
+
     /** A person's initial in the search — `#5B4A36` on `#EBE3D4`; the row's chevron — `#8A7A62`. */
     val cardInitialInk = Color(0xFF5B4A36)
     val cardInitialPaper = Color(0xFFEBE3D4)
