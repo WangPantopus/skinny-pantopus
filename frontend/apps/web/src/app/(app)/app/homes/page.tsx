@@ -27,7 +27,7 @@ type PendingClaim = { claim: Claim; addressLine: string; cityLine: string };
 // What My Homes last showed for this signed-in session (homes, claims and the first page of residency
 // requests), so opening it again shows that at once and re-checks behind it. Tab memory only; the
 // session marker changes on any sign-in, sign-out or account switch, so another account's copy never shows.
-type PageCopy = { session: string; homes: MyHome[]; pendingClaims: PendingClaim[]; residencyRequests: ResidencyRequest[]; residencyCursor: string | null };
+type PageCopy = { session: string; homes: MyHome[]; pendingClaims: PendingClaim[]; askedClaims: Claim[]; residencyRequests: ResidencyRequest[]; residencyCursor: string | null };
 let lastPage: PageCopy | null = null;
 
 function claimInProgress(status: string) {
@@ -49,13 +49,15 @@ export default function HomesPage() {
     if (lastPage?.session === api.authSessionMarker() && showsMyHomesCopy({ homes: lastPage.homes })) return lastPage;
     const kept = queryClient.getQueryData<MyHomesReply>(myHomesQuery().queryKey);
     return showsMyHomesCopy(kept) && kept?.homes.length
-      ? { homes: kept.homes, pendingClaims: [], residencyRequests: [], residencyCursor: null } : null;
+      ? { homes: kept.homes, pendingClaims: [], askedClaims: [], residencyRequests: [], residencyCursor: null } : null;
   });
   const seeded = useRef(seed !== null);
   const [homes, setHomes] = useState<MyHome[]>(seed?.homes ?? []);
   const recheckOnResume = useRef(false);
   const savedRemoval = useSavedRemoval();
   const [pendingClaims, setPendingClaims] = useState<PendingClaim[]>(seed?.pendingClaims ?? []);
+  // Claims on homes listed under Your homes that a Pantopus reviewer asked more of (Request info).
+  const [askedClaims, setAskedClaims] = useState<Claim[]>(seed?.askedClaims ?? []);
   const [loading, setLoading] = useState(!seeded.current);
   const [error, setError] = useState('');
   // Leaving keeps what's shown, unless a home on it may not show before its re-check.
@@ -75,7 +77,7 @@ export default function HomesPage() {
   const residencyEpoch = useRef(0);
   const morePages = useRef(false);
   const retire = useCallback(() => {
-    generation.current++; ready.current = null; setHomes([]); setPendingClaims([]); setLoading(true);
+    generation.current++; ready.current = null; setHomes([]); setPendingClaims([]); setAskedClaims([]); setLoading(true);
     setResidencyRequests([]); setResidencyCursor(null); setLoadingMore(false); setMoreError(''); setRefreshError('');
   }, []);
   const abandon = useCallback(() => { generation.current++; ready.current = null; }, []);
@@ -87,7 +89,7 @@ export default function HomesPage() {
     lastAttempt.current = Date.now();
     if (!background) {
       ready.current = null; morePages.current = false;
-      setHomes([]); setPendingClaims([]);
+      setHomes([]); setPendingClaims([]); setAskedClaims([]);
       setResidencyRequests([]); setResidencyCursor(null); setLoadingMore(false); setMoreError('');
       setLoading(true);
       setError('');
@@ -126,20 +128,21 @@ export default function HomesPage() {
       // Each claim is named by the address you claimed (your own entry), as on iOS and Android.
       const enriched = claims.filter((c) => claimInProgress(c.status) && c.home_id && !homeIds.has(c.home_id))
         .map((claim) => { const { line, city } = claimAddress(claim); return { claim, addressLine: line, cityLine: city }; });
+      const asked = claims.filter((c) => claimInProgress(c.status) && c.home_id && homeIds.has(c.home_id) && openInfoRequest(c));
       // A page that opened on the kept list becomes ready with its first confirmed answer.
       if (!background || ready.current === null) ready.current = current;
-      setHomes(list); setPendingClaims(enriched);
+      setHomes(list); setPendingClaims(enriched); setAskedClaims(asked);
       // Keep the older requests someone already paged through; a refresh only renews the first page.
       if (!background || !morePages.current) {
         residencyEpoch.current++; setLoadingMore(false); setMoreError('');
         setResidencyRequests(residencyRes.requests); setResidencyCursor(residencyRes.next_cursor);
       }
-      lastPage = showsMyHomesCopy({ homes: list }) ? { session, homes: list, pendingClaims: enriched,
+      lastPage = showsMyHomesCopy({ homes: list }) ? { session, homes: list, pendingClaims: enriched, askedClaims: asked,
         residencyRequests: residencyRes.requests, residencyCursor: residencyRes.next_cursor } : null;
     } catch (e: unknown) {
       if (generation.current !== revision) return;
       if (background) { setRefreshError('Your homes couldn’t be refreshed, so this list may be out of date.'); return; }
-      setHomes([]); setPendingClaims([]); ready.current = null;
+      setHomes([]); setPendingClaims([]); setAskedClaims([]); ready.current = null;
       setError(e instanceof Error ? e.message : 'Failed to load homes');
     } finally {
       inFlight.current--;
@@ -432,6 +435,10 @@ export default function HomesPage() {
                         : residencyDocument ? `/app/homes/${h.id}/verify-residency/submitted`
                           : `/app/homes/${h.id}/residency` : `/app/homes/${h.id}/dashboard`;
                     const action = privateSetup ? 'Home tasks' : verification ? 'Check status' : 'Dashboard';
+                    // A Pantopus reviewer asked more of this home's claim: the note, and where to send it.
+                    const askedClaim = askedClaims.find((c) => c.home_id === h.id);
+                    const askedRequest = askedClaim ? openInfoRequest(askedClaim) : null;
+                    const askedHref = askedClaim ? `/app/homes/${h.id}/${askedClaim.claim_type === 'resident' ? 'verify-residency' : 'claim-owner/evidence'}?claimId=${encodeURIComponent(askedClaim.id)}` : null;
                     const occ = privateSetup ? 'Private setup' : verification ? (ownership ? 'Ownership verification pending' : 'Residency verification pending')
                       : ({ owner: 'Owner', admin: 'Administrator', manager: 'Manager', member: 'Member', lease_resident: 'Resident', restricted_member: 'Restricted member', guest: 'Guest', service_provider: 'Service provider' } as Record<string, string>)[h.role_base || ''] || 'Home access';
                     return (
@@ -447,6 +454,7 @@ export default function HomesPage() {
                               ? 'Claim it now to use your household tools and invite your household. Verifying by mail later gets you neighbor messages and your verified badge.'
                               : 'Start with your own tasks while verification is pending.'}</p>}
                           {verification && <p className="mt-2 text-sm text-app-text-secondary">Household access is awaiting verification. Continue your request to see its current status.</p>}
+                          {askedRequest ? <ClaimInfoRequestNote request={askedRequest} className="mt-3" /> : null}
                         </Link>
                         <div className="flex flex-wrap items-center gap-2">
                           {privateSetup && instantClaim && !claimHeld && (
@@ -458,6 +466,9 @@ export default function HomesPage() {
                           {claimHeld && (
                             <Link href={`/app/homes/${h.id}/verify-postcard`}
                               className="px-3 py-2 rounded-lg bg-black text-white text-sm font-semibold hover:bg-gray-900">Verify by mail</Link>
+                          )}
+                          {askedHref && (
+                            <Link href={askedHref} className="px-3 py-2 rounded-lg bg-black text-white text-sm font-semibold hover:bg-gray-900">Upload documents</Link>
                           )}
                           <Link href={destination} className="px-3 py-2 rounded-lg border border-app-border text-sm font-semibold text-app-text hover:bg-app-hover">{action}</Link>
                           {!verification && (privateSetup || residencyRequests.some(r => r.home_id === h.id)) && <Link href={`/app/homes/${h.id}/residency`} className="px-3 py-2 rounded-lg border border-app-border text-sm font-semibold text-app-text hover:bg-app-hover">Residency status</Link>}

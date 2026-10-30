@@ -44,6 +44,12 @@ export function resolveWebNotificationPath(link: string | null | undefined, noti
   if (notification?.type === 'ownership_claim_rejected') {
     return '/app/homes';
   }
+  // A business verification decision opens the business's verification page,
+  // where its documents and their history are (the apps open the business).
+  if (notification?.type === 'business_verification_approved' || notification?.type === 'business_verification_rejected') {
+    const business = notification.metadata?.business_user_id;
+    if (typeof business === 'string' && uuid.test(business)) return `/app/business/${business.toLowerCase()}/settings/legal`;
+  }
   if (!link) return null;
   const trimmed = link.trim();
   if (!trimmed) return null;

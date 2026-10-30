@@ -331,21 +331,23 @@ export default function AdminReviewClaimsPage() {
             selectedClaim?.id === claim.id ? 'border-violet-500 shadow-md' : 'border-app-border'
           }`}>
           <div className="flex items-center justify-between mb-2">
-            <span className={`text-[11px] font-bold px-2 py-1 rounded-md ${
-              claim.claim_type === 'owner'
-                ? 'bg-violet-100 text-violet-700'
-                : 'bg-amber-100 text-amber-700'
-            }`}>
-              {claim.claim_type === 'owner' ? 'Ownership' : 'Residency'}
-            </span>
-            {/* After Request info: still waiting on the claimant, or they sent a document since. */}
-            {claim.state === 'needs_more_info' ? (
+            <div className="flex items-center gap-1.5">
               <span className={`text-[11px] font-bold px-2 py-1 rounded-md ${
-                (claim.documents_since_request ?? 0) > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-app-surface-sunken text-app-text-secondary'
+                claim.claim_type === 'owner'
+                  ? 'bg-violet-100 text-violet-700'
+                  : 'bg-amber-100 text-amber-700'
               }`}>
-                {(claim.documents_since_request ?? 0) > 0 ? 'Docs sent' : 'Awaiting docs'}
+                {claim.claim_type === 'owner' ? 'Ownership' : 'Residency'}
               </span>
-            ) : null}
+              {/* After Request info: still waiting on the claimant, or they sent a document since. */}
+              {claim.state === 'needs_more_info' ? (
+                <span className={`text-[11px] font-bold px-2 py-1 rounded-md ${
+                  (claim.documents_since_request ?? 0) > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-app-surface-sunken text-app-text-secondary'
+                }`}>
+                  {(claim.documents_since_request ?? 0) > 0 ? 'Docs sent' : 'Awaiting docs'}
+                </span>
+              ) : null}
+            </div>
             <span className="text-xs text-app-text-muted">{formatTimeAgo(claim.created_at)}</span>
           </div>
 

@@ -86,7 +86,7 @@ async function notifyClaimInfoSent({ claim, home }) {
 
   const kind = claim.claim_type === 'resident' ? 'Residency' : 'Ownership';
   const where = [home && home.city, home && home.state].filter(Boolean).join(', ') || 'unknown area';
-  const subject = `[Pantopus] Document sent for a ${kind.toLowerCase()} claim · ${where}`;
+  const subject = `[Pantopus] Document sent for ${kind === 'Ownership' ? 'an' : 'a'} ${kind.toLowerCase()} claim · ${where}`;
   const text = [
     `A claimant sent a document after a reviewer asked for more. The ${kind.toLowerCase()} claim is waiting for review again.`,
     '',
