@@ -769,9 +769,8 @@ public final class PulseComposeViewModel {
         case .event:
             [.title, .eventDate, .eventEndDate, .eventLocation, .eventCapacity, .body]
         case .lost:
-            // An edit shows the saved contact read-only (`buildUpdateRequest` never sends it), so its
-            // phone number neither blocks nor enables Save.
-            isEditing
+            // Only the editable Phone choice shows a phone field. Hidden errors must not block posting.
+            isEditing || lostFoundContactPref != .phone
                 ? [.body, .lostLastSeenLocation, .lostLastSeenDate]
                 : [.body, .lostLastSeenLocation, .lostLastSeenDate, .contactPhone]
         case .announce:

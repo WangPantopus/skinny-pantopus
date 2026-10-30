@@ -812,14 +812,15 @@ class PulseComposeViewModel
                         PulseComposeField.EventCapacity,
                         PulseComposeField.Body,
                     )
-                // An edit shows the saved contact read-only (buildUpdateRequest never sends it), so its
-                // phone number neither blocks nor enables Save.
+                // Only the editable Phone choice shows a phone field. Hidden errors must not block posting.
                 PulseComposeIntent.Lost ->
                     listOfNotNull(
                         PulseComposeField.Body,
                         PulseComposeField.LostLastSeenLocation,
                         PulseComposeField.LostLastSeenDate,
-                        PulseComposeField.ContactPhone.takeUnless { isEditing },
+                        PulseComposeField.ContactPhone.takeUnless {
+                            isEditing || _lostFoundContactPref.value != PulseLostFoundContactPref.Phone
+                        },
                     )
                 PulseComposeIntent.Announce ->
                     if (composePurpose == PulseComposePurpose.Deal) {
