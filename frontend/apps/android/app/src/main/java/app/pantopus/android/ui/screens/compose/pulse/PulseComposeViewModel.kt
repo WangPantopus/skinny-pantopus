@@ -91,11 +91,12 @@ enum class PulseComposeIntent(
          * The four read-only lanes added for RN chip-row parity
          * (`Alert` / `Deal` / `NeighborhoodWin` / `VisitorGuide`) have no
          * dedicated compose form yet, so they pre-fill the generic
-         * Announce / Recommend composers.
+         * Announce / Recommend composers. `Generic` (a `general` post, or
+         * another type with no chip) edits on the Announce form, as on iOS.
          */
         fun fromFeedIntent(feed: PulseIntent): PulseComposeIntent =
             when (feed) {
-                PulseIntent.All, PulseIntent.Generic, PulseIntent.Ask -> Ask
+                PulseIntent.All, PulseIntent.Ask -> Ask
                 PulseIntent.Recommend, PulseIntent.VisitorGuide -> Recommend
                 PulseIntent.Event -> Event
                 PulseIntent.Lost -> Lost
@@ -103,6 +104,7 @@ enum class PulseComposeIntent(
                 PulseIntent.Alert,
                 PulseIntent.Deal,
                 PulseIntent.NeighborhoodWin,
+                PulseIntent.Generic,
                 -> Announce
             }
     }
@@ -1417,14 +1419,9 @@ class PulseComposeViewModel
         /** Seed every field + selector from the saved post + rebaseline. */
         @Suppress("CyclomaticComplexMethod", "LongMethod")
         private fun applyPrefill(post: PostDetailDto) {
-            val intent =
-                if (post.postType == "general") {
-                    PulseComposeIntent.Announce
-                } else {
-                    PulseComposeIntent.fromFeedIntent(PulseIntent.fromPostType(post.postType))
-                }
+            val intent = PulseComposeIntent.fromFeedIntent(PulseIntent.fromPostType(post.postType))
             _activeIntent.value = intent
-            // Older general posts can have no title; preserve that valid state when editing.
+            // Web's default "general" posts have no title and open on the Announcement form.
             titleOptional = post.title.isNullOrBlank()
             savedAudienceLabel =
                 PulseComposeVisibility.entries.firstOrNull { it.key == post.visibility }?.label
