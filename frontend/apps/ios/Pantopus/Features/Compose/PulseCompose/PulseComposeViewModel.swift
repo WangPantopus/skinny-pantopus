@@ -350,7 +350,7 @@ public final class PulseComposeViewModel {
     public var announceAudience: PulseAnnounceAudience = .neighbors
 
     /// Heads Up alert sub-type — required when `postType == alert`.
-    public var safetyAlertKind: PulseSafetyAlertKind = .hazard
+    public var safetyAlertKind: PulseSafetyAlertKind? = .hazard
 
     /// Ask category chip selection. New Asks start on Handyman; an edited Ask posted without a
     /// category has none selected.
@@ -399,6 +399,7 @@ public final class PulseComposeViewModel {
     private var baselineAskCategory: PulseAskCategory? = .handyman
     private var baselineRecommendRating: Int = 5
     private var baselineDealExpiresAt: Date?
+    private var baselineSafetyAlertKind: PulseSafetyAlertKind?
 
     private let createCommandId = UUID().uuidString
     private let api: APIClient
@@ -494,6 +495,7 @@ public final class PulseComposeViewModel {
         baselineIdentity = self.identity
         baselineVisibility = visibility
         baselineDealExpiresAt = dealExpiresAt
+        baselineSafetyAlertKind = safetyAlertKind
     }
 
     /// A Pantopus AI post card's other fields, as current values like its
@@ -632,6 +634,7 @@ public final class PulseComposeViewModel {
         if identity != baselineIdentity { return true }
         if visibility != baselineVisibility { return true }
         if composePurpose == .deal, dealExpiresAt != baselineDealExpiresAt { return true }
+        if composePurpose == .headsUp, safetyAlertKind != baselineSafetyAlertKind { return true }
         for field in fieldsActiveForCurrentIntent() where fields[field]?.isDirty ?? false {
             return true
         }
@@ -937,9 +940,13 @@ public final class PulseComposeViewModel {
     /// Seed every field + selector from the saved post. Re-baselines so
     /// the form starts in a non-dirty pose.
     private func apply(prefill post: PostDetailDTO) {
-        let intent = PulseComposeIntent.from(feedIntent: PulseIntent.from(postType: post.postType))
+        composePurpose = PulseComposePurpose.allCases.first { $0.postType == post.postType }
+        let intent = composePurpose?.legacyIntent ?? PulseComposeIntent.from(feedIntent: PulseIntent.from(postType: post.postType))
+        if composePurpose == .headsUp {
+            safetyAlertKind = post.safetyAlertKind.flatMap(PulseSafetyAlertKind.init(rawValue:))
+            baselineSafetyAlertKind = safetyAlertKind
+        }
         if post.postType == "deal" {
-            composePurpose = .deal
             seedField(.dealBusinessName, value: post.dealBusinessName ?? "")
             dealExpiresAt = Self.dealPickerFormatter().date(from: String(formatEventDateForPicker(post.dealExpiresAt).prefix(10)))
             baselineDealExpiresAt = dealExpiresAt
@@ -1152,7 +1159,7 @@ public final class PulseComposeViewModel {
                 postType: postType,
                 visibility: announceVis,
                 postAs: postAs,
-                safetyAlertKind: postType == "alert" ? safetyAlertKind.rawValue : nil,
+                safetyAlertKind: postType == "alert" ? safetyAlertKind?.rawValue : nil,
                 dealExpiresAt: isDeal ? dealExpiresAt.map(dealExpiryTimestamp(from:)) : nil,
                 businessName: isDeal && !dealBusiness.isEmpty ? dealBusiness : nil,
                 audience: audience,
@@ -1550,7 +1557,9 @@ public final class PulseComposeViewModel {
                 title: titleValue.isEmpty ? nil : titleValue,
                 dealBusinessName: composePurpose == .deal ? trimmedValue(.dealBusinessName) : nil,
                 dealExpiresAt: composePurpose == .deal && dealExpiresAt != baselineDealExpiresAt
-                    ? dealExpiresAt.map(dealExpiryTimestamp(from:)) : nil
+                    ? dealExpiresAt.map(dealExpiryTimestamp(from:)) : nil,
+                safetyAlertKind: composePurpose == .headsUp && safetyAlertKind != baselineSafetyAlertKind
+                    ? safetyAlertKind?.rawValue : nil
             )
         }
     }

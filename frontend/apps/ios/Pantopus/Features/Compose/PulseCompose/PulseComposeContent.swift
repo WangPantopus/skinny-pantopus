@@ -22,7 +22,7 @@ public struct PulseComposeContentState: Equatable {
     public var lostFoundKind: PulseLostFoundKind
     public var lostFoundContactPref: PulseLostFoundContactPref
     public var announceAudience: PulseAnnounceAudience
-    public var safetyAlertKind: PulseSafetyAlertKind
+    public var safetyAlertKind: PulseSafetyAlertKind?
     public var askCategory: PulseAskCategory?
     public var recommendRating: Int
     public var dealExpiresAt: Date?
@@ -66,7 +66,7 @@ public struct PulseComposeContentState: Equatable {
         lostFoundKind: PulseLostFoundKind = .lost,
         lostFoundContactPref: PulseLostFoundContactPref = .dm,
         announceAudience: PulseAnnounceAudience = .neighbors,
-        safetyAlertKind: PulseSafetyAlertKind = .hazard,
+        safetyAlertKind: PulseSafetyAlertKind? = .hazard,
         askCategory: PulseAskCategory? = .handyman,
         recommendRating: Int = 5,
         dealExpiresAt: Date? = Date().addingTimeInterval(7 * 86400),
@@ -930,6 +930,11 @@ public struct PulseComposeContent: View {
 
     private var safetyKindChipRow: some View {
         VStack(alignment: .leading, spacing: Spacing.s1) {
+            if state.safetyAlertKind == nil {
+                Text("Keep the current alert type, or choose a new one.")
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+            }
             Text("Alert type")
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)

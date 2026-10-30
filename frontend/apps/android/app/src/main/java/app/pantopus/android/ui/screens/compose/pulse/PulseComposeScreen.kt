@@ -515,7 +515,7 @@ internal data class PulseComposeContentState(
     /** True when the precheck classified this as a visitor post. */
     val isVisitorPost: Boolean = false,
     val announceAudience: PulseAnnounceAudience = PulseAnnounceAudience.Neighbors,
-    val safetyAlertKind: PulseSafetyAlertKind = PulseSafetyAlertKind.Hazard,
+    val safetyAlertKind: PulseSafetyAlertKind? = PulseSafetyAlertKind.Hazard,
     val askCategory: PulseAskCategory? = PulseAskCategory.Handyman,
     val recommendRating: Int = 5,
     val fields: Map<PulseComposeField, FormFieldState> = emptyMap(),
@@ -1309,17 +1309,24 @@ private fun LostFoundToggle(
 private fun HeadsUpSection(
     fields: Map<PulseComposeField, FormFieldState>,
     audience: PulseAnnounceAudience,
-    safetyKind: PulseSafetyAlertKind,
+    safetyKind: PulseSafetyAlertKind?,
     showAudience: Boolean,
     onUpdateField: (PulseComposeField, String) -> Unit,
     onSelectAudience: (PulseAnnounceAudience) -> Unit,
     onSelectSafetyKind: (PulseSafetyAlertKind) -> Unit,
 ) {
     FormFieldGroup("Heads Up") {
+        if (safetyKind == null) {
+            Text(
+                text = "Keep the current alert type, or choose a new one.",
+                style = PantopusTextStyle.caption,
+                color = PantopusColors.appTextSecondary,
+            )
+        }
         ChipRow(
             label = "Alert type",
             options = PulseSafetyAlertKind.entries.map { it.key to it.label },
-            activeKey = safetyKind.key,
+            activeKey = safetyKind?.key.orEmpty(),
             identifierPrefix = "composePulseSafetyKind",
             onSelect = { key ->
                 PulseSafetyAlertKind.fromKey(key)?.let(onSelectSafetyKind)

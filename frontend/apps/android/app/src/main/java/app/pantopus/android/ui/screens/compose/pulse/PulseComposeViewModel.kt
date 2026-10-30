@@ -393,8 +393,10 @@ class PulseComposeViewModel
         val announceAudience: StateFlow<PulseAnnounceAudience> = _announceAudience.asStateFlow()
 
         private val _safetyAlertKind =
-            MutableStateFlow(prefillDraft?.safetyAlertKind?.let(PulseSafetyAlertKind::fromKey) ?: PulseSafetyAlertKind.Hazard)
-        val safetyAlertKind: StateFlow<PulseSafetyAlertKind> = _safetyAlertKind.asStateFlow()
+            MutableStateFlow<PulseSafetyAlertKind?>(
+                prefillDraft?.safetyAlertKind?.let(PulseSafetyAlertKind::fromKey) ?: PulseSafetyAlertKind.Hazard,
+            )
+        val safetyAlertKind: StateFlow<PulseSafetyAlertKind?> = _safetyAlertKind.asStateFlow()
 
         // New Asks start on Handyman; an edited Ask posted without a category has none selected.
         private val _askCategory = MutableStateFlow<PulseAskCategory?>(PulseAskCategory.Handyman)
@@ -463,6 +465,7 @@ class PulseComposeViewModel
         private var baselineAskCategory: PulseAskCategory? = PulseAskCategory.Handyman
         private var baselineRecommendRating: Int = DEFAULT_RECOMMEND_RATING
         private var baselineDealExpiresAt = _dealExpiresAt.value
+        private var baselineSafetyAlertKind = _safetyAlertKind.value
 
         private var postingTarget: PulsePostingTarget? = null
         private var composePurpose: PulseComposePurpose? = null
@@ -776,6 +779,7 @@ class PulseComposeViewModel
                 if (_identity.value != baselineIdentity) return true
                 if (_visibility.value != baselineVisibility) return true
                 if (composePurpose == PulseComposePurpose.Deal && _dealExpiresAt.value != baselineDealExpiresAt) return true
+                if (composePurpose == PulseComposePurpose.HeadsUp && _safetyAlertKind.value != baselineSafetyAlertKind) return true
                 if (activeIntentFields().any { (_fields.value[it]?.isDirty == true) }) return true
                 return when (_activeIntent.value) {
                     PulseComposeIntent.Ask -> _askCategory.value != baselineAskCategory
@@ -1420,9 +1424,13 @@ class PulseComposeViewModel
         /** Seed every field + selector from the saved post + rebaseline. */
         @Suppress("CyclomaticComplexMethod", "LongMethod")
         private fun applyPrefill(post: PostDetailDto) {
-            val intent = PulseComposeIntent.fromFeedIntent(PulseIntent.fromPostType(post.postType))
+            composePurpose = PulseComposePurpose.entries.firstOrNull { it.postType == post.postType }
+            val intent = composePurpose?.legacyIntent ?: PulseComposeIntent.fromFeedIntent(PulseIntent.fromPostType(post.postType))
+            if (composePurpose == PulseComposePurpose.HeadsUp) {
+                _safetyAlertKind.value = post.safetyAlertKind?.let(PulseSafetyAlertKind::fromKey)
+                baselineSafetyAlertKind = _safetyAlertKind.value
+            }
             if (post.postType == "deal") {
-                composePurpose = PulseComposePurpose.Deal
                 seedField(PulseComposeField.DealBusinessName, post.dealBusinessName.orEmpty())
                 _dealExpiresAt.value = PlanFormat.instant(post.dealExpiresAt)?.atOffset(java.time.ZoneOffset.UTC)?.toLocalDateTime()
                 baselineDealExpiresAt = _dealExpiresAt.value
@@ -1639,6 +1647,12 @@ class PulseComposeViewModel
                             } else {
                                 null
                             },
+                        safetyAlertKind =
+                            if (composePurpose == PulseComposePurpose.HeadsUp && _safetyAlertKind.value != baselineSafetyAlertKind) {
+                                _safetyAlertKind.value?.key
+                            } else {
+                                null
+                            },
                     )
             }
         }
@@ -1736,7 +1750,7 @@ class PulseComposeViewModel
                             purpose = purposeTag,
                             safetyAlertKind =
                                 if (postType == "alert") {
-                                    _safetyAlertKind.value.key
+                                    _safetyAlertKind.value?.key
                                 } else {
                                     null
                                 },

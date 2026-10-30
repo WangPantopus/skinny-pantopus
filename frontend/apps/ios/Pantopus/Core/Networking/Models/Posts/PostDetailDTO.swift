@@ -1,13 +1,5 @@
-//
-//  PostDetailDTO.swift
-//  Pantopus
-//
-//  DTOs for `GET /api/posts/:id` — route `backend/routes/posts.js:2142`.
-//
-//  Only one reaction kind exists server-side today (`POST /:id/like`);
-//  the design draws three (Helpful/Heart/Going). UI surfaces all three
-//  but wires only Helpful — see `PulsePostDetailViewModel`.
-//
+// DTOs for GET /api/posts/:id. Only likes are backed by the reaction API;
+// other displayed reaction styles remain read-only in the detail view.
 
 import Foundation
 
@@ -260,6 +252,7 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
     public let dealBusinessName: String?
     /// Optional end of a Deal, stored by the existing composer.
     public let dealExpiresAt: String?
+    public let safetyAlertKind: String?
     /// Post place label, preferred over the creator locality in the header.
     public let locationName: String?
     /// `moderation` when a moderator removed the post. Only its author can
@@ -315,6 +308,7 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         case serviceCategory = "service_category"
         case dealBusinessName = "deal_business_name"
         case dealExpiresAt = "deal_expires_at"
+        case safetyAlertKind = "safety_alert_kind"
         case locationName = "location_name"
         case archiveReason = "archive_reason"
         case state, resolution
@@ -367,6 +361,7 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         serviceCategory = c.lenient(String.self, forKey: .serviceCategory)
         dealBusinessName = c.lenient(String.self, forKey: .dealBusinessName)
         dealExpiresAt = c.lenient(String.self, forKey: .dealExpiresAt)
+        safetyAlertKind = c.lenient(String.self, forKey: .safetyAlertKind)
         locationName = c.lenient(String.self, forKey: .locationName)
         archiveReason = c.lenient(String.self, forKey: .archiveReason)
         state = c.lenient(String.self, forKey: .state)
@@ -419,6 +414,7 @@ extension PostDetailDTO {
         serviceCategory = nil
         dealBusinessName = nil
         dealExpiresAt = nil
+        safetyAlertKind = nil
         locationName = post.locationName
         archiveReason = nil
         state = post.state

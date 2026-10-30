@@ -108,6 +108,7 @@ public struct PostAuthorHeader: View {
     private let identity: IdentityPillar
     private let timeAndLocality: String
     private let intent: PostIntent
+    private let intentLabel: String
     private let onAvatarTap: (@MainActor () -> Void)?
     private let pulseCard: PulsePageCard?
 
@@ -118,6 +119,7 @@ public struct PostAuthorHeader: View {
         identity: IdentityPillar,
         timeAndLocality: String,
         intent: PostIntent,
+        intentLabel: String? = nil,
         onAvatarTap: (@MainActor () -> Void)? = nil,
         pulseCard: PulsePageCard? = nil
     ) {
@@ -127,6 +129,7 @@ public struct PostAuthorHeader: View {
         self.identity = identity
         self.timeAndLocality = timeAndLocality
         self.intent = intent
+        self.intentLabel = intentLabel ?? intent.label
         self.onAvatarTap = onAvatarTap
         self.pulseCard = pulseCard
     }
@@ -169,9 +172,9 @@ public struct PostAuthorHeader: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             Spacer()
-            StatusChip(intent.label.uppercased(), variant: intent.chipVariant, icon: intent.icon)
+            StatusChip(intentLabel.uppercased(), variant: intent.chipVariant, icon: intent.icon)
                 // "Share post" would read like the top bar's Share button.
-                .accessibilityLabel(intent == .generic ? intent.label : "Post type: \(intent.label)")
+                .accessibilityLabel(intent == .generic ? intentLabel : "Post type: \(intentLabel)")
         }
         .padding(.horizontal, Spacing.s4)
         .accessibilityElement(children: .contain)

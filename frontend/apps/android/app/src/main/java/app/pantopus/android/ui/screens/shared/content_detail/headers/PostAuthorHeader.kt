@@ -93,6 +93,7 @@ fun PostAuthorHeader(
     identity: IdentityPillar,
     timeAndLocality: String,
     intent: PostIntent,
+    intentLabel: String = intent.label,
     onAvatarTap: (() -> Unit)? = null,
 ) {
     Row(
@@ -152,8 +153,8 @@ fun PostAuthorHeader(
         }
         // Named by the post's type; the chip's colour tone isn't content ("LOST & FOUND, error"), and
         // "Share post" would read like the top bar's Share button.
-        Box(modifier = Modifier.clearAndSetSemantics { contentDescription = "Post type: ${intent.label}" }) {
-            StatusChip(text = intent.label.uppercase(), variant = intent.chipVariant, icon = intent.icon)
+        Box(modifier = Modifier.clearAndSetSemantics { contentDescription = "Post type: $intentLabel" }) {
+            StatusChip(text = intentLabel.uppercase(), variant = intent.chipVariant, icon = intent.icon)
         }
     }
 }

@@ -54,8 +54,10 @@ import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
+import app.pantopus.android.ui.screens.compose.pulse.PulseComposePurpose
 import app.pantopus.android.ui.screens.compose.pulse.PulseLostFoundContactPref
 import app.pantopus.android.ui.screens.compose.pulse.PulseLostFoundKind
+import app.pantopus.android.ui.screens.compose.pulse.PulseSafetyAlertKind
 import app.pantopus.android.ui.screens.feed.pulse.PostStatusPill
 import app.pantopus.android.ui.screens.feed.pulse.PulseEventDetails
 import app.pantopus.android.ui.screens.feed.pulse.pulseEventDetails
@@ -106,6 +108,13 @@ internal fun dealDetailLine(post: PostDetailDto): String? {
             ?.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
             ?.let { "Expires $it" }
     return listOfNotNull(business, expiry).joinToString(" · ").ifEmpty { null }
+}
+
+internal fun alertDetailLine(post: PostDetailDto): String? {
+    if (post.postType != "alert") return null
+    val kind = post.safetyAlertKind?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val label = PulseSafetyAlertKind.fromKey(kind)?.label ?: kind.replace('_', ' ').replaceFirstChar { it.titlecase() }
+    return "Alert type: $label"
 }
 
 /**
@@ -534,6 +543,8 @@ fun PulsePostDetailLoadedContent(
                     identity = content.authorIdentity,
                     timeAndLocality = content.timeAndLocality,
                     intent = content.intent,
+                    intentLabel =
+                        PulseComposePurpose.entries.firstOrNull { it.postType == content.post.postType }?.label ?: content.intent.label,
                     // A business author opens its page, and only while it has a published one (the web links none).
                     onAvatarTap =
                         if (businessAuthor != null) {
@@ -561,7 +572,7 @@ fun PulsePostDetailLoadedContent(
         body = {
             BodyReactionsBody(
                 body = content.post.content,
-                detailLine = dealDetailLine(content.post) ?: lostFoundDetailLine(content.post),
+                detailLine = dealDetailLine(content.post) ?: lostFoundDetailLine(content.post) ?: alertDetailLine(content.post),
                 eventDetails = eventDetails(content.post),
                 media = content.media,
                 intent = content.intent,
