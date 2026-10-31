@@ -130,6 +130,8 @@ class SignUpViewModel
             val didSucceed: Boolean = false,
             /** An address filled in for the person (an emailed invitation's); leaving it as it is isn't input. */
             val suggestedEmail: String = "",
+            /** The code a friend's join link filled in; leaving it as it is isn't input either. */
+            val suggestedInviteCode: String = "",
             /** `null` until the link's code is read, and when the read fails (the general invited line stays). */
             val inviteSender: InviteSender? = null,
         ) {
@@ -157,7 +159,7 @@ class SignUpViewModel
                     middleName,
                     lastName,
                     phoneNumber,
-                    inviteCode,
+                    inviteCode.takeIf { it != suggestedInviteCode }.orEmpty(),
                 )
                     .any { it.isNotEmpty() } || dateOfBirth != null || agreedToTerms
 
@@ -220,7 +222,8 @@ class SignUpViewModel
         /** True when the screen was reached from a `join/:code` link. */
         val arrivedByInvite: Boolean = seededInviteCode.isNotEmpty()
 
-        private val _uiState = MutableStateFlow(UiState(inviteCode = seededInviteCode))
+        private val _uiState =
+            MutableStateFlow(UiState(inviteCode = seededInviteCode, suggestedInviteCode = seededInviteCode))
         val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
         init {
