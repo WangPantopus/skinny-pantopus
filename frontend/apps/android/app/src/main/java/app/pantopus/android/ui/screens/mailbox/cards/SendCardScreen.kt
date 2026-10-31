@@ -204,7 +204,16 @@ private fun Steps(
             }
         SendCardStep.Seal ->
             if (design != null && to != null) {
-                SealStep(cards, to, design, fromName, form, onArrival = viewModel::chooseArrival, onLook = viewModel::look)
+                SealStep(
+                    cards,
+                    to,
+                    design,
+                    fromName,
+                    form,
+                    onArrival = viewModel::chooseArrival,
+                    onLook = viewModel::look,
+                    onSend = viewModel::send,
+                )
             }
         SendCardStep.Look -> {
             val preview = form.preview

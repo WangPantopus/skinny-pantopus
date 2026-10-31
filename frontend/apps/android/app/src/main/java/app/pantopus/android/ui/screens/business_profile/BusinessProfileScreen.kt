@@ -281,7 +281,7 @@ fun BusinessProfileScreen(
  */
 private fun businessShareText(content: BusinessProfileContent): String {
     val handle = content.header.handle?.takeIf { it.isNotBlank() }
-    val link = if (content.hasPublicPage && handle != null) InviteLinks.businessUrl(handle) else InviteLinks.DOWNLOAD_URL
+    val link = if (content.hasPublicPage && handle != null) InviteLinks.businessUrl(handle) else InviteLinks.siteUrl
     return "Check out ${content.header.displayName} on Pantopus — $link"
 }
 

@@ -12,6 +12,8 @@
 //  the Mail recipient search for people only.
 //
 
+// swiftlint:disable file_length
+
 import Foundation
 import Observation
 
@@ -97,6 +99,16 @@ final class HolidayCardFlowViewModel {
     /// Why the card can't be looked over, or a choice that closed while it
     /// was: under the choices on "Seal it for the day".
     private(set) var previewError: String?
+    /// The server can't show the look (it doesn't have Look it over yet, or
+    /// its answer can't be read): step 4 says so and seals and sends itself.
+    /// Each visit to step 4 asks for the look again.
+    private(set) var lookUnavailable = false
+
+    /// What step 4 says under its choices: why the card didn't go, or that
+    /// the look can't be shown.
+    var sealNotice: String? {
+        previewError ?? (lookUnavailable ? "Pantopus can’t show how your card will look yet. You can still seal and send it." : nil)
+    }
 
     /// The card just sent, shown as "On its way".
     private(set) var sent: SentHolidayCard?
@@ -218,6 +230,7 @@ final class HolidayCardFlowViewModel {
         guard step != .to, step != .sent, let previous = HolidayCardStep(rawValue: step.rawValue - 1) else { return false }
         step = previous
         sendError = nil
+        previewError = nil
         return true
     }
 
@@ -243,6 +256,7 @@ final class HolidayCardFlowViewModel {
     func toSeal() {
         guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         if arrival.map({ !arrivals.contains($0) }) ?? true { arrival = arrivals.first }
+        lookUnavailable = false
         step = .seal
         // Read their day again: it moves on at 7 a.m. where they live.
         readTheirs()
@@ -256,7 +270,8 @@ final class HolidayCardFlowViewModel {
 
     /// "Look it over": what the other person will see, from the same checks
     /// sending runs (nothing is stored or sent), then step 5. A refusal stays
-    /// on step 4 with the server's sentence.
+    /// on step 4 with the server's sentence; a server that can't show the
+    /// look leaves "Seal and send" on step 4.
     func lookItOver() async {
         guard let body = sendBody, !previewing else { return }
         previewing = true
@@ -268,6 +283,10 @@ final class HolidayCardFlowViewModel {
             sendError = nil
             step = .look
         } catch {
+            if Self.lookIsUnavailable(error) {
+                lookUnavailable = true
+                return
+            }
             previewError = Self.refusal(error, fallback: "Couldn’t show your card just now. Try again in a moment.")
         }
     }
@@ -333,13 +352,15 @@ final class HolidayCardFlowViewModel {
         )
     }
 
-    /// "Seal and send", from "Look it over". A refusal stays there with the
-    /// server's sentence; a choice that closed meanwhile (the 7 a.m. pickup
-    /// came) goes back to step 4 to pick again.
+    /// "Seal and send", from "Look it over" (or from step 4 when the look
+    /// can't be shown). A refusal stays there with the server's sentence; a
+    /// choice that closed meanwhile (the 7 a.m. pickup came) goes back to
+    /// step 4 to pick again.
     func send() async {
         guard let body = sendBody, !sending else { return }
         sending = true
         sendError = nil
+        if step == .seal { previewError = nil }
         defer { sending = false }
         do {
             let response: SendHolidayCardResponse = try await answer(HolidayCardEndpoints.send(body))
@@ -348,13 +369,15 @@ final class HolidayCardFlowViewModel {
             tookBack = false
         } catch {
             let sentence = Self.refusal(error, fallback: "Couldn’t send your card just now. Try again in a moment.")
-            guard Self.refusalCode(error) == "CARD_ARRIVAL_CLOSED" else {
+            let closed = Self.refusalCode(error) == "CARD_ARRIVAL_CLOSED"
+            guard closed || step == .seal else {
                 sendError = sentence
                 return
             }
+            // Step 4 says why, under its choices.
             previewError = sentence
             step = .seal
-            await readOpenArrivals()
+            if closed { await readOpenArrivals() }
         }
     }
 
@@ -381,6 +404,7 @@ final class HolidayCardFlowViewModel {
             let _: TakeBackHolidayCardResponse = try await answer(HolidayCardEndpoints.takeBack(cardId: card.id))
             sent = nil
             preview = nil
+            lookUnavailable = false
             tookBack = true
             recipient = nil
             theirs = nil
@@ -412,7 +436,9 @@ extension HolidayCardFlowViewModel {
         let reply = try await api.requestDataResponse(endpoint, includingForbidden: true, includingNotFound: true)
         guard (200..<300).contains(reply.response.statusCode) else {
             let text = String(data: reply.data, encoding: .utf8)
-            throw HolidayCardRefusal(sentence: Self.serverSentence(text), code: Self.serverCode(text))
+            throw HolidayCardRefusal(
+                sentence: Self.serverSentence(text), code: Self.serverCode(text), status: reply.response.statusCode
+            )
         }
         do {
             return try JSONDecoder().decode(Response.self, from: reply.data)
@@ -464,6 +490,15 @@ extension HolidayCardFlowViewModel {
         }
     }
 
+    /// The server can't show the look: it has no Look it over yet (a 404
+    /// without the server's code, as a server from before it answers), or
+    /// its answer can't be read. Sending still works there.
+    static func lookIsUnavailable(_ error: any Error) -> Bool {
+        if let refusal = error as? HolidayCardRefusal { return refusal.status == 404 && refusal.code == nil }
+        if case .decoding = error as? APIError { return true }
+        return false
+    }
+
     /// What to say when a send or a take-back didn't go: the server's own
     /// sentence when it gave one, else offline or "try again".
     static func refusal(_ error: any Error, fallback: String) -> String {
@@ -497,4 +532,6 @@ extension HolidayCardFlowViewModel {
 struct HolidayCardRefusal: Error {
     let sentence: String?
     var code: String?
+    /// The answer's status (a 403 or a 404).
+    var status: Int?
 }

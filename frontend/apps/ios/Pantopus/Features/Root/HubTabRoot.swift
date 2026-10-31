@@ -1400,6 +1400,13 @@ public struct HubTabRoot: View {
             // Back returns to the mailbox.
             openMailboxScreen(.mailItemDetail(mailId: mailId))
             _ = router.consume()
+        case let .mailSentCard(id):
+            // A card notice (they joined and have it, or its 90 days ended):
+            // the card's page, over the Mailbox showing Sent.
+            MailboxRootViewModel.pendingShowSent = true
+            NotificationCenter.default.post(name: .mailboxShowSent, object: nil)
+            openMailboxScreen(.mailSentCard(id: id))
+            _ = router.consume()
         case let .neighborMessage(messageId):
             path.append(.neighborMessage(messageId: messageId))
             _ = router.consume()
@@ -1433,7 +1440,7 @@ public struct HubTabRoot: View {
              .plans, .plan, .planRequests, .planNew:
             return false
         case .vacationHold, .mailDay, .stamps, .mailTask,
-             .mailTranslation, .unboxing, .packageGig, .earn, .mailbox, .mailItem:
+             .mailTranslation, .unboxing, .packageGig, .earn, .mailbox, .mailItem, .mailSentCard:
             // With Mailbox off for launch, the Place stack shows the placeholder.
             return tab == (LaunchFeatures.mailbox ? .mail : .place)
         default:
@@ -2800,7 +2807,7 @@ public struct HubTabRoot: View {
                     onShareListing: {
                         let name = titleHint ?? "this listing"
                         systemSheet = .share(
-                            items: ["Check out \(name) on Pantopus — \(InviteLinks.downloadURLString)"]
+                            items: ["Check out \(name) on Pantopus — \(InviteLinks.publicPageURLString(path: "/listing/\(listingId)"))"]
                         )
                     },
                     onOpenBuyer: { buyer in
@@ -3047,7 +3054,7 @@ public struct HubTabRoot: View {
                             let draft = MailDraft(
                                 subject: "Join Pantopus",
                                 body: "I'd love to see your business on Pantopus — neighbors near me are "
-                                    + "looking for trusted local pros. \(InviteLinks.downloadURLString)"
+                                    + "looking for trusted local pros. \(PersonalInviteLink.shared.url.absoluteString)"
                             )
                             if MailDraft.canSendMail {
                                 systemSheet = .mail(draft)

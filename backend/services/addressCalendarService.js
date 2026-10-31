@@ -124,8 +124,9 @@ async function loadCountyRules(home) {
 }
 
 // County rules are public and depend only on the home's state and point. A
-// caller that composes one home's calendar twice in a request (Hub Today reads
-// it again at its response boundary) passes the same `countyReads` Map to both,
+// caller that composes one home's calendar more than once in a request (Hub
+// Today reads it again at its response boundary; Place's calendar card and its
+// Today payload are the same home) passes the same `countyReads` Map to each,
 // so they're read once; a home at another state or point gets its own read.
 function countyRulesFor(home, countyReads) {
   if (!countyReads) return loadCountyRules(home);
@@ -236,9 +237,10 @@ function pickupScheduleVersion(rules, homeId) {
 async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS, rules: suppliedRules = null, countyReads = null } = {}) {
   const today = localToday(home, now);
   const end = isoDate(new Date(noonUtc(today).getTime() + windowDays * 86400000));
-  const base = suppliedRules || await loadRules(home);
+  // The home's own rules and its county rules don't depend on each other.
+  const [base, county] = await Promise.all([suppliedRules || loadRules(home), countyRulesFor(home, countyReads)]);
   const baseIds = new Set(base.map((r) => r.id));
-  const loaded = [...base, ...(await countyRulesFor(home, countyReads)).filter((r) => !baseIds.has(r.id))];
+  const loaded = [...base, ...county.filter((r) => !baseIds.has(r.id))];
   const hasHouseholdPickup = loaded.some((r) => r.scope_type === 'home' && PICKUP_KINDS.has(r.kind));
   // Once the household sets its schedule, unknown pickup kinds must not
   // silently fall back to a guessed city week (including briefing signals).

@@ -67,6 +67,12 @@ export const fetchPublicPost = cache(async (id: string): Promise<PublicFetchResu
   return { data: result.data?.post ?? null, status: result.status };
 });
 
+/** A friend's invite link: who sent it (as neighbors see them), or valid: false for a code nobody has. */
+export type PublicJoin = { valid: boolean; referrer_name?: string; referrer_avatar?: string | null; code?: string };
+
+export const fetchPublicJoin = cache(async (code: string): Promise<PublicFetchResult<PublicJoin>> =>
+  fetchPublicJson<PublicJoin>(`/api/users/public/join/${encodeURIComponent(code)}`, { noStore: true }));
+
 export const fetchPublicSupportTrain = cache(async (id: string): Promise<PublicFetchResult<any>> => {
   const result = await fetchPublicJson<any>(
     `/api/activities/support-trains/${encodeURIComponent(id)}`,

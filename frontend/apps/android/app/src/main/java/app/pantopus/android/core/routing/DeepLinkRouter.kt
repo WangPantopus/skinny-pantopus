@@ -30,8 +30,9 @@ import java.net.URLDecoder
  * via [PendingDeepLinkStore] for one-shot post-login replay. OAuth
  * callback, auth reset/verify, and [Destination.Unknown] are never stashed.
  */
-// Arrival completion shares this router's account binding and path resolver.
-@Suppress("TooManyFunctions")
+// Arrival completion shares this router's account binding and path resolver, and it reads every link shape the
+// apps accept, so it stays one large object.
+@Suppress("TooManyFunctions", "LargeClass")
 object DeepLinkRouter {
     private const val BUSINESS_CONVERSATION_SEGMENTS = 4
 
@@ -269,6 +270,13 @@ object DeepLinkRouter {
          */
         data class MailItem(val mailId: String) : Destination
 
+        /**
+         * `/app/mailbox/sent/:id` — a card the person sent, on its page over
+         * Sent (the holiday_card_claimed / holiday_card_expired notices).
+         * Mirrors iOS `mailSentCard`.
+         */
+        data class MailSentCard(val id: String) : Destination
+
         /** `/mailbox` — the Mail tab (the Mail Day summary notification). */
         data object Mailbox : Destination
 
@@ -422,6 +430,10 @@ object DeepLinkRouter {
     private val _prefersLoginPresentation = MutableStateFlow(false)
     val prefersLoginPresentation: StateFlow<Boolean> = _prefersLoginPresentation.asStateFlow()
 
+    /** Counts links parked for after sign-in, so a screen already up (the login form) can re-read what waits. */
+    private val _parkedArrivals = MutableStateFlow(0)
+    val parkedArrivals: StateFlow<Int> = _parkedArrivals.asStateFlow()
+
     /**
      * Bound once from [app.pantopus.android.data.auth.AuthRepository] so
      * the object router can classify without Hilt.
@@ -440,6 +452,21 @@ object DeepLinkRouter {
     fun bindPlansEnabledProvider(provider: () -> Boolean) {
         plansEnabledProvider = provider
     }
+
+    /** The `plans` answer a Plans link acts on, bound once from `PlansFeature` (see [plansAnswer]). */
+    @Volatile
+    private var plansAnswerProvider: suspend () -> Boolean = { plansEnabledProvider() }
+
+    fun bindPlansAnswerProvider(provider: suspend () -> Boolean) {
+        plansAnswerProvider = provider
+    }
+
+    /**
+     * Whether a Plans link may open now: [plansEnabled], or the server's answer while this device has none kept for
+     * the signed-in person (their first sign-in here). Without the wait, a neighbor's plan link that arrives with a
+     * new person's first sign-in meets the default "off" and is dropped.
+     */
+    suspend fun plansAnswer(): Boolean = plansAnswerProvider()
 
     /** True when [destination] is a Plans page. Those open only while the `plans` flag is on. */
     fun isPlansDestination(destination: Destination): Boolean =
@@ -472,6 +499,7 @@ object DeepLinkRouter {
             val normalized = Paths.normalizeIncoming(path)
             if (resolveString(normalized) is Destination.Unknown) return
             if (PendingDeepLinkStore.stash(Paths.normalized(normalized), expectedUserId)) {
+                _parkedArrivals.value += 1
                 _prefersLoginPresentation.value = true
             }
             return
@@ -530,7 +558,7 @@ object DeepLinkRouter {
             // Package unboxing is package tracking (#7), as on web.
             is Destination.Unboxing -> setOf(LaunchFeature.HOUSEHOLD_EXTRAS, LaunchFeature.MAILBOX)
             Destination.Mailbox, is Destination.MailItem, Destination.MailDay, Destination.VacationHold, Destination.Stamps,
-            is Destination.MailTask,
+            is Destination.MailTask, is Destination.MailSentCard,
             -> setOf(LaunchFeature.MAILBOX)
             // A mailbox page the app has no route for (`/app/mailbox/vault`) is still the Mailbox.
             is Destination.Unknown -> if (isMailboxLink(destination.uri)) setOf(LaunchFeature.MAILBOX) else emptySet()
@@ -571,8 +599,9 @@ object DeepLinkRouter {
             "mail_escrow_expired" to setOf(LaunchFeature.MAIL_EXTRAS),
             "mail_escrow_claimed" to setOf(LaunchFeature.MAIL_EXTRAS),
             "mail_claimed" to setOf(LaunchFeature.MAIL_EXTRAS),
-            // Someone not on Pantopus joined and has the sender's Christmas card.
+            // Someone not on Pantopus joined and has the sender's Christmas card, or its 90 days ended.
             "holiday_card_claimed" to setOf(LaunchFeature.MAILBOX, LaunchFeature.HOLIDAY_CARDS),
+            "holiday_card_expired" to setOf(LaunchFeature.MAILBOX, LaunchFeature.HOLIDAY_CARDS),
         )
 
     /**
@@ -683,6 +712,7 @@ object DeepLinkRouter {
                     _pending.value = destination
                 } else {
                     PendingDeepLinkStore.stash(persistencePath)
+                    _parkedArrivals.value += 1
                     _pending.value = null
                     _prefersLoginPresentation.value = true
                 }
@@ -1081,6 +1111,11 @@ object DeepLinkRouter {
                     "tasks" -> {
                         val taskId = segments.getOrNull(2)
                         if (taskId.isNullOrBlank()) Destination.Unknown(raw) else Destination.MailTask(taskId)
+                    }
+                    // A sent card's page; Sent itself is a drawer of the Mailbox.
+                    "sent" -> {
+                        val id = segments.getOrNull(2)
+                        if (segments.size == 3 && id != null && MAIL_UUID.matches(id)) Destination.MailSentCard(id) else Destination.Mailbox
                     }
                     else ->
                         if (segments.size == 2 && MAIL_UUID.matches(sub)) Destination.MailItem(sub) else Destination.Unknown(raw)

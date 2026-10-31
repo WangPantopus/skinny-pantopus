@@ -1986,6 +1986,7 @@ module.exports = {
   normalizeAlignedMediaUrls,
   normalizeFeedPostRow,
   attachIdentityAuthors,
+  loadIdentityAuthorRows,
   getMuteAndHideFilters,
   applyMuteHideFilters,
   enrichWithUserStatus,
