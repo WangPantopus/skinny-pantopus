@@ -438,6 +438,8 @@ public enum HubRoute: Hashable {
     /// Send a Christmas card, or today's card once it's sent (`holiday_cards`):
     /// the row at the top of Me in the Mailbox.
     case christmasCards
+    /// A card in Sent (`mailbox`): what they got, its trail, and Take it back.
+    case mailSentCard(id: String)
     /// Family Mail Party — household co-opening (discover / join / start /
     /// react / hand off). Reached from the Mailbox root overflow menu.
     case mailParty
@@ -933,6 +935,7 @@ public struct HubTabRoot: View {
         model.onVerifyHome = { homeId in showVerifyHome(homeId) }
         model.onOpenWelcome = { mail in push(.mailWelcome(mail)) }
         model.onOpenChristmasCards = { push(.christmasCards) }
+        model.onOpenSentCard = { id in push(.mailSentCard(id: id)) }
         return model
     }
 
@@ -973,7 +976,7 @@ public struct HubTabRoot: View {
              .walletActivityList, .stamps, .mailTask, .mailTaskList, .mailTranslation,
              .packageGig, .earn, .businessOwner, .viewAs, .cancelClaim, .propertyCorrection,
              .quickPostGig, .editGig, .transferOwnership, .mailRoutingQueue, .mailDay,
-             .homeClaimReview, .christmasCards:
+             .homeClaimReview, .christmasCards, .mailSentCard:
             true
         // Forms and wizards with their own Close.
         case .logMaintenance, .editMaintenance, .startPoll, .editAccessCode, .addCalendarEvent,
@@ -3421,7 +3424,19 @@ public struct HubTabRoot: View {
         case .mailRoutingQueue:
             MailRoutingQueueView { Task { @MainActor in pop() } }
         case .christmasCards:
-            HolidayCardFlowView(viewModel: HolidayCardFlowViewModel(fromName: MailPieceRecipient.personName)) {
+            HolidayCardFlowView(
+                viewModel: HolidayCardFlowViewModel(fromName: MailPieceRecipient.personName),
+                onSeeInSent: { cardId in
+                    // Back to the Mailbox, which shows Sent and the card.
+                    Task { @MainActor in
+                        pop()
+                        NotificationCenter.default.post(name: .mailboxOpenSent, object: cardId)
+                    }
+                },
+                onClose: { Task { @MainActor in pop() } }
+            )
+        case let .mailSentCard(id):
+            MailSentPieceView(viewModel: MailSentPieceViewModel(id: id)) {
                 Task { @MainActor in pop() }
             }
         case .mailParty:
@@ -4066,7 +4081,7 @@ extension HubRoute {
         // records, My mail day, vacation hold, stamps, mail tasks and search.
         // Postcard address verification (`.postcardVerification`) stays.
         case .mailboxRoot, .mailboxMap, .mailboxSearch, .mailboxVault, .mailItemDetail, .mailWelcome, .vacationHold,
-             .mailRoutingQueue, .mailDay, .stamps, .mailTask, .mailTaskList, .homeRecords:
+             .mailRoutingQueue, .mailDay, .stamps, .mailTask, .mailTaskList, .homeRecords, .mailSentCard:
             LaunchFeatures.mailbox
         // Launch cuts #12 + #10: sending a Christmas card.
         case .christmasCards:

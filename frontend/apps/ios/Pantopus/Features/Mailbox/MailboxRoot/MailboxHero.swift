@@ -9,7 +9,8 @@
 //  many are still unopened. After an empty round: "No mail today" with the
 //  next delivery. The first time the Mailbox shows after a round, the door
 //  opens and the stack slides out, once per round, in under 2 seconds;
-//  Reduce Motion skips it.
+//  Reduce Motion skips it. While a card waits for the 7 a.m. pickup the
+//  flag is up ("Your flag is up"), and the hero opens Sent.
 //
 
 import SwiftUI
@@ -34,11 +35,29 @@ struct MailboxHeroModel: Equatable {
     let addressVerified: Bool
     /// The number on the mailbox's plate.
     let houseNumber: String?
+    /// Cards to a person still waiting for the 7 a.m. pickup (Sent).
+    var waitingCards = 0
+
+    /// The flag is up while a card waits for the carrier.
+    var flagUp: Bool {
+        waitingCards > 0
+    }
 
     static func make(
         delivery: DrawerListResponse.MailDelivery?,
         homes: [DrawerListResponse.MailboxHome],
+        waitingCards: Int = 0,
         now: Date = Date()
+    ) -> MailboxHeroModel {
+        var model = roundModel(delivery: delivery, homes: homes, now: now)
+        model.waitingCards = waitingCards
+        return model
+    }
+
+    private static func roundModel(
+        delivery: DrawerListResponse.MailDelivery?,
+        homes: [DrawerListResponse.MailboxHome],
+        now: Date
     ) -> MailboxHeroModel {
         let home = homes.first(where: \.isOpen) ?? homes.first
         let address = home.flatMap { MailPieceModel.firstText($0.addressLine, $0.name) }
@@ -67,7 +86,8 @@ struct MailboxHeroModel: Equatable {
     }
 
     var title: String {
-        switch round {
+        if flagUp { return "Your flag is up" }
+        return switch round {
         case let .cameToday(time, _, _): "Today's mail came at \(time)"
         case .comesThisMorning: "Your mail comes this morning"
         case .noMailToday: "No mail today"
@@ -76,6 +96,11 @@ struct MailboxHeroModel: Equatable {
     }
 
     var detail: String? {
+        if flagUp {
+            // "7 a.m." stays on one line.
+            let pickup = "the 7\u{00A0}a.m. pickup"
+            return waitingCards == 1 ? "1 card waits for \(pickup)" : "\(waitingCards) cards wait for \(pickup)"
+        }
         switch round {
         case let .cameToday(_, count, unopened):
             let pieces = count == 1 ? "1 piece" : "\(count) pieces"
@@ -91,7 +116,7 @@ struct MailboxHeroModel: Equatable {
     }
 
     var nextChip: String? {
-        if case let .noMailToday(next) = round { return "\(next) · usually by 8 a.m." }
+        if !flagUp, case let .noMailToday(next) = round { return "\(next) · usually by 8 a.m." }
         return nil
     }
 
@@ -116,14 +141,39 @@ struct MailboxHero: View {
     let model: MailboxHeroModel
     /// The account whose round this is (the once-per-round memory is per account).
     let accountId: String
+    /// With the flag up, the hero opens Sent.
+    var onFlag: (() -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var doorOpen = false
     @State private var stackOut = false
 
     var body: some View {
+        Group {
+            if model.flagUp, let onFlag {
+                Button(action: onFlag) {
+                    card.contentShape(Rectangle())
+                }
+                .buttonStyle(MailPieceButtonStyle())
+                .accessibilityHint("Opens Sent.")
+                .accessibilityAddTraits(.isButton)
+            } else {
+                card
+            }
+        }
+        .accessibilityIdentifier(model.flagUp ? "mailboxHeroFlag" : "mailboxHero")
+        .task(id: model.roundKey) { await playDeliveryIfNew() }
+    }
+
+    private var card: some View {
         HStack(alignment: .center, spacing: 14) {
-            MailboxDrawing(doorOpen: doorOpen || model.doorOpen, showsStack: doorOpen, stackOut: stackOut, houseNumber: model.houseNumber)
-                .frame(width: 72, height: 72)
+            MailboxDrawing(
+                doorOpen: doorOpen || model.doorOpen,
+                showsStack: doorOpen,
+                stackOut: stackOut,
+                houseNumber: model.houseNumber,
+                flagUp: model.flagUp
+            )
+            .frame(width: 72, height: 72)
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.title)
                     .font(.system(size: 16, weight: .semibold))
@@ -159,16 +209,18 @@ struct MailboxHero: View {
                 }
             }
             Spacer(minLength: Spacing.s0)
+            if model.flagUp, onFlag != nil {
+                Icon(.chevronRight, size: 18, color: Theme.Color.appTextMuted)
+            }
         }
-        .padding(.horizontal, Spacing.s4)
+        .padding(.leading, Spacing.s4)
+        .padding(.trailing, model.flagUp && onFlag != nil ? Spacing.s3 : Spacing.s4)
         .padding(.vertical, 14)
         .background(Theme.Color.appSurface, in: RoundedRectangle(cornerRadius: Radii.xl2, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radii.xl2, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
         .shadow(color: .black.opacity(0.04), radius: 3, x: 0, y: 1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(model.spokenLabel)
-        .accessibilityIdentifier("mailboxHero")
-        .task(id: model.roundKey) { await playDeliveryIfNew() }
     }
 
     private var addressColor: Color {
@@ -206,7 +258,7 @@ struct MailboxHero: View {
 
 /// The mailbox from the drawings: a blue arched box on its post, the house
 /// number plate and the red flag. Open, the door drops and today's stack
-/// slides out.
+/// slides out. The flag stands up while a card waits for the carrier.
 struct MailboxDrawing: View {
     let doorOpen: Bool
     /// Today's stack shows only when it's delivered; after an empty round the
@@ -214,6 +266,7 @@ struct MailboxDrawing: View {
     let showsStack: Bool
     let stackOut: Bool
     let houseNumber: String?
+    var flagUp = false
 
     var body: some View {
         GeometryReader { geo in
@@ -258,12 +311,26 @@ struct MailboxDrawing: View {
                             .offset(x: 40 * unit, y: 68 * unit)
                     }
                 }
-                Rectangle()
-                    .fill(MailPaper.mailboxFlag)
-                    .frame(width: 16 * unit, height: 7 * unit)
-                    .clipShape(RoundedRectangle(cornerRadius: 1.5 * unit))
-                    .rotationEffect(.degrees(stackOut ? -70 : 0), anchor: .leading)
-                    .offset(x: 102 * unit, y: 64 * unit)
+                if flagUp {
+                    // Raised: its arm stands up beside the box, the flag at the top.
+                    Rectangle()
+                        .fill(MailPaper.mailboxFlag)
+                        .frame(width: 6 * unit, height: 46 * unit)
+                        .clipShape(RoundedRectangle(cornerRadius: 1.5 * unit))
+                        .offset(x: 104 * unit, y: 20 * unit)
+                    Rectangle()
+                        .fill(MailPaper.mailboxFlag)
+                        .frame(width: 16 * unit, height: 12 * unit)
+                        .clipShape(RoundedRectangle(cornerRadius: 1.5 * unit))
+                        .offset(x: 104 * unit, y: 20 * unit)
+                } else {
+                    Rectangle()
+                        .fill(MailPaper.mailboxFlag)
+                        .frame(width: 16 * unit, height: 7 * unit)
+                        .clipShape(RoundedRectangle(cornerRadius: 1.5 * unit))
+                        .rotationEffect(.degrees(stackOut ? -70 : 0), anchor: .leading)
+                        .offset(x: 102 * unit, y: 64 * unit)
+                }
             }
         }
         .accessibilityHidden(true)

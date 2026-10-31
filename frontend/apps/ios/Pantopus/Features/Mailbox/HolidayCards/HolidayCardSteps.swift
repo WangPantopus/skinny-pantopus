@@ -26,6 +26,25 @@ enum HolidayCardDesk {
     static func muted(_ scheme: ColorScheme) -> Color {
         scheme == .dark ? Theme.Color.appTextSecondary : MailPaper.cardTextMuted
     }
+
+    /// Body words a shade darker than `muted`.
+    static func soft(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Theme.Color.appTextSecondary : MailPaper.cardTextSoft
+    }
+
+    /// The small section headings and the soft links.
+    static func label(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Theme.Color.appTextSecondary : MailPaper.cardLabel
+    }
+
+    static func link(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Theme.Color.appText : MailPaper.cardLink
+    }
+
+    /// Why something didn't go: the wax-red warning ink, lighter in dark mode.
+    static func error(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Theme.Color.error : MailPaper.warningInk
+    }
 }
 
 // MARK: - Step 1: who it's for

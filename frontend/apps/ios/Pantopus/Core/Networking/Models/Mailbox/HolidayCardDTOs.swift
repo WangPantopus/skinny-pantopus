@@ -205,6 +205,116 @@ public struct TakeBackHolidayCardResponse: Decodable, Sendable, Hashable {
     }
 }
 
+/// `POST /api/mailbox/cards/preview` → 200: what the other person will see,
+/// before anything is stored or sent. The card as their Mailbox will show
+/// it, when it comes and opens by their clock, and for an email address the
+/// email they get and the page its link opens. Never their time zone,
+/// address or ids.
+public struct HolidayCardPreview: Decodable, Sendable, Hashable {
+    /// The card as a Mailbox row (`id` "preview"): the name it will really
+    /// carry, the postmark by their clock, the note and the card.
+    public let piece: DrawerItemsResponse.DrawerMail
+    /// The day it goes into their mailbox by their clock (`YYYY-MM-DD`; nil by email).
+    public let arrivesOn: String?
+    /// The day a sealed card opens (`YYYY-MM-DD`), or nil.
+    public let opensOn: String?
+    /// Days from its arrival to the morning a sealed card opens, or nil.
+    public let sealedDays: Int?
+    /// Until when it could be taken back (the carrier's pickup; nil by email).
+    public let takeBackUntil: String?
+    /// The email an address gets; nil for a person on Pantopus.
+    public let email: Email?
+    /// The page the email's link opens; nil for a person on Pantopus.
+    public let linkPage: LinkPage?
+
+    /// The email's words, from the strings the real email uses.
+    public struct Email: Decodable, Sendable, Hashable {
+        public let subject: String
+        public let heading: String
+        public let lines: [String]
+        public let button: String
+        public let footnote: String
+        /// The email's footer lines.
+        public let footer: [String]
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            subject = try c.decode(String.self, forKey: .subject)
+            heading = try c.decode(String.self, forKey: .heading)
+            lines = (try? c.decodeIfPresent([String].self, forKey: .lines)) ?? []
+            button = try c.decode(String.self, forKey: .button)
+            footnote = (try? c.decodeIfPresent(String.self, forKey: .footnote)) ?? ""
+            let footer = (try? c.decodeIfPresent([String].self, forKey: .footer)) ?? []
+            self.footer = footer.isEmpty
+                ? ["Pantopus — Your household, organized.", "If you don’t know the sender, you can safely ignore this email."]
+                : footer
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case subject, heading, lines, button, footnote, footer
+        }
+    }
+
+    /// What the link's page says: who it's from, sealed or not, and the
+    /// address it was sent to, masked ("d***@example.com").
+    public struct LinkPage: Decodable, Sendable, Hashable {
+        public let senderName: String
+        public let senderVerified: Bool
+        public let sealed: Bool
+        public let sentTo: String
+        public let sentOn: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case sealed
+            case senderName = "sender_name"
+            case senderVerified = "sender_verified"
+            case sentTo = "sent_to"
+            case sentOn = "sent_on"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            senderName = try c.decode(String.self, forKey: .senderName)
+            senderVerified = (try? c.decodeIfPresent(Bool.self, forKey: .senderVerified)) ?? false
+            sealed = (try? c.decodeIfPresent(Bool.self, forKey: .sealed)) ?? false
+            sentTo = try c.decode(String.self, forKey: .sentTo)
+            sentOn = try? c.decodeIfPresent(String.self, forKey: .sentOn)
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case piece, email
+        case arrivesOn = "arrives_on"
+        case opensOn = "opens_on"
+        case sealedDays = "sealed_days"
+        case takeBackUntil = "take_back_until"
+        case linkPage = "link_page"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        piece = try Self.piece(in: c)
+        arrivesOn = try? c.decodeIfPresent(String.self, forKey: .arrivesOn)
+        opensOn = try? c.decodeIfPresent(String.self, forKey: .opensOn)
+        sealedDays = try? c.decodeIfPresent(Int.self, forKey: .sealedDays)
+        takeBackUntil = try? c.decodeIfPresent(String.self, forKey: .takeBackUntil)
+        email = try? c.decodeIfPresent(Email.self, forKey: .email)
+        linkPage = try? c.decodeIfPresent(LinkPage.self, forKey: .linkPage)
+    }
+
+    /// The piece read as any Mailbox row is. One without the stored `type`
+    /// reads as the letter a card is.
+    private static func piece(in c: KeyedDecodingContainer<CodingKeys>) throws -> DrawerItemsResponse.DrawerMail {
+        if let row = try? c.decode(DrawerItemsResponse.DrawerMail.self, forKey: .piece) { return row }
+        guard case var .object(fields) = try c.decode(JSONValue.self, forKey: .piece) else {
+            throw DecodingError.dataCorruptedError(forKey: .piece, in: c, debugDescription: "The preview's piece isn't an object.")
+        }
+        if fields["type"]?.stringValue == nil { fields["type"] = .string("letter") }
+        let data = try JSONEncoder().encode(JSONValue.object(fields))
+        return try JSONDecoder().decode(DrawerItemsResponse.DrawerMail.self, from: data)
+    }
+}
+
 /// The card a piece of mail carries (`card` on every piece; nil for anything
 /// else): its picture, caption, paper and year, and whether it's still sealed
 /// until Christmas morning (its note stays on the server until then).
@@ -235,6 +345,23 @@ public struct MailCard: Decodable, Sendable, Hashable {
         arrival = nil
         sealedUntil = nil
         self.sealed = sealed
+    }
+
+    private init(copying card: MailCard, sealed: Bool) {
+        design = card.design
+        number = card.number
+        caption = card.caption
+        paper = card.paper
+        holiday = card.holiday
+        year = card.year
+        arrival = card.arrival
+        sealedUntil = card.sealedUntil
+        self.sealed = sealed
+    }
+
+    /// The same card on the morning its seal lifts.
+    func unsealed() -> MailCard {
+        MailCard(copying: self, sealed: false)
     }
 
     public init(from decoder: any Decoder) throws {

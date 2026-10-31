@@ -150,6 +150,10 @@ enum MailPaper {
     static let cardTextMuted = Color(red: 0x4E / 255, green: 0x55 / 255, blue: 0x63 / 255)
     /// The step dots still ahead.
     static let cardDotAhead = Color(red: 0xD6 / 255, green: 0xCB / 255, blue: 0xB6 / 255)
+    /// The small headings on the desk (Look it over's sections) and its soft
+    /// links ("Open it again").
+    static let cardLabel = Color(red: 0x6B / 255, green: 0x5A / 255, blue: 0x3E / 255)
+    static let cardLink = Color(red: 0x7C / 255, green: 0x4A / 255, blue: 0x2D / 255)
 
     /// A card's paper from its design (`#rrggbb`); the season's cream when
     /// it's missing or unreadable.

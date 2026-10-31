@@ -10,6 +10,10 @@ public extension Notification.Name {
     static let mailboxMailLeftList = Notification.Name("mailboxMailLeftList")
     /// Posted with a letter's id as `object` after opening it marked it read.
     static let mailboxMailViewed = Notification.Name("mailboxMailViewed")
+    /// Posted with a sent card's id as `object` after it was taken back on its page.
+    static let mailboxSentChanged = Notification.Name("mailboxSentChanged")
+    /// Posted to show Sent in the Mailbox; with a sent card's id as `object`, that card's page too.
+    static let mailboxOpenSent = Notification.Name("mailboxOpenSent")
 }
 
 /// The four mailbox drawers. `business` carries the "Biz" short label
@@ -184,6 +188,16 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     private(set) var pieceSections: [MailPieceSection] = []
     /// The Homes this person lives at (whose mail is open, or waits for proof).
     private var homes: [DrawerListResponse.MailboxHome] = []
+    /// Sent (`mailbox`): the chip after the drawers, its list in place of the
+    /// tabs while it's chosen, and the hero's flag while a card waits for the
+    /// 7 a.m. pickup. Sent isn't a drawer: no `GET /v2/drawer/:drawer`, no badge.
+    private(set) var showsSent = false
+    private(set) var sentSummary: DrawerListResponse.MailSent?
+    let sent: MailSentViewModel
+    /// A sent card's page.
+    var onOpenSentCard: (@MainActor (String) -> Void)?
+    /// This Mailbox opened the card flow, so its "See it in Sent" lands here.
+    private var openedCardFlow = false
     /// Owns a business (`GET /api/businesses/my-businesses`): shows Biz.
     private var ownsBusiness = false
     private var didCheckBusinesses = false
@@ -434,6 +448,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         seededState: ListOfRowsState? = nil
     ) {
         self.api = api
+        sent = MailSentViewModel(api: api)
         selectedDrawer = initialDrawer
         selectedTab = initialTab.rawValue
         self.onOpenMail = onOpenMail
@@ -452,6 +467,10 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         onOpenMailTasksHandler = onOpenMailTasks
         sampleProvider = dataProvider
         self.seededState = seededState
+        // A card taken back from Sent: the flag and today's card follow.
+        sent.onChange = { [weak self] in
+            Task { @MainActor in await self?.sentChanged() }
+        }
     }
 
     /// A14.8 — invoked from `MailboxRootView`'s overflow menu when the
@@ -540,6 +559,7 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             }
             // A card may have gone out, or come back, since.
             await fetchChristmasCards()
+            if showsSent { await sent.refresh() }
             return
         }
         state = .loading
@@ -559,7 +579,11 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         }
         await fetchDrawerBadges()
         await fetchPendingRouting()
-        await reloadActiveCombo(keepingRows: true)
+        if showsSent {
+            await sent.refresh()
+        } else {
+            await reloadActiveCombo(keepingRows: true)
+        }
         await fetchChristmasCards()
     }
 
@@ -613,7 +637,47 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     }
 
     public func selectDrawer(_ drawer: MailboxDrawer) {
+        showsSent = false
         selectedDrawer = drawer
+    }
+
+    // MARK: - Sent
+
+    /// The Sent chip shows with `mailbox` once something's been sent, or
+    /// while cards can be sent.
+    var showsSentChip: Bool {
+        isLive && LaunchFeatures.mailbox && (sentSummary?.any == true || LaunchFeatures.holidayCards || showsSent)
+    }
+
+    /// Cards to a person still waiting for the 7 a.m. pickup: the flag is up.
+    /// A card part, so only while cards are on too.
+    var waitingCards: Int {
+        LaunchFeatures.mailbox && LaunchFeatures.holidayCards ? sentSummary?.waiting ?? 0 : 0
+    }
+
+    /// Sent in place of the drawer's tabs and mail.
+    func selectSent() {
+        showsSent = true
+        Task { @MainActor in await sent.load() }
+    }
+
+    func openSentCard(_ id: String) {
+        onOpenSentCard?(id)
+    }
+
+    /// "See it in Sent" from the card flow this Mailbox opened: Sent, then the card.
+    func showSentAfterSending(_ id: String?) {
+        guard openedCardFlow else { return }
+        openedCardFlow = false
+        selectSent()
+        if let id { openSentCard(id) }
+    }
+
+    /// A card was sent or taken back: Sent, the flag and today's card follow.
+    func sentChanged() async {
+        if showsSent { await sent.refresh() }
+        await fetchDrawerBadges()
+        await fetchChristmasCards()
     }
 
     public func selectTab(_ tab: MailboxTab) {
@@ -707,7 +771,8 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             if api === APIClient.shared { MailBadgeStore.shared.apply(response) }
             homes = response.homes
             vacationHold = response.vacationHold
-            hero = MailboxHeroModel.make(delivery: response.delivery, homes: response.homes)
+            sentSummary = response.sent
+            hero = MailboxHeroModel.make(delivery: response.delivery, homes: response.homes, waitingCards: waitingCards)
             if !loadedMail.isEmpty { applyLiveState(drawer: selectedDrawer, tab: currentTab) }
         } catch {
             // Badges are non-blocking chrome — leave them empty on failure
@@ -743,12 +808,13 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
 
     /// The row's tap: the card flow, or today's card.
     func openChristmasCards() {
+        openedCardFlow = true
         onOpenChristmasCards?()
     }
 
     /// The row shows on Me's Incoming while sending is open.
     var showsChristmasCardRow: Bool {
-        isLive && selectedDrawer == .me && currentTab == .incoming && christmasCards != nil
+        isLive && !showsSent && selectedDrawer == .me && currentTab == .incoming && christmasCards != nil
     }
 
     /// Poll the disambiguation queue on appear / pull-to-refresh, exactly
