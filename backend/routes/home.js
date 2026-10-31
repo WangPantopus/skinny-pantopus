@@ -41,6 +41,7 @@ const { unpublishedBusinessIds, isUnpublishedBusiness } = require('../utils/visi
 const homeClaimMergeService = require('../services/homeClaimMergeService');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
 const propertySuggestionsService = require('../services/ai/propertySuggestionsService');
+const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
 const { encodeGeohash } = require('../utils/geohash');
 const { HOME_ISSUE_LIST, HOME_BILL_LIST, HOME_PACKAGE_LIST } = require('../utils/columns');
 const { excludeHiddenHomeActivity } = require('../utils/featureFlags');
@@ -145,7 +146,10 @@ const createHomeSchema = Joi.object({
   wifi_name: Joi.string().max(200).optional().allow('', null),
   wifi_password: Joi.string().max(200).optional().allow('', null),
 
-  /** Full ATTOM /property/detail bundle from property-suggestions — stored under Home.niche_data */
+  /**
+   * property-suggestions' ATTOM bundle, which the apps send back. Accepted and
+   * ignored: the Home stores the server's own copy for its address.
+   */
   attom_property_detail: Joi.object().unknown(true).optional().allow(null),
 }).custom((value, helpers) => {
   if (value.role && value.is_owner !== undefined && value.is_owner !== (value.role === 'owner')) {
@@ -742,7 +746,6 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       year_built, move_in_date, role,
       description, entry_instructions, parking_instructions,
       visibility, amenities,
-      attom_property_detail,
     } = req.body;
     const userId = req.user.id;
     const is_owner = role === 'owner' || (!role && req.body.is_owner === true);
@@ -1111,6 +1114,10 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       });
     }
 
+    // A verified owner reads this record as the county's, so it is the
+    // server's own lookup for this address, never the copy the app sends.
+    const attomPropertyDetail = await propertyIntelligenceService.getAddressAttomPropertyDetail(canonicalAddress.id);
+
     const homeData = {
       address: normalizedLine1,
       address2: normalizedLine2,
@@ -1154,9 +1161,7 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       member_attach_policy: 'open_invite',
       privacy_mask_level: 'normal',
       ownership_state: is_owner ? 'claim_pending' : 'unclaimed',
-      ...(attom_property_detail && typeof attom_property_detail === 'object'
-        ? { niche_data: { attom_property_detail } }
-        : {}),
+      ...(attomPropertyDetail ? { niche_data: { attom_property_detail: attomPropertyDetail } } : {}),
     };
 
     // Add location if provided.

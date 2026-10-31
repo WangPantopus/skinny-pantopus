@@ -8,7 +8,10 @@
 const logger = require('../../utils/logger');
 const { getAnthropicClient, resolveModel, resolveEffort, DRAFT_MODEL } = require('../../config/anthropic');
 const { complete, isTimeoutError, parseJsonObject } = require('./llm');
-const { fetchAttomPropertyDetailBundle } = require('./propertyIntelligenceService');
+const {
+  fetchAttomPropertyDetailBundle,
+  fetchAttomPropertyDetailBundleForAddress,
+} = require('./propertyIntelligenceService');
 
 const LLM_TIMEOUT_MS = 12000;
 // A leftover PROPERTY_SUGGESTIONS_LLM_MODEL naming another provider's model is ignored.
@@ -133,7 +136,8 @@ async function getPropertySuggestions(input, supabaseAdmin) {
         .from('HomeAddress')
         .select(`
           id, building_type, parcel_type, google_place_types,
-          residential_unit_count, parcel_land_use, parcel_property_type
+          residential_unit_count, parcel_land_use, parcel_property_type,
+          address_line1_norm, address_line2_norm, city_norm, state, postal_code
         `)
         .eq('id', addressId)
         .maybeSingle();
@@ -156,15 +160,19 @@ async function getPropertySuggestions(input, supabaseAdmin) {
   // Tier 1 — ATTOM (strongest structured signal; one /property/detail call)
   let attom = null;
   let attom_property_detail = null;
-  if (process.env.ATTOM_API_KEY) {
+  if (homeAddressRow || process.env.ATTOM_API_KEY) {
     try {
-      const bundle = await fetchAttomPropertyDetailBundle({
-        address,
-        address2: unitNumber,
-        city,
-        state,
-        zipcode: zipCode,
-      });
+      // A validated address is looked up as validated, and the server keeps
+      // the answer: creating the Home stores that copy, not the app's.
+      const bundle = homeAddressRow
+        ? await fetchAttomPropertyDetailBundleForAddress(homeAddressRow)
+        : await fetchAttomPropertyDetailBundle({
+          address,
+          address2: unitNumber,
+          city,
+          state,
+          zipcode: zipCode,
+        });
       attom = bundle.snapshot;
       attom_property_detail = bundle.attomPayload;
     } catch (e) {
