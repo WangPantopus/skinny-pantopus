@@ -92,7 +92,7 @@ class PropertyDetailsViewModelTest {
     @Test
     fun sampleData_monoFlagsOnExpectedRowsOnly() {
         val monoIds = setOf("year", "beds", "baths", "interior", "lot", "parcel", "zoning", "assessed")
-        val rows = PropertyDetailsSampleData.clean.propertyFacts + PropertyDetailsSampleData.clean.records
+        val rows = PropertyDetailsSampleData.clean.propertyFacts + PropertyDetailsSampleData.clean.recordSections.flatMap { it.rows }
 
         rows.filter { it.id in monoIds }.forEach { row ->
             assertTrue("Row ${row.id} should render monospaced", row.mono)

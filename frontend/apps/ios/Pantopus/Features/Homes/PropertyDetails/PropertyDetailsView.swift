@@ -107,12 +107,21 @@ private struct LoadedBody: View {
                         MismatchBanner(data: banner)
                     }
                     PropertySection(title: "Property", rows: content.propertyFacts)
-                    // Records (ATTOM provenance) + Verification sources have
-                    // no clean backend mapping today, so they're hidden when
-                    // the projection leaves them empty.
-                    if !content.records.isEmpty {
-                        PropertySection(title: "Records", rows: content.records)
+                    // The county record (ATTOM) comes for verified owners
+                    // only, so everyone else sees just the Property card.
+                    ForEach(content.recordSections) { section in
+                        PropertySection(title: section.title, rows: section.rows, note: section.note)
                     }
+                    if let footer = content.recordFooter {
+                        Text(footer)
+                            .pantopusTextStyle(.caption)
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("propertyDetails_recordFooter")
+                    }
+                    // Verification sources have no clean backend mapping
+                    // today, so they're hidden when the projection leaves
+                    // them empty.
                     if !content.verification.isEmpty {
                         VerificationSectionView(sources: content.verification)
                     }
@@ -246,6 +255,7 @@ private struct HouseholdPill: View {
 private struct PropertySection: View {
     let title: String
     let rows: [PropertyFactRow]
+    var note: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
@@ -264,6 +274,12 @@ private struct PropertySection: View {
                         RowDivider()
                     }
                 }
+            }
+            if let note {
+                Text(note)
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
