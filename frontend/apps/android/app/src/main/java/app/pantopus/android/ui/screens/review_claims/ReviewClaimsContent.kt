@@ -132,11 +132,20 @@ object AdminClaimChip {
             )
         }
         if (claim.state == "needs_more_info") {
-            return AdminClaimChipDescriptor(
-                text = "Awaiting docs",
-                icon = PantopusIcon.Hourglass,
-                variant = StatusChipVariant.Neutral,
-            )
+            // After Request info: the claimant sent a document since, or the claim still waits on them.
+            return if ((claim.documentsSinceRequest ?: 0) > 0) {
+                AdminClaimChipDescriptor(
+                    text = "Docs sent",
+                    icon = PantopusIcon.FileText,
+                    variant = StatusChipVariant.Success,
+                )
+            } else {
+                AdminClaimChipDescriptor(
+                    text = "Awaiting docs",
+                    icon = PantopusIcon.Hourglass,
+                    variant = StatusChipVariant.Neutral,
+                )
+            }
         }
         val ageDays = ageDays(claim.createdAt, referenceInstant)
         return if (ageDays != null && ageDays >= AGING_THRESHOLD_DAYS) {

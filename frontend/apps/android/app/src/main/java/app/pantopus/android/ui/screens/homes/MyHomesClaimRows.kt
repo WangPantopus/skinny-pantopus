@@ -25,13 +25,18 @@ import app.pantopus.android.ui.theme.PantopusIcon
 internal val OwnershipClaimDto.kindLabel: String
     get() = if (claimType == "resident") "Residency claim" else "Ownership claim"
 
+/** A Pantopus reviewer asked for more and no document answered it yet (the web and iOS say the same). */
+internal const val CLAIM_INFO_REQUEST_LABEL = "Pantopus asked for more"
+
 /** What the claim waits on, as web My Homes says it. */
 internal val OwnershipClaimDto.waitingLabel: String
     get() =
-        approval?.let(WaitingRoomApproval::summary) ?: when (hasEvidence) {
-            false -> "Document needed"
-            true -> "Under review"
-            null -> "Check document status"
+        when {
+            openInfoRequest != null -> CLAIM_INFO_REQUEST_LABEL
+            approval != null -> WaitingRoomApproval.summary(approval)
+            hasEvidence == false -> "Document needed"
+            hasEvidence == true -> "Under review"
+            else -> "Check document status"
         }
 
 /** Claims in review for a Home the list doesn't show already. A private setup is not a verification receipt (web). */

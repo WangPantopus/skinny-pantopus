@@ -75,6 +75,7 @@ private fun myHomeChips(
     home: MyHome,
     personal: PersonalHomeResidencyRequest?,
     pending: PendingVerification?,
+    infoRequested: Boolean,
 ): List<RowChip> =
     buildList {
         if (home.accessKind == "private_setup") {
@@ -82,11 +83,15 @@ private fun myHomeChips(
                 RowChip("Private setup", PantopusIcon.Home, RowChip.Tint.Status(StatusChipVariant.Warning)),
             )
         }
-        // Requests already say "Verification in progress".
+        // Requests already say "Verification in progress". A claim Pantopus asked more of says so instead.
         val review = home.pendingClaimReviewLabel
         if (home.accessKind != "verification" && review != null) {
             add(
-                RowChip(review, PantopusIcon.Clock, RowChip.Tint.Status(StatusChipVariant.Warning)),
+                RowChip(
+                    if (infoRequested) CLAIM_INFO_REQUEST_LABEL else review,
+                    PantopusIcon.Clock,
+                    RowChip.Tint.Status(StatusChipVariant.Warning),
+                ),
             )
         }
         if (home.hasSharedAccess && home.ownershipStatus == "verified") {
@@ -526,7 +531,8 @@ class MyHomesListViewModel
             val title = homeRowTitle(home, personal)
             val locality = listOfNotNull(home.city, home.state).filter { it.isNotBlank() }.joinToString(", ").takeIf { it.isNotBlank() }
             val pending = pendingVerificationFor(home)
-            val chips = myHomeChips(home, personal, pending)
+            val infoRequested = claims.claims.any { it.homeId == home.id && it.openInfoRequest != null }
+            val chips = myHomeChips(home, personal, pending, infoRequested)
             val canDelete = home.canDeleteHome == true
             val footerTitle =
                 when {
