@@ -123,6 +123,17 @@ async function loadCountyRules(home) {
   }
 }
 
+// County rules are public and depend only on the home's state and point. A
+// caller that composes one home's calendar twice in a request (Hub Today reads
+// it again at its response boundary) passes the same `countyReads` Map to both,
+// so they're read once; a home at another state or point gets its own read.
+function countyRulesFor(home, countyReads) {
+  if (!countyReads) return loadCountyRules(home);
+  const key = [home.state, home.county_fips, home.map_center_lat, home.map_center_lng].join('|');
+  if (!countyReads.has(key)) countyReads.set(key, loadCountyRules(home));
+  return countyReads.get(key);
+}
+
 // Narrowest scope wins per kind: a household's pickup day replaces the
 // city default; a city council rule replaces a county one, etc.
 function applyPrecedence(rules) {
@@ -222,12 +233,12 @@ function pickupScheduleVersion(rules, homeId) {
  * The address calendar for a home.
  * @returns {Promise<{upcoming: object[], next: object|null, needs_pickup_day: boolean, pickup_version: string, window_days: number, rule_count: number}>}
  */
-async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS, rules: suppliedRules = null } = {}) {
+async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS, rules: suppliedRules = null, countyReads = null } = {}) {
   const today = localToday(home, now);
   const end = isoDate(new Date(noonUtc(today).getTime() + windowDays * 86400000));
   const base = suppliedRules || await loadRules(home);
   const baseIds = new Set(base.map((r) => r.id));
-  const loaded = [...base, ...(await loadCountyRules(home)).filter((r) => !baseIds.has(r.id))];
+  const loaded = [...base, ...(await countyRulesFor(home, countyReads)).filter((r) => !baseIds.has(r.id))];
   const hasHouseholdPickup = loaded.some((r) => r.scope_type === 'home' && PICKUP_KINDS.has(r.kind));
   // Once the household sets its schedule, unknown pickup kinds must not
   // silently fall back to a guessed city week (including briefing signals).
