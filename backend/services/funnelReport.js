@@ -43,6 +43,8 @@ const PLAN_STEPS = Object.freeze({
   plan_accepted: 'accepted',
   plan_attended: 'attended',
   plan_hosted_again: 'hosted_again',
+  plan_invited: 'invited',
+  plan_invite_joined: 'invite_joined',
 });
 
 function emptyLadder() {
@@ -142,6 +144,7 @@ function summarizePlans(rows) {
   const byKind = Object.create(null);
   const acceptedBy = Object.create(null);
   const howItWent = Object.create(null);
+  const invitedBy = Object.create(null);
   for (const row of rows || []) {
     const step = PLAN_STEPS[row.event_type];
     if (!step) continue;
@@ -154,6 +157,7 @@ function summarizePlans(rows) {
     byKind[kind][step] += 1;
     if (step === 'accepted') bump(acceptedBy, meta.by === 'rule' ? 'rule' : 'host');
     if (step === 'attended') bump(howItWent, shortLabel(meta.answer));
+    if (step === 'invited') bump(invitedBy, shortLabel(meta.channel));
   }
   const sizes = (sets) => Object.fromEntries(Object.entries(sets).map(([step, set]) => [step, set.size]));
   return {
@@ -165,9 +169,11 @@ function summarizePlans(rows) {
       accept: rate(events.accepted, events.requested),
       went_well: rate(events.attended, events.accepted),
       hosted_again: rate(events.hosted_again, events.created),
+      invite_joined: rate(events.invite_joined, events.invited),
     },
     accepted_by: acceptedBy,
     how_it_went: howItWent,
+    invited_by: invitedBy,
     by_kind: byKind,
   };
 }

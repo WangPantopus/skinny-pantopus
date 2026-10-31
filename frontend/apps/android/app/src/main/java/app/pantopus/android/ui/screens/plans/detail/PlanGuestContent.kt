@@ -13,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
@@ -453,17 +454,18 @@ internal fun PlanNotThisTime(
     }
 }
 
-/** J9: a playdate link for someone without a verified address. */
+/** J9: a playdate link for someone without a verified address ([invitedBy]: the host's first name when they invited them). */
 @Composable
 internal fun PlaydateLocked(
     city: String?,
+    invitedBy: String?,
     onClose: () -> Unit,
     onVerify: () -> Unit,
     onSeeOthers: () -> Unit,
 ) {
     PlanPlainScaffold(
         onBack = onClose,
-        title = "Shared with you",
+        title = if (invitedBy == null) "Shared with you" else "Invitation",
         closeIcon = true,
         footer = {
             PrimaryButton(title = "Verify your address", onClick = onVerify, modifier = Modifier.height(50.dp))
@@ -478,7 +480,12 @@ internal fun PlaydateLocked(
                 color = PantopusColors.appText,
                 modifier = Modifier.semantics { heading() },
             )
-            Text(text = "Someone shared this with you.", style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
+            Text(
+                text = invitedBy?.let { "$it invited you to their playdate." } ?: "Someone shared this with you.",
+                style = PantopusTextStyle.small,
+                color = PantopusColors.appTextSecondary,
+                modifier = Modifier.testTag("planVerifyInvitedBy"),
+            )
         }
         Column(modifier = Modifier.fillMaxWidth().planCard().padding(Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
             PlanIconTile(PantopusIcon.Lock, PantopusColors.appSurfaceSunken, PantopusColors.appTextStrong, size = 48.dp, glyph = 22.dp)
@@ -486,7 +493,8 @@ internal fun PlaydateLocked(
                 Text(text = "Playdates are for verified neighbors", style = planH4, color = PantopusColors.appText)
                 Text(
                     text =
-                        "Verify your address to see the time, the place and who's going, and to ask to join. " +
+                        "Verify your address to see the time, the place and who's going, and to " +
+                            (if (invitedBy == null) "ask to join. " else "say you're in. Your invitation waits for you. ") +
                             "Everyone at a playdate has done the same.",
                     style = PantopusTextStyle.small,
                     color = PantopusColors.appTextSecondary,

@@ -371,8 +371,8 @@ public struct RootTabView: View {
         // stack. While the `plans` switch is off the link is dropped.
         case .plans:
             openPlansTab()
-        case let .plan(id):
-            openPlans(.plan(id: id, intent: .view))
+        case let .plan(id, invite):
+            openPlans(.plan(id: id, intent: invite.map { .invite(token: $0) } ?? .view))
         case let .planRequests(id):
             openPlans(.requests(planId: id))
         case .planNew:

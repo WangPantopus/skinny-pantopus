@@ -217,8 +217,10 @@ struct RootView: View {
             if becameSignedIn(from: previous, to: new) {
                 showsSessionLogin = false
                 DeepLinkRouter.shared.acknowledgeLoginPresentation()
+                // Signing in or up (not a session restored at launch) may also open a plan invitation.
+                let freshSignIn = if case .signedOut = previous { true } else { false }
                 Task { @MainActor in
-                    replayDeferredDeepLinkIfNeeded()
+                    replayDeferredDeepLinkIfNeeded(freshSignIn: freshSignIn)
                 }
             }
         }
@@ -281,11 +283,23 @@ struct RootView: View {
         return true
     }
 
-    private func replayDeferredDeepLinkIfNeeded() {
+    private func replayDeferredDeepLinkIfNeeded(freshSignIn: Bool = false) {
         guard case let .signedIn(user) = auth.state,
-              DeepLinkRouter.shared.activeContentArrival == nil,
-              let path = PendingDeepLinkStore.take(userID: user.id) else { return }
+              DeepLinkRouter.shared.activeContentArrival == nil else { return }
+        guard let path = PendingDeepLinkStore.take(userID: user.id) else {
+            if freshSignIn { Task { await openUnopenedPlanInvite() } }
+            return
+        }
         DeepLinkRouter.shared.handle(path: path)
+    }
+
+    /// Someone invited to a plan by email who just signed up (or signed in) with that address, without the
+    /// email's link surviving the App Store: the plan opens, once (planInvites.js `GET /api/plans/invites/next`).
+    private func openUnopenedPlanInvite() async {
+        guard let next: PlanNextInviteResponse = try? await APIClient.shared.request(PlansEndpoints.nextInvite()),
+              let planId = next.planId,
+              DeepLinkRouter.shared.activeContentArrival == nil else { return }
+        DeepLinkRouter.shared.handle(path: "/plans/\(planId)")
     }
 }
 

@@ -278,13 +278,19 @@ public struct PlanRequestViewDTO: Decodable, Sendable, Hashable, Identifiable {
     public let kidsCount: Int?
     public let kidsAgeBands: [PlanKidsAgeBand]?
     public let createdAt: String?
+    /// The host invited them (planInvites.js).
+    public let invited: Bool
+    /// They opened the host's email invitation to this address from an account it isn't verified for (a forwarded
+    /// email): the host says yes or no as to any ask.
+    public let openedInviteTo: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, user, note
+        case id, user, note, invited
         case partySize = "party_size"
         case kidsCount = "kids_count"
         case kidsAgeBands = "kids_age_bands"
         case createdAt = "created_at"
+        case openedInviteTo = "opened_invite_to"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -297,6 +303,8 @@ public struct PlanRequestViewDTO: Decodable, Sendable, Hashable, Identifiable {
         let bands = try? container.decodeIfPresent([String].self, forKey: .kidsAgeBands)
         kidsAgeBands = bands?.compactMap(PlanKidsAgeBand.init(rawValue:))
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+        invited = (try? container.decodeIfPresent(Bool.self, forKey: .invited)) ?? false
+        openedInviteTo = try? container.decodeIfPresent(String.self, forKey: .openedInviteTo)
     }
 }
 

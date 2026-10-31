@@ -35,6 +35,7 @@ const PLAN_NOTICE_TYPES = [
   'plan_request', 'plan_accepted', 'plan_declined', 'plan_reminder', 'plan_changed',
   'plan_cancelled', 'plan_spot_opened', 'plan_host_summary',
   'plan_guest_left', 'plan_guest_auto_joined', 'plan_still_coming_reminder',
+  'plan_invite', 'plan_invite_declined',
 ];
 const CHAT_OPEN_AFTER_END_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -69,11 +70,15 @@ async function claimNotice(row, patch) {
 }
 
 /** Has this notice's moment passed? */
-function isStale(row, plan, request) {
+function isStale(row, plan, request, invite = null) {
   if (!plan) return true;
   if (plan.status === 'cancelled' && row.type !== 'plan_cancelled') return true;
   const ended = new Date(plan.post.event_end_date).getTime() <= Date.now();
   switch (row.type) {
+    // Answered or taken back in the meantime, or asking closed.
+    case 'plan_invite': return !invite || invite.status !== 'pending'
+      || !rules.isAskingOpen(plan, plan.post.event_date, plan.post.event_end_date);
+    case 'plan_invite_declined': return ended;
     case 'plan_request': return !request || request.status !== 'pending' || ended;
     case 'plan_accepted': return !request || request.status !== 'accepted' || ended;
     case 'plan_changed': return !request || request.status !== 'accepted' || request.reconfirmed != null || ended;
@@ -109,6 +114,12 @@ async function releaseHeldPushes() {
     const { data } = await supabaseAdmin.from('PlanRequest').select('id, status, reconfirmed, reconfirm_requested_at').in('id', requestIds);
     for (const r of data || []) requests.set(r.id, r);
   }
+  const inviteIds = rows.map((r) => r.metadata?.invite_id).filter(planService.isUuid);
+  const invites = new Map();
+  if (inviteIds.length) {
+    const { data } = await supabaseAdmin.from('PlanInvite').select('id, status').in('id', inviteIds);
+    for (const i of data || []) invites.set(i.id, i);
+  }
 
   let sent = 0;
   const bundles = new Map();
@@ -121,7 +132,7 @@ async function releaseHeldPushes() {
       bundles.get(key).rows.push({ row, request });
       continue;
     }
-    const stale = isStale(row, plan, request);
+    const stale = isStale(row, plan, request, invites.get(row.metadata?.invite_id));
     if (!(await claimNotice(row, { push_sent_at: now, ...(stale ? { push_skipped: true } : {}) }))) continue;
     if (!stale) {
       await planNotify.sendPush(row);

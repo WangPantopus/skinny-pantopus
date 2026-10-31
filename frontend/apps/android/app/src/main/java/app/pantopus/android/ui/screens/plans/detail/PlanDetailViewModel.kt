@@ -48,9 +48,10 @@ sealed interface PlanDetailUiState {
         val fresh: Boolean,
     ) : PlanDetailUiState
 
-    /** A playdate shared with someone who can't see it yet (board J9). */
+    /** A playdate shared with someone who can't see it yet (board J9); [invitedBy] is the host's first name when they invited them. */
     data class PlaydateLocked(
         val city: String?,
+        val invitedBy: String? = null,
     ) : PlanDetailUiState
 
     /** Removed, cancelled and hidden, or blocked: nothing to show. */
@@ -111,6 +112,10 @@ class PlanDetailViewModel
         private val askOnOpen: Boolean = savedStateHandle.get<Boolean>(PlansRoutes.ASK_KEY) ?: false
         private val revealOnOpen: Boolean = savedStateHandle.get<Boolean>(PlansRoutes.REVEAL_KEY) ?: false
 
+        /** An email or text invitation's token (`?invite=`): the plan opens it for this account first. */
+        private val inviteToken: String? = savedStateHandle.get<String>(PlansRoutes.INVITE_KEY)?.takeIf(String::isNotBlank)
+        private var inviteClaimed = false
+
         private val _ui = MutableStateFlow(PlanDetailUi(viewerId = feature.viewerId))
         val ui: StateFlow<PlanDetailUi> = _ui.asStateFlow()
 
@@ -122,16 +127,52 @@ class PlanDetailViewModel
             repository.card(planId)?.let { card -> _ui.update { it.copy(state = PlanDetailUiState.Ready(card, fresh = false)) } }
         }
 
-        /** Every appearance: read the plan fresh. */
+        /** Every appearance: read the plan fresh (opening an invitation first, once). */
         fun load() {
             if (loadJob?.isActive == true) return
-            loadJob = viewModelScope.launch { read() }
+            loadJob =
+                viewModelScope.launch {
+                    claimInviteOnce()
+                    read()
+                }
         }
+
+        /**
+         * Opened from an email or text invitation: it becomes this account's. Someone else already used it, or the host
+         * took it back: the plan opens as any shared plan does, with a sentence saying so (as on iOS).
+         */
+        private suspend fun claimInviteOnce() {
+            val token = inviteToken ?: return
+            if (inviteClaimed) return
+            inviteClaimed = true
+            when (val result = repository.claimInvite(planId, token)) {
+                is NetworkResult.Success ->
+                    result.data.plan?.let { plan -> _ui.update { it.copy(state = PlanDetailUiState.Ready(plan, fresh = false)) } }
+                is NetworkResult.Failure -> {
+                    val sentence =
+                        when {
+                            result.error == NetworkError.NotFound -> "This invitation isn't available anymore. You can still ask to join."
+                            result.error.planCode == "invite_used" -> result.error.planMessage
+                            else -> null
+                        }
+                    sentence?.let { line -> _ui.update { it.copy(notice = line) } }
+                }
+            }
+        }
+
+        /** "Can't make it" to an invitation (someone already in or waiting is taken out first). */
+        fun declineInvite() =
+            act(done = "We told ${hostFirst()}") {
+                when (val result = repository.declineInvite(planId)) {
+                    is NetworkResult.Success -> NetworkResult.Success(Unit)
+                    is NetworkResult.Failure -> result
+                }
+            }
 
         private suspend fun read() {
             when (val read = repository.read(planId)) {
                 is PlanRead.Found -> show(read.plan)
-                is PlanRead.Locked -> _ui.update { it.copy(state = PlanDetailUiState.PlaydateLocked(read.city)) }
+                is PlanRead.Locked -> _ui.update { it.copy(state = PlanDetailUiState.PlaydateLocked(read.city, read.invitedBy)) }
                 PlanRead.Missing -> _ui.update { it.copy(state = PlanDetailUiState.Gone) }
                 is PlanRead.Failed ->
                     _ui.update {

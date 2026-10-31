@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.data.api.models.plans.PlanDto
+import app.pantopus.android.data.api.models.plans.PlanHostInvitesDto
 import app.pantopus.android.data.api.models.plans.PlanPersonDto
 import app.pantopus.android.data.api.models.plans.PlanRequestsResponse
 import app.pantopus.android.data.plans.KidsAgeBand
@@ -73,6 +75,7 @@ internal fun ColumnScope.PlanHostBody(
     viewerId: String?,
     busy: Boolean,
     onOpenRequests: () -> Unit,
+    onInvite: () -> Unit,
     onMessageGuests: () -> Unit,
     onChange: () -> Unit,
     onCancel: () -> Unit,
@@ -105,6 +108,7 @@ internal fun ColumnScope.PlanHostBody(
         // Nobody to answer, but people are waiting for a spot: the host can still see who (H10's waitlist).
         WaitlistCard(waitingCount, waiting.mapNotNull { it.user?.displayName }, onOpenRequests)
     }
+    InviteCard(plan, closed, onOpen = onInvite)
     GoingSection(plan, viewerId, busy, closed, asked = count > 0 || waitingCount > 0, onRemove = onRemove)
     if (closed && plan.chatRoomId != null) {
         // The chat stays to read once the plan is over (as on iOS).
@@ -177,6 +181,66 @@ private fun RequestsCard(
             Text(text = who, style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
         }
         PantopusIconImage(icon = PantopusIcon.ChevronRight, contentDescription = null, size = 16.dp, tint = PantopusColors.appTextMuted)
+    }
+}
+
+/** "Invite friends": people they know, by email or by text (PlanInviteSheet), with how it stands (as on iOS). */
+@Composable
+private fun InviteCard(
+    plan: PlanDto,
+    closed: Boolean,
+    onOpen: () -> Unit,
+) {
+    val invites = plan.invites?.takeIf { !closed && it.canInvite } ?: return
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .planCard()
+                .clickable(role = Role.Button, onClick = onOpen)
+                .padding(14.dp)
+                .semantics(mergeDescendants = true) {}
+                .testTag("planInviteCard"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        PlanIconTile(PantopusIcon.UserPlus, PantopusColors.primary100, PantopusColors.primary700)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Invite friends",
+                style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
+                color = PantopusColors.appText,
+            )
+            Text(
+                text = PlanInviteHostLines.summary(invites, plan.isAtHome),
+                style = PantopusTextStyle.small,
+                color = PantopusColors.appTextSecondary,
+                maxLines = 2,
+            )
+        }
+        PantopusIconImage(icon = PantopusIcon.ChevronRight, contentDescription = null, size = 16.dp, tint = PantopusColors.appTextMuted)
+    }
+}
+
+/** The host's invitation summary (the same on iOS). */
+internal object PlanInviteHostLines {
+    /** "3 waiting · 1 said yes", or what inviting does before anyone is invited. */
+    fun summary(
+        invites: PlanHostInvitesDto,
+        atHome: Boolean,
+    ): String {
+        val parts =
+            listOfNotNull(
+                invites.invited.takeIf { it > 0 }?.let { "$it waiting" },
+                invites.saidYes.takeIf { it > 0 }?.let { "$it said yes" },
+                invites.cantMakeIt.takeIf { it > 0 }?.let { "$it can't make it" },
+            )
+        if (parts.isNotEmpty()) return parts.joinToString(" · ")
+        return if (atHome) {
+            "People on Pantopus, by email or text. They see your address once they say they're in."
+        } else {
+            "People on Pantopus, by email or text. They're in as soon as they say yes."
+        }
     }
 }
 

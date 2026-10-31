@@ -12,7 +12,15 @@ import app.pantopus.android.data.api.models.plans.MyPlansResponse
 import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanFeedbackBody
 import app.pantopus.android.data.api.models.plans.PlanGamesResponse
+import app.pantopus.android.data.api.models.plans.PlanInviteBody
+import app.pantopus.android.data.api.models.plans.PlanInviteClaimBody
+import app.pantopus.android.data.api.models.plans.PlanInviteLinkBody
+import app.pantopus.android.data.api.models.plans.PlanInviteLinkResponse
+import app.pantopus.android.data.api.models.plans.PlanInviteListDto
+import app.pantopus.android.data.api.models.plans.PlanInvitePeopleResponse
+import app.pantopus.android.data.api.models.plans.PlanInvitePlanResponse
 import app.pantopus.android.data.api.models.plans.PlanNearbyPlacesResponse
+import app.pantopus.android.data.api.models.plans.PlanNextInviteResponse
 import app.pantopus.android.data.api.models.plans.PlanPinsResponse
 import app.pantopus.android.data.api.models.plans.PlanPlaceSuggestBody
 import app.pantopus.android.data.api.models.plans.PlanPlaceSuggestionsResponse
@@ -192,6 +200,62 @@ interface PlansApi {
         @Path("id") id: String,
         @Body body: PlanFeedbackBody,
     ): Unit
+
+    // ---- Invitations (backend/routes/plans.js, services/plans/planInvites.js) ----
+
+    /** `GET /api/plans/:id/invites` (host): the invitations sent and where each stands. Route `backend/routes/plans.js`. */
+    @GET("api/plans/{id}/invites")
+    suspend fun invites(
+        @Path("id") id: String,
+    ): PlanInviteListDto
+
+    /** `GET /api/plans/:id/invites/people?q=` (host): connections and people who came to their plans. */
+    @GET("api/plans/{id}/invites/people")
+    suspend fun invitePeople(
+        @Path("id") id: String,
+        @Query("q") query: String? = null,
+    ): PlanInvitePeopleResponse
+
+    /**
+     * `POST /api/plans/:id/invites` (host): people on Pantopus and addresses. 409 `confirm_shares_address` the first
+     * time at a home; 429 `too_many_invites`; 422 `invalid_email`.
+     */
+    @POST("api/plans/{id}/invites")
+    suspend fun invite(
+        @Path("id") id: String,
+        @Body body: PlanInviteBody,
+    ): PlanInviteListDto
+
+    /** `POST /api/plans/:id/invites/link` (host): a one-person link to text. */
+    @POST("api/plans/{id}/invites/link")
+    suspend fun inviteLink(
+        @Path("id") id: String,
+        @Body body: PlanInviteLinkBody,
+    ): PlanInviteLinkResponse
+
+    /** `DELETE /api/plans/:id/invites/:inviteId` (host): take back an invitation nobody said yes to. */
+    @DELETE("api/plans/{id}/invites/{inviteId}")
+    suspend fun cancelInvite(
+        @Path("id") id: String,
+        @Path("inviteId") inviteId: String,
+    ): PlanInviteListDto
+
+    /** `POST /api/plans/:id/invites/claim`: the person opened an email or text invitation (409 `invite_used`). */
+    @POST("api/plans/{id}/invites/claim")
+    suspend fun claimInvite(
+        @Path("id") id: String,
+        @Body body: PlanInviteClaimBody,
+    ): PlanInvitePlanResponse
+
+    /** `POST /api/plans/:id/invites/decline`: "Can't make it". Saying "I'm in" is the ordinary ask. */
+    @POST("api/plans/{id}/invites/decline")
+    suspend fun declineInvite(
+        @Path("id") id: String,
+    ): PlanInvitePlanResponse
+
+    /** `GET /api/plans/invites/next`: right after signing in, the newest invitation not opened yet. */
+    @GET("api/plans/invites/next")
+    suspend fun nextInvite(): PlanNextInviteResponse
 
     /** `GET /api/public/plans/:id`: the signed-out card (a playdate says only its kind and city). */
     @GET("api/public/plans/{id}")

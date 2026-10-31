@@ -2,12 +2,13 @@
 //  PlanPushActions.swift
 //  Pantopus
 //
-//  Board A3: the three Plans push categories and their buttons. The host
+//  Board A3: the Plans push categories and their buttons. The host
 //  answers a request from the lock screen (Accept, Decline); a guest says
 //  "On my way" or "Can't make it" to a reminder, and "Still coming" or
-//  "Can't make it" when the host moved the plan. Each button calls the
-//  Plans endpoint with the ids in the payload; a button that fails opens
-//  the plan with an honest note instead.
+//  "Can't make it" when the host moved the plan; someone invited says
+//  "I'm in" or "Can't make it". Each button calls the Plans endpoint with
+//  the ids in the payload; a button that fails opens the plan with an
+//  honest note instead.
 //
 
 import UserNotifications
@@ -36,11 +37,13 @@ enum PlanPushActions {
     nonisolated static let onMyWay = "PLAN_ON_MY_WAY"
     nonisolated static let cantMakeIt = "PLAN_CANT_MAKE_IT"
     nonisolated static let stillComing = "PLAN_STILL_COMING"
+    nonisolated static let imIn = "PLAN_IM_IN"
 
-    static let all: Set<String> = [accept, decline, onMyWay, cantMakeIt, stillComing]
+    static let all: Set<String> = [accept, decline, onMyWay, cantMakeIt, stillComing, imIn]
 
     /// PLAN_REQUEST (Accept, Decline), PLAN_REMINDER (On my way, Can't make
-    /// it), PLAN_CHANGED (Still coming, Can't make it).
+    /// it), PLAN_CHANGED (Still coming, Can't make it), PLAN_INVITE (I'm in,
+    /// Can't make it; never for a playdate, which asks the kids' ages).
     nonisolated static var categories: [UNNotificationCategory] {
         let request = UNNotificationCategory(
             identifier: "PLAN_REQUEST",
@@ -69,7 +72,16 @@ enum PlanPushActions {
             intentIdentifiers: [],
             options: []
         )
-        return [request, reminder, changed]
+        let invite = UNNotificationCategory(
+            identifier: "PLAN_INVITE",
+            actions: [
+                UNNotificationAction(identifier: imIn, title: "I'm in", options: [.authenticationRequired]),
+                UNNotificationAction(identifier: cantMakeIt, title: "Can't make it", options: [.authenticationRequired, .destructive])
+            ],
+            intentIdentifiers: [],
+            options: []
+        )
+        return [request, reminder, changed, invite]
     }
 
     /// Runs a button. Only for the account the push was for, only with Plans
@@ -115,9 +127,14 @@ enum PlanPushActions {
             _ = try await api.request(PlansEndpoints.onMyWay(planId: planId), as: EmptyResponse.self)
         case stillComing:
             _ = try await api.request(PlansEndpoints.stillComing(planId: planId, coming: true), as: EmptyResponse.self)
+        case imIn:
+            // From the lock screen it's just them; they can change who's coming on the plan.
+            _ = try await api.request(PlansEndpoints.ask(planId: planId, AskToJoinBody(partySize: 1, note: nil)), as: EmptyResponse.self)
         case cantMakeIt:
             if payload.category == "PLAN_CHANGED" {
                 _ = try await api.request(PlansEndpoints.stillComing(planId: planId, coming: false), as: EmptyResponse.self)
+            } else if payload.category == "PLAN_INVITE" {
+                _ = try await api.request(PlansEndpoints.declineInvite(planId: planId), as: EmptyResponse.self)
             } else {
                 _ = try await api.request(PlansEndpoints.withdraw(planId: planId), as: EmptyResponse.self)
             }
@@ -137,6 +154,7 @@ enum PlanPushActions {
         case decline: return "Couldn't decline \(who). \(reason)"
         case onMyWay: return "Couldn't send \u{201C}On my way\u{201D}. \(reason)"
         case stillComing: return "Couldn't send \u{201C}Still coming\u{201D}. \(reason)"
+        case imIn: return "Couldn't say you're in. \(reason)"
         default: return "Couldn't tell the host you can't make it. \(reason)"
         }
     }
