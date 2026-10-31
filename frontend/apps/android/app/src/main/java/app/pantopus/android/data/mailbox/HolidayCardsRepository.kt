@@ -15,6 +15,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.HolidayCardsApi
 import app.pantopus.android.data.api.services.MailComposeApi
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -178,17 +179,25 @@ class HolidayCardsRepository
             /** A sent card as its page just read it (Sent compares it with what it shows). */
             val sentRead: SharedFlow<SentCard> = sentReadFlow.asSharedFlow()
 
-            private val showSentFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+            // Kept until a Mailbox opens Sent: a card notice opens the card's page over a Mailbox that isn't open yet.
+            private val showSentFlow = MutableSharedFlow<Unit>(replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
-            /** "See it in Sent": the Mailbox opens Sent. */
+            /** "See it in Sent", or a card notice: the Mailbox opens Sent. */
             val showSent: SharedFlow<Unit> = showSentFlow.asSharedFlow()
 
             fun announceShowSent() {
                 showSentFlow.tryEmit(Unit)
             }
 
+            /** A Mailbox opened Sent for the last [announceShowSent]. */
+            @OptIn(ExperimentalCoroutinesApi::class)
+            fun showSentHandled() {
+                showSentFlow.resetReplayCache()
+            }
+
             /** Sign-out: nothing of this account's cards stays for the next one. */
             fun forgetAccount() {
+                showSentHandled()
                 latestFlow.value = null
             }
         }
