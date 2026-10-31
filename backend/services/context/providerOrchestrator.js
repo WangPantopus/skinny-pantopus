@@ -235,11 +235,11 @@ function clearHubTodayCache(userId) {
 // when there is no home or the lookup fails; never throws. A saved place is a
 // private bookmark, not a home: it gets weather, air and alerts only (pilot
 // brief WP2 and section 13), so it never loads public pickup or tax dates.
-async function fetchAddressCalendar(location, userId) {
+async function fetchAddressCalendar(location, userId, countyReads) {
   const homeId = location.homeId;
   if (!homeId) return null;
   try {
-    return await addressCalendarService.composeForHomeId(homeId, { userId });
+    return await addressCalendarService.composeForHomeId(homeId, { userId, countyReads });
   } catch (err) {
     logger.warn('orchestrator: address calendar unavailable', { homeId, error: err.message });
     return null;
@@ -278,6 +278,8 @@ async function getHubToday(userId, options = {}) {
   const generations = memoGenerations(userId, location.homeId);
 
   const { latitude, longitude } = location;
+  // The calendar is read twice below; its public county rules only once.
+  const countyReads = new Map();
 
   // 2. Fetch all data in parallel with per-provider timing
   const fetchStartMs = Date.now();
@@ -286,7 +288,7 @@ async function getHubToday(userId, options = {}) {
     fetchAQI(latitude, longitude),
     fetchAlerts(latitude, longitude),
     collectInternalContext(userId, location.homeId, location.timezone),
-    fetchAddressCalendar(location, userId),
+    fetchAddressCalendar(location, userId, countyReads),
   ]);
   const fetchMs = Date.now() - fetchStartMs;
 
@@ -304,12 +306,15 @@ async function getHubToday(userId, options = {}) {
 
   // AddressCalendarRule household rows use their own authorized reader, not
   // internal.calendar_events. Refresh that projection after providers too, and
-  // drop it if the user's current Home anchor changed during the wait.
+  // drop it if the user's current Home anchor changed during the wait. The
+  // anchor and the calendar's authorized read go together, in one round.
   if (location.homeId) {
     try {
-      const currentLocation = await resolveLocation(userId);
-      addressCalendar = currentLocation.homeId === location.homeId
-        ? await fetchAddressCalendar(currentLocation, userId) : null;
+      const [currentLocation, currentCalendar] = await Promise.all([
+        resolveLocation(userId),
+        fetchAddressCalendar(location, userId, countyReads),
+      ]);
+      addressCalendar = currentLocation.homeId === location.homeId ? currentCalendar : null;
     } catch (_) { addressCalendar = null; }
   }
 
