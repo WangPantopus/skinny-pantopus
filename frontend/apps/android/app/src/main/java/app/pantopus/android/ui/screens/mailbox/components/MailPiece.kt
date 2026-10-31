@@ -253,7 +253,7 @@ private fun LetterEnvelope(piece: MailPieceModel) {
             }
         }
         Spacer(Modifier.height(10.dp))
-        TrustLine(piece.sender)
+        TrustLine(piece.sender, card = piece.card != null)
     }
 }
 
@@ -466,7 +466,7 @@ private fun PostcardPiece(piece: MailPieceModel) {
                 Text(it, style = handwriting, color = PantopusColors.appText, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 4)
             }
             Spacer(Modifier.height(8.dp))
-            TrustLine(piece.sender)
+            TrustLine(piece.sender, card = piece.card != null)
         }
         Box(
             modifier =
@@ -716,17 +716,20 @@ private fun SenderBlock(
                 )
             }
             Spacer(Modifier.height(3.dp))
-            TrustLine(piece.sender)
+            TrustLine(piece.sender, card = piece.card != null)
         }
     }
 }
 
 /** How Pantopus checked the sender; red, with a warning sign, for an unknown one. */
 @Composable
-private fun TrustLine(sender: MailSender) {
+private fun TrustLine(
+    sender: MailSender,
+    card: Boolean,
+) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         PantopusIconImage(icon = sender.icon, contentDescription = null, size = 12.dp, tint = sender.color)
-        Text(sender.line, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium, color = sender.color)
+        Text(sender.lineFor(card), fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium, color = sender.color)
     }
 }
 

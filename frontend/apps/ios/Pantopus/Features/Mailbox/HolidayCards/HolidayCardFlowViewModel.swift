@@ -398,10 +398,17 @@ final class HolidayCardFlowViewModel {
         }
     }
 
+    /// A card answer (`answer(_:api:)`).
+    private func answer<Response: Decodable>(_ endpoint: Endpoint) async throws -> Response {
+        try await Self.answer(endpoint, api: api)
+    }
+}
+
+extension HolidayCardFlowViewModel {
     /// A card answer: the decoded body, or the server's own sentence for a
     /// card it turned down (a limit, a choice that closed, someone it can't
-    /// reach), which a 403 or 404 carries too.
-    private func answer<Response: Decodable>(_ endpoint: Endpoint) async throws -> Response {
+    /// reach), which a 403 or 404 carries too. Sent's take-back reads it too.
+    static func answer<Response: Decodable>(_ endpoint: Endpoint, api: APIClient) async throws -> Response {
         let reply = try await api.requestDataResponse(endpoint, includingForbidden: true, includingNotFound: true)
         guard (200..<300).contains(reply.response.statusCode) else {
             let text = String(data: reply.data, encoding: .utf8)
@@ -413,9 +420,7 @@ final class HolidayCardFlowViewModel {
             throw APIError.decoding(underlying: error)
         }
     }
-}
 
-extension HolidayCardFlowViewModel {
     // MARK: Words
 
     /// The server's sentence from a card's error answer (`{ error, code }`),

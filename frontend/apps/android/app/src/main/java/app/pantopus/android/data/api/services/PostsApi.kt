@@ -161,6 +161,18 @@ interface PostsApi {
         @Header("If-None-Match") etag: String?,
     ): Response<MyPostsResponse>
 
+    /**
+     * The same list read as feed rows (the route uses the feed's serializer), for a person's
+     * profile, which draws each post with the Pulse card. Route `backend/routes/posts.js`,
+     * `/user/:userId`.
+     */
+    @GET("api/posts/user/{userId}")
+    suspend fun profilePostsConditional(
+        @Path("userId") userId: String,
+        @Query("limit") limit: Int,
+        @Header("If-None-Match") etag: String?,
+    ): Response<FeedResponse>
+
     /** `GET /api/posts/saved` — the viewer's saved posts they can still open (offset paging over saves). */
     @GET("api/posts/saved")
     suspend fun savedPosts(

@@ -181,10 +181,11 @@ struct NeighborhoodView: View {
     }
 
     private var inviteButton: some View {
-        // The invite payload is the /start funnel — the recipient sees their
-        // own address answered, not our app pitch.
+        // The invite is the person's own link (/join/<code>): the recipient sees
+        // who invited them over the /start address lookup, so their own address
+        // is answered first, not our app pitch. /start itself until it loads.
         ShareLink(
-            item: URL(string: "https://pantopus.com/start")!,
+            item: PersonalInviteLink.shared.url,
             message: Text("See what's true about your address — records, risks, and who's verified nearby. Free, no account.")
         ) {
             HStack(spacing: Spacing.s2) {

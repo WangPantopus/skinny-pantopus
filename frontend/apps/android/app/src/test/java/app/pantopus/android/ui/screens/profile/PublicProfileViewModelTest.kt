@@ -5,8 +5,8 @@ package app.pantopus.android.ui.screens.profile
 import androidx.lifecycle.SavedStateHandle
 import app.pantopus.android.core.LaunchFeature
 import app.pantopus.android.core.LaunchFeatures
-import app.pantopus.android.data.api.models.posts.MyPostDto
-import app.pantopus.android.data.api.models.posts.MyPostsResponse
+import app.pantopus.android.data.api.models.feed.FeedPost
+import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.models.profile.PublicProfileReview
 import app.pantopus.android.data.api.models.relationships.ConnectionRequestResponse
@@ -70,13 +70,12 @@ class PublicProfileViewModelTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { repo.publicProfileCopy(any()) } returns Stored()
         every { social.publicProfileCopy(any()) } returns Stored()
-        every { posts.userPostsCopy(any(), any(), any()) } returns Stored()
+        every { posts.profilePostsCopy(any()) } returns Stored()
         // The launch cut hides the persona chip and the Gigs count; these tests pin them.
         LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
         // Local-kind profiles pull `GET /api/posts/user/:id`; default the
         // stub to an empty feed and let individual tests override it.
-        coEvery { posts.userPosts(any(), any(), any(), any(), any(), any()) } returns
-            NetworkResult.Success(MyPostsResponse(emptyList()))
+        coEvery { posts.profilePosts(any(), any()) } returns NetworkResult.Success(FeedResponse(emptyList()))
     }
 
     @After fun tearDown() {
@@ -447,11 +446,11 @@ class PublicProfileViewModelTest {
         runTest {
             coEvery { repo.publicProfile(ROUTE_ID, any()) } returns
                 NetworkResult.Success(profile(residency = mapOf("verified" to true)))
-            coEvery { posts.userPosts("u1", any()) } returns
+            coEvery { posts.profilePosts("u1", any()) } returns
                 NetworkResult.Success(
-                    MyPostsResponse(
+                    FeedResponse(
                         listOf(
-                            MyPostDto(
+                            FeedPost(
                                 id = "p1",
                                 userId = "u1",
                                 content = "Free pile on the curb.",
@@ -461,7 +460,7 @@ class PublicProfileViewModelTest {
                                 commentCount = 12,
                                 locationName = "88 Beech St",
                             ),
-                            MyPostDto(
+                            FeedPost(
                                 id = "p2",
                                 userId = "u1",
                                 content = "Water main flagged on Beech.",
@@ -494,7 +493,7 @@ class PublicProfileViewModelTest {
         runTest {
             coEvery { repo.publicProfile(ROUTE_ID, any()) } returns
                 NetworkResult.Success(profile(residency = mapOf("verified" to true)))
-            coEvery { posts.userPosts("u1", any()) } returns
+            coEvery { posts.profilePosts("u1", any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))
             val vm = makeVm()
             vm.load()
@@ -508,7 +507,7 @@ class PublicProfileViewModelTest {
             coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile(residency = null))
             val vm = makeVm()
             vm.load()
-            coVerify(exactly = 0) { posts.userPosts(any(), any(), any(), any(), any(), any()) }
+            coVerify(exactly = 0) { posts.profilePosts(any(), any()) }
             assertTrue((vm.state.value as PublicProfileUiState.Loaded).content.posts.isEmpty())
         }
 

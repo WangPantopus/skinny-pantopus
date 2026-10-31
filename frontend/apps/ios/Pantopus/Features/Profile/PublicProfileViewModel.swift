@@ -345,6 +345,14 @@ public final class PublicProfileViewModel {
     /// `true` when the Local post feed couldn't load. The feed then offers
     /// Try again instead of the "Quiet for now" empty state.
     public private(set) var postsLoadFailed: Bool = false
+    /// The Local profile's posts drawn as Pulse cards: photos and videos,
+    /// tappable links, Helpful, Save, Repost, share and report.
+    public let postCards: ProfilePostCardsModel
+    /// Drives the "Unfollow …?" confirm, so one tap on Following never unfollows.
+    public var showUnfollowConfirm: Bool = false
+    /// When the Local posts were read. A post on this profile changed
+    /// elsewhere after that (its page, the feed) makes the next opening re-read them.
+    private var postsReadAt: Date?
 
     /// The raw route param — may be a UUID or a `@handle`.
     private let routeIdentifier: String
@@ -373,6 +381,8 @@ public final class PublicProfileViewModel {
         self.currentUserId = currentUserId
         self.client = client
         store = ScreenStore.store(for: client)
+        postCards = ProfilePostCardsModel(viewerId: currentUserId, client: client, store: store)
+        postCards.onToast = { [weak self] message in self?.toastMessage = message }
         showStoredCopy()
     }
 
@@ -403,11 +413,22 @@ public final class PublicProfileViewModel {
         resolvedUserId = profile.id
         let kind = derivedKind(from: profile)
         profileKind = kind
-        let posts = kind == .local
-            ? store.peek(PostsEndpoints.userPosts(userId: profile.id), as: MyPostsResponse.self)?.value.posts.map { project(post: $0) }
-            : []
-        guard let posts else { return }
-        state = .loaded(build(from: profile, kind: kind, posts: posts))
+        var rows: [FeedPostDTO] = []
+        if kind == .local {
+            guard let copy = store.peek(PostsEndpoints.userPosts(userId: profile.id), as: FeedResponse.self) else { return }
+            rows = copy.value.posts
+            postsReadAt = copy.fetchedAt
+            postCards.show(rows, readRevision: postCards.actionRevision)
+        }
+        state = .loaded(build(from: profile, kind: kind, posts: rows.map { project(post: $0) }))
+    }
+
+    /// A post on this profile was changed somewhere else since its list was
+    /// read: a reply or Helpful on its page, a save in Pulse.
+    private var postsChangedElsewhere: Bool {
+        guard let postsReadAt else { return false }
+        let topics = Set(postCards.postIds.map(ScreenTopic.post))
+        return store.wasMarked(topics: topics, kind: .otherPeople, since: postsReadAt)
     }
 
     /// A follow, connection or block changed this profile's counts and edges:
@@ -727,8 +748,10 @@ public final class PublicProfileViewModel {
             // empty list on purpose: that endpoint returns plain posts, not
             // tier-gated broadcasts, and feeding them into the broadcast
             // card would invent a visibility chip the API never sent.
-            let posts = kind == .local ? await loadUserPosts(id: profile.id, force: force) : []
-            state = .loaded(build(from: profile, kind: kind, posts: posts))
+            let rows = kind == .local
+                ? await loadUserPosts(id: profile.id, force: force || postsChangedElsewhere)
+                : []
+            state = .loaded(build(from: profile, kind: kind, posts: rows.map { project(post: $0) }))
             await loadRelationship(id: profile.id)
         } catch is CancellationError {
             return
@@ -855,6 +878,12 @@ public final class PublicProfileViewModel {
         }
     }
 
+    /// The Unfollow button of the "Unfollow …?" confirm: it only ever unfollows.
+    public func unfollow() async {
+        guard isFollowing else { return }
+        await toggleFollow()
+    }
+
     private func followFailureMessage(for error: APIError, wasFollowing: Bool) -> String {
         let fallback = wasFollowing ? "Couldn't unfollow." : "Couldn't follow."
         switch error {
@@ -875,28 +904,42 @@ public final class PublicProfileViewModel {
     /// A21.2 — the Local profile's post feed. Mirrors the RN
     /// `components/profile/PostsTab` fetch. A failure doesn't fail the whole
     /// profile: the feed stays empty and `postsLoadFailed` makes it offer
-    /// Try again rather than the design's "Quiet for now" state.
-    private func loadUserPosts(id: String, force: Bool) async -> [PublicProfilePost] {
+    /// Try again rather than the design's "Quiet for now" state. The rows
+    /// are the feed's (`feedService` serializer), so they also feed the
+    /// Pulse cards.
+    private func loadUserPosts(id: String, force: Bool) async -> [FeedPostDTO] {
+        let readRevision = postCards.actionRevision
         do {
-            let response = try await store.load(
+            let snapshot = try await store.load(
                 PostsEndpoints.userPosts(userId: id),
-                as: MyPostsResponse.self,
+                as: FeedResponse.self,
                 kind: .otherPeople,
+                // Your own taps on posts (here, in Pulse) mark this list too.
+                topics: [ScreenTopic.posts],
                 force: force
-            ).value
+            )
             postsLoadFailed = false
-            return response.posts.map { project(post: $0) }
+            postsReadAt = snapshot.fetchedAt
+            postCards.show(snapshot.value.posts, readRevision: readRevision)
+            return snapshot.value.posts
         } catch {
             logger.debug("Profile posts load failed: \(error)")
             postsLoadFailed = true
+            postCards.show([], readRevision: readRevision)
             return []
         }
     }
 
-    private func project(post: MyPostDTO) -> PublicProfilePost {
+    private func project(post: FeedPostDTO) -> PublicProfilePost {
         PublicProfilePost(
             id: post.id,
             body: post.content.isEmpty ? (post.title ?? "") : post.content,
+            media: PostMediaItem.items(
+                urls: post.mediaURLs,
+                types: post.mediaTypes,
+                thumbnails: post.mediaThumbnails,
+                liveURLs: post.mediaLiveURLs
+            ),
             timeAgo: relativeTimestamp(post.createdAt),
             locality: post.locationName,
             reactions: post.likeCount,

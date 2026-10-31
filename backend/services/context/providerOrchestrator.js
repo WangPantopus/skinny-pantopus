@@ -229,6 +229,8 @@ function clearHubTodayCache(userId) {
  *   requested home here — a landlord in Portland opening their Phoenix
  *   rental must get Phoenix weather, freeze guidance, and alerts, not
  *   Portland's. Invalid coordinates fall back to the user's location.
+ * @param {Map} [options.countyReads]  A caller's per-request county-rules
+ *   read (addressCalendarService.composeForHome), shared with the calendar here.
  * @returns {Promise<Object>} HubTodayResult
  */
 // The address calendar for the location's home (Wedge Phase 2, D6) — null
@@ -278,8 +280,9 @@ async function getHubToday(userId, options = {}) {
   const generations = memoGenerations(userId, location.homeId);
 
   const { latitude, longitude } = location;
-  // The calendar is read twice below; its public county rules only once.
-  const countyReads = new Map();
+  // The calendar is read twice below; its public county rules only once. Place
+  // passes its own read in, shared with its address calendar card.
+  const countyReads = options.countyReads || new Map();
 
   // 2. Fetch all data in parallel with per-provider timing
   const fetchStartMs = Date.now();

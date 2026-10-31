@@ -79,10 +79,12 @@ struct MailPostage: View {
         if model.trust.usesStamp {
             ZStack(alignment: .topTrailing) {
                 MailStamp(art: model.stamp)
-                MailPostmarkView(town: model.postmarkTown, date: model.postmarkDate, year: model.postmarkYear, waves: true)
-                    .frame(width: 92, height: 46)
-                    .opacity(0.62)
-                    .offset(x: 6, y: 4)
+                if model.isPostmarked {
+                    MailPostmarkView(town: model.postmarkTown, date: model.postmarkDate, year: model.postmarkYear, waves: true)
+                        .frame(width: 92, height: 46)
+                        .opacity(0.62)
+                        .offset(x: 6, y: 4)
+                }
             }
             .frame(width: 92, height: 58, alignment: .topTrailing)
         } else if let indicia = model.trust.indicia {

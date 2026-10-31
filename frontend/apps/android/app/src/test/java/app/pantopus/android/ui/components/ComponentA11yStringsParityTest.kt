@@ -12,7 +12,7 @@ import org.junit.Test
  * matching test on the other.
  *
  * Pin sources (iOS):
- *   - InviteLinks:  `Core/Design/Components/SystemSheets.swift:31-33`
+ *   - InviteLinks:  `Core/Design/Components/SystemSheets.swift:69-70`
  *   - Toast palette: `Core/Design/Components/Toast.swift:11-16`
  *
  * Component-internal strings (e.g. `BidderStack`'s "N bidders" formatter,
@@ -28,15 +28,9 @@ class ComponentA11yStringsParityTest {
         // iOS `InviteLinks.inviteMessage` — locked so a marketing copy
         // update has to flow to both platforms in lockstep.
         val expected =
-            "Join me on Pantopus — your neighborhood for trusted home help, " +
-                "local gigs, and your whole household in one place. " +
-                InviteLinks.DOWNLOAD_URL
+            "Join me on Pantopus — your neighborhood for trusted home help " +
+                "and your whole household in one place."
         assertEquals(expected, InviteLinks.INVITE_MESSAGE)
-    }
-
-    @Test
-    fun invite_download_url_is_canonical() {
-        assertEquals("https://pantopus.app", InviteLinks.DOWNLOAD_URL)
     }
 
     @Test

@@ -53,6 +53,9 @@ enum class MailSender(
     /** People and businesses without printed postage put a stamp on. */
     val stamps: Boolean get() = this == Neighbor || this == PantopusBusiness
 
+    /** [line], for a Christmas card when [card]: anyone with a personal account sends one, so no proven home is claimed. */
+    fun lineFor(card: Boolean): String = if (card && this == Neighbor) "Pantopus neighbor" else line
+
     companion object {
         /**
          * `sender_trust` as the server stores it, with Pantopus's own letters marked by `from_pantopus`; a Pantopus

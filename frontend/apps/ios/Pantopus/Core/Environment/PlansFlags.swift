@@ -77,6 +77,16 @@ final class PlansFlags {
         restore(for: newAccount)
     }
 
+    /// The answer a Plans link acts on: the remembered one, or the server's when
+    /// this device has none for `account` yet. A plan link that arrives with the
+    /// first sign-in (someone new opening a neighbor's plan) would otherwise meet
+    /// the default "off" and be dropped.
+    func ready(account newAccount: String?) async {
+        prime(account: newAccount)
+        guard let newAccount, defaults.array(forKey: Self.key(newAccount)) == nil else { return }
+        await refresh(account: newAccount)
+    }
+
     private func check(account checked: String) async {
         let api = injectedAPI ?? APIClient.shared
         async let plansAnswer = Self.read("plans", api: api)

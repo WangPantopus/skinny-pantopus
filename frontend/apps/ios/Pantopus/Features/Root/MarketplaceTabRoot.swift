@@ -18,6 +18,9 @@ public enum MarketplaceRoute: Hashable {
     case listingOffers(listingId: String, titleHint: String?)
     case publicProfile(userId: String)
     case chatConversation(InboxConversationDestination)
+    /// A post opened from a profile's Posts tab, and one of your own edited from its page.
+    case post(postId: String)
+    case editPost(postId: String)
 }
 
 /// NavigationStack wrapper for the Marketplace tab.
@@ -170,7 +173,7 @@ public struct MarketplaceTabRoot: View {
                     onShareListing: {
                         let name = titleHint ?? "this listing"
                         systemSheet = .share(
-                            items: ["Check out \(name) on Pantopus — \(InviteLinks.downloadURLString)"]
+                            items: ["Check out \(name) on Pantopus — \(InviteLinks.publicPageURLString(path: "/listing/\(listingId)"))"]
                         )
                     },
                     onOpenBuyer: { buyer in
@@ -193,6 +196,9 @@ public struct MarketplaceTabRoot: View {
             PublicProfileView(
                 userId: userId,
                 onBack: pop,
+                onOpenMessages: { profile in
+                    Task { @MainActor in path.append(.chatConversation(.directMessage(with: profile))) }
+                },
                 onOpenGig: { gigId in
                     // The Marketplace stack has no gig-detail route; hand
                     // the public `/gig/:id` link to the router, which
@@ -202,8 +208,21 @@ public struct MarketplaceTabRoot: View {
                 },
                 onOpenProfile: { reviewerId in
                     Task { @MainActor in path.append(.publicProfile(userId: reviewerId)) }
+                },
+                onOpenPost: { postId in
+                    Task { @MainActor in path.append(.post(postId: postId)) }
                 }
             )
+        case let .post(postId):
+            PostPageDestination(
+                postId: postId,
+                currentUserId: currentUserId,
+                onBack: pop,
+                onOpenProfile: { path.append(.publicProfile(userId: $0)) },
+                onEdit: { path.append(.editPost(postId: $0)) }
+            )
+        case let .editPost(postId):
+            PulseComposeFlowView(editingPostId: postId, onCancel: { pop() }) { _ in pop() }
         case let .chatConversation(dest):
             ChatConversationView(
                 viewModel: ChatConversationViewModel(

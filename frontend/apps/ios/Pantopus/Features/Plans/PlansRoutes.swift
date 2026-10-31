@@ -17,6 +17,12 @@ enum PlansRoute: Hashable {
     case change(planId: String)
     /// A host's public profile (J1's host card).
     case profile(userId: String)
+    /// A post opened from a profile's Posts tab.
+    case post(postId: String)
+    /// One of your own posts, edited from its page.
+    case editPost(postId: String)
+    /// A DM opened from a profile's Message button.
+    case chat(InboxConversationDestination)
 }
 
 /// Hand-off into the Plans tab's stack from outside it: a deep link, a push,

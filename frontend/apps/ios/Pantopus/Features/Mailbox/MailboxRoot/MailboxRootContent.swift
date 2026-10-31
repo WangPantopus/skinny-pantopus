@@ -3,9 +3,10 @@
 //  Pantopus
 //
 //  The Mailbox's drawers and tabs (Mail tab drawings, board "Main"): the
-//  Me · Home · Biz chips with their unopened counts, the routing banner when
-//  mail needs a Home picked, and the Incoming · Counter · Vault tabs. The
-//  "My mail day" button is gone with scanning (founder decision 2026-10-26).
+//  Me · Home · Biz chips with their unopened counts, then Sent (no count),
+//  the routing banner when mail needs a Home picked, and the Incoming ·
+//  Counter · Vault tabs (hidden while Sent shows). The "My mail day" button
+//  is gone with scanning (founder decision 2026-10-26).
 //
 
 import SwiftUI
@@ -23,8 +24,10 @@ struct MailboxRootHeader: View {
                     .padding(.horizontal, Spacing.s4)
                     .padding(.bottom, Spacing.s2)
             }
-            tabBar
-                .padding(.horizontal, Spacing.s2)
+            if !viewModel.showsSent {
+                tabBar
+                    .padding(.horizontal, Spacing.s2)
+            }
         }
     }
 
@@ -64,12 +67,25 @@ struct MailboxRootHeader: View {
                         label: drawer.label,
                         icon: drawer.icon,
                         accent: drawer.accent,
-                        isActive: drawer == viewModel.selectedDrawer,
+                        isActive: drawer == viewModel.selectedDrawer && !viewModel.showsSent,
                         unread: viewModel.drawerBadge(drawer)
                     ) {
                         viewModel.selectDrawer(drawer)
                     }
                     .accessibilityIdentifier("mailboxRootDrawer.\(drawer.rawValue)")
+                }
+                // What you've sent: not a drawer, so no count.
+                if viewModel.showsSentChip {
+                    MailboxDrawerChip(
+                        label: "Sent",
+                        icon: .send,
+                        accent: MailboxDrawer.me.accent,
+                        isActive: viewModel.showsSent,
+                        unread: 0
+                    ) {
+                        viewModel.selectSent()
+                    }
+                    .accessibilityIdentifier("mailboxRootDrawer.sent")
                 }
             }
             .padding(.horizontal, Spacing.s4)

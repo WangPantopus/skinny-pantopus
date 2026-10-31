@@ -15,12 +15,15 @@ import SwiftUI
 
 struct HolidayCardFlowView: View {
     @State private var viewModel: HolidayCardFlowViewModel
+    /// "See it in Sent" on a card just sent: its id.
+    private let onSeeInSent: ((String) -> Void)?
     private let onClose: () -> Void
     @Environment(\.colorScheme) private var scheme
     private static let top = "sendCardTop"
 
-    init(viewModel: HolidayCardFlowViewModel, onClose: @escaping () -> Void) {
+    init(viewModel: HolidayCardFlowViewModel, onSeeInSent: ((String) -> Void)? = nil, onClose: @escaping () -> Void) {
         _viewModel = State(initialValue: viewModel)
+        self.onSeeInSent = onSeeInSent
         self.onClose = onClose
     }
 
@@ -128,7 +131,14 @@ struct HolidayCardFlowView: View {
     @ViewBuilder
     private func loaded(_ cards: HolidayCardsResponse) -> some View {
         if viewModel.step == .sent, let sent = viewModel.sent {
-            HolidayCardSentView(viewModel: viewModel, card: sent, cards: cards, title: "On its way", onDone: onClose)
+            HolidayCardSentView(
+                viewModel: viewModel,
+                card: sent,
+                cards: cards,
+                title: "On its way",
+                onDone: onClose,
+                onSeeInSent: onSeeInSent.map { open in { open(sent.id) } }
+            )
         } else if let today = viewModel.today {
             HolidayCardSentView(viewModel: viewModel, card: today, cards: cards, title: "Today’s card", onDone: onClose)
         } else if !cards.open {

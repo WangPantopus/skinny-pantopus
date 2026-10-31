@@ -138,7 +138,7 @@ public struct BusinessProfileView: View {
         let link = if payload.hasPublicPage, let handle = payload.header.handle, !handle.isEmpty {
             InviteLinks.businessURLString(username: handle)
         } else {
-            InviteLinks.downloadURLString
+            InviteLinks.siteURLString
         }
         onShare("Check out \(name) on Pantopus — \(link)")
     }

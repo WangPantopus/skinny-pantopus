@@ -7,6 +7,8 @@ struct HomeInvitationDecisionView: View {
     let onReopen: () async -> Void
     @State private var confirmation: Confirmation?
     @State private var accountSwitchLifetime: Int?
+    /// The accepted answer this screen already tried to open the Home for, once.
+    @State private var openedAfterAccept: String?
     private struct Confirmation: Identifiable {
         let id = UUID()
         let action: HomeInvitationAction?
@@ -156,6 +158,9 @@ struct HomeInvitationDecisionView: View {
             }
             Text(explanation(draft)).accessibilityIdentifier("homeInvitationExplanation")
             if draft.outcome?.state == "completed", draft.action == .accept {
+                // Accepting this invitation goes straight into the Home once access is
+                // shared; these stay for access that starts later or a failed read.
+                Color.clear.frame(height: 0).task(id: draft.requestId) { await openAfterAccept(draft) }
                 control("Check Home access", "homeInvitationAccess") { await model.checkAccess() }
                 if let progress = model.progress {
                     Text(progress.currentAccess == "shared" ? "You can open this Home now."
@@ -195,6 +200,18 @@ struct HomeInvitationDecisionView: View {
                 }.frame(minHeight: 44).disabled(model.isWorking).accessibilityIdentifier("homeInvitationCancel")
             }
         }
+    }
+
+    /// Once per accepted answer to the invitation opened here: open the Home when
+    /// its access is shared now (`acknowledge(openHome:)` re-reads it first).
+    private func openAfterAccept(_ draft: PendingHomeInvitationDecision) async {
+        guard draft.token == model.token, openedAfterAccept != draft.requestId else { return }
+        openedAfterAccept = draft.requestId
+        await model.checkAccess()
+        guard model.progress?.currentAccess == "shared",
+              let original = await model.acknowledge(requestId: draft.requestId, openHome: true) else { return }
+        onClose()
+        DeepLinkRouter.shared.handle(path: "/homes/\(original.homeId)/dashboard")
     }
 
     private func explanation(_ draft: PendingHomeInvitationDecision) -> String {

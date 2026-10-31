@@ -737,7 +737,7 @@ fun FeedScreen(
 }
 
 /** Report reasons accepted by `reportPostSchema` (`backend/routes/posts.js:3168`). */
-private val pulseReportReasons =
+internal val pulseReportReasons =
     listOf(
         "spam" to "Spam",
         "harassment" to "Harassment",

@@ -661,27 +661,31 @@ async function composeTodayForPoint(lat, lng, { budgetMs = null } = {}) {
 // the whole pipeline completes, and the composers run inside one
 // Promise.all, so both calls always missed and every request made two full
 // provider round-trips. The hub payload is now fetched ONCE in
-// composeHomeIntelligence and passed down.
+// composeHomeIntelligence and passed down, still loading: the card's heat
+// reads don't need it, so only its freeze half waits for the forecast.
 // The weather section's provider, as the Heat & cold card credits it.
 const WEATHER_SOURCE_LABELS = { WEATHERKIT: 'Apple Weather', OPEN_METEO: 'Open-Meteo' };
 
-async function composeHeatCold(home, hub) {
-  const provider = hub && hub.meta && hub.meta.section_providers && hub.meta.section_providers.weather;
-  const weather = hub && hub.weather
-    ? {
-      hourly: mapWeatherHours(hub.weather.hourly),
-      daily: mapWeatherDays(hub.weather.daily),
-      timezone: (hub.location && hub.location.timezone) || null,
-      source_label: WEATHER_SOURCE_LABELS[provider] || null,
-    }
-    : null;
+function composeHeatCold(home, hubPromise) {
+  const forecast = Promise.resolve(hubPromise).then((hub) => {
+    const provider = hub && hub.meta && hub.meta.section_providers && hub.meta.section_providers.weather;
+    return hub && hub.weather
+      ? {
+        hourly: mapWeatherHours(hub.weather.hourly),
+        daily: mapWeatherDays(hub.weather.daily),
+        timezone: (hub.location && hub.location.timezone) || null,
+        source_label: WEATHER_SOURCE_LABELS[provider] || null,
+      }
+      : null;
+  });
 
-  return placeSectionAdapters.composeHeatCold(home, weather);
+  return placeSectionAdapters.composeHeatCold(home, forecast);
 }
 
 // Wedge Phase 2 (D6) — the address calendar. Never throws; a home with no
 // city/state (or no rules in scope yet) is `unavailable`, not an error.
-async function composeAddressCalendar(home) {
+// `countyReads` is the request's shared county-rules read (see composeHomeIntelligence).
+async function composeAddressCalendar(home, countyReads) {
   if (!home || !home.state || !home.city) {
     return [serializePlaceSection('address_calendar', {
       status: 'unavailable',
@@ -689,7 +693,7 @@ async function composeAddressCalendar(home) {
     })];
   }
   try {
-    const data = await addressCalendarService.composeForHome(home);
+    const data = await addressCalendarService.composeForHome(home, { countyReads });
     if (!data.rule_count) {
       // Where towns or counties set the tax dates, say where to look.
       const taxNote = addressCalendarService.taxDateGuidance(home.state);
@@ -1205,9 +1209,9 @@ const COMPOSER_SECTIONS = [
   { ids: ['weather', 'air_quality', 'alerts', 'good_day_to'], run: async ({ home, userId, hubPromise }) => composeToday(userId, home, await hubPromise) },
   { ids: ['sunrise_sunset'], run: ({ home }) => placeSectionAdapters.composeSunriseSunset(home) },
   // A claimant gets the public calendar: without the Home id, the household's own pickup day isn't loaded.
-  { ids: ['address_calendar'], run: ({ home, claimant }) => composeAddressCalendar(claimant ? { ...home, id: null } : home) },
+  { ids: ['address_calendar'], run: ({ home, claimant, countyReads }) => composeAddressCalendar(claimant ? { ...home, id: null } : home, countyReads) },
   { ids: ['flood', 'census_context'], run: ({ home }) => composeNeighborhood(home) },
-  { ids: ['heat_cold'], run: async ({ home, hubPromise }) => composeHeatCold(home, await hubPromise) },
+  { ids: ['heat_cold'], run: ({ home, hubPromise }) => composeHeatCold(home, hubPromise) },
   { ids: ['seismic'], run: ({ home }) => placeSectionAdapters.composeSeismic(home) },
   { ids: ['wildfire'], run: ({ home }) => placeSectionAdapters.composeWildfire(home) },
   { ids: ['lead_radon'], run: ({ home }) => placeSectionAdapters.composeLeadRadon(home) },
@@ -1320,6 +1324,10 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   // coordinates gets no hub payload — its weather sections degrade to
   // unavailable rather than borrowing the viewer's city. A claimant's payload
   // is anchored to the point only, so the household's own records aren't read.
+  //
+  // The hub payload's calendar and the address calendar card are for the same
+  // home: they share one read of its county rules (public data).
+  const countyReads = new Map();
   const HUB_SECTIONS = ['weather', 'air_quality', 'alerts', 'good_day_to', 'heat_cold'];
   let hubPromise = Promise.resolve(null);
   if (HUB_SECTIONS.some((id) => requested.has(id))) {
@@ -1329,6 +1337,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
         .getHubToday(userId, {
           detail: true,
           atLocation: { latitude: ll.lat, longitude: ll.lng, label: home.address || home.name, homeId: claimant ? null : home.id },
+          countyReads,
         })
         .catch((err) => {
           logger.warn('placeIntelligence: getHubToday failed', { userId, error: err.message });
@@ -1347,7 +1356,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   const subject = claimant ? { ...home, move_in_date: null } : home;
   const [privacy, ...groups] = await Promise.all([
     getHomePrivacy(homeId).catch(() => ({ address_precision: true })),
-    ...runs.map(({ run }) => run({ home: subject, userId, tier, hubPromise, access, ballot: ballotOn, claimant })),
+    ...runs.map(({ run }) => run({ home: subject, userId, tier, hubPromise, access, ballot: ballotOn, claimant, countyReads })),
   ]);
 
   const composed = {};

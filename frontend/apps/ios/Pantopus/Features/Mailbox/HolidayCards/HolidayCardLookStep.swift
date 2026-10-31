@@ -412,7 +412,8 @@ private extension MailPieceModel {
             stamp: stamp,
             peekLine: peekLine,
             meta: meta,
-            card: card
+            card: card,
+            isPostmarked: isPostmarked
         )
     }
 }

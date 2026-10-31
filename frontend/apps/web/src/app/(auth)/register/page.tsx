@@ -36,6 +36,10 @@ function RegisterContent() {
   const searchParams = useSearchParams();
   const prefillEmail = (searchParams?.get('email') || '').trim().toLowerCase();
   const redirectTo = safeRedirectPath(readAuthRedirectQuery(searchParams), '/app/place');
+  // A friend's invite link (/join/:code) arrives as ?invite_code=; sending it credits them with this account.
+  // Anything the server's code rule would refuse is left out rather than failing sign-up.
+  const rawInviteCode = (searchParams?.get('invite_code') || '').trim();
+  const inviteCode = /^[A-Za-z0-9_-]{6,12}$/.test(rawInviteCode) ? rawInviteCode : '';
   type FieldErrors = Record<string, string>;
   const [formData, setFormData] = useState({
     firstName: '',
@@ -136,6 +140,7 @@ function RegisterContent() {
         password: formData.password,
         redirectTo,
         ...(anonId ? { anon_id: anonId } : {}),
+        ...(inviteCode ? { invite_code: inviteCode } : {}),
       });
 
       bindPlaceArrival(redirectTo, response.user?.id);

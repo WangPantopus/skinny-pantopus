@@ -17,15 +17,15 @@ import UIKit
 
 // MARK: - Invite copy / links
 
-/// Single source of truth for the invite message + download link shared by
-/// "Invite to Pantopus" and the post-contact-pick invite. Swap
-/// `downloadURLString` for the real App Store / Play Store smart-link when
-/// it ships — every invite surface reads from here.
+/// Single source of truth for the invite message and the links shared by
+/// "Invite to Pantopus" and the post-contact-pick invite. An invite carries the
+/// person's own link (`PersonalInviteLink`); any other share links to this
+/// build's web home page.
 public enum InviteLinks {
-    public static let downloadURLString = "https://pantopus.app"
-
-    public static var downloadURL: URL? {
-        URL(string: downloadURLString)
+    /// This build's web home page (pantopus.com in production), for a share
+    /// that isn't an invite or a page of its own.
+    public static var siteURLString: String {
+        publicWebOrigin
     }
 
     /// Use the existing public train page, with this build's web origin.
@@ -67,14 +67,12 @@ public enum InviteLinks {
     }
 
     public static let inviteMessage =
-        "Join me on Pantopus — your neighborhood for trusted home help, " +
-        "local gigs, and your whole household in one place. \(downloadURLString)"
+        "Join me on Pantopus — your neighborhood for trusted home help and your whole household in one place."
 
-    /// Items handed to `UIActivityViewController` for an invite share.
-    public static var shareItems: [Any] {
-        var items: [Any] = [inviteMessage]
-        if let url = downloadURL { items.append(url) }
-        return items
+    /// Items handed to `UIActivityViewController` for an invite share: the
+    /// words and the person's own invite link.
+    @MainActor public static var shareItems: [Any] {
+        [inviteMessage, PersonalInviteLink.shared.url]
     }
 }
 

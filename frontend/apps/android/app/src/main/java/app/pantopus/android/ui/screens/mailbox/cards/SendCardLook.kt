@@ -190,7 +190,7 @@ private fun PersonLook(
         CardComingOut(envelope, card, from)
     }
     LookSection("On the back") {
-        CardBack(card, from, modifier = Modifier.padding(horizontal = Spacing.s3, vertical = Spacing.s2).rotate(1f))
+        CardNoteSide(card, from, modifier = Modifier.padding(horizontal = Spacing.s3, vertical = Spacing.s2).rotate(1f))
     }
 }
 
@@ -223,8 +223,8 @@ private fun EmailLook(
                 horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
                 verticalAlignment = Alignment.Top,
             ) {
-                CardFront(card, from, modifier = Modifier.weight(1f))
-                CardBack(card, from, modifier = Modifier.weight(1f))
+                CardPictureSide(card, from, modifier = Modifier.weight(1f))
+                CardNoteSide(card, from, modifier = Modifier.weight(1f))
             }
         }
     }
@@ -283,9 +283,9 @@ private fun CardComingOut(
     }
 }
 
-/** The picture side as the card prints it, with the day it's mailed in the postmark. */
+/** The picture side as the card prints it, with the day it's mailed in the postmark (step 5, and a card in Sent). */
 @Composable
-private fun CardFront(
+internal fun CardPictureSide(
     card: MailLetterCard,
     from: String,
     modifier: Modifier = Modifier,
@@ -306,9 +306,9 @@ private fun CardFront(
     )
 }
 
-/** The back with the note on it and who it's from, the size of the picture side. */
+/** The back with the note on it and who it's from, the size of the picture side (step 5, and a card in Sent). */
 @Composable
-private fun CardBack(
+internal fun CardNoteSide(
     card: MailLetterCard,
     from: String,
     modifier: Modifier = Modifier,

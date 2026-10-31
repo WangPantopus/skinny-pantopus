@@ -52,7 +52,7 @@ import { Group, SectionCard, LockedCard, DensityCard, PlaceHeader, TextButton, A
 import { PantopusLockup } from '@/components/brand/PantopusMark';
 import { renderSection } from '@/components/place/presentation';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
-import { getStoreDownloadCta } from '@/lib/publicShare';
+import { absoluteMediaUrl, getStoreDownloadCta } from '@/lib/publicShare';
 import { clearPendingPlaces, stashPendingPlace } from './pendingPlace';
 import { authPageHref } from '@/lib/auth-utils';
 import { launchFeatures } from '@/lib/featureFlags';
@@ -76,6 +76,35 @@ function TopBar() {
   );
 }
 
+/** The person whose invite link (/join/:code) opened the funnel. */
+export type StartInvite = { code: string; name: string; avatarUrl: string | null };
+
+/** Sign-up links from an invite carry its code, so the person who sent it is credited. */
+function inviteExtras(invite?: StartInvite): Record<string, string> {
+  return invite ? { invite_code: invite.code } : {};
+}
+
+export function InvitedBy({ invite }: { invite: StartInvite }) {
+  const src = absoluteMediaUrl(invite.avatarUrl);
+  return (
+    <span
+      data-testid="start-invited-by"
+      className="inline-flex max-w-full items-center gap-2 rounded-full border border-app-border bg-app-surface py-1 pl-1 pr-3 text-[13.5px] font-semibold text-app-text"
+    >
+      {src ? (
+        // Native img keeps public avatars working across storage hosts without Next image config churn.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="h-7 w-7 flex-none rounded-full object-cover" />
+      ) : (
+        <span aria-hidden="true" className="grid h-7 w-7 flex-none place-items-center rounded-full bg-primary-600 text-[12px] font-bold text-white">
+          {invite.name.slice(0, 1).toUpperCase()}
+        </span>
+      )}
+      <span className="truncate">{invite.name} invited you to Pantopus</span>
+    </span>
+  );
+}
+
 // ── The hero step ───────────────────────────────────────────
 //
 // One job: get a stranger from a postcard, a share card or a search to
@@ -90,6 +119,7 @@ function HeroStep({
   canSubmit,
   onBrowse,
   fromCard,
+  invite,
 }: {
   onSelect: (p: SelectedAddress) => void;
   onClear: () => void;
@@ -99,13 +129,17 @@ function HeroStep({
   onBrowse: () => void;
   /** Opened from a mailed card (`/start?r=…`). */
   fromCard: boolean;
+  /** Opened from a friend's invite link: their name leads the page. */
+  invite?: StartInvite;
 }) {
   return (
     <div className="flex flex-col min-h-screen pb-8">
       <TopBar />
       <div className="flex-1 flex flex-col justify-center py-8 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:items-center lg:gap-14">
         <div>
-          {fromCard ? (
+          {invite ? (
+            <InvitedBy invite={invite} />
+          ) : fromCard ? (
             <span
               data-testid="start-from-card"
               className="inline-flex items-center gap-1.5 rounded-full bg-app-home-bg px-2.5 py-1 text-[12.5px] font-semibold text-app-home"
@@ -115,7 +149,7 @@ function HeroStep({
             </span>
           ) : null}
           <h1
-            className={`text-[31px] leading-[37px] sm:text-[36px] sm:leading-[43px] lg:text-[42px] lg:leading-[48px] font-bold -tracking-[0.028em] text-app-text text-balance ${fromCard ? 'mt-4' : ''}`}
+            className={`text-[31px] leading-[37px] sm:text-[36px] sm:leading-[43px] lg:text-[42px] lg:leading-[48px] font-bold -tracking-[0.028em] text-app-text text-balance ${invite || fromCard ? 'mt-4' : ''}`}
           >
             Know what matters for your home, and stay on top of it.
           </h1>
@@ -168,7 +202,7 @@ function HeroStep({
           route around.
         */}
         <Link
-          href="/register?redirectTo=%2Fapp%2Fplace%2Fscout"
+          href={invite ? authPageHref('/register', '/app/place/scout', inviteExtras(invite)) : '/register?redirectTo=%2Fapp%2Fplace%2Fscout'}
           className="inline-flex items-center gap-1.5 py-2 px-1 text-[13.5px] font-medium text-app-text-secondary -tracking-[0.005em]"
         >
           Considering a place you don&apos;t live at yet?
@@ -646,7 +680,7 @@ function UnsupportedRegion({ onBrowse }: { onBrowse: () => void }) {
 }
 
 // ── The funnel ──────────────────────────────────────────────
-export default function StartFunnel() {
+export default function StartFunnel({ invite }: { invite?: StartInvite } = {}) {
   const router = useRouter();
   const [fromCard, setFromCard] = useState(false);
   const [selected, setSelected] = useState<SelectedAddress | null>(null);
@@ -752,7 +786,7 @@ export default function StartFunnel() {
   const goBrowse = () => {
     clearPendingPlaces();
     // Launch cut #1 (Beacon): browsing lands on Pulse, not the Beacons feed.
-    router.push(authPageHref('/register', launchFeatures.beacon ? '/app/feed?surface=personas' : '/app/feed'));
+    router.push(authPageHref('/register', launchFeatures.beacon ? '/app/feed?surface=personas' : '/app/feed', inviteExtras(invite)));
   };
 
   const continueWithPreview = (page: '/login' | '/register') => {
@@ -773,10 +807,10 @@ export default function StartFunnel() {
         setContinuationError('Your browser could not keep this preview. Allow site storage and try again.');
         return;
       }
-      router.push(authPageHref(page, `/app/place?preview=${previewId}`));
+      router.push(authPageHref(page, `/app/place?preview=${previewId}`, inviteExtras(invite)));
       return;
     }
-    router.push(authPageHref(page, '/app/place'));
+    router.push(authPageHref(page, '/app/place', inviteExtras(invite)));
   };
   const goWall = () => continueWithPreview('/register');
 
@@ -798,6 +832,7 @@ export default function StartFunnel() {
             canSubmit={!!selected || !!fallbackAddress}
             onBrowse={goBrowse}
             fromCard={fromCard}
+            invite={invite}
           />
         </div>
       </main>

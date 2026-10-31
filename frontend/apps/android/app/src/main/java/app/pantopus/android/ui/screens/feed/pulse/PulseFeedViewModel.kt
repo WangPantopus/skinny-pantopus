@@ -14,7 +14,6 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.feed.FeedMuteEntityType
 import app.pantopus.android.data.api.models.feed.FeedPost
-import app.pantopus.android.data.api.models.feed.FeedRepostedBy
 import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.location.ViewingLocationDto
 import app.pantopus.android.data.api.models.sports.ActiveSportsEventDto
@@ -36,15 +35,11 @@ import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.ui.screens.feed.FeedEmptyContent
 import app.pantopus.android.ui.screens.feed.FeedRadiusSuggestion
 import app.pantopus.android.ui.screens.feed.FeedSurface
-import app.pantopus.android.ui.screens.shared.feed.FeedAvatarTint
-import app.pantopus.android.ui.screens.shared.media.buildPostMediaItems
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.time.Duration
-import java.time.Instant
 import javax.inject.Inject
 
 /** Where a feed request looks: coordinates plus the viewing radius, when known. */
@@ -1418,177 +1413,26 @@ class PulseFeedViewModel
 
         // ── Projection ──────────────────────────────────────────────────
 
-        private fun projectCard(post: FeedPost): PulsePostCardContent {
-            val intent = PulseIntent.fromPostType(post.postType)
-            val authorName = post.creator?.displayName() ?: "Pantopus user"
-            val isBusiness = post.creator?.accountType == "business" || post.businessAuthorId != null
-            val surfaceValue = _surface.value
-            val hasReacted = effectiveHasReacted(post)
-            val likeCount = effectiveLikeCount(post)
-            val isOwner = isOwner(post)
-            val isSolved = effectiveIsSolved(post)
-            val openAsk = isOwnOpenAsk(post, isOwner, isSolved)
-            return PulsePostCardContent(
-                id = post.id,
-                likePending = post.id in liking,
-                savePending = post.id in saving,
-                authorName = authorName,
-                authorInitials = initials(authorName),
-                // Beacon credentials come from the public profile, never the surface.
-                // Other surfaces carry no verification field, so no badge (being
-                // a business isn't being verified).
-                authorVerified = surfaceValue == FeedSurface.Beacons && post.creator?.credential?.status == "verified",
-                avatarTint = if (isBusiness) FeedAvatarTint.Violet else FeedAvatarTint.Sky,
-                meta = metaString(post),
-                intent = intent,
-                chipLabel = intent.chipLabelFor(post.lostFoundType),
-                isVisitor = post.isVisitorPost,
-                origin = post.origin,
-                title = post.title,
-                body = post.content.orEmpty(),
-                event =
-                    pulseEventDetails(
-                        postType = post.postType,
-                        startsAt = post.eventDate,
-                        endsAt = post.eventEndDate,
-                        venue = post.eventVenue,
-                    ),
-                reactions =
-                    intent.reactionTemplate(
-                        helpfulCount = likeCount,
-                        secondaryCount = 0,
-                    ),
-                attendees =
-                    if (intent == PulseIntent.Event) {
-                        PulseAttendeeStrip(
-                            avatars = emptyList(),
-                            goingCount = likeCount,
-                            userIsGoing = hasReacted,
-                        )
-                    } else {
-                        null
-                    },
-                userHasReacted = hasReacted,
-                commentCount = post.commentCount,
-                media =
-                    buildPostMediaItems(
-                        urls = post.mediaUrls,
-                        types = post.mediaTypes,
-                        thumbnails = post.mediaThumbnails,
-                        liveUrls = post.mediaLiveUrls,
-                    ),
-                actions =
-                    PulsePostActions(
-                        isSeeded = post.isSeeded,
+        private fun projectCard(post: FeedPost): PulsePostCardContent =
+            pulseCardContent(
+                post = post,
+                viewerId = viewerId,
+                surface = _surface.value,
+                live =
+                    PulseCardLiveValues(
+                        hasReacted = effectiveHasReacted(post),
+                        likeCount = effectiveLikeCount(post),
                         isSaved = effectiveIsSaved(post),
                         isReposted = effectiveIsReposted(post),
                         shareCount = effectiveShareCount(post),
-                        canShareExternally = post.canShareExternally,
-                        isSolved = isSolved,
-                        isOwner = isOwner,
-                        canMarkSolved = isOwner && post.postType == "ask_local" && !isSolved,
-                        canFlagNotHelpful = surfaceValue.supportsNotHelpful && !isOwner && !post.isSeeded,
-                        muteEntityType =
-                            when {
-                                post.businessAuthorId != null -> FeedMuteEntityType.Business
-                                post.userId != null -> FeedMuteEntityType.User
-                                else -> null
-                            },
-                        muteEntityId = post.businessAuthorId ?: post.userId,
-                        muteEntityName = authorName,
-                        postType = post.postType.takeUnless { intent == PulseIntent.Generic },
-                        topicLabel = intent.cardChipLabel,
-                        pulseTopic = cardTopic(post),
-                        canKeepOpen = openAsk && hasNotBeenKeptOpen(post),
-                        canCloseAsk = openAsk,
+                        isSolved = effectiveIsSolved(post),
+                        keptOpen = post.id in keptOpenIds || !post.lifecycleMetadata?.keptOpenAt.isNullOrBlank(),
+                        likePending = post.id in liking,
+                        savePending = post.id in saving,
                     ),
-                status = statusFor(post),
-                repostedBy = repostedByText(post.repostedBy),
             )
-        }
 
-        /** Connections: "Ben C. reposted", "Ben C. and Eve H. reposted", "Ben C. and 2 others reposted" (as on web). */
-        private fun repostedByText(repostedBy: FeedRepostedBy?): String? {
-            val first = repostedBy?.names?.firstOrNull()
-            val second = repostedBy?.names?.getOrNull(1)
-            val others = (repostedBy?.count ?: 0) - 1
-            return when {
-                first == null || others < 0 -> null
-                others == 0 -> "$first reposted"
-                others == 1 && second != null -> "$first and $second reposted"
-                else -> "$first and $others ${if (others == 1) "other" else "others"} reposted"
-            }
-        }
-
-        /** The asker's own open Ask: Keep open and Close (S7). The October 13 card (the Pulse redesign off) has neither. */
-        private fun isOwnOpenAsk(
-            post: FeedPost,
-            isOwner: Boolean,
-            isSolved: Boolean,
-        ): Boolean = LaunchFeatures.pulseRedesign && isOwner && isOpenAsk(post, isSolved)
-
-        /** The card's topic, named on its meta line and muted by "Mute this topic" (S4); none on the October 13 card. */
-        private fun cardTopic(post: FeedPost): PulseTopic? = PulseTopic.fromKey(post.topic)?.takeIf { LaunchFeatures.pulseRedesign }
-
-        private fun hasNotBeenKeptOpen(post: FeedPost): Boolean =
-            post.id !in keptOpenIds && post.lifecycleMetadata?.keptOpenAt.isNullOrBlank()
-
-        /** The status word (S7). The October 13 card (the Pulse redesign off) has none, only its "Solved" badge. */
-        private fun statusFor(post: FeedPost): PostStatus? =
-            if (!LaunchFeatures.pulseRedesign) {
-                null
-            } else {
-                PostStatus.of(
-                    postType = post.postType,
-                    state = if (effectiveIsSolved(post)) "solved" else post.state,
-                    resolution = post.resolution,
-                    expiresAt = post.expiresAt,
-                    goingCount = effectiveLikeCount(post),
-                )
-            }
-
-        /** An Ask that hasn't ended: no resolution, not solved or archived, and not past its end. */
-        private fun isOpenAsk(
-            post: FeedPost,
-            isSolved: Boolean,
-        ): Boolean {
-            if (post.postType != "ask_local" || isSolved) return false
-            if (post.resolution != null || (post.state != null && post.state != "open")) return false
-            return PostStatus.askWindowIsOpen(post.createdAt, post.expiresAt)
-        }
-
-        private fun isOwner(post: FeedPost): Boolean {
-            val viewer = viewerId?.takeIf { it.isNotEmpty() } ?: return false
-            return post.userId == viewer || post.creator?.id == viewer
-        }
-
-        private fun metaString(post: FeedPost): String =
-            listOfNotNull(
-                relativeTimestamp(post.createdAt),
-                // Ahead of the place so a long place name never truncates it; web draws the badge beside the time.
-                "Visitor".takeIf { post.isVisitorPost },
-                // The topic too, before the place, as on iOS ("2h · Gardening · Camas").
-                cardTopic(post)?.label,
-                post.locationName?.takeIf { it.isNotEmpty() },
-            ).joinToString(" · ")
-
-        private fun relativeTimestamp(iso: String): String =
-            runCatching {
-                val instant = Instant.parse(iso)
-                val seconds = Duration.between(instant, Instant.now()).seconds
-                when {
-                    seconds < 60 -> "Just now"
-                    seconds < 3_600 -> "${seconds / 60}m"
-                    seconds < 86_400 -> "${seconds / 3_600}h"
-                    seconds < 604_800 -> "${seconds / 86_400}d"
-                    else -> "${seconds / 604_800}w"
-                }
-            }.getOrDefault(iso)
-
-        private fun initials(name: String): String {
-            val parts = name.split(" ").take(2)
-            return parts.mapNotNull { it.firstOrNull()?.toString() }.joinToString("").uppercase()
-        }
+        private fun isOwner(post: FeedPost): Boolean = post.isOwnedBy(viewerId)
     }
 
 /** A read's failure as people read it, or [fallback] when there is none (a read dropped by a wipe). */

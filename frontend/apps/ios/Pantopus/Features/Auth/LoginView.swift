@@ -58,6 +58,8 @@ struct LoginView: View {
                     .padding(.horizontal, Spacing.s5)
                     .padding(.bottom, Spacing.s5)
 
+                    LoginWaitingLinkNote()
+
                     if let security = viewModel.securityMessage {
                         SecuritySignOutBanner(message: security) { viewModel.dismissSecurityMessage(using: auth) }
                             .padding(.horizontal, Spacing.s5)
@@ -97,21 +99,7 @@ struct LoginView: View {
                     }
 
                     if let info = viewModel.infoMessage {
-                        HStack(alignment: .top, spacing: Spacing.s2) {
-                            Icon(.mail, size: 16, color: Theme.Color.primaryInk)
-                            Text(info)
-                                .pantopusTextStyle(.small)
-                                .foregroundStyle(Theme.Color.appText)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Spacer(minLength: Spacing.s0)
-                        }
-                        .padding(Spacing.s3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Theme.Color.primary100)
-                        .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
-                        .padding(.horizontal, Spacing.s5)
-                        .padding(.bottom, Spacing.s3)
-                        .accessibilityIdentifier("loginInfoBanner")
+                        LoginNote(icon: .mail, text: info, identifier: "loginInfoBanner")
                     }
 
                     VStack(spacing: Spacing.s3) {
@@ -391,7 +379,69 @@ struct LoginView: View {
     }
 }
 
+extension LoginView {
+    /// A shared link opened before signing in waits in `PendingDeepLinkStore`
+    /// and opens once the person is in. Say what it is, so someone new who
+    /// tapped a neighbor's plan doesn't meet a bare "Welcome back".
+    @MainActor static func waitingLine(path: String? = PendingDeepLinkStore.peek()) -> String? {
+        guard let path, let url = URL(string: path) else { return nil }
+        let thing: String
+        switch DeepLinkRouter.shared.resolve(url: url) {
+        case .plan, .planRequests: thing = "open the plan you were sent"
+        case .post: thing = "open the post you were sent"
+        case .supportTrain, .supportTrainManage: thing = "open the Support Train you were sent"
+        case .invite: thing = "answer your invitation"
+        case .unknown, .resetPassword, .verifyEmail, .joinInvite: return nil
+        default: thing = "open the link you were sent"
+        }
+        return "Log in or create an account to \(thing)."
+    }
+}
+
 // MARK: - Login subcomponents
+
+/// A tinted one-line note above the login form.
+private struct LoginNote: View {
+    let icon: PantopusIcon
+    let text: String
+    let identifier: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Spacing.s2) {
+            Icon(icon, size: 16, color: Theme.Color.primaryInk)
+            Text(text)
+                .pantopusTextStyle(.small)
+                .foregroundStyle(Theme.Color.appText)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: Spacing.s0)
+        }
+        .padding(Spacing.s3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Color.primary100)
+        .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+        .padding(.horizontal, Spacing.s5)
+        .padding(.bottom, Spacing.s3)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+/// What a shared link is waiting to show once the person signs in; nothing
+/// when no link waits. Re-read when another link arrives.
+private struct LoginWaitingLinkNote: View {
+    @State private var deepLink = DeepLinkRouter.shared
+    @State private var text: String?
+
+    var body: some View {
+        VStack(spacing: Spacing.s0) {
+            Color.clear.frame(height: 0)
+            if let text {
+                LoginNote(icon: .link, text: text, identifier: "loginWaitingLink")
+            }
+        }
+        .onAppear { text = LoginView.waitingLine() }
+        .onChange(of: deepLink.parkedArrivals) { _, _ in text = LoginView.waitingLine() }
+    }
+}
 
 /// Keeps "Log in" in view above the keyboard while a field is being edited; on a small phone the keyboard
 /// otherwise covers it.
