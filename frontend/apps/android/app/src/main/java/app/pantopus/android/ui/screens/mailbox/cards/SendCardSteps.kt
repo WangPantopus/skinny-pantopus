@@ -34,6 +34,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -443,7 +444,10 @@ private fun CollectionRow(
     }
 }
 
-/** A collection's name on a pill: card stock, or wax red while it's shown, and then scrolled into view. */
+/**
+ * A collection's name on a pill: card stock, or wax red while it's shown, and then scrolled into view. It's drawn 36 dp
+ * tall and takes touches across 48.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CollectionChip(
@@ -463,6 +467,7 @@ private fun CollectionChip(
             Modifier
                 .onSizeChanged { size = it }
                 .bringIntoViewRequester(inView)
+                .minimumInteractiveComponentSize()
                 .heightIn(min = 36.dp)
                 .clip(CircleShape)
                 .background(if (selected) PantopusColors.cardWax else PantopusColors.cardField)
