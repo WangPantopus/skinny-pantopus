@@ -107,6 +107,13 @@ function stampFor(id: string): (typeof STAMPS)[number] {
   return STAMPS[hash % STAMPS.length];
 }
 
+// A Christmas card's stamp goes by its picture (1, 4, 7 … fir; 2, 5, 8 … peak; 3, 6, 9 … river), the same in every
+// app and before it's sent, so the look before sending shows the stamp it will carry.
+function cardStamp(card: NonNullable<MailItemV2['card']>): (typeof STAMPS)[number] | null {
+  const picture = card.number ?? Number(card.design.split('-').pop());
+  return Number.isInteger(picture) && picture > 0 ? STAMPS[(picture - 1) % STAMPS.length] : null;
+}
+
 const PERFORATION: CSSProperties = {
   WebkitMask: 'linear-gradient(#000 0 0) content-box, radial-gradient(circle at 3px 3px, transparent 1.6px, #000 1.9px) -3px -3px / 6px 6px',
   mask: 'linear-gradient(#000 0 0) content-box, radial-gradient(circle at 3px 3px, transparent 1.6px, #000 1.9px) -3px -3px / 6px 6px',
@@ -273,7 +280,7 @@ export default function MailPiece({ item, recipientName, recipientLine, opened, 
           <div className="truncate">{from}</div>
           {town ? <div className="truncate">{town}</div> : null}
         </div>
-        <div className="absolute right-3.5 top-3"><Stamp design={stampFor(item.id)} /></div>
+        <div className="absolute right-3.5 top-3"><Stamp design={cardStamp(item.card) ?? stampFor(item.id)} /></div>
         {postDate ? <div className="absolute right-2 top-4"><Postmark town={town} date={postDate} size={46} /></div> : null}
         <div className="absolute left-[38%] right-3 top-[72px] text-[16px] italic leading-[21px] text-[#fffaf0]" style={{ fontFamily: SERIF }}>
           <div className="truncate">{recipientName}</div>

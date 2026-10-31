@@ -34,6 +34,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
@@ -128,6 +129,7 @@ import app.pantopus.android.ui.screens.feed.FeedScreen
 import app.pantopus.android.ui.screens.feed.FeedTopMenu
 import app.pantopus.android.ui.screens.feed.beacons.BeaconsFeedScreen
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
+import app.pantopus.android.ui.screens.feed.rememberTouchExplorationEnabled
 import app.pantopus.android.ui.screens.following.FollowingScreen
 import app.pantopus.android.ui.screens.gigs.GigSearchScreen
 import app.pantopus.android.ui.screens.gigs.GigsCategory
@@ -2260,6 +2262,12 @@ private val SAVED_PAGE_OFFLINE_STRIP_ROUTES =
         ChildRoutes.SETTINGS_NOTIFICATIONS, ChildRoutes.SETTINGS_PRIVACY,
     )
 
+/**
+ * Screens where the tab bar stays while their page scrolls, as on iPhone: a chat and a piece of mail keep their own bar
+ * (the composer, the letter's actions) just above it, and the Plans map has no page to scroll.
+ */
+private val TAB_BAR_STAYS_ROUTES = setOf(ChildRoutes.CHAT_CONVERSATION, ChildRoutes.MAILBOX_ITEM_DETAIL, PantopusRoute.Plans.path)
+
 @Composable
 fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val navController = rememberNavController()
@@ -2316,6 +2324,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 rootsOnStack = PantopusRoute.all.filter { navController.isOnBackStack(it.path) },
             )
         }
+    // The tab bar slides away while a page scrolls down (founder request 2026-10-30, as on iPhone), never while
+    // TalkBack explores the screen. Every new screen, tab or step back starts with it in view.
+    val tabBarScroll = remember { TabBarScrollState() }
+    val tabBarSlides = !rememberTouchExplorationEnabled() && backStackEntry?.destination?.route !in TAB_BAR_STAYS_ROUTES
+    val tabBarScrollConnection = rememberTabBarScrollConnection(tabBarScroll, enabled = tabBarSlides)
+    LaunchedEffect(backStackEntry) { tabBarScroll.show() }
     // Plans is a tab only while its switch is on, and the bar follows the switch while the app runs.
     val plansGate: PlansGateViewModel = hiltViewModel()
     val plansFlags by plansGate.flags.collectAsStateWithLifecycle()
@@ -2831,6 +2845,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     selected = currentRoute,
                     badges = badges,
                     tabs = barTabs,
+                    away = tabBarSlides && tabBarScroll.isAway,
                     onSelect = { target ->
                         ScreenTiming.tabTapped(target.path.substringAfterLast('/'))
                         if (target == currentRoute) {
@@ -2856,7 +2871,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             NavHost(
                 navController = navController,
                 startDestination = PantopusRoute.Place.path,
-                modifier = Modifier.padding(padding),
+                modifier = Modifier.padding(padding).nestedScroll(tabBarScrollConnection),
             ) {
                 composable(PantopusRoute.Place.path) {
                     PlaceTabRoot(

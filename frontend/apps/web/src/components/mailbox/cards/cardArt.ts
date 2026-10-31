@@ -43,12 +43,23 @@ export function daysUntil(iso: string, now = new Date()): number {
   return Math.max(0, Math.round((end - start) / 86_400_000));
 }
 
-/** "in 6 days", "tomorrow", "today". */
-export function inDays(iso: string, now = new Date()): string {
-  const days = daysUntil(iso, now);
+/** "in 6 days", "tomorrow", "today", for a count of days. */
+export function daysAway(days: number): string {
   if (days <= 0) return 'today';
   if (days === 1) return 'tomorrow';
   return `in ${days} days`;
+}
+
+/** "in 6 days", "tomorrow", "today". */
+export function inDays(iso: string, now = new Date()): string {
+  return daysAway(daysUntil(iso, now));
+}
+
+/** "Friday, December 25", from a calendar day ("2026-12-25", read at noon here so no zone moves it a day) or a time. */
+export function longDay(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const date = new Date(iso.length === 10 ? `${iso}T12:00:00` : iso);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
 /** "Sat, Dec 19", from a time or a calendar day ("2026-12-19", read at noon here so no zone moves it a day). */

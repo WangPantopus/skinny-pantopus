@@ -3,6 +3,7 @@
 // The household's mailbox on its post (Mail tab drawings: Main, R1-Before,
 // R2-Delivery, R4-NoMail boards): closed with the flag down, or with the door
 // open, empty or with today's stack inside. The house number sits on the door.
+// The flag goes up while something you sent waits for the 7 a.m. pickup (S7).
 
 export type MailboxState = 'closed' | 'open-empty' | 'open-stack';
 
@@ -11,6 +12,7 @@ export default function MailboxIllustration({
   number,
   size = 72,
   animate = false,
+  flagUp = false,
   className = '',
 }: {
   state?: MailboxState;
@@ -19,6 +21,8 @@ export default function MailboxIllustration({
   size?: number;
   /** Play the delivery moment: the door drops open and the stack slides out. */
   animate?: boolean;
+  /** Outgoing mail waits for the carrier. */
+  flagUp?: boolean;
   className?: string;
 }) {
   const open = state !== 'closed';
@@ -55,7 +59,14 @@ export default function MailboxIllustration({
           ) : null}
         </>
       )}
-      <rect x="102" y="64" width="16" height="7" rx="1.5" fill="#c2410c" />
+      {flagUp ? (
+        <>
+          <rect x="104" y="20" width="6" height="46" rx="1.5" fill="#c2410c" />
+          <rect x="104" y="20" width="16" height="12" rx="1.5" fill="#c2410c" />
+        </>
+      ) : (
+        <rect x="102" y="64" width="16" height="7" rx="1.5" fill="#c2410c" />
+      )}
     </svg>
   );
 }
