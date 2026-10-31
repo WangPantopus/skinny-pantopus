@@ -373,6 +373,9 @@ async function retryMessage(clientMessageId, roomId, senderUserId, actorUserId) 
 }
 
 async function roomMembership(roomId, userId, asBusinessUserId, { activeOnly = false } = {}) {
+  const named = asBusinessUserId && String(asBusinessUserId) !== String(userId);
+  // The caller's own row and, when no business is named, the task's business don't depend on each other.
+  const taskBusinessRead = named ? null : settle(taskBusinessInRoom(roomId, userId));
   const { data: own, error } = await supabaseAdmin
     .from('ChatParticipant')
     .select('*')
@@ -380,9 +383,7 @@ async function roomMembership(roomId, userId, asBusinessUserId, { activeOnly = f
     .eq('user_id', userId)
     .maybeSingle();
   if (error) throw chatAccessUnavailable();
-  const businessUserId = asBusinessUserId && String(asBusinessUserId) !== String(userId)
-    ? asBusinessUserId
-    : await taskBusinessInRoom(roomId, userId);
+  const businessUserId = named ? asBusinessUserId : settled(await taskBusinessRead);
   if (businessUserId) {
     const business = await businessMembership(roomId, userId, businessUserId);
     if (business) {
@@ -1951,10 +1952,13 @@ router.get('/conversations/:otherUserId/messages', verifyToken, async (req, res)
     const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
 
     const lim = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 400);
-    const sharedRoomIds = await personChatRoomIds(userId, otherUserId, asBusinessUserId);
-    // Read the watermark first. A commit during the history query is replayed
-    // harmlessly next time; a watermark captured afterward could skip it.
-    const sync = req.query.sync === 'true' ? await chatSyncSnapshot(sharedRoomIds) : null;
+    const sharedRooms = await personChatRooms(userId, otherUserId, asBusinessUserId);
+    const sharedRoomIds = sharedRooms.map((room) => room.id);
+    // The watermark comes with the scope read, before the history (as in personChatChanges). A commit during the
+    // history query is replayed harmlessly next time; a watermark captured afterward could skip it.
+    const sync = req.query.sync === 'true' ? {
+      cursors: Object.fromEntries(sharedRooms.map((room) => [room.id, room.message_revision])),
+    } : null;
     if (sharedRoomIds.length === 0) {
       return res.json({ messages: [], hasMore: false, roomIds: [], ...(sync ? { syncCursors: sync.cursors } : {}) });
     }
@@ -2098,11 +2102,19 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
     const { limit = 50, before, after } = req.query;
     const asBusinessUserId = req.query.asBusinessUserId ? String(req.query.asBusinessUserId) : null;
 
+    // These reads don't depend on one another, so they start together; their answers are applied in the order below,
+    // so each refusal is the one the sequential checks gave (as POST /messages does). The sync watermark is one of
+    // them, read before the history: a commit during the history query is replayed harmlessly next time, while a
+    // watermark captured afterward could skip it.
+    const membershipCheck = settle(roomMembership(roomId, userId, asBusinessUserId));
+    const closedCheck = settle(gigRoomClosed(roomId, userId, asBusinessUserId));
+    const syncRead = req.query.sync === 'true' ? settle(chatSyncSnapshot([roomId])) : null;
+
     // Verify access
-    const participant = await roomMembership(roomId, userId, asBusinessUserId);
+    const participant = settled(await membershipCheck);
     if (!participant) return res.status(403).json({ error: 'Access denied' });
 
-    if (await gigRoomClosed(roomId, userId, asBusinessUserId)) {
+    if (settled(await closedCheck)) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -2117,7 +2129,17 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
 
     // No sync cursor for someone who left: one at the room's current revision would make their apps skip what was
     // said while they were away if they're added back (they re-read pages instead).
-    const sync = req.query.sync === 'true' && !leftAt ? await chatSyncSnapshot([roomId]) : null;
+    const sync = syncRead && !leftAt ? settled(await syncRead) : null;
+
+    // Historical access after departure is read-only. All clients already use
+    // sendRefusal to replace the composer before someone writes an unsendable draft.
+    // Active identities keep the existing draft/closed-business refusal check, read alongside the messages.
+    const sendRefusalRead = participant.is_active === false
+      ? { code: 'ROOM_MEMBERSHIP_INACTIVE', error: 'You are no longer in this conversation. You can still read earlier messages.' }
+      : unpublishedRoomRefusal(roomId, participant.user_id).catch((refusalError) => {
+        logger.warn('chat.send_refusal_unavailable', { requestId: req.requestId, userId, roomId, error: refusalError.message });
+        return null; // sends are still checked when they arrive
+      });
 
     const runQuery = async ({ senderKey }) => {
       let q = supabaseAdmin
@@ -2165,15 +2187,7 @@ router.get('/rooms/:roomId/messages', verifyToken, async (req, res) => {
     const [reactionMap, people, sendRefusal] = await Promise.all([
       buildReactionSummary(messageIds, userId),
       loadMessageSenders(visibleMessages),
-      // Historical access after departure is read-only. All clients already use
-      // sendRefusal to replace the composer before someone writes an unsendable draft.
-      // Active identities keep the existing draft/closed-business refusal check.
-      participant.is_active === false
-        ? { code: 'ROOM_MEMBERSHIP_INACTIVE', error: 'You are no longer in this conversation. You can still read earlier messages.' }
-        : unpublishedRoomRefusal(roomId, participant.user_id).catch((refusalError) => {
-          logger.warn('chat.send_refusal_unavailable', { requestId: req.requestId, userId, roomId, error: refusalError.message });
-          return null; // sends are still checked when they arrive
-        }),
+      sendRefusalRead,
       applyDirectReadReceipts(visibleMessages, userId, { identityUserId: participant.user_id }),
     ]);
     const messagesWithReactions = visibleMessages.map((m) => ({

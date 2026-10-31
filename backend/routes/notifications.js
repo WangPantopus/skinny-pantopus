@@ -19,7 +19,7 @@ const logger = require('../utils/logger');
 const { NOTIFICATION_LIST } = require('../utils/columns');
 const pushService = require('../services/pushService');
 const badgeService = require('../services/badgeService');
-const { notificationBlockFilter } = require('../services/blockService');
+const { notificationBlockFilter, blockedUserIds } = require('../services/blockService');
 const { notificationPostFilter } = require('../services/pulse/readAccess');
 const { excludeHiddenLaunchNotifications, isLaunchFeatureEnabled } = require('../utils/featureFlags');
 
@@ -189,9 +189,13 @@ router.get('/', verifyToken, async (req, res) => {
     query = withoutAssistantRows(applyNotificationFilters(query, { contextType, contextId, contexts }), req);
     // Launch cuts: notifications that only a hidden feature produces are left out.
     query = excludeHiddenLaunchNotifications(query);
-    // So are notices from someone across a block, in either direction.
-    const withoutBlocked = await notificationBlockFilter(userId);
-    const readablePost = await notificationPostFilter(userId);
+    // So are notices from someone across a block, in either direction. Both filters use one read of the block list
+    // and are built together.
+    const blocked = blockedUserIds(userId);
+    const [withoutBlocked, readablePost] = await Promise.all([
+      notificationBlockFilter(userId, blocked),
+      notificationPostFilter(userId, blocked),
+    ]);
     query = readablePost(withoutBlocked(query));
 
     // Get unread count (always, for the badge), read alongside the page
@@ -233,9 +237,12 @@ router.get('/unread-count', verifyToken, async (req, res) => {
     const userId = req.user.id;
 
     // Launch cuts: hidden notification types stay out of the badge counts, and so do notices from
-    // someone across a block.
-    const withoutBlocked = await notificationBlockFilter(userId);
-    const readablePost = await notificationPostFilter(userId);
+    // someone across a block. Both filters use one read of the block list and are built together.
+    const blocked = blockedUserIds(userId);
+    const [withoutBlocked, readablePost] = await Promise.all([
+      notificationBlockFilter(userId, blocked),
+      notificationPostFilter(userId, blocked),
+    ]);
     const baseFilter = (q) => readablePost(withoutBlocked(excludeHiddenLaunchNotifications(withoutAssistantRows(q
       .from('Notification')
       .select('id', { count: 'exact', head: true })
