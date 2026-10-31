@@ -15,6 +15,7 @@ const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const { readCappedJson, readCappedText } = require('../../utils/cappedBody');
 const { houseFromAttomProperty } = require('../place/houseShape');
+const placeSectionCache = require('../placeSectionCache');
 
 const ATTOM_BASE = 'https://api.gateway.attomdata.com/propertyapi/v1.0.0';
 const ATTOM_RAW_CACHE_TABLE = 'AttomPropertyCache';
@@ -287,12 +288,15 @@ async function setCachedRawAttom(homeId, home, endpointResponses, existingRawPay
   }
 }
 
-function getStoredAttomPropertyDetail(home) {
-  const payload = home?.niche_data?.attom_property_detail;
+function validAttomPropertyDetail(payload) {
   if (!payload || typeof payload !== 'object') return null;
   if (payload.property && typeof payload.property === 'object') return payload;
   if (Array.isArray(payload.full_response?.property) && payload.full_response.property.length > 0) return payload;
   return null;
+}
+
+function getStoredAttomPropertyDetail(home) {
+  return validAttomPropertyDetail(home?.niche_data?.attom_property_detail);
 }
 
 function buildDetailResponseFromStoredPayload(attomPayload) {
@@ -882,6 +886,56 @@ async function fetchAttomPropertyDetailSnapshot(p) {
   return bundle.snapshot;
 }
 
+// Add Home looks an address up before its Home exists. The server keeps that
+// answer under the validated address (its HomeAddress id), so the new Home
+// stores the server's own copy, never one an app sends back, and a second
+// lookup of the same address within the TTL doesn't pay ATTOM again.
+const ADDRESS_DETAIL_SECTION = 'attom_property_detail';
+
+function addressDetailCacheKey(addressId) {
+  return `address:${addressId}`;
+}
+
+/**
+ * Add Home's lookup for a validated address: the server's copy while it's
+ * fresh, else one /property/detail call by the address as validated (never
+ * as typed).
+ *
+ * @param {object} address HomeAddress row (id, address_line1_norm, address_line2_norm, city_norm, state, postal_code)
+ * @returns {{ snapshot: object|null, detailData: object|null, attomPayload: object|null }}
+ */
+async function fetchAttomPropertyDetailBundleForAddress(address) {
+  const { payload } = await placeSectionCache.readThrough({
+    cacheKey: addressDetailCacheKey(address.id),
+    sectionId: ADDRESS_DETAIL_SECTION,
+    ttlMs: CACHE_TTL_DAYS * 24 * 60 * 60 * 1000,
+    fetch: async () => (await fetchAttomPropertyDetailBundle({
+      address: address.address_line1_norm,
+      address2: address.address_line2_norm,
+      city: address.city_norm,
+      state: address.state,
+      zipcode: address.postal_code,
+    })).attomPayload,
+  });
+  const stored = validAttomPropertyDetail(payload);
+  return buildAttomPropertyDetailResult(buildDetailResponseFromStoredPayload(stored), stored?.fetched_at);
+}
+
+/**
+ * The server's own Add Home lookup for a validated address, at any age, or
+ * null. Never asks ATTOM.
+ */
+async function getAddressAttomPropertyDetail(addressId) {
+  if (!addressId) return null;
+  try {
+    const row = await placeSectionCache.readRow(addressDetailCacheKey(addressId), ADDRESS_DETAIL_SECTION);
+    return validAttomPropertyDetail(row?.payload);
+  } catch (err) {
+    logger.warn('Address ATTOM copy read failed', { error: err.message });
+    return null;
+  }
+}
+
 module.exports = {
   getProfile,
   getHomeAttomPropertyDetail,
@@ -889,4 +943,6 @@ module.exports = {
   CACHE_TTL_DAYS,
   fetchAttomPropertyDetailSnapshot,
   fetchAttomPropertyDetailBundle,
+  fetchAttomPropertyDetailBundleForAddress,
+  getAddressAttomPropertyDetail,
 };
