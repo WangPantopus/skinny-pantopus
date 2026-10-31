@@ -272,4 +272,62 @@ public enum PlansEndpoints {
     public static func feedback(planId: String, _ body: PlanFeedbackBody) -> Endpoint {
         Endpoint(method: .post, path: "\(base)/\(planId)/feedback", body: body)
     }
+
+    // MARK: - Invitations
+
+    /// `GET /api/plans/:id/invites` (host) — `{ invites, unopened_links,
+    /// counts, emails_left, can_invite }`. Route `backend/routes/plans.js`
+    /// (`GET /:id/invites`).
+    public static func invites(planId: String) -> Endpoint {
+        Endpoint(method: .get, path: "\(base)/\(planId)/invites")
+    }
+
+    /// `GET /api/plans/:id/invites/people?q=` (host) — connections and people
+    /// who came to their plans, with where each stands on this plan. Route
+    /// `backend/routes/plans.js` (`GET /:id/invites/people`).
+    public static func invitePeople(planId: String, query text: String = "") -> Endpoint {
+        Endpoint(method: .get, path: "\(base)/\(planId)/invites/people", query: text.isEmpty ? [:] : ["q": text])
+    }
+
+    /// `POST /api/plans/:id/invites` (host) — people on Pantopus and addresses.
+    /// 409 `confirm_shares_address` the first time at a home; 429
+    /// `too_many_invites`; 422 `invalid_email`. Route `backend/routes/plans.js`.
+    public static func invite(planId: String, _ body: PlanInviteBody) -> Endpoint {
+        Endpoint(method: .post, path: "\(base)/\(planId)/invites", body: body)
+    }
+
+    /// `POST /api/plans/:id/invites/link` (host) — a one-person link to text,
+    /// `{ invite_id, url, message }`. Route `backend/routes/plans.js`.
+    public static func inviteLink(planId: String, confirmSharesAddress: Bool?) -> Endpoint {
+        Endpoint(
+            method: .post,
+            path: "\(base)/\(planId)/invites/link",
+            body: PlanInviteLinkBody(confirmSharesAddress: confirmSharesAddress)
+        )
+    }
+
+    /// `DELETE /api/plans/:id/invites/:inviteId` (host) — take back an
+    /// invitation nobody said yes to. Route `backend/routes/plans.js`.
+    public static func cancelInvite(planId: String, inviteId: String) -> Endpoint {
+        Endpoint(method: .delete, path: "\(base)/\(planId)/invites/\(inviteId)")
+    }
+
+    /// `POST /api/plans/:id/invites/claim` — the person opened an email or
+    /// text invitation (`?invite=` on the plan link). 409 `invite_used`, 404
+    /// `invite_unavailable`. Route `backend/routes/plans.js`.
+    public static func claimInvite(planId: String, token: String) -> Endpoint {
+        Endpoint(method: .post, path: "\(base)/\(planId)/invites/claim", body: PlanInviteClaimBody(token: token))
+    }
+
+    /// `POST /api/plans/:id/invites/decline` — "Can't make it". Saying "I'm
+    /// in" is the ordinary ask. Route `backend/routes/plans.js`.
+    public static func declineInvite(planId: String) -> Endpoint {
+        Endpoint(method: .post, path: "\(base)/\(planId)/invites/decline")
+    }
+
+    /// `GET /api/plans/invites/next` — right after signing in, the newest
+    /// invitation not opened yet, `{ plan_id }`. Route `backend/routes/plans.js`.
+    public static func nextInvite() -> Endpoint {
+        Endpoint(method: .get, path: "\(base)/invites/next")
+    }
 }

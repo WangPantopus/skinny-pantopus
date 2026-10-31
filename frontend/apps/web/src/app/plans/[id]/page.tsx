@@ -16,8 +16,10 @@ import {
   buildShareMetadata,
   fetchPublicPlan,
   getStoreDownloadCta,
+  planInviteToken,
   summarizeText,
   type PublicPlan,
+  type PublicPlanInvite,
 } from '@/lib/publicShare';
 import OpenInAppButton from '@/components/public-share/OpenInAppButton';
 import JustInstalledHint from '@/components/public-share/JustInstalledHint';
@@ -67,6 +69,30 @@ const KIND_LABEL: Record<Kind, string> = {
   walk_coffee: 'Walk & coffee',
   study_group: 'Study group',
 };
+
+/** As a sentence says it: "Sam invited you to their watch party". */
+const KIND_NOUN: Record<Kind, string> = {
+  watch_party: 'watch party',
+  playdate: 'playdate',
+  pickup_game: 'pickup game',
+  walk_coffee: 'walk & coffee',
+  study_group: 'study group',
+};
+
+type PageProps = { params: Promise<{ id: string }>; searchParams: Promise<{ invite?: string | string[] }> };
+
+/**
+ * An invitation's token from ?invite= and, once the plan is read, the invitation it opens (null when there's none or
+ * it was taken back). The page's links carry the token so the app can open the invitation.
+ */
+async function inviteFrom(searchParams: PageProps['searchParams']): Promise<string | null> {
+  const value = (await searchParams)?.invite;
+  return planInviteToken(Array.isArray(value) ? value[0] : value);
+}
+
+function inviteQuery(token: string | null, invite: PublicPlanInvite | null): string {
+  return token && invite?.available ? `?invite=${encodeURIComponent(token)}` : '';
+}
 
 const KIND_TOKEN: Record<Kind, string> = {
   watch_party: 'watch',
@@ -226,9 +252,12 @@ function whenText(plan: PublicPlan): string | null {
 }
 
 /** The line above the card: an invitation, unless the person is the host, is in, or already asked. */
-function introText(plan: PublicPlan, hostName: string, viewer: PlanViewer | null, over: boolean): string {
+function introText(plan: PublicPlan, hostName: string, viewer: PlanViewer | null, over: boolean, invite: PublicPlanInvite | null): string {
   const near = nearPhrase(plan);
   const host = firstNameOf(hostName);
+  if (invite?.available && !over && (!viewer || viewer.role === 'none')) {
+    return `${invite.host_first_name} invited you to their ${KIND_NOUN[plan.kind]} ${near}.`;
+  }
   if (viewer?.role === 'host') {
     const waiting = over ? 0 : viewer.requestsWaiting;
     if (waiting > 0) return `Your plan ${near}. ${waiting} ${waiting === 1 ? 'person is' : 'people are'} waiting for your answer.`;
@@ -280,15 +309,15 @@ function VerifiedBadge() {
   );
 }
 
-function TopBar({ id, fallbackUrl }: { id: string; fallbackUrl: string | null }) {
+function TopBar({ id, fallbackUrl, query = '' }: { id: string; fallbackUrl: string | null; query?: string }) {
   return (
     <div className="flex h-14 items-center justify-between border-b border-app-border bg-app-surface px-4">
       <Link href="/" className="text-[19px] font-bold leading-[22px] tracking-[-0.02em] text-app-text">
         Pantopus
       </Link>
       <OpenInAppButton
-        appUrl={buildPlanAppUrl(id)}
-        linkHref={buildPlanShareUrl(id)}
+        appUrl={`${buildPlanAppUrl(id)}${query}`}
+        linkHref={`${buildPlanShareUrl(id)}${query}`}
         fallbackUrl={fallbackUrl}
         className="text-sm font-semibold text-app-link"
       >
@@ -315,18 +344,21 @@ const PRIMARY_BUTTON =
 
 const PLAYDATE_CAPTION = 'Playdate links show no details here. Open them in the app with a verified address.';
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const { id } = await params;
-  const { data: plan } = await fetchPublicPlan(id);
+  const token = await inviteFrom(searchParams);
+  const { data: plan } = await fetchPublicPlan(id, token);
   const base = { robots: { index: false, follow: false } };
   if (!plan) {
     return { ...base, title: 'Plan not available | Pantopus', description: "This plan isn't available." };
   }
+  // A texted invitation's preview says whose it is.
+  const invitedBy = plan.invite?.available ? `${plan.invite.host_first_name} invited you: ` : '';
   if (plan.kind === 'playdate') {
     return {
       ...base,
       ...buildShareMetadata({
-        title: `A playdate ${nearPhrase(plan)}`,
+        title: `${invitedBy}A playdate ${nearPhrase(plan)}`,
         description: 'Open it in Pantopus with a verified address to see the details and ask to join.',
         path: buildPlanPath(id),
         appArgument: buildPlanAppUrl(id),
@@ -338,7 +370,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return {
     ...base,
     ...buildShareMetadata({
-      title: plan.title || KIND_LABEL[plan.kind],
+      title: `${invitedBy}${plan.title || KIND_LABEL[plan.kind]}`,
       description: summarizeText(`${description}. ${plan.about || ''}`, 160, description),
       path: buildPlanPath(id),
       appArgument: buildPlanAppUrl(id),
@@ -346,12 +378,18 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
-export default async function PublicPlanPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PublicPlanPage({ params, searchParams }: PageProps) {
   const { id } = await params;
-  const [result, viewer] = await Promise.all([fetchPublicPlan(id), fetchPlanViewer(id)]);
+  const token = await inviteFrom(searchParams);
+  const [result, viewer] = await Promise.all([fetchPublicPlan(id, token), fetchPlanViewer(id)]);
   const plan = result.data;
   const userAgent = (await headers()).get('user-agent') || '';
   const fallbackUrl = getStoreDownloadCta(userAgent)?.href ?? null;
+  const invite = plan?.invite ?? null;
+  // The app opens the invitation from the same link; one taken back opens the plan as any share does.
+  const query = inviteQuery(token, invite);
+  const appUrl = `${buildPlanAppUrl(id)}${query}`;
+  const linkHref = `${buildPlanShareUrl(id)}${query}`;
 
   if (!plan && result.status === 404) notFound();
 
@@ -375,11 +413,13 @@ export default async function PublicPlanPage({ params }: { params: Promise<{ id:
   if (plan.kind === 'playdate') {
     // The host and families who are in see their own playdate's details in the app, as everyone does.
     const mine = viewer?.role === 'host' || viewer?.role === 'guest';
+    const invitedBy = invite?.available && !mine ? invite.host_first_name : null;
     return (
       <main className="min-h-screen bg-app text-app-text">
         <div className="mx-auto w-full max-w-md pb-10">
-          <TopBar id={id} fallbackUrl={fallbackUrl} />
+          <TopBar id={id} fallbackUrl={fallbackUrl} query={query} />
           <div className="flex flex-col gap-4 px-4 pt-[18px]">
+            {invitedBy ? <p className="text-sm leading-5 text-app-text-secondary">{invitedBy} invited you to their playdate.</p> : null}
             <KindTag kind="playdate" />
             <h1 className="text-2xl font-bold leading-[30px] tracking-[-0.015em]">
               {viewer?.role === 'host' ? 'Your playdate' : 'A playdate'} {nearPhrase(plan)}
@@ -397,20 +437,22 @@ export default async function PublicPlanPage({ params }: { params: Promise<{ id:
                     ? "Open it in the Pantopus app to see who asked to join and who's going."
                     : viewer?.role === 'guest'
                       ? "You're in. Open it in the Pantopus app to see the time, the place and who's going."
-                      : "Open it in the Pantopus app with a verified address to see the time, the place and who's going, and to ask to join."}
+                      : invitedBy
+                        ? "Open it in the Pantopus app with a verified address to see the time, the place and who's going, and to say you're in."
+                        : "Open it in the Pantopus app with a verified address to see the time, the place and who's going, and to ask to join."}
                 </p>
               </div>
             </div>
             <OpenInAppButton
-              appUrl={buildPlanAppUrl(id)}
-              linkHref={buildPlanShareUrl(id)}
+              appUrl={appUrl}
+              linkHref={linkHref}
               fallbackUrl={fallbackUrl}
               className={PRIMARY_BUTTON}
             >
               Open in Pantopus
             </OpenInAppButton>
             <StoreButtons />
-            <JustInstalledHint what="this playdate" />
+            <JustInstalledHint what="this playdate" emailHint={invitedBy ? invite?.email_hint : null} />
             <p className="text-center text-xs leading-4 text-app-text-secondary">{PLAYDATE_CAPTION}</p>
           </div>
         </div>
@@ -424,13 +466,20 @@ export default async function PublicPlanPage({ params }: { params: Promise<{ id:
   // Someone who is in, or already asked, opens the plan in the app rather than joining.
   const joined = viewer?.role === 'host' || viewer?.role === 'guest'
     || (!over && (viewer?.requestStatus === 'pending' || viewer?.requestStatus === 'waitlisted'));
+  // An invitation is the host's yes: in the app, the person just says they're in.
+  const invited = Boolean(invite?.available) && !over && !joined;
 
   return (
     <main className="min-h-screen bg-app text-app-text">
       <div className="mx-auto w-full max-w-md pb-10">
-        <TopBar id={id} fallbackUrl={fallbackUrl} />
+        <TopBar id={id} fallbackUrl={fallbackUrl} query={query} />
         <div className="flex flex-col gap-4 px-4 pt-[18px]">
-          <p className="text-sm leading-5 text-app-text-secondary">{introText(plan, hostName, viewer, over)}</p>
+          <p className="text-sm leading-5 text-app-text-secondary">{introText(plan, hostName, viewer, over, invite)}</p>
+          {invite && !invite.available && !over ? (
+            <p className="text-sm leading-5 text-app-text-secondary">
+              This invitation isn&apos;t available anymore. You can still ask to join in the app.
+            </p>
+          ) : null}
 
           <section
             className="overflow-hidden rounded-[20px] border border-app-border bg-app-surface shadow-sm"
@@ -469,20 +518,28 @@ export default async function PublicPlanPage({ params }: { params: Promise<{ id:
                 ? 'The exact place goes only to people you let in.'
                 : viewer?.role === 'guest'
                   ? 'You see the exact place in the app.'
-                  : 'The exact place goes only to people the host lets in.'}
+                  : invited
+                    ? 'You see the exact place in the app once you say you’re in.'
+                    : 'The exact place goes only to people the host lets in.'}
             </span>
           </div>
 
           <OpenInAppButton
-            appUrl={buildPlanAppUrl(id)}
-            linkHref={buildPlanShareUrl(id)}
+            appUrl={appUrl}
+            linkHref={linkHref}
             fallbackUrl={fallbackUrl}
             className={PRIMARY_BUTTON}
           >
-            {joined ? 'Open in Pantopus' : over ? 'See plans near you in Pantopus' : 'Open in Pantopus to join'}
+            {joined
+              ? 'Open in Pantopus'
+              : over
+                ? 'See plans near you in Pantopus'
+                : invited
+                  ? 'Open in Pantopus to say you’re in'
+                  : 'Open in Pantopus to join'}
           </OpenInAppButton>
           <StoreButtons />
-          <JustInstalledHint what="this plan" />
+          <JustInstalledHint what="this plan" emailHint={invited ? invite?.email_hint : null} />
           <p className="text-center text-xs leading-4 text-app-text-secondary">{PLAYDATE_CAPTION}</p>
         </div>
       </div>

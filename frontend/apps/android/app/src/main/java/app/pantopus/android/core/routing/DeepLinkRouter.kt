@@ -393,8 +393,11 @@ object DeepLinkRouter {
          */
         data object CreatorAudienceMembers : Destination
 
-        /** Nearby Plans: `/plans/:id` opens the plan (J1 to J8, or H9 for its host). Behind the `plans` flag. */
-        data class Plan(val id: String) : Destination
+        /**
+         * Nearby Plans: `/plans/:id` opens the plan (J1 to J8, or H9 for its host). Behind the `plans` flag.
+         * `?invite=` carries an email or text invitation for the plan to open ([invite]).
+         */
+        data class Plan(val id: String, val invite: String? = null) : Destination
 
         /** Nearby Plans: `/plans/:id/requests` opens the host's requests (H10). */
         data class PlanRequests(val id: String) : Destination
@@ -975,7 +978,7 @@ object DeepLinkRouter {
                     segments.size == 1 -> Destination.PlansTab
                     id == "new" && segments.size == 2 -> Destination.NewPlan
                     id.isNullOrBlank() -> Destination.Unknown(raw)
-                    segments.size == 2 -> Destination.Plan(id)
+                    segments.size == 2 -> Destination.Plan(id, Paths.queryParam(queryPart, "invite")?.takeIf(Paths::isInviteToken))
                     trailing == "requests" && segments.size == 3 -> Destination.PlanRequests(id)
                     else -> Destination.Unknown(raw)
                 }
@@ -1239,6 +1242,10 @@ object DeepLinkRouter {
         /** The longest id a link may carry: UUIDs are 36 characters, invite and booking tokens 64. */
         private const val MAX_SEGMENT_LENGTH = 128
 
+        /** A Plans invitation token: 32 random bytes in base64url. */
+        private const val INVITE_TOKEN_LENGTH = 43
+        private const val BASE64URL_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
         /** Whether [segment] (raw, still percent-encoded), once decoded into an API path, stays one segment of its route. */
         fun isSafeSegment(segment: String): Boolean {
             val decoded = runCatching { URLDecoder.decode(segment, "UTF-8") }.getOrNull() ?: return false
@@ -1284,6 +1291,9 @@ object DeepLinkRouter {
             val pathAndQuery = rest.substringAfter('/', missingDelimiterValue = "")
             return "pantopus://$pathAndQuery"
         }
+
+        /** A Plans invitation's token as it rides in `?invite=`: 43 base64url characters (planInvites.js). */
+        fun isInviteToken(value: String): Boolean = value.length == INVITE_TOKEN_LENGTH && value.all { it in BASE64URL_CHARS }
 
         fun queryParam(
             query: String,

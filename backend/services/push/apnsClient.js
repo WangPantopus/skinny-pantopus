@@ -93,7 +93,7 @@ function buildPayload({ title, body, data } = {}) {
   // (services/ai/nudges/engine.js, phase 3 §9.2) may opt into OS action buttons.
   if ([
     'PICKUP_REMINDER', 'TASK_REMINDER', 'TASK_REMINDER_DONE_ONLY',
-    'PLAN_REQUEST', 'PLAN_REMINDER', 'PLAN_CHANGED',
+    'PLAN_REQUEST', 'PLAN_REMINDER', 'PLAN_CHANGED', 'PLAN_INVITE',
     'ASSISTANT_SUGGESTION', 'ASSISTANT_DONE', 'ASSISTANT_SOLVED', 'ASSISTANT_DONE_ONLY', 'ASSISTANT_SOLVED_ONLY',
   ].includes(data?.category)) {
     payload.aps.category = data.category;

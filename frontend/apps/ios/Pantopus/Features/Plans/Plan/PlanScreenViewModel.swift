@@ -36,8 +36,9 @@ final class PlanScreenViewModel {
     enum Phase: Equatable {
         case loading
         case loaded
-        /// A playdate shared with someone without a verified address (J9).
-        case needsVerification(city: String?)
+        /// A playdate shared with someone without a verified address (J9);
+        /// `invitedBy` is the host's first name when they invited this person.
+        case needsVerification(city: String?, invitedBy: String?)
         case unavailable
         case error(String)
     }
@@ -136,7 +137,7 @@ final class PlanScreenViewModel {
               reply.response.statusCode == 404,
               let body = try? JSONDecoder().decode(PlanNotFoundDTO.self, from: reply.data),
               body.error == "needs_verified_address" else { return nil }
-        return .needsVerification(city: body.plan?.city)
+        return .needsVerification(city: body.plan?.city, invitedBy: body.invitedBy)
     }
 
     private func loadOtherPlans() async {
@@ -222,6 +223,49 @@ final class PlanScreenViewModel {
         return done
     }
 
+    // MARK: - Invitations
+
+    /// The viewer's invitation while it's still theirs to answer (not answered, or "Can't make it"): the footer
+    /// offers "I'm in". Nil once they've said yes (they're in, waiting or on the waitlist).
+    var openInvite: PlanMyInviteDTO? {
+        guard let invite = card?.myInvite, invite.isOpen, mode == .browsing else { return nil }
+        return invite
+    }
+
+    /// Opened from an email or text invitation (`?invite=`): it becomes this account's. Someone else already used
+    /// it, or the host took it back: the plan opens as any shared plan does, with a sentence saying so.
+    func claimInvite(token: String) async {
+        do {
+            let reply: PlanInvitePlanResponse = try await api.request(PlansEndpoints.claimInvite(planId: planId, token: token))
+            plan = reply.plan
+            phase = .loaded
+            PlansStoreReads.changed(planId: planId, store: store)
+        } catch let error as APIError {
+            switch error {
+            case .notFound:
+                notice = "This invitation isn't available anymore. You can still ask to join."
+            case let .clientError(_, body) where PlanErrors.code(in: body) == "needs_verified_address":
+                // A playdate they can't see yet: the invitation is theirs, and the screen says to verify (J9).
+                break
+            case .clientError:
+                notice = error.errorDescription
+            default:
+                break
+            }
+        } catch {
+            return
+        }
+    }
+
+    /// "Can't make it" to an invitation (someone already in or waiting is taken out first).
+    func declineInvite() async -> Bool {
+        await perform {
+            let reply: PlanInvitePlanResponse = try await api.request(PlansEndpoints.declineInvite(planId: planId))
+            plan = reply.plan
+            await load()
+        }
+    }
+
     // MARK: - Hosting
 
     func cancelPlan(note: String?) async -> Bool {
@@ -297,6 +341,14 @@ struct PlanNotFoundDTO: Decodable {
 
     let error: String?
     let plan: Teaser?
+    /// The host's first name when the viewer holds an invitation to the playdate.
+    let invitedBy: String?
+
+    enum CodingKeys: String, CodingKey {
+        case error
+        case plan
+        case invitedBy = "invited_by"
+    }
 }
 
 /// An earlier request, to start "Change who's coming" from.

@@ -299,6 +299,10 @@ public struct PlanCardDTO: Decodable, Sendable, Hashable, Identifiable {
     public let askingClosesAt: String?
     /// The viewer's own request, any status.
     public let myRequest: PlanMyRequestDTO?
+    /// The viewer's invitation from the host, or nil (planInvites.js).
+    public let myInvite: PlanMyInviteDTO?
+    /// Host only: their invitations to this plan.
+    public let invites: PlanHostInvitesDTO?
 
     enum CodingKeys: String, CodingKey {
         case id, kind, title, about, timezone, area, host, spots, details, state, viewer
@@ -319,6 +323,8 @@ public struct PlanCardDTO: Decodable, Sendable, Hashable, Identifiable {
         case startsOn = "starts_on"
         case askingClosesAt = "asking_closes_at"
         case myRequest = "my_request"
+        case myInvite = "my_invite"
+        case invites
     }
 
     public init(from decoder: any Decoder) throws {
@@ -352,6 +358,8 @@ public struct PlanCardDTO: Decodable, Sendable, Hashable, Identifiable {
         startsOn = try container.decodeIfPresent(String.self, forKey: .startsOn)
         askingClosesAt = try container.decodeIfPresent(String.self, forKey: .askingClosesAt)
         myRequest = try? container.decodeIfPresent(PlanMyRequestDTO.self, forKey: .myRequest)
+        myInvite = try? container.decodeIfPresent(PlanMyInviteDTO.self, forKey: .myInvite)
+        invites = try? container.decodeIfPresent(PlanHostInvitesDTO.self, forKey: .invites)
     }
 
     /// The exact start, parsed. Nil when hidden (a playdate before you're in).
@@ -419,13 +427,15 @@ public struct MyPlansResponse: Decodable, Sendable, Hashable {
     public let going: [PlanCardDTO]
     public let asked: [PlanCardDTO]
     public let waitlisted: [PlanCardDTO]
+    /// Invitations the viewer hasn't answered yet.
+    public let invited: [PlanCardDTO]
     /// Ended in the last 2 days, hosted or in (A5).
     public let recent: [PlanCardDTO]
     /// The viewer's own standing.
     public let viewer: MyPlansViewer?
 
     enum CodingKeys: String, CodingKey {
-        case hosting, going, asked, waitlisted, recent, viewer
+        case hosting, going, asked, waitlisted, invited, recent, viewer
     }
 
     public init(from decoder: any Decoder) throws {
@@ -434,16 +444,17 @@ public struct MyPlansResponse: Decodable, Sendable, Hashable {
         going = try container.decodeIfPresent(LossyList<PlanCardDTO>.self, forKey: .going)?.items ?? []
         asked = try container.decodeIfPresent(LossyList<PlanCardDTO>.self, forKey: .asked)?.items ?? []
         waitlisted = try container.decodeIfPresent(LossyList<PlanCardDTO>.self, forKey: .waitlisted)?.items ?? []
+        invited = (try? container.decodeIfPresent(LossyList<PlanCardDTO>.self, forKey: .invited))?.items ?? []
         recent = try container.decodeIfPresent(LossyList<PlanCardDTO>.self, forKey: .recent)?.items ?? []
         viewer = try? container.decodeIfPresent(MyPlansViewer.self, forKey: .viewer)
     }
 
     public var isEmpty: Bool {
-        hosting.isEmpty && going.isEmpty && asked.isEmpty && waitlisted.isEmpty
+        hosting.isEmpty && going.isEmpty && asked.isEmpty && waitlisted.isEmpty && invited.isEmpty
     }
 
     var carriesPrivateTimes: Bool {
-        (hosting + going + asked + waitlisted + recent).contains(where: \.carriesPrivateTime)
+        (hosting + going + asked + waitlisted + invited + recent).contains(where: \.carriesPrivateTime)
     }
 }
 

@@ -22,6 +22,7 @@ const { loadViewer, verifiedUserIds } = require('./planViewer');
 const planPlace = require('./planPlace');
 const planChat = require('./planChat');
 const planNotify = require('./planNotifications');
+const planInvites = require('./planInvites');
 const { findGame } = require('./planGames');
 
 class PlanError extends Error {
@@ -662,6 +663,7 @@ async function cancelPlan(user, postId, { note, sports_revision: sportsRevision 
   for (const request of requests) {
     await planNotify.cancelled({ plan: updated, request, hostFirst, note: cancelNote, wasIn: request.status === 'accepted' });
   }
+  await planInvites.notifyCancelled(updated, hostFirst, cancelNote);
   return planBodyFor(postId, viewer);
 }
 
@@ -692,8 +694,10 @@ async function enforceCapacity(plan) {
   return new Set(overflow);
 }
 
-/** Whether a rule lets this person in now (for someone already in line). */
+/** Whether a rule, or the host's invitation, lets this person in now (for someone already in line). */
 async function ruleFor(plan, userId) {
+  const invite = (await planInvites.viewerInvites(String(userId), [plan.post_id])).get(plan.post_id);
+  if (invite && invite.status === 'accepted' && !invite.needs_host_ok) return 'invite';
   const autoRules = Array.isArray(plan.auto_rules) ? plan.auto_rules : [];
   if (plan.kind === 'playdate' || autoRules.length === 0) return null;
   if (autoRules.includes('hosted_before')) {
@@ -802,8 +806,11 @@ function cleanAsk(plan, body) {
   return out;
 }
 
-/** Where the person lives (or is), as a band from the exact place: what the host sees. */
-function requesterBand(plan, viewer) {
+/**
+ * Where the person lives (or is), as a band from the exact place: what the host sees. Someone invited from farther
+ * away than the bands go has none (asking is within 5 miles, so everyone else is "about 5 mi" at most).
+ */
+function requesterBand(plan, viewer, { invited = false } = {}) {
   const exact = { latitude: Number(plan.place_latitude), longitude: Number(plan.place_longitude) };
   const homes = viewer.homes.filter((h) => h.point).map((h) => h.point);
   const points = homes.length > 0 ? homes : viewer.locations;
@@ -812,6 +819,7 @@ function requesterBand(plan, viewer) {
     const d = rules.distanceMeters(point, exact);
     if (d != null && (best == null || d < best)) best = d;
   }
+  if (invited) return rules.distanceBandFromMeters(best) || null;
   return rules.distanceBandFromMeters(best) || (best != null ? 'about_5_mi' : null);
 }
 
@@ -855,12 +863,15 @@ async function askToJoin(user, postId, body, { io = null } = {}) {
     fail(status, eligibility.cannot_ask_reason || 'cannot_ask', message);
   }
 
+  // The host's invitation is their yes: in at once (the waitlist when it's full), or, for an email invite opened by
+  // an account the address isn't verified for, an ordinary ask the host answers.
+  const invite = ctx.myInviteByPlan.get(postId) || null;
   const seats = rules.seatsFor(plan.kind, ask.party_size);
   let status = 'waitlisted';
   let decidedBy = null;
   let rule = null;
   if (seats <= spotsLeft) {
-    rule = planService.matchingAutoRule(plan, viewer, ctx);
+    rule = invite ? (invite.needs_host_ok ? null : 'invite') : planService.matchingAutoRule(plan, viewer, ctx);
     if (rule) {
       status = 'accepted';
       decidedBy = 'rule';
@@ -873,7 +884,7 @@ async function askToJoin(user, postId, body, { io = null } = {}) {
     status,
     decided_by: decidedBy,
     decided_at: decidedBy ? stamp : null,
-    distance_band: requesterBand(plan, viewer),
+    distance_band: requesterBand(plan, viewer, { invited: Boolean(invite) }),
     queued_at: stamp,
     reconfirm_requested_at: null,
     reconfirmed: null,
@@ -884,10 +895,11 @@ async function askToJoin(user, postId, body, { io = null } = {}) {
 
   let request;
   if (mine) {
-    // Asking again after withdrawing, leaving or expiring.
+    // Asking again after withdrawing, leaving or expiring; invited again after a no or a removal.
+    const again = invite ? ['withdrawn', 'left', 'expired', 'declined', 'removed'] : ['withdrawn', 'left', 'expired'];
     const { data, error } = await supabaseAdmin.from('PlanRequest')
-      .update({ ...row, ask_count: (mine.ask_count || 1) + 1 })
-      .eq('id', mine.id).in('status', ['withdrawn', 'left', 'expired']).select(planService.REQUEST_COLUMNS);
+      .update({ ...row, ask_count: Math.min(rules.LIMITS.asksPerPlan, (mine.ask_count || 1) + 1) })
+      .eq('id', mine.id).in('status', again).select(planService.REQUEST_COLUMNS);
     if (error) throw new Error(`Failed to send your request: ${error.message}`);
     if (!data || data.length === 0) return { status: 200, body: await requestResult(postId, viewer, mine.id) };
     request = data[0];
@@ -907,6 +919,7 @@ async function askToJoin(user, postId, body, { io = null } = {}) {
   }
 
   recordFunnelEvent('plan_requested', { userId: viewer.id, meta: { plan_id: postId, kind: plan.kind, status: request.status } });
+  if (invite) await planInvites.markAccepted(plan, viewer.id, request);
   const names = await userNames([viewer.id, plan.host_user_id]);
   const hostFirst = firstOf(names.get(String(plan.host_user_id)));
   if (request.status === 'accepted') {
@@ -915,7 +928,10 @@ async function askToJoin(user, postId, body, { io = null } = {}) {
       await admit(plan, request, { byRule: true, hostFirst, io, rule });
     }
   } else if (request.status === 'pending') {
-    await planNotify.requestReceived({ plan, request, hostFirst, requesterFirst: firstOf(names.get(viewer.id)) });
+    await planNotify.requestReceived({
+      plan, request, hostFirst, requesterFirst: firstOf(names.get(viewer.id)),
+      invitedEmail: invite?.needs_host_ok ? invite.email : null,
+    });
   }
   return { status: mine ? 200 : 201, body: await requestResult(postId, viewer, request.id) };
 }
@@ -962,16 +978,23 @@ async function listRequests(user, postId) {
     .filter((r) => r.status === 'pending' || r.status === 'waitlisted')
     .filter((r) => !viewer.blockedUserIds.has(String(r.user_id)));
   const userIds = requests.map((r) => String(r.user_id));
-  const [users, names, people, verified, stats, mutual] = await Promise.all([
+  const [users, names, people, verified, stats, mutual, invites] = await Promise.all([
     userIds.length ? supabaseAdmin.from('User').select('id, profile_picture_url, created_at').in('id', userIds) : { data: [] },
     userNames(userIds),
     loadChatPeople(userIds),
     verifiedUserIds(userIds),
     planService.requesterStats(viewer.id, userIds),
     planService.mutualConnectionCounts(viewer.id, userIds),
+    userIds.length
+      ? supabaseAdmin.from('PlanInvite').select('invitee_user_id, channel, email, needs_host_ok')
+        .eq('post_id', postId).in('invitee_user_id', userIds).neq('status', 'cancelled')
+      : { data: [] },
   ]);
   if (users.error) throw new Error(`Failed to load people: ${users.error.message}`);
   const userRows = new Map((users.data || []).map((u) => [String(u.id), u]));
+  // Asks that came through the host's invitations: "You invited them", or the address an opened email was for.
+  const inviteByUser = new Map();
+  for (const invite of (invites.error ? [] : invites.data) || []) inviteByUser.set(String(invite.invitee_user_id), invite);
   const view = (r) => {
     const id = String(r.user_id);
     const row = userRows.get(id);
@@ -994,6 +1017,8 @@ async function listRequests(user, postId) {
       kids_count: plan.kind === 'playdate' ? r.kids_count ?? null : null,
       kids_age_bands: plan.kind === 'playdate' ? r.kids_age_bands || [] : null,
       created_at: planService.iso(r.queued_at || r.created_at),
+      invited: inviteByUser.has(id),
+      opened_invite_to: inviteByUser.get(id)?.needs_host_ok ? inviteByUser.get(id).email : null,
     };
   };
   const byQueue = (a, b) => new Date(a.queued_at) - new Date(b.queued_at);
@@ -1039,7 +1064,10 @@ async function decide(user, postId, requestId, action, body = {}, { io = null } 
         .update({ status: 'declined', decided_by: 'host', decided_at: stamp, updated_at: stamp })
         .eq('id', request.id).in('status', ['pending', 'waitlisted']).select('id');
       if (error) throw new Error(`Failed to decline: ${error.message}`);
-      if (moved && moved.length > 0) await planNotify.declined({ plan, request, hostFirst });
+      if (moved && moved.length > 0) {
+        await planInvites.cancelForPerson(postId, request.user_id);
+        await planNotify.declined({ plan, request, hostFirst });
+      }
     }
   } else if (action === 'remove') {
     if (request.status !== 'removed') {
@@ -1050,6 +1078,7 @@ async function decide(user, postId, requestId, action, body = {}, { io = null } 
         .eq('id', request.id).eq('status', 'accepted').select('id');
       if (error) throw new Error(`Failed to remove: ${error.message}`);
       if (moved && moved.length > 0) {
+        await planInvites.cancelForPerson(postId, request.user_id);
         await planNotify.declined({ plan, request, hostFirst });
         await offerOpenSpots(plan, { io });
       }

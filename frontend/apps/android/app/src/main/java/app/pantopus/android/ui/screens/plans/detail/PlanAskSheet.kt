@@ -70,6 +70,8 @@ internal fun PlanAskSheet(
     onEdit: ((AskDraft) -> AskDraft) -> Unit,
     onSend: () -> Unit,
     onClose: () -> Unit,
+    /** The host invited them: saying they're in lets them in, no request (planInvites.js). */
+    invited: Boolean = false,
 ) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val host = plan.hostFirst
@@ -93,7 +95,7 @@ internal fun PlanAskSheet(
             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Ask $host to join",
+                        text = if (invited) "Join $host's plan" else "Ask $host to join",
                         style = planH3,
                         color = PantopusColors.appText,
                         modifier = Modifier.semantics { heading() },
@@ -131,6 +133,7 @@ internal fun PlanAskSheet(
                         // (the server keeps the old one in `my_request`), as on iOS.
                         plan.standing == PlanViewerStanding.REQUESTED -> "Update request"
                         plan.isFull -> "Join the waitlist"
+                        invited -> "I'm in"
                         else -> "Send request"
                     },
                 onClick = onSend,

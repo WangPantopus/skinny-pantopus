@@ -310,6 +310,10 @@ object PlanFormat {
                 parts += whenText
             }
             else -> {
+                // An invitation not answered yet: "Sam invited you · Sun 1:25 PM" (as on iOS).
+                if (plan.standing == PlanViewerStanding.NONE && plan.myInvite?.status == "pending") {
+                    parts += "${firstName(plan.host?.displayName)} invited you"
+                }
                 parts += whenText
                 if (plan.isPlaydate) {
                     area?.let { parts += it }
@@ -358,7 +362,11 @@ object PlanFormat {
         val host = firstName(plan.host?.displayName)
         // The host sees their rules; a guest sees the rule that would let them in (`viewer.auto_rule`).
         val rules = plan.autoRules.orEmpty() + listOfNotNull(plan.viewer?.autoRule)
+        val invite = plan.myInvite?.takeIf { it.isOpen && plan.viewer?.role != "host" }
         return when {
+            // The host's invitation: no request (or, opened from another address, the host says yes first), as iOS.
+            invite != null && invite.needsHostOk -> "$host says yes first"
+            invite != null -> "Invited by $host · no request needed"
             !plan.hostApproves && PlanAutoRule.ANYONE_NEARBY in rules -> "Lets in anyone nearby automatically"
             !plan.hostApproves && PlanAutoRule.VERIFIED in rules -> "Lets in verified neighbors automatically"
             !plan.hostApproves -> "You can get in right away"

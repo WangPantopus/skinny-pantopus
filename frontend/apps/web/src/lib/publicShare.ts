@@ -137,11 +137,26 @@ export type PublicPlan = {
   details?: Record<string, unknown>;
   state?: 'upcoming' | 'live' | 'ended' | 'cancelled';
   city?: string | null;
+  /** With ?invite=<token>: whose invitation it is, and for an email invitation a hint of the address it went to. */
+  invite?: PublicPlanInvite;
 };
 
-export const fetchPublicPlan = cache(async (id: string): Promise<PublicFetchResult<PublicPlan>> => {
+export type PublicPlanInvite = {
+  host_first_name: string;
+  available: boolean;
+  channel: 'account' | 'email' | 'link';
+  email_hint: string | null;
+};
+
+/** An invitation's token as it rides in ?invite= (43 base64url characters), or null. */
+export function planInviteToken(value: unknown): string | null {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(value) ? value : null;
+}
+
+export const fetchPublicPlan = cache(async (id: string, invite: string | null = null): Promise<PublicFetchResult<PublicPlan>> => {
+  const query = invite ? `?invite=${encodeURIComponent(invite)}` : '';
   const result = await fetchPublicJson<PublicPlan>(
-    `/api/public/plans/${encodeURIComponent(id)}`,
+    `/api/public/plans/${encodeURIComponent(id)}${query}`,
     { noStore: true },
   );
   return { data: result.data ?? null, status: result.status };

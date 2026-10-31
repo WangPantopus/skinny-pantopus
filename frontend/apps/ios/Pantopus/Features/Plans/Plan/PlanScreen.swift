@@ -21,6 +21,7 @@ struct PlanScreen: View {
     @State private var askIsChange = false
     @State private var confirmation: PlanConfirmation?
     @State private var showsCancel = false
+    @State private var showsInvite = false
     @State private var showsReport = false
     @State private var chatRoute: PlanChatRoute?
     @State private var toast: String?
@@ -42,8 +43,8 @@ struct PlanScreen: View {
                 loading
             case .loaded:
                 if let card = viewModel.card { loaded(card) } else { loading }
-            case let .needsVerification(city):
-                PlanVerifyScreen(city: city, onClose: close)
+            case let .needsVerification(city, invitedBy):
+                PlanVerifyScreen(city: city, invitedBy: invitedBy, onClose: close)
             case .unavailable:
                 unavailable
             case let .error(message):
@@ -55,6 +56,8 @@ struct PlanScreen: View {
         // Opens out of its card on the Plans map; drag it down to close it back in.
         .itemZoomDestination(.plan, id: viewModel.planId)
         .task {
+            // An email or text invitation becomes this account's before the plan is read.
+            if case let .invite(token) = intent, !askedOnOpen { await viewModel.claimInvite(token: token) }
             await viewModel.load()
             if let notice = PlansNavigator.shared.notice {
                 PlansNavigator.shared.notice = nil
@@ -70,7 +73,11 @@ struct PlanScreen: View {
         .refreshesOnStoreChange(affects: { PlansStoreReads.affects($0) }, perform: { await viewModel.load() })
         .sheet(isPresented: $showsAsk) {
             if let card = viewModel.card {
-                PlanAskSheet(card: card, previous: askIsChange ? viewModel.askPrefill : nil) { body in
+                PlanAskSheet(
+                    card: card,
+                    previous: askIsChange ? viewModel.askPrefill : nil,
+                    invited: !askIsChange && viewModel.openInvite.map { !$0.needsHostOk } == true
+                ) { body in
                     await viewModel.ask(body) ? nil : viewModel.actionError ?? "We couldn't send that. Please try again."
                 }
             }
@@ -78,6 +85,11 @@ struct PlanScreen: View {
         .sheet(isPresented: $showsCancel) {
             PlanCancelSheet(viewModel: viewModel) { showsCancel = false }
         }
+        .sheet(
+            isPresented: $showsInvite,
+            onDismiss: { Task { await viewModel.load() } },
+            content: { if let card = viewModel.card { PlanInviteSheet(card: card) } }
+        )
         .askPantopus($pantopusTopic)
         .confirmationDialog("Report this plan", isPresented: $showsReport, titleVisibility: .visible) {
             ForEach(PlanReportReason.all, id: \.token) { reason in
@@ -165,6 +177,7 @@ struct PlanScreen: View {
                     viewModel: viewModel,
                     onOpenHost: { path.append(.profile(userId: $0)) },
                     onOpenRequests: { path.append(.requests(planId: viewModel.planId)) },
+                    onInvite: { showsInvite = true },
                     onOpenChat: openChat,
                     onChange: { path.append(.change(planId: viewModel.planId)) },
                     onCancel: { showsCancel = true },

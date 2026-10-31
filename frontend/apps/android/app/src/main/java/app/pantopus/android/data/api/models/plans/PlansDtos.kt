@@ -189,6 +189,10 @@ data class PlanDto(
     @Json(name = "requests_count") val requestsCount: Int? = null,
     @Json(name = "auto_rules") val autoRules: List<String>? = null,
     @Json(name = "guest_note") val guestNote: String? = null,
+    /** The viewer's invitation from the host, or null (planInvites.js). */
+    @Json(name = "my_invite") val myInvite: PlanMyInviteDto? = null,
+    /** The host only: their invitations to this plan. */
+    @Json(name = "invites") val invites: PlanHostInvitesDto? = null,
 )
 
 /** `nearest_elsewhere` (F4): the closest town with plans 5 to 15 miles away when the page is empty. */
@@ -225,6 +229,8 @@ data class MyPlansResponse(
     @Json(name = "going") val going: List<PlanDto> = emptyList(),
     @Json(name = "asked") val asked: List<PlanDto> = emptyList(),
     @Json(name = "waitlisted") val waitlisted: List<PlanDto> = emptyList(),
+    /** Invitations the viewer hasn't answered yet. */
+    @Json(name = "invited") val invited: List<PlanDto> = emptyList(),
     /** Ended in the last 2 days, the viewer hosted or was in (A5). */
     @Json(name = "recent") val recent: List<PlanDto> = emptyList(),
     @Json(name = "viewer") val viewer: PlansStandingDto? = null,
@@ -381,6 +387,10 @@ data class PlanRequestViewDto(
     @Json(name = "kids_count") val kidsCount: Int? = null,
     @Json(name = "kids_age_bands") val kidsAgeBands: List<String>? = null,
     @Json(name = "created_at") val createdAt: String? = null,
+    /** The host invited them (planInvites.js). */
+    @Json(name = "invited") val invited: Boolean = false,
+    /** They opened the host's email invitation to this address from an account it isn't verified for. */
+    @Json(name = "opened_invite_to") val openedInviteTo: String? = null,
 )
 
 /** `GET /api/plans/:id/requests` (host only). */

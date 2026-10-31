@@ -90,11 +90,13 @@ struct PlanNotThisTimeScreen: View {
 
 struct PlanVerifyScreen: View {
     let city: String?
+    /// The host's first name when they invited this person (the invitation waits until they verify).
+    var invitedBy: String?
     let onClose: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            PlanNavBar(title: "Shared with you", leading: .close, onLeading: onClose)
+            PlanNavBar(title: invitedBy == nil ? "Shared with you" : "Invitation", leading: .close, onLeading: onClose)
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s5) {
                     VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -103,9 +105,10 @@ struct PlanVerifyScreen: View {
                             .planFont(.h2)
                             .foregroundStyle(Theme.Color.appText)
                             .accessibilityAddTraits(.isHeader)
-                        Text("Someone shared this with you.")
+                        Text(invitedBy.map { "\($0) invited you to their playdate." } ?? "Someone shared this with you.")
                             .planFont(.small)
                             .foregroundStyle(Theme.Color.appTextSecondary)
+                            .accessibilityIdentifier("planVerifyInvitedBy")
                     }
                     PlanCardBox(padding: Spacing.s4) {
                         VStack(alignment: .leading, spacing: Spacing.s3) {
@@ -116,7 +119,8 @@ struct PlanVerifyScreen: View {
                                 .accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: Spacing.s1) {
                                 Text("Playdates are for verified neighbors").planFont(.h4).foregroundStyle(Theme.Color.appText)
-                                Text("Verify your address to see the time, the place and who's going, and to ask to join. "
+                                Text("Verify your address to see the time, the place and who's going, and to "
+                                    + (invitedBy == nil ? "ask to join. " : "say you're in. Your invitation waits for you. ")
                                     + "Everyone at a playdate has done the same.")
                                     .planFont(.small)
                                     .foregroundStyle(Theme.Color.appTextSecondary)

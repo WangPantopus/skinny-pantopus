@@ -71,12 +71,15 @@ struct PlanFooter: View {
         }
     }
 
-    /// One primary action, as on Android: ask (or join the waitlist), verify,
-    /// share a location, or the reason someone can't, greyed out.
+    /// One primary action, as on Android: "I'm in" to an invitation, ask (or
+    /// join the waitlist), verify, share a location, or the reason someone
+    /// can't, greyed out.
     @ViewBuilder
     private func browsing(_ card: PlanCardDTO) -> some View {
         let viewer = card.viewer
-        if viewer?.canAsk ?? true {
+        if let invite = viewModel.openInvite, viewer?.canAsk == true || viewer?.cannotAskReason == .fullUseWaitlist {
+            invited(card, invite)
+        } else if viewer?.canAsk ?? true {
             Button { onAsk(false) } label: {
                 PlanButtonLabel(title: card.isFull ? "Join the waitlist" : "Ask to join", kind: .primary, isLoading: viewModel.isWorking)
             }
@@ -111,6 +114,28 @@ struct PlanFooter: View {
                 if let text = PlanCannotAskCopy.caption(reason) { caption(text) }
             }
         }
+    }
+
+    /// The host's invitation: "I'm in" (the waitlist when it's full) and "Can't make it", which the person can
+    /// still change their mind about.
+    @ViewBuilder
+    private func invited(_ card: PlanCardDTO, _ invite: PlanMyInviteDTO) -> some View {
+        let host = PlanCardLines.firstName(card.host.displayName)
+        Button { onAsk(false) } label: {
+            PlanButtonLabel(title: card.isFull ? "Join the waitlist" : "I'm in", kind: .primary, isLoading: viewModel.isWorking)
+        }
+        .planButton(.primary)
+        .disabled(viewModel.isWorking)
+        .accessibilityIdentifier("planInviteYes")
+        if invite.status == .pending {
+            Button("Can't make it") {
+                Task { if await viewModel.declineInvite() { viewModel.notice = "We told \(host)" } }
+            }
+            .planButton(.text, size: .extraSmall)
+            .disabled(viewModel.isWorking)
+            .accessibilityIdentifier("planInviteNo")
+        }
+        caption(PlanInviteCopy.footer(card: card, invite: invite))
     }
 
     private func caption(_ text: String) -> some View {
@@ -166,6 +191,28 @@ enum PlanCannotAskCopy {
         case .other: "You can't ask to join this plan right now."
         case .needsVerifiedAddress, .needsLocation, .fullUseWaitlist, .ended: nil
         }
+    }
+}
+
+/// The words around an invitation (the same on Android).
+enum PlanInviteCopy {
+    /// Under "I'm in".
+    static func footer(card: PlanCardDTO, invite: PlanMyInviteDTO) -> String {
+        let host = PlanCardLines.firstName(card.host.displayName)
+        if invite.status == .declined { return "You said you can't make it. If that changes, tap I'm in." }
+        if card.isFull { return PlanCannotAskCopy.waitlist }
+        if invite.needsHostOk { return "This invitation went to another address, so \(host) says yes first." }
+        return "\(host) invited you, so you're in as soon as you say so."
+    }
+
+    /// The banner over the plan: "Sam invited you".
+    static func banner(card: PlanCardDTO, invite: PlanMyInviteDTO) -> (title: String, message: String) {
+        let host = PlanCardLines.firstName(card.host.displayName)
+        let place = card.kind == .playdate ? "the time and the exact place" : card.placeKind == .home ? "the address" : "the exact place"
+        if invite.needsHostOk {
+            return ("\(host) invited you", "Say you're in and \(host) gets a request. You see \(place) once they say yes.")
+        }
+        return ("\(host) invited you", "No request needed. You see \(place) once you say you're in.")
     }
 }
 
