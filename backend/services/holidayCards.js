@@ -8,7 +8,8 @@
  * search, notices and older app versions never show it. A card sealed until Christmas morning keeps its note on the
  * server until then (isSealed): the routes that read a letter's stored copy give a sealed card a short note instead.
  *
- * The apps carry the pictures themselves (one per design id) and print the caption, the year and the postmark.
+ * The pictures come in collections. The website serves every picture (/holiday-cards/<design id>.jpg); the phone apps
+ * carry the first 17 and load the rest from the website. Each app prints the caption, the year and the postmark.
  */
 const { DateTime } = require('luxon');
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -22,31 +23,81 @@ const SEALED_NOTE = 'This Christmas card is sealed until Christmas morning.';
 const SEASON = { holiday: 'christmas', year: 2026, tag: 'christmas_2026', closes_on: '2026-12-31' };
 const MORNING_HOUR = 7;
 
-// The 17 pictures (the founder's own, 2026-10-30), with the caption printed under each and the colour of its paper.
+/** A picture's design id by its number ("christmas-2026-07"). */
+const designIdOf = (number) => `christmas-2026-${String(number).padStart(2, '0')}`;
+
+// The collections "Pick a card" shows, in this order, each with its pictures (by number) in grid order (founder,
+// 2026-10-31). A picture can move to another collection; its number stays.
+const COLLECTIONS = [
+  ['as-a-kid', 'Christmas as a Kid', 'For families with kids, and anyone who misses being one.',
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]],
+  ['with-friends', 'Christmas with Friends', 'For the friends who feel like family.', [18, 19, 20, 21, 22, 26, 31]],
+  ['love-stories', 'Christmas Love Stories', 'For the one you love, near or far.', [23, 24, 25, 27, 28, 29, 30]],
+  ['in-your-twenties', 'Christmas in Your Twenties', 'For first apartments, old roommates and long trips home.',
+    [32, 33, 34, 35, 36, 37]],
+  ['memories', 'Christmas Memories', 'For anyone who misses the little things.', [38, 39, 40, 41, 42, 43]],
+  ['grandmas-house', 'Christmas at Grandma’s House', 'For grandparents, and the grandkids who still come home.',
+    [44, 45, 46, 47, 48, 49]],
+].map(([id, name, line, numbers]) => ({ id, name, line, designs: numbers.map(designIdOf) }));
+const COLLECTION_OF_DESIGN = new Map(COLLECTIONS.flatMap((c) => c.designs.map((design) => [design, c.id])));
+
+// The pictures by number, with the caption printed under each, the colour of its paper and its height in px at 960 px
+// wide (an app keeps a picture's shape while it loads it). 1–17 are the founder's own (2026-10-30); 18–49 came in five
+// groups on 2026-10-31. A number is never reused: every app picks the card's stamp from it.
 const DESIGNS = [
-  ['Home for Christmas.', '#f7eee0'],
-  ['One more run?', '#f7efe1'],
-  ['Don’t open until Christmas.', '#f4eee0'],
-  ['Remember making your wish list?', '#fcf5e7'],
-  ['We saved you a window seat.', '#fbf2e2'],
-  ['Shake it once for me.', '#f4ede2'],
-  ['Remember Christmas at the mall?', '#f8f0e3'],
-  ['Come finish our snowman.', '#f9f1e3'],
-  ['Look outside. It’s snowing.', '#f6ede0'],
-  ['One more Christmas movie.', '#f8f0e0'],
-  ['We found our tree.', '#f9f3e7'],
-  ['Your cocoa’s getting cold.', '#f5eee0'],
-  ['A little Christmas from home.', '#f8f1e0'],
-  ['Wish you were here.', '#f9f6ed'],
-  ['Snowy wishes, just for you.', '#f8f0e3'],
-  ['Saved you the good cookies.', '#f4efe4'],
-  ['See you after Christmas.', '#fbf3e4'],
-].map(([caption, paper], index) => ({
-  id: `christmas-2026-${String(index + 1).padStart(2, '0')}`,
-  number: index + 1,
-  caption,
-  paper,
-}));
+  ['Home for Christmas.', '#f7eee0', 1054],
+  ['One more run?', '#f7efe1', 1054],
+  ['Don’t open until Christmas.', '#f4eee0', 1034],
+  ['Remember making your wish list?', '#fcf5e7', 1054],
+  ['We saved you a window seat.', '#fbf2e2', 1035],
+  ['Shake it once for me.', '#f4ede2', 1032],
+  ['Remember Christmas at the mall?', '#f8f0e3', 1058],
+  ['Come finish our snowman.', '#f9f1e3', 1045],
+  ['Look outside. It’s snowing.', '#f6ede0', 1062],
+  ['One more Christmas movie.', '#f8f0e0', 1040],
+  ['We found our tree.', '#f9f3e7', 1027],
+  ['Your cocoa’s getting cold.', '#f5eee0', 1052],
+  ['A little Christmas from home.', '#f8f1e0', 1065],
+  ['Wish you were here.', '#f9f6ed', 1046],
+  ['Snowy wishes, just for you.', '#f8f0e3', 1052],
+  ['Saved you the good cookies.', '#f4efe4', 1042],
+  ['See you after Christmas.', '#fbf3e4', 1054],
+  ['Same friends. New memories.', '#f2eee2', 1024],
+  ['No fancy plans. Just us.', '#f3efe5', 982],
+  ['Come over. There’s always room.', '#f1ede2', 1014],
+  ['Let’s take the long way home.', '#f7f3ea', 1019],
+  ['We saved your usual seat.', '#f5f0e6', 990],
+  ['Our little place. Our Christmas.', '#f9f1e3', 994],
+  ['Another Christmas. Still you.', '#f9f1df', 968],
+  ['Until I can hold you again.', '#f8f0df', 987],
+  ['One more movie, like always.', '#f7f0e3', 975],
+  ['Christmas starts when you get here.', '#f7f2e8', 1019],
+  ['One more song, my love.', '#f7f0e5', 1019],
+  ['My favorite place is beside you.', '#faf1e1', 1066],
+  ['All I wanted was you.', '#f6eee0', 1004],
+  ['Good friends. Questionable wrapping skills.', '#f5efe2', 971],
+  ['Save me a place at home.', '#f2eadf', 1034],
+  ['Our kind of Christmas Eve.', '#f1e7d8', 999],
+  ['Books closed. Christmas starts now.', '#f5ede1', 999],
+  ['Small gifts. Good company.', '#f2ece1', 999],
+  ['We’ll make it fit.', '#f0e8d6', 1057],
+  ['Different cities. Same old us.', '#f4ecdc', 999],
+  ['Saved you something sweet.', '#f7f0e3', 1014],
+  ['A little Christmas, sent your way.', '#f6eddd', 1040],
+  ['Follow the lights home.', '#f7eede', 1041],
+  ['Press play. Stay awhile.', '#f8eee1', 1031],
+  ['Wake up. It’s Christmas.', '#faf0e1', 996],
+  ['Come in. The movie’s starting.', '#f4e7d3', 1046],
+  ['Your turn to stir.', '#faf3e5', 993],
+  ['You can have one now.', '#f5f1e7', 997],
+  ['Take this for tomorrow.', '#f9f2e6', 997],
+  ['You made this one.', '#f6f2e9', 986],
+  ['One more piece before bed.', '#f4f0e6', 1034],
+  ['Your bed’s already made.', '#f6eddd', 994],
+].map(([caption, paper, height], index) => {
+  const id = designIdOf(index + 1);
+  return { id, number: index + 1, caption, paper, collection: COLLECTION_OF_DESIGN.get(id) || null, height };
+});
 const DESIGN_BY_ID = new Map(DESIGNS.map((design) => [design.id, design]));
 
 // When a card comes: with the next morning's mail, the next morning sealed until Christmas, or on Christmas morning.
@@ -132,6 +183,8 @@ function cardView(mail, now = new Date()) {
     number: design?.number ?? null,
     caption: card.caption || design?.caption || null,
     paper: design?.paper || '#f7f0e2',
+    // The picture's height at 960 px wide, so an app keeps its shape while it loads it.
+    height: design?.height ?? null,
     holiday: card.holiday || SEASON.holiday,
     year: card.year || SEASON.year,
     arrival: card.arrival || null,
@@ -248,7 +301,7 @@ function sentPiece(mail, { toName, senderName, zone, now = new Date() }) {
     // The envelope as it reaches them: postmarked once the carrier has it (by email, the day it was sent).
     envelope: { from: senderName, postmarked_on: status === 'waiting' ? null : dayIn(mail.created_at, zone) },
     card: { design: view.design || null, number: view.number ?? null, caption: view.caption || null, paper: view.paper || null,
-      year: view.year || null },
+      year: view.year || null, height: view.height ?? null },
   };
 }
 
@@ -298,7 +351,7 @@ async function sentLine(userId, now = new Date()) {
 }
 
 module.exports = {
-  CARD_TAG, MESSAGE_LIMIT, SUBJECT, SEALED_NOTE, SEASON, DESIGNS, PERSON_ARRIVALS, EMAIL_ARRIVALS,
+  CARD_TAG, MESSAGE_LIMIT, SUBJECT, SEALED_NOTE, SEASON, COLLECTIONS, DESIGNS, PERSON_ARRIVALS, EMAIL_ARRIVALS,
   designById, isCard, isSealed, sealedView, christmasMorning, seasonOpen, dayStart, daysBetween, arrivalsFor,
   personDelivery, cardView, pickupAt, sentSummary, sentCards, sentStatus, sentPiece, sentTrail, sentLine,
 };
