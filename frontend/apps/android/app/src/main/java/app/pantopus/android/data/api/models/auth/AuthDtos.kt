@@ -53,12 +53,15 @@ data class OAuthUrlResponse(
 
 /**
  * `POST /api/users/oauth/callback` request. Route:
- * `backend/routes/users.js:3862`.
+ * `backend/routes/users.js:3862`. [inviteCode] is the friend's code Create
+ * account carried: the server credits them when this sign-in creates the
+ * account.
  */
 @JsonClass(generateAdapter = true)
 data class OAuthCodeExchangeRequest(
     val code: String,
     val device: DeviceDescriptorDto? = null,
+    @Json(name = "invite_code") val inviteCode: String? = null,
 )
 
 /**
@@ -70,6 +73,19 @@ data class OAuthTokenExchangeRequest(
     val accessToken: String,
     val refreshToken: String,
     val device: DeviceDescriptorDto? = null,
+    /** As on [OAuthCodeExchangeRequest]. */
+    @Json(name = "invite_code") val inviteCode: String? = null,
+)
+
+/**
+ * `GET /api/users/public/join/:code` response: whether a friend's invite
+ * code is live and whose it is, by the name neighbors see. Web's join page
+ * reads the same route.
+ */
+@JsonClass(generateAdapter = true)
+data class PublicJoinLookup(
+    val valid: Boolean,
+    @Json(name = "referrer_name") val referrerName: String? = null,
 )
 
 /**

@@ -34,10 +34,12 @@ extension AuthManager {
     /// OAuth through `GET /api/users/oauth/:provider` (route
     /// `backend/routes/users.js:4006`) and `POST /api/users/oauth/callback`
     /// (route `backend/routes/users.js:4186`). Legacy fragment tokens fall
-    /// back to `POST /api/users/oauth/token` (`:3792`).
-    func signIn(with provider: OAuthProvider) async throws {
+    /// back to `POST /api/users/oauth/token` (`:3792`). `inviteCode` is the
+    /// friend's code from Create account: the server credits them when this
+    /// sign-in creates the account.
+    func signIn(with provider: OAuthProvider, inviteCode: String? = nil) async throws {
         if provider == .apple {
-            try await signInWithAppleSheet()
+            try await signInWithAppleSheet(inviteCode: inviteCode)
             return
         }
         do {
@@ -77,7 +79,7 @@ extension AuthManager {
                 throw AuthError.serverError(Self.oauthProviderFailedMessage)
             }
 
-            let loginResponse = try await exchangeOAuthCallback(callbackURL)
+            let loginResponse = try await exchangeOAuthCallback(callbackURL, inviteCode: inviteCode)
             try persistLoginResponse(loginResponse, method: provider == .apple ? .apple : .google)
         } catch OAuthWebAuthenticationError.cancelled {
             throw OAuthWebAuthenticationError.cancelled
@@ -97,7 +99,7 @@ extension AuthManager {
     /// Native Sign in with Apple → `POST /api/users/oauth/native` (route
     /// `backend/routes/users.js` `/oauth/native`). Carries the device
     /// descriptor (+ DPoP) so the session is bound at issue, like `/login`.
-    private func signInWithAppleSheet() async throws {
+    private func signInWithAppleSheet(inviteCode: String?) async throws {
         let credential: AppleSignInCredential
         do {
             credential = try await AppleSignInCoordinator().signIn()
@@ -118,7 +120,8 @@ extension AuthManager {
                         accessToken: nil,
                         device: makeDeviceDescriptor(),
                         givenName: credential.givenName,
-                        familyName: credential.familyName
+                        familyName: credential.familyName,
+                        inviteCode: inviteCode
                     )
                 )
             )
@@ -183,19 +186,24 @@ extension AuthManager {
     /// Exchange either `?code=` or legacy `#access_token&refresh_token`.
     /// Both carry the device descriptor (+ DPoP) so the new session is bound
     /// at issue, exactly like `/login`.
-    private func exchangeOAuthCallback(_ callbackURL: URL) async throws -> LoginResponse {
+    private func exchangeOAuthCallback(_ callbackURL: URL, inviteCode: String?) async throws -> LoginResponse {
         let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)
         let device = makeDeviceDescriptor()
         if let code = components?.queryItems?.first(where: { $0.name == "code" })?.value,
            !code.isEmpty {
-            return try await apiClient.request(AuthEndpoints.exchangeOAuthCode(code, device: device))
+            return try await apiClient.request(AuthEndpoints.exchangeOAuthCode(code, device: device, inviteCode: inviteCode))
         }
 
         let access = Self.fragmentParam(callbackURL.fragment, name: "access_token")
         let refresh = Self.fragmentParam(callbackURL.fragment, name: "refresh_token")
         if let access, !access.isEmpty, let refresh, !refresh.isEmpty {
             return try await apiClient.request(
-                AuthEndpoints.exchangeOAuthToken(accessToken: access, refreshToken: refresh, device: device)
+                AuthEndpoints.exchangeOAuthToken(
+                    accessToken: access,
+                    refreshToken: refresh,
+                    device: device,
+                    inviteCode: inviteCode
+                )
             )
         }
         throw OAuthWebAuthenticationError.invalidCallback

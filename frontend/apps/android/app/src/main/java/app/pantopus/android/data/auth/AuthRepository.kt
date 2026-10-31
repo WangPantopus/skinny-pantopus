@@ -22,6 +22,7 @@ import app.pantopus.android.data.api.models.auth.LogoutRequest
 import app.pantopus.android.data.api.models.auth.OAuthCodeExchangeRequest
 import app.pantopus.android.data.api.models.auth.OAuthNativeRequest
 import app.pantopus.android.data.api.models.auth.OAuthTokenExchangeRequest
+import app.pantopus.android.data.api.models.auth.PublicJoinLookup
 import app.pantopus.android.data.api.models.auth.RefreshRequest
 import app.pantopus.android.data.api.models.auth.RegisterDeviceRequest
 import app.pantopus.android.data.api.models.auth.RegisterRequest
@@ -602,14 +603,18 @@ class AuthRepository
         suspend fun exchangeOAuthCode(
             code: String,
             provider: OAuthProvider? = null,
+            inviteCode: String? = null,
         ): UserDto =
             mappingAuthFailures {
                 val (device, proof) = issuanceProof(PATH_OAUTH_CALLBACK)
                 persistLoginResponse(
-                    authApi.exchangeOAuthCode(OAuthCodeExchangeRequest(code, device), proof),
+                    authApi.exchangeOAuthCode(OAuthCodeExchangeRequest(code, device, inviteCode), proof),
                     method = provider.hintMethod(),
                 )
             }
+
+        /** Whose invite a friend's link carries (`GET /api/users/public/join/:code`, no sign-in). */
+        suspend fun lookupInvite(code: String): PublicJoinLookup = authApi.publicJoin(code)
 
         /**
          * Legacy fragment-token path via `POST /api/users/oauth/token`
@@ -619,6 +624,7 @@ class AuthRepository
             accessToken: String,
             refreshToken: String,
             provider: OAuthProvider? = null,
+            inviteCode: String? = null,
         ): UserDto =
             mappingAuthFailures {
                 val (device, proof) = issuanceProof(PATH_OAUTH_TOKEN)
@@ -628,6 +634,7 @@ class AuthRepository
                             accessToken = accessToken,
                             refreshToken = refreshToken,
                             device = device,
+                            inviteCode = inviteCode,
                         ),
                         proof,
                     ),
