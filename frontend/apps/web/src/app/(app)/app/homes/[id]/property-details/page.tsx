@@ -6,7 +6,7 @@ import { queryKeys } from '@/lib/query-keys';
 import { showsHouseholdHomeCopy, useAfterRecheck } from '@/lib/householdCopy';
 import { useParams, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
-import type { AttomPropertyDetailPayload } from '@pantopus/api';
+import type { AttomPropertyDetailPayload, CountyRecord } from '@pantopus/api';
 import {
   ArrowLeft,
   BedDouble,
@@ -56,51 +56,57 @@ function formatNumber(value: unknown, suffix = ''): string {
   return `${n.toLocaleString('en-US')}${suffix}`;
 }
 
-function buildHeroStats(property: AttomProperty | null): StatCard[] {
-  if (!property) return [];
+type HeroFacts = { beds: unknown; baths: unknown; living: unknown; lot: unknown; yearBuilt: unknown; stories: unknown };
 
+// The county record's facts for a verified owner; everyone else sees the Home's own.
+function heroFacts(property: AttomProperty | null, home: HomeRecord | null): HeroFacts {
+  if (!property) {
+    return { beds: home?.bedrooms, baths: home?.bathrooms, living: home?.sq_ft, lot: home?.lot_sq_ft,
+      yearBuilt: home?.year_built, stories: null };
+  }
   const rooms = property.building?.rooms || {};
   const size = property.building?.size || {};
-  const summary = property.summary || {};
-  const buildingSummary = property.building?.summary || {};
-  const lot = property.lot || {};
+  return { beds: rooms.beds, baths: rooms.bathstotal, living: size.livingsize ?? size.bldgsize,
+    lot: property.lot?.lotsize2, yearBuilt: property.summary?.yearbuilt, stories: property.building?.summary?.levels };
+}
 
+function buildHeroStats(facts: HeroFacts): StatCard[] {
   const stats: StatCard[] = [];
 
-  if (rooms.beds != null) {
-    stats.push({ label: 'Beds', value: formatValue(rooms.beds), icon: BedDouble, tint: 'bg-indigo-50 text-indigo-600' });
+  if (facts.beds != null) {
+    stats.push({ label: 'Beds', value: formatValue(facts.beds), icon: BedDouble, tint: 'bg-indigo-50 text-indigo-600' });
   }
-  if (rooms.bathstotal != null) {
-    stats.push({ label: 'Baths', value: formatValue(rooms.bathstotal), icon: Bath, tint: 'bg-sky-50 text-sky-600' });
+  if (facts.baths != null) {
+    stats.push({ label: 'Baths', value: formatValue(facts.baths), icon: Bath, tint: 'bg-sky-50 text-sky-600' });
   }
-  if (size.livingsize != null || size.bldgsize != null) {
+  if (facts.living != null) {
     stats.push({
       label: 'Living Sqft',
-      value: formatNumber(size.livingsize ?? size.bldgsize),
+      value: formatNumber(facts.living),
       icon: Ruler,
       tint: 'bg-emerald-50 text-emerald-600',
     });
   }
-  if (lot.lotsize2 != null) {
+  if (facts.lot != null) {
     stats.push({
       label: 'Lot Sqft',
-      value: formatNumber(lot.lotsize2),
+      value: formatNumber(facts.lot),
       icon: MapPinned,
       tint: 'bg-amber-50 text-amber-600',
     });
   }
-  if (summary.yearbuilt != null) {
+  if (facts.yearBuilt != null) {
     stats.push({
       label: 'Year Built',
-      value: formatValue(summary.yearbuilt),
+      value: formatValue(facts.yearBuilt),
       icon: CalendarDays,
       tint: 'bg-rose-50 text-rose-600',
     });
   }
-  if (buildingSummary.levels != null) {
+  if (facts.stories != null) {
     stats.push({
       label: 'Stories',
-      value: formatValue(buildingSummary.levels),
+      value: formatValue(facts.stories),
       icon: Layers3,
       tint: 'bg-violet-50 text-violet-600',
     });
@@ -138,7 +144,8 @@ export default function HomePropertyDetailsPage() {
       if (!res || res.home?.id !== homeId || !['home', 'cache', 'attom', 'unavailable'].includes(res.source)
         || !(res.attom_property_detail === null || (typeof res.attom_property_detail === 'object'
           && !Array.isArray(res.attom_property_detail)))
-        || (res.source === 'unavailable' && res.attom_property_detail !== null)) {
+        || (res.source === 'unavailable' && res.attom_property_detail !== null)
+        || !(res.county_record == null || Array.isArray(res.county_record.sections))) {
         throw new Error('Property details could not be verified. Please retry.');
       }
       return res;
@@ -149,7 +156,10 @@ export default function HomePropertyDetailsPage() {
   const { data: details } = useAfterRecheck(detailQuery, () => household);
   const home: HomeRecord | null = details?.home ?? null;
   const attomPayload: AttomPropertyDetailPayload | null = details?.attom_property_detail ?? null;
+  const countyRecord: CountyRecord | null = details?.county_record ?? null;
   const unavailableReason: string | null = details?.unavailable_reason ?? null;
+  // The county record is the verified owner's; everyone else sees the Home's own facts.
+  const ownerOnly = unavailableReason === 'OWNER_ONLY';
   const error = !details && detailQuery.isError
     ? (detailQuery.error instanceof Error ? detailQuery.error.message : 'Failed to load property details. Please retry.')
     : '';
@@ -157,7 +167,8 @@ export default function HomePropertyDetailsPage() {
   const load = () => detailQuery.refetch();
 
   const property = getAttomPropertyFromPayload(attomPayload);
-  const stats = buildHeroStats(property);
+  const stats = buildHeroStats(heroFacts(property, home));
+  const hasRecord = !!property || !!countyRecord?.sections.length;
   const addressLine =
     property?.address?.oneLine ||
     joinText([home?.address, home?.address2], ' ') ||
@@ -170,7 +181,7 @@ export default function HomePropertyDetailsPage() {
     property?.summary?.propclass ||
     home?.home_type ||
     null;
-  const yearBuilt = property?.summary?.yearbuilt ?? null;
+  const yearBuilt = property?.summary?.yearbuilt ?? home?.year_built ?? null;
   const subdivision = property?.area?.subdname ?? null;
 
   const emptyDescription =
@@ -227,7 +238,7 @@ export default function HomePropertyDetailsPage() {
           </div>
         </div>
 
-        {!property ? (
+        {!hasRecord && !ownerOnly ? (
           <div className="rounded-[28px] border border-app-border bg-app-surface px-8 py-16 text-center shadow-sm">
             <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
               <Home className="h-10 w-10" />
@@ -299,14 +310,18 @@ export default function HomePropertyDetailsPage() {
               </section>
             ) : null}
 
-            <div className="flex items-start justify-center gap-2 pl-4 pr-20 text-center text-sm font-semibold text-violet-600 sm:px-0">
-              <ShieldCheck className="h-4 w-4 shrink-0" />
-              <span>Data from public records via ATTOM</span>
-            </div>
+            {hasRecord ? (
+              <>
+                <div className="flex items-start justify-center gap-2 pl-4 pr-20 text-center text-sm font-semibold text-violet-600 sm:px-0">
+                  <ShieldCheck className="h-4 w-4 shrink-0" />
+                  <span>{countyRecord?.footer || 'Data from public records via ATTOM'}</span>
+                </div>
 
-            <section className="rounded-[28px] border border-app-border bg-app-surface px-4 py-4 shadow-sm sm:px-6 sm:py-6">
-              <AttomStructuredFields attomPropertyDetail={attomPayload} />
-            </section>
+                <section className="rounded-[28px] border border-app-border bg-app-surface px-4 py-4 shadow-sm sm:px-6 sm:py-6">
+                  <AttomStructuredFields attomPropertyDetail={attomPayload} sections={countyRecord?.sections} />
+                </section>
+              </>
+            ) : null}
           </div>
         )}
       </div>

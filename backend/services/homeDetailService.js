@@ -5,6 +5,7 @@ const invitations = require('./homeInvitationService');
 const claimConfig = require('../config/householdClaims');
 const claimPolicy = require('./homeClaimRoutingService');
 const property = require('./ai/propertyIntelligenceService');
+const { serializeCountyRecord } = require('../serializers/countyRecordSerializer');
 const { SAFE_CREATOR_SELECT } = require('../serializers/identitySerializers');
 const { currentOccupancy, resolveHomeRole, ROLE_RANK } = require('../utils/homeAccessPolicy');
 const parsePoint = require('../utils/parsePostGISPoint');
@@ -194,7 +195,14 @@ async function detail(homeId, actorId) {
 
 async function propertyDetail(homeId, actorId) {
   return authority.withCurrentAccess({ homeId, actorId }, async access => {
-    const { home, raw } = await readHome(homeId, access, { provider: true });
+    // The county record is the verified owner's, as the Home's value is on Place. Everyone else who can open
+    // the Home sees its own facts, and their visit never asks ATTOM.
+    if (!access.isOwner) {
+      const { home } = await readHome(homeId, access);
+      return { home, attom_property_detail: null, source: 'unavailable', unavailable_reason: 'OWNER_ONLY', county_record: null };
+    }
+    // ATTOM's value estimate comes from the cache only, read alongside the Home.
+    const [{ home, raw }, avm] = await Promise.all([readHome(homeId, access, { provider: true }), property.getCachedAttomValue(homeId)]);
     const result = await property.getHomeAttomPropertyDetail(raw);
     if (!result || !['home', 'cache', 'attom', 'unavailable'].includes(result.source)
       || !(result.attomPayload === null || object(result.attomPayload))
@@ -202,7 +210,7 @@ async function propertyDetail(homeId, actorId) {
     // Only the property bundle is returned, never the rest of niche_data or
     // unrelated raw Home fields. Deeper vendor-content validation is separate.
     return { home, attom_property_detail: result.attomPayload, source: result.source,
-      unavailable_reason: result.unavailableReason || null };
+      unavailable_reason: result.unavailableReason || null, county_record: serializeCountyRecord(result.attomPayload, avm) };
   });
 }
 

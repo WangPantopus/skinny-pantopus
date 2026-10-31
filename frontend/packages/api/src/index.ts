@@ -228,6 +228,9 @@ export type {
 export type {
   AddressCheckResult,
   AttomPropertyDetailPayload,
+  CountyRecord,
+  CountyRecordRow,
+  CountyRecordSection,
   HomePropertyDetailResponse,
   HouseholdAccessRequestRow,
   PropertySuggestionsResponse,

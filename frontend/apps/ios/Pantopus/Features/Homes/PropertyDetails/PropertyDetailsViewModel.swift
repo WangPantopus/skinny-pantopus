@@ -4,11 +4,13 @@
 //
 //  Backs `PropertyDetailsView` (A.4 / A13.5). Reads the home's property
 //  fields from `GET /api/homes/:id/property-details` (route
-//  `backend/routes/home.js:2991`) and projects them into a `.clean`
-//  state. Only the property facts + address are backed; the Records
-//  (ATTOM) and Verification (provenance) sections + the mismatch banner
-//  have no clean backend source, so they stay empty / nil. An injectable
-//  `loader` seam (non-nil) bypasses the network for previews + tests.
+//  `backend/routes/home.js:1949`) and projects them into a `.clean`
+//  state. The property facts + address are backed for everyone who can
+//  open the home; the county record (ATTOM) sections for its verified
+//  owners, whom the server sends them to. The Verification (provenance)
+//  section + the mismatch banner have no clean backend source, so they
+//  stay empty / nil. An injectable `loader` seam (non-nil) bypasses the
+//  network for previews + tests.
 //
 //  Instant Screens: the read goes through the screen store (a home's facts,
 //  10 minutes), so coming back shows the copy in the first frame and asks
@@ -107,7 +109,7 @@ final class PropertyDetailsViewModel {
 
     private func show(_ snapshot: ScreenSnapshot<PropertyDetailsResponse>) {
         staleNotice = snapshot.refreshNotice
-        let content = Self.content(from: snapshot.value.home)
+        let content = Self.content(from: snapshot.value.home, countyRecord: snapshot.value.countyRecord)
         state = content.banner == nil ? .clean(content) : .mismatch(content)
     }
 
@@ -121,10 +123,11 @@ final class PropertyDetailsViewModel {
         }
     }
 
-    /// Map the backend `home` onto the screen's projection. Records +
-    /// Verification stay empty (no clean source) and the banner is never
-    /// raised from the backend, so this always yields the clean state.
-    static func content(from home: PropertyHomeDTO) -> PropertyDetailsContent {
+    /// Map the backend `home` and the verified owner's county record onto
+    /// the screen's projection. Verification stays empty (no clean source)
+    /// and the banner is never raised from the backend, so this always
+    /// yields the clean state.
+    static func content(from home: PropertyHomeDTO, countyRecord: PropertyCountyRecordDTO? = nil) -> PropertyDetailsContent {
         let line1 = [home.address?.nonBlank, home.unitNumber?.nonBlank]
             .compactMap { $0 }
             .joined(separator: " · ")
@@ -155,6 +158,14 @@ final class PropertyDetailsViewModel {
             facts.append(PropertyFactRow(id: "lot", label: "Lot", value: "\(lot.formatted()) sq ft", mono: true))
         }
 
+        // The server words and formats every county-record row.
+        let sections = (countyRecord?.sections ?? []).compactMap { section -> PropertyRecordSection? in
+            let rows = section.rows.map {
+                PropertyFactRow(id: $0.id, label: $0.label, value: $0.value, mono: $0.mono ?? false)
+            }
+            return rows.isEmpty ? nil : PropertyRecordSection(id: section.id, title: section.title, rows: rows, note: section.note)
+        }
+
         return PropertyDetailsContent(
             address: PropertyAddress(
                 line1: line1.isEmpty ? "Address unavailable" : line1,
@@ -163,7 +174,8 @@ final class PropertyDetailsViewModel {
                 longitude: home.location?.longitude
             ),
             propertyFacts: facts,
-            records: [],
+            recordSections: sections,
+            recordFooter: sections.isEmpty ? nil : countyRecord?.footer?.nonBlank,
             verification: [],
             banner: nil
         )

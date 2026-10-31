@@ -4,8 +4,12 @@ import { useMemo, useState } from 'react';
 import type { AttomPropertyDetailPayload } from '@pantopus/api';
 import { buildAttomDisplaySections, type AttomDisplaySection } from '@pantopus/utils';
 
+type Section = AttomDisplaySection & { note?: string | null };
+
 type Props = {
-  attomPropertyDetail: AttomPropertyDetailPayload | null;
+  attomPropertyDetail?: AttomPropertyDetailPayload | null;
+  /** Sections the server already labeled (a verified owner's county record); shown instead of the raw record. */
+  sections?: Section[];
 };
 
 function SectionBlock({
@@ -13,7 +17,7 @@ function SectionBlock({
   expanded,
   onToggle,
 }: {
-  section: AttomDisplaySection;
+  section: Section;
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -37,14 +41,20 @@ function SectionBlock({
               <div className="text-app-text-strong font-medium leading-snug break-words">{row.value}</div>
             </div>
           ))}
+          {section.note ? (
+            <p className="px-3 py-2 text-xs leading-snug text-app-text-secondary">{section.note}</p>
+          ) : null}
         </div>
       ) : null}
     </div>
   );
 }
 
-export default function AttomStructuredFields({ attomPropertyDetail }: Props) {
-  const sections = useMemo(() => buildAttomDisplaySections(attomPropertyDetail ?? undefined), [attomPropertyDetail]);
+export default function AttomStructuredFields({ attomPropertyDetail, sections: labeled }: Props) {
+  const sections = useMemo(
+    () => labeled ?? buildAttomDisplaySections(attomPropertyDetail ?? undefined),
+    [labeled, attomPropertyDetail],
+  );
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   if (sections.length === 0) return null;

@@ -176,12 +176,21 @@ private fun LoadedBody(
                     MismatchBanner(data = content.banner)
                 }
                 PropertySection(title = "Property", rows = content.propertyFacts)
-                // Records (ATTOM provenance) + Verification sources have no
-                // clean backend mapping today, so they're hidden when the
-                // projection leaves them empty.
-                if (content.records.isNotEmpty()) {
-                    PropertySection(title = "Records", rows = content.records)
+                // The county record (ATTOM) comes for verified owners only,
+                // so everyone else sees just the Property card.
+                content.recordSections.forEach { section ->
+                    PropertySection(title = section.title, rows = section.rows, note = section.note)
                 }
+                content.recordFooter?.let { footer ->
+                    Text(
+                        text = footer,
+                        style = PantopusTextStyle.caption,
+                        color = PantopusColors.appTextSecondary,
+                        modifier = Modifier.testTag("propertyDetails_recordFooter"),
+                    )
+                }
+                // Verification sources have no clean backend mapping today,
+                // so they're hidden when the projection leaves them empty.
                 if (content.verification.isNotEmpty()) {
                     VerificationSection(sources = content.verification)
                 }
@@ -386,6 +395,7 @@ private fun HouseholdPill(modifier: Modifier = Modifier) {
 private fun PropertySection(
     title: String,
     rows: List<PropertyFactRow>,
+    note: String? = null,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
         SectionHeader(title)
@@ -401,6 +411,9 @@ private fun PropertySection(
                 )
                 if (index < rows.lastIndex) RowDivider()
             }
+        }
+        note?.let {
+            Text(text = it, style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)
         }
     }
 }
