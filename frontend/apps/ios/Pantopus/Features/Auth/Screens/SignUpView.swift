@@ -155,6 +155,7 @@ struct SignUpView: View {
               let code = inviteCode?.trimmingCharacters(in: .whitespacesAndNewlines),
               !code.isEmpty else { return }
         viewModel.inviteCode = code
+        viewModel.suggestedInviteCode = code
     }
 
     /// An emailed household invitation waiting for sign-in only works for its address, so the Email field
