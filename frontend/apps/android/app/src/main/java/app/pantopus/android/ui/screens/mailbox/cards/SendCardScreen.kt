@@ -183,16 +183,8 @@ private fun Steps(
             modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s2),
         )
     }
+    ToLine(form)
     val to = form.to
-    if (to != null && form.step in setOf(SendCardStep.Pick, SendCardStep.Write, SendCardStep.Seal, SendCardStep.Look)) {
-        Text(
-            "To ${to.label}",
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            color = PantopusColors.cardTextQuiet,
-            modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s1),
-        )
-    }
     val design = cards.designs.firstOrNull { it.id == form.design }
     when (form.step) {
         SendCardStep.To -> ToStep(form, viewModel)
@@ -231,6 +223,20 @@ private fun Steps(
                 )
             }
     }
+}
+
+/** "To Maya O." over steps 2 to 5, once who it's to is chosen. */
+@Composable
+private fun ToLine(form: SendCardForm) {
+    val to = form.to ?: return
+    if (form.step !in setOf(SendCardStep.Pick, SendCardStep.Write, SendCardStep.Seal, SendCardStep.Look)) return
+    Text(
+        "To ${to.label}",
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        color = PantopusColors.cardTextQuiet,
+        modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s1),
+    )
 }
 
 /** The back arrow, the title, and five dots: wax red for the steps done and the current one (longer), cream ahead. */
