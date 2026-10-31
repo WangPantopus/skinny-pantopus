@@ -2822,6 +2822,9 @@ public struct YouTabRoot: View {
                 },
                 onOpenProfile: { reviewerId in
                     Task { @MainActor in path.append(.publicProfile(userId: reviewerId)) }
+                },
+                onOpenPost: { postId in
+                    Task { @MainActor in path.append(.pulsePost(postId: postId)) }
                 }
             )
         case let .businessProfile(businessId):

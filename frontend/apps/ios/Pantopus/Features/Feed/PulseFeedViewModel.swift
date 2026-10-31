@@ -39,6 +39,34 @@ private struct PulsePostOverride {
     var expiresAt: String?
 }
 
+/// One card's values after the viewer's own taps, ahead of the next read.
+/// The feed and a person's profile (`ProfilePostCardsModel`) build the same
+/// card from a row plus these.
+struct PulseCardLiveValues {
+    var hasReacted: Bool
+    var likeCount: Int
+    var isSaved: Bool
+    var isReposted: Bool
+    var shareCount: Int
+    var isSolved: Bool
+    var expiresAt: String?
+    var keptOpen: Bool
+    var pending: Set<PulsePendingAction>
+
+    /// The row as the server sent it, before any tap.
+    init(_ post: FeedPostDTO) {
+        hasReacted = post.userHasLiked
+        likeCount = post.likeCount
+        isSaved = post.userHasSaved
+        isReposted = post.userHasReposted
+        shareCount = post.shareCount
+        isSolved = post.state == "solved"
+        expiresAt = post.expiresAt
+        keptOpen = post.keptOpenAt != nil
+        pending = []
+    }
+}
+
 /// Pulse / Connections / Beacons feed view-model. The same engine backs all
 /// three A03 surfaces; `surface` selects the backend query, the verified
 /// floor, and the empty-state copy.
@@ -1126,11 +1154,32 @@ public final class PulseFeedViewModel {
     // MARK: - Projection
 
     private func project(_ post: FeedPostDTO) -> PulsePostCardContent {
+        var live = PulseCardLiveValues(post)
+        live.hasReacted = effectiveHasReacted(post)
+        live.likeCount = effectiveLikeCount(post)
+        live.isSaved = effectiveIsSaved(post)
+        live.isReposted = effectiveIsReposted(post)
+        live.shareCount = effectiveShareCount(post)
+        live.isSolved = effectiveIsSolved(post)
+        live.expiresAt = overrides[post.id]?.expiresAt ?? post.expiresAt
+        live.keptOpen = post.keptOpenAt != nil || overrides[post.id]?.keptOpen == true
+        live.pending = pendingActions[post.id] ?? []
+        return Self.card(for: post, viewerId: viewerId, surface: surface, live: live)
+    }
+
+    /// The Pulse card for one row. `surface` is nil off the feed (a person's
+    /// profile): no Beacon credential badge and no "Not helpful here".
+    static func card(
+        for post: FeedPostDTO,
+        viewerId: String?,
+        surface: FeedSurface?,
+        live: PulseCardLiveValues
+    ) -> PulsePostCardContent {
         let intent = PulseIntent.from(postType: post.postType)
         let initials = Self.initials(from: post.creator?.displayName ?? "?")
         let isBusiness = post.creator?.accountType == "business" || post.businessAuthorId != nil
-        let hasReacted = effectiveHasReacted(post)
-        let likeCount = effectiveLikeCount(post)
+        let hasReacted = live.hasReacted
+        let likeCount = live.likeCount
         let attendees: PulseAttendeeStrip? = intent == .event
             ? PulseAttendeeStrip(
                 avatars: [],
@@ -1139,8 +1188,8 @@ public final class PulseFeedViewModel {
             )
             : nil
         let isOwner = Self.isOwner(post: post, viewerId: viewerId)
-        let isSolved = effectiveIsSolved(post)
-        let expiresAt = overrides[post.id]?.expiresAt ?? post.expiresAt
+        let isSolved = live.isSolved
+        let expiresAt = live.expiresAt
         // Keep open and Close are the redesign's (Pulse S7, launch cut #11).
         let askIsOpen = LaunchFeatures.pulseRedesign && isOwner && !isSolved && PulsePostStatus.askIsOpen(
             postType: post.postType,
@@ -1149,7 +1198,7 @@ public final class PulseFeedViewModel {
             expiresAt: expiresAt,
             createdAt: post.createdAt
         )
-        let keptOpen = post.keptOpenAt != nil || overrides[post.id]?.keptOpen == true
+        let keptOpen = live.keptOpen
         return PulsePostCardContent(
             id: post.id,
             authorName: post.creator?.displayName ?? "Pantopus user",
@@ -1190,20 +1239,20 @@ public final class PulseFeedViewModel {
             commentCount: post.commentCount,
             actions: PulsePostActions(
                 isSeeded: post.isSeeded,
-                isSaved: effectiveIsSaved(post),
-                isReposted: effectiveIsReposted(post),
-                shareCount: effectiveShareCount(post),
+                isSaved: live.isSaved,
+                isReposted: live.isReposted,
+                shareCount: live.shareCount,
                 isSolved: isSolved,
                 isOwner: isOwner,
                 canMarkSolved: isOwner && post.postType == "ask_local" && !isSolved,
-                canFlagNotHelpful: surface.supportsNotHelpful && !isOwner && !post.isSeeded,
+                canFlagNotHelpful: (surface?.supportsNotHelpful ?? false) && !isOwner && !post.isSeeded,
                 muteEntityType: post.businessAuthorId != nil ? .business : (post.userId != nil ? .user : nil),
                 muteEntityId: post.businessAuthorId ?? post.userId,
                 muteEntityName: post.creator?.displayName ?? "this author",
                 // A type this build doesn't know has no chip to name, so no type mute.
                 postType: intent == .generic ? nil : post.postType,
                 topicLabel: intent.cardChipLabel,
-                pending: pendingActions[post.id] ?? [],
+                pending: live.pending,
                 canCloseAsk: askIsOpen,
                 canKeepAskOpen: askIsOpen && !keptOpen
             ),

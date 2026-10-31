@@ -26,6 +26,10 @@ public enum InboxRoute: Hashable {
     case startSupportTrain(story: String)
     /// A person's public profile, opened from a DM header.
     case publicProfile(userId: String)
+    /// A post opened from a profile's Posts tab.
+    case post(postId: String)
+    /// One of your own posts, edited from its page.
+    case editPost(postId: String)
 }
 
 /// Routing payload for a conversation push — captures the mode the
@@ -331,6 +335,14 @@ public struct InboxTabRoot: View {
             supportTrainStart(story: story)
         case let .publicProfile(userId):
             profileDestination(userId: userId)
+        case let .post(postId):
+            PostPageDestination(postId: postId, currentUserId: currentUserId, onBack: { if !path.isEmpty { path.removeLast() } }) {
+                path.append(.publicProfile(userId: $0))
+            } onEdit: { path.append(.editPost(postId: $0)) }
+        case let .editPost(postId):
+            PulseComposeFlowView(editingPostId: postId, onCancel: { if !path.isEmpty { path.removeLast() } }) { _ in
+                if !path.isEmpty { path.removeLast() }
+            }
         }
     }
 
@@ -349,13 +361,7 @@ public struct InboxTabRoot: View {
                         path = previousPath
                         return
                     }
-                    path.append(.conversation(InboxConversationDestination(
-                        mode: .person(otherUserId: profile.id),
-                        displayName: profile.displayName,
-                        initials: Self.profileInitials(from: profile.displayName),
-                        identityKind: nil,
-                        verified: profile.hasVerifiedResidency
-                    )))
+                    path.append(.conversation(.directMessage(with: profile)))
                 }
             },
             onOpenGig: { gigId in
@@ -364,14 +370,9 @@ public struct InboxTabRoot: View {
             },
             onOpenProfile: { otherId in
                 Task { @MainActor in path.append(.publicProfile(userId: otherId)) }
-            }
+            },
+            onOpenPost: { postId in path.append(.post(postId: postId)) }
         )
-    }
-
-    private static func profileInitials(from name: String) -> String {
-        let parts = name.split(separator: " ").prefix(2)
-        let joined = parts.compactMap { $0.first.map(String.init) }.joined().uppercased()
-        return joined.isEmpty ? "··" : joined
     }
 
     /// Where an assistant draft's "Use" goes. Posts and Support Trains carry
