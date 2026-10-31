@@ -33,6 +33,15 @@ data class PropertyFactRow(
     val mismatch: Boolean = false,
 )
 
+/** One titled card of read-only record rows: the county record's Building, Lot, Parcel & records… sections. */
+data class PropertyRecordSection(
+    val id: String,
+    val title: String,
+    val rows: List<PropertyFactRow>,
+    /** Caption under the card (the value estimate's "isn't an appraisal"). */
+    val note: String? = null,
+)
+
 /** Status pill configuration for one verification source. */
 data class SourcePillSpec(
     val label: String,
@@ -58,7 +67,10 @@ data class MismatchBannerData(
 data class PropertyDetailsContent(
     val address: PropertyAddress,
     val propertyFacts: List<PropertyFactRow>,
-    val records: List<PropertyFactRow>,
+    /** The county record's sections; empty for anyone but a verified owner. */
+    val recordSections: List<PropertyRecordSection>,
+    /** Where the record came from and when, under its last section. */
+    val recordFooter: String? = null,
     val verification: List<VerificationSource>,
     val banner: MismatchBannerData? = null,
 )

@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.homes.property_details
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.homes.PropertyCountyRecordDto
 import app.pantopus.android.data.api.models.homes.PropertyDetailsResponse
 import app.pantopus.android.data.api.models.homes.PropertyHomeDto
 import app.pantopus.android.data.homes.HomesRepository
@@ -27,11 +28,12 @@ const val PROPERTY_DETAILS_HOME_ID_KEY = "homeId"
 /**
  * ViewModel for the read-mostly Property Details screen. Reads the home's
  * property fields from `GET /api/homes/:id/property-details` (route
- * `backend/routes/home.js:2991`) and projects them into the clean state.
- * Only the property facts + address are backed; the Records (ATTOM) and
- * Verification (provenance) sections + the mismatch banner have no clean
- * backend source. An injectable [loader] seam (non-null) bypasses the
- * network for previews + tests.
+ * `backend/routes/home.js:1949`) and projects them into the clean state.
+ * The property facts + address are backed for everyone who can open the
+ * home; the county record (ATTOM) sections for its verified owners, whom
+ * the server sends them to. The Verification (provenance) section + the
+ * mismatch banner have no clean backend source. An injectable [loader]
+ * seam (non-null) bypasses the network for previews + tests.
  */
 @HiltViewModel
 class PropertyDetailsViewModel
@@ -84,7 +86,7 @@ class PropertyDetailsViewModel
                 return
             }
             if (_state.value is PropertyDetailsUiState.Loading && gate.showsCopy) {
-                homesRepository.storedPropertyDetails(homeId)?.let { _state.value = projection(contentFrom(it.home)) }
+                homesRepository.storedPropertyDetails(homeId)?.let { _state.value = projection(contentFrom(it.home, it.countyRecord)) }
             }
             read(force = false)
         }
@@ -133,7 +135,7 @@ class PropertyDetailsViewModel
                 if (generation != readGeneration) return@launch
                 _refreshing.value = false
                 _state.value =
-                    stored.data?.let { projection(contentFrom(it.home)) }
+                    stored.data?.let { projection(contentFrom(it.home, it.countyRecord)) }
                         ?: PropertyDetailsUiState.Error("Couldn't load property details. Pull to retry.")
                 _refreshNotice.value = RefreshNotice(stored.fetchedAt, ::refresh).takeIf { stored.showsRefreshFailure(StoreKind.HOMES) }
             }
@@ -159,12 +161,16 @@ class PropertyDetailsViewModel
 
         companion object {
             /**
-             * Map the backend `home` onto the screen's projection. Records +
-             * Verification stay empty (no clean source) and the banner is
-             * never raised from the backend, so this always yields the clean
-             * state. Mirrors iOS `PropertyDetailsViewModel.content(from:)`.
+             * Map the backend `home` and the verified owner's county record
+             * onto the screen's projection. Verification stays empty (no
+             * clean source) and the banner is never raised from the backend,
+             * so this always yields the clean state. Mirrors iOS
+             * `PropertyDetailsViewModel.content(from:countyRecord:)`.
              */
-            fun contentFrom(home: PropertyHomeDto): PropertyDetailsContent {
+            fun contentFrom(
+                home: PropertyHomeDto,
+                countyRecord: PropertyCountyRecordDto? = null,
+            ): PropertyDetailsContent {
                 val line1 =
                     listOfNotNull(home.address?.nonBlank(), home.unitNumber?.nonBlank())
                         .joinToString(" · ")
@@ -197,6 +203,18 @@ class PropertyDetailsViewModel
                         }
                     }
 
+                // The server words and formats every county-record row.
+                val sections =
+                    countyRecord?.sections.orEmpty().mapNotNull { section ->
+                        val rows =
+                            section.rows.map {
+                                PropertyFactRow(id = it.id, label = it.label, value = it.value, mono = it.mono == true)
+                            }
+                        rows.takeIf { it.isNotEmpty() }?.let {
+                            PropertyRecordSection(id = section.id, title = section.title, rows = it, note = section.note)
+                        }
+                    }
+
                 return PropertyDetailsContent(
                     address =
                         PropertyAddress(
@@ -206,7 +224,8 @@ class PropertyDetailsViewModel
                             longitude = home.location?.longitude,
                         ),
                     propertyFacts = facts,
-                    records = emptyList(),
+                    recordSections = sections,
+                    recordFooter = countyRecord?.footer?.nonBlank()?.takeIf { sections.isNotEmpty() },
                     verification = emptyList(),
                     banner = null,
                 )

@@ -17,20 +17,27 @@ object PropertyDetailsSampleData {
 
     private val records =
         listOf(
-            PropertyFactRow(id = "parcel", label = "Parcel ID", value = "NY-013-0042-019", mono = true),
-            PropertyFactRow(
-                id = "class",
-                label = "Property class",
-                value = "Residential",
-                sub = "Multi-family · 4-6 unit",
-            ),
-            PropertyFactRow(id = "zoning", label = "Zoning", value = "R5", mono = true),
-            PropertyFactRow(
-                id = "assessed",
-                label = "Last assessed",
-                value = "\$1.24M",
-                sub = "2025 county roll",
-                mono = true,
+            PropertyRecordSection(
+                id = "records",
+                title = "Records",
+                rows =
+                    listOf(
+                        PropertyFactRow(id = "parcel", label = "Parcel ID", value = "NY-013-0042-019", mono = true),
+                        PropertyFactRow(
+                            id = "class",
+                            label = "Property class",
+                            value = "Residential",
+                            sub = "Multi-family · 4-6 unit",
+                        ),
+                        PropertyFactRow(id = "zoning", label = "Zoning", value = "R5", mono = true),
+                        PropertyFactRow(
+                            id = "assessed",
+                            label = "Last assessed",
+                            value = "\$1.24M",
+                            sub = "2025 county roll",
+                            mono = true,
+                        ),
+                    ),
             ),
         )
 
@@ -47,7 +54,7 @@ object PropertyDetailsSampleData {
                     PropertyFactRow(id = "interior", label = "Interior", value = "845 sq ft", mono = true),
                     PropertyFactRow(id = "lot", label = "Lot share", value = "1/6", sub = "6-unit building", mono = true),
                 ),
-            records = records,
+            recordSections = records,
             verification =
                 listOf(
                     VerificationSource(
@@ -91,7 +98,7 @@ object PropertyDetailsSampleData {
                     PropertyFactRow(id = "interior", label = "Interior", value = "845 sq ft", mono = true),
                     PropertyFactRow(id = "lot", label = "Lot share", value = "1/6", sub = "6-unit building", mono = true),
                 ),
-            records = records,
+            recordSections = records,
             verification =
                 listOf(
                     VerificationSource(
