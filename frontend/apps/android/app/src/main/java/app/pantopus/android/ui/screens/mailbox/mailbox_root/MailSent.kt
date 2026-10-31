@@ -360,7 +360,7 @@ object MailSentWords {
             postmarkTown = null,
             postmarkDay = posted?.format(postmark)?.uppercase(Locale.US).orEmpty(),
             postmarkYear = posted?.year?.toString().orEmpty(),
-            stamp = card.card?.let { MailStamp.forCard(it.number, it.design) } ?: MailStamp.forPiece(card.id),
+            stamp = card.card?.let { MailStamp.forCard(it.number, it.design.orEmpty()) } ?: MailStamp.forPiece(card.id),
             note = null,
             meta = "",
             accessibilityLabel = "Christmas card from ${from.removeSuffix(".")} to $to, $state.",

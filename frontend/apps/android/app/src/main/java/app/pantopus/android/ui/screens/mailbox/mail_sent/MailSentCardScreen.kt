@@ -443,7 +443,8 @@ private fun trailStep(
             "picked_up" -> "Picked up by the carrier"
             "delivered" -> "Delivered with $first’s $round mail"
             "opens" -> "Opens on Christmas morning"
-            "emailed" -> "Emailed to ${card.toName.orEmpty()}"
+            // Once claimed, Sent names the person instead of the address it went to (as the web says it).
+            "emailed" -> "Emailed to ${card.toName?.takeIf { card.status != "claimed" && it.isNotBlank() } ?: "them"}"
             "joined" -> if (step.done) "They joined Pantopus and have it" else "They join Pantopus and have it"
             "returned" -> "They didn’t open the email in 90 days"
             else -> step.step
@@ -463,8 +464,9 @@ private fun trailStep(
 /** The card as its page draws it, with the sender's own note; null when the server sent no picture. */
 private fun sentLetterCard(card: SentCard): MailLetterCard? {
     val face = card.card ?: return null
+    val design = face.design?.takeIf { it.isNotBlank() } ?: return null
     return MailLetterCard(
-        design = face.design,
+        design = design,
         caption = face.caption,
         paper = face.paper,
         year = face.year ?: Year.now().value,

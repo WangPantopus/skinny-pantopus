@@ -215,10 +215,10 @@ data class SentCardEnvelope(
     @Json(name = "postmarked_on") val postmarkedOn: String? = null,
 )
 
-/** The card's picture and its printing. */
+/** The card's picture and its printing (the server sends null for a picture it no longer knows). */
 @JsonClass(generateAdapter = true)
 data class SentCardFace(
-    val design: String,
+    val design: String? = null,
     val number: Int? = null,
     val caption: String? = null,
     val paper: String? = null,
