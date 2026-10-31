@@ -603,7 +603,7 @@ internal fun WriteStep(
 
 /**
  * The sealed envelope, when it arrives, until when it can be taken back, and "Look it over" (step 5, where it's sent
- * from). Why it can't go on shows under the choices.
+ * from; "Seal and send" here when the server can't show the look). Why it can't go on shows under the choices.
  */
 @Composable
 internal fun SealStep(
@@ -614,6 +614,7 @@ internal fun SealStep(
     form: SendCardForm,
     onArrival: (String) -> Unit,
     onLook: () -> Unit,
+    onSend: () -> Unit,
 ) {
     val zone = HolidayCardTimes.zone(cards.timeZone)
     val options = if (to is CardRecipient.Email) cards.arrivals.email else (form.theirs?.arrivals ?: cards.arrivals.person)
@@ -638,7 +639,7 @@ internal fun SealStep(
                 ArrivalChoice(title, detail, selected = form.arrival == arrival, tag = "sendCardArrival.$arrival") { onArrival(arrival) }
             }
         }
-        form.sealError?.let {
+        form.sealNotice?.let {
             Text(
                 it,
                 fontSize = 14.sp,
@@ -658,10 +659,10 @@ internal fun SealStep(
             modifier = Modifier.padding(top = 14.dp),
         )
         CardButton(
-            "Look it over",
-            onClick = onLook,
+            if (form.lookUnavailable) "Seal and send" else "Look it over",
+            onClick = if (form.lookUnavailable) onSend else onLook,
             enabled = form.arrival != null,
-            busy = form.previewing,
+            busy = form.previewing || form.sending,
             modifier = Modifier.padding(top = Spacing.s5).testTag("sendCardSend"),
         )
     }
