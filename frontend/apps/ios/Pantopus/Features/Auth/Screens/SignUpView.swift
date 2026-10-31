@@ -54,7 +54,7 @@ struct SignUpView: View {
                     .accessibilityIdentifier("signUpErrorBanner")
             }
 
-            if hasInvite {
+            if hasInvite, viewModel.inviteSender != .invalid {
                 invitedNote
             }
 
@@ -105,6 +105,7 @@ struct SignUpView: View {
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { seedInviteCode() }
         .task { await seedInvitedEmail() }
+        .task { await viewModel.loadInviteSender(code: inviteCode) }
         .onChange(of: viewModel.didSucceed) { _, succeeded in
             guard succeeded else { return }
             let email = viewModel.email.trimmingCharacters(in: .whitespaces).lowercased()
@@ -126,7 +127,7 @@ struct SignUpView: View {
     private var invitedNote: some View {
         HStack(spacing: Spacing.s2) {
             Icon(.userPlus, size: 16, color: Theme.Color.primaryInk)
-            Text("You've been invited to join Pantopus!")
+            Text(invitedLine)
                 .pantopusTextStyle(.small)
                 .foregroundStyle(Theme.Color.appText)
             Spacer(minLength: 0)
@@ -136,6 +137,15 @@ struct SignUpView: View {
         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
         .padding(.horizontal, Spacing.s4)
         .accessibilityIdentifier("signUpInvitedBanner")
+    }
+
+    /// "Sam invited you to Pantopus", as web's join page says; the general line
+    /// until the inviter's name is known, or when it can't be read.
+    private var invitedLine: String {
+        if case let .named(name) = viewModel.inviteSender {
+            return "\(name) invited you to Pantopus"
+        }
+        return "You've been invited to join Pantopus!"
     }
 
     /// Seed the optional Invite code field once, without clobbering a value

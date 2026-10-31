@@ -961,7 +961,13 @@ async function getOAuthProfileById(userId) {
   return data || null;
 }
 
-async function ensureOAuthUserProfile({ userId, email, meta, source }) {
+// A friend's invite code sent with a Google or Apple sign-in (Create account carries the one from their link). Shaped
+// like register's invite_code; anything else is ignored rather than failing the sign-in.
+function oauthInviteCode(value) {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{6,12}$/.test(value) ? value : null;
+}
+
+async function ensureOAuthUserProfile({ userId, email, meta, source, inviteCode = null }) {
   const existingUser = await getOAuthProfileById(userId);
   if (existingUser) {
     if (!existingUser.verified) {
@@ -1002,6 +1008,9 @@ async function ensureOAuthUserProfile({ userId, email, meta, source }) {
 
   if (!insertError && newUser) {
     logger.info('OAuth user created', { source, userId, email, username });
+    // This sign-in made the account, so a friend's link credits them as an email sign-up does; an existing
+    // account signing in never does.
+    if (inviteCode) await creditReferralJoin(userId, inviteCode);
     return newUser;
   }
 
@@ -1075,6 +1084,8 @@ const oauthNativeSchema = Joi.object({
   // authorization, never in the identity token.
   givenName: Joi.string().trim().max(100).allow('', null).optional(),
   familyName: Joi.string().trim().max(100).allow('', null).optional(),
+  // A friend's code from Create account; oauthInviteCode drops a malformed one instead of refusing the sign-in.
+  invite_code: Joi.string().max(64).allow('', null).optional(),
 });
 
 const reauthenticateSchema = Joi.object({
@@ -5181,6 +5192,7 @@ router.post('/oauth/token', oauthLimiter, authRouteDpop(), async (req, res) => {
       email,
       meta,
       source: 'token',
+      inviteCode: oauthInviteCode(req.body.invite_code),
     });
 
     logger.info('OAuth token login successful', { userId, email });
@@ -5293,6 +5305,7 @@ router.post('/oauth/callback', oauthLimiter, authRouteDpop(), async (req, res) =
       email,
       meta,
       source: 'callback',
+      inviteCode: oauthInviteCode(req.body.invite_code),
     });
 
     logger.info('OAuth login successful', { userId, email });
@@ -5386,6 +5399,7 @@ router.post('/oauth/native', oauthLimiter, validate(oauthNativeSchema), authRout
       email,
       meta,
       source: 'native',
+      inviteCode: oauthInviteCode(req.body.invite_code),
     });
 
     logger.info('OAuth native sign-in successful', { userId, email, provider });

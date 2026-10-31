@@ -31,11 +31,15 @@ public enum AuthEndpoints {
     /// `POST /api/users/oauth/callback` — route
     /// `backend/routes/users.js:4186`. Carries the device descriptor +
     /// DPoP so the new session is bound at issue.
-    public static func exchangeOAuthCode(_ code: String, device: DeviceDescriptor? = nil) -> Endpoint {
+    public static func exchangeOAuthCode(
+        _ code: String,
+        device: DeviceDescriptor? = nil,
+        inviteCode: String? = nil
+    ) -> Endpoint {
         Endpoint(
             method: .post,
             path: "/api/users/oauth/callback",
-            body: OAuthCodeExchangeRequest(code: code, device: device),
+            body: OAuthCodeExchangeRequest(code: code, device: device, inviteCode: inviteCode),
             authenticated: false,
             requiresDPoP: device != nil
         )
@@ -43,14 +47,31 @@ public enum AuthEndpoints {
 
     /// `POST /api/users/oauth/token` — legacy fragment-token path.
     /// Route: `backend/routes/users.js:4083`.
-    public static func exchangeOAuthToken(accessToken: String, refreshToken: String, device: DeviceDescriptor? = nil) -> Endpoint {
+    public static func exchangeOAuthToken(
+        accessToken: String,
+        refreshToken: String,
+        device: DeviceDescriptor? = nil,
+        inviteCode: String? = nil
+    ) -> Endpoint {
         Endpoint(
             method: .post,
             path: "/api/users/oauth/token",
-            body: OAuthTokenExchangeRequest(accessToken: accessToken, refreshToken: refreshToken, device: device),
+            body: OAuthTokenExchangeRequest(
+                accessToken: accessToken,
+                refreshToken: refreshToken,
+                device: device,
+                inviteCode: inviteCode
+            ),
             authenticated: false,
             requiresDPoP: device != nil
         )
+    }
+
+    /// `GET /api/users/public/join/:code` — whose invite a friend's link
+    /// carries, for Create account's note. No sign-in. Route
+    /// `backend/routes/users.js` `/public/join/:code`.
+    public static func publicJoin(code: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/users/public/join/\(Endpoint.pathSegment(code))", authenticated: false)
     }
 
     /// `POST /api/users/oauth/native` — native id-token sign-in (Sign in

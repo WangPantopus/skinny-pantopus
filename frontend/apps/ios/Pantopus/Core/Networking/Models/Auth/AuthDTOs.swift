@@ -87,14 +87,23 @@ public struct OAuthURLResponse: Decodable, Sendable, Hashable {
 }
 
 /// `POST /api/users/oauth/callback` request — see
-/// `backend/routes/users.js:4186`.
+/// `backend/routes/users.js:4186`. `inviteCode` (`invite_code`) is the
+/// friend's code Create account carried: the server credits them when this
+/// sign-in creates the account.
 public struct OAuthCodeExchangeRequest: Encodable, Sendable, Hashable {
     public let code: String
     public let device: DeviceDescriptor?
+    public let inviteCode: String?
 
-    public init(code: String, device: DeviceDescriptor? = nil) {
+    public init(code: String, device: DeviceDescriptor? = nil, inviteCode: String? = nil) {
         self.code = code
         self.device = device
+        self.inviteCode = inviteCode
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case code, device
+        case inviteCode = "invite_code"
     }
 }
 
@@ -104,11 +113,19 @@ public struct OAuthTokenExchangeRequest: Encodable, Sendable, Hashable {
     public let accessToken: String
     public let refreshToken: String
     public let device: DeviceDescriptor?
+    /// As on `OAuthCodeExchangeRequest`.
+    public let inviteCode: String?
 
-    public init(accessToken: String, refreshToken: String, device: DeviceDescriptor? = nil) {
+    public init(accessToken: String, refreshToken: String, device: DeviceDescriptor? = nil, inviteCode: String? = nil) {
         self.accessToken = accessToken
         self.refreshToken = refreshToken
         self.device = device
+        self.inviteCode = inviteCode
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case accessToken, refreshToken, device
+        case inviteCode = "invite_code"
     }
 }
 
@@ -126,6 +143,8 @@ public struct OAuthNativeRequest: Encodable, Sendable, Hashable {
     public let device: DeviceDescriptor?
     public let givenName: String?
     public let familyName: String?
+    /// As on `OAuthCodeExchangeRequest`.
+    public let inviteCode: String?
 
     public init(
         provider: OAuthProvider,
@@ -134,7 +153,8 @@ public struct OAuthNativeRequest: Encodable, Sendable, Hashable {
         accessToken: String?,
         device: DeviceDescriptor?,
         givenName: String? = nil,
-        familyName: String? = nil
+        familyName: String? = nil,
+        inviteCode: String? = nil
     ) {
         self.provider = provider.rawValue
         self.idToken = idToken
@@ -143,6 +163,25 @@ public struct OAuthNativeRequest: Encodable, Sendable, Hashable {
         self.device = device
         self.givenName = givenName
         self.familyName = familyName
+        self.inviteCode = inviteCode
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case provider, idToken, nonce, accessToken, device, givenName, familyName
+        case inviteCode = "invite_code"
+    }
+}
+
+/// `GET /api/users/public/join/:code` response: whether a friend's invite
+/// code is live and whose it is, by the name neighbors see. Web's join page
+/// reads the same route.
+public struct PublicJoinLookup: Decodable, Sendable, Hashable {
+    public let valid: Bool
+    public let referrerName: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case valid
+        case referrerName = "referrer_name"
     }
 }
 
