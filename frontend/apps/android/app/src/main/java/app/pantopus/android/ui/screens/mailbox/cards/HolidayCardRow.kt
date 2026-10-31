@@ -81,7 +81,7 @@ fun HolidayCardRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
-        Fan(today?.design?.let(::listOf) ?: HolidayCardArt.fan)
+        Fan(today?.design?.let(::listOf) ?: HolidayCardArt.fan, cards)
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 title,
@@ -113,13 +113,17 @@ private fun todayLine(
         }
     }
 
-/** Three pictures fanned out, or today's card on its own, tilted. */
+/** Three pictures fanned out, or today's card on its own, tilted; each its paper at its shape while it loads. */
 @Composable
-private fun Fan(designs: List<String>) {
+private fun Fan(
+    designs: List<String>,
+    cards: HolidayCardsResponse,
+) {
     Box(modifier = Modifier.size(width = 62.dp, height = 54.dp)) {
         designs.forEachIndexed { index, design ->
             val single = designs.size == 1
             val shape = RoundedCornerShape(2.dp)
+            val known = cards.designOf(design)
             AsyncImage(
                 model = HolidayCardArt.picture(design, thumb = true),
                 contentDescription = null,
@@ -129,10 +133,10 @@ private fun Fan(designs: List<String>) {
                         .offset(x = if (single) 11.dp else (index * 11).dp)
                         .rotate(if (single) -3f else (index - 1) * 7f)
                         .width(40.dp)
-                        .aspectRatio(HolidayCardArt.pictureAspect(design))
+                        .aspectRatio(HolidayCardArt.pictureAspect(design, known?.height))
                         .shadow(3.dp, shape)
                         .clip(shape)
-                        .background(PantopusColors.cardPaper),
+                        .background(HolidayCardArt.paper(known?.paper)),
             )
         }
     }

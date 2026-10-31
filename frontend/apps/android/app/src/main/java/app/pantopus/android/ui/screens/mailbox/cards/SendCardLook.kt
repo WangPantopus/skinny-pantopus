@@ -298,6 +298,7 @@ internal fun CardPictureSide(
         paper = card.paper,
         year = card.year,
         mailedOn = card.mailedOn,
+        pictureHeight = card.pictureHeight,
         modifier =
             modifier
                 .shadow(6.dp, shape)
@@ -319,7 +320,7 @@ internal fun CardNoteSide(
         modifier =
             modifier
                 .fillMaxWidth()
-                .aspectRatio(HolidayCardArt.cardAspect(card.design))
+                .aspectRatio(HolidayCardArt.cardAspect(card.design, card.pictureHeight))
                 .shadow(6.dp, shape)
                 .clip(shape)
                 .clearAndSetSemantics { contentDescription = "On the back: $note From ${from.removeSuffix(".")}." },
@@ -713,6 +714,7 @@ private fun lookCard(
         mailedOn = preview.piece.postmark?.date ?: preview.piece.createdAt,
         note = preview.piece.content.orEmpty().trim(),
         firstOpen = true,
+        pictureHeight = card?.height ?: design.height,
     )
 }
 
