@@ -13,16 +13,30 @@ const OAUTH_ATTEMPT_MAX_AGE_MS = 30 * 60_000;
 export const OAUTH_ATTEMPT_UNAVAILABLE_ERROR =
   'Google and Apple sign-in need this browser to allow site data for Pantopus. Allow it, or sign in with your email.';
 
-/** Start an attempt in this tab: its check, or null when the browser keeps no session storage for this site. */
-export function beginOAuthAttempt(): string | null {
+/**
+ * Start an attempt in this tab: its check, or null when the browser keeps no session storage for this site. Create
+ * account passes the friend's invite code from their link, so a Google or Apple sign-up credits them too.
+ */
+export function beginOAuthAttempt(inviteCode?: string): string | null {
   try {
     const bytes = new Uint8Array(32);
     crypto.getRandomValues(bytes);
     const nonce = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-    sessionStorage.setItem(OAUTH_ATTEMPT_KEY, JSON.stringify({ nonce, at: Date.now() }));
+    sessionStorage.setItem(OAUTH_ATTEMPT_KEY, JSON.stringify({ nonce, at: Date.now(), ...(inviteCode ? { inviteCode } : {}) }));
     return sessionStorage.getItem(OAUTH_ATTEMPT_KEY) ? nonce : null;
   } catch {
     return null;
+  }
+}
+
+/** The invite code this tab's pending attempt started with, if any. Read it before `takeOAuthAttempt` uses it up. */
+export function oauthAttemptInviteCode(): string | undefined {
+  try {
+    const raw = sessionStorage.getItem(OAUTH_ATTEMPT_KEY);
+    const { inviteCode } = (raw ? JSON.parse(raw) : {}) as { inviteCode?: unknown };
+    return typeof inviteCode === 'string' && inviteCode ? inviteCode : undefined;
+  } catch {
+    return undefined;
   }
 }
 

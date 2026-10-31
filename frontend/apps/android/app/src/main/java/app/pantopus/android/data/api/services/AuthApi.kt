@@ -14,6 +14,7 @@ import app.pantopus.android.data.api.models.auth.OAuthNativeRequest
 import app.pantopus.android.data.api.models.auth.OAuthTokenExchangeRequest
 import app.pantopus.android.data.api.models.auth.OAuthUrlResponse
 import app.pantopus.android.data.api.models.auth.OkResponse
+import app.pantopus.android.data.api.models.auth.PublicJoinLookup
 import app.pantopus.android.data.api.models.auth.ReauthenticateRequest
 import app.pantopus.android.data.api.models.auth.ReauthenticateResponse
 import app.pantopus.android.data.api.models.auth.RefreshRequest
@@ -68,6 +69,15 @@ interface AuthApi {
         @Path("provider") provider: String,
         @Query("redirectTo") redirectTo: String,
     ): OAuthUrlResponse
+
+    /**
+     * `GET /api/users/public/join/:code` — whose invite a friend's link
+     * carries, for Create account's note. No sign-in.
+     */
+    @GET("api/users/public/join/{code}")
+    suspend fun publicJoin(
+        @Path("code") code: String,
+    ): PublicJoinLookup
 
     /** `POST /api/users/oauth/callback` — route `backend/routes/users.js:3862`. */
     @POST("api/users/oauth/callback")
