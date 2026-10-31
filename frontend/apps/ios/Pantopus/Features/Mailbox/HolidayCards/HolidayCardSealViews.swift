@@ -158,7 +158,8 @@ struct HolidayCardSentView: View {
         VStack(spacing: Spacing.s0) {
             HStack(alignment: .top, spacing: Spacing.s4) {
                 if let design = card.design {
-                    HolidayCardPictureView(design: design, thumb: true)
+                    let known = cards.designs.first { $0.id == design }
+                    HolidayCardPictureView(design: design, paper: known?.paper, height: known?.height, thumb: true)
                         .frame(width: 84)
                         .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
                         .shadow(color: MailPaper.cardShadow.opacity(0.25), radius: 7, x: 0, y: 6)

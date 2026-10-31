@@ -15,16 +15,57 @@
 import SwiftUI
 import UIKit
 
-/// The season's pictures, shipped with the app (`Assets.xcassets/HolidayCards`).
+/// The season's pictures. The first 17 ship with the app
+/// (`Assets.xcassets/HolidayCards`); the website serves every other one
+/// (`<web origin>/holiday-cards/<id>.jpg`, `-thumb.jpg` for the smaller
+/// copy), and the phone keeps each one it loads (`PantopusImagePipeline`),
+/// so it shows again offline and after a relaunch.
 enum HolidayCardPicture {
-    /// The picture, or its smaller copy for grids and thumbs; nil for a
-    /// design this app doesn't carry.
+    /// The picture, or its smaller copy for grids and thumbs, when it's at
+    /// hand: shipped with the app, or loaded already. Nil until one from the
+    /// website loads.
     static func image(_ design: String, thumb: Bool = false) -> UIImage? {
-        UIImage(named: thumb ? "\(design)-thumb" : design)
+        if let shipped = UIImage(named: name(design, thumb: thumb)) { return shipped }
+        return url(design, thumb: thumb).flatMap { PantopusImagePipeline.shared.cachedImage(for: $0) }
     }
 
-    /// Width over height of the pictures (960 × 1054).
-    static let aspect: CGFloat = 960 / 1054
+    /// The picture from the app, the phone's copy or the website; nil when
+    /// it can't load (offline, an error).
+    static func load(_ design: String, thumb: Bool = false) async -> UIImage? {
+        if let image = image(design, thumb: thumb) { return image }
+        guard let url = url(design, thumb: thumb) else { return nil }
+        return await PantopusImagePipeline.shared.image(for: url)
+    }
+
+    /// Loads pictures before they show, so they're there at once. Never in
+    /// Low Data Mode or offline.
+    @MainActor
+    static func loadAhead(_ designs: [String], thumb: Bool = false, network: NetworkMonitor = .shared) {
+        guard network.isOnline, !network.isLowData else { return }
+        for design in designs where image(design, thumb: thumb) == nil {
+            guard let url = url(design, thumb: thumb) else { continue }
+            Task(priority: .utility) { _ = await PantopusImagePipeline.shared.image(for: url) }
+        }
+    }
+
+    /// Where the website keeps a picture: this build's web origin
+    /// (`PantopusPublicWebURL`). Nil for an id that isn't a picture's.
+    static func url(_ design: String, thumb: Bool) -> URL? {
+        guard design.range(of: #"^[a-z0-9][a-z0-9-]{0,63}$"#, options: .regularExpression) != nil else { return nil }
+        return URL(string: InviteLinks.publicPageURLString(path: "/holiday-cards/\(name(design, thumb: thumb)).jpg"))
+    }
+
+    /// "christmas-2026-18", or "christmas-2026-18-thumb" for the smaller copy.
+    static func name(_ design: String, thumb: Bool) -> String {
+        thumb ? "\(design)-thumb" : design
+    }
+
+    /// Width over height of a picture before it loads: its height at 960
+    /// wide from the server, else 960 × 1048.
+    static func aspect(height: Int?) -> CGFloat {
+        960 / CGFloat(height.flatMap { $0 > 0 ? $0 : nil } ?? 1048)
+    }
+
     /// The three thumbs fanned out on the way in.
     static let fan = ["christmas-2026-01", "christmas-2026-08", "christmas-2026-15"]
 }
@@ -36,23 +77,53 @@ enum HolidayCardHand {
     }
 }
 
-/// A picture, or plain paper of its shape when this app doesn't carry it.
+/// A picture. One from the website shows as plain paper of its shape until
+/// it loads, and stays paper when it can't: never a spinner or a broken
+/// picture.
 struct HolidayCardPictureView: View {
     let design: String
     var paper: String?
+    /// The picture's height at 960 wide (the server's): its shape before it loads.
+    var height: Int?
     var thumb = false
 
     var body: some View {
-        if let image = HolidayCardPicture.image(design, thumb: thumb) {
-            Image(uiImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .accessibilityHidden(true)
-        } else {
-            MailPaper.cardPaper(paper)
-                .aspectRatio(HolidayCardPicture.aspect, contentMode: .fit)
-                .accessibilityHidden(true)
+        HolidayCardPictureImage(design: design, thumb: thumb) { image in
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            } else {
+                MailPaper.cardPaper(paper)
+                    .aspectRatio(HolidayCardPicture.aspect(height: height), contentMode: .fit)
+            }
         }
+        .accessibilityHidden(true)
+    }
+}
+
+/// Hands its content the picture once it's at hand (nil until then),
+/// loading one from the website; it tries again when the phone comes back
+/// online.
+struct HolidayCardPictureImage<Content: View>: View {
+    let design: String
+    var thumb = false
+    @ViewBuilder let content: (UIImage?) -> Content
+    @State private var loaded: Loaded?
+
+    private struct Loaded {
+        let name: String
+        let image: UIImage
+    }
+
+    var body: some View {
+        let name = HolidayCardPicture.name(design, thumb: thumb)
+        let image = HolidayCardPicture.image(design, thumb: thumb) ?? (loaded?.name == name ? loaded?.image : nil)
+        content(image)
+            .task(id: image == nil ? "\(name) \(NetworkMonitor.shared.isOnline)" : name) {
+                guard image == nil, let picture = await HolidayCardPicture.load(design, thumb: thumb), !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: 0.2)) { loaded = Loaded(name: name, image: picture) }
+            }
     }
 }
 
@@ -62,6 +133,8 @@ struct HolidayCardFront: View {
     let design: String
     let caption: String?
     let paper: String?
+    /// The picture's height at 960 wide (the server's): its shape before it loads.
+    var height: Int?
     let year: Int
     /// The day it was mailed ("OCT 30") for the postmark; none while it's
     /// being written.
@@ -70,7 +143,7 @@ struct HolidayCardFront: View {
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
-            HolidayCardPictureView(design: design, paper: paper, thumb: thumb)
+            HolidayCardPictureView(design: design, paper: paper, height: height, thumb: thumb)
             HolidayCardStrip(caption: caption, year: year, mailedOn: mailedOn)
                 .aspectRatio(1 / 0.15, contentMode: .fit)
         }

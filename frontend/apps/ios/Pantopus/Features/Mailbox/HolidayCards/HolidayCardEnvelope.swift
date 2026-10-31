@@ -65,6 +65,10 @@ struct HolidayCardEnvelopePiece: View {
         // The faint light flecks of the red paper.
         .background(CardGrain(color: .white.opacity(0.05)))
         .mailPaper(MailPaper.cardEnvelope, edge: MailPaper.cardSealInk.opacity(0.35), radius: 6, torn: model.isOpened)
+        // Its picture, before it's opened: the card never slides out blank.
+        .task(id: model.card?.design) {
+            if let design = model.card?.design { HolidayCardPicture.loadAhead([design]) }
+        }
     }
 }
 
@@ -95,21 +99,25 @@ struct ChristmasSeal: View {
     }
 }
 
-/// The picture of an opened card, peeking out over its envelope's torn top.
+/// The picture of an opened card, peeking out over its envelope's torn top
+/// (its paper until a picture from the website loads).
 struct HolidayCardPeek: View {
     let design: String
+    var paper: String?
 
     var body: some View {
-        GeometryReader { geo in
-            if let image = HolidayCardPicture.image(design, thumb: true) {
-                let height = geo.size.width / max(0.1, image.size.width / max(1, image.size.height))
-                Image(uiImage: image)
-                    .resizable()
-                    .frame(width: geo.size.width, height: height)
-                    // Its upper middle shows, as on the web (28% down the picture).
-                    .offset(y: -(height - geo.size.height) * 0.28)
-            } else {
-                MailPaper.cardPaper(nil)
+        HolidayCardPictureImage(design: design, thumb: true) { image in
+            GeometryReader { geo in
+                if let image {
+                    let height = geo.size.width / max(0.1, image.size.width / max(1, image.size.height))
+                    Image(uiImage: image)
+                        .resizable()
+                        .frame(width: geo.size.width, height: height)
+                        // Its upper middle shows, as on the web (28% down the picture).
+                        .offset(y: -(height - geo.size.height) * 0.28)
+                } else {
+                    MailPaper.cardPaper(paper)
+                }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))

@@ -138,6 +138,7 @@ struct HolidayCardView: View {
                 design: card.card.design,
                 caption: card.card.caption,
                 paper: card.card.paper,
+                height: card.card.height,
                 year: card.card.year,
                 mailedOn: card.mailedOn
             )

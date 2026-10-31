@@ -163,6 +163,7 @@ struct MailSentPieceView: View {
             design: piece.card.design,
             caption: piece.card.caption,
             paper: piece.card.paper,
+            height: piece.card.height,
             year: piece.card.year,
             // Before the carrier's postmark, the day you sent it (as the web).
             mailedOn: envelope.isPostmarked
@@ -186,8 +187,7 @@ struct MailSentPieceView: View {
                 showBack.toggle()
             }
             .accessibilityIdentifier("mailSentPieceTurn")
-            HolidayCardFront(design: piece.card.design, caption: nil, paper: piece.card.paper, year: piece.card.year)
-                .hidden()
+            front.hidden()
                 .overlay { back }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("On the back: \(note) From \(HolidayCardWords.withoutPeriod(from)).")

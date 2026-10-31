@@ -25,7 +25,7 @@ struct MailPieceView: View {
                 Group {
                     if let card = model.card {
                         // An opened Christmas card: its picture peeks out.
-                        HolidayCardPeek(design: card.design)
+                        HolidayCardPeek(design: card.design, paper: card.paper)
                     } else {
                         MailPeekSheet(line: model.peekLine)
                     }

@@ -1855,8 +1855,9 @@ async function checkCard(senderId, body, now) {
 
 /**
  * GET /api/mailbox/cards
- * What the Send a Christmas card screens need: the season's pictures (the apps carry the pictures themselves; this is
- * their ids, captions and paper), whether sending is open, the arrivals open now, and today's card once it's sent.
+ * What the Send a Christmas card screens need: the season's pictures (their ids, captions, paper and heights; the
+ * website serves the pictures themselves) and the collections "Pick a card" shows them in, whether sending is open, the
+ * arrivals open now, and today's card once it's sent.
  */
 router.get('/cards', verifyToken, async (req, res) => {
   if (!cardsOn()) return sendCardsOff(res);
@@ -1873,6 +1874,7 @@ router.get('/cards', verifyToken, async (req, res) => {
       closes_on: holidayCards.SEASON.closes_on,
       message_limit: holidayCards.MESSAGE_LIMIT,
       designs: holidayCards.DESIGNS,
+      collections: holidayCards.COLLECTIONS,
       arrivals: { person: arrivals(false), email: arrivals(true) },
       next_round_at: mailDelivery.nextRound(timeZone, now).toISOString(),
       christmas_morning_at: holidayCards.christmasMorning(timeZone).toISOString(),
