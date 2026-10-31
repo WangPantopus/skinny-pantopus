@@ -4989,6 +4989,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenProfile = { reviewerId ->
                             navController.navigate(ChildRoutes.publicProfile(reviewerId))
                         },
+                        // A Posts tab card opens the post's page, as in Pulse.
+                        onOpenPost = openPost@{ postId ->
+                            if (navController.currentBackStackEntry?.id != profileEntry.id) return@openPost
+                            navController.navigate(ChildRoutes.pulsePost(postId))
+                        },
                     )
                 }
                 composable(

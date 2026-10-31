@@ -39,6 +39,8 @@ import androidx.compose.ui.unit.sp
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.BeaconBanner
 import app.pantopus.android.ui.components.BeaconIdentity
+import app.pantopus.android.ui.screens.feed.pulse.PulsePostCard
+import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridStyle
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridWithViewer
 import app.pantopus.android.ui.theme.PantopusColors
@@ -412,8 +414,15 @@ fun PublicProfilePostsFeed(
      * people's posts, so the card says so and invites nothing.
      */
     hiddenByBlock: Boolean = false,
+    /**
+     * The Local profile's posts as Pulse cards (photos, video, links, Helpful, Save, Repost,
+     * the post menu). `null` keeps the plain cards.
+     */
+    pulseCards: List<PulsePostCardContent>? = null,
+    cardActions: ProfilePostCardActions = ProfilePostCardActions(),
 ) {
-    if (posts.isEmpty()) {
+    val cards = pulseCards.takeIf { kind == PublicProfileKind.Local }
+    if (cards?.isEmpty() ?: posts.isEmpty()) {
         BeaconPostsEmptyState(
             kind = kind,
             onCta = if (loadFailed) onRetry else onEmptyCta,
@@ -422,6 +431,8 @@ fun PublicProfilePostsFeed(
             hiddenByBlock = hiddenByBlock,
             modifier = Modifier.padding(horizontal = Spacing.s4),
         )
+    } else if (cards != null) {
+        ProfilePulseCards(cards = cards, actions = cardActions)
     } else {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4),
@@ -441,6 +452,41 @@ fun PublicProfilePostsFeed(
                     PublicProfileKind.Local ->
                         PublicProfileLocalPostCard(post = post)
                 }
+            }
+        }
+    }
+}
+
+/** Full-width rows as in Pulse: the same card, its controls, and the same post page behind a tap. */
+@Composable
+private fun ProfilePulseCards(
+    cards: List<PulsePostCardContent>,
+    actions: ProfilePostCardActions,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().testTag("publicProfilePulsePosts"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        Text(
+            text = "RECENT POSTS",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = PantopusColors.appTextSecondary,
+            modifier = Modifier.padding(horizontal = Spacing.s4).semantics { heading() },
+        )
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(PantopusColors.appBorderSubtle))
+            cards.forEach { card ->
+                val react = { actions.onReact(card.id) }
+                PulsePostCard(
+                    content = card,
+                    onTap = { actions.onOpen(card.id) },
+                    onPrimaryReaction = react,
+                    onRSVP = react.takeIf { card.attendees != null },
+                    onOverflow = { actions.onOptions(card.id) }.takeIf { card.actions.canShareExternally || card.actions.canReport },
+                    onToggleSave = { actions.onToggleSave(card.id) },
+                    onToggleRepost = { actions.onToggleRepost(card.id) },
+                )
             }
         }
     }
