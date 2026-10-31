@@ -68,11 +68,12 @@ async function checkDeliveryAvailability() {
 
 /**
  * Send an email. Explicit local preview logs metadata only, never auth links.
- * @param {Object} opts - { to, subject, html, text, attachments? }
+ * @param {Object} opts - { to, subject, html, text, attachments?, headers? }
  *   attachments: optional nodemailer attachment array (e.g. an .ics calendar invite).
+ *   headers: optional extra headers (e.g. List-Unsubscribe).
  * @returns {Promise<{ success: boolean, messageId?: string }>}
  */
-async function sendEmail({ to, subject, html, text, attachments }) {
+async function sendEmail({ to, subject, html, text, attachments, headers }) {
   const mailOptions = {
     from: SMTP_FROM,
     to,
@@ -82,6 +83,9 @@ async function sendEmail({ to, subject, html, text, attachments }) {
   };
   if (attachments && attachments.length) {
     mailOptions.attachments = attachments;
+  }
+  if (headers && Object.keys(headers).length) {
+    mailOptions.headers = headers;
   }
 
   if (previewMode) {
@@ -399,6 +403,123 @@ ${words.footer[1]}
 `;
 
   return sendEmail({ to: toEmail, subject: words.subject, html, text });
+}
+
+// ============================================================
+//  PLANS INVITATION EMAIL
+// ============================================================
+
+/**
+ * The words of a Plans invitation email (services/plans/planInvites.js). The plan's card only: what, when and the
+ * area, never an address. A playdate keeps its title in the app and its time a part of the day, as everywhere else.
+ * @param {Object} words - { hostFirst, noun, icon, title, when, where, playdate }
+ * @param {string} toEmail - the invited address, so the person signs up with it
+ */
+function planInviteEmailContent(words, toEmail) {
+  const invitedTo = words.noun === 'coffee' ? 'invited you for coffee' : `invited you to a ${words.noun}`;
+  return {
+    subject: `${words.hostFirst} ${invitedTo}${words.playdate || !words.when ? '' : ` on ${words.when}`}`,
+    heading: 'You’re invited',
+    lead: ` ${invitedTo}.`,
+    facts: [
+      words.title || (words.playdate ? 'A playdate' : null),
+      words.when ? words.when[0].toUpperCase() + words.when.slice(1) : null,
+      words.where,
+    ].filter(Boolean),
+    button: words.playdate ? 'See the playdate' : 'See the plan',
+    footnote: words.playdate
+      ? `Pantopus is free. Sign up or sign in with this address, ${toEmail}. Playdates are for verified neighbors: with a verified address, you’ll see the time, the place and who’s going.`
+      : `Pantopus is free. Sign up or sign in with this address, ${toEmail}, and the plan opens for you.`,
+    footer: `You got this because ${words.hostFirst} invited you to a plan on Pantopus.`,
+  };
+}
+
+/**
+ * Send a Plans invitation. One per invitation, never a reminder; the unsubscribe link (and the mail app's one-click
+ * unsubscribe header) stops every later invitation email to the address.
+ * @param {Object} opts - { toEmail, words, link, unsubscribeLink, oneClickUnsubscribeLink }
+ */
+async function sendPlanInviteEmail({ toEmail, words, link, unsubscribeLink, oneClickUnsubscribeLink }) {
+  const content = planInviteEmailContent(words, toEmail);
+  const safeLink = escapeHtml(link);
+  const [title, ...otherFacts] = content.facts;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0; padding:0; background-color:#f9fafb; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:480px; margin:40px auto; background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+
+    <!-- Header -->
+    <div style="background:#111827; padding:32px 32px 24px; text-align:center;">
+      <div style="font-size:32px; margin-bottom:8px;">${escapeHtml(words.icon || '📅')}</div>
+      <h1 style="color:#ffffff; font-size:20px; font-weight:600; margin:0;">${escapeHtml(content.heading)}</h1>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:32px;">
+      <p style="color:#374151; font-size:15px; line-height:1.6; margin:0 0 20px;">
+        <strong>${escapeHtml(words.hostFirst)}</strong>${escapeHtml(content.lead)}
+      </p>
+
+      <!-- The plan's card -->
+      <div style="border:1px solid #e5e7eb; border-radius:12px; padding:16px 18px;">
+        <p style="color:#111827; font-size:16px; font-weight:600; line-height:1.4; margin:0 0 6px;">${escapeHtml(title || '')}</p>
+        ${otherFacts.map((fact) => `<p style="color:#4b5563; font-size:14px; line-height:1.5; margin:0;">${escapeHtml(fact)}</p>`).join('\n        ')}
+      </div>
+
+      <!-- CTA -->
+      <div style="text-align:center; margin:28px 0;">
+        <a href="${safeLink}" style="display:inline-block; background:#111827; color:#ffffff; font-size:15px; font-weight:600; padding:14px 32px; border-radius:10px; text-decoration:none;">
+          ${escapeHtml(content.button)}
+        </a>
+      </div>
+
+      <p style="color:#9ca3af; font-size:12px; text-align:center; margin:20px 0 0;">
+        ${escapeHtml(content.footnote)}
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="background:#f9fafb; border-top:1px solid #e5e7eb; padding:16px 32px; text-align:center;">
+      <p style="color:#9ca3af; font-size:11px; margin:0;">
+        ${escapeHtml(content.footer)}
+      </p>
+      <p style="color:#d1d5db; font-size:10px; margin:8px 0 0;">
+        <a href="${escapeHtml(unsubscribeLink)}" style="color:#9ca3af; text-decoration:underline;">Don’t send me invitations</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = `
+${words.hostFirst}${content.lead}
+
+${content.facts.join('\n')}
+
+${content.button}: ${link}
+
+${content.footnote}
+
+${content.footer}
+Don’t send me invitations: ${unsubscribeLink}
+`;
+
+  return sendEmail({
+    to: toEmail,
+    subject: content.subject,
+    html,
+    text,
+    headers: {
+      'List-Unsubscribe': `<${oneClickUnsubscribeLink}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    },
+  });
 }
 
 // ============================================================
@@ -1326,6 +1447,8 @@ module.exports = {
   sendLetterWaitingEmail,
   cardWaitingEmailContent,
   sendCardWaitingEmail,
+  planInviteEmailContent,
+  sendPlanInviteEmail,
   sendPasswordResetEmail,
   sendVerificationEmail,
   sendMonthlyReceipt,

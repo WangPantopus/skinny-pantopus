@@ -40,6 +40,8 @@ const CATEGORY_BY_TYPE = {
   plan_changed: 'PLAN_CHANGED',
   // Asked again: the same Still coming / Can't make it buttons.
   plan_still_coming_reminder: 'PLAN_CHANGED',
+  // I'm in / Can't make it. Not for a playdate: saying you're in needs the kids' ages.
+  plan_invite: 'PLAN_INVITE',
 };
 
 const ICON_BY_KIND = {
@@ -277,8 +279,11 @@ async function notify({ userId, type, title, body, link, plan, metadata = {}, re
 
 // ── The eight notices ────────────────────────────────────────
 
-/** Someone asked a plan the host approves. The first ask in 10 minutes pushes with Accept/Decline; later ones bundle. */
-async function requestReceived({ plan, request, requesterUser, hostFirst, requesterFirst }) {
+/**
+ * Someone asked a plan the host approves. The first ask in 10 minutes pushes with Accept/Decline; later ones bundle.
+ * `invitedEmail`: they opened the host's email invitation to that address from an account it isn't verified for.
+ */
+async function requestReceived({ plan, request, requesterUser, hostFirst, requesterFirst, invitedEmail = null }) {
   const tenMinutesAgo = new Date(Date.now() - BUNDLE_WINDOW_MS).toISOString();
   const { data: recent } = await supabaseAdmin
     .from('Notification')
@@ -291,7 +296,10 @@ async function requestReceived({ plan, request, requesterUser, hostFirst, reques
     .limit(20);
   const head = (recent || []).find((n) => !n.metadata?.bundled);
   const when = whenText(plan.post.event_date, rules.timezoneForPlan(plan));
-  const parts = [when, partyText(plan, request, requesterFirst), bandText(request.distance_band)].filter(Boolean);
+  const parts = [
+    when, partyText(plan, request, requesterFirst), bandText(request.distance_band),
+    invitedEmail ? `Opened your invitation to ${invitedEmail}` : null,
+  ].filter(Boolean);
   return notify({
     userId: plan.host_user_id,
     type: 'plan_request',
@@ -484,11 +492,12 @@ async function hostSummaryLetter({ plan, comingCount, spotsLeft, requestsCount, 
 
 // ── Host notices and asking again ────────────────────────────
 
-// How a rule let someone in, as the host set it (who gets in).
+// How a rule let someone in, as the host set it (who gets in), or the host's own invitation.
 const RULE_TEXT = {
   verified: 'Verified neighbor',
   hosted_before: "You've hosted them before",
   anyone_nearby: 'Anyone nearby can join',
+  invite: 'You invited them',
 };
 
 const goingText = (plan, goingCount) => {
@@ -527,6 +536,49 @@ async function guestAutoJoined({ plan, request, guestName, rule, goingCount, via
   });
 }
 
+// ── Invitations (planInvites.js) ─────────────────────────────
+
+/** "Sam invited you to a watch party", "Sam invited you for coffee". */
+function invitedTitle(plan, hostFirst) {
+  const what = noun(plan);
+  return what === 'coffee' ? `${hostFirst} invited you for coffee` : `${hostFirst} invited you to a ${what}`;
+}
+
+/**
+ * The host invited someone on Pantopus: the push has I'm in / Can't make it (not for a playdate, which asks the
+ * kids' ages first). Like every notice, the area only; a playdate's title stays in the app, for verified neighbors.
+ */
+async function invited({ plan, invite, userId, hostFirst }) {
+  const tz = rules.timezoneForPlan(plan);
+  const playdate = plan.kind === 'playdate';
+  const when = whenText(plan.post.event_date, tz, { hideTime: playdate, dayPart: rules.dayPart(plan.post.event_date, tz) });
+  return notify({
+    userId,
+    type: 'plan_invite',
+    title: invitedTitle(plan, hostFirst),
+    body: [playdate ? null : plan.post.title, playdate ? capitalized(when) : when, placePhrase(plan, hostFirst)].filter(Boolean).join(' · '),
+    link: `/plans/${plan.post_id}`,
+    plan,
+    metadata: { invite_id: invite.id, host_name: hostFirst, ...(plan.kind === 'playdate' ? { category: null } : {}) },
+    idempotencyKey: `plan_invite:${invite.id}`,
+  });
+}
+
+/** Someone the host invited can't make it. To the host. */
+async function inviteDeclined({ plan, userId, guestName, goingCount }) {
+  const when = whenText(plan.post.event_date, rules.timezoneForPlan(plan));
+  return notify({
+    userId: plan.host_user_id,
+    type: 'plan_invite_declined',
+    title: `${guestName} can't make it`,
+    body: [`${capitalized(noun(plan))} ${when}`, ...goingText(plan, goingCount)].filter(Boolean).join(' · '),
+    link: `/plans/${plan.post_id}`,
+    plan,
+    recipientIsIn: true,
+    metadata: { invitee_user_id: String(userId) },
+  });
+}
+
 /**
  * "Still coming?" again, for a guest who hasn't answered: once per change (the change's
  * reconfirm_requested_at is in the key), with the same buttons as the first ask.
@@ -552,6 +604,7 @@ async function stillComingReminder({ plan, request, hostFirst }) {
 module.exports = {
   hostSummaryLetter,
   CATEGORY_BY_TYPE,
+  ICON_BY_KIND,
   BUNDLE_WINDOW_MS,
   noun,
   whenText,
@@ -577,4 +630,6 @@ module.exports = {
   guestLeft,
   guestAutoJoined,
   stillComingReminder,
+  invited,
+  inviteDeclined,
 };

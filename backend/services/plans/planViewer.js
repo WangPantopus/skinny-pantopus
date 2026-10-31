@@ -111,13 +111,14 @@ function parseGps(raw) {
  */
 async function loadViewer(user, opts = {}) {
   const userId = String(user.id);
-  const [playdatesFlag, filters, homes, savedPlaces, scopeAccess, sportsFlag] = await Promise.all([
+  const [playdatesFlag, filters, homes, savedPlaces, scopeAccess, sportsFlag, invitesFlag] = await Promise.all([
     isFeatureEnabled('plans_playdates', user),
     getMuteAndHideFilters(userId),
     loadHomes(userId),
     loadSavedPlaces(userId),
     postScopeAccess(userId),
     isFeatureEnabled('plans_sports', user),
+    isFeatureEnabled('plans_invites', user),
   ]);
   const gps = parseGps(opts.gps);
   const verified = homes.some((home) => home.verified);
@@ -154,6 +155,8 @@ async function loadViewer(user, opts = {}) {
     seesPlaydates: Boolean(playdatesFlag) && verified,
     playdatesFlag: Boolean(playdatesFlag),
     sportsFlag: Boolean(sportsFlag),
+    // Hosts can invite people (planInvites.js).
+    invitesFlag: Boolean(invitesFlag),
     sports: filters.sports || {},
     homes,
     savedPlaces,

@@ -21,6 +21,9 @@ const { loadChatPeople } = require('../chatPeople');
 const rules = require('./planRules');
 const { canReadPostModeration, postScopeAccess } = require('../pulse/readAccess');
 
+// planInvites requires this module; it is read when called.
+const invites = () => require('./planInvites');
+
 const POST_COLUMNS = 'id, user_id, title, content, event_date, event_end_date, latitude, longitude, location_precision, archived_at, archive_reason, moderation_state, created_at, read_scope, area_id, pulse_post_town_id, allow_external_share';
 const PLAN_COLUMNS = [
   'post_id', 'host_user_id', 'kind', 'spots', 'auto_rules', 'join_requirement', 'place_kind',
@@ -172,10 +175,14 @@ async function loadCardContext(plans, viewer, { withPeople = false } = {}) {
     answerMinutesByHost: new Map(),
     peopleStats: new Map(),
     viewerOpenRequestCount: 0,
+    // The viewer's own open invitation to each plan, and for plans they host, how their invitations stand.
+    myInviteByPlan: new Map(),
+    inviteCountsByPlan: new Map(),
   };
   if (planIds.length === 0) return ctx;
 
-  const [activeRequests, myRequests, openCount, hostedRows, myHistory] = await Promise.all([
+  const hostedIds = plans.filter((p) => String(p.host_user_id) === viewer.id).map((p) => p.post_id);
+  const [activeRequests, myRequests, openCount, hostedRows, myHistory, myInvites, inviteCounts] = await Promise.all([
     supabaseAdmin.from('PlanRequest').select(REQUEST_COLUMNS).in('post_id', planIds).in('status', ACTIVE_REQUEST_STATUSES),
     supabaseAdmin.from('PlanRequest').select(REQUEST_COLUMNS).in('post_id', planIds).eq('user_id', viewer.id),
     supabaseAdmin.from('PlanRequest').select('id', { count: 'exact', head: true }).eq('user_id', viewer.id).in('status', OPEN_REQUEST_STATUSES),
@@ -186,10 +193,14 @@ async function loadCardContext(plans, viewer, { withPeople = false } = {}) {
       .eq('user_id', viewer.id)
       .eq('status', 'accepted')
       .eq('plan.status', 'ended'),
+    invites().viewerInvites(viewer.id, planIds.filter((id) => !hostedIds.includes(id))),
+    invites().hostInviteCounts(hostedIds),
   ]);
   for (const result of [activeRequests, myRequests, openCount, hostedRows, myHistory]) {
     if (result.error) throw new Error(`Failed to load plan details: ${result.error.message}`);
   }
+  ctx.myInviteByPlan = myInvites;
+  ctx.inviteCountsByPlan = inviteCounts;
 
   for (const request of activeRequests.data || []) {
     if (!ctx.requestsByPlan.has(request.post_id)) ctx.requestsByPlan.set(request.post_id, []);
@@ -397,6 +408,14 @@ function askEligibility(plan, viewer, ctx, { myRequest, spotsLeft, state }) {
   if (myRequest && ACTIVE_REQUEST_STATUSES.includes(myRequest.status)) return no(null);
   if (state === 'cancelled' || state === 'ended') return no('ended');
   if (!rules.isAskingOpen(plan, startsAt(plan), endsAt(plan))) return no('ended');
+  // The host's invitation: no location, distance, ask-limit or "who can ask" rule. A playdate still needs a verified
+  // address. Saying no to someone, or removing them, ends their invitations (planInvites.cancelForPerson).
+  if (ctx.myInviteByPlan?.has(plan.post_id)) {
+    if (viewer.blockedUserIds.has(String(plan.host_user_id))) return no('blocked');
+    if (plan.kind === 'playdate' && !viewer.verified) return no('needs_verified_address');
+    if (spotsLeft <= 0) return no('full_use_waitlist');
+    return { can_ask: true, cannot_ask_reason: null };
+  }
   if (myRequest?.status === 'declined') return no('declined');
   if (myRequest?.status === 'removed') return no('removed');
   if (viewer.blockedUserIds.has(String(plan.host_user_id))) return no('blocked');
@@ -477,9 +496,12 @@ function buildCard(plan, viewer, ctx) {
     ? waitlist.findIndex((r) => r.id === myRequest.id)
     : -1;
   const waitlistPosition = myWaitIndex >= 0 ? myWaitIndex + 1 : null;
-  const autoRule = role === 'none' ? matchingAutoRule(plan, viewer, ctx) : null;
+  const myInvite = role === 'host' ? null : ctx.myInviteByPlan?.get(plan.post_id) || null;
+  const autoRule = role === 'none' && !myInvite ? matchingAutoRule(plan, viewer, ctx) : null;
   const eligibility = askEligibility(plan, viewer, ctx, { myRequest, spotsLeft, state });
   const distanceFrom = viewer.origin;
+  // Saying you're in to an invitation lets you in at once, unless the host must say yes first (needs_host_ok).
+  const joinsAtOnce = Boolean(autoRule) || Boolean(myInvite && !myInvite.needs_host_ok);
 
   const card = {
     id: plan.post_id,
@@ -516,7 +538,7 @@ function buildCard(plan, viewer, ctx) {
     is_full: spotsLeft <= 0,
     waitlist_count: waitlist.length,
     details: publicDetails(plan),
-    how_people_get_in: autoRule ? 'automatic' : 'host_approves',
+    how_people_get_in: joinsAtOnce ? 'automatic' : 'host_approves',
     join_requirement: plan.join_requirement,
     state,
     asking_closes_at: hideTime ? null : rules.askingClosesAt(plan.kind, startsAt(plan), endsAt(plan)).toISOString(),
@@ -530,12 +552,22 @@ function buildCard(plan, viewer, ctx) {
       feedback_given: Boolean(myRequest?.feedback),
     },
     my_request: myRequestView(plan, myRequest, { waitlistPosition }),
+    // The viewer's invitation (planInvites.js), or null: the app says "Sam invited you" and offers I'm in.
+    my_invite: invites().myInviteView(myInvite),
     share_url: shareUrl(plan.post_id),
   };
 
   if (role === 'host') {
     card.requests_count = requests.filter((r) => r.status === 'pending').length;
     card.auto_rules = Array.isArray(plan.auto_rules) ? plan.auto_rules : [];
+    const counts = ctx.inviteCountsByPlan?.get(plan.post_id) || { pending: 0, accepted: 0, declined: 0 };
+    card.invites = {
+      can_invite: Boolean(viewer.invitesFlag) && plan.status === 'open'
+        && rules.isAskingOpen(plan, startsAt(plan), endsAt(plan), now),
+      invited: counts.pending || 0,
+      said_yes: counts.accepted || 0,
+      cant_make_it: counts.declined || 0,
+    };
   }
   return card;
 }
@@ -763,7 +795,7 @@ async function findNearestElsewhere(viewer, point, { window, kinds }) {
 async function listMine(viewer) {
   const nowIso = new Date().toISOString();
   const recentIso = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
-  const [hosting, requests] = await Promise.all([
+  const [hosting, requests, invitedIds] = await Promise.all([
     supabaseAdmin.from('Plan').select(PLAN_SELECT)
       .eq('host_user_id', viewer.id)
       .in('status', ['open', 'ended'])
@@ -774,18 +806,20 @@ async function listMine(viewer) {
       .eq('user_id', viewer.id)
       .in('status', ACTIVE_REQUEST_STATUSES)
       .limit(200),
+    invites().invitedPlanIds(viewer.id),
   ]);
   if (hosting.error) throw new Error(`Failed to load your plans: ${hosting.error.message}`);
   if (requests.error) throw new Error(`Failed to load your requests: ${requests.error.message}`);
 
-  const requestedRows = await loadPlanRows((requests.data || []).map((r) => r.post_id));
+  const requestedRows = await loadPlanRows([...(requests.data || []).map((r) => r.post_id), ...invitedIds]);
   const all = new Map();
   for (const plan of [...(hosting.data || []), ...requestedRows]) all.set(plan.post_id, plan);
   const visible = [...all.values()].filter((plan) => isVisibleTo(plan, viewer) && plan.status !== 'cancelled');
   const ctx = await loadCardContext(visible, viewer);
 
   const out = {
-    hosting: [], going: [], asked: [], waitlisted: [], recent: [],
+    // invited: plans someone invited the viewer to that they haven't answered (planInvites.js).
+    hosting: [], going: [], asked: [], waitlisted: [], invited: [], recent: [],
     // The viewer's own standing, so the apps can lead people without a verified address to "Verify your
     // address" instead of a playdate they can't ask to join or host.
     viewer: { verified_address: Boolean(viewer.verified), sees_playdates: Boolean(viewer.seesPlaydates) },
@@ -806,6 +840,7 @@ async function listMine(viewer) {
     else if (status === 'accepted') out.going.push(card);
     else if (status === 'pending') out.asked.push(card);
     else if (status === 'waitlisted') out.waitlisted.push(card);
+    else if (card.my_invite?.status === 'pending' && rules.isAskingOpen(plan, startsAt(plan), endsAt(plan))) out.invited.push(card);
   }
   return out;
 }
