@@ -611,7 +611,7 @@ export async function seedMailboxTestData(options?: {
 
 // ============ CHRISTMAS CARDS (launch key holiday_cards) ============
 
-/** One of the season's pictures. The apps carry the picture itself, by id. */
+/** One of the season's pictures. The website serves the picture itself, by id. */
 export interface HolidayCardDesign {
   id: string;
   number: number;
@@ -619,6 +619,20 @@ export interface HolidayCardDesign {
   caption: string;
   /** The card's paper colour, for the strip the app prints under the picture. */
   paper: string;
+  /** The collection it's in (`HolidayCardCollection.id`). */
+  collection?: string | null;
+  /** The picture's height in px at 960 px wide. */
+  height?: number | null;
+}
+
+/** A collection "Pick a card" shows: its name, who it's for, and its pictures in grid order. */
+export interface HolidayCardCollection {
+  id: string;
+  name: string;
+  /** One line under the row of collections. */
+  line: string;
+  /** Design ids, in grid order. */
+  designs: string[];
 }
 
 /**
@@ -655,7 +669,10 @@ export interface HolidayCards {
   year: number;
   closes_on: string;
   message_limit: number;
+  /** Every picture, in number order. */
   designs: HolidayCardDesign[];
+  /** The collections "Pick a card" shows, in order (none from a server before collections: one grid of every design). */
+  collections?: HolidayCardCollection[];
   /** The arrivals open now, to a person and by email. */
   arrivals: { person: HolidayCardArrival[]; email: HolidayCardArrival[] };
   /** Your next 7 a.m. round and Christmas morning, where you are. */
@@ -742,7 +759,9 @@ export interface SentPiece {
   take_back_until: string | null;
   /** The envelope as it reaches them: no postmark until the carrier has it. */
   envelope: { from: string; postmarked_on: string | null };
-  card: { design: string | null; number: number | null; caption: string | null; paper: string | null; year: number | null };
+  card: { design: string | null; number: number | null; caption: string | null; paper: string | null; year: number | null;
+    /** The picture's height in px at 960 px wide. */
+    height?: number | null };
 }
 
 /** A step of a sent card's trail: `at` an instant (shown by the sender's clock), `on` a day by theirs. */

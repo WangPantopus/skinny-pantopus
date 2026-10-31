@@ -8,10 +8,10 @@
 // back until the 7 a.m. pickup (by email: until they open it).
 // ============================================================
 
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { HolidayCardArrival, HolidayCardDesign, HolidayCardPreview, HolidayCards, SentHolidayCard } from '@pantopus/api';
+import type { HolidayCardArrival, HolidayCardCollection, HolidayCardDesign, HolidayCardPreview, HolidayCards, SentHolidayCard } from '@pantopus/api';
 import { ChevronLeft, Check, Loader2, Mail, Search, Send, X } from 'lucide-react';
 import type { MailItemV2 } from '@/types/mailbox';
 import type { MailboxApiError } from '@/lib/mailbox-api';
@@ -240,70 +240,156 @@ function ToStep({ onChoose }: { onChoose: (to: Recipient) => void }) {
 
 // ── Step 2: pick a card ──────────────────────────────────────
 
+const collectionTab = (id: string) => `card-collection-${id}`;
+
 function PickStep({
   designs,
+  collections,
   year,
   chosen,
   onChoose,
   onNext,
 }: {
   designs: HolidayCardDesign[];
+  /** The server's collections, in order; none (a server from before collections): one grid of every design. */
+  collections: HolidayCardCollection[];
   year: number;
   chosen: string | null;
   onChoose: (id: string) => void;
   onNext: () => void;
 }) {
   const [large, setLarge] = useState<HolidayCardDesign | null>(null);
-  const picked = designs.find((design) => design.id === chosen) ?? null;
+  const byId = useMemo(() => new Map(designs.map((design) => [design.id, design])), [designs]);
+  const shelves = useMemo(() => collections.filter((c) => c.designs.some((id) => byId.has(id))), [collections, byId]);
+  // The collection that holds the chosen card (coming back from step 3), else the first. Switching keeps the card.
+  const [shownId, setShownId] = useState(() => (shelves.find((c) => chosen && c.designs.includes(chosen)) ?? shelves[0])?.id);
+  const shown = shelves.find((c) => c.id === shownId) ?? shelves[0] ?? null;
+  const grid = shown ? shown.designs.flatMap((id) => byId.get(id) ?? []) : designs;
+  const picked = (chosen && byId.get(chosen)) || null;
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  // On narrow screens the row scrolls sideways (wider ones wrap it): keep the chosen collection's chip in sight, also
+  // after the screen turns. Only the row moves, never the page.
+  useEffect(() => {
+    const row = rowRef.current;
+    if (!row) return undefined;
+    const reveal = () => {
+      const chip = row.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (!chip) return;
+      const box = row.getBoundingClientRect();
+      const at = chip.getBoundingClientRect();
+      if (at.left < box.left + 16) row.scrollLeft -= box.left + 16 - at.left;
+      else if (at.right > box.right - 16) row.scrollLeft += at.right - (box.right - 16);
+    };
+    reveal();
+    window.addEventListener('resize', reveal);
+    return () => window.removeEventListener('resize', reveal);
+  }, [shownId]);
+
+  // Arrow keys, Home and End move along the row, as tabs do.
+  const onRowKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    const at = shelves.findIndex((c) => c.id === shown?.id);
+    const moves: Partial<Record<string, number>> = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: shelves.length - 1 };
+    const to = moves[event.key];
+    if (to === undefined) return;
+    event.preventDefault();
+    const next = shelves[(to + shelves.length) % shelves.length];
+    setShownId(next.id);
+    document.getElementById(collectionTab(next.id))?.focus();
+  };
+
+  const gridView = (
+    <div role="radiogroup" aria-label={shown?.name ?? 'Christmas cards'} className="grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4">
+      {grid.map((design) => {
+        const selected = design.id === chosen;
+        return (
+          <button
+            key={design.id}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            aria-label={design.caption}
+            data-testid={`sendCardDesign.${design.id}`}
+            onClick={() => (selected ? setLarge(design) : onChoose(design.id))}
+            className="group flex flex-col items-center gap-1.5 rounded-lg p-1 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
+          >
+            <span
+              className="relative block w-full overflow-hidden rounded-[3px] transition"
+              style={{ boxShadow: selected ? `0 0 0 3px ${WAX}, 0 6px 14px rgba(60, 40, 10, 0.25)` : '0 4px 10px rgba(60, 40, 10, 0.22)' }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={cardPicture(design.id, 'thumb')} alt="" className="block w-full" loading="lazy" />
+              {selected ? (
+                <span aria-hidden className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full text-[#fff7ed]" style={{ backgroundColor: WAX }}>
+                  <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                </span>
+              ) : null}
+            </span>
+            <span className="line-clamp-2 text-[12px] font-medium leading-4 text-[#374151] [@media(prefers-color-scheme:dark)]:text-app-text-secondary">{design.caption}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="mt-3 px-4">
-      <div role="radiogroup" aria-label="Christmas cards" className="grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4">
-        {designs.map((design) => {
-          const selected = design.id === chosen;
-          return (
-            <button
-              key={design.id}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              aria-label={design.caption}
-              onClick={() => (selected ? setLarge(design) : onChoose(design.id))}
-              className="group flex flex-col items-center gap-1.5 rounded-lg p-1 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d]"
-            >
-              <span
-                className="relative block w-full overflow-hidden rounded-[3px] transition"
-                style={{ boxShadow: selected ? `0 0 0 3px ${WAX}, 0 6px 14px rgba(60, 40, 10, 0.25)` : '0 4px 10px rgba(60, 40, 10, 0.22)' }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={cardPicture(design.id, 'thumb')} alt="" className="block w-full" loading="lazy" />
-                {selected ? (
-                  <span aria-hidden className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full text-[#fff7ed]" style={{ backgroundColor: WAX }}>
-                    <Check className="h-3.5 w-3.5" strokeWidth={3} />
-                  </span>
-                ) : null}
-              </span>
-              <span className="line-clamp-2 text-[12px] font-medium leading-4 text-[#374151] [@media(prefers-color-scheme:dark)]:text-app-text-secondary">{design.caption}</span>
-            </button>
-          );
-        })}
-      </div>
+      {shown ? (
+        <>
+          <div
+            ref={rowRef}
+            role="tablist"
+            aria-label="Collections"
+            data-testid="sendCardCollections"
+            onKeyDown={onRowKey}
+            className="-mx-4 flex scroll-px-4 gap-2 overflow-x-auto px-4 py-1 [scrollbar-width:none] md:flex-wrap md:overflow-visible [&::-webkit-scrollbar]:hidden"
+          >
+            {shelves.map((collection) => {
+              const selected = collection.id === shown.id;
+              return (
+                <button
+                  key={collection.id}
+                  id={collectionTab(collection.id)}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  aria-controls="card-collection-panel"
+                  tabIndex={selected ? 0 : -1}
+                  data-testid={`sendCardCollection.${collection.id}`}
+                  onClick={() => setShownId(collection.id)}
+                  className={`h-9 flex-shrink-0 whitespace-nowrap rounded-full border px-4 text-[14px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d] focus-visible:ring-offset-2 ${
+                    selected ? 'border-[#8b1d1d] bg-[#8b1d1d] text-[#fff7ed]' : 'border-[#d6cbb6] bg-[#fffdf8] text-[#374151] hover:bg-[#f5efe3]'
+                  }`}
+                >
+                  {collection.name}
+                </button>
+              );
+            })}
+          </div>
+          <div id="card-collection-panel" role="tabpanel" aria-labelledby={collectionTab(shown.id)}>
+            <p data-testid="sendCardCollectionLine" className={`mt-2 text-[14px] leading-5 ${muted}`}>{shown.line}</p>
+            <div className="mt-3">{gridView}</div>
+          </div>
+        </>
+      ) : gridView}
       <div className="mt-6 space-y-2.5 pb-4">
         {picked ? (
-          <button type="button" onClick={() => setLarge(picked)} className={secondary}>See it larger</button>
+          <button type="button" data-testid="sendCardSeeLarger" onClick={() => setLarge(picked)} className={secondary}>See it larger</button>
         ) : (
           <p className={`text-center text-[14px] ${muted}`}>Tap a picture to choose it.</p>
         )}
-        <button type="button" disabled={!picked} onClick={onNext} className={primary} style={{ backgroundColor: WAX }}>Write on this card</button>
+        <button type="button" data-testid="sendCardWriteOn" disabled={!picked} onClick={onNext} className={primary} style={{ backgroundColor: WAX }}>Write on this card</button>
       </div>
 
       {large ? (
-        <div role="dialog" aria-modal="true" aria-label={large.caption} className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4" onClick={() => setLarge(null)}>
+        <div role="dialog" aria-modal="true" aria-label={large.caption} data-testid="sendCardLarge" className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4" onClick={() => setLarge(null)}>
           <div style={{ width: 'min(420px, calc((100vh - 120px) * 0.72), 100%)' }} onClick={(event) => event.stopPropagation()}>
             <CardFront design={large.id} caption={large.caption} paper={large.paper} year={year} className="rounded-[3px] shadow-2xl" />
             <div className="mt-3 flex gap-2.5">
-              <button type="button" onClick={() => setLarge(null)} className={secondary}><X className="h-4 w-4" aria-hidden /> Close</button>
+              <button type="button" data-testid="sendCardLargeClose" onClick={() => setLarge(null)} className={secondary}><X className="h-4 w-4" aria-hidden /> Close</button>
               <button
                 type="button"
+                data-testid="sendCardChooseThis"
                 onClick={() => { onChoose(large.id); setLarge(null); }}
                 className={primary}
                 style={{ backgroundColor: WAX }}
@@ -772,7 +858,14 @@ export default function SendCardFlow() {
         <ToStep onChoose={(next) => { setTo(next); setStep('pick'); }} />
       ) : null}
       {step === 'pick' ? (
-        <PickStep designs={data.designs} year={data.year} chosen={designId} onChoose={setDesignId} onNext={() => setStep('write')} />
+        <PickStep
+          designs={data.designs}
+          collections={data.collections ?? []}
+          year={data.year}
+          chosen={designId}
+          onChoose={setDesignId}
+          onNext={() => setStep('write')}
+        />
       ) : null}
       {step === 'write' && design ? (
         <WriteStep
