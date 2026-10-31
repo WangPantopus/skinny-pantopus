@@ -6,7 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
-import app.pantopus.android.data.api.models.posts.MyPostDto
+import app.pantopus.android.data.api.models.feed.FeedPost
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
@@ -28,6 +28,7 @@ import app.pantopus.android.ui.screens.shared.content_detail.bodies.StatsTabsCon
 import app.pantopus.android.ui.screens.shared.content_detail.headers.IdentityPillarBadge
 import app.pantopus.android.ui.screens.shared.content_detail.headers.IdentityPillarVerificationState
 import app.pantopus.android.ui.screens.shared.media.PostMediaItem
+import app.pantopus.android.ui.screens.shared.media.buildPostMediaItems
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -343,6 +344,22 @@ class PublicProfileViewModel
         private val _postsLoadFailed = MutableStateFlow(false)
         val postsLoadFailed: StateFlow<Boolean> = _postsLoadFailed.asStateFlow()
 
+        /**
+         * The Local profile's posts drawn as Pulse cards: photos and videos, tappable links,
+         * Helpful, Save, Repost, share and report.
+         */
+        val postCards =
+            ProfilePostCards(
+                scope = viewModelScope,
+                posts = posts,
+                viewerId = { (authRepository.state.value as? AuthRepository.State.SignedIn)?.user?.id },
+                onToast = { _toastMessage.value = it },
+            )
+
+        /** Drives the "Unfollow …?" confirm, so one tap on Following never unfollows. */
+        private val _showUnfollowConfirm = MutableStateFlow(false)
+        val showUnfollowConfirm: StateFlow<Boolean> = _showUnfollowConfirm.asStateFlow()
+
         private var loading = false
         private val _refreshing = MutableStateFlow(false)
         val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
@@ -361,17 +378,14 @@ class PublicProfileViewModel
                 profileCopy().data?.let { profile ->
                     userId = profile.id
                     profileKind = derivedKind(profile)
-                    val feed =
+                    val rows =
                         if (profileKind == PublicProfileKind.Local) {
-                            posts.userPostsCopy(
-                                profile.id,
-                                50,
-                                includeArchived = false,
-                            ).data?.posts.orEmpty().map(::project)
+                            posts.profilePostsCopy(profile.id).data?.posts.orEmpty()
                         } else {
                             emptyList()
                         }
-                    _state.value = PublicProfileUiState.Loaded(build(profile, profileKind, feed))
+                    postCards.show(rows, postCards.actionRevision)
+                    _state.value = PublicProfileUiState.Loaded(build(profile, profileKind, rows.map(::project)))
                 }
             }
             viewModelScope.launch {
@@ -475,6 +489,21 @@ class PublicProfileViewModel
                 }
                 _isFollowInFlight.value = false
             }
+        }
+
+        /** Following asks before it unfollows, as Connected does before it disconnects. */
+        fun requestUnfollow() {
+            _showUnfollowConfirm.value = true
+        }
+
+        fun cancelUnfollow() {
+            _showUnfollowConfirm.value = false
+        }
+
+        /** The Unfollow button of the "Unfollow …?" confirm: it only ever unfollows. */
+        fun unfollow() {
+            _showUnfollowConfirm.value = false
+            if (_isFollowing.value) toggleFollow()
         }
 
         /**
@@ -802,8 +831,9 @@ class PublicProfileViewModel
                     val previous = (_state.value as? PublicProfileUiState.Loaded)?.content?.takeIf { it.profile.id == profile.id }
                     val firstFrame =
                         if (kind == PublicProfileKind.Local) {
-                            previous?.posts ?: posts.userPostsCopy(profile.id, 50, includeArchived = false)
-                                .data?.posts.orEmpty().map(::project)
+                            previous?.posts ?: posts.profilePostsCopy(profile.id).data?.posts.orEmpty().also {
+                                postCards.show(it, postCards.actionRevision)
+                            }.map(::project)
                         } else {
                             emptyList()
                         }
@@ -833,26 +863,37 @@ class PublicProfileViewModel
         private suspend fun loadUserPosts(
             id: String,
             force: Boolean,
-        ): List<PublicProfilePost> =
-            when (val result = posts.userPosts(id, force = force)) {
+        ): List<PublicProfilePost> {
+            val readRevision = postCards.actionRevision
+            return when (val result = posts.profilePosts(id, force = force)) {
                 is NetworkResult.Success -> {
                     _postsLoadFailed.value = false
+                    postCards.show(result.data.posts, readRevision)
                     result.data.posts.map { project(it) }
                 }
                 is NetworkResult.Failure -> {
                     _postsLoadFailed.value = true
                     if (result.error.refusesStoredCopy) {
+                        postCards.show(emptyList(), readRevision)
                         emptyList()
                     } else {
                         (_state.value as? PublicProfileUiState.Loaded)?.content?.posts.orEmpty()
                     }
                 }
             }
+        }
 
-        private fun project(post: MyPostDto): PublicProfilePost =
+        private fun project(post: FeedPost): PublicProfilePost =
             PublicProfilePost(
                 id = post.id,
                 body = post.content?.takeIf { it.isNotEmpty() } ?: post.title.orEmpty(),
+                media =
+                    buildPostMediaItems(
+                        urls = post.mediaUrls,
+                        types = post.mediaTypes,
+                        thumbnails = post.mediaThumbnails,
+                        liveUrls = post.mediaLiveUrls,
+                    ),
                 timeAgo = relativeTimestamp(post.createdAt),
                 locality = post.locationName,
                 reactions = post.likeCount,

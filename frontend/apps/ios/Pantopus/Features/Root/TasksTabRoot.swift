@@ -23,6 +23,9 @@ public enum TasksRoute: Hashable {
     case entityDetail(kind: MapEntityKind, id: String)
     case publicProfile(userId: String)
     case chatConversation(InboxConversationDestination)
+    /// A post opened from a profile's Posts tab, and one of your own edited from its page.
+    case post(postId: String)
+    case editPost(postId: String)
     case listingOffers(listingId: String, titleHint: String?)
     case editListing(listingId: String, jumpToStep: ListingComposeStep?)
     /// Feed-scope quick links + Support Train rows (RN `gigs.tsx:433-441`).
@@ -157,6 +160,12 @@ public struct TasksTabRoot: View {
             publicProfileDestination(userId: userId)
         case let .chatConversation(dest):
             chatDestination(dest)
+        case let .post(postId):
+            PostPageDestination(postId: postId, currentUserId: currentUserId, onBack: pop) {
+                path.append(.publicProfile(userId: $0))
+            } onEdit: { path.append(.editPost(postId: $0)) }
+        case let .editPost(postId):
+            PulseComposeFlowView(editingPostId: postId, onCancel: pop) { _ in pop() }
         case let .listingOffers(listingId, titleHint):
             listingOffersDestination(listingId: listingId, titleHint: titleHint)
         case let .editListing(listingId, jumpToStep):
@@ -316,22 +325,15 @@ public struct TasksTabRoot: View {
             userId: userId,
             onBack: pop,
             onOpenMessages: { profile in
-                Task { @MainActor in
-                    path.append(.chatConversation(InboxConversationDestination(
-                        mode: .person(otherUserId: profile.id),
-                        displayName: profile.displayName,
-                        initials: Self.initials(from: profile.displayName),
-                        identityKind: nil,
-                        verified: profile.hasVerifiedResidency
-                    )))
-                }
+                Task { @MainActor in path.append(.chatConversation(.directMessage(with: profile))) }
             },
             onOpenGig: { gigId in
                 Task { @MainActor in path.append(.gigDetail(gigId: gigId)) }
             },
             onOpenProfile: { reviewerId in
                 Task { @MainActor in path.append(.publicProfile(userId: reviewerId)) }
-            }
+            },
+            onOpenPost: { postId in path.append(.post(postId: postId)) }
         )
     }
 

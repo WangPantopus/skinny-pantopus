@@ -25,6 +25,8 @@ public enum PulseRoute: Hashable {
     case compose(intent: String)
     case editPost(postId: String)
     case publicProfile(userId: String)
+    /// A DM opened from a profile's Message button.
+    case chatConversation(InboxConversationDestination)
 }
 
 /// NavigationStack wrapper for the Pulse tab.
@@ -253,6 +255,9 @@ public struct PulseTabRoot: View {
             PublicProfileView(
                 userId: userId,
                 onBack: pop,
+                onOpenMessages: { profile in
+                    Task { @MainActor in path.append(.chatConversation(.directMessage(with: profile))) }
+                },
                 onOpenGig: { gigId in
                     // The Pulse stack has no gig-detail route; hand the
                     // public `/gig/:id` link to the router, which opens it
@@ -262,7 +267,24 @@ public struct PulseTabRoot: View {
                 },
                 onOpenProfile: { reviewerId in
                     Task { @MainActor in path.append(.publicProfile(userId: reviewerId)) }
+                },
+                onOpenPost: { postId in
+                    Task { @MainActor in path.append(.post(postId: postId)) }
                 }
+            )
+        case let .chatConversation(dest):
+            ChatConversationView(
+                viewModel: ChatConversationViewModel(
+                    mode: dest.threadMode,
+                    counterparty: dest.counterparty,
+                    currentUserId: currentUserId,
+                    initialTopic: dest.initialTopic
+                ),
+                mode: dest.kind,
+                onOpenProfile: { userId in
+                    Task { @MainActor in path.append(.publicProfile(userId: userId)) }
+                },
+                onBack: pop
             )
         }
     }

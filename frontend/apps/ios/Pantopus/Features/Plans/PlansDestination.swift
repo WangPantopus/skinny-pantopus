@@ -23,13 +23,57 @@ struct PlansDestination: View {
             case let .change(planId):
                 PlanChangeScreen(planId: planId) { pop() }
             case let .profile(userId):
-                PublicProfileView(userId: userId) { pop() }
-                    .toolbar(.hidden, for: .navigationBar)
+                PublicProfileView(
+                    userId: userId,
+                    onBack: { pop() },
+                    onOpenMessages: { profile in path.append(.chat(.directMessage(with: profile))) },
+                    onOpenProfile: { otherId in path.append(.profile(userId: otherId)) },
+                    onOpenPost: { postId in path.append(.post(postId: postId)) }
+                )
+                .toolbar(.hidden, for: .navigationBar)
+            case let .post(postId):
+                PulsePostDetailView(
+                    postId: postId,
+                    currentUserId: currentUserId,
+                    onBack: { pop() },
+                    onOpenProfile: { userId in path.append(.profile(userId: userId)) },
+                    onEdit: { id in path.append(.editPost(postId: id)) },
+                    onOpenBusiness: { business in
+                        // The Plans stack has no business-profile route; the router opens it in the Place stack.
+                        DeepLinkRouter.shared.handle(path: "/business/\(business)")
+                    }
+                )
+                .toolbar(.hidden, for: .navigationBar)
+            case let .editPost(postId):
+                PulseComposeFlowView(
+                    editingPostId: postId,
+                    onCancel: { pop() },
+                    onPosted: { _ in pop() }
+                )
+                .toolbar(.hidden, for: .navigationBar)
+            case let .chat(dest):
+                ChatConversationView(
+                    viewModel: ChatConversationViewModel(
+                        mode: dest.threadMode,
+                        counterparty: dest.counterparty,
+                        currentUserId: currentUserId ?? "",
+                        initialTopic: dest.initialTopic
+                    ),
+                    mode: dest.kind,
+                    onOpenProfile: { userId in path.append(.profile(userId: userId)) },
+                    onBack: { pop() }
+                )
+                .toolbar(.hidden, for: .navigationBar)
             }
         }
         // A link that replaces the screen on top (another plan) must start a
         // fresh screen: the stack reuses its slot, and the old plan's state with it.
         .id(route)
+    }
+
+    private var currentUserId: String? {
+        if case let .signedIn(user) = AuthManager.shared.state { return user.id }
+        return nil
     }
 
     private func pop() {
