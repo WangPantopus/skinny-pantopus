@@ -4,9 +4,12 @@
 // The top of the Mailbox: your mailbox, your verified address and the morning
 // delivery (Mail tab drawings: Main, R1-Before, R4-NoMail; contract
 // `delivery` and `homes`). Mail comes once a morning, at 7:00 a.m. where the
-// mailbox is; time-sensitive pieces arrive at once as Special delivery.
+// mailbox is; time-sensitive pieces arrive at once as Special delivery. While
+// a card you sent waits for the pickup, the flag is up and it opens Sent (M1).
 // ============================================================
 
+import Link from 'next/link';
+import { ChevronRight } from 'lucide-react';
 import type { MailDelivery, MailboxHome } from '@/types/mailbox';
 import MailboxIllustration from './MailboxIllustration';
 
@@ -67,31 +70,35 @@ export default function MailboxHero({
   delivery,
   homes,
   opening = false,
+  waiting = 0,
 }: {
   delivery?: MailDelivery;
   homes?: MailboxHome[];
   /** Today's delivery is being shown for the first time: the door is open. */
   opening?: boolean;
+  /** Cards you sent that wait for the 7 a.m. pickup: the flag is up, and the mailbox opens Sent. */
+  waiting?: number;
 }) {
   const state = deliveryState(delivery);
   const home = homes?.find((h) => h.mail_access === 'open');
-  const title = !state ? 'Your mailbox'
-    : state.kind === 'came' ? `Today's mail came at ${deliveryTime(state.at, delivery?.time_zone)}`
-      : state.kind === 'before' ? 'Your mail comes this morning'
-        : 'No mail today';
-  const detail = !state ? null
-    : state.kind === 'came' ? piecesLine(state.count, state.unopened)
-      : state.kind === 'before' ? "Usually by 8 a.m. You'll get one notification."
-        : 'Next delivery tomorrow morning.';
-  const illustration = opening ? 'open-stack' : state?.kind === 'none' ? 'open-empty' : 'closed';
+  const flagUp = waiting > 0;
+  const title = flagUp ? 'Your flag is up'
+    : !state ? 'Your mailbox'
+      : state.kind === 'came' ? `Today's mail came at ${deliveryTime(state.at, delivery?.time_zone)}`
+        : state.kind === 'before' ? 'Your mail comes this morning'
+          : 'No mail today';
+  const detail = flagUp ? `${waiting === 1 ? '1 card waits' : `${waiting} cards wait`} for the 7 a.m. pickup`
+    : !state ? null
+      : state.kind === 'came' ? piecesLine(state.count, state.unopened)
+        : state.kind === 'before' ? "Usually by 8 a.m. You'll get one notification."
+          : 'Next delivery tomorrow morning.';
+  const illustration = flagUp ? 'closed' : opening ? 'open-stack' : state?.kind === 'none' ? 'open-empty' : 'closed';
+  const box = 'mx-4 mt-1 flex items-center gap-3.5 rounded-[20px] border border-app-border bg-app-surface px-4 py-3.5 shadow-sm md:max-w-xl';
 
-  return (
-    <section
-      aria-label="Your mailbox"
-      className="mx-4 mt-1 flex items-center gap-3.5 rounded-[20px] border border-app-border bg-app-surface px-4 py-3.5 shadow-sm md:max-w-xl"
-    >
-      <MailboxIllustration state={illustration} number={houseNumber(home?.address_line)} size={72} animate={opening} />
-      <div className="min-w-0" aria-live="polite">
+  const inside = (
+    <>
+      <MailboxIllustration state={illustration} number={houseNumber(home?.address_line)} size={72} animate={opening && !flagUp} flagUp={flagUp} />
+      <div className="min-w-0 flex-1" aria-live="polite">
         <p className="text-base font-semibold leading-[22px] text-app-text">{title}</p>
         {detail ? <p className="text-sm leading-5 text-app-text-secondary">{detail}</p> : null}
         {home ? (
@@ -101,6 +108,27 @@ export default function MailboxHero({
           </p>
         ) : null}
       </div>
+    </>
+  );
+
+  // The flag up: the mailbox opens what waits for the carrier, in Sent.
+  if (flagUp) {
+    return (
+      <Link
+        href="/app/mailbox/sent"
+        data-testid="mailboxHeroFlag"
+        aria-label={`${title}. ${detail}. Opens Sent.`}
+        className={`${box} transition-colors hover:bg-app-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500`}
+      >
+        {inside}
+        <ChevronRight className="h-[18px] w-[18px] flex-shrink-0 text-app-text-muted" aria-hidden />
+      </Link>
+    );
+  }
+
+  return (
+    <section aria-label="Your mailbox" className={box}>
+      {inside}
     </section>
   );
 }

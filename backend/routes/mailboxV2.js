@@ -7,8 +7,9 @@ const supabaseAdmin = require('../config/supabaseAdmin');
 const {
   getAccessibleHomeIds, canAccessMail, readableMail, homesMailFilter, visibleMailFilter, visibleMailIds,
   removedMailInfo, sendHomeMailRemovedNotice, mailReaderIdsOrThrow, mailHomesOrThrow, sendMailUnavailable,
-  onlyDelivered,
+  onlyDelivered, restoreWindowOver,
 } = require('../utils/homeMailAccess');
+const { isLaunchFeatureEnabled } = require('../utils/featureFlags');
 // Mail comes in the morning (SRV-1): the delivery rule every writer follows, and the mailbox's delivery line.
 const mailDelivery = require('../services/mailDelivery');
 // What the apps read about a piece (SRV-2): kind, from_pantopus, postmark, on_counter, summary; the kept summaries;
@@ -304,13 +305,21 @@ router.get('/drawers', verifyToken, async (req, res) => {
       logger.error('GET /drawers: vacation line unavailable', { error: error.message });
       return null;
     });
-    const [personal, home, business, earn, delivery, vacation] = await Promise.all([
+    // Sent, with the mailbox on: whether they've sent a card, and how many wait for the 7 a.m. pickup (the mailbox's
+    // flag). A failed read leaves it null rather than failing the mailbox.
+    const sentOn = isLaunchFeatureEnabled('mailbox');
+    const sentRead = sentOn ? holidayCards.sentLine(userId, now).catch((error) => {
+      logger.error('GET /drawers: sent line unavailable', { error: error.message });
+      return null;
+    }) : null;
+    const [personal, home, business, earn, delivery, vacation, sent] = await Promise.all([
       countForDrawer('personal'),
       countForDrawer('home'),
       countForDrawer('business'),
       countForDrawer('earn'),
       deliveryRead,
       vacationRead,
+      sentRead,
     ]);
 
     res.json({
@@ -327,6 +336,7 @@ router.get('/drawers', verifyToken, async (req, res) => {
       delivery,
       vacation_hold: vacation ? { status: vacation.status, start_date: vacation.start_date, end_date: vacation.end_date,
         held_count: vacation.held_count, release_at: vacation.release_at } : null,
+      ...(sentOn ? { sent } : {}),
     });
   } catch (err) {
     logger.error('GET /drawers failed', { error: err.message, stack: err.stack });
@@ -604,10 +614,12 @@ router.get('/item/:id', verifyToken, async (req, res) => {
 
     // A deleted letter still opens for the members who could see it, so its
     // notice can offer Restore; a dismissed one says so too. Neither is marked
-    // opened by viewing it. A Home letter for someone who hasn't proven the
-    // address answers 403 MAIL_HOME_NEEDS_PROOF; anything else is not found.
-    if (error || !mail || !(await canAccessMail(mail, userId, { includeDeleted: true }))) {
-      return sendMailUnavailable(res, error ? null : mail, userId);
+    // opened by viewing it. Past its 30 days to restore it, it's gone for them.
+    // A Home letter for someone who hasn't proven the address answers 403
+    // MAIL_HOME_NEEDS_PROOF; anything else is not found.
+    const gone = !error && restoreWindowOver(mail);
+    if (error || !mail || gone || !(await canAccessMail(mail, userId, { includeDeleted: true }))) {
+      return sendMailUnavailable(res, error || gone ? null : mail, userId);
     }
     mail.removed = await removedMailInfo(mail);
 

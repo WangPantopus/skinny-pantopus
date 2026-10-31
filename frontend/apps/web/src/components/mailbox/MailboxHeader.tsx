@@ -3,9 +3,10 @@
 // ============================================================
 // The Mailbox's navigation, in the page itself so phones reach every page
 // (the left column it replaces was desktop-only): the title and the "…" menu,
-// the drawer chips (Me · Home · Biz) and the tabs (Incoming · Counter ·
+// the drawer chips (Me · Home · Biz · Sent) and the tabs (Incoming · Counter ·
 // Vault), as on the Mail tab drawings (Main, R9-Counter, R10-Vault boards,
-// 2026-10-27). The Mailbox's other pages get a back bar with the same menu.
+// 2026-10-27; Sent: M1, M2, M5, 2026-10-30). Sent has no tabs. The Mailbox's
+// other pages get a back bar with the same menu.
 // ============================================================
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
@@ -14,7 +15,7 @@ import { ChevronLeft, MoreHorizontal, PenLine, Search } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { MailboxIcons } from '@/lib/icons';
 import { launchFeatures } from '@/lib/featureFlags';
-import { useCounterItems, useDrawerMeta, useOwnsBusiness } from '@/lib/mailbox-queries';
+import { useCounterItems, useMailboxDrawers, useOwnsBusiness } from '@/lib/mailbox-queries';
 
 export type MailboxDrawer = 'personal' | 'home' | 'business' | 'earn';
 export type MailboxTab = 'incoming' | 'counter' | 'vault';
@@ -22,11 +23,12 @@ export type MailboxTab = 'incoming' | 'counter' | 'vault';
 /**
  * What the Mailbox shows at a path: one of its main screens (a drawer's
  * Incoming, Counter or Vault, `pushed` for a letter or folder opened from
- * one), another Mailbox page (`page`), or a link that is still redirecting
- * (`none`).
+ * one), Sent (`pushed` for a card opened from it), another Mailbox page
+ * (`page`), or a link that is still redirecting (`none`).
  */
 export type MailboxView =
   | { kind: 'main'; tab: MailboxTab; drawer: MailboxDrawer; pushed: boolean }
+  | { kind: 'sent'; pushed: boolean }
   | { kind: 'page' }
   | { kind: 'none' };
 
@@ -62,6 +64,7 @@ export function isMailboxDrawer(value: string | null | undefined): value is Mail
 export function mailboxView(pathname: string, drawerParam: string | null): MailboxView {
   const [, , first, second] = pathname.split('/').filter(Boolean);
   const drawer = isMailboxDrawer(drawerParam) ? drawerParam : 'personal';
+  if (first === 'sent') return { kind: 'sent', pushed: !!second };
   if (first === 'counter') return { kind: 'main', tab: 'counter', drawer, pushed: false };
   if (first === 'vault') return { kind: 'main', tab: 'vault', drawer, pushed: !!second };
   if (isMailboxDrawer(first)) return { kind: 'main', tab: 'incoming', drawer: first, pushed: !!second };
@@ -114,6 +117,7 @@ export default function MailboxHeader({
   onWriteLetter?: () => void;
 }) {
   if (view.kind === 'none') return null;
+  const sent = view.kind === 'sent';
 
   if (view.kind === 'page') {
     return (
@@ -146,37 +150,44 @@ export default function MailboxHeader({
         </Link>
         <MailboxMenu onWriteLetter={onWriteLetter} />
       </div>
-      {view.tab === 'incoming' ? hero : null}
+      {sent || view.tab === 'incoming' ? hero : null}
       <DrawerChips view={view} />
-      <MailboxTabs view={view} />
+      {sent ? null : <MailboxTabs view={view} />}
     </div>
   );
 }
 
-function DrawerChips({ view }: { view: Extract<MailboxView, { kind: 'main' }> }) {
-  const { data: drawers } = useDrawerMeta();
+const chip = 'inline-flex h-10 flex-shrink-0 items-center gap-2 rounded-full pl-3 pr-3.5 text-sm font-semibold transition-colors';
+const chipOn = 'bg-primary-600 text-white';
+const chipOff = 'border border-app-border bg-app-surface text-app-text-strong hover:bg-app-hover';
+
+function DrawerChips({ view }: { view: Extract<MailboxView, { kind: 'main' } | { kind: 'sent' }> }) {
+  const { data: reply } = useMailboxDrawers();
+  const drawers = reply?.drawers;
   const { data: ownsBusiness = false } = useOwnsBusiness();
   const unread = (drawer: MailboxDrawer) => drawers?.find((d) => d.drawer === drawer)?.unread_count ?? 0;
+  const current = view.kind === 'main' ? view.drawer : null;
+  // From Sent, a drawer opens its Incoming.
+  const tab = view.kind === 'main' ? view.tab : 'incoming';
   // Biz is for business owners; anyone with unopened Biz mail (or on it now) still sees it.
-  const shown = MAILBOX_DRAWERS.filter((drawer) => drawer !== 'business' || ownsBusiness || unread('business') > 0 || view.drawer === 'business');
+  const shown = MAILBOX_DRAWERS.filter((drawer) => drawer !== 'business' || ownsBusiness || unread('business') > 0 || current === 'business');
+  // Sent: once they've sent something, or while cards can be sent (and on it now).
+  const showSent = view.kind === 'sent' || Boolean(reply?.sent?.any) || (launchFeatures.holidayCards && launchFeatures.mailbox);
+  const SentIcon = MailboxIcons.sent;
 
   return (
     <div role="group" aria-label="Drawers" className="flex gap-2 overflow-x-auto px-4 pb-1 pt-2">
       {shown.map((drawer) => {
         const Icon = DRAWER_ICONS[drawer];
-        const on = drawer === view.drawer;
+        const on = drawer === current;
         const count = unread(drawer);
         return (
           <Link
             key={drawer}
-            href={mailboxHref(view.tab, drawer)}
+            href={mailboxHref(tab, drawer)}
             aria-current={on ? 'page' : undefined}
             aria-label={count > 0 ? `${DRAWER_LABELS[drawer]}, ${count} unopened` : DRAWER_LABELS[drawer]}
-            className={`inline-flex h-10 flex-shrink-0 items-center gap-2 rounded-full pl-3 pr-3.5 text-sm font-semibold transition-colors ${
-              on
-                ? 'bg-primary-600 text-white'
-                : 'border border-app-border bg-app-surface text-app-text-strong hover:bg-app-hover'
-            }`}
+            className={`${chip} ${on ? chipOn : chipOff}`}
           >
             <Icon className="h-4 w-4" strokeWidth={on ? 2.25 : 2} aria-hidden />
             <span>{DRAWER_LABELS[drawer]}</span>
@@ -193,6 +204,17 @@ function DrawerChips({ view }: { view: Extract<MailboxView, { kind: 'main' }> })
           </Link>
         );
       })}
+      {showSent ? (
+        <Link
+          href="/app/mailbox/sent"
+          data-testid="mailboxRootDrawer.sent"
+          aria-current={view.kind === 'sent' ? 'page' : undefined}
+          className={`${chip} pr-4 ${view.kind === 'sent' ? chipOn : chipOff}`}
+        >
+          <SentIcon className="h-4 w-4" strokeWidth={view.kind === 'sent' ? 2.25 : 2} aria-hidden />
+          <span>Sent</span>
+        </Link>
+      ) : null}
     </div>
   );
 }
