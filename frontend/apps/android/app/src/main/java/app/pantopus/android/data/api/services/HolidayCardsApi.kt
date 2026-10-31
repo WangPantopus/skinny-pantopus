@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.mailbox.SendHolidayCardResponse
 import app.pantopus.android.data.api.models.mailbox.SentCardResponse
 import app.pantopus.android.data.api.models.mailbox.SentMailResponse
 import app.pantopus.android.data.api.models.mailbox.TakeBackHolidayCardResponse
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -41,12 +42,13 @@ interface HolidayCardsApi {
     /**
      * `POST /api/mailbox/cards/preview` — route `backend/routes/mailbox.js` (before `POST /cards`): the card exactly as
      * the other person will see it, after every check sending runs; it stores and sends nothing. The same errors as
-     * [send].
+     * [send]. The whole response, so a 404's body can be read (a server from before Look it over answers 404 without
+     * the server's code).
      */
     @POST("api/mailbox/cards/preview")
     suspend fun preview(
         @Body body: SendHolidayCardBody,
-    ): HolidayCardPreview
+    ): Response<HolidayCardPreview>
 
     /**
      * `POST /api/mailbox/cards/:id/take-back` — route `backend/routes/mailbox.js:1988`: before the 7 a.m. pickup (by
