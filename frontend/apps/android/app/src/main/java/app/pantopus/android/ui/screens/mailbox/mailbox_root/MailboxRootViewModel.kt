@@ -261,8 +261,13 @@ class MailboxRootViewModel
             viewModelScope.launch { HolidayCardsRepository.cardSent.collect { readDrawersAndShow() } }
             viewModelScope.launch { HolidayCardsRepository.takenBack.collect { readDrawersAndShow() } }
             viewModelScope.launch { HolidayCardsRepository.movedOn.collect { readDrawersAndShow() } }
-            // "See it in Sent" after sending a card.
-            viewModelScope.launch { HolidayCardsRepository.showSent.collect { openSent() } }
+            // "See it in Sent" after sending a card, or a card notice that opened a card's page over this Mailbox.
+            viewModelScope.launch {
+                HolidayCardsRepository.showSent.collect {
+                    openSent()
+                    HolidayCardsRepository.showSentHandled()
+                }
+            }
         }
 
         fun configureNavigation(onOpenMail: (String) -> Unit) {
