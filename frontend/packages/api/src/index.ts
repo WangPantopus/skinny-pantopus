@@ -130,7 +130,7 @@ export { getHomes, attachToHome, detachFromHome } from './endpoints/homes';
 export { getChatRooms, getBusinessChatRooms, sendMessage, markMessagesAsRead, markMessagesAsReadForIdentity, getConversationMessages, markConversationAsRead } from './endpoints/chat';
 export { uploadProfilePicture, uploadPortfolio, getPortfolio } from './endpoints/files';
 export { getMailbox, markMailAsRead, createAdCampaign } from './endpoints/mailbox';
-export type { DeletedMail, HolidayCards, HolidayCardDesign, HolidayCardArrival, HolidayCardArrivalsFor, HolidayCardPreview, SentHolidayCard } from './endpoints/mailbox';
+export type { DeletedMail, HolidayCards, HolidayCardDesign, HolidayCardArrival, HolidayCardArrivalsFor, HolidayCardPreview, SentHolidayCard, SentPiece, SentPieceDetail, SentTrailStep } from './endpoints/mailbox';
 export { getBalance, createPaymentIntent, requestPayout } from './endpoints/payments';
 export {
   uploadGigMedia,
