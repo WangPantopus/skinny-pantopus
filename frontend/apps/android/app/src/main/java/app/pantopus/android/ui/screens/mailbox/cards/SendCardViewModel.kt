@@ -14,6 +14,7 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.identity.LocalProfileRepository
+import app.pantopus.android.data.mailbox.CardLook
 import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.ui.screens.mailbox.components.mailMessage
@@ -109,8 +110,16 @@ data class SendCardForm(
     val preview: HolidayCardPreview? = null,
     /** Step 4's "Look it over" is reading the preview. */
     val previewing: Boolean = false,
-    /** Why step 4 couldn't go on: the preview's refusal, or a choice that closed while the card was being looked over. */
+    /**
+     * Why step 4 couldn't go on: the preview's refusal, a choice that closed while the card was being looked over, or
+     * why a card sent from step 4 didn't go.
+     */
     val sealError: String? = null,
+    /**
+     * The server can't show the look (it doesn't have Look it over yet, or its answer can't be read): step 4 says so and
+     * seals and sends itself. Each visit to step 4 asks for the look again.
+     */
+    val lookUnavailable: Boolean = false,
     /** The card just sent ("On its way"). */
     val sent: SentHolidayCard? = null,
     val sending: Boolean = false,
@@ -120,7 +129,13 @@ data class SendCardForm(
     val takeBackError: String? = null,
     /** "You took your card back. You can send a card again today." */
     val tookBack: Boolean = false,
-)
+) {
+    /** What step 4 says under its choices: why the card didn't go, or that the look can't be shown. */
+    val sealNotice: String? get() = sealError ?: LOOK_UNAVAILABLE.takeIf { lookUnavailable }
+}
+
+/** Step 4 when the server can't show the look; "Seal and send" is then on step 4. */
+private const val LOOK_UNAVAILABLE = "Pantopus can’t show how your card will look yet. You can still seal and send it."
 
 /**
  * Send a Christmas card (launch keys `holiday_cards` + `mailbox`; Draft 1's flow around the founder's pictures): who
@@ -284,7 +299,8 @@ class SendCardViewModel
             _form.update { form ->
                 when {
                     form.step == SendCardStep.Pick && form.design != null -> form.copy(step = SendCardStep.Write)
-                    form.step == SendCardStep.Write && form.message.isNotBlank() -> form.copy(step = SendCardStep.Seal)
+                    form.step == SendCardStep.Write && form.message.isNotBlank() ->
+                        form.copy(step = SendCardStep.Seal, lookUnavailable = false)
                     else -> form
                 }
             }
@@ -303,7 +319,8 @@ class SendCardViewModel
 
         /**
          * Step 4's "Look it over": the card exactly as the other person will see it, after every check sending runs
-         * (nothing is sent). A refusal stays on step 4 with the server's sentence.
+         * (nothing is sent). A refusal stays on step 4 with the server's sentence; a server that can't show the look
+         * leaves "Seal and send" on step 4.
          */
         fun look() {
             val form = _form.value
@@ -313,7 +330,7 @@ class SendCardViewModel
             if (form.previewing || form.sending || form.message.isBlank()) return
             _form.value = form.copy(previewing = true, sealError = null)
             viewModelScope.launch {
-                val result =
+                val look =
                     repo.preview(
                         design = design,
                         message = form.message.trim(),
@@ -326,28 +343,30 @@ class SendCardViewModel
                     when {
                         // Back, or another choice, while it was read: only an answer for what's chosen now counts.
                         !same || it.message != form.message -> it.copy(previewing = false)
-                        result is NetworkResult.Success ->
-                            it.copy(previewing = false, preview = result.data, step = SendCardStep.Look, sendError = null)
-                        result is NetworkResult.Failure ->
-                            it.copy(previewing = false, sealError = sendMessage(result.error, doing = "show how your card will look"))
+                        look is CardLook.Shown ->
+                            it.copy(previewing = false, preview = look.preview, step = SendCardStep.Look, sendError = null)
+                        look is CardLook.Unavailable -> it.copy(previewing = false, lookUnavailable = true)
+                        look is CardLook.Failed ->
+                            it.copy(previewing = false, sealError = sendMessage(look.error, doing = "show how your card will look"))
                         else -> it
                     }
                 }
-                if ((result as? NetworkResult.Failure)?.error?.serverCode() == ARRIVAL_CLOSED) readTheirs()
+                if ((look as? CardLook.Failed)?.error?.serverCode() == ARRIVAL_CLOSED) readTheirs()
             }
         }
 
         /**
-         * Step 5's "Seal and send". A refusal stays on step 5 with the server's sentence; a choice that closed meanwhile
-         * (their 7 a.m. came) goes back to step 4 with why, and their day is read again.
+         * "Seal and send", on step 5 (or on step 4 when the look can't be shown). A refusal stays there with the server's
+         * sentence; a choice that closed meanwhile (their 7 a.m. came) goes back to step 4 with why, and their day is
+         * read again.
          */
         fun send() {
             val form = _form.value
             val to = form.to ?: return
             val design = form.design ?: return
             val arrival = form.arrival ?: return
-            if (form.sending || form.message.isBlank()) return
-            _form.value = form.copy(sending = true, sendError = null)
+            if (form.sending || form.previewing || form.message.isBlank()) return
+            _form.value = form.copy(sending = true, sendError = null, sealError = null)
             viewModelScope.launch {
                 val result =
                     repo.send(
@@ -362,7 +381,8 @@ class SendCardViewModel
                     when {
                         result is NetworkResult.Success ->
                             it.copy(sending = false, sent = result.data, step = SendCardStep.Sent, preview = null)
-                        result is NetworkResult.Failure && closed ->
+                        // Sent from step 4, or a choice that closed: step 4 says why, under its choices.
+                        result is NetworkResult.Failure && (closed || it.step == SendCardStep.Seal) ->
                             it.copy(sending = false, step = SendCardStep.Seal, preview = null, sealError = sendMessage(result.error))
                         result is NetworkResult.Failure -> it.copy(sending = false, sendError = sendMessage(result.error))
                         else -> it

@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -55,16 +56,35 @@ class HolidayCardsRepository
         /** `GET /api/mailbox/cards/arrivals?to=`: when a card to this person can come, by their clock. */
         suspend fun arrivalsFor(userId: String): NetworkResult<HolidayCardArrivalsFor> = safeApiCall { api.arrivals(userId) }
 
-        /** `POST /api/mailbox/cards/preview`: the card as the other person will see it; nothing is sent. */
+        /**
+         * `POST /api/mailbox/cards/preview`: the card as the other person will see it; nothing is sent. [CardLook.Unavailable]
+         * when the server can't show it: it has no Look it over yet (a 404 without the server's code, as a server from
+         * before it answers), or its answer can't be read. Sending still works there.
+         */
         suspend fun preview(
             design: String,
             message: String,
             arrival: String,
             toUserId: String?,
             toEmail: String?,
-        ): NetworkResult<HolidayCardPreview> {
+        ): CardLook {
             val body = SendHolidayCardBody(design, message, arrival, HolidayCardRecipient(userId = toUserId, email = toEmail))
-            return safeApiCall { api.preview(body) }
+            val response =
+                when (val result = safeApiCall { api.preview(body) }) {
+                    is NetworkResult.Success -> result.data
+                    is NetworkResult.Failure ->
+                        return if (result.error is NetworkError.Decoding) CardLook.Unavailable else CardLook.Failed(result.error)
+                }
+            if (response.isSuccessful) return response.body()?.let { CardLook.Shown(it) } ?: CardLook.Unavailable
+            val error = runCatching { response.errorBody()?.string() }.getOrNull()
+            val code = runCatching { JSONObject(error.orEmpty()).optString("code") }.getOrNull().orEmpty()
+            return when (response.code()) {
+                HTTP_NOT_FOUND -> if (code.isBlank()) CardLook.Unavailable else CardLook.Failed(NetworkError.NotFound)
+                HTTP_UNAUTHORIZED -> CardLook.Failed(NetworkError.Unauthorized)
+                HTTP_FORBIDDEN -> CardLook.Failed(NetworkError.Forbidden(error))
+                in HTTP_SERVER_ERRORS -> CardLook.Failed(NetworkError.Server(response.code(), error))
+                else -> CardLook.Failed(NetworkError.ClientError(response.code(), error))
+            }
         }
 
         /** `POST /api/mailbox/cards`: today's card, to a person by their user id or by email. */
@@ -182,3 +202,22 @@ class HolidayCardsRepository
             }
         }
     }
+
+/** Step 4's "Look it over": the card as they'll see it, a server that can't show it (sending still works), or why not. */
+sealed interface CardLook {
+    data class Shown(
+        val preview: HolidayCardPreview,
+    ) : CardLook
+
+    /** No Look it over on this server yet, or an answer that can't be read. */
+    data object Unavailable : CardLook
+
+    data class Failed(
+        val error: NetworkError,
+    ) : CardLook
+}
+
+private const val HTTP_UNAUTHORIZED = 401
+private const val HTTP_FORBIDDEN = 403
+private const val HTTP_NOT_FOUND = 404
+private val HTTP_SERVER_ERRORS = 500..599
