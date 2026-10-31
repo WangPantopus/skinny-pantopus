@@ -220,10 +220,14 @@ export async function getOAuthUrl(
 }
 
 /**
- * Exchange OAuth authorization code for session
+ * Exchange OAuth authorization code for session. `inviteCode` is the friend's code a Create account attempt carried:
+ * the server credits them when this sign-in creates the account.
  */
-export async function oauthCallback(code: string): Promise<AuthResponse> {
-  const response = await post<AuthResponse>('/api/users/oauth/callback', { code });
+export async function oauthCallback(code: string, inviteCode?: string): Promise<AuthResponse> {
+  const response = await post<AuthResponse>('/api/users/oauth/callback', {
+    code,
+    ...(inviteCode ? { invite_code: inviteCode } : {}),
+  });
   await persistAuthResponse(response);
   return response;
 }
@@ -233,11 +237,13 @@ export async function oauthCallback(code: string): Promise<AuthResponse> {
  */
 export async function oauthTokenCallback(
   accessToken: string,
-  refreshToken?: string | null
+  refreshToken?: string | null,
+  inviteCode?: string
 ): Promise<AuthResponse> {
   const response = await post<AuthResponse>('/api/users/oauth/token', {
     accessToken,
     ...(refreshToken ? { refreshToken } : {}),
+    ...(inviteCode ? { invite_code: inviteCode } : {}),
   });
   await persistAuthResponse(response);
   return response;

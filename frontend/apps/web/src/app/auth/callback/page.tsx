@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { bindPlaceArrival } from '@/components/place/pendingPlace';
 import { OAUTH_NONCE_PARAM, authPageHref, readAuthRedirectQuery, safeRedirectPath } from '@/lib/auth-utils';
-import { takeOAuthAttempt } from '@/lib/oauth-attempt';
+import { oauthAttemptInviteCode, takeOAuthAttempt } from '@/lib/oauth-attempt';
 
 const NO_CODE_ERROR_DELAY_MS = 700;
 // The Auth server passes the provider's error through: Google sends
@@ -25,6 +25,8 @@ function AuthCallbackPageContent() {
   // Whether this callback is the sign-in this tab started. Decided once, because
   // deciding uses the attempt up and the effect below can run more than once.
   const attemptOwned = useRef<boolean | null>(null);
+  // The friend's invite code a Create account attempt carried; the server credits them if this sign-in makes the account.
+  const inviteCode = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,6 +55,7 @@ function AuthCallbackPageContent() {
     // A link carrying someone else's session or code (login CSRF) never signs
     // this browser in: only the attempt this tab started, with its check.
     if (attemptOwned.current === null) {
+      inviteCode.current = oauthAttemptInviteCode();
       attemptOwned.current = takeOAuthAttempt(searchParams?.get(OAUTH_NONCE_PARAM) || params.get(OAUTH_NONCE_PARAM));
     }
     if (!attemptOwned.current) {
@@ -65,8 +68,8 @@ function AuthCallbackPageContent() {
       exchangeRef.current = {
         key,
         promise: credentials
-          ? api.auth.oauthTokenCallback(credentials.access, credentials.refresh)
-          : api.auth.oauthCallback(code!),
+          ? api.auth.oauthTokenCallback(credentials.access, credentials.refresh, inviteCode.current)
+          : api.auth.oauthCallback(code!, inviteCode.current),
       };
     }
     setError('');
