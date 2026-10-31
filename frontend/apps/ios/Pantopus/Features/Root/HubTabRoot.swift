@@ -1403,6 +1403,7 @@ public struct HubTabRoot: View {
         case let .mailSentCard(id):
             // A card notice (they joined and have it, or its 90 days ended):
             // the card's page, over the Mailbox showing Sent.
+            MailboxRootViewModel.pendingShowSent = true
             NotificationCenter.default.post(name: .mailboxShowSent, object: nil)
             openMailboxScreen(.mailSentCard(id: id))
             _ = router.consume()

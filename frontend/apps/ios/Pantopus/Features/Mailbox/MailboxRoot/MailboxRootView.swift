@@ -102,14 +102,17 @@ public struct MailboxRootView: View {
         }
         // A card notice opened the card's page over the Mailbox: Back lands on Sent.
         .onReceive(NotificationCenter.default.publisher(for: .mailboxShowSent)) { _ in
-            if viewModel.showsSentChip { viewModel.selectSent() }
+            viewModel.showSentIfPending()
         }
         // A card taken back on its page: gone from Sent; the flag follows.
         .onReceive(NotificationCenter.default.publisher(for: .mailboxSentChanged)) { note in
             if let id = note.object as? String { viewModel.sent.dropPiece(id) }
             Task { await viewModel.sentChanged() }
         }
-        .onAppear { Analytics.track(.screenMailboxRootViewed) }
+        .onAppear {
+            Analytics.track(.screenMailboxRootViewed)
+            viewModel.showSentIfPending()
+        }
     }
 
     private var accountId: String {

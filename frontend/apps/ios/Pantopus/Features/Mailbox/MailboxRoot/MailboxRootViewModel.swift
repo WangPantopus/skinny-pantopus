@@ -667,6 +667,17 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
         onOpenSentCard?(id)
     }
 
+    /// Set when a card notice opens a card's page over a Mailbox that may not
+    /// be open yet, so Back lands on Sent.
+    static var pendingShowSent = false
+
+    /// Sent, once, for a card notice: this Mailbox was open or opens now.
+    func showSentIfPending() {
+        guard Self.pendingShowSent else { return }
+        Self.pendingShowSent = false
+        if LaunchFeatures.mailbox { selectSent() }
+    }
+
     /// "See it in Sent" from the card flow this Mailbox opened: Sent, then the card.
     func showSentAfterSending(_ id: String?) {
         guard openedCardFlow else { return }
