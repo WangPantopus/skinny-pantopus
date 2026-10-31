@@ -58,13 +58,27 @@ import app.pantopus.android.ui.theme.Spacing
 
 /**
  * The Mailbox's top card (drawings `Main`, `R1-Before`, `R4-NoMail`): the person's mailbox with their house number,
- * the morning round in words, and the verified address the mail comes to. Read as one sentence.
+ * the morning round in words, and the verified address the mail comes to. Read as one sentence. While cards they sent
+ * wait for the carrier's 7 a.m. pickup ([waiting]), its flag is up instead ("Your flag is up", drawing `M1-FlagUp`)
+ * and a tap opens Sent.
  */
 @Composable
-fun MailboxHeroCard(hero: MailboxHeroState) {
+fun MailboxHeroCard(
+    hero: MailboxHeroState,
+    waiting: Int = 0,
+    onOpenSent: () -> Unit = {},
+) {
+    val flag = waiting > 0
+    val title = if (flag) "Your flag is up" else hero.title
+    val detail =
+        when {
+            !flag -> hero.detail
+            waiting == 1 -> "1 card waits for the 7 a.m. pickup"
+            else -> "$waiting cards wait for the 7 a.m. pickup"
+        }
     // One sentence each, with words for the "·" a screen reader would otherwise read out.
     val spoken =
-        listOfNotNull(hero.title, hero.detail, hero.address)
+        listOfNotNull(title, detail, hero.address, "Opens Sent".takeIf { flag })
             .joinToString(" ") { if (it.endsWith(".")) it else "$it." }
             .replace(" · ", ", ")
     Row(
@@ -75,16 +89,19 @@ fun MailboxHeroCard(hero: MailboxHeroState) {
                 .clip(RoundedCornerShape(20.dp))
                 .background(PantopusColors.appSurface)
                 .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(20.dp))
-                .padding(horizontal = Spacing.s4, vertical = 14.dp)
-                .clearAndSetSemantics { contentDescription = spoken }
-                .testTag("mailboxHero"),
+                .then(if (flag) Modifier.clickable(onClick = onOpenSent) else Modifier)
+                .padding(start = Spacing.s4, end = if (flag) Spacing.s3 else Spacing.s4, top = 14.dp, bottom = 14.dp)
+                .clearAndSetSemantics {
+                    contentDescription = spoken
+                    if (flag) role = Role.Button
+                }.testTag(if (flag) "mailboxHeroFlag" else "mailboxHero"),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MailboxDrawing(modifier = Modifier.size(72.dp), number = hero.number)
+        MailboxDrawing(modifier = Modifier.size(72.dp), number = hero.number, flagUp = flag)
         Column(modifier = Modifier.weight(1f)) {
-            Text(hero.title, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-            Text(hero.detail, fontSize = 14.sp, lineHeight = 20.sp, color = PantopusColors.appTextSecondary)
+            Text(title, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+            Text(detail, fontSize = 14.sp, lineHeight = 20.sp, color = PantopusColors.appTextSecondary)
             hero.address?.let {
                 Spacer(Modifier.height(Spacing.s1))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
@@ -92,6 +109,9 @@ fun MailboxHeroCard(hero: MailboxHeroState) {
                     Text(it, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = PantopusColors.home)
                 }
             }
+        }
+        if (flag) {
+            PantopusIconImage(icon = PantopusIcon.ChevronRight, contentDescription = null, size = 18.dp, tint = PantopusColors.appTextMuted)
         }
     }
 }

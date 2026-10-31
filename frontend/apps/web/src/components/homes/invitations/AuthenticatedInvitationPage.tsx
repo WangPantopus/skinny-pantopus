@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as api from '@pantopus/api';
 import { confirmStore } from '@/components/ui/confirm-store';
 import { useInvitationDecision } from './useInvitationDecision';
@@ -15,6 +15,20 @@ export default function AuthenticatedInvitationPage({ token }: { token: string }
   const [switching, setSwitching] = useState(false), [switchError, setSwitchError] = useState('');
   const { pending, context, progress, error, busy, ready, canAcknowledge, canDecide, accountLabel } = recovery;
   const state = pending?.outcome?.state;
+  // Accepting the invitation opened here goes straight into the Home once its access is shared: read
+  // the access once, then open. "Check Home access" and "Open Home" stay for access that starts later.
+  const autoOpen = useRef<{ requestId: string; step: 'checking' | 'opening' } | null>(null);
+  useEffect(() => {
+    if (!pending || state !== 'completed' || pending.action !== 'accept' || pending.token !== token || busy) return;
+    const tried = autoOpen.current?.requestId === pending.request_id ? autoOpen.current.step : null;
+    if (!tried) {
+      autoOpen.current = { requestId: pending.request_id, step: 'checking' };
+      void recovery.checkAccess();
+    } else if (tried === 'checking' && progress?.current_access === 'shared') {
+      autoOpen.current = { requestId: pending.request_id, step: 'opening' };
+      void recovery.openHome(pending.request_id).then((homeId) => { if (homeId) router.push(`/app/homes/${homeId}/dashboard`); });
+    }
+  }, [pending, state, token, busy, progress, recovery, router]);
   const title = pending ? state === 'completed' ? pending.action === 'accept' ? 'Invitation accepted' : 'Invitation declined'
     : state === 'cancelled' ? 'Attempt discarded' : state === 'rejected' ? 'Couldn’t finish this' : 'Check your answer'
     : context ? "You're invited" : error ? 'Invitation status' : 'Checking your invitation';

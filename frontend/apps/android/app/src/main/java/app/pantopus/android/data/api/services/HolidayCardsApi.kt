@@ -5,6 +5,8 @@ import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardBody
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardResponse
+import app.pantopus.android.data.api.models.mailbox.SentCardResponse
+import app.pantopus.android.data.api.models.mailbox.SentMailResponse
 import app.pantopus.android.data.api.models.mailbox.TakeBackHolidayCardResponse
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -54,4 +56,20 @@ interface HolidayCardsApi {
     suspend fun takeBack(
         @Path("id") id: String,
     ): TakeBackHolidayCardResponse
+
+    /**
+     * `GET /api/mailbox/sent?before=&limit=` — route `backend/routes/mailbox.js` (before `GET /:id`; launch key
+     * `mailbox`): the cards the person sent, newest first; [before] is the last page's `next`.
+     */
+    @GET("api/mailbox/sent")
+    suspend fun sent(
+        @Query("before") before: String?,
+        @Query("limit") limit: Int,
+    ): SentMailResponse
+
+    /** `GET /api/mailbox/sent/:id` — the same route file: one card the person sent, its note and trail; 404 for anyone else. */
+    @GET("api/mailbox/sent/{id}")
+    suspend fun sentCard(
+        @Path("id") id: String,
+    ): SentCardResponse
 }

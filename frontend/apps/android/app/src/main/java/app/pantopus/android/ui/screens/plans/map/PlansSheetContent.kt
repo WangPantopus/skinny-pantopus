@@ -596,7 +596,7 @@ internal fun mainAction(plan: PlanDto): PlanMainAction? {
 }
 
 /** What "Invite a neighbor" shares (board F4, the same words as iOS). */
-const val PLANS_INVITE_MESSAGE = "I'm on Pantopus to make small plans with neighbors. Join me. https://pantopus.com/start"
+const val PLANS_INVITE_MESSAGE = "I'm on Pantopus to make small plans with neighbors. Join me."
 
 /** Nothing planned this week (board F4): a game to host if there is one, the other types, and an invite. */
 @Composable

@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerListResponse
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerMail
 import app.pantopus.android.data.api.models.mailbox.v2.MailHome
+import app.pantopus.android.data.api.models.mailbox.v2.MailSentSummary
 import app.pantopus.android.data.api.models.mailbox.v2.MailVacationHold
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
@@ -42,6 +43,8 @@ import javax.inject.Inject
 
 /**
  * The mailbox drawers. `Business` carries the "Biz" short label per the design; Earn stays hidden with Mail extras.
+ * `Sent` is what the person sent (launch key `mailbox`): not a drawer on the server, so it's never read as one, and it
+ * has no tabs and no count.
  */
 enum class MailboxDrawer(
     val id: String,
@@ -53,6 +56,7 @@ enum class MailboxDrawer(
     Me("me", "Me", PantopusIcon.User, PantopusColors.personal),
     Home("home", "Home", PantopusIcon.Home, PantopusColors.home),
     Business("business", "Biz", PantopusIcon.Briefcase, PantopusColors.business),
+    Sent("sent", "Sent", PantopusIcon.Send, PantopusColors.primary600),
     Earn("earn", "Earn", PantopusIcon.DollarSign, PantopusColors.primary600),
     ;
 
@@ -203,6 +207,11 @@ class MailboxRootViewModel
          */
         val cards: StateFlow<HolidayCardsResponse?> = holidayCards.latest
 
+        private val _sent = MutableStateFlow<MailSentSummary?>(null)
+
+        /** What the person has sent (`sent` on the drawers): whether Sent shows, and the cards that put the flag up. */
+        val sent: StateFlow<MailSentSummary?> = _sent.asStateFlow()
+
         private var onOpenMail: (String) -> Unit = {}
 
         private var book = MailAddressBook(personName = null)
@@ -247,6 +256,13 @@ class MailboxRootViewModel
             viewModelScope.launch {
                 MailboxRepository.mailChanged.collect { if (_state.value !is MailboxUiState.Loading) refreshQuietly() }
             }
+            // A card sent, taken back, or too late to take back (picked up meanwhile): the flag and whether Sent shows are
+            // read again.
+            viewModelScope.launch { HolidayCardsRepository.cardSent.collect { readDrawersAndShow() } }
+            viewModelScope.launch { HolidayCardsRepository.takenBack.collect { readDrawersAndShow() } }
+            viewModelScope.launch { HolidayCardsRepository.movedOn.collect { readDrawersAndShow() } }
+            // "See it in Sent" after sending a card.
+            viewModelScope.launch { HolidayCardsRepository.showSent.collect { openSent() } }
         }
 
         fun configureNavigation(onOpenMail: (String) -> Unit) {
@@ -331,7 +347,25 @@ class MailboxRootViewModel
             if (_selectedDrawer.value == drawer) return
             _selectedDrawer.value = drawer
             _vaultShelf.value = MailVaultShelf.All
+            // Sent reads its own list (MailSentViewModel); the drawer's pieces are read again when another opens.
+            if (drawer == MailboxDrawer.Sent) {
+                ++generation
+                updateDrawers()
+                return
+            }
             switchList()
+        }
+
+        /** The flag, or "See it in Sent": Sent opens (and its chip shows, even before the drawers are read again). */
+        fun openSent() {
+            selectDrawer(MailboxDrawer.Sent)
+        }
+
+        private fun readDrawersAndShow() {
+            viewModelScope.launch {
+                readDrawers()
+                updateDrawers()
+            }
         }
 
         fun selectTab(tab: MailboxTab) {
@@ -392,6 +426,7 @@ class MailboxRootViewModel
 
         private fun showDrawers(response: DrawerListResponse) {
             _drawerUnread.value = response.drawers.associate { it.drawer to it.unreadCount }
+            _sent.value = response.sent
             book = MailAddressBook(personName = signedInName(), homes = response.homes.orEmpty())
             homesKnown = response.homes != null
             _homes.value = response.homes.orEmpty()
@@ -424,11 +459,15 @@ class MailboxRootViewModel
 
         private fun updateDrawers() {
             val bizHasMail = (_drawerUnread.value[MailboxDrawer.Business.backendKey] ?: 0) > 0
+            val selected = _selectedDrawer.value
+            // Sent: once something was sent, or while cards can be sent (keys `holiday_cards` + `mailbox`).
+            val sent = _sent.value?.any == true || LaunchFeatures.holidayCards || selected == MailboxDrawer.Sent
             _drawers.value =
                 buildList {
                     add(MailboxDrawer.Me)
                     add(MailboxDrawer.Home)
-                    if (ownsBusiness || bizHasMail || _selectedDrawer.value == MailboxDrawer.Business) add(MailboxDrawer.Business)
+                    if (ownsBusiness || bizHasMail || selected == MailboxDrawer.Business) add(MailboxDrawer.Business)
+                    if (sent) add(MailboxDrawer.Sent)
                     if (LaunchFeatures.mailExtras) add(MailboxDrawer.Earn)
                 }
         }
@@ -442,6 +481,12 @@ class MailboxRootViewModel
         }
 
         private suspend fun reloadActiveTab(limit: Int = pageSize) {
+            // Sent isn't a drawer on the server: its list reads itself, and the open drawer's pieces stay as they were.
+            if (_selectedDrawer.value == MailboxDrawer.Sent) {
+                ++generation
+                loading = false
+                return
+            }
             val gen = ++generation
             offset = 0
             loadedMail = mutableListOf()
@@ -455,8 +500,9 @@ class MailboxRootViewModel
             gen: Int,
             limit: Int = pageSize,
         ) {
-            loading = true
             val drawer = _selectedDrawer.value
+            if (drawer == MailboxDrawer.Sent) return
+            loading = true
             val tab = _selectedTab.value
             val shelf = _vaultShelf.value
             val result =

@@ -412,7 +412,14 @@ class SendCardViewModel
             when (error) {
                 is NetworkError.NotFound -> "We couldn’t find that person. Search for them again."
                 is NetworkError.Forbidden -> error.reason ?: "You can’t send a card to this person."
-                else -> error.mailMessage(online = network.isOnline.value, doing = doing)
+                // The server's own check of the address is stricter than ours (it knows which endings an address can
+                // have), and the address isn't on this step: say where to fix it, as the web does.
+                else ->
+                    if (error.refusedField() == "to.email") {
+                        "That email address doesn’t look right. Go back to “Who it’s for” and check it."
+                    } else {
+                        error.mailMessage(online = network.isOnline.value, doing = doing)
+                    }
             }
 
         /**
@@ -502,6 +509,13 @@ private fun NetworkError.serverCode(): String? {
             else -> null
         } ?: return null
     return runCatching { JSONObject(body).optString("code") }.getOrNull()?.takeIf { it.isNotBlank() }
+}
+
+/** The field a refused request names first (`{ error, details: [{ field, message }] }`), when the server sent one. */
+private fun NetworkError.refusedField(): String? {
+    val body = (this as? NetworkError.ClientError)?.body ?: return null
+    val detail = runCatching { JSONObject(body).optJSONArray("details")?.optJSONObject(0) }.getOrNull()
+    return detail?.optString("field")?.takeIf { it.isNotBlank() }
 }
 
 /** How many letters [this] has, counting an emoji or an accented letter once (the server counts the same way). */

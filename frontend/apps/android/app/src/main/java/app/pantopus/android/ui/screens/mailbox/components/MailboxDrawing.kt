@@ -21,7 +21,8 @@ import app.pantopus.android.ui.theme.PantopusColors
 /**
  * The person's mailbox on its post, from the Mail tab drawings (`Main`, `R2-Delivery`): a blue arched box, the house
  * [number] on its plate, the red flag. [doorOpen] runs from 0 (closed) to 1 (the door folded down with today's mail
- * inside), for the delivery moment; [mailInside] puts the day's pieces in the open box.
+ * inside), for the delivery moment; [mailInside] puts the day's pieces in the open box. [flagUp] raises the flag on its
+ * arm (drawing `S7-Outgoing`): a card waits in the box for the carrier's 7 a.m. pickup.
  */
 @Composable
 fun MailboxDrawing(
@@ -29,6 +30,7 @@ fun MailboxDrawing(
     number: String? = null,
     doorOpen: Float = 0f,
     mailInside: Boolean = false,
+    flagUp: Boolean = false,
 ) {
     Canvas(modifier = modifier) {
         // The drawing's 120 × 130 viewbox, fitted and centered.
@@ -83,8 +85,14 @@ fun MailboxDrawing(
             rect(51f, 90f + 12f * lay, 18f, 5f, PantopusColors.primary100, r = 2.5f)
             if (lay > 0.6f && mailInside) sparkles(::at, unit, alpha = (lay - 0.6f) / 0.4f)
         }
-        // The flag, up: the carrier has been.
-        rect(102f, 64f, 16f, 7f, PantopusColors.mailboxFlag, r = 1.5f)
+        if (flagUp) {
+            // The flag raised on its arm: outgoing mail waits for the carrier.
+            rect(104f, 20f, 6f, 46f, PantopusColors.mailboxFlag, r = 1.5f)
+            rect(104f, 20f, 16f, 12f, PantopusColors.mailboxFlag, r = 1.5f)
+        } else {
+            // The flag, up: the carrier has been.
+            rect(102f, 64f, 16f, 7f, PantopusColors.mailboxFlag, r = 1.5f)
+        }
     }
 }
 

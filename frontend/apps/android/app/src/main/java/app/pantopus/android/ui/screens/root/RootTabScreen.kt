@@ -58,6 +58,7 @@ import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.perf.ScreenTiming
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.ai.AIScreenContext
+import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.ui.components.ClosesKeyboardOnNavigation
 import app.pantopus.android.ui.components.ErrorState
@@ -296,6 +297,8 @@ import app.pantopus.android.ui.screens.mailbox.mail_day.MAIL_DAY_VARIANT_KEY
 import app.pantopus.android.ui.screens.mailbox.mail_day.MailDayScreen
 import app.pantopus.android.ui.screens.mailbox.mail_detail.MailDetailScreen
 import app.pantopus.android.ui.screens.mailbox.mail_party.MailPartyScreen
+import app.pantopus.android.ui.screens.mailbox.mail_sent.MAIL_SENT_CARD_ID_KEY
+import app.pantopus.android.ui.screens.mailbox.mail_sent.MailSentCardScreen
 import app.pantopus.android.ui.screens.mailbox.mail_task.MAIL_TASK_LIST_MAIL_ID_KEY
 import app.pantopus.android.ui.screens.mailbox.mail_task.MAIL_TASK_LIST_NONE
 import app.pantopus.android.ui.screens.mailbox.mail_task.MAIL_TASK_LIST_SENDER_KEY
@@ -546,6 +549,9 @@ private object ChildRoutes {
 
     /** Send a Christmas card, or today's card once it's sent (launch keys `holiday_cards` + `mailbox`). */
     const val MAILBOX_CARDS = "mailbox/cards"
+
+    /** A card the person sent, opened from Sent in the Mailbox (launch key `mailbox`). */
+    const val MAILBOX_SENT_CARD = "mailbox/sent/{$MAIL_SENT_CARD_ID_KEY}"
 
     /** T6.5e (P19.5) — Mailbox Vault list. Personal pillar. */
     const val MAILBOX_VAULT = "mailbox/vault"
@@ -1511,6 +1517,8 @@ private object ChildRoutes {
     /** Build the concrete path for a mailbox item detail. */
     fun mailboxItemDetail(id: String): String = "mailbox/item/$id"
 
+    fun mailboxSentCard(id: String): String = "mailbox/sent/$id"
+
     /** Build the concrete path for a public profile. */
     fun publicProfile(id: String): String = "users/$id"
 
@@ -2266,11 +2274,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     ClosesKeyboardOnNavigation(navController)
     // P6.6 — system share / mail + contacts picker for the placeholder sweep.
     val appContext = androidx.compose.ui.platform.LocalContext.current
+    // Every invite carries the person's own link (pantopus.com/join/<code>).
+    val inviteShare: InviteShareViewModel = hiltViewModel()
     val findPeopleLauncher =
         androidx.activity.compose.rememberLauncherForActivityResult(
             androidx.activity.result.contract.ActivityResultContracts.PickContact(),
         ) { uri ->
-            if (uri != null) appContext.shareText(InviteLinks.INVITE_MESSAGE, "Invite to Pantopus")
+            if (uri != null) inviteShare.share(appContext, InviteLinks.INVITE_MESSAGE, "Invite to Pantopus")
         }
     val briefingNotice: BriefingNoticeViewModel = hiltViewModel()
     BriefingNotice(onManage = { navController.navigate(ChildRoutes.SETTINGS_NOTIFICATIONS) }, viewModel = briefingNotice)
@@ -2369,9 +2379,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         }
 
         // A Plans page from a link or push: the Plans tab with [route] on top, so Back lands on Plans; while the `plans`
-        // flag is off, Pulse (Nearby with the Pulse redesign off) instead.
-        fun openPlansLink(route: String) {
-            if (DeepLinkRouter.plansEnabled()) {
+        // flag is off, Pulse (Nearby with the Pulse redesign off) instead. Right after a first sign-in the flag isn't
+        // known yet, so this waits for it rather than dropping the plan someone was sent.
+        suspend fun openPlansLink(route: String) {
+            if (DeepLinkRouter.plansAnswer()) {
                 navController.navigateToRootTab(PantopusRoute.Plans)
                 navController.navigate(route)
             } else {
@@ -2384,10 +2395,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.tokenAccept(pending.token, pending.leaseInvitation))
                 DeepLinkRouter.consume()
             }
-            is DeepLinkRouter.Destination.JoinInvite -> {
-                navController.navigate(ChildRoutes.tokenAccept(pending.code))
-                DeepLinkRouter.consume()
-            }
+            // A friend's invite link (pantopus.com/join/…) is for someone new to Pantopus. Signed in, there is nothing to
+            // accept: the link just opens the app. It is never a Home invitation, so no invitation screen.
+            is DeepLinkRouter.Destination.JoinInvite -> DeepLinkRouter.consume()
             DeepLinkRouter.Destination.Notifications -> {
                 navController.navigate(ChildRoutes.NOTIFICATIONS)
                 DeepLinkRouter.consume()
@@ -2934,7 +2944,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     // The list's "More nearby" rows: only with the Pulse redesign on (Nearby has them).
                                     onOpenPulse = { navController.navigateToRootTab(PantopusRoute.Pulse) },
                                     onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
-                                    onInvite = { appContext.shareText(PLANS_INVITE_MESSAGE, "Invite a neighbor") },
+                                    onInvite = { inviteShare.share(appContext, PLANS_INVITE_MESSAGE, "Invite a neighbor") },
                                     onAskPantopus = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                                     onOpenMenu = openMenu,
                                 ),
@@ -2970,7 +2980,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
                                     onOpenMarketplace = { navController.navigate(PantopusRoute.Marketplace.path) },
                                     onOpenTasks = { navController.navigate(PantopusRoute.Tasks.path) },
-                                    onInvite = { appContext.shareText(NEIGHBORHOOD_INVITE_MESSAGE, "Invite your neighbors") },
+                                    onInvite = { inviteShare.share(appContext, NEIGHBORHOOD_INVITE_MESSAGE, "Invite your neighbors") },
                                 )
                             },
                         )
@@ -3046,6 +3056,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onStartVerify = { homeId, method -> navController.openPlaceVerify(method, homeId) },
                         onOpenVerificationStatus = { homeId -> navController.navigate(ChildRoutes.waitingRoom(homeId)) },
                         onOpenCards = { navController.navigate(ChildRoutes.MAILBOX_CARDS) },
+                        onOpenSentCard = { id -> navController.navigate(ChildRoutes.mailboxSentCard(id)) },
                     )
                 }
                 composable(PantopusRoute.Pulse.path) {
@@ -4896,7 +4907,23 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     if (!LaunchFeatures.holidayCards || !LaunchFeatures.mailbox) {
                         return@composable LaunchCutPlaceholder("Christmas cards", navController)
                     }
-                    SendCardScreen(onClose = { navController.popBackStack() })
+                    SendCardScreen(
+                        onClose = { navController.popBackStack() },
+                        // "See it in Sent": the Mailbox under it opens Sent, and the card's page goes on top.
+                        onSeeInSent = { id ->
+                            navController.popBackStack()
+                            HolidayCardsRepository.announceShowSent()
+                            navController.navigate(ChildRoutes.mailboxSentCard(id))
+                        },
+                    )
+                }
+                composable(
+                    route = ChildRoutes.MAILBOX_SENT_CARD,
+                    arguments = listOf(navArgument(MAIL_SENT_CARD_ID_KEY) { type = NavType.StringType }),
+                ) {
+                    // Launch cut #10 (Mailbox): Sent is part of it.
+                    if (!LaunchFeatures.mailbox) return@composable LaunchCutPlaceholder("Mailbox", navController)
+                    MailSentCardScreen(onBack = { navController.popBackStack() })
                 }
                 composable(
                     route = ChildRoutes.MAILBOX_ITEM_DETAIL,
@@ -4988,6 +5015,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
                         onOpenProfile = { reviewerId ->
                             navController.navigate(ChildRoutes.publicProfile(reviewerId))
+                        },
+                        // A Posts tab card opens the post's page, as in Pulse.
+                        onOpenPost = openPost@{ postId ->
+                            if (navController.currentBackStackEntry?.id != profileEntry.id) return@openPost
+                            navController.navigate(ChildRoutes.pulsePost(postId))
                         },
                     )
                 }
@@ -5371,7 +5403,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 ),
                             )
                         },
-                        onInvite = { appContext.shareText(InviteLinks.INVITE_MESSAGE, "Invite to Pantopus") },
+                        onInvite = { inviteShare.share(appContext, InviteLinks.INVITE_MESSAGE, "Invite to Pantopus") },
                     )
                 }
                 composable(ChildRoutes.PULSE_FEED) {
@@ -5477,7 +5509,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onBack = { navController.popBackStack() },
                         onShareListing = {
                             appContext.shareText(
-                                "Check out this listing on Pantopus — ${InviteLinks.DOWNLOAD_URL}",
+                                "Check out this listing on Pantopus — ${InviteLinks.publicPageUrl("/listing/${Uri.encode(listingId)}")}",
                                 "Share listing",
                             )
                         },
@@ -5848,12 +5880,14 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 DiscoverBusinessesTarget.SetHomeAddress ->
                                     navController.navigate(ChildRoutes.ADD_HOME)
                                 DiscoverBusinessesTarget.InviteBusiness ->
-                                    appContext.composeEmail(
-                                        subject = "Join Pantopus",
-                                        body =
-                                            "I'd love to see your business on Pantopus — neighbors near " +
-                                                "me are looking for trusted local pros. ${InviteLinks.DOWNLOAD_URL}",
-                                    )
+                                    inviteShare.withLink { link ->
+                                        appContext.composeEmail(
+                                            subject = "Join Pantopus",
+                                            body =
+                                                "I'd love to see your business on Pantopus — neighbors near " +
+                                                    "me are looking for trusted local pros. $link",
+                                        )
+                                    }
                             }
                         },
                     )
@@ -7069,7 +7103,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onBack = { navController.popBackStack() },
                         onShare = {
                             appContext.shareText(
-                                "Check out this membership on Pantopus — ${InviteLinks.DOWNLOAD_URL}",
+                                "Check out this membership on Pantopus — ${InviteLinks.siteUrl}",
                                 "Share membership",
                             )
                         },

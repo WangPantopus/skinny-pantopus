@@ -262,6 +262,10 @@ final class DeepLinkRouter {
     /// and opens the existing Login cover without disrupting the Place funnel.
     private(set) var prefersLoginPresentation = false
 
+    /// Counts links parked for after sign-in, so a screen that is already up
+    /// (the Login cover) can re-read what is waiting.
+    private(set) var parkedArrivals = 0
+
     private let onDiagnostic: @MainActor (String) -> Void
 
     init(onDiagnostic: @escaping @MainActor (String) -> Void = { category in
@@ -301,6 +305,7 @@ final class DeepLinkRouter {
             let normalized = Self.normalizeIncoming(path)
             guard canResolve(path: normalized) else { return }
             if PendingDeepLinkStore.stash(normalized, expectedUserID: expectedUserID) {
+                parkedArrivals += 1
                 prefersLoginPresentation = true
             }
             return
@@ -409,6 +414,7 @@ final class DeepLinkRouter {
                 // re-sign-in; a different account or an explicit sign-out
                 // still clears it (`PendingDeepLinkStore`).
                 PendingDeepLinkStore.stash(persistencePath, expectedUserID: Self.hydratingUserIDProvider())
+                parkedArrivals += 1
                 pending = nil
                 prefersLoginPresentation = true
             }

@@ -85,12 +85,12 @@ private val SURFACES =
     )
 
 /**
- * "Invite your neighbors" on the Neighborhood segment: the /start funnel, as on iOS and web, so the person invited sees
- * their own address answered, not an app pitch.
+ * "Invite your neighbors" on the Neighborhood segment, as on iOS and web. The person's own invite link follows it
+ * (`InviteShareViewModel`): it opens the /start address lookup under their name, so the person invited sees their own
+ * address answered, not an app pitch.
  */
 const val NEIGHBORHOOD_INVITE_MESSAGE =
-    "See what's true about your address — records, risks, and who's verified nearby. Free, no account. " +
-        "https://pantopus.com/start"
+    "See what's true about your address — records, risks, and who's verified nearby. Free, no account."
 
 /** Launch cuts #3 (Marketplace) / #4 (Open Gigs): the surfaces the first launch still shows. */
 private val launchSurfaces: List<NearbySurface>

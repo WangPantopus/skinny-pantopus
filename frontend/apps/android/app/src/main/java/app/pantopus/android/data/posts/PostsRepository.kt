@@ -232,6 +232,20 @@ class PostsRepository
             includeArchived: Boolean,
         ): Stored<MyPostsResponse> = store.peek(StoreKeys.userPosts(userId, limit, includeArchived))
 
+        /** `GET /api/posts/user/:userId` as feed rows: a person's latest posts on their profile, as Pulse cards. */
+        suspend fun profilePosts(
+            userId: String,
+            force: Boolean = false,
+        ): NetworkResult<FeedResponse> {
+            val stored =
+                store.read(StoreKeys.profilePosts(userId), force) { etag ->
+                    conditionalApiCall { api.profilePostsConditional(userId, StoreKeys.PROFILE_POSTS_LIMIT, etag) }
+                }
+            return stored.data?.let { NetworkResult.Success(it) } ?: stored.asResult()
+        }
+
+        fun profilePostsCopy(userId: String): Stored<FeedResponse> = store.peek(StoreKeys.profilePosts(userId))
+
         /** `GET /api/posts/saved` — My posts' Saved tab. */
         suspend fun savedPosts(
             limit: Int = 50,

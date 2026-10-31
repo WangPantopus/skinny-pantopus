@@ -20,6 +20,7 @@ import {
   type PublicPlan,
 } from '@/lib/publicShare';
 import OpenInAppButton from '@/components/public-share/OpenInAppButton';
+import JustInstalledHint from '@/components/public-share/JustInstalledHint';
 
 // A Nearby Plans share link (design board W1). Signed out, area only: the exact
 // place, the host's note and the people going are only in the app, for people
@@ -409,6 +410,7 @@ export default async function PublicPlanPage({ params }: { params: Promise<{ id:
               Open in Pantopus
             </OpenInAppButton>
             <StoreButtons />
+            <JustInstalledHint what="this playdate" />
             <p className="text-center text-xs leading-4 text-app-text-secondary">{PLAYDATE_CAPTION}</p>
           </div>
         </div>
@@ -480,6 +482,7 @@ export default async function PublicPlanPage({ params }: { params: Promise<{ id:
             {joined ? 'Open in Pantopus' : over ? 'See plans near you in Pantopus' : 'Open in Pantopus to join'}
           </OpenInAppButton>
           <StoreButtons />
+          <JustInstalledHint what="this plan" />
           <p className="text-center text-xs leading-4 text-app-text-secondary">{PLAYDATE_CAPTION}</p>
         </div>
       </div>

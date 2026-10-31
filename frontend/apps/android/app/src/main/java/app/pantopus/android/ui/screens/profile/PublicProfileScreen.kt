@@ -26,25 +26,28 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.BeaconIdentity
 import app.pantopus.android.ui.components.EmptyState
-import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.InviteLinks
-import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.rememberShareTextWithCompletion
 import app.pantopus.android.ui.components.shareText
 import app.pantopus.android.ui.components.toastDurationMillis
+import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
 import app.pantopus.android.ui.screens.profile.tabs.ProfileGigReviewsSection
 import app.pantopus.android.ui.screens.profile.tabs.ProfileGigsSection
 import app.pantopus.android.ui.screens.profile.tabs.ProfilePortfolioSection
@@ -87,6 +90,8 @@ fun PublicProfileScreen(
     onComposeBroadcast: () -> Unit = {},
     onOpenGig: (String) -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
+    /** Opens a post from the Posts tab, as a tap on a Pulse card does. */
+    onOpenPost: (String) -> Unit = {},
     viewModel: PublicProfileViewModel = hiltViewModel(),
     usernameShare: UsernameShareViewModel = hiltViewModel(),
 ) {
@@ -109,6 +114,22 @@ fun PublicProfileScreen(
     val canFollow by viewModel.canFollow.collectAsStateWithLifecycle()
     val relationshipLoaded by viewModel.relationshipLoaded.collectAsStateWithLifecycle()
     val postsLoadFailed by viewModel.postsLoadFailed.collectAsStateWithLifecycle()
+    val postCards by viewModel.postCards.cards.collectAsStateWithLifecycle()
+    val postOptionsId by viewModel.postCards.optionsPostId.collectAsStateWithLifecycle()
+    val reportingPostId by viewModel.postCards.reportingPostId.collectAsStateWithLifecycle()
+    val showUnfollowConfirm by viewModel.showUnfollowConfirm.collectAsStateWithLifecycle()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val shareTextWithCompletion = rememberShareTextWithCompletion()
+    val postCardActions =
+        remember(viewModel, onOpenPost) {
+            ProfilePostCardActions(
+                onOpen = onOpenPost,
+                onReact = viewModel.postCards::tapReaction,
+                onOptions = viewModel.postCards::openOptions,
+                onToggleSave = viewModel.postCards::toggleSave,
+                onToggleRepost = viewModel.postCards::toggleRepost,
+            )
+        }
     val sheetState = rememberModalBottomSheetState()
     val reportSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showReportSheet by remember { mutableStateOf(false) }
@@ -177,10 +198,13 @@ fun PublicProfileScreen(
                                     ),
                                 connection = connection,
                                 onFollow = { viewModel.follow() },
+                                onUnfollow = { viewModel.requestUnfollow() },
                                 onOpenGig = onOpenGig,
                                 onOpenProfile = onOpenProfile,
                                 postsLoadFailed = postsLoadFailed,
                                 onRetryPosts = { viewModel.refresh() },
+                                postCards = postCards,
+                                postCardActions = postCardActions,
                             )
                         } else {
                             PublicProfileLoadedFrame(
@@ -356,6 +380,52 @@ fun PublicProfileScreen(
                         Text("Cancel")
                     }
                 },
+            )
+        }
+        // A stray tap on Following never unfollows: it asks first, as Connected does.
+        if (showUnfollowConfirm) {
+            val name = (state as? PublicProfileUiState.Loaded)?.content?.header?.displayName?.trim().orEmpty()
+            AlertDialog(
+                onDismissRequest = { viewModel.cancelUnfollow() },
+                title = { Text(if (name.isEmpty()) "Unfollow this person?" else "Unfollow $name?") },
+                text = { Text("They won't be notified.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = { viewModel.unfollow() },
+                        modifier = Modifier.testTag("publicProfileUnfollowConfirm"),
+                    ) {
+                        Text("Unfollow", color = PantopusColors.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { viewModel.cancelUnfollow() },
+                        modifier = Modifier.testTag("publicProfileUnfollowCancel"),
+                    ) {
+                        Text("Cancel")
+                    }
+                },
+            )
+        }
+        postOptionsId?.let { id ->
+            postCards.firstOrNull { it.id == id }?.let { card ->
+                ProfilePostOptionsSheet(
+                    card = card,
+                    onShare = {
+                        viewModel.postCards.dismissOptions()
+                        viewModel.postCards.shareExternally(card.id) { url, onCompleted ->
+                            lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && shareTextWithCompletion(url, onCompleted)
+                        }
+                    },
+                    onReport = { viewModel.postCards.beginReport(card.id) },
+                    onDismiss = { viewModel.postCards.dismissOptions() },
+                )
+            }
+        }
+        reportingPostId?.let { id ->
+            ProfilePostReportDialog(
+                onReport = { reason -> viewModel.postCards.report(id, reason) },
+                onDismiss = { viewModel.postCards.cancelReport() },
             )
         }
         // Tapping "Connected" removes the edge, and RN gates the same
@@ -582,10 +652,13 @@ internal fun LocalProfileLoadedFrame(
     follow: ProfileFollowState = ProfileFollowState(),
     connection: ProfileConnection = ProfileConnection.None,
     onFollow: () -> Unit = {},
+    onUnfollow: () -> Unit = {},
     onOpenGig: (String) -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
     postsLoadFailed: Boolean = false,
     onRetryPosts: () -> Unit = {},
+    postCards: List<PulsePostCardContent> = emptyList(),
+    postCardActions: ProfilePostCardActions = ProfilePostCardActions(),
 ) {
     ContentDetailShell(
         title = null,
@@ -639,6 +712,7 @@ internal fun LocalProfileLoadedFrame(
                     ProfileFollowRow(
                         follow = follow,
                         onFollow = onFollow,
+                        onUnfollow = onUnfollow,
                         modifier = Modifier.padding(horizontal = Spacing.s4),
                     )
                 }
@@ -661,6 +735,8 @@ internal fun LocalProfileLoadedFrame(
                             loadFailed = postsLoadFailed,
                             onRetry = onRetryPosts,
                             hiddenByBlock = connection == ProfileConnection.Blocked,
+                            pulseCards = postCards,
+                            cardActions = postCardActions,
                         )
                     LocalProfileTab.About ->
                         Box(modifier = Modifier.padding(horizontal = Spacing.s4)) {
@@ -760,34 +836,41 @@ private fun ConnectHeaderButton(
  * Message — `beacon-primitives.jsx:268-272`), so the follow control lives
  * directly beneath the identity block, the same slot RN puts its action
  * row in (`src/app/user/[id].tsx:522-569`). Hidden on your own profile and
- * when signed out. Mirrors iOS `PublicProfileView.followRow`.
+ * when signed out. Mirrors iOS `PublicProfileView.followRow`: a compact
+ * button like the header's, not a full-width bar a stray tap lands on, and
+ * Following asks before it unfollows ([onUnfollow] opens the confirm).
  */
 @Composable
 private fun ProfileFollowRow(
     follow: ProfileFollowState,
     onFollow: () -> Unit,
+    onUnfollow: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (follow.canFollow && follow.relationshipLoaded) {
         Box(modifier = modifier.testTag("publicProfileFollowButton")) {
             if (follow.isFollowing) {
-                GhostButton(
+                BeaconHeaderGhostButton(
+                    icon = PantopusIcon.Check,
+                    actionLabel = "Following. Tap to unfollow",
+                    onClick = onUnfollow,
                     title = "Following",
-                    onClick = onFollow,
-                    isLoading = follow.isInFlight,
-                    isEnabled = !follow.isInFlight,
+                    enabled = !follow.isInFlight,
                 )
             } else {
-                PrimaryButton(
-                    title = "Follow",
-                    onClick = onFollow,
-                    isLoading = follow.isInFlight,
-                    isEnabled = !follow.isInFlight,
-                )
+                Box(modifier = Modifier.alpha(if (follow.isInFlight) DISABLED_FOLLOW_ALPHA else 1f)) {
+                    BeaconHeaderPrimaryButton(
+                        title = "Follow",
+                        icon = PantopusIcon.Plus,
+                        onClick = { if (!follow.isInFlight) onFollow() },
+                    )
+                }
             }
         }
     }
 }
+
+private const val DISABLED_FOLLOW_ALPHA = 0.6f
 
 /** The profile's public link (web `/u/:username`, the link web's own profile Share uses), or null without one. */
 private fun profileShareUrl(state: PublicProfileUiState): String? {

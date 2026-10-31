@@ -49,11 +49,6 @@ class SystemSheetsTest {
     }
 
     @Test
-    fun inviteLinksMessageIncludesDownloadUrl() {
-        assertTrue(InviteLinks.INVITE_MESSAGE.contains(InviteLinks.DOWNLOAD_URL))
-    }
-
-    @Test
     fun pickedContactCarriesNullableFields() {
         val both =
             PickedContact(

@@ -81,6 +81,7 @@ class PlansFeature
             if (started) return
             started = true
             DeepLinkRouter.bindPlansEnabledProvider { isOn }
+            DeepLinkRouter.bindPlansAnswerProvider { linkAnswer() }
             scope.launch {
                 auth.state.collect { state ->
                     val signedIn = state as? AuthRepository.State.SignedIn
@@ -99,6 +100,17 @@ class PlansFeature
                     }
                 }
             }
+        }
+
+        /**
+         * The answer a Plans link acts on: the one kept for the signed-in person, or the server's when this device has
+         * none for them yet (their first sign-in here). Read straight from the auth state, so a link handled before
+         * the sign-in reaches [start]'s collector still knows who is in.
+         */
+        suspend fun linkAnswer(): Boolean {
+            val id = userId ?: (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id ?: return false
+            if (prefs.contains(id)) return if (id == userId) isOn else remembered(id).plans
+            return read(FLAG_PLANS) ?: isOn
         }
 
         /** The app came to the foreground: re-check both flags. */

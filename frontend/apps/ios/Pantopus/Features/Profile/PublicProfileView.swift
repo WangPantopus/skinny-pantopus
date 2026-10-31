@@ -40,6 +40,7 @@ public struct PublicProfileView: View {
     private let onComposeBroadcast: @MainActor () -> Void
     private let onOpenGig: @MainActor (String) -> Void
     private let onOpenProfile: @MainActor (String) -> Void
+    private let onOpenPost: @MainActor (String) -> Void
 
     public init(
         userId: String,
@@ -50,7 +51,8 @@ public struct PublicProfileView: View {
         onOpenInsights: @escaping @MainActor () -> Void = {},
         onComposeBroadcast: @escaping @MainActor () -> Void = {},
         onOpenGig: @escaping @MainActor (String) -> Void = { _ in },
-        onOpenProfile: @escaping @MainActor (String) -> Void = { _ in }
+        onOpenProfile: @escaping @MainActor (String) -> Void = { _ in },
+        onOpenPost: @escaping @MainActor (String) -> Void = { _ in }
     ) {
         // No call site threads the signed-in id through, so fall back to the
         // session when the caller doesn't supply one — otherwise `isOwner`
@@ -68,6 +70,7 @@ public struct PublicProfileView: View {
         self.onComposeBroadcast = onComposeBroadcast
         self.onOpenGig = onOpenGig
         self.onOpenProfile = onOpenProfile
+        self.onOpenPost = onOpenPost
     }
 
     public var body: some View {
@@ -192,6 +195,26 @@ public struct PublicProfileView: View {
         } message: {
             Text("Remove this connection?")
         }
+        // A stray tap on Following never unfollows: it asks first, as Connected
+        // does. An alert, like Block's, so Cancel shows beside Unfollow (as on
+        // web and Android).
+        .alert(
+            unfollowTitle,
+            isPresented: Binding(
+                get: { viewModel.showUnfollowConfirm },
+                set: { viewModel.showUnfollowConfirm = $0 }
+            )
+        ) {
+            Button("Cancel", role: .cancel) {}
+                .accessibilityIdentifier("publicProfileUnfollowCancel")
+            Button("Unfollow", role: .destructive) {
+                Task { await viewModel.unfollow() }
+            }
+            .accessibilityIdentifier("publicProfileUnfollowConfirm")
+        } message: {
+            Text("They won't be notified.")
+        }
+        .modifier(ProfilePostCardSurfaces(model: viewModel.postCards))
         .sheet(
             isPresented: Binding(
                 get: { viewModel.showFollowHandshake },
@@ -233,6 +256,10 @@ public struct PublicProfileView: View {
 
     private var unblockTitle: String {
         blockName.map { "Unblock \($0)?" } ?? "Unblock this user?"
+    }
+
+    private var unfollowTitle: String {
+        blockName.map { "Unfollow \($0)?" } ?? "Unfollow this person?"
     }
 
     /// Names the neighbor being disconnected, per the destructive-confirm
@@ -363,7 +390,9 @@ public struct PublicProfileView: View {
                 localName: payload.header.displayName,
                 loadFailed: viewModel.postsLoadFailed,
                 onRetry: retryLoad,
-                hiddenByBlock: viewModel.connection == .blocked
+                hiddenByBlock: viewModel.connection == .blocked,
+                pulseCards: viewModel.postCards,
+                onOpenPost: onOpenPost
             )
         case .about:
             LocalProfileAboutSection(content: neighbor)
@@ -465,31 +494,33 @@ public struct PublicProfileView: View {
     /// identity block — the same slot RN puts its action row in
     /// (`src/app/user/[id].tsx:522-569`). Hidden on your own profile and
     /// when signed out, matching RN, and until the relationship has loaded.
+    /// A compact button like the header's, not a full-width bar a stray tap
+    /// lands on, and Following asks before it unfollows.
     @ViewBuilder private var followRow: some View {
         // A blocked profile keeps no Follow control (the server refuses the
         // follow in both directions).
         if viewModel.canFollow, viewModel.relationshipLoaded, viewModel.connection != .blocked {
-            Group {
+            HStack(spacing: Spacing.s0) {
                 if viewModel.isFollowing {
-                    GhostButton(
+                    BeaconHeaderGhostButton(
                         title: "Following",
-                        isLoading: viewModel.isFollowInFlight,
-                        isEnabled: !viewModel.isFollowInFlight
+                        icon: .check,
+                        accessibilityLabel: "Following. Tap to unfollow"
                     ) {
-                        await viewModel.toggleFollow()
+                        viewModel.showUnfollowConfirm = true
                     }
+                    .accessibilityIdentifier("publicProfileFollowButton")
                 } else {
-                    PrimaryButton(
-                        title: "Follow",
-                        isLoading: viewModel.isFollowInFlight,
-                        isEnabled: !viewModel.isFollowInFlight
-                    ) {
-                        await viewModel.toggleFollow()
+                    BeaconHeaderPrimaryButton(title: "Follow", icon: .plus) {
+                        Task { await viewModel.toggleFollow() }
                     }
+                    .accessibilityIdentifier("publicProfileFollowButton")
                 }
+                Spacer(minLength: Spacing.s0)
             }
+            .disabled(viewModel.isFollowInFlight)
+            .opacity(viewModel.isFollowInFlight ? 0.6 : 1)
             .padding(.horizontal, Spacing.s4)
-            .accessibilityIdentifier("publicProfileFollowButton")
         }
     }
 
