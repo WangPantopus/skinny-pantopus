@@ -36,31 +36,46 @@ function maskClaimState(state, claimPhaseV2 = null) {
   return terminalStates[state] || 'under_review';
 }
 
+/**
+ * What Pantopus asked for while the claim waits (Request info, POST /api/admin/claims/:id/review; household owners
+ * can't ask): the reviewer's note, when, and when the first document came in after it. The status stays the masked
+ * `under_review` older apps read. Null when nothing is asked.
+ */
+function infoRequest(claim, documentTimes) {
+  if (claim.state !== 'needs_more_info' || !claim.reviewed_at) return null;
+  const asked = Date.parse(claim.reviewed_at);
+  const after = documentTimes.filter(time => Date.parse(time) > asked).sort((a, b) => Date.parse(a) - Date.parse(b));
+  const note = typeof claim.review_note === 'string' && claim.review_note.trim() ? claim.review_note.trim() : null;
+  return { note, requested_at: claim.reviewed_at, responded_at: after[0] || null };
+}
+
 /** The claims `userId` made, newest first, with masked statuses. Throws when they can't be read. */
 async function listOwnClaims(userId) {
   const { data: claims, error } = await supabaseAdmin
     .from('HomeOwnershipClaim')
-    .select('id, home_id, claim_type, state, claim_phase_v2, method, created_at, updated_at, home:home_id ( address, address2, city, state )')
+    .select('id, home_id, claim_type, state, claim_phase_v2, method, created_at, updated_at, reviewed_at, review_note, home:home_id ( address, address2, city, state )')
     .eq('claimant_user_id', userId)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
 
   // Whether each claim has documents, so a claim started from Add Home isn't
-  // described as documents waiting for review. Unknown (null) if unreadable.
-  // An identity check is not a document.
+  // described as documents waiting for review, and when each came in. Unknown
+  // (null) if unreadable. An identity check is not a document.
   let withEvidence = null;
+  const uploadedAt = new Map();
   const claimIds = (claims || []).map(c => c.id);
   if (claimIds.length) {
     const { data: evidence, error: evidenceError } = await supabaseAdmin
       .from('HomeVerificationEvidence')
-      .select('claim_id')
+      .select('claim_id, created_at')
       .in('claim_id', claimIds)
       .neq('evidence_type', 'idv');
     if (evidenceError) {
       logger.warn('Failed to read claim evidence presence', { error: evidenceError.message });
     } else {
       withEvidence = new Set((evidence || []).map(e => e.claim_id));
+      for (const e of evidence || []) uploadedAt.set(e.claim_id, [...(uploadedAt.get(e.claim_id) || []), e.created_at]);
     }
   }
 
@@ -85,6 +100,7 @@ async function listOwnClaims(userId) {
     status: maskClaimState(c.state, c.claim_phase_v2),
     has_evidence: withEvidence ? withEvidence.has(c.id) : null,
     approval: progress?.get(c.id)?.active ? homeClaimIdentityService.claimantApproval(progress.get(c.id)) : null,
+    info_request: infoRequest(c, uploadedAt.get(c.id) || []),
     created_at: c.created_at,
     updated_at: c.updated_at,
     home: c.home ? {

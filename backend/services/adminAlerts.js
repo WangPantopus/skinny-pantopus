@@ -71,6 +71,50 @@ async function notifyClaimToReview({ claim, home, claimantUserId }) {
   }
 }
 
+/**
+ * A claimant sent a document after a reviewer asked for more (Request info): the claim is waiting for review again.
+ * Same shape as notifyClaimToReview; no address, no document contents.
+ *
+ * @param {object} params
+ * @param {object} params.claim   The HomeOwnershipClaim row (id, claim_type, claimant_user_id, reviewed_at).
+ * @param {object} params.home    The Home row (city, state) — city only is printed.
+ * @returns {Promise<boolean>} true when an email was handed to the mailer.
+ */
+async function notifyClaimInfoSent({ claim, home }) {
+  const to = recipients();
+  if (!to.length || !claim) return false;
+
+  const kind = claim.claim_type === 'resident' ? 'Residency' : 'Ownership';
+  const where = [home && home.city, home && home.state].filter(Boolean).join(', ') || 'unknown area';
+  const subject = `[Pantopus] Document sent for ${kind === 'Ownership' ? 'an' : 'a'} ${kind.toLowerCase()} claim · ${where}`;
+  const text = [
+    `A claimant sent a document after a reviewer asked for more. The ${kind.toLowerCase()} claim is waiting for review again.`,
+    '',
+    `Claim: ${claim.id}`,
+    `Area: ${where}`,
+    `Claimant: ${claim.claimant_user_id}`,
+    `Asked: ${claim.reviewed_at || 'unknown'}`,
+    '',
+    `Review it: ${queueUrl()}`,
+  ].join('\n');
+  const html = `<p>A claimant sent a document after a reviewer asked for more. The <strong>${kind.toLowerCase()}</strong> claim is waiting for review again.</p>
+<ul>
+  <li>Claim: <code>${claim.id}</code></li>
+  <li>Area: ${where}</li>
+  <li>Claimant: <code>${claim.claimant_user_id}</code></li>
+  <li>Asked: ${claim.reviewed_at || 'unknown'}</li>
+</ul>
+<p><a href="${queueUrl()}">Open the review queue</a></p>`;
+
+  try {
+    await emailService.sendEmail({ to: to.join(','), subject, text, html });
+    return true;
+  } catch (err) {
+    logger.warn('adminAlerts: claim info-sent email failed (non-fatal)', { claimId: claim.id, error: err.message });
+    return false;
+  }
+}
+
 const REPORTED = { user: 'person', post: 'post', reply: 'reply', gig: 'task', message: 'neighbor message' };
 const REASONS = new Set(['spam', 'harassment', 'inappropriate', 'misinformation', 'safety', 'other']);
 
@@ -257,5 +301,5 @@ async function notifyProbationDisputeToReview({ caseId, home }) {
   }
 }
 
-module.exports = { notifyClaimToReview, notifyReportToReview, notifyRemovalVoteToReview, notifyAddressWatchCase,
-  notifyProbationDisputeToReview, recipients };
+module.exports = { notifyClaimToReview, notifyClaimInfoSent, notifyReportToReview, notifyRemovalVoteToReview,
+  notifyAddressWatchCase, notifyProbationDisputeToReview, recipients };

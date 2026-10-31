@@ -71,7 +71,7 @@ const PERSONAL_TEMPLATES = [
   { name: 'ownership_verification_needed', pushTitle: 'Verify ownership of {home.name}', pushBody: 'Provide a proof document to continue.' },
   { name: 'ownership_claim_approved', pushTitle: 'Home verification approved', pushBody: 'Your home verification request was approved.' },
   { name: 'ownership_claim_rejected', pushTitle: 'Home verification not approved', pushBody: '{reason}' },
-  { name: 'ownership_claim_needs_more_info', pushTitle: 'More info needed', pushBody: 'We need additional details for {home.name}.' },
+  { name: 'ownership_claim_needs_more_info', pushTitle: 'Pantopus needs one more thing', pushBody: 'For {home.name}: {reason}' },
   { name: 'new_ownership_claim', pushTitle: 'New ownership claim', pushBody: 'Someone submitted an ownership claim for {home.name}.' },
   { name: 'ownership_dispute', pushTitle: 'Ownership dispute', pushBody: 'Someone filed ownership documents that dispute who owns {home.name}. Pantopus will review them.' },
   { name: 'mail_delivered', pushTitle: 'Mail delivered', pushBody: 'New mail at {mailbox.id}.' },
@@ -79,6 +79,9 @@ const PERSONAL_TEMPLATES = [
   { name: 'household_access_request', pushTitle: 'Household access request', pushBody: '{actor.displayName} requested access to your home.' },
   { name: 'household_access_request_rejected', pushTitle: 'Household request not approved', pushBody: 'Your request for {home.name} was not approved.' },
   { name: 'home_member_removed', pushTitle: 'Removed from a household', pushBody: "You're no longer a member of {home.name} on Pantopus." },
+  { name: 'business_verification_approved', pushTitle: 'Your business is verified', pushBody: '{business.displayName} is now verified on Pantopus.' },
+  { name: 'business_verification_rejected', pushTitle: 'Verification document not accepted', pushBody: '{reason}' },
+  { name: 'nonprofit_verified', pushTitle: 'Nonprofit Status Verified', pushBody: 'Your 501(c)(3) nonprofit status has been verified.' },
 ];
 
 for (const tpl of PERSONAL_TEMPLATES) {
@@ -1076,18 +1079,30 @@ async function notifyOwnershipClaimRejected({ userId, homeName, homeId, reason }
   });
 }
 
+// A reviewer's note quoted in a notice; the claim's own screen shows all of it.
+const NOTICE_NOTE_MAX = 240;
+function quotedNote(note) {
+  const text = typeof note === 'string' ? note.trim() : '';
+  if (!text) return null;
+  return `“${text.length > NOTICE_NOTE_MAX ? `${text.slice(0, NOTICE_NOTE_MAX - 1).trimEnd()}…` : text}”`;
+}
+
 /**
- * Notify user that more information is needed for their ownership claim (upload proof again).
+ * Tell a claimant that a Pantopus reviewer asked for more (Request info), quoting the reviewer's note. The link opens
+ * the claim's waiting room in the apps, where they upload; the web opens the claim's upload page from the metadata
+ * (lib/notificationRoutes.ts).
  */
-async function notifyOwnershipClaimNeedsMoreInfo({ userId, homeName, homeId }) {
+async function notifyOwnershipClaimNeedsMoreInfo({ userId, homeName, homeId, claimId, claimType, note }) {
+  const where = homeName || 'your home';
+  const quote = quotedNote(note);
   return createNotification({
     userId,
     type: 'ownership_claim_needs_more_info',
-    title: 'More information needed',
-    body: `Your verification request for ${homeName || 'your home'} needs additional documentation. Open My Homes to continue your claim.`,
+    title: 'Pantopus needs one more thing',
+    body: `${quote ? `For ${where}: ${quote}` : `A Pantopus reviewer needs more from you for ${where}.`} Open your claim to respond.`,
     icon: '📋',
-    link: `/app/homes/${homeId}/dashboard`,
-    metadata: { home_id: homeId },
+    link: `/homes/${homeId}/waiting-room`,
+    metadata: { home_id: homeId, ...(claimId ? { claim_id: claimId } : {}), ...(claimType ? { claim_type: claimType } : {}) },
   });
 }
 
@@ -1143,6 +1158,45 @@ async function notifyHomeMemberRemoved({ userId, homeName, homeId, idempotencyKe
     metadata: { home_id: homeId },
     ...(idempotencyKey ? { idempotencyKey } : {}),
   });
+}
+
+// ============================================================
+//  BUSINESS VERIFICATION NOTIFICATION HELPERS
+// ============================================================
+
+/**
+ * Tell a business's active owners that Pantopus approved or turned down a verification document. A turn-down quotes
+ * the reviewer's note so they know what to send instead; an approved 501(c)(3) document says the fee is now 0%. The
+ * link opens the business's Legal tab on the web, where documents are uploaded; the apps open the business.
+ */
+async function notifyBusinessVerificationDecision({ businessId, businessName, approved, note, nonprofit = false }) {
+  const { data: owners, error } = await supabaseAdmin
+    .from('BusinessTeam')
+    .select('user_id')
+    .eq('business_user_id', businessId)
+    .eq('role_base', 'owner')
+    .eq('is_active', true);
+  if (error) {
+    logger.warn('Business verification notice: owners unavailable', { businessId, error: error.message });
+    return [];
+  }
+  const name = businessName || 'Your business';
+  const quote = quotedNote(note);
+  const notices = [];
+  const notice = nonprofit && approved
+    ? { type: 'nonprofit_verified', title: 'Nonprofit Status Verified',
+      body: 'Your 501(c)(3) nonprofit status has been verified. Your platform fee is now 0%.', icon: '✅',
+      metadata: { business_user_id: businessId, fee_override_pct: 0 } }
+    : { type: approved ? 'business_verification_approved' : 'business_verification_rejected',
+      title: approved ? 'Your business is verified' : 'Verification document not accepted',
+      body: approved
+        ? `${name} is now verified on Pantopus.`
+        : `Pantopus couldn't verify ${name} from the document you sent.${quote ? ` Reviewer's note: ${quote}` : ''} You can upload another one.`,
+      icon: approved ? '✅' : '📋', metadata: { business_user_id: businessId } };
+  for (const userId of new Set((owners || []).map((row) => row.user_id).filter(Boolean))) {
+    notices.push(await createNotification({ userId, ...notice, link: `/app/businesses/${businessId}/dashboard?tab=legal` }));
+  }
+  return notices;
 }
 
 // ============================================================
@@ -1511,6 +1565,8 @@ module.exports = {
   notifyNewOwnershipClaim,
   notifyOwnershipDispute,
   notifyHomeMemberRemoved,
+  // Business verification notifications
+  notifyBusinessVerificationDecision,
   // Mail delivery notifications
   notifyMailDelivered,
   notifyHomeMailRemoved,
