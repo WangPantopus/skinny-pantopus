@@ -1,3 +1,5 @@
+@file:Suppress("LongMethod", "MagicNumber", "MatchingDeclarationName")
+
 package app.pantopus.android.ui.screens.feed.pulse
 
 import app.pantopus.android.core.LaunchFeatures
