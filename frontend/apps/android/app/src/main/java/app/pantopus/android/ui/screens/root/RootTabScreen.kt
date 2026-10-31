@@ -2681,6 +2681,19 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 if (!showing) navController.openTabRoot(PantopusRoute.Mail, ChildRoutes.mailboxItemDetail(pending.mailId))
                 DeepLinkRouter.consume()
             }
+            // A card notice (they joined and have it, or its 90 days ended): the card's page on the Mail tab, over the
+            // Mailbox showing Sent. The same card already on screen stays.
+            is DeepLinkRouter.Destination.MailSentCard -> {
+                val top = navController.currentBackStackEntry
+                val showing =
+                    top?.destination?.route == ChildRoutes.MAILBOX_SENT_CARD &&
+                        top.arguments?.getString(MAIL_SENT_CARD_ID_KEY) == pending.id
+                if (!showing) {
+                    HolidayCardsRepository.announceShowSent()
+                    navController.openTabRoot(PantopusRoute.Mail, ChildRoutes.mailboxSentCard(pending.id))
+                }
+                DeepLinkRouter.consume()
+            }
             // `/mailbox` ("Your mail is here", the morning summary) — the Mail tab at its Mailbox, at the top of Incoming.
             DeepLinkRouter.Destination.Mailbox -> {
                 navController.openTabRoot(PantopusRoute.Mail)
