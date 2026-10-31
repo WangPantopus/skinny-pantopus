@@ -100,6 +100,10 @@ public struct MailboxRootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .mailboxOpenSent)) { note in
             viewModel.showSentAfterSending(note.object as? String)
         }
+        // A card notice opened the card's page over the Mailbox: Back lands on Sent.
+        .onReceive(NotificationCenter.default.publisher(for: .mailboxShowSent)) { _ in
+            if viewModel.showsSentChip { viewModel.selectSent() }
+        }
         // A card taken back on its page: gone from Sent; the flag follows.
         .onReceive(NotificationCenter.default.publisher(for: .mailboxSentChanged)) { note in
             if let id = note.object as? String { viewModel.sent.dropPiece(id) }

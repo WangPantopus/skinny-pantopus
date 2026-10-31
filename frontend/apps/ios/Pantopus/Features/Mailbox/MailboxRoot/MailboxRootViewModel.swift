@@ -14,6 +14,8 @@ public extension Notification.Name {
     static let mailboxSentChanged = Notification.Name("mailboxSentChanged")
     /// Posted to show Sent in the Mailbox; with a sent card's id as `object`, that card's page too.
     static let mailboxOpenSent = Notification.Name("mailboxOpenSent")
+    /// Posted when a link opens a sent card's page (a card notice): the Mailbox under it shows Sent.
+    static let mailboxShowSent = Notification.Name("mailboxShowSent")
 }
 
 /// The four mailbox drawers. `business` carries the "Biz" short label

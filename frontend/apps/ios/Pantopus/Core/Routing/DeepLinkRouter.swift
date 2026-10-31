@@ -172,6 +172,9 @@ final class DeepLinkRouter {
         /// (mail_delivered / mail_claimed / mail_escrow_*), opened in the
         /// existing mail item detail.
         case mailItem(mailId: String)
+        /// `/app/mailbox/sent/:id` — a card the person sent, on its page in
+        /// Sent (the holiday_card_claimed / holiday_card_expired notices).
+        case mailSentCard(id: String)
         /// `/mailbox` — the Mail tab (the Mail Day summary notification).
         case mailbox
         /// `/app/place/neighbor-message/:id` — a received neighbor message, in
@@ -949,6 +952,10 @@ final class DeepLinkRouter {
         case "gig": return packageGigDestination(url: url, idQuery: idQuery)
         case "translation": return .mailTranslation(mailId: idQuery ?? "")
         case "tasks": return mailTaskDestination(url: url, segments: segments)
+        case "sent":
+            // A sent card's page; Sent itself is a drawer of the Mailbox.
+            guard segments.count == 3, UUID(uuidString: segments[2]) != nil else { return .mailbox }
+            return .mailSentCard(id: segments[2])
         default:
             guard segments.count == 2, UUID(uuidString: sub) != nil else { return .unknown(url) }
             return .mailItem(mailId: sub)
@@ -1069,7 +1076,7 @@ extension DeepLinkRouter.Destination {
     var opensMailbox: Bool {
         switch self {
         case .vacationHold, .mailDay, .stamps, .mailTask, .mailTranslation, .unboxing, .packageGig, .earn,
-             .mailbox, .mailItem:
+             .mailbox, .mailItem, .mailSentCard:
             true
         default:
             false

@@ -88,7 +88,9 @@ public struct EmptyState: View {
     /// One VoiceOver element: the combined element takes the CTA's button trait and action, so
     /// its label names the action too ("… Try again, button"), not just the message.
     private var accessibilitySummary: String {
-        var summary = "\(headline). \(subcopy)"
+        // A headline that already ends its sentence ("Nothing sent yet.") isn't read with a second stop.
+        let stop = headline.last.map { ".!?".contains($0) } == true ? "" : "."
+        var summary = "\(headline)\(stop) \(subcopy)"
         guard let cta else { return summary }
         if let last = summary.last, !".!?".contains(last) { summary += "." }
         return summary + " \(cta.title)"
