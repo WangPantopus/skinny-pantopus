@@ -1985,7 +1985,7 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
         if (skipForLaunchCut(['mailbox', 'holiday_cards'], 'cardEmail')) return;
         try {
           const sent = await emailService.sendCardWaitingEmail({ toEmail, senderName, claimLink,
-            expiresAt: escrow.expiresAt, sealed: arrival === 'sealed_christmas' });
+            expiresAt: escrow.expiresAt, sealed: arrival === 'sealed_christmas', timeZone: senderZone });
           if (!sent?.success) logger.warn('Card email not delivered', { mailId: mail.id, error: sent?.error || null });
         } catch (emailErr) {
           logger.warn('Card email failed (non-blocking)', { mailId: mail.id, error: emailErr.message });
@@ -2039,7 +2039,8 @@ router.post('/cards/preview', verifyToken, validate(sendCardSchema), async (req,
       sealed_days: arrivesOn && opensOn ? holidayCards.daysBetween(arrivesOn, opensOn) : null,
       take_back_until: card.take_back_until,
       email: toEmail
-        ? emailService.cardWaitingEmailContent({ senderName: senderDisplay, expiresAt: checked.escrowExpiresAt, sealed })
+        ? emailService.cardWaitingEmailContent({ senderName: senderDisplay, expiresAt: checked.escrowExpiresAt, sealed,
+          timeZone: checked.senderZone })
         : null,
       link_page: linkPage,
     });
@@ -2062,22 +2063,33 @@ router.post('/cards/:id/take-back', verifyToken, async (req, res) => {
   if (!UUID_REGEX.test(id)) return notHere();
   try {
     const { data: mail, error } = await supabaseAdmin.from('Mail')
-      .select('id, sender_user_id, created_at, delivered_at, escrow_status, object_id, mail_extracted')
+      .select('id, sender_user_id, created_at, delivered_at, escrow_status, escrow_expires_at, object_id, mail_extracted')
       .eq('id', id).maybeSingle();
     if (error) throw new Error(error.message);
     if (!mail || String(mail.sender_user_id) !== String(senderId) || !holidayCards.isCard(mail)) return notHere();
     const now = new Date();
-    const tooLate = () => res.status(409).json({
-      error: mail.escrow_status ? 'They already have your card.' : 'The carrier has already picked up your card.',
+    // Why it can't come back, as Sent says it: its email's 90 days ended, they have it, or the carrier has it.
+    const tooLate = (row) => res.status(409).json({
+      error: holidayCards.sentStatus(row, now) === 'expired' ? 'They didn’t open the email in 90 days.'
+        : row.escrow_status ? 'They already have your card.' : 'The carrier has already picked up your card.',
       code: 'CARD_ALREADY_SENT' });
-    if (!holidayCards.sentSummary(mail, now).can_take_back) return tooLate();
+    if (!holidayCards.sentSummary(mail, now).can_take_back || holidayCards.sentStatus(mail, now) === 'expired') {
+      return tooLate(mail);
+    }
 
     if (mail.escrow_status) {
       const { data: withdrawn, error: updateError } = await supabaseAdmin.from('Mail')
         .update({ escrow_status: 'withdrawn' })
-        .eq('id', id).eq('sender_user_id', senderId).eq('escrow_status', 'pending').select('id');
+        .eq('id', id).eq('sender_user_id', senderId).eq('escrow_status', 'pending')
+        .gt('escrow_expires_at', now.toISOString())
+        .select('id');
       if (updateError) throw new Error(updateError.message);
-      if (!withdrawn?.length) return tooLate();
+      if (!withdrawn?.length) {
+        // Opened or ended meanwhile: say which.
+        const { data: fresh } = await supabaseAdmin.from('Mail')
+          .select('escrow_status, escrow_expires_at').eq('id', id).maybeSingle();
+        return tooLate({ ...mail, ...(fresh || {}) });
+      }
     } else {
       // Only while it waits for the pickup: the row goes, and nobody ever saw it.
       const { data: removed, error: deleteError } = await supabaseAdmin.from('Mail').delete()
@@ -2085,7 +2097,7 @@ router.post('/cards/:id/take-back', verifyToken, async (req, res) => {
         .gt('delivered_at', now.toISOString())
         .select('id');
       if (deleteError) throw new Error(deleteError.message);
-      if (!removed?.length) return tooLate();
+      if (!removed?.length) return tooLate(mail);
       await removeCardObject(mail.object_id);
     }
     logger.info('Christmas card taken back', { mailId: id, senderId });
@@ -3197,7 +3209,7 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
           title: 'Your Christmas card arrived',
           body: `${claimerName} joined Pantopus and has your card.`,
           icon: '✉️',
-          link: '/app/mailbox',
+          link: `/app/mailbox/sent/${mailId}`,
           metadata: { mail_id: mailId, claimer_id: claimerId },
         } : {
           userId: mail.sender_user_id,

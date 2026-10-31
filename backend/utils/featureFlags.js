@@ -129,8 +129,9 @@ const LAUNCH_NOTIFICATION_TYPE_FEATURES = {
   mail_urgent: ['mailbox'],
   mail_interrupt: ['mailbox'],
   home_mail_removed: ['mailbox'],
-  // 12. Christmas cards: someone not on Pantopus joined and has the sender's card.
+  // 12. Christmas cards by email: someone not on Pantopus joined and has the sender's card, or its 90 days ended.
   holiday_card_claimed: ['mailbox', 'holiday_cards'],
+  holiday_card_expired: ['mailbox', 'holiday_cards'],
   // 11. The Pulse redesign: follow alerts, Helpful and thanks notices, offer requests and the
   // Ask reminder. The October 13 Pulse's reply and mention notices are not here.
   pulse_follow_reply: ['pulse_redesign'],

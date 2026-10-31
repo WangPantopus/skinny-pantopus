@@ -163,7 +163,8 @@ function RegisterContent() {
     if (oauthLoading) return;
     setOauthLoading(provider);
     try {
-      const nonce = beginOAuthAttempt();
+      // A friend's link's code rides the attempt, so a Google or Apple sign-up credits them too.
+      const nonce = beginOAuthAttempt(inviteCode || undefined);
       if (!nonce) {
         setError(OAUTH_ATTEMPT_UNAVAILABLE_ERROR);
         setOauthLoading(null);
