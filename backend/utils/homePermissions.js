@@ -63,17 +63,34 @@ async function homeHasClaim(homeId, userId) {
  * Resolve one current effective policy. Unknown verification does not attest
  * membership; missing age is preserved as historical adult-compatible data.
  * Errors throw so callers cannot turn an unreadable deny into a base grant.
+ *
+ * Every read the decision may need goes out at once, one round trip: the role
+ * and override rows, and the claim and removal-vote checks that apply to some
+ * people only. Each answer is used exactly where the decision needs it, and
+ * only a read that is used can fail the check. A claim's set-aside check stays
+ * a second step; it applies to claims only.
  */
 async function getUserAccess(homeId, userId) {
   const empty = { permissions: [], role_base: null, effective_role_base: null,
     occupancy: null, hasAccess: false, isOwner: false };
   if (!homeId || !userId) return empty;
-  const [home, occupancy, owner] = await Promise.all([
+  const settle = (read) => read.then((value) => ({ value }), (error) => ({ error }));
+  const used = ({ value, error }) => {
+    if (error) throw error;
+    return value;
+  };
+  const [home, occupancy, owner, roleRead, overridesRead, otherClaimRead, removalVoteRead] = await Promise.all([
     checked(supabaseAdmin.from('Home').select('id, owner_id').eq('id', homeId).maybeSingle()),
     checked(supabaseAdmin.from('HomeOccupancy').select('*').eq('home_id', homeId).eq('user_id', userId).maybeSingle()),
     checked(supabaseAdmin.from('HomeOwner').select('id, subject_type, owner_status')
       .eq('home_id', homeId).eq('subject_id', userId).eq('subject_type', 'user')
       .eq('owner_status', 'verified').maybeSingle()),
+    // Every role's rows (a few dozen): which role applies is known only once the occupancy is read.
+    settle(checked(supabaseAdmin.from('HomeRolePermission').select('role_base, permission, allowed'))),
+    settle(checked(supabaseAdmin.from('HomePermissionOverride').select('permission, allowed')
+      .eq('home_id', homeId).eq('user_id', userId))),
+    settle(homeHasClaim(homeId, userId)),
+    settle(removalVoteOpen(homeId, userId)),
   ]);
   if (!home) return empty;
   const role = resolveHomeRole(occupancy);
@@ -89,11 +106,10 @@ async function getUserAccess(homeId, userId) {
 
   const ownerEntitlement = !!ownership;
   const baseRole = ownerEntitlement ? 'owner' : role;
-  const [roleRows, overrides] = await Promise.all([
-    checked(supabaseAdmin.from('HomeRolePermission').select('permission, allowed').eq('role_base', baseRole)),
-    checked(supabaseAdmin.from('HomePermissionOverride').select('permission, allowed')
-      .eq('home_id', homeId).eq('user_id', userId)),
-  ]);
+  const allRoleRows = used(roleRead);
+  const overrides = used(overridesRead);
+  if (!Array.isArray(allRoleRows)) throw accessUnavailable();
+  const roleRows = allRoleRows.filter(row => row && row.role_base === baseRole);
   if (![roleRows, overrides].every(rows => Array.isArray(rows)
     && rows.every(row => row && typeof row.permission === 'string' && typeof row.allowed === 'boolean'))) {
     throw accessUnavailable();
@@ -116,12 +132,12 @@ async function getUserAccess(homeId, userId) {
     permissions = permissions.filter(permission => defaults.has(permission));
   } else if (holdsProof(occupancy, role) && !permissions.includes('members.view')
     && !overrides.some(row => row.permission === 'members.view' && row.allowed === false)
-    && await homeHasClaim(homeId, userId)) {
+    && used(otherClaimRead)) {
     permissions = HOME_PERMISSIONS.filter(permission => permission === 'members.view' || permissions.includes(permission));
   }
   // Home claims PR 5: someone a household vote may remove keeps their access while the vote is open, but not the
   // power to bring people in or decide about them (home_effective_access drops it the same way in SQL).
-  if (!ownerEntitlement && permissions.includes('members.manage') && await removalVoteOpen(homeId, userId)) {
+  if (!ownerEntitlement && permissions.includes('members.manage') && used(removalVoteRead)) {
     permissions = permissions.filter(permission => permission !== 'members.manage');
   }
   return {
