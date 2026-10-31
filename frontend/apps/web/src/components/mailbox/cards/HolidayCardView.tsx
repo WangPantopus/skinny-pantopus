@@ -5,9 +5,11 @@
 // the envelope with its seal and how long until it opens. The first time it's
 // opened: the envelope opens and the card slides out picture side up. Then
 // "Turn it over" to read the note. With Reduce Motion nothing slides or turns.
+// The sealed notice and the slide-out are shared with Look it over, the
+// sender's look before sending, so it shows exactly this.
 // ============================================================
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { MailItemV2 } from '@/types/mailbox';
 import MailPiece from '../MailPiece';
 import CardFront from './CardFront';
@@ -20,7 +22,7 @@ const MOTION = `
 @keyframes pantopus-envelope-away { from { transform: none; opacity: 1; } to { transform: translateY(55%); opacity: 0; } }
 `;
 
-function useReducedMotion(): boolean {
+export function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
     const query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
@@ -31,6 +33,86 @@ function useReducedMotion(): boolean {
     return () => query.removeEventListener?.('change', change);
   }, []);
   return reduced;
+}
+
+/**
+ * The card leaving its envelope: envelope → opening (it rises out as the envelope drops away, about 0.7 s) → card.
+ * `open` plays it from the start, again if asked; with Reduce Motion the card is simply there.
+ */
+export function useCardOpening(firstOpen: boolean) {
+  const reduced = useReducedMotion();
+  const [stage, setStage] = useState<'envelope' | 'opening' | 'card'>(firstOpen ? 'envelope' : 'card');
+  const [plays, setPlays] = useState(0);
+
+  useEffect(() => {
+    if (stage !== 'opening') return;
+    const done = window.setTimeout(() => setStage('card'), 760);
+    return () => window.clearTimeout(done);
+  }, [stage, plays]);
+
+  const open = useCallback(() => {
+    if (reduced) { setStage('card'); return; }
+    setPlays((n) => n + 1);
+    setStage('opening');
+  }, [reduced]);
+
+  return { stage, plays, open };
+}
+
+/** What a sealed card says when it's tapped before Christmas morning. */
+export function SealedNotice({ from, day, when, className = '' }: { from: string; day: string; when?: string | null; className?: string }) {
+  return (
+    <section aria-label="Sealed until Christmas" className={`rounded-2xl border border-[#e7dcc6] bg-[#fbf6ec] px-5 py-4 text-center [@media(prefers-color-scheme:dark)]:brightness-[0.94] ${className}`}>
+      <p className="text-[22px] leading-7" style={{ fontFamily: SERIF, color: WAX }}>Do not open until Christmas</p>
+      <p className="mt-2 text-[15px] leading-[22px] text-[#374151]">
+        {from} sealed this card. It opens on Christmas morning, {day}{when ? `, ${when}` : ''}.
+      </p>
+    </section>
+  );
+}
+
+/**
+ * The card out of its envelope, picture side up, with what goes under it (`children`: its buttons); while `opening`
+ * it rises out as the envelope drops away below.
+ */
+export function CardFromEnvelope({
+  piece,
+  recipientName,
+  recipientLine,
+  opening,
+  plays = 0,
+  showBack,
+  children,
+}: {
+  piece: MailItemV2;
+  recipientName: string;
+  recipientLine?: string | null;
+  opening: boolean;
+  /** Each play starts the movement again from the beginning. */
+  plays?: number;
+  showBack: boolean;
+  children?: ReactNode;
+}) {
+  const card = piece.card!;
+  const from = piece.sender_display || 'Someone';
+  return (
+    <div className="relative">
+      <style>{MOTION}</style>
+      <div key={plays} style={opening ? { animation: 'pantopus-card-rise 720ms cubic-bezier(0.2, 0.8, 0.2, 1) both' } : undefined}>
+        <CardFlip
+          showBack={showBack}
+          front={<CardFront design={card.design} caption={card.caption} paper={card.paper} year={card.year} mailedOn={piece.postmark?.date || piece.created_at} className="rounded-[3px] shadow-[0_14px_30px_rgba(60,40,10,0.28)]" />}
+          back={<CardBack paper={card.paper} fromName={from} year={card.year} message={piece.content || ''} className="rounded-[3px] shadow-[0_14px_30px_rgba(60,40,10,0.28)]" />}
+        />
+      </div>
+      {opening ? (
+        <div key={`away-${plays}`} className="pointer-events-none absolute inset-x-0 bottom-0" style={{ animation: 'pantopus-envelope-away 720ms ease-in both' }}>
+          <MailPiece item={piece} recipientName={recipientName} recipientLine={recipientLine} opened />
+        </div>
+      ) : null}
+      {children}
+    </div>
+  );
 }
 
 const button = 'inline-flex min-h-[44px] items-center justify-center rounded-xl px-5 text-[15px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2';
@@ -55,15 +137,8 @@ export default function HolidayCardView({
   // The caption as a sentence for screen readers: most end in a full stop or a question mark already.
   const caption = card.caption || 'A Christmas picture';
   const captionSentence = /[.!?]$/.test(caption) ? caption : `${caption}.`;
-  const reduced = useReducedMotion();
-  const [stage, setStage] = useState<'envelope' | 'opening' | 'card'>(firstOpen ? 'envelope' : 'card');
+  const { stage, plays, open } = useCardOpening(firstOpen);
   const [showBack, setShowBack] = useState(false);
-
-  useEffect(() => {
-    if (stage !== 'opening') return;
-    const done = window.setTimeout(() => setStage('card'), 760);
-    return () => window.clearTimeout(done);
-  }, [stage]);
 
   const envelope = (
     <button
@@ -82,28 +157,13 @@ export default function HolidayCardView({
     return (
       <div className="mx-auto w-full max-w-md px-4 pb-6 pt-2">
         {envelope}
-        <section aria-label="Sealed until Christmas" className="mt-5 rounded-2xl border border-[#e7dcc6] bg-[#fbf6ec] px-5 py-4 text-center [@media(prefers-color-scheme:dark)]:brightness-[0.94]">
-          <p className="text-[22px] leading-7" style={{ fontFamily: SERIF, color: WAX }}>Do not open until Christmas</p>
-          <p className="mt-2 text-[15px] leading-[22px] text-[#374151]">
-            {from} sealed this card. It opens on Christmas morning, {day}
-            {card.sealed_until ? `, ${inDays(card.sealed_until)}` : ''}.
-          </p>
-        </section>
+        <SealedNotice from={from} day={day} when={card.sealed_until ? inDays(card.sealed_until) : null} className="mt-5" />
       </div>
     );
   }
 
-  const theCard = (
-    <CardFlip
-      showBack={showBack}
-      front={<CardFront design={card.design} caption={card.caption} paper={card.paper} year={card.year} mailedOn={piece.postmark?.date || piece.created_at} className="rounded-[3px] shadow-[0_14px_30px_rgba(60,40,10,0.28)]" />}
-      back={<CardBack paper={card.paper} fromName={from} year={card.year} message={piece.content || ''} className="rounded-[3px] shadow-[0_14px_30px_rgba(60,40,10,0.28)]" />}
-    />
-  );
-
   return (
     <div className="mx-auto w-full max-w-md px-4 pb-6 pt-2">
-      <style>{MOTION}</style>
       {stage === 'envelope' ? (
         <div>
           {envelope}
@@ -111,7 +171,7 @@ export default function HolidayCardView({
           <div className="mt-3 flex justify-center">
             <button
               type="button"
-              onClick={() => setStage(reduced ? 'card' : 'opening')}
+              onClick={open}
               className={`${button} text-[#fff7ed] focus-visible:ring-[#8b1d1d]`}
               style={{ backgroundColor: WAX }}
             >
@@ -120,15 +180,7 @@ export default function HolidayCardView({
           </div>
         </div>
       ) : (
-        <div className="relative">
-          <div style={stage === 'opening' ? { animation: 'pantopus-card-rise 720ms cubic-bezier(0.2, 0.8, 0.2, 1) both' } : undefined}>
-            {theCard}
-          </div>
-          {stage === 'opening' ? (
-            <div className="pointer-events-none absolute inset-x-0 bottom-0" style={{ animation: 'pantopus-envelope-away 720ms ease-in both' }}>
-              <MailPiece item={piece} recipientName={recipientName} recipientLine={recipientLine} opened />
-            </div>
-          ) : null}
+        <CardFromEnvelope piece={piece} recipientName={recipientName} recipientLine={recipientLine} opening={stage === 'opening'} plays={plays} showBack={showBack}>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
@@ -148,7 +200,7 @@ export default function HolidayCardView({
           </div>
           {/* The note for screen readers, whichever side is up */}
           <p className="sr-only">{`Card from ${from}: ${captionSentence} On the back: ${piece.content || ''}`}</p>
-        </div>
+        </CardFromEnvelope>
       )}
     </div>
   );

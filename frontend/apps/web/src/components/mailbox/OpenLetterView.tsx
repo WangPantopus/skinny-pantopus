@@ -87,11 +87,81 @@ function useSignedIn(): boolean | null {
   return signedIn;
 }
 
+/** The page's own panel; Look it over draws a card's page in it too. */
+export const LINK_PAGE_PANEL = 'bg-app-surface border border-app-border rounded-2xl shadow-sm p-6';
+
+/** What the page says about the piece: the server's answer, or (Look it over) what it will answer once it's sent. */
+export type LinkPageLetter = Pick<Letter, 'senderName' | 'senderVerified' | 'senderKind' | 'subject' | 'previewText' | 'outcomeDescription' | 'sentTo' | 'createdAt' | 'card'>;
+
+/**
+ * Who it's from and what it is (a Christmas card says only that it is one: no picture, no note, until it's in
+ * their mailbox). Look it over shows this same block before a card is sent, so the two can't drift.
+ */
+export function LinkPageSummary({ letter }: { letter: LinkPageLetter }) {
+  const card = letter.card ?? null;
+  return (
+    <>
+      <div className="flex items-start gap-3.5">
+        <span className="w-12 h-12 rounded-2xl bg-app-surface-sunken flex items-center justify-center shrink-0">
+          <Mail size={24} strokeWidth={2} className="text-app-text-secondary" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-[12px] font-semibold tracking-[0.08em] uppercase text-app-text-muted">{card ? 'A Christmas card for you' : 'A letter for you'}</p>
+          <h1 className="text-[19px] font-bold text-app-text -tracking-[0.01em] mt-0.5 break-words">From {letter.senderName}</h1>
+          {letter.senderVerified && (
+            <p className="inline-flex items-center gap-1.5 rounded-full bg-app-success-light px-2.5 py-1 mt-2 text-[12px] font-semibold text-app-success">
+              <BadgeCheck size={14} strokeWidth={2.25} />
+              {letter.senderKind === 'business' ? 'Verified business' : 'Verified neighbor'}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <section aria-label={card ? 'Card' : 'Letter preview'} className="mt-5 rounded-xl border border-app-border-subtle bg-app-surface-raised p-4">
+        {letter.subject && <h2 className="text-[15px] font-semibold text-app-text break-words">{letter.subject}</h2>}
+        {card ? (
+          <p className="text-[14px] text-app-text-secondary leading-[21px] mt-1">
+            {card.sealed ? 'It’s sealed until Christmas morning. ' : ''}You’ll see the card once it’s in your mailbox.
+          </p>
+        ) : null}
+        {letter.previewText && (
+          <p className="text-[14px] text-app-text-secondary leading-[21px] mt-1 break-words line-clamp-3">{letter.previewText}</p>
+        )}
+        <p className="text-[12px] text-app-text-muted mt-3">
+          Sent {fmtDate(letter.createdAt)}{letter.outcomeDescription ? ` · ${letter.outcomeDescription}` : ''}
+        </p>
+      </section>
+    </>
+  );
+}
+
+/**
+ * Signed out: sign in or create an account with the address it was sent to. Without links (Look it over) it's drawn
+ * as the page shows it, and does nothing.
+ */
+export function LinkPageSignIn({ letter, loginHref, registerHref }: { letter: LinkPageLetter; loginHref?: string; registerHref?: string }) {
+  const card = letter.card ?? null;
+  const byNumber = !letter.sentTo.includes('@');
+  const sentToLabel = `${letter.sentTo}, the ${byNumber ? 'number' : 'address'} this ${card ? 'card' : 'letter'} was sent to`;
+  const signIn = card ? 'Sign in to open it' : 'Sign in to read it';
+  return (
+    <div className="mt-5 flex flex-col gap-2.5">
+      {loginHref ? <Link href={loginHref} className={primaryButton}>{signIn}</Link> : <span className={primaryButton}>{signIn}</span>}
+      {registerHref
+        ? <Link href={registerHref} className={secondaryButton}>Create a free account</Link>
+        : <span className={secondaryButton}>Create a free account</span>}
+      <p className="text-[13px] text-app-text-secondary leading-[19px] text-center mt-1">
+        Use {sentToLabel}.
+      </p>
+    </div>
+  );
+}
+
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-h-screen bg-app-bg flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-[420px]">
-        <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-6">{children}</div>
+        <div className={LINK_PAGE_PANEL}>{children}</div>
         <p className="text-[12px] text-app-text-muted leading-[18px] mt-4 text-center">
           Pantopus — your household, organized.{' '}
           <Link href="/start" className="text-primary-600 font-semibold hover:underline">What is Pantopus?</Link>
@@ -218,49 +288,13 @@ export default function OpenLetterView({ mailId, token }: { mailId: string; toke
   const card = letter.card ?? null;
   const noun = card ? 'card' : 'letter';
   const byNumber = !letter.sentTo.includes('@');
-  const sentToLabel = `${letter.sentTo}, the ${byNumber ? 'number' : 'address'} this ${noun} was sent to`;
 
   return (
     <Shell>
-      <div className="flex items-start gap-3.5">
-        <span className="w-12 h-12 rounded-2xl bg-app-surface-sunken flex items-center justify-center shrink-0">
-          <Mail size={24} strokeWidth={2} className="text-app-text-secondary" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-[12px] font-semibold tracking-[0.08em] uppercase text-app-text-muted">{card ? 'A Christmas card for you' : 'A letter for you'}</p>
-          <h1 className="text-[19px] font-bold text-app-text -tracking-[0.01em] mt-0.5 break-words">From {letter.senderName}</h1>
-          {letter.senderVerified && (
-            <p className="inline-flex items-center gap-1.5 rounded-full bg-app-success-light px-2.5 py-1 mt-2 text-[12px] font-semibold text-app-success">
-              <BadgeCheck size={14} strokeWidth={2.25} />
-              {letter.senderKind === 'business' ? 'Verified business' : 'Verified neighbor'}
-            </p>
-          )}
-        </div>
-      </div>
-
-      <section aria-label={card ? 'Card' : 'Letter preview'} className="mt-5 rounded-xl border border-app-border-subtle bg-app-surface-raised p-4">
-        {letter.subject && <h2 className="text-[15px] font-semibold text-app-text break-words">{letter.subject}</h2>}
-        {card ? (
-          <p className="text-[14px] text-app-text-secondary leading-[21px] mt-1">
-            {card.sealed ? 'It’s sealed until Christmas morning. ' : ''}You’ll see the card once it’s in your mailbox.
-          </p>
-        ) : null}
-        {letter.previewText && (
-          <p className="text-[14px] text-app-text-secondary leading-[21px] mt-1 break-words line-clamp-3">{letter.previewText}</p>
-        )}
-        <p className="text-[12px] text-app-text-muted mt-3">
-          Sent {fmtDate(letter.createdAt)}{letter.outcomeDescription ? ` · ${letter.outcomeDescription}` : ''}
-        </p>
-      </section>
+      <LinkPageSummary letter={letter} />
 
       {signedIn === false && (
-        <div className="mt-5 flex flex-col gap-2.5">
-          <Link href={loginHref} className={primaryButton}>{card ? 'Sign in to open it' : 'Sign in to read it'}</Link>
-          <Link href={`/register?redirectTo=${encodeURIComponent(here)}`} className={secondaryButton}>Create a free account</Link>
-          <p className="text-[13px] text-app-text-secondary leading-[19px] text-center mt-1">
-            Use {sentToLabel}.
-          </p>
-        </div>
+        <LinkPageSignIn letter={letter} loginHref={loginHref} registerHref={`/register?redirectTo=${encodeURIComponent(here)}`} />
       )}
 
       {signedIn === true && wrongAccount && (
