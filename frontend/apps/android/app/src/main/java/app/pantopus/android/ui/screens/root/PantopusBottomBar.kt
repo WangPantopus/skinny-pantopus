@@ -3,6 +3,9 @@
 package app.pantopus.android.ui.screens.root
 
 import android.os.Build
+import androidx.compose.animation.core.EaseOut
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -12,9 +15,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -26,12 +31,30 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -44,10 +67,14 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.ui.screens.feed.PULSE_HEADER_HYSTERESIS
+import app.pantopus.android.ui.screens.feed.PULSE_HEADER_MS
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Spacing
+import app.pantopus.android.ui.theme.rememberReduceMotion
+import kotlin.math.roundToInt
 
 /**
  * Custom bottom bar matching the Pantopus design spec: 78dp tall, semi-
@@ -60,10 +87,14 @@ import app.pantopus.android.ui.theme.Spacing
  * The app draws edge to edge, so the surface extends under the system
  * navigation bar and the tabs sit above it.
  *
+ * While a page scrolls down the bar steps aside ([away], founder request 2026-10-30, as on iPhone): it slides down
+ * behind the system navigation area over the Pulse header's 220 ms, and the page above grows into its room.
+ *
  * @param selected Currently selected route.
  * @param onSelect Called when the user taps a different tab.
  * @param badges Map of route → badge count. Missing entries render no badge.
  * @param tabs The tabs to draw, in order ([PantopusRoute.barTabs]).
+ * @param away Scrolled out of the way ([TabBarScrollState]).
  */
 @Composable
 fun PantopusBottomBar(
@@ -72,6 +103,7 @@ fun PantopusBottomBar(
     badges: Map<PantopusRoute, Int> = emptyMap(),
     tabs: List<PantopusRoute> = PantopusRoute.entries,
     modifier: Modifier = Modifier,
+    away: Boolean = false,
 ) {
     val background = PantopusColors.appSurface.copy(alpha = 0.96f)
     val blurModifier =
@@ -80,9 +112,21 @@ fun PantopusBottomBar(
         } else {
             Modifier
         }
+    val reduceMotion = rememberReduceMotion()
+    val awayProgress =
+        animateFloatAsState(
+            targetValue = if (away) 1f else 0f,
+            animationSpec = tween(durationMillis = PULSE_HEADER_MS, easing = EaseOut),
+            label = "tabBarAway",
+        )
+    val navigationPx = WindowInsets.navigationBars.getBottom(LocalDensity.current)
 
     BoxWithConstraints(
-        modifier = modifier.fillMaxWidth(),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .slidesAway(progress = { awayProgress.value }, navigationPx, reduceMotion, strip = background)
+                .takesNoTouchesWhile(away),
     ) {
         val labelFontScale = tabLabelFontScale(tabs = tabs, tabWidth = maxWidth / tabs.size.coerceAtLeast(1))
         // Blurred tint layer — behind the content. On pre-S devices `blur`
@@ -113,6 +157,133 @@ fun PantopusBottomBar(
                     labelFontScale = labelFontScale,
                     onClick = { onSelect(route) },
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Draws the bar [progress] of the way out of view (0 in place, 1 away): its height shrinks to the system navigation
+ * area's [navigationPx], so the page above grows into the room, and the tabs slide down behind that area, which keeps
+ * the bar's [strip] color. With [reduceMotion] the tabs fade out in place, and the room goes to the page once they
+ * have. In place (0) it draws exactly as before.
+ */
+private fun Modifier.slidesAway(
+    progress: () -> Float,
+    navigationPx: Int,
+    reduceMotion: Boolean,
+    strip: Color,
+): Modifier =
+    // A layer of its own, so redrawing the bar each frame of the slide redraws nothing else on screen. The drawing comes
+    // before the shrinking, so it sees the shrunken height: the tabs drawn above the strip, the strip over the
+    // navigation area.
+    graphicsLayer().drawWithContent {
+        val progressNow = progress()
+        if (progressNow <= 0f) {
+            drawContent()
+            return@drawWithContent
+        }
+        val keep = navigationPx.toFloat().coerceAtMost(size.height)
+        clipRect(bottom = size.height - keep) {
+            if (reduceMotion) {
+                drawIntoCanvas { canvas ->
+                    canvas.saveLayer(Rect(Offset.Zero, size), Paint().apply { alpha = 1f - progressNow })
+                    this@drawWithContent.drawContent()
+                    canvas.restore()
+                }
+            } else {
+                this@drawWithContent.drawContent()
+            }
+        }
+        if (keep > 0f) drawRect(strip, topLeft = Offset(0f, size.height - keep), size = Size(size.width, keep))
+    }.layout { measurable, constraints ->
+        val placeable = measurable.measure(constraints)
+        val keep = navigationPx.coerceIn(0, placeable.height)
+        val gone = if (reduceMotion) (if (progress() >= 1f) 1f else 0f) else progress()
+        val height = placeable.height - ((placeable.height - keep) * gone).roundToInt()
+        layout(placeable.width, height) { placeable.place(0, 0) }
+    }
+        // The tabs in a layer of their own too: drawn once, then clipped rather than redrawn as they slide.
+        .graphicsLayer()
+
+/** While the bar is away, a touch on the strip it leaves doesn't reach the tabs slid behind it. */
+private fun Modifier.takesNoTouchesWhile(away: Boolean): Modifier =
+    if (!away) {
+        this
+    } else {
+        pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) {
+                    awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+                }
+            }
+        }
+    }
+
+/**
+ * Whether the bar is out of the way while a page scrolls down (founder request 2026-10-30, as on iPhone): a page
+ * scrolled down [PULSE_HEADER_HYSTERESIS] sends it away, and scrolled up as far, or pulled down at its top, brings it
+ * back. The Pulse header's distance, so on Pulse the two go and come back together. [RootTabScreen] brings it back on
+ * every new screen, tab or step back.
+ */
+@Stable
+internal class TabBarScrollState {
+    var isAway by mutableStateOf(false)
+        private set
+
+    /** Travel in the current direction, in px: < 0 down the page, > 0 up it. */
+    private var travel = 0f
+
+    /**
+     * A page moved [consumedY] px (negative: its content went up, the person reading on), and [availableY] px of the
+     * drag were left over (positive: pulled down past the top).
+     */
+    fun onScroll(
+        consumedY: Float,
+        availableY: Float,
+        thresholdPx: Float,
+    ) {
+        if (consumedY == 0f) {
+            if (availableY > 0f) show()
+            return
+        }
+        if (travel != 0f && (travel < 0f) != (consumedY < 0f)) travel = 0f
+        travel += consumedY
+        if (travel <= -thresholdPx) {
+            update(away = true)
+        } else if (travel >= thresholdPx) {
+            update(away = false)
+        }
+    }
+
+    fun show() = update(away = false)
+
+    private fun update(away: Boolean) {
+        travel = 0f
+        if (isAway != away) isAway = away
+    }
+}
+
+/**
+ * Hands every page's scrolling to [state]; installed with `Modifier.nestedScroll` around the pages, it never takes any
+ * of a scroll. While [enabled] is false (TalkBack on, or a screen that keeps the bar) it does nothing.
+ */
+@Composable
+internal fun rememberTabBarScrollConnection(
+    state: TabBarScrollState,
+    enabled: Boolean,
+): NestedScrollConnection {
+    val thresholdPx = with(LocalDensity.current) { PULSE_HEADER_HYSTERESIS.toPx() }
+    val isEnabled by rememberUpdatedState(enabled)
+    return remember(state, thresholdPx) {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                if (isEnabled) state.onScroll(consumed.y, available.y, thresholdPx)
+                return Offset.Zero
             }
         }
     }

@@ -11,7 +11,9 @@
 //  place; only the selected tab is in the window, so its screens appear and
 //  disappear as they did under the system bar and a screen in another tab
 //  never counts as on screen (`ScreenStoreLive`). `RootTabView` draws the bar
-//  (`RootTabBar`) over it.
+//  (`RootTabBar`) over it; the tabs' screens keep clear of it as they did of
+//  the system bar, and `RootTabBarScrollWatcher` slides it away while a page
+//  scrolls down.
 //
 
 import SwiftUI
@@ -53,8 +55,8 @@ struct RootTabContainer: UIViewControllerRepresentable {
     /// The tabs on the bar, in order.
     let tabs: [RootTab]
     let selected: RootTab
-    /// The bar's height above the bottom safe area; 0 while a screen hides it.
-    let barHeight: CGFloat
+    /// The room the bar takes at the bottom; `.none` while a screen hides it.
+    let barSpace: RootTabBarSpace
     let environment: RootTabEnvironment
     /// Changes when the selected tab is tapped again: its stack goes back to its root.
     let reselection: RootTabReselection?
@@ -69,7 +71,7 @@ struct RootTabContainer: UIViewControllerRepresentable {
         controller.update(
             tabs: tabs,
             selected: selected,
-            barHeight: barHeight,
+            barSpace: barSpace,
             environment: environment,
             makeRoot: makeRoot
         )
@@ -85,7 +87,11 @@ final class RootTabContainerController: UIViewController {
     private var roots: [RootTab: AnyView] = [:]
     private(set) var selectedTab: RootTab?
     private var environment: RootTabEnvironment?
-    private var barHeight: CGFloat = 0
+    private var barSpace = RootTabBarSpace.none
+    /// The bottom inset each tab's screens get for the bar, from `barSpace`
+    /// and this screen's bottom safe area.
+    private var barInset: CGFloat = 0
+    private let scrollWatcher = RootTabBarScrollWatcher()
     private var handledReselection: UUID?
     /// Between `viewWillAppear` and `viewDidDisappear`: tab switches then
     /// tell the tabs they appear and disappear.
@@ -103,6 +109,12 @@ final class RootTabContainerController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .clear
+        scrollWatcher.install(on: view)
+    }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        applyBarInset()
     }
 
     override func viewDidLayoutSubviews() {
@@ -135,7 +147,7 @@ final class RootTabContainerController: UIViewController {
     func update(
         tabs: [RootTab],
         selected: RootTab,
-        barHeight: CGFloat,
+        barSpace: RootTabBarSpace,
         environment: RootTabEnvironment,
         makeRoot: @MainActor (RootTab) -> AnyView
     ) {
@@ -149,11 +161,10 @@ final class RootTabContainerController: UIViewController {
                 if let root = roots[tab] { host.rootView = RootTabHostedRoot(root: root, environment: environment) }
             }
         }
-        if barHeight != self.barHeight {
-            self.barHeight = barHeight
-            for host in hosts.values {
-                host.additionalSafeAreaInsets = insets
-            }
+        scrollWatcher.tabs = environment.tabs
+        if barSpace != self.barSpace {
+            self.barSpace = barSpace
+            applyBarInset()
         }
         let shown = tabs.contains(selected) ? selected : tabs.first
         guard let shown, shown != selectedTab else { return }
@@ -173,7 +184,21 @@ final class RootTabContainerController: UIViewController {
     }
 
     private var insets: UIEdgeInsets {
-        UIEdgeInsets(top: 0, left: 0, bottom: barHeight, right: 0)
+        UIEdgeInsets(top: 0, left: 0, bottom: barInset, right: 0)
+    }
+
+    /// Keeps each tab's screens clear of the bar: the flat bar's height over
+    /// the safe area, or the floating bar's reach from the screen's edge (49
+    /// points over the Home indicator's 34, the system bar's 83 in all).
+    private func applyBarInset() {
+        let safeAreaBottom = view.safeAreaInsets.bottom
+        let inset = barSpace.inset(safeAreaBottom: safeAreaBottom)
+        scrollWatcher.barHeight = inset > 0 ? inset + safeAreaBottom : 0
+        guard inset != barInset else { return }
+        barInset = inset
+        for host in hosts.values {
+            host.additionalSafeAreaInsets = insets
+        }
     }
 
     private func show(

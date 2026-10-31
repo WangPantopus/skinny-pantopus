@@ -81,7 +81,9 @@ function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
 
   // The main screen last shown: where the other pages' back bar returns.
   const [backHref, setBackHref] = useState('/app/mailbox/personal');
-  const mainHref = view.kind === 'main' && !view.pushed ? mailboxHref(view.tab, view.drawer) : null;
+  const mainHref = view.kind === 'main' && !view.pushed ? mailboxHref(view.tab, view.drawer)
+    : view.kind === 'sent' && !view.pushed ? '/app/mailbox/sent'
+      : null;
   useEffect(() => {
     if (mainHref) setBackHref(mainHref);
   }, [mainHref]);
@@ -123,16 +125,19 @@ function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
     ? `Your mail hold starts ${holdDay(vacationHold.start_date)}`
     : `Your mail is on hold until ${holdDay(vacationHold.end_date)}${held > 0 ? ` · ${held} held` : ''}`;
 
-  // The banners belong to the main screens; a letter or folder opened from one
-  // is its own screen on phones.
-  const bannerClass = view.kind === 'main' ? (view.pushed ? 'hidden md:flex' : 'flex') : 'hidden';
+  // The banners belong to the main screens and Sent; a letter, folder or card
+  // opened from one is its own screen on phones.
+  const bannerClass = view.kind === 'main' || view.kind === 'sent' ? (view.pushed ? 'hidden md:flex' : 'flex') : 'hidden';
+
+  // The flag is up while a card you sent waits for the 7 a.m. pickup (Christmas cards on).
+  const waiting = launchFeatures.holidayCards ? drawers?.sent?.waiting ?? 0 : 0;
 
   return (
     <div className="bg-app md:flex md:h-[calc(100vh-3.5rem)] md:flex-col md:overflow-hidden">
       <MailboxHeader
         view={view}
         backHref={backHref}
-        hero={drawers ? <MailboxHero delivery={delivery} homes={drawers.homes} opening={deliveryOpening} /> : null}
+        hero={drawers ? <MailboxHero delivery={delivery} homes={drawers.homes} opening={deliveryOpening} waiting={waiting} /> : null}
         onWriteLetter={launchFeatures.mailExtras ? () => setComposeOpen(true) : undefined}
       />
 
