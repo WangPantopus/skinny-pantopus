@@ -7,6 +7,7 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const notificationService = require('../services/notificationService');
+const holidayCards = require('../services/holidayCards');
 const logger = require('../utils/logger');
 
 async function mailEscrowExpiry() {
@@ -19,7 +20,7 @@ async function mailEscrowExpiry() {
     // Find pending escrowed mail that has expired
     const { data: expired, error } = await supabaseAdmin
       .from('Mail')
-      .select('id, sender_user_id, escrow_recipient_contact, subject, display_title')
+      .select('id, sender_user_id, escrow_recipient_contact, subject, display_title, mail_extracted')
       .eq('escrow_status', 'pending')
       .not('escrow_expires_at', 'is', null)
       .lt('escrow_expires_at', now)
@@ -46,8 +47,19 @@ async function mailEscrowExpiry() {
         const contact = mail.escrow_recipient_contact || 'the recipient';
         const maskedContact = maskContact(contact);
 
-        // Notify the sender
-        await notificationService.createNotification({
+        // Notify the sender. A Christmas card says so and opens in their Sent, where it stays.
+        await notificationService.createNotification(holidayCards.isCard(mail) ? {
+          userId: mail.sender_user_id,
+          type: 'holiday_card_expired',
+          title: 'Your Christmas card came back',
+          body: `They didn’t open the email in 90 days. Your card to ${maskedContact} stays in Sent.`,
+          icon: '📭',
+          link: `/app/mailbox/sent/${mail.id}`,
+          metadata: {
+            mail_id: mail.id,
+            escrow_contact: maskedContact,
+          },
+        } : {
           userId: mail.sender_user_id,
           type: 'mail_escrow_expired',
           title: 'Mail not picked up',
