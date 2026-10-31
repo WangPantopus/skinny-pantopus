@@ -25,6 +25,8 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = safeRedirectPath(readAuthRedirectQuery(searchParams), '/app/place');
+  // Kept for "Sign up": someone who came from a friend's invite link still credits them.
+  const inviteCode = (searchParams?.get('invite_code') || '').trim();
   type FieldErrors = Record<string, string>;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -341,7 +343,7 @@ function LoginContent() {
 
         <p className="mt-6 text-center text-sm text-app-text-secondary dark:text-app-text-muted">
           Don&apos;t have an account?{' '}
-          <Link href={authPageHref('/register', redirectTo)} className="font-medium text-primary-700 dark:text-primary-300 hover:opacity-90">
+          <Link href={authPageHref('/register', redirectTo, inviteCode ? { invite_code: inviteCode } : {})} className="font-medium text-primary-700 dark:text-primary-300 hover:opacity-90">
             Sign up
           </Link>
         </p>

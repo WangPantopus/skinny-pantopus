@@ -392,7 +392,7 @@ extension TodayDetailViewModel {
         parts.append(signals.filter { shareableSignalKinds.contains($0.kind ?? "") }.compactMap(\.label).joined(separator: " · "))
         let sentences = parts.map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ". ")) }.filter { !$0.isEmpty }
         if sentences.isEmpty { return shareFallback }
-        return "Today's briefing: \(sentences.joined(separator: ". ")).\nShared from Pantopus: \(InviteLinks.downloadURLString)"
+        return "Today's briefing: \(sentences.joined(separator: ". ")).\nShared from Pantopus: \(InviteLinks.siteURLString)"
     }
 
     /// The share text for the screen's state: the prepared message, or just the link while loading or failed.
@@ -406,7 +406,7 @@ extension TodayDetailViewModel {
     }
 
     private static var shareFallback: String {
-        "Today's Pantopus briefing — \(InviteLinks.downloadURLString)"
+        "Today's Pantopus briefing — \(InviteLinks.siteURLString)"
     }
 
     private static func parseInstant(_ iso: String?) -> Date? {

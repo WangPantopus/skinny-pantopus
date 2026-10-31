@@ -49,13 +49,14 @@ import java.util.UUID
 // MARK: - Invite copy / links ────────────────────────────────────────────
 
 /**
- * Single source of truth for the invite message + download link shared by
- * every "Invite to Pantopus" / "Find people" surface. Swap
- * [DOWNLOAD_URL] for the real Play Store / App Store smart-link when it
- * ships.
+ * Single source of truth for the invite message and the links shared by
+ * every "Invite to Pantopus" / "Find people" surface. An invite carries the
+ * person's own link (`InviteShareViewModel`); any other share links to this
+ * build's web home page, [siteUrl].
  */
 object InviteLinks {
-    const val DOWNLOAD_URL = "https://pantopus.app"
+    /** This build's web home page (pantopus.com in production), for a share that isn't an invite or a page of its own. */
+    val siteUrl: String get() = BuildConfig.PANTOPUS_WEB_BASE_URL.trimEnd('/')
 
     /** The existing public train page, using this build's web origin. */
     fun supportTrainUrl(trainId: String): String = BuildConfig.PANTOPUS_WEB_BASE_URL.trimEnd('/') + "/support-trains/${Uri.encode(trainId)}"
@@ -69,9 +70,9 @@ object InviteLinks {
     /** A person's public profile (web `/u/:username`, the link web's own profile Share uses). */
     fun profileUrl(username: String): String = publicPageUrl("/u/${Uri.encode(username)}")
 
+    /** The invite's words; the person's own link follows them when it is shared. */
     const val INVITE_MESSAGE =
-        "Join me on Pantopus — your neighborhood for trusted home help, " +
-            "local gigs, and your whole household in one place. $DOWNLOAD_URL"
+        "Join me on Pantopus — your neighborhood for trusted home help and your whole household in one place."
 }
 
 // MARK: - Mail compose ───────────────────────────────────────────────────
@@ -304,11 +305,6 @@ fun Context.shareFile(
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
     startActivity(Intent.createChooser(intent, chooserTitle))
-}
-
-/** Fire the invite share sheet (text + landing link). */
-fun Context.shareInvite() {
-    shareText(InviteLinks.INVITE_MESSAGE, chooserTitle = "Invite to Pantopus")
 }
 
 /**
