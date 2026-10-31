@@ -127,9 +127,8 @@ struct SkyScrubGesture: ViewModifier {
     @State private var tick = 0
 
     func body(content: Content) -> some View {
-        content
+        holding(content)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-            .gesture(drag, including: hours > 0 ? .all : .subviews)
             .sensoryFeedback(.selection, trigger: tick)
             .onDisappear {
                 rewind?.cancel()
@@ -137,19 +136,35 @@ struct SkyScrubGesture: ViewModifier {
             }
     }
 
+    /// From iOS 18 SwiftUI's long press held every scroll that started on the
+    /// card, so the page wouldn't move under a finger on the sky. UIKit's long
+    /// press lets a quick drag scroll the page and stops it once the hold begins.
+    @ViewBuilder
+    private func holding(_ content: Content) -> some View {
+        if #available(iOS 18, *) {
+            content.gesture(SkyScrubPress(enabled: hours > 0, onSlide: slide(to:), onEnd: windBack))
+        } else {
+            content.gesture(drag, including: hours > 0 ? .all : .subviews)
+        }
+    }
+
     private var drag: some Gesture {
         LongPressGesture(minimumDuration: 0.3)
             .sequenced(before: DragGesture(minimumDistance: 0))
             .onChanged { value in
                 guard case let .second(true, drag?) = value else { return }
-                rewind?.cancel()
-                let index = index(at: drag.location.x)
-                if index != scrub {
-                    scrub = index
-                    tick += 1
-                }
+                slide(to: drag.location.x)
             }
             .onEnded { _ in windBack() }
+    }
+
+    private func slide(to x: CGFloat) {
+        rewind?.cancel()
+        let index = index(at: x)
+        if index != scrub {
+            scrub = index
+            tick += 1
+        }
     }
 
     private func index(at x: CGFloat) -> Int {
@@ -173,6 +188,32 @@ struct SkyScrubGesture: ViewModifier {
                 if Task.isCancelled { return }
             }
             scrub = nil
+        }
+    }
+}
+
+/// The sky's touch and hold (0.3 s), then the finger's position as it slides.
+@available(iOS 18, *)
+private struct SkyScrubPress: UIGestureRecognizerRepresentable {
+    let enabled: Bool
+    let onSlide: (CGFloat) -> Void
+    let onEnd: () -> Void
+
+    func makeUIGestureRecognizer(context _: Context) -> UILongPressGestureRecognizer {
+        let recognizer = UILongPressGestureRecognizer()
+        recognizer.minimumPressDuration = 0.3
+        return recognizer
+    }
+
+    func updateUIGestureRecognizer(_ recognizer: UILongPressGestureRecognizer, context _: Context) {
+        recognizer.isEnabled = enabled
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UILongPressGestureRecognizer, context: Context) {
+        switch recognizer.state {
+        case .began, .changed: onSlide(context.converter.localLocation.x)
+        case .ended, .cancelled, .failed: onEnd()
+        default: break
         }
     }
 }

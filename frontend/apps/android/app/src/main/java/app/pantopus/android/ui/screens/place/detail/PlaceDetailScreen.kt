@@ -37,6 +37,7 @@ import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.place.FullWidthShimmer
 import app.pantopus.android.ui.screens.place.PlaceDeniedState
 import app.pantopus.android.ui.screens.place.PlaceDetailGroup
 import app.pantopus.android.ui.screens.place.PlacePresentation
@@ -232,7 +233,7 @@ private fun PlaceDetailSkeleton() {
     ) {
         Spacer(modifier = Modifier.height(26.dp))
         Shimmer(width = 96.dp, height = 11.dp)
-        repeat(3) { Shimmer(width = 360.dp, height = 96.dp, cornerRadius = 16.dp) }
+        repeat(3) { FullWidthShimmer(height = 96.dp, cornerRadius = 16.dp) }
     }
 }
 

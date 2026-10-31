@@ -521,7 +521,7 @@ private fun PlaceMessagesEntry(
             PlaceMessagesActionRow(
                 icon = PantopusIcon.MessageSquarePlus,
                 title = "Message a neighbor",
-                subtitle = "Send a verified heads-up to a home on your block.",
+                subtitle = "Send a private heads-up to a home on your block.",
                 onTap = { onComposeMessage(address) },
             )
             PlaceMessagesActionRow(

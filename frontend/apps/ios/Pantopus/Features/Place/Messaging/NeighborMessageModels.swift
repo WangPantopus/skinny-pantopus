@@ -99,10 +99,13 @@ struct PlaceActionRowLabel: View {
                 Text(title)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.Color.appText)
+                // Two lines: on a phone-width row one line cut "Send a private
+                // heads-up to a home on your block." off at "on y…".
                 Text(subtitle)
                     .font(.system(size: 12.5))
                     .foregroundStyle(Theme.Color.appTextMuted)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
             }
             Spacer(minLength: 0)
             PlaceChevron()

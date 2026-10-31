@@ -90,10 +90,10 @@ final class PlaceSwitcherViewModel {
         do {
             let response = try await HomesStoreReads.myHomes(store: ScreenStore.store(for: api)).value
             state = .loaded(Self.rows(for: response))
-        } catch let error as APIError {
-            state = .error(message: error.errorDescription ?? "Couldn't load your homes.")
         } catch {
-            state = .error(message: "Couldn't load your homes.")
+            // A failed re-read keeps the homes the sheet already shows, as on Android.
+            if case .loaded = state { return }
+            state = .error(message: (error as? APIError)?.errorDescription ?? "Couldn't load your homes.")
         }
     }
 

@@ -47,7 +47,7 @@ import app.pantopus.android.data.api.models.place.PlaceTier
 import app.pantopus.android.data.api.models.place.ResidencyLetter
 import app.pantopus.android.data.api.models.place.ResidencyLetterStatus
 import app.pantopus.android.ui.components.PrimaryButton
-import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.place.FullWidthShimmer
 import app.pantopus.android.ui.screens.place.components.PlaceChip
 import app.pantopus.android.ui.screens.place.components.PlaceChipModel
 import app.pantopus.android.ui.screens.place.components.PlaceChipTone
@@ -368,7 +368,7 @@ private fun ResidencyLetterSection(
             }
         }
         when (val current = state) {
-            ResidencyLetterUiState.Loading -> Shimmer(width = 360.dp, height = 64.dp, cornerRadius = 16.dp)
+            ResidencyLetterUiState.Loading -> FullWidthShimmer(height = 64.dp, cornerRadius = 16.dp)
             is ResidencyLetterUiState.Loaded ->
                 if (current.letters.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { current.letters.forEach { LetterRow(it, viewModel) } }

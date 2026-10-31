@@ -49,12 +49,19 @@ final class PlacePrivacyMirrorViewModel {
     }
 
     private func fetch() async {
-        state = .loading
+        // A pull to refresh keeps the preview on screen while it reads again.
+        if case .loaded = state {} else { state = .loading }
         do {
             let mirror: HomeMirrorDTO = try await client.request(IdentityCenterEndpoints.homeMirror(homeId: homeId))
             state = .loaded(mirror)
         } catch {
-            state = .error(message: "We couldn't load the preview. Only a member of this home can see it.")
+            if case .loaded = state { return }
+            // Only a refusal is about membership; anything else (offline, a server error) can be retried.
+            state = if case .forbidden = error as? APIError {
+                .error(message: "We couldn't load the preview. Only a member of this home can see it.")
+            } else {
+                .error(message: "We couldn't load the preview. Check your connection and try again.")
+            }
         }
     }
 }
@@ -108,9 +115,15 @@ struct PlacePrivacyMirrorView: View {
         HStack {
             Button(action: onBack) {
                 Icon(.chevronLeft, size: 20, strokeWidth: 2.5, color: Theme.Color.appTextStrong)
-                    .frame(width: 34, height: 34).background(Theme.Color.appSurface).clipShape(Circle())
+                    .frame(width: 34, height: 34)
+                    .background(Theme.Color.appSurface)
+                    .clipShape(Circle())
+                    // A 44-pt target, the circle where it was (as `PlaceDetailHeader`).
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .padding(-5)
             .accessibilityLabel("Back")
             Text("Your Place")
                 .font(.system(size: 13, weight: .semibold))

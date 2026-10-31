@@ -3687,8 +3687,14 @@ public struct HubTabRoot: View {
                         }
                     },
                     onOpenVerificationStatus: { push(.waitingRoom(homeId: homeId)) }
-                )
-            ) { pop() }
+                ),
+                // The Today page's "Open your ballot": back to Your Place, at its ballot card.
+                onOpenBallot: {
+                    rootTabs.placeBallotHomeId = homeId
+                    pop()
+                },
+                onBack: { pop() }
+            )
         case let .placePulse(homeId):
             PlacePulseView(
                 viewModel: PlacePulseViewModel(homeId: homeId)
@@ -3782,8 +3788,11 @@ public struct HubTabRoot: View {
             ),
             isActive: isActive,
             isRoot: isRoot,
-            scrollToTop: isRoot ? rootTabs.placeReselectedAtRoot : nil
-        ) { rootTabs.showsNavigationMenu = true }
+            scrollToTop: isRoot ? rootTabs.placeReselectedAtRoot : nil,
+            showsBallot: rootTabs.placeBallotHomeId == homeId,
+            onBallotShown: { rootTabs.placeBallotHomeId = nil },
+            onOpenMenu: { rootTabs.showsNavigationMenu = true }
+        )
     }
 
     /// A Place link. A Home the person can open becomes the root (the named
