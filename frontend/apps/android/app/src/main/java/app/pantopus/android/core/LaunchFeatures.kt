@@ -54,8 +54,8 @@ enum class LaunchFeature(
 
     /**
      * 12. Christmas cards (founder decision, 2026-10-30): "Send a Christmas card" at the top of Me in the Mailbox, the
-     * four steps that send one card a day, and today's card. It needs [MAILBOX] on too. Cards that arrive draw as cards
-     * whenever the server sends them.
+     * five steps that send one card a day (the last, Look it over, shows it as the other person will see it), and
+     * today's card. It needs [MAILBOX] on too. Cards that arrive draw as cards whenever the server sends them.
      */
     HOLIDAY_CARDS("holiday_cards"),
 }

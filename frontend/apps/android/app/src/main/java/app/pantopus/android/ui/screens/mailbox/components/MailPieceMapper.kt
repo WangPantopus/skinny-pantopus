@@ -108,7 +108,7 @@ object MailPieceMapper {
             postmarkTown = row.postmark?.town?.takeIf { it.isNotBlank() },
             postmarkDay = postmarkDate?.format(shortDate)?.uppercase(Locale.US) ?: "",
             postmarkYear = postmarkDate?.year?.toString() ?: "",
-            stamp = MailStamp.forPiece(row.id),
+            stamp = stamp(row),
             note = note(kind, row, title),
             meta = meta(row, kind, whenWords, dueWords),
             accessibilityLabel =
@@ -119,6 +119,9 @@ object MailPieceMapper {
             card = row.card?.let { MailPieceCard(design = it.design, sealed = it.sealed) },
         )
     }
+
+    /** A Christmas card's stamp goes with its picture, so the one its sender looked over is the one that comes. */
+    private fun stamp(row: DrawerMail): MailStamp = row.card?.let { MailStamp.forCard(it.number, it.design) } ?: MailStamp.forPiece(row.id)
 
     /** What's due: a bill still owed says how much ("$184.00 due today"); else the due day, if any. */
     private fun owedWords(
