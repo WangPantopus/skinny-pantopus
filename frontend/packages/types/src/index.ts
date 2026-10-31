@@ -1365,6 +1365,8 @@ export interface RegisterForm {
   phone_number?: string;
   /** Pre-account funnel continuity id (see @pantopus/api funnel). */
   anon_id?: string;
+  /** The code from a friend's invite link (/join/:code); credits them with this account. */
+  invite_code?: string;
 }
 
 export interface GigCreateForm {

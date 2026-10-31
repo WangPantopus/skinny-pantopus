@@ -55,8 +55,9 @@ struct PlansEmptyCard: View {
                             .accessibilityIdentifier("plansShowElsewhere")
                     }
                 }
+                // The person's own invite link, so the neighbor sees who asked them.
                 ShareLink(
-                    item: URL(string: "https://pantopus.com/start") ?? URL(fileURLWithPath: "/"),
+                    item: PersonalInviteLink.shared.url,
                     message: Text("I'm on Pantopus to make small plans with neighbors. Join me.")
                 ) {
                     PlanButtonLabel(title: "Invite a neighbor", icon: .share, kind: .secondary)
