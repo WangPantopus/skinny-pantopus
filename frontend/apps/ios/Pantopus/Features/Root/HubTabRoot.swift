@@ -2426,6 +2426,9 @@ public struct HubTabRoot: View {
                 },
                 onOpenProfile: { reviewerId in
                     Task { @MainActor in push(.publicProfile(userId: reviewerId)) }
+                },
+                onOpenPost: { postId in
+                    Task { @MainActor in push(.pulsePost(postId: postId)) }
                 }
             )
         case let .businessProfile(businessId):

@@ -294,6 +294,21 @@ object StoreKeys {
         topics = setOf(StoreTopics.POSTS, "profile:$userId"),
     )
 
+    /**
+     * A person's posts on their profile, read as feed rows for the Pulse card. Its own entry
+     * (`shape`, never sent) so it can't meet a [userPosts] reply of another type.
+     */
+    fun profilePosts(userId: String) =
+        StoreKey<FeedResponse>(
+            "api/posts/user/$userId",
+            mapOf("limit" to PROFILE_POSTS_LIMIT.toString(), "shape" to "feed"),
+            kind = StoreKind.POST,
+            topics = setOf(StoreTopics.POSTS, "profile:$userId"),
+        )
+
+    /** How many of a person's latest posts their profile shows. */
+    const val PROFILE_POSTS_LIMIT = 50
+
     fun savedPosts(limit: Int) =
         StoreKey<SavedPostsResponse>(
             "api/posts/saved",

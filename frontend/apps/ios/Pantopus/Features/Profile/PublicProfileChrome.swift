@@ -438,11 +438,18 @@ struct PublicProfilePostsFeed: View {
     /// `true` when the viewer blocked this neighbour: a block hides both
     /// people's posts, so the card says so and invites nothing.
     var hiddenByBlock = false
+    /// The Local profile's posts as Pulse cards (photos, video, links,
+    /// Helpful, Save, Repost, the post menu). Nil keeps the plain cards.
+    var pulseCards: ProfilePostCardsModel?
+    /// Opens a card's post page, as a tap on a Pulse card does.
+    var onOpenPost: @MainActor (String) -> Void = { _ in }
 
     var body: some View {
-        if hiddenByBlock || posts.isEmpty {
+        if hiddenByBlock || isEmpty {
             emptyState
                 .padding(.horizontal, Spacing.s4)
+        } else if kind == .local, let pulseCards {
+            pulseFeed(pulseCards)
         } else {
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 Text(headerLabel)
@@ -465,6 +472,61 @@ struct PublicProfilePostsFeed: View {
             }
             .padding(.horizontal, Spacing.s4)
         }
+    }
+
+    private var isEmpty: Bool {
+        if kind == .local, let pulseCards { return pulseCards.cards.isEmpty }
+        return posts.isEmpty
+    }
+
+    /// Full-width rows as in Pulse: the same card, its controls, and the
+    /// same post page behind a tap.
+    private func pulseFeed(_ model: ProfilePostCardsModel) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s3) {
+            Text(headerLabel)
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .textCase(.uppercase)
+                .accessibilityAddTraits(.isHeader)
+                .padding(.horizontal, Spacing.s4)
+
+            LazyVStack(spacing: Spacing.s0) {
+                ForEach(model.cards) { card in
+                    pulseCard(card, model: model)
+                }
+            }
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(Theme.Color.appBorderSubtle)
+                    .frame(height: 1)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("publicProfilePulsePosts")
+    }
+
+    /// One post with the controls the Pulse feed gives it.
+    private func pulseCard(_ card: PulsePostCardContent, model: ProfilePostCardsModel) -> PulsePostCard {
+        let postId = card.id
+        let react: @MainActor () -> Void = { Task { await model.tapReaction(postId: postId) } }
+        let save: @MainActor () -> Void = { Task { await model.toggleSave(postId: postId) } }
+        let repost: @MainActor () -> Void = { Task { await model.toggleRepost(postId: postId) } }
+        let rsvp: (@MainActor () -> Void)? = card.attendees == nil ? nil : react
+        var options: (@MainActor () -> Void)?
+        if model.hasOptions(card) {
+            options = { model.overflowPostId = postId }
+        }
+        let open = onOpenPost
+        return PulsePostCard(
+            content: card,
+            onTap: { open(postId) },
+            onPrimaryReaction: react,
+            onRSVP: rsvp,
+            onOverflow: options,
+            onToggleSave: save,
+            onToggleRepost: repost
+        )
     }
 
     // MARK: Empty state
