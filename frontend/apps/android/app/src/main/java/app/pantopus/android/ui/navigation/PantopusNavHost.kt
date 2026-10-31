@@ -88,7 +88,13 @@ fun PantopusNavHost(viewModel: RootViewModel = hiltViewModel()) {
         val signedIn = authState as? AuthRepository.State.SignedIn
         if (signedIn != null && prev !is AuthRepository.State.SignedIn) {
             DeepLinkRouter.acknowledgeLoginPresentation()
-            PendingDeepLinkStore.take(userId = signedIn.user.id)?.let { DeepLinkRouter.handle(it) }
+            val parked = PendingDeepLinkStore.take(userId = signedIn.user.id)
+            if (parked != null) {
+                DeepLinkRouter.handle(parked)
+            } else if (prev is AuthRepository.State.SignedOut || prev is AuthRepository.State.Resumable) {
+                // Signing in or up (not a session restored at launch) may also open a plan invitation.
+                viewModel.unopenedPlanInvite()?.let { planId -> DeepLinkRouter.handle("/plans/$planId") }
+            }
         }
     }
 

@@ -93,6 +93,7 @@ import app.pantopus.android.ui.screens.plans.components.PlanSheetState
 import app.pantopus.android.ui.screens.plans.components.PlanSheetStop
 import app.pantopus.android.ui.screens.plans.components.PlanSwatch
 import app.pantopus.android.ui.screens.plans.components.aboveSheet
+import app.pantopus.android.ui.screens.plans.detail.PlanInviteSheet
 import app.pantopus.android.ui.screens.plans.planGlass
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusElevations
@@ -265,6 +266,9 @@ private fun PlansSheetHost(
     val selected = state.selected
     val context = LocalContext.current
     val missing = state.locationStatus == PlansLocationStatus.Missing
+    // "Invite friends" from the posted plan (H8).
+    var inviting by remember { mutableStateOf<PlanDto?>(null) }
+    inviting?.let { plan -> PlanInviteSheet(plan = plan, onDismiss = { inviting = null }) }
     PlanSheet(
         stop = stop,
         onStop = onStop,
@@ -288,6 +292,7 @@ private fun PlansSheetHost(
                         actions.onOpenPlan(selected.id)
                     },
                     onDone = viewModel::dismissPosted,
+                    onInvite = if (selected.invites?.canInvite == true) ({ inviting = selected }) else null,
                 )
             state.locationStatus == PlansLocationStatus.Missing ->
                 PlansNoLocationContent(

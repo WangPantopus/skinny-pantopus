@@ -31,6 +31,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.plans.PlanDto
+import app.pantopus.android.data.plans.PlanCannotAsk
 import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.PlanState
 import app.pantopus.android.data.plans.PlanViewerStanding
@@ -107,7 +108,13 @@ fun PlanDetailScreen(
                 }
             PlanDetailUiState.Gone -> PlanGone(onBack = onBack, onSeeAll = onSeeAllPlans)
             is PlanDetailUiState.PlaydateLocked ->
-                PlaydateLocked(city = state.city, onClose = onBack, onVerify = openVerification, onSeeOthers = onSeeAllPlans)
+                PlaydateLocked(
+                    city = state.city,
+                    invitedBy = state.invitedBy,
+                    onClose = onBack,
+                    onVerify = openVerification,
+                    onSeeOthers = onSeeAllPlans,
+                )
             is PlanDetailUiState.Ready ->
                 PlanReady(
                     plan = state.plan,
@@ -144,7 +151,8 @@ private fun PlanReady(
     onAskPantopus: ((AIScreenContext) -> Unit)? = null,
 ) {
     val standing = plan.standing
-    if (standing == PlanViewerStanding.DECLINED || standing == PlanViewerStanding.REMOVED) {
+    // Invited again after a no or a removal: the invitation, not "Didn't work out".
+    if ((standing == PlanViewerStanding.DECLINED || standing == PlanViewerStanding.REMOVED) && plan.openInvite == null) {
         PlanNotThisTime(
             plan = plan,
             others = ui.others,
@@ -171,6 +179,7 @@ private fun PlanReady(
         }
     }
     var confirmLeave by remember { mutableStateOf<LeaveKind?>(null) }
+    var inviting by remember { mutableStateOf(false) }
     var reporting by remember { mutableStateOf(false) }
     var confirmBlock by remember { mutableStateOf(false) }
     val hosting = standing == PlanViewerStanding.HOSTING
@@ -203,6 +212,7 @@ private fun PlanReady(
                     viewerId = ui.viewerId,
                     busy = ui.busy,
                     onOpenRequests = onOpenRequests,
+                    onInvite = { inviting = true },
                     onMessageGuests = { plan.chatRoomId?.let(onOpenChat) },
                     onChange = onChange,
                     onCancel = viewModel::openCancel,
@@ -221,11 +231,30 @@ private fun PlanReady(
                 )
             standing == PlanViewerStanding.REQUESTED -> PlanRequestedBody(plan)
             standing == PlanViewerStanding.WAITLISTED -> PlanWaitlistBody(plan)
-            else -> PlanBeforeInBody(plan)
+            else -> {
+                plan.openInvite?.let { invite -> PlanInviteBanner(plan, invite) }
+                PlanBeforeInBody(plan)
+            }
         }
     }
     if (ui.askOpen) {
-        PlanAskSheet(plan = plan, draft = ui.ask, onEdit = viewModel::editAsk, onSend = viewModel::sendAsk, onClose = viewModel::closeAsk)
+        PlanAskSheet(
+            plan = plan,
+            draft = ui.ask,
+            onEdit = viewModel::editAsk,
+            onSend = viewModel::sendAsk,
+            onClose = viewModel::closeAsk,
+            invited = plan.openInvite?.needsHostOk == false && plan.standing != PlanViewerStanding.REQUESTED,
+        )
+    }
+    if (inviting) {
+        PlanInviteSheet(
+            plan = plan,
+            onDismiss = {
+                inviting = false
+                viewModel.load()
+            },
+        )
     }
     if (ui.cancelOpen) {
         PlanCancelSheet(
@@ -328,6 +357,9 @@ private fun footerFor(
                 waitlistCaption(plan)?.let { PlanFooterCaption(it) }
             }
         }
+        plan.openInvite != null &&
+            (plan.viewer?.canAsk == true || plan.viewer?.cannotAskReason == PlanCannotAsk.FULL_USE_WAITLIST) ->
+            inviteFooterContent(plan, requireNotNull(plan.openInvite), ui.busy, viewModel)
         else -> askFooterContent(askFooter(plan), viewModel, onVerify, onLocation)
     }
 }

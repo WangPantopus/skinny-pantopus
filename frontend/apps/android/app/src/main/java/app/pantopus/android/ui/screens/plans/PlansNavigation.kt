@@ -18,12 +18,16 @@ object PlansRoutes {
     const val PLAN_ID_KEY = "planId"
     const val ASK_KEY = "ask"
     const val REVEAL_KEY = "reveal"
+    const val INVITE_KEY = "invite"
     const val KIND_KEY = "kind"
     const val GAME_KEY = "game"
     const val AGAIN_KEY = "again"
 
-    /** A plan (J1 to J9 for guests, H9 for its host). `ask=true` opens "Ask to join" at once. */
-    const val PLAN = "plans/{$PLAN_ID_KEY}?$ASK_KEY={$ASK_KEY}&$REVEAL_KEY={$REVEAL_KEY}"
+    /**
+     * A plan (J1 to J9 for guests, H9 for its host). `ask=true` opens "Ask to join" at once; `invite` is an email or
+     * text invitation's token, which the plan opens for this account first.
+     */
+    const val PLAN = "plans/{$PLAN_ID_KEY}?$ASK_KEY={$ASK_KEY}&$REVEAL_KEY={$REVEAL_KEY}&$INVITE_KEY={$INVITE_KEY}"
 
     /** The host's requests (H10). */
     const val REQUESTS = "plans/{$PLAN_ID_KEY}/requests"
@@ -38,7 +42,8 @@ object PlansRoutes {
         id: String,
         ask: Boolean = false,
         reveal: Boolean = false,
-    ): String = "plans/${Uri.encode(id)}?$ASK_KEY=$ask&$REVEAL_KEY=$reveal"
+        invite: String? = null,
+    ): String = "plans/${Uri.encode(id)}?$ASK_KEY=$ask&$REVEAL_KEY=$reveal" + invite?.let { "&$INVITE_KEY=${Uri.encode(it)}" }.orEmpty()
 
     fun requests(id: String): String = "plans/${Uri.encode(id)}/requests"
 
@@ -85,6 +90,11 @@ fun NavGraphBuilder.plansRoutes(
                 navArgument(PlansRoutes.REVEAL_KEY) {
                     type = NavType.BoolType
                     defaultValue = false
+                },
+                navArgument(PlansRoutes.INVITE_KEY) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
                 },
             ),
     ) {

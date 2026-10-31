@@ -12,7 +12,15 @@ import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.models.plans.PlanFeedbackBody
 import app.pantopus.android.data.api.models.plans.PlanGamesResponse
 import app.pantopus.android.data.api.models.plans.PlanGpsInput
+import app.pantopus.android.data.api.models.plans.PlanInviteBody
+import app.pantopus.android.data.api.models.plans.PlanInviteClaimBody
+import app.pantopus.android.data.api.models.plans.PlanInviteLinkBody
+import app.pantopus.android.data.api.models.plans.PlanInviteLinkResponse
+import app.pantopus.android.data.api.models.plans.PlanInviteListDto
+import app.pantopus.android.data.api.models.plans.PlanInvitePeopleResponse
+import app.pantopus.android.data.api.models.plans.PlanInvitePlanResponse
 import app.pantopus.android.data.api.models.plans.PlanNearbyPlacesResponse
+import app.pantopus.android.data.api.models.plans.PlanNextInviteResponse
 import app.pantopus.android.data.api.models.plans.PlanPinsResponse
 import app.pantopus.android.data.api.models.plans.PlanPlaceSuggestBody
 import app.pantopus.android.data.api.models.plans.PlanPlaceSuggestionsResponse
@@ -219,7 +227,10 @@ class PlansRepository
                     forget(id)
                     val json = error?.let { runCatching { JSONObject(it) }.getOrNull() }
                     if (json?.optString("error") == "needs_verified_address") {
-                        PlanRead.Locked(json.optJSONObject("plan")?.optString("city")?.takeIf(String::isNotBlank))
+                        PlanRead.Locked(
+                            city = json.optJSONObject("plan")?.optString("city")?.takeIf(String::isNotBlank),
+                            invitedBy = json.optString("invited_by").takeIf { !json.isNull("invited_by") && it.isNotBlank() },
+                        )
                     } else {
                         PlanRead.Missing
                     }
@@ -394,6 +405,46 @@ class PlansRepository
             }
         }
 
+        // ---- Invitations (planInvites.js) ----
+
+        suspend fun invites(id: String): NetworkResult<PlanInviteListDto> = safeApiCall(surfaceForbiddenBody = true) { api.invites(id) }
+
+        suspend fun invitePeople(
+            id: String,
+            query: String = "",
+        ): NetworkResult<PlanInvitePeopleResponse> =
+            safeApiCall(surfaceForbiddenBody = true) { api.invitePeople(id, query.takeIf(String::isNotBlank)) }
+
+        suspend fun invite(
+            id: String,
+            body: PlanInviteBody,
+        ): NetworkResult<PlanInviteListDto> = write(id) { api.invite(id, body) }
+
+        suspend fun inviteLink(
+            id: String,
+            confirmSharesAddress: Boolean,
+        ): NetworkResult<PlanInviteLinkResponse> = write(id) { api.inviteLink(id, PlanInviteLinkBody(confirmSharesAddress.takeIf { it })) }
+
+        suspend fun cancelInvite(
+            id: String,
+            inviteId: String,
+        ): NetworkResult<PlanInviteListDto> = write(id) { api.cancelInvite(id, inviteId) }
+
+        /** The person opened an email or text invitation: it becomes this account's. */
+        suspend fun claimInvite(
+            id: String,
+            token: String,
+        ): NetworkResult<PlanInvitePlanResponse> =
+            write(id) { api.claimInvite(id, PlanInviteClaimBody(token)) }.also { result ->
+                (result as? NetworkResult.Success)?.data?.plan?.let(::rememberCard)
+            }
+
+        /** "Can't make it" to an invitation. */
+        suspend fun declineInvite(id: String): NetworkResult<PlanInvitePlanResponse> = write(id, chats = true) { api.declineInvite(id) }
+
+        /** Right after signing in: the newest invitation not opened yet (an email invite finds its verified address). */
+        suspend fun nextInvite(): NetworkResult<PlanNextInviteResponse> = safeApiCall { api.nextInvite() }
+
         /** Plans changed elsewhere (a push, another device): the next read of every Plans entry asks again. */
         fun changed(planId: String? = null) {
             store.markStale(planId?.let(PlanStoreKeys::topic) ?: PlanStoreKeys.TOPIC)
@@ -466,9 +517,10 @@ sealed interface PlanRead {
         val plan: PlanDto,
     ) : PlanRead
 
-    /** A playdate the viewer can't see without a verified address (J9). */
+    /** A playdate the viewer can't see without a verified address (J9); [invitedBy] is the host's first name when they invited them. */
     data class Locked(
         val city: String?,
+        val invitedBy: String? = null,
     ) : PlanRead
 
     /** Gone, hidden, or the flag is off. */

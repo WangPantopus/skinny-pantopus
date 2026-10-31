@@ -53,6 +53,7 @@ import app.pantopus.android.ui.screens.plans.components.PlanSpotsMeter
 import app.pantopus.android.ui.screens.plans.components.PlanStatusChip
 import app.pantopus.android.ui.screens.plans.components.PlanVerifiedBadge
 import app.pantopus.android.ui.screens.plans.components.planCard
+import app.pantopus.android.ui.screens.plans.detail.PlanInfoLine
 import app.pantopus.android.ui.screens.plans.detail.PlanPlainScaffold
 import app.pantopus.android.ui.screens.plans.map.PlanRowsSkeleton
 import app.pantopus.android.ui.theme.PantopusColors
@@ -241,6 +242,18 @@ private fun RequestCard(
                 Text(text = requesterCaption(request), style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
             }
             PlanStatusChip(text = partyLabel(request, playdate))
+        }
+        // A forwarded email invitation: the host sees whose address it went to before saying yes (as on iOS).
+        val invitedTo = request.openedInviteTo
+        if (invitedTo != null) {
+            PlanInfoLine(
+                PantopusIcon.Mail,
+                "Opened your invitation to $invitedTo",
+                strong = false,
+                modifier = Modifier.testTag("planRequestInvite"),
+            )
+        } else if (request.invited) {
+            PlanInfoLine(PantopusIcon.UserPlus, "You invited them", strong = false, modifier = Modifier.testTag("planRequestInvite"))
         }
         request.note?.takeIf(String::isNotBlank)?.let {
             Text(text = "“$it”", style = PantopusTextStyle.body.copy(fontStyle = FontStyle.Italic), color = PantopusColors.appText)

@@ -4,8 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.security.AppLockManager
 import app.pantopus.android.core.security.StepUpCoordinator
+import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.SessionEndReason
+import app.pantopus.android.data.plans.PlansRepository
 import app.pantopus.android.data.realtime.SocketManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +23,7 @@ class RootViewModel
         /** Mounted by `StepUpHost` in the signed-in branch (persistent login, design §2.5). */
         val stepUpCoordinator: StepUpCoordinator,
         private val socketManager: SocketManager,
+        private val plans: PlansRepository,
     ) : ViewModel() {
         val authState: StateFlow<AuthRepository.State> = authRepository.state
 
@@ -84,6 +87,12 @@ class RootViewModel
                 AuthRepository.State.Unknown -> Unit
             }
         }
+
+        /**
+         * Someone invited to a plan by email who just signed up (or signed in) with that address, without the email's
+         * link surviving the Play Store: the plan to open, once (planInvites.js `GET /api/plans/invites/next`), as iOS.
+         */
+        suspend fun unopenedPlanInvite(): String? = (plans.nextInvite() as? NetworkResult.Success)?.data?.planId
 
         suspend fun signOutFromAppLock() {
             appLockManager.clearTransientState()

@@ -2799,7 +2799,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             // top, so Back lands on Plans; while the `plans` flag is off it opens Pulse (Nearby with the Pulse redesign
             // off) instead.
             is DeepLinkRouter.Destination.Plan -> {
-                openPlansLink(PlansRoutes.plan(pending.id))
+                openPlansLink(PlansRoutes.plan(pending.id, invite = pending.invite))
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.PlanRequests -> {
