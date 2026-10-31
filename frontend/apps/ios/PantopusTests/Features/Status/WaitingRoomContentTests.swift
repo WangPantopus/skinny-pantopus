@@ -63,8 +63,7 @@ final class WaitingRoomContentTests: XCTestCase {
         XCTAssertEqual(content.halo.icon, .fileWarning)
         XCTAssertFalse(content.halo.isPulsing)
         XCTAssertEqual(content.headline, "We need one more thing")
-        XCTAssertTrue(content.subcopy.contains("older than 90 days"))
-        XCTAssertTrue(content.subcopy.contains("last 60 days"))
+        XCTAssertTrue(content.subcopy.contains("A Pantopus reviewer asked for something"))
         // Address + claim ref are constant across both frames.
         XCTAssertEqual(content.address, "418 Linden Ave · Apt 3B")
         XCTAssertEqual(content.claimRef, "CLM-4F2A")
@@ -72,18 +71,17 @@ final class WaitingRoomContentTests: XCTestCase {
         XCTAssertTrue(content.timelinePaused)
         XCTAssertEqual(content.timeline.map(\.state), [.done, .current, .pending])
         XCTAssertEqual(content.timeline[1].sub, "Action needed")
-        // ETA pill flips to warning "Paused · respond within 7 days".
+        // ETA pill flips to warning "Paused · waiting for you" (no response deadline is promised).
         XCTAssertEqual(content.etaPill.tone, .warning)
-        XCTAssertEqual(content.etaPill.text, "Paused · respond within 7 days")
+        XCTAssertEqual(content.etaPill.text, "Paused · waiting for you")
         XCTAssertEqual(content.etaPill.icon, .alertCircle)
     }
 
     func testMoreInfoRequestedShowsReviewerNote() {
-        let note = WaitingRoomContent.moreInfoRequested().reviewerNote
+        let note = WaitingRoomContent.moreInfoRequested(note: "Doc please", askedOn: "Oct 30").reviewerNote
         XCTAssertNotNil(note)
-        XCTAssertEqual(note?.eyebrow, "Note from reviewer · Maya K.")
-        XCTAssertEqual(note?.body.contains("July 14"), true)
-        XCTAssertEqual(note?.body.contains("last 60 days"), true)
+        XCTAssertEqual(note?.eyebrow, "Note from Pantopus · Oct 30")
+        XCTAssertEqual(note?.body, "\u{201C}Doc please\u{201D}")
     }
 
     func testMoreInfoRequestedPromotesUpdateEvidenceToPrimary() {

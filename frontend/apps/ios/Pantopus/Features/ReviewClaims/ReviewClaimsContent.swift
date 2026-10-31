@@ -101,7 +101,10 @@ public enum AdminClaimChip {
             return AdminClaimChipDescriptor(text: "Conflict", icon: .alertTriangle, variant: .error)
         }
         if claim.state == "needs_more_info" {
-            return AdminClaimChipDescriptor(text: "Awaiting docs", icon: .hourglass, variant: .neutral)
+            // After Request info: the claimant sent a document since, or the claim still waits on them.
+            return (claim.documentsSinceRequest ?? 0) > 0
+                ? AdminClaimChipDescriptor(text: "Docs sent", icon: .fileText, variant: .success)
+                : AdminClaimChipDescriptor(text: "Awaiting docs", icon: .hourglass, variant: .neutral)
         }
 
         let parser = ISO8601DateFormatter()
