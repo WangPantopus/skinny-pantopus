@@ -57,7 +57,8 @@ fun EmptyState(
                 .fillMaxSize()
                 .background(PantopusColors.appBg)
                 .padding(horizontal = Spacing.s6)
-                .semantics { contentDescription = "$headline. $subcopy" },
+                // A headline that already ends its sentence ("Nothing sent yet.") isn't read with a second stop.
+                .semantics { contentDescription = if (headline.endsWith(".")) "$headline $subcopy" else "$headline. $subcopy" },
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
