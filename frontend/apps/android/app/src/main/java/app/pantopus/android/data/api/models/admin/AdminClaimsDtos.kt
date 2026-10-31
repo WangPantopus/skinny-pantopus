@@ -93,6 +93,8 @@ data class AdminClaimDto(
     @Json(name = "evidence_count") val evidenceCount: Int,
     val home: AdminClaimHomeDto?,
     val claimant: AdminClaimUserDto?,
+    /** On a claim waiting on the claimant (Request info): documents they sent after the request. */
+    @Json(name = "documents_since_request") val documentsSinceRequest: Int? = null,
 )
 
 /**

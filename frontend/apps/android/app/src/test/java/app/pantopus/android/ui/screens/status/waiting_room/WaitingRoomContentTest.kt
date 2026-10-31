@@ -91,8 +91,7 @@ class WaitingRoomContentTest {
         assertEquals(PantopusIcon.FileWarning, content.halo.icon)
         assertFalse(content.halo.isPulsing)
         assertEquals("We need one more thing", content.headline)
-        assertTrue(content.subcopy.contains("older than 90 days"))
-        assertTrue(content.subcopy.contains("last 60 days"))
+        assertTrue(content.subcopy.contains("A Pantopus reviewer asked for something"))
         assertEquals("418 Linden Ave · Apt 3B", content.address)
         assertEquals("CLM-4F2A", content.claimRef)
         assertTrue(content.timelinePaused)
@@ -102,17 +101,16 @@ class WaitingRoomContentTest {
         )
         assertEquals("Action needed", content.timeline[1].sub)
         assertEquals(StatusPillTone.Warning, content.etaPill.tone)
-        assertEquals("Paused · respond within 7 days", content.etaPill.text)
+        assertEquals("Paused · waiting for you", content.etaPill.text)
         assertEquals(PantopusIcon.AlertCircle, content.etaPill.icon)
     }
 
     @Test
     fun moreInfo_shows_reviewer_note() {
-        val note = WaitingRoomContent.moreInfoRequested().reviewerNote
+        val note = WaitingRoomContent.moreInfoRequested(note = "Doc please", askedOn = "Oct 30").reviewerNote
         assertNotNull(note)
-        assertEquals("Note from reviewer · Maya K.", note?.eyebrow)
-        assertTrue(note?.body?.contains("July 14") == true)
-        assertTrue(note?.body?.contains("last 60 days") == true)
+        assertEquals("Note from Pantopus · Oct 30", note?.eyebrow)
+        assertEquals("\u201CDoc please\u201D", note?.body)
     }
 
     @Test
