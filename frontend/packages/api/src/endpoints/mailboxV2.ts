@@ -127,6 +127,8 @@ export interface MailCard {
   number: number | null;
   caption: string | null;
   paper: string;
+  /** The picture's height in px at 960 px wide; null for a design the server doesn't know. */
+  height?: number | null;
   holiday: string;
   year: number;
   arrival: string | null;
