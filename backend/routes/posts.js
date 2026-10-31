@@ -1688,9 +1688,14 @@ router.get('/feed', verifyToken, async (req, res) => {
     let feedLatitude = Number.isFinite(parseFloat(latitude)) ? parseFloat(latitude) : null;
     let feedLongitude = Number.isFinite(parseFloat(longitude)) ? parseFloat(longitude) : null;
     let fallbackArea = null;
+    let scopeAccessRead = null;
     // Place needs a location. With no area chosen and no device location, it looks around the
     // person's own place, as Today does: their home first, then a saved place.
     if (surface === 'place' && (feedLatitude == null || feedLongitude == null)) {
+      // Which Pulse areas the reader may read doesn't depend on their place, so it's read alongside it. A read that
+      // isn't used waits (the catch only marks it handled).
+      scopeAccessRead = postScopeAccess(userId);
+      scopeAccessRead.catch(() => {});
       const ownPlace = await resolveLocation(userId);
       if (ownPlace.latitude == null || ownPlace.longitude == null) {
         return res.json({
@@ -1706,6 +1711,11 @@ router.get('/feed', verifyToken, async (req, res) => {
       fallbackArea = { label: ownPlace.label, source: ownPlace.source };
     }
 
+    // The neighborhood cards below can appear only on the first page of the place surface. There, which cards the
+    // reader dismissed is read alongside the feed (one small read, unused once the area has more than 8 posts).
+    const isColdStart = surface === 'place' && !topic && !cursorCreatedAt && !cursorId && !postType
+      && feedLatitude != null && feedLongitude != null;
+    const dismissedRead = isColdStart ? loadDismissedSeededFactIds(userId) : null;
     const result = await feedService.getListFeed({
       userId,
       surface,
@@ -1721,13 +1731,12 @@ router.get('/feed', verifyToken, async (req, res) => {
       topic: topic || null,
       sportsMode: sportsMode || null,
       eventKey: eventKey || null,
+      scopeAccessRead,
     });
 
     // Cold-start seeding: inject neighborhood facts when real posts are sparse
     // Only on first page of the place surface, when fewer than 5 real posts
     const realPostCount = result.posts.length;
-    const isColdStart = surface === 'place' && !topic && !cursorCreatedAt && !cursorId && !postType
-      && feedLatitude != null && feedLongitude != null;
 
     if (isColdStart && realPostCount < 5) {
       try {
@@ -1735,7 +1744,7 @@ router.get('/feed', verifyToken, async (req, res) => {
         // The facts and the user's dismissed fact IDs are read together.
         const [facts, dismissedIds] = await Promise.all([
           generateNeighborhoodFacts(geohash),
-          loadDismissedSeededFactIds(userId),
+          dismissedRead,
         ]);
 
         // Filter out dismissed facts
@@ -1787,15 +1796,9 @@ router.get('/feed', verifyToken, async (req, res) => {
         const geohash = _encodeGeohash6(feedLatitude, feedLongitude);
         const transitionId = `transition_${geohash}`;
 
-        // Load user's dismissed list (reuse from cold-start path if available)
-        const { data: userData } = await supabaseAdmin
-          .from('User')
-          .select('dismissed_seeded_facts')
-          .eq('id', userId)
-          .maybeSingle();
-
-        const dismissed = userData?.dismissed_seeded_facts || [];
-        if (!dismissed.includes(transitionId)) {
+        // The user's dismissed list, read alongside the feed
+        const dismissed = await dismissedRead;
+        if (!dismissed.has(transitionId)) {
           const now = new Date();
           const transitionCard = _buildSeededItem(
             {

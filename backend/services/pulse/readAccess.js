@@ -119,8 +119,9 @@ async function postScopeAccess(userId, context) {
 // A notification can quote a post or reply. Resolve its current access fields in
 // the database and use the same scope predicate before both pagination and counts.
 // The computed field is a query-only server projection; it is never selected for a client.
-async function notificationPostFilter(userId) {
-  const [access, blocked] = await Promise.all([postScopeAccess(userId), blockService.blockedUserIds(userId)]);
+// `blockedRead` is blockService.blockedUserIds(userId) already started by the caller.
+async function notificationPostFilter(userId, blockedRead) {
+  const [access, blocked] = await Promise.all([postScopeAccess(userId), blockedRead || blockService.blockedUserIds(userId)]);
   const field = name => `pulse_notification_post_access->>${name}`;
   return query => {
     let q = access.query(query, null, 'pulse_notification_post_access')

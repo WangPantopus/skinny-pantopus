@@ -531,11 +531,13 @@ function loadUserStatusRows(posts, userId) {
 
 // NOTE: This function applies location privacy via applyPostLocationPrivacy.
 // Callers should NOT also call applyPostLocationPrivacy.
-// `statusRows` is loadUserStatusRows' result when the caller has already read it.
-async function enrichWithUserStatus(posts, userId, statusRows = null) {
+async function enrichWithUserStatus(posts, userId) {
   if (!posts.length) return posts;
-  await dropUnpublishedMatches(posts);
-  const [{ data: likes }, { data: saves }, { data: reposts }] = statusRows || await loadUserStatusRows(posts, userId);
+  // The matched businesses' state and the viewer's likes, saves and reposts don't depend on each other.
+  const [[{ data: likes }, { data: saves }, { data: reposts }]] = await Promise.all([
+    loadUserStatusRows(posts, userId),
+    dropUnpublishedMatches(posts),
+  ]);
   const likedSet = new Set((likes || []).map(r => r.post_id));
   const savedSet = new Set((saves || []).map(r => r.post_id));
   const repostSet = new Set((reposts || []).map(r => r.post_id));
@@ -720,11 +722,11 @@ async function attachIdentityAuthors(posts, viewerUserId, authorRows = null) {
 // trip; the location privacy pass still runs before the authors are attached.
 async function enrichFeedPosts(posts, userId) {
   if (!posts.length) return posts;
-  const [statusRows, authorRows] = await Promise.all([
-    loadUserStatusRows(posts, userId),
+  const [withStatus, authorRows] = await Promise.all([
+    enrichWithUserStatus(posts, userId),
     loadIdentityAuthorRows(posts),
   ]);
-  return attachIdentityAuthors(await enrichWithUserStatus(posts, userId, statusRows), userId, authorRows);
+  return attachIdentityAuthors(withStatus, userId, authorRows);
 }
 
 // ---------------------------------------------------------------------------
@@ -1179,6 +1181,8 @@ async function getListFeed({
   sportsMode,
   eventKey,
   includeEnded = false,
+  // postScopeAccess(userId) when the caller started it earlier (GET /api/posts/feed, alongside the viewer's own place).
+  scopeAccessRead = null,
 }) {
   // 1. Validate surface
   if (!FEED_SURFACES.includes(surface)) {
@@ -1210,7 +1214,7 @@ async function getListFeed({
   // Read filters alongside the cursor and author graph; Connections also uses them
   // to keep muted or blocked people from introducing posts through a repost.
   const filtersRead = settle(getMuteAndHideFilters(userId));
-  const scopeAccess = await postScopeAccess(userId);
+  const scopeAccess = await (scopeAccessRead || postScopeAccess(userId));
   const globalPinsRead = isFirstPage ? settle(getGlobalPins(scopeAccess)) : null;
   const initialCursorPinned = await getCursorPinState(cursorId);
 

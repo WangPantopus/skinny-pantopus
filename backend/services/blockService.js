@@ -141,10 +141,11 @@ async function removeFollowsBetween(userId1, userId2) {
  * (metadata.user_id) is across a block from userId, in either direction: blocks hide people from
  * each other, including what they did before the block. A notice with no actor stays. If the block
  * list can't be read, refuse the read rather than bringing back a blocked person's notices.
+ * `blockedRead` is blockedUserIds(userId) already started by the caller, for one read per request.
  * @returns {Promise<(query: object) => object>}
  */
-async function notificationBlockFilter(userId) {
-  const blocked = await blockedUserIds(userId);
+async function notificationBlockFilter(userId, blockedRead) {
+  const blocked = await (blockedRead || blockedUserIds(userId));
   if (!blocked.size) return (query) => query;
   const ids = [...blocked].join(',');
   return (query) => query.or(`metadata->>user_id.is.null,metadata->>user_id.not.in.(${ids})`);
