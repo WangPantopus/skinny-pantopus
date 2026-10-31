@@ -119,8 +119,9 @@ async function postScopeAccess(userId, context) {
 // A notification can quote a post or reply. Resolve its current access fields in
 // the database and use the same scope predicate before both pagination and counts.
 // The computed field is a query-only server projection; it is never selected for a client.
-async function notificationPostFilter(userId) {
-  const [access, blocked] = await Promise.all([postScopeAccess(userId), blockService.blockedUserIds(userId)]);
+// `blockedRead` is blockService.blockedUserIds(userId) already started by the caller.
+async function notificationPostFilter(userId, blockedRead) {
+  const [access, blocked] = await Promise.all([postScopeAccess(userId), blockedRead || blockService.blockedUserIds(userId)]);
   const field = name => `pulse_notification_post_access->>${name}`;
   return query => {
     let q = access.query(query, null, 'pulse_notification_post_access')
@@ -146,14 +147,18 @@ function canReadPostModeration(post, userId, staff = false) {
   return true;
 }
 
-/** Whether `userId` (null: signed out) may read `post`, a row with at least POST_READ_SELECT. */
-async function canReadPost(post, userId, scopeAccess) {
+/**
+ * Whether `userId` (null: signed out) may read `post`, a row with at least POST_READ_SELECT. `blocked` is the reader's
+ * block list (blockService.blockedUserIds, or that read in flight) when the caller reads it anyway.
+ */
+async function canReadPost(post, userId, scopeAccess, blocked) {
   if (userId && post.user_id === userId) return true;
   if (!canReadPostModeration(post, userId, post.moderation_state === 'held' && await isStaff(userId))) return false;
   // A held post that passed the shared check belongs to staff's review view.
   if (post.moderation_state === 'held') return true;
-  // Profile blocks (UserBlock) hide posts in both directions, like messaging.
-  if (userId && post.user_id && await blockService.isBlocked(post.user_id, userId)) return false;
+  // Profile blocks (UserBlock) hide posts in both directions, like messaging; the block list holds both directions.
+  if (userId && post.user_id
+      && (blocked ? (await blocked).has(post.user_id) : await blockService.isBlocked(post.user_id, userId))) return false;
   if (post.identity_context_type === 'persona'
       && (post.archived_at || post.status === 'removed'
         || (post.post_metadata?.broadcast_status != null

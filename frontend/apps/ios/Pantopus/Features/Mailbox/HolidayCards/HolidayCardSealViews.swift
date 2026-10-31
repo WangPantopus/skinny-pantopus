@@ -48,20 +48,32 @@ struct HolidayCardSealStep: View {
                 .background(MailPaper.cardNote, in: RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).strokeBorder(MailPaper.cardRowLine, lineWidth: 1))
                 .padding(.top, 14)
-            if let error = viewModel.previewError {
-                Text(error)
+            if let notice = viewModel.sealNotice {
+                Text(notice)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(HolidayCardDesk.error(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, Spacing.s3)
                     .accessibilityIdentifier("sendCardError")
             }
-            // Step 5 shows exactly what they'll see; "Seal and send" is there.
+            button
+                .padding(.top, Spacing.s5)
+                .accessibilityIdentifier("sendCardSend")
+        }
+    }
+
+    /// Step 5 shows exactly what they'll see, and "Seal and send" is there.
+    /// When the server can't show it, the card is sealed and sent from here.
+    @ViewBuilder
+    private var button: some View {
+        if viewModel.lookUnavailable {
+            HolidayCardWaxButton(title: "Seal and send", isLoading: viewModel.sending, isEnabled: viewModel.arrival != nil) {
+                Task { await viewModel.send() }
+            }
+        } else {
             HolidayCardWaxButton(title: "Look it over", isLoading: viewModel.previewing, isEnabled: viewModel.arrival != nil) {
                 Task { await viewModel.lookItOver() }
             }
-            .padding(.top, Spacing.s5)
-            .accessibilityIdentifier("sendCardSend")
         }
     }
 

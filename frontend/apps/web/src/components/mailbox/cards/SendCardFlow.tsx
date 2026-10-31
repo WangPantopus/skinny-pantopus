@@ -47,6 +47,17 @@ const primary = 'flex h-12 w-full items-center justify-center gap-2 rounded-xl t
 const secondary = 'flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#d6cbb6] bg-[#fffdf8] text-[15px] font-semibold text-[#374151] transition hover:bg-[#f5efe3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8b1d1d] disabled:opacity-50';
 const muted = 'text-[#4e5563] [@media(prefers-color-scheme:dark)]:text-app-text-secondary';
 
+/** Step 4 when the server can't show the look; "Seal and send" is then on step 4. */
+const LOOK_UNAVAILABLE = 'Pantopus can’t show how your card will look yet. You can still seal and send it.';
+
+/**
+ * The server can't show the look: it has no Look it over yet (a 404 without the server's code, as a server from before
+ * it answers). Sending still works there.
+ */
+function lookIsUnavailable(error: MailboxApiError | null): boolean {
+  return error?.status === 404 && !error.serverCode;
+}
+
 /** The server's own sentence when it sent one (a card that can't go yet, a limit), else what went wrong. */
 function sendMessage(error: MailboxApiError | null, byEmail = false): string {
   if (error?.serverCode && error.status < 500) return error.message;
@@ -409,8 +420,11 @@ function SealStep({
   arrival,
   onArrival,
   looking,
+  sendsHere,
+  sending,
   error,
   onLook,
+  onSend,
 }: {
   cards: HolidayCards;
   to: Recipient;
@@ -422,8 +436,12 @@ function SealStep({
   onArrival: (arrival: HolidayCardArrival) => void;
   /** Reading what they will get (the next step). */
   looking: boolean;
+  /** The server can't show the look: "Seal and send" is here instead. */
+  sendsHere: boolean;
+  sending: boolean;
   error: string | null;
   onLook: () => void;
+  onSend: () => void;
 }) {
   const preview = {
     id: `preview-${design.id}`,
@@ -468,9 +486,16 @@ function SealStep({
       </p>
       {error ? <p role="alert" className="mx-auto mt-3 max-w-[420px] text-[14px] font-medium text-[#a81a1a]">{error}</p> : null}
       <div className="mx-auto mt-5 max-w-[420px] pb-4">
-        <button type="button" disabled={!arrival || looking} onClick={onLook} className={primary} style={{ backgroundColor: WAX }}>
-          {looking ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : null}
-          Look it over
+        <button
+          type="button"
+          data-testid="sendCardSend"
+          disabled={!arrival || looking || sending}
+          onClick={sendsHere ? onSend : onLook}
+          className={primary}
+          style={{ backgroundColor: WAX }}
+        >
+          {looking || sending ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> : null}
+          {sendsHere ? 'Seal and send' : 'Look it over'}
         </button>
       </div>
     </div>
@@ -587,8 +612,10 @@ export default function SendCardFlow() {
   const [step, setStep] = useState<Step>('to');
   // What they will get, from the server's look (step 5).
   const [look, setLook] = useState<HolidayCardPreview | null>(null);
-  // A choice that closed while they looked it over: step 4 says so.
+  // A choice that closed while they looked it over, or why a card sent from step 4 didn't go: step 4 says so.
   const [sealError, setSealError] = useState<string | null>(null);
+  // The server can't show the look: step 4 says so and seals and sends itself. Each visit to step 4 asks again.
+  const [lookUnavailable, setLookUnavailable] = useState(false);
   const [to, setTo] = useState<Recipient | null>(null);
   // A person's arrivals and day go by their clock, read once they're chosen and again on the last step.
   const theirs = useCardArrivals(to?.kind === 'person' ? to.userId : null);
@@ -635,16 +662,30 @@ export default function SendCardFlow() {
     const card = cardToSend();
     if (!card) return;
     setSealError(null);
-    preview.mutate(card, { onSuccess: (res) => { setLook(res); setStep('look'); } });
+    preview.mutate(card, {
+      onSuccess: (res) => {
+        // An answer without the card can't be shown.
+        if (!res?.piece) { setLookUnavailable(true); return; }
+        setLook(res);
+        setStep('look');
+      },
+      onError: (error) => { if (lookIsUnavailable(error)) setLookUnavailable(true); },
+    });
   };
 
   const doSend = () => {
     const card = cardToSend();
     if (!card) return;
+    // From step 4 (the look can't be shown), a refusal shows under its choices.
+    const fromSeal = step === 'seal';
+    setSealError(null);
     send.mutate(card, {
       onSuccess: (res) => { setSent(res.card); setLook(null); setStep('sent'); },
       onError: (error) => {
-        if (error.serverCode !== 'CARD_ARRIVAL_CLOSED') return;
+        if (error.serverCode !== 'CARD_ARRIVAL_CLOSED') {
+          if (fromSeal) { setSealError(sendMessage(error, to?.kind === 'email')); send.reset(); }
+          return;
+        }
         // Their 7 a.m. came while they looked it over: choose again on step 4, with what's open now.
         setSealError(sendMessage(error));
         send.reset();
@@ -666,7 +707,7 @@ export default function SendCardFlow() {
       onSuccess: () => {
         setSent(null);
         setTookBack(true);
-        setTo(null); setDesignId(null); setMessage(''); setArrival(null); setLook(null);
+        setTo(null); setDesignId(null); setMessage(''); setArrival(null); setLook(null); setLookUnavailable(false);
         setStep('to');
       },
       onError: (error) => setTakeBackError(sendMessage(error)),
@@ -742,7 +783,7 @@ export default function SendCardFlow() {
           limit={data.message_limit}
           message={message}
           onMessage={setMessage}
-          onNext={() => { setStep('seal'); if (to?.kind === 'person') void theirs.refetch(); }}
+          onNext={() => { setStep('seal'); setLookUnavailable(false); if (to?.kind === 'person') void theirs.refetch(); }}
         />
       ) : null}
       {step === 'seal' && design && to ? (
@@ -756,8 +797,11 @@ export default function SendCardFlow() {
           arrival={arrival}
           onArrival={(next) => { setArrival(next); setSealError(null); preview.reset(); }}
           looking={preview.isPending}
-          error={sealError ?? (preview.isError ? sendMessage(preview.error, to.kind === 'email') : null)}
+          sendsHere={lookUnavailable}
+          sending={send.isPending}
+          error={sealError ?? (lookUnavailable ? LOOK_UNAVAILABLE : preview.isError ? sendMessage(preview.error, to.kind === 'email') : null)}
           onLook={doLook}
+          onSend={doSend}
         />
       ) : null}
       {step === 'look' && look && to ? (

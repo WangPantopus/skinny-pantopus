@@ -124,6 +124,7 @@ const {
   applyMuteHideFilters,
   enrichFeedPosts,
   attachIdentityAuthors,
+  loadIdentityAuthorRows,
   applyPostLocationPrivacy,
   sortMatchedBusinessesByRating,
   dropUnpublishedMatches,
@@ -539,21 +540,39 @@ async function readCommentPage(post, userId, blocked, limit, offset) {
     .range(offset, offset + limit - 1);
   if (error) throw error;
 
-  const ids = (comments || []).map(comment => comment.id);
-  let liked = new Set();
-  if (ids.length) {
-    const { data, error: likesError } = await supabaseAdmin.from('CommentLike')
-      .select('comment_id').eq('user_id', userId).in('comment_id', ids);
-    if (likesError) throw likesError;
-    liked = new Set((data || []).map(like => like.comment_id));
-  }
+  // The viewer's likes, the attachments and the writers' names each need only the page, so they're read together.
+  const rows = comments || [];
+  const [liked, withFiles, names] = await Promise.all([
+    likedCommentIds(rows.map(comment => comment.id), userId),
+    attachFilesToComments(rows),
+    loadCommentNames(rows, post),
+  ]);
   const projected = await legacyReplyParents(
-    await serializeCommentsForViewer(await attachFilesToComments(comments || []), post, userId),
+    await serializeCommentsForViewer(withFiles, post, userId, undefined, { blocked, names }),
     post.id, userId, blocked);
   return {
     comments: projected.map(comment => ({ ...comment, userHasLiked: liked.has(comment.id) })),
-    readCount: (comments || []).length,
+    readCount: rows.length,
   };
+}
+
+// Native detail screens consume the whole thread. Read bounded pages so
+// PostgREST's row cap cannot silently cut off a busy conversation.
+async function readWholeThread(post, userId, blocked) {
+  const rows = [];
+  for (let offset = 0; ; offset += 100) {
+    const page = await readCommentPage(post, userId, blocked, 100, offset);
+    rows.push(...page.comments);
+    if (page.readCount < 100) return rows;
+  }
+}
+
+async function likedCommentIds(commentIds, userId) {
+  if (!commentIds.length) return new Set();
+  const { data, error } = await supabaseAdmin.from('CommentLike')
+    .select('comment_id').eq('user_id', userId).in('comment_id', commentIds);
+  if (error) throw error;
+  return new Set((data || []).map(like => like.comment_id));
 }
 
 async function attachFilesToComments(comments) {
@@ -642,15 +661,23 @@ function serializeCommentForViewer(comment, audienceAuthor, viewerUserId, person
   };
 }
 
-async function serializeCommentsForViewer(comments, post, viewerUserId, preparedAuthors) {
+// The names these comments' writers go by: on a persona post the fans' and the persona's identities. Off a persona post,
+// commenters go by the name the post's author does: a person by their Local Profile's name, handle and photo, a
+// business (or anyone without a Local Profile) by the account. A chat names people that way, so its lookup is reused;
+// `id` stays the account id the web's hover card follows and connects by.
+async function loadCommentNames(comments, post, preparedAuthors) {
+  const userIds = comments.map((comment) => comment.user_id);
+  const authors = preparedAuthors ?? await loadPersonaCommentAuthors(post, userIds);
+  return { authors, people: authors ? null : await loadChatPeople(userIds) };
+}
+
+// `prepared` is what the caller has already read: the viewer's block list (`blocked`) and loadCommentNames' result
+// for these comments (`names`).
+async function serializeCommentsForViewer(comments, post, viewerUserId, preparedAuthors, prepared = {}) {
   // Comments from users blocked by / blocking the viewer are never shown to them.
-  const blocked = viewerUserId ? await blockService.blockedUserIds(viewerUserId) : new Set();
+  const blocked = prepared.blocked || (viewerUserId ? await blockService.blockedUserIds(viewerUserId) : new Set());
   const visible = blocked.size ? comments.filter((comment) => !blocked.has(comment.user_id)) : comments;
-  const authors = preparedAuthors ?? await loadPersonaCommentAuthors(post, visible.map((comment) => comment.user_id));
-  // Off a persona post, commenters go by the name the post's author does: a person by their Local Profile's name,
-  // handle and photo, a business (or anyone without a Local Profile) by the account. A chat names people that way, so
-  // its lookup is reused; `id` stays the account id the web's hover card follows and connects by.
-  const people = authors ? null : await loadChatPeople(visible.map((comment) => comment.user_id));
+  const { authors, people } = prepared.names || await loadCommentNames(visible, post, preparedAuthors);
   return visible.map((comment) => serializeCommentForViewer(comment,
     authors ? authors.get(comment.user_id) || { id: '', displayName: 'Fan', href: null } : null,
     viewerUserId, people?.get(String(comment.user_id))));
@@ -667,9 +694,10 @@ function serializeLikeForViewer(like) {
   };
 }
 
-async function serializePostForViewer(post, viewerUserId) {
+// `authorRows` is loadIdentityAuthorRows([post])' result when the caller has already read it.
+async function serializePostForViewer(post, viewerUserId, authorRows = null) {
   if (!post) return null;
-  const [serialized] = await attachIdentityAuthors([post], viewerUserId);
+  const [serialized] = await attachIdentityAuthors([post], viewerUserId, authorRows);
   return serialized || post;
 }
 
@@ -728,7 +756,8 @@ function postEngagementNotificationLink(post, postId) {
   return { link: `/posts/${postId}`, extraMeta: {} };
 }
 
-async function requireVisiblePost({ postId, userId, res, select = POST_VISIBILITY_SELECT }) {
+// `blocked`: the reader's block list in flight, for canViewPost (see GET /:id).
+async function requireVisiblePost({ postId, userId, res, select = POST_VISIBILITY_SELECT, blocked }) {
   const { data: post, error } = await supabaseAdmin
     .from('Post')
     .select(select)
@@ -746,7 +775,7 @@ async function requireVisiblePost({ postId, userId, res, select = POST_VISIBILIT
     return null;
   }
 
-  const hasAccess = await canViewPost(post, userId);
+  const hasAccess = await canViewPost(post, userId, undefined, blocked);
   if (!hasAccess) {
     res.status(403).json({ error: 'You do not have access to this post' });
     return null;
@@ -1688,9 +1717,14 @@ router.get('/feed', verifyToken, async (req, res) => {
     let feedLatitude = Number.isFinite(parseFloat(latitude)) ? parseFloat(latitude) : null;
     let feedLongitude = Number.isFinite(parseFloat(longitude)) ? parseFloat(longitude) : null;
     let fallbackArea = null;
+    let scopeAccessRead = null;
     // Place needs a location. With no area chosen and no device location, it looks around the
     // person's own place, as Today does: their home first, then a saved place.
     if (surface === 'place' && (feedLatitude == null || feedLongitude == null)) {
+      // Which Pulse areas the reader may read doesn't depend on their place, so it's read alongside it. A read that
+      // isn't used waits (the catch only marks it handled).
+      scopeAccessRead = postScopeAccess(userId);
+      scopeAccessRead.catch(() => {});
       const ownPlace = await resolveLocation(userId);
       if (ownPlace.latitude == null || ownPlace.longitude == null) {
         return res.json({
@@ -1706,6 +1740,11 @@ router.get('/feed', verifyToken, async (req, res) => {
       fallbackArea = { label: ownPlace.label, source: ownPlace.source };
     }
 
+    // The neighborhood cards below can appear only on the first page of the place surface. There, which cards the
+    // reader dismissed is read alongside the feed (one small read, unused once the area has more than 8 posts).
+    const isColdStart = surface === 'place' && !topic && !cursorCreatedAt && !cursorId && !postType
+      && feedLatitude != null && feedLongitude != null;
+    const dismissedRead = isColdStart ? loadDismissedSeededFactIds(userId) : null;
     const result = await feedService.getListFeed({
       userId,
       surface,
@@ -1721,13 +1760,12 @@ router.get('/feed', verifyToken, async (req, res) => {
       topic: topic || null,
       sportsMode: sportsMode || null,
       eventKey: eventKey || null,
+      scopeAccessRead,
     });
 
     // Cold-start seeding: inject neighborhood facts when real posts are sparse
     // Only on first page of the place surface, when fewer than 5 real posts
     const realPostCount = result.posts.length;
-    const isColdStart = surface === 'place' && !topic && !cursorCreatedAt && !cursorId && !postType
-      && feedLatitude != null && feedLongitude != null;
 
     if (isColdStart && realPostCount < 5) {
       try {
@@ -1735,7 +1773,7 @@ router.get('/feed', verifyToken, async (req, res) => {
         // The facts and the user's dismissed fact IDs are read together.
         const [facts, dismissedIds] = await Promise.all([
           generateNeighborhoodFacts(geohash),
-          loadDismissedSeededFactIds(userId),
+          dismissedRead,
         ]);
 
         // Filter out dismissed facts
@@ -1787,15 +1825,9 @@ router.get('/feed', verifyToken, async (req, res) => {
         const geohash = _encodeGeohash6(feedLatitude, feedLongitude);
         const transitionId = `transition_${geohash}`;
 
-        // Load user's dismissed list (reuse from cold-start path if available)
-        const { data: userData } = await supabaseAdmin
-          .from('User')
-          .select('dismissed_seeded_facts')
-          .eq('id', userId)
-          .maybeSingle();
-
-        const dismissed = userData?.dismissed_seeded_facts || [];
-        if (!dismissed.includes(transitionId)) {
+        // The user's dismissed list, read alongside the feed
+        const dismissed = await dismissedRead;
+        if (!dismissed.has(transitionId)) {
           const now = new Date();
           const transitionCard = _buildSeededItem(
             {
@@ -2704,6 +2736,11 @@ router.get('/:id', optionalAuth, async (req, res) => {
       return res.status(503).json({ error: 'Could not check your sign-in right now. Please try again.' });
     }
 
+    // The reader's block list doesn't depend on the post, so it's read alongside it; the access check and the replies
+    // use it. Until one does, a failed read waits (the catch only marks it handled), so a post that's missing or
+    // hidden by moderation still answers 404 or 403. Signed out, there's nothing to read.
+    const blocked = blockService.blockedUserIds(userId);
+    blocked.catch(() => {});
     const { data: post, error } = await supabaseAdmin
       .from('Post')
       .select(`*, creator:user_id (${SAFE_CREATOR_SELECT}), home:home_id (id, address, city, state)`)
@@ -2716,7 +2753,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
     }
     if (!post) return res.status(404).json({ error: 'Post not found' });
 
-    const hasAccess = await canViewPost(post, userId);
+    const hasAccess = await canViewPost(post, userId, undefined, blocked);
     if (!hasAccess) return res.status(403).json({ error: 'You do not have access to this post' });
 
     if (!userId) {
@@ -2730,26 +2767,19 @@ router.get('/:id', optionalAuth, async (req, res) => {
       });
     }
 
-    const blocked = await blockService.blockedUserIds(userId);
-    const commentRows = [];
-    // Native detail screens consume the whole thread. Read bounded pages so
-    // PostgREST's row cap cannot silently cut off a busy conversation.
-    for (let offset = 0; ; offset += 100) {
-      const page = await readCommentPage(post, userId, blocked, 100, offset);
-      commentRows.push(...page.comments);
-      if (page.readCount < 100) break;
-    }
-
-    let userLike = null;
-    let userSave = null;
-    let userRepost = null;
-    if (userId) {
-      [{ data: userLike }, { data: userSave }, { data: userRepost }] = await Promise.all([
+    // Now that the reader may see the post: the replies, their like, save and repost, the matched businesses' state and
+    // the author's names don't depend on each other, so they're read together.
+    const blockedIds = await blocked;
+    const [commentRows, [{ data: userLike }, { data: userSave }, { data: userRepost }], authorRows] = await Promise.all([
+      readWholeThread(post, userId, blockedIds),
+      Promise.all([
         supabaseAdmin.from('PostLike').select('id').eq('post_id', id).eq('user_id', userId).single(),
         supabaseAdmin.from('PostSave').select('id').eq('post_id', id).eq('user_id', userId).single(),
         supabaseAdmin.from('PostShare').select('id').eq('post_id', id).eq('user_id', userId).eq('share_type', 'repost').maybeSingle(),
-      ]);
-    }
+      ]),
+      loadIdentityAuthorRows([post]),
+      dropUnpublishedMatches([post]),
+    ]);
 
     // Record unique authenticated views without letting repeated refreshes inflate counts.
     const userAgent = req.get('user-agent') || '';
@@ -2771,7 +2801,6 @@ router.get('/:id', optionalAuth, async (req, res) => {
         .catch(err => logger.warn('post.view_count.error', { error: err.message, postId: id, userId }));
     }
 
-    await dropUnpublishedMatches([post]);
     applyPostLocationPrivacy(post, userId);
     const responsePost = await serializePostForViewer({
       ...post,
@@ -2782,7 +2811,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
       userHasSaved: !!userSave,
       userHasReposted: !!userRepost,
       comments: commentRows,
-    }, userId);
+    }, userId, authorRows);
 
     res.json({
       post: isOwner ? responsePost : readerPostView(responsePost),
@@ -3346,10 +3375,12 @@ router.get('/:id/comments', verifyToken, async (req, res) => {
     if (!Number.isInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(offset) || offset < 0) {
       return res.status(400).json({ error: 'Choose a comment page size from 1 to 100 and a nonnegative offset.' });
     }
-    const post = await requireVisiblePost({ postId, userId, res });
+    // The reader's block list is read alongside the post, as on GET /:id.
+    const blocked = blockService.blockedUserIds(userId);
+    blocked.catch(() => {});
+    const post = await requireVisiblePost({ postId, userId, res, blocked });
     if (!post) return;
-    const blocked = await blockService.blockedUserIds(userId);
-    const page = await readCommentPage(post, userId, blocked, limit, offset);
+    const page = await readCommentPage(post, userId, await blocked, limit, offset);
     res.json({ comments: page.comments, pagination: { limit, offset, nextOffset: offset + page.readCount, hasMore: page.readCount === limit } });
   } catch (err) {
     logger.error('Comments fetch error', { error: err.message, postId: req.params.id });
