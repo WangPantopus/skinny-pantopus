@@ -4,11 +4,12 @@
 //
 //  Send a Christmas card (launch keys `holiday_cards` + `mailbox`; the web's
 //  `SendCardFlow`): who it's for → pick a card → write on the back → seal it
-//  for the day. One card a day: once it's sent, the screen shows today's
-//  card, which can be taken back until the 7 a.m. pickup (by email: until
-//  they open it). `GET`/`POST /api/mailbox/cards`, `POST
-//  /api/mailbox/cards/:id/take-back`, and the Mail recipient search for
-//  people only.
+//  for the day → look it over, exactly as the other person will see it,
+//  then seal and send. One card a day: once it's sent, the screen shows
+//  today's card, which can be taken back until the 7 a.m. pickup (by email:
+//  until they open it). `GET`/`POST /api/mailbox/cards`, `POST
+//  /api/mailbox/cards/preview`, `POST /api/mailbox/cards/:id/take-back`, and
+//  the Mail recipient search for people only.
 //
 
 import Foundation
@@ -20,12 +21,12 @@ enum HolidayCardFlowState {
     case error(message: String)
 }
 
-/// The flow's four steps, then the card on its way.
+/// The flow's five steps, then the card on its way.
 enum HolidayCardStep: Int, CaseIterable {
-    case to, pick, write, seal, sent
+    case to, pick, write, seal, look, sent
 
-    /// The four steps the dots count.
-    static let counted: [HolidayCardStep] = [.to, .pick, .write, .seal]
+    /// The five steps the dots count.
+    static let counted: [HolidayCardStep] = [.to, .pick, .write, .seal, .look]
 
     var title: String {
         switch self {
@@ -33,6 +34,7 @@ enum HolidayCardStep: Int, CaseIterable {
         case .pick: "Pick a card"
         case .write: "Write on the back"
         case .seal: "Seal it for the day"
+        case .look: "Look it over"
         case .sent: "On its way"
         }
     }
@@ -73,9 +75,14 @@ final class HolidayCardFlowViewModel {
     private(set) var recipient: HolidayCardRecipient?
     var designId: String?
     var message = "" {
-        didSet { sendError = nil }
+        didSet {
+            sendError = nil
+            previewError = nil
+        }
     }
 
+    /// When it comes. Changing it here keeps a sentence about a choice
+    /// that closed; the person's own pick clears it (`pick(_:)`).
     var arrival: HolidayCardArrival? {
         didSet { sendError = nil }
     }
@@ -84,9 +91,17 @@ final class HolidayCardFlowViewModel {
     /// it's read (the sender's next morning stands in meanwhile).
     private(set) var theirs: HolidayCardArrivalsFor?
 
+    /// What the other person will see (step 5), read when "Look it over" is tapped.
+    private(set) var preview: HolidayCardPreview?
+    private(set) var previewing = false
+    /// Why the card can't be looked over, or a choice that closed while it
+    /// was: under the choices on "Seal it for the day".
+    private(set) var previewError: String?
+
     /// The card just sent, shown as "On its way".
     private(set) var sent: SentHolidayCard?
     private(set) var sending = false
+    /// Why "Seal and send" didn't go, on "Look it over".
     private(set) var sendError: String?
     private(set) var takingBack = false
     private(set) var takeBackError: String?
@@ -233,6 +248,30 @@ final class HolidayCardFlowViewModel {
         readTheirs()
     }
 
+    /// A choice on "Seal it for the day", picked by the person.
+    func pick(_ arrival: HolidayCardArrival) {
+        self.arrival = arrival
+        previewError = nil
+    }
+
+    /// "Look it over": what the other person will see, from the same checks
+    /// sending runs (nothing is stored or sent), then step 5. A refusal stays
+    /// on step 4 with the server's sentence.
+    func lookItOver() async {
+        guard let body = sendBody, !previewing else { return }
+        previewing = true
+        previewError = nil
+        defer { previewing = false }
+        do {
+            let look: HolidayCardPreview = try await answer(HolidayCardEndpoints.preview(body))
+            preview = look
+            sendError = nil
+            step = .look
+        } catch {
+            previewError = Self.refusal(error, fallback: "Couldn’t show your card just now. Try again in a moment.")
+        }
+    }
+
     /// When a card to the person chosen can come, by their clock. A failure
     /// keeps the sender's next morning; sending says why if it can't go.
     private func readTheirs() {
@@ -279,29 +318,57 @@ final class HolidayCardFlowViewModel {
 
     // MARK: - Send and take back
 
-    func send() async {
-        guard let recipient, let design, let arrival, !sending else { return }
-        sending = true
-        sendError = nil
-        defer { sending = false }
+    /// The card as it stands: what "Look it over" checks and "Seal and send" sends.
+    private var sendBody: SendHolidayCardBody? {
+        guard let recipient, let design, let arrival else { return nil }
         let to: SendHolidayCardBody.Recipient = switch recipient {
         case let .person(userId, _): .person(userId: userId)
         case let .email(address): .email(address)
         }
-        let body = SendHolidayCardBody(
+        return SendHolidayCardBody(
             design: design.id,
             message: message.trimmingCharacters(in: .whitespacesAndNewlines),
             arrival: arrival,
             to: to
         )
+    }
+
+    /// "Seal and send", from "Look it over". A refusal stays there with the
+    /// server's sentence; a choice that closed meanwhile (the 7 a.m. pickup
+    /// came) goes back to step 4 to pick again.
+    func send() async {
+        guard let body = sendBody, !sending else { return }
+        sending = true
+        sendError = nil
+        defer { sending = false }
         do {
             let response: SendHolidayCardResponse = try await answer(HolidayCardEndpoints.send(body))
             sent = response.card
             step = .sent
             tookBack = false
         } catch {
-            sendError = Self.refusal(error, fallback: "Couldn’t send your card just now. Try again in a moment.")
+            let sentence = Self.refusal(error, fallback: "Couldn’t send your card just now. Try again in a moment.")
+            guard Self.refusalCode(error) == "CARD_ARRIVAL_CLOSED" else {
+                sendError = sentence
+                return
+            }
+            previewError = sentence
+            step = .seal
+            await readOpenArrivals()
         }
+    }
+
+    /// The arrivals open now, read again after one closed: a person's by
+    /// their clock, an email's from the season's answer. A failure keeps
+    /// what's shown.
+    private func readOpenArrivals() async {
+        if recipient?.isEmail == false {
+            readTheirs()
+            return
+        }
+        guard let response: HolidayCardsResponse = try? await api.request(HolidayCardEndpoints.cards()) else { return }
+        state = .loaded(response)
+        if arrival.map({ !arrivals.contains($0) }) ?? true { arrival = arrivals.first }
     }
 
     func takeBack() async {
@@ -313,6 +380,7 @@ final class HolidayCardFlowViewModel {
         do {
             let _: TakeBackHolidayCardResponse = try await answer(HolidayCardEndpoints.takeBack(cardId: card.id))
             sent = nil
+            preview = nil
             tookBack = true
             recipient = nil
             theirs = nil
@@ -336,7 +404,8 @@ final class HolidayCardFlowViewModel {
     private func answer<Response: Decodable>(_ endpoint: Endpoint) async throws -> Response {
         let reply = try await api.requestDataResponse(endpoint, includingForbidden: true, includingNotFound: true)
         guard (200..<300).contains(reply.response.statusCode) else {
-            throw HolidayCardRefusal(sentence: Self.serverSentence(String(data: reply.data, encoding: .utf8)))
+            let text = String(data: reply.data, encoding: .utf8)
+            throw HolidayCardRefusal(sentence: Self.serverSentence(text), code: Self.serverCode(text))
         }
         do {
             return try JSONDecoder().decode(Response.self, from: reply.data)
@@ -344,17 +413,50 @@ final class HolidayCardFlowViewModel {
             throw APIError.decoding(underlying: error)
         }
     }
+}
 
-    // MARK: - Words
+extension HolidayCardFlowViewModel {
+    // MARK: Words
 
-    /// The server's sentence from a card's error answer (`{ error, code }`).
+    /// The server's sentence from a card's error answer (`{ error, code }`),
+    /// or what's wrong when the card failed its field checks (an email
+    /// address the server doesn't take, say `name@example.test`).
     static func serverSentence(_ body: String?) -> String? {
         guard let data = body?.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              json["code"] is String,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        if let field = (json["details"] as? [[String: Any]])?.first {
+            if field["field"] as? String == "to.email" {
+                return "That email address doesn’t look right. Go back to “Who it’s for” and check it."
+            }
+            if let message = (field["message"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
+                return message
+            }
+        }
+        guard json["code"] is String,
               let sentence = (json["error"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
               !sentence.isEmpty else { return nil }
         return sentence
+    }
+
+    /// The code of a card's error answer (`CARD_ARRIVAL_CLOSED`, …).
+    static func serverCode(_ body: String?) -> String? {
+        guard let data = body?.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return json["code"] as? String
+    }
+
+    /// The code of a refusal, however it came (a 403 or 404 the card
+    /// answer reads, or another 4xx or 5xx the client throws).
+    static func refusalCode(_ error: any Error) -> String? {
+        if let refusal = error as? HolidayCardRefusal { return refusal.code }
+        switch error as? APIError {
+        case let .clientError(_, body):
+            return serverCode(body)
+        case let .server(_, body):
+            return serverCode(body)
+        default:
+            return nil
+        }
     }
 
     /// What to say when a send or a take-back didn't go: the server's own
@@ -386,7 +488,8 @@ final class HolidayCardFlowViewModel {
     }
 }
 
-/// A card the server turned down, with its sentence when it gave one.
+/// A card the server turned down, with its sentence and code when it gave them.
 struct HolidayCardRefusal: Error {
     let sentence: String?
+    var code: String?
 }

@@ -5,9 +5,10 @@
 //  Send a Christmas card (launch keys `holiday_cards` + `mailbox`; the web's
 //  `/app/mailbox/cards`), opened from the row at the top of Me in the
 //  Mailbox. The whole screen is the cream desk the card sits on: Back, the
-//  step's title and four step dots, then who it's for → pick a card → write
-//  on the back → seal it for the day. Once today's card is sent it shows
-//  that card instead, with Take it back until the pickup.
+//  step's title and five step dots, then who it's for → pick a card → write
+//  on the back → seal it for the day → look it over, with "Seal and send"
+//  pinned under it. Once today's card is sent it shows that card instead,
+//  with Take it back until the pickup.
 //
 
 import SwiftUI
@@ -16,6 +17,7 @@ struct HolidayCardFlowView: View {
     @State private var viewModel: HolidayCardFlowViewModel
     private let onClose: () -> Void
     @Environment(\.colorScheme) private var scheme
+    private static let top = "sendCardTop"
 
     init(viewModel: HolidayCardFlowViewModel, onClose: @escaping () -> Void) {
         _viewModel = State(initialValue: viewModel)
@@ -25,15 +27,25 @@ struct HolidayCardFlowView: View {
     var body: some View {
         VStack(spacing: Spacing.s0) {
             header
-            ScrollView {
-                content
-                    .frame(maxWidth: 560)
-                    .padding(.horizontal, Spacing.s4)
-                    .padding(.top, Spacing.s3)
-                    .padding(.bottom, Spacing.s8)
-                    .frame(maxWidth: .infinity)
+            ScrollViewReader { scroller in
+                ScrollView {
+                    content
+                        .frame(maxWidth: 560)
+                        .padding(.horizontal, Spacing.s4)
+                        .padding(.top, Spacing.s3)
+                        .padding(.bottom, Spacing.s8)
+                        .frame(maxWidth: .infinity)
+                        .id(Self.top)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                // Each step starts at its top (Look it over is long).
+                .onChange(of: viewModel.step) { scroller.scrollTo(Self.top, anchor: .top) }
             }
-            .scrollDismissesKeyboard(.interactively)
+            .safeAreaInset(edge: .bottom, spacing: Spacing.s0) {
+                if let recipient = lookRecipient {
+                    HolidayCardLookFooter(viewModel: viewModel, byEmail: recipient.isEmail)
+                }
+            }
         }
         .background(HolidayCardDesk.background(scheme).ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
@@ -82,6 +94,12 @@ struct HolidayCardFlowView: View {
     private func back() {
         let today = viewModel.step != .sent && viewModel.today != nil
         if today || !viewModel.back() { onClose() }
+    }
+
+    /// Who the card is for while Look it over shows (its footer pins under it).
+    private var lookRecipient: HolidayCardRecipient? {
+        guard viewModel.cards != nil, viewModel.today == nil, viewModel.step == .look, viewModel.preview != nil else { return nil }
+        return viewModel.recipient
     }
 
     // MARK: Content
@@ -159,13 +177,17 @@ struct HolidayCardFlowView: View {
             if let design = viewModel.design, let recipient = viewModel.recipient {
                 HolidayCardSealStep(viewModel: viewModel, cards: cards, design: design, recipient: recipient)
             }
+        case .look:
+            if let design = viewModel.design, let recipient = viewModel.recipient, let preview = viewModel.preview {
+                HolidayCardLookStep(viewModel: viewModel, cards: cards, design: design, recipient: recipient, preview: preview)
+            }
         case .sent:
             EmptyView()
         }
     }
 }
 
-/// The four steps as dots: wax red up to this one (a longer dash), cream ahead.
+/// The five steps as dots: wax red up to this one (a longer dash), cream ahead.
 private struct StepDots: View {
     let current: HolidayCardStep
 

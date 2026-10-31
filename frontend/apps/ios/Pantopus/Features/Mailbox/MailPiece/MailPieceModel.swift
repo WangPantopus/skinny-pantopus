@@ -120,6 +120,13 @@ enum MailStampArt: CaseIterable {
         let sum = id.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }
         return allCases[abs(sum) % allCases.count]
     }
+
+    /// A Christmas card's stamp comes from its picture's number, the same on
+    /// every app and before it's sent: 1, 4, 7 … fir; 2, 5, 8 … peak; 3, 6,
+    /// 9 … river.
+    static func forCard(number: Int) -> MailStampArt {
+        allCases[((number - 1) % allCases.count + allCases.count) % allCases.count]
+    }
 }
 
 /// Who a piece came to: the person, or the Home for Home mail.
@@ -282,7 +289,7 @@ extension MailPieceModel {
         // Mail from before today that's been read (or never sealed) fades;
         // a sealed envelope stays bright until it's opened.
         isFaded = ageDays >= 1 && isOpened
-        stamp = MailStampArt.forPiece(item.id)
+        stamp = item.card?.number.map(MailStampArt.forCard(number:)) ?? MailStampArt.forPiece(item.id)
         // An opened card shows its picture over the torn top, not a line.
         peekLine = isOpened && kind.isEnvelope && item.card == nil ? subject : nil
         self.meta = meta

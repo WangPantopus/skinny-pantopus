@@ -2,10 +2,10 @@
 //  HolidayCardSealViews.swift
 //  Pantopus
 //
-//  The last step of sending a Christmas card and what follows (the web's
-//  `SendCardFlow`): seal it for the day (when it arrives, until when it can
-//  be taken back), the card on its way or today's card, and the season once
-//  sending has closed.
+//  Sealing a Christmas card and what follows (the web's `SendCardFlow`):
+//  seal it for the day (when it arrives, until when it can be taken back,
+//  then "Look it over"), the card on its way or today's card, and the
+//  season once sending has closed.
 //
 
 import SwiftUI
@@ -48,16 +48,17 @@ struct HolidayCardSealStep: View {
                 .background(MailPaper.cardNote, in: RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).strokeBorder(MailPaper.cardRowLine, lineWidth: 1))
                 .padding(.top, 14)
-            if let error = viewModel.sendError {
+            if let error = viewModel.previewError {
                 Text(error)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(MailPaper.warningInk)
+                    .foregroundStyle(HolidayCardDesk.error(scheme))
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, Spacing.s3)
                     .accessibilityIdentifier("sendCardError")
             }
-            HolidayCardWaxButton(title: "Seal and send", isLoading: viewModel.sending, isEnabled: viewModel.arrival != nil) {
-                Task { await viewModel.send() }
+            // Step 5 shows exactly what they'll see; "Seal and send" is there.
+            HolidayCardWaxButton(title: "Look it over", isLoading: viewModel.previewing, isEnabled: viewModel.arrival != nil) {
+                Task { await viewModel.lookItOver() }
             }
             .padding(.top, Spacing.s5)
             .accessibilityIdentifier("sendCardSend")
@@ -84,7 +85,7 @@ struct HolidayCardSealStep: View {
             postmarkYear: String(calendar.component(.year, from: now)),
             isOpened: false,
             isFaded: false,
-            stamp: MailStampArt.forPiece(design.id),
+            stamp: MailStampArt.forCard(number: design.number),
             peekLine: nil,
             meta: MailPieceMeta(parts: [], due: nil, dueIsSettled: false),
             card: MailCard(design: design, year: cards.year, sealed: viewModel.arrival == .sealedChristmas)
@@ -95,7 +96,7 @@ struct HolidayCardSealStep: View {
         let words = HolidayCardWords.arrivalChoice(arrival, cards: cards, recipient: recipient, theirDay: viewModel.theirDay)
         let checked = viewModel.arrival == arrival
         return Button {
-            viewModel.arrival = arrival
+            viewModel.pick(arrival)
         } label: {
             HStack(alignment: .top, spacing: Spacing.s3) {
                 Circle()
