@@ -96,6 +96,16 @@ class SignUpViewModel
             savedStateHandle: SavedStateHandle,
         ) : this(authRepository, savedStateHandle, null)
 
+        /** Whose invite a friend's link carries, for Create account's note. */
+        sealed interface InviteSender {
+            data class Named(
+                val name: String,
+            ) : InviteSender
+
+            /** The link's code isn't a live invite: no note. */
+            data object Invalid : InviteSender
+        }
+
         data class UiState(
             val email: String = "",
             val password: String = "",
@@ -120,6 +130,8 @@ class SignUpViewModel
             val didSucceed: Boolean = false,
             /** An address filled in for the person (an emailed invitation's); leaving it as it is isn't input. */
             val suggestedEmail: String = "",
+            /** `null` until the link's code is read, and when the read fails (the general invited line stays). */
+            val inviteSender: InviteSender? = null,
         ) {
             val passwordStrength: Int get() = AuthValidation.passwordStrength(password)
 
@@ -212,6 +224,27 @@ class SignUpViewModel
         val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
         init {
+            // The note names whoever's link this is ("Sam invited you to Pantopus"), as web's join page does; offline or
+            // a server error keeps the general line.
+            if (arrivedByInvite) {
+                viewModelScope.launch {
+                    val sender =
+                        try {
+                            val lookup = authRepository.lookupInvite(seededInviteCode)
+                            val name = lookup.referrerName?.trim().orEmpty()
+                            when {
+                                !lookup.valid -> InviteSender.Invalid
+                                name.isNotEmpty() -> InviteSender.Named(name)
+                                else -> null
+                            }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Throwable) {
+                            null
+                        }
+                    _uiState.update { it.copy(inviteSender = sender) }
+                }
+            }
             // An emailed household invitation waiting for sign-in only works for its address, so Email starts with it
             // (never over something the person already typed).
             invitations?.let { api ->
@@ -342,6 +375,8 @@ class SignUpViewModel
                 return
             }
             update { it.copy(isSubmitting = true, topLevelError = null) }
+            // A friend's link credits them whichever way the account is made.
+            val inviteCode = oauthInviteCode()
             viewModelScope.launch {
                 val ownerId = UUID.randomUUID().toString()
                 oauthOwnerId = ownerId
@@ -377,11 +412,12 @@ class SignUpViewModel
                                 it.copy(topLevelError = AuthError.ServerError(OAuthSessionStore.PROVIDER_FAILED_MESSAGE))
                             }
                         is OAuthSessionStore.Callback.Code ->
-                            authRepository.exchangeOAuthCode(callback.value)
+                            authRepository.exchangeOAuthCode(callback.value, inviteCode = inviteCode)
                         is OAuthSessionStore.Callback.Tokens ->
                             authRepository.exchangeOAuthTokens(
                                 accessToken = callback.accessToken,
                                 refreshToken = callback.refreshToken,
+                                inviteCode = inviteCode,
                             )
                     }
                     update { it.copy(isSubmitting = false) }
@@ -400,6 +436,12 @@ class SignUpViewModel
                 }
             }
         }
+
+        /**
+         * The Invite code field as Google or Apple sign-in sends it: the
+         * trimmed code, or null when it is empty or not shaped like one.
+         */
+        private fun oauthInviteCode(): String? = _uiState.value.inviteCode.trim().takeIf { INVITE_CODE_SHAPE.matches(it) }
 
         /**
          * Called when the host screen leaves the foreground — the browser
@@ -482,6 +524,13 @@ class SignUpViewModel
 
             /** Copy shown when the form was opened from a `join/:code` link. */
             const val INVITED_MESSAGE = "You've been invited to join Pantopus!"
+
+            /** What an invite code looks like (register's `invite_code` rule). */
+            private val INVITE_CODE_SHAPE = Regex("^[A-Za-z0-9_-]{6,12}$")
+
+            /** "Sam invited you to Pantopus", as web's join page says; [INVITED_MESSAGE] until the name is known. */
+            fun invitedLine(sender: InviteSender?): String =
+                (sender as? InviteSender.Named)?.let { "${it.name} invited you to Pantopus" } ?: INVITED_MESSAGE
 
             /**
              * Blocked because the OAuth callback can only ever produce a
