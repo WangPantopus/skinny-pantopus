@@ -28,6 +28,8 @@ public struct OwnershipClaimDTO: Decodable, Sendable, Hashable, Identifiable {
     public var hasEvidence: Bool?
     /// What a claim in review still needs before it can be approved; nil otherwise.
     public var approval: ClaimApprovalProgressDTO?
+    /// What a Pantopus reviewer asked for while the claim waits (Request info); nil when nothing is asked.
+    public var infoRequest: ClaimInfoRequestDTO?
 
     /// The claimed Home's address lines.
     public struct ClaimedHome: Decodable, Sendable, Hashable {
@@ -64,6 +66,12 @@ public struct OwnershipClaimDTO: Decodable, Sendable, Hashable, Identifiable {
         status == "under_review"
     }
 
+    /// A reviewer's request for more that no document has answered yet.
+    var openInfoRequest: ClaimInfoRequestDTO? {
+        guard isInReview, let infoRequest, infoRequest.respondedAt == nil else { return nil }
+        return infoRequest
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id
         case homeId = "home_id"
@@ -74,6 +82,28 @@ public struct OwnershipClaimDTO: Decodable, Sendable, Hashable, Identifiable {
         case home
         case hasEvidence = "has_evidence"
         case approval
+        case infoRequest = "info_request"
+    }
+}
+
+/// A Pantopus reviewer's request for more on a claim in review (Request info): their note (nil when
+/// they wrote none), when they asked, and when the claimant's first document after it came in (nil
+/// until then). Mirrors the web `ClaimInfoRequest` (`frontend/packages/api/src/endpoints/homeOwnership.ts`).
+public struct ClaimInfoRequestDTO: Decodable, Sendable, Hashable {
+    public let note: String?
+    public let requestedAt: String
+    public let respondedAt: String?
+
+    public init(note: String?, requestedAt: String, respondedAt: String?) {
+        self.note = note
+        self.requestedAt = requestedAt
+        self.respondedAt = respondedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case note
+        case requestedAt = "requested_at"
+        case respondedAt = "responded_at"
     }
 }
 

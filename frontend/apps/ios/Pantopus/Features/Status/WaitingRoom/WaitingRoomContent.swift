@@ -335,29 +335,37 @@ public extension WaitingRoomContent {
         )
     }
 
-    /// More info requested · review paused — `We need one more thing`, static
-    /// warning halo, a reviewer-note card, the timeline paused on "Under
-    /// review" (current node shows `alert-circle`), the "Paused · respond
-    /// within 7 days" ETA pill, and "Update evidence" promoted to primary.
-    /// The dock follows `canOpenHome` as in `active`.
+    /// The design's sample note, shown before the claim loads (the seeded frame).
+    static let sampleNote = "Please upload a property tax bill with your name on it."
+
+    /// More info requested · review paused: a Pantopus reviewer asked for something (Request info) and no
+    /// document has answered it yet. `We need one more thing`, static warning halo, the reviewer's note
+    /// (`note`, asked on `askedOn`), the timeline paused on "Under review" (current node shows
+    /// `alert-circle`), the "Paused · waiting for you" pill and the upload promoted to primary. The
+    /// identity checklist stays, and the dock follows `canOpenHome` as in `active`.
     static func moreInfoRequested(
         address: String = sampleAddress,
         claimRef: String = sampleClaimRef,
         submittedOn: String? = "Oct 24",
+        note: String? = sampleNote,
+        askedOn: String? = "Oct 26",
+        residency: Bool = false,
+        approval: ClaimApprovalProgressDTO? = nil,
         canOpenHome: Bool = true
     ) -> WaitingRoomContent {
-        WaitingRoomContent(
+        let quoted = note.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
+        return WaitingRoomContent(
             title: roomTitle,
             halo: StatusHalo(tone: .warning, icon: .fileWarning),
             headline: "We need one more thing",
-            subcopy: "Your utility bill is older than 90 days. " +
-                "Upload one from the last 60 days to continue the review.",
+            subcopy: "A Pantopus reviewer asked for something before they can finish your claim. " +
+                "Upload it and the review continues.",
             address: address,
             claimRef: claimRef,
             reviewerNote: WaitingRoomReviewerNote(
-                eyebrow: "Note from reviewer · Maya K.",
-                body: "\u{201C}The PG&E bill you uploaded is dated July 14. Please upload one from " +
-                    "August or later — anything within the last 60 days works.\u{201D}"
+                eyebrow: askedOn.map { "Note from Pantopus · \($0)" } ?? "Note from Pantopus",
+                body: quoted.map { "\u{201C}\($0)\u{201D}" }
+                    ?? "A reviewer needs another document before they can finish your claim."
             ),
             timeline: [
                 StatusTimelineStage(id: "submitted", label: "Submitted", sub: submittedOn, state: .done),
@@ -366,7 +374,7 @@ public extension WaitingRoomContent {
             ],
             timelinePaused: true,
             etaPill: StatusWaitingPill(
-                text: "Paused · respond within 7 days",
+                text: "Paused · waiting for you",
                 icon: .alertCircle,
                 tone: .warning
             ),
@@ -374,7 +382,7 @@ public extension WaitingRoomContent {
             inlineActions: [
                 WaitingRoomInlineAction(
                     id: "updateEvidence",
-                    label: "Update evidence",
+                    label: "Upload documents",
                     icon: .filePlus2,
                     tone: .primary,
                     actionKey: "update_evidence"
@@ -382,7 +390,8 @@ public extension WaitingRoomContent {
                 cancelClaimAction()
             ],
             primaryCta: viewClaim,
-            secondaryCta: canOpenHome ? backToHome : backToMyHomes
+            secondaryCta: canOpenHome ? backToHome : backToMyHomes,
+            approvalSteps: WaitingRoomApproval.steps(approval, residency: residency)
         )
     }
 }

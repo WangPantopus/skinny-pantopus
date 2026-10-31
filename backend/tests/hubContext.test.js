@@ -1176,7 +1176,7 @@ describe('Provider Orchestrator', () => {
     expect(failed.meta.section_providers).toEqual({ weather: null, alerts: null });
     expect(failed.meta.partial_failures).toEqual(expect.arrayContaining(['weather', 'alerts']));
 
-    expect(calendarService.composeForHomeId).toHaveBeenCalledWith('h1', { userId: MOCK_USER_ID });
+    expect(calendarService.composeForHomeId).toHaveBeenCalledWith('h1', { userId: MOCK_USER_ID, countyReads: expect.any(Map) });
     calendarService.composeForHomeId.mockClear();
     const { resolveLocation } = require('../services/context/locationResolver');
     resolveLocation.mockReturnValue({ latitude: 45.5, longitude: -122.6, label: 'Saved address', source: 'saved_place',
