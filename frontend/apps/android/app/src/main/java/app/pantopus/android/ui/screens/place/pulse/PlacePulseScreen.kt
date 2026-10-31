@@ -14,7 +14,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,9 +35,12 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.place.PulsePayload
 import app.pantopus.android.data.api.models.place.PulseSignal
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.place.PlaceRepository
 import app.pantopus.android.ui.components.ErrorState
-import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.RefreshFailedLine
+import app.pantopus.android.ui.components.RefreshNotice
+import app.pantopus.android.ui.screens.place.FullWidthShimmer
 import app.pantopus.android.ui.screens.place.detail.PlaceDetailCard
 import app.pantopus.android.ui.screens.place.detail.PlaceDetailHeader
 import app.pantopus.android.ui.screens.place.detail.PlaceDetailSectionLabel
@@ -43,6 +48,7 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -79,37 +85,63 @@ class PlacePulseViewModel
         private val _state = MutableStateFlow<PlacePulseUiState>(PlacePulseUiState.Loading)
         val state: StateFlow<PlacePulseUiState> = _state.asStateFlow()
 
+        /** A pull is reading again while the pulse stays on screen. */
+        private val _refreshing = MutableStateFlow(false)
+        val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+        /** A pull that failed: the pulse stays, with the line saying when it was read. */
+        private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
+        val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
+
+        private var readJob: Job? = null
+
         fun load() {
             if (_state.value is PlacePulseUiState.Loaded) return
             refresh()
         }
 
+        /** Reads now. The pulse on screen stays while it does (pull to refresh); only a first read shows loading. */
         fun refresh() {
-            _state.value = PlacePulseUiState.Loading
-            viewModelScope.launch {
-                _state.value =
+            readJob?.cancel()
+            val shown = _state.value as? PlacePulseUiState.Loaded
+            if (shown == null) _state.value = PlacePulseUiState.Loading else _refreshing.value = true
+            readJob =
+                viewModelScope.launch {
                     when (val r = repo.pulse(homeId)) {
-                        is NetworkResult.Success -> PlacePulseUiState.Loaded(r.data.pulse)
-                        is NetworkResult.Failure -> PlacePulseUiState.Error(r.error.message)
+                        is NetworkResult.Success -> {
+                            _state.value = PlacePulseUiState.Loaded(r.data.pulse, System.currentTimeMillis())
+                            _refreshNotice.value = null
+                        }
+                        is NetworkResult.Failure ->
+                            if (shown != null) {
+                                _refreshNotice.value = RefreshNotice(shown.fetchedAt, ::refresh)
+                            } else {
+                                _state.value = PlacePulseUiState.Error(r.error.displayMessage("Couldn't load your pulse."))
+                            }
                     }
-            }
+                    _refreshing.value = false
+                }
         }
     }
 
 sealed interface PlacePulseUiState {
     data object Loading : PlacePulseUiState
 
-    data class Loaded(val pulse: PulsePayload) : PlacePulseUiState
+    /** [fetchedAt]: when this pulse was read (wall clock). */
+    data class Loaded(val pulse: PulsePayload, val fetchedAt: Long) : PlacePulseUiState
 
     data class Error(val message: String) : PlacePulseUiState
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlacePulseScreen(
     onBack: () -> Unit,
     viewModel: PlacePulseViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { viewModel.load() }
 
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg)) {
@@ -119,22 +151,26 @@ fun PlacePulseScreen(
             address = if (state is PlacePulseUiState.Loaded) deviceGreeting() else "",
             onBack = onBack,
         )
-        when (val current = state) {
-            PlacePulseUiState.Loading ->
-                Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Spacer(modifier = Modifier.height(26.dp))
-                    repeat(3) { Shimmer(width = 360.dp, height = 84.dp, cornerRadius = 16.dp) }
-                }
-            is PlacePulseUiState.Error -> ErrorState(message = current.message, onRetry = viewModel::refresh)
-            is PlacePulseUiState.Loaded ->
-                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
-                    if (current.pulse.signals.isEmpty()) {
-                        AllClear(current.pulse)
-                    } else {
-                        Tiers(current.pulse)
+        // Pull to refresh, like the other Place pages.
+        PullToRefreshBox(isRefreshing = refreshing, onRefresh = viewModel::refresh, modifier = Modifier.weight(1f)) {
+            when (val current = state) {
+                PlacePulseUiState.Loading ->
+                    Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Spacer(modifier = Modifier.height(26.dp))
+                        repeat(3) { FullWidthShimmer(height = 84.dp, cornerRadius = 16.dp) }
                     }
-                    Spacer(modifier = Modifier.height(40.dp))
-                }
+                is PlacePulseUiState.Error -> ErrorState(message = current.message, onRetry = viewModel::refresh)
+                is PlacePulseUiState.Loaded ->
+                    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
+                        refreshNotice?.let { RefreshFailedLine(it) }
+                        if (current.pulse.signals.isEmpty()) {
+                            AllClear(current.pulse)
+                        } else {
+                            Tiers(current.pulse)
+                        }
+                        Spacer(modifier = Modifier.height(40.dp))
+                    }
+            }
         }
     }
 }

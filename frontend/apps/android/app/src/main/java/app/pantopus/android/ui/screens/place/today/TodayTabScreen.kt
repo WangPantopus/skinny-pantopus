@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -46,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
+import app.pantopus.android.data.api.models.place.PlaceAddressRef
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.NavigationMenuButton
@@ -61,6 +63,7 @@ import app.pantopus.android.ui.screens.place.components.placeCard
 import app.pantopus.android.ui.screens.place.detail.LocalPlaceDetailRetry
 import app.pantopus.android.ui.screens.place.detail.PlaceTodayDetailContent
 import app.pantopus.android.ui.screens.place.detail.TodayAlertsCheck
+import app.pantopus.android.ui.screens.place.detail.placeDetailAddress
 import app.pantopus.android.ui.screens.place.detail.rememberMinuteClock
 import app.pantopus.android.ui.screens.plans.today.PlansTodayActions
 import app.pantopus.android.ui.screens.plans.today.PlansTodayCards
@@ -125,9 +128,7 @@ fun TodayTabScreen(
                         modifier = Modifier.padding(bottom = 3.dp),
                     )
                 }
-                (state as? TodayTabUiState.Loaded)?.intelligence?.place?.label?.let {
-                    Text(it, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted, maxLines = 1)
-                }
+                (state as? TodayTabUiState.Loaded)?.intelligence?.place?.let { TodayAddressLine(it) }
             }
             onOpenMenu?.let { NavigationMenuButton(onClick = it, testTag = "today.menu", modifier = Modifier.offset(y = (-10).dp)) }
         }
@@ -179,6 +180,19 @@ fun TodayTabScreen(
             }
         }
     }
+}
+
+/** "1421 SE Oak St · Portland", as iOS's Today and the Place pages show it. */
+@Composable
+private fun TodayAddressLine(place: PlaceAddressRef) {
+    Text(
+        placeDetailAddress(place),
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Medium,
+        color = PantopusColors.appTextMuted,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 private fun todayPlaceZone(state: TodayTabUiState): ZoneId =

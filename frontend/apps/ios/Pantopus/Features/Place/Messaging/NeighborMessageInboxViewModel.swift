@@ -27,8 +27,14 @@ final class NeighborMessageInboxViewModel {
         self.api = api
     }
 
+    /// Coming back from a message keeps the list on screen while it is read
+    /// again (the message's unread dot goes); only a first visit or a retry
+    /// shows the loading rows.
     func load() async {
-        state = .loading
+        switch state {
+        case .loaded, .empty: break
+        case .loading, .error: state = .loading
+        }
         await fetch()
     }
 
@@ -43,7 +49,12 @@ final class NeighborMessageInboxViewModel {
             )
             state = response.messages.isEmpty ? .empty : .loaded(response.messages)
         } catch {
-            state = .error(message: "We couldn't load your messages. Check your connection and try again.")
+            switch state {
+            // A failed re-read keeps the list (or the empty inbox) that is on screen.
+            case .loaded, .empty: return
+            case .loading, .error:
+                state = .error(message: "We couldn't load your messages. Check your connection and try again.")
+            }
         }
     }
 }

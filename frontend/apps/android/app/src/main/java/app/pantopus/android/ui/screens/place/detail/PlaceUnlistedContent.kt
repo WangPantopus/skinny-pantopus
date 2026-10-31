@@ -39,7 +39,7 @@ import app.pantopus.android.data.api.models.place.UnlistedRemovalStatus
 import app.pantopus.android.data.api.models.place.UnlistedStateProgram
 import app.pantopus.android.data.api.models.place.UnlistedStateProgramAnswer
 import app.pantopus.android.ui.components.PrimaryButton
-import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.place.FullWidthShimmer
 import app.pantopus.android.ui.screens.place.components.PlaceChip
 import app.pantopus.android.ui.screens.place.components.PlaceChipModel
 import app.pantopus.android.ui.screens.place.components.PlaceChipTone
@@ -123,9 +123,9 @@ fun PlaceUnlistedSection(viewModel: PlaceDetailViewModel) {
 @Composable
 private fun UnlistedSkeleton() {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-        Shimmer(width = 360.dp, height = 96.dp, cornerRadius = Radii.xl)
-        Shimmer(width = 360.dp, height = 64.dp, cornerRadius = Radii.xl)
-        Shimmer(width = 360.dp, height = 120.dp, cornerRadius = Radii.xl)
+        FullWidthShimmer(height = 96.dp, cornerRadius = Radii.xl)
+        FullWidthShimmer(height = 64.dp, cornerRadius = Radii.xl)
+        FullWidthShimmer(height = 120.dp, cornerRadius = Radii.xl)
     }
 }
 

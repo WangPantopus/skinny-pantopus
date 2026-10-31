@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.identity.HomeMirrorDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.identity.IdentityCenterRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -60,8 +61,13 @@ class PlacePrivacyMirrorViewModel
                     _state.value =
                         when (val r = repository.homeMirror(homeId)) {
                             is NetworkResult.Success -> PrivacyMirrorUiState.Loaded(r.data)
+                            // Only a refusal is about membership; anything else (offline, a server error) can be retried.
                             is NetworkResult.Failure ->
-                                PrivacyMirrorUiState.Error("We couldn't load the preview. Only a member of this home can see it.")
+                                if (r.error is NetworkError.Forbidden) {
+                                    PrivacyMirrorUiState.Error("We couldn't load the preview. Only a member of this home can see it.")
+                                } else {
+                                    PrivacyMirrorUiState.Error("We couldn't load the preview. Check your connection and try again.")
+                                }
                         }
                 }
         }

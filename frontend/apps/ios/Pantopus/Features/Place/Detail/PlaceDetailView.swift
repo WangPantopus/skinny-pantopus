@@ -15,10 +15,13 @@ struct PlaceDetailView: View {
     @State private var viewModel: PlaceDetailViewModel
     /// The assistant, opened from the header about this section.
     @State private var askTopic: AIAskTopic?
+    /// The Today page's "Open your ballot"; without it, Back.
+    var onOpenBallot: (() -> Void)?
     var onBack: () -> Void
 
-    init(viewModel: PlaceDetailViewModel, onBack: @escaping () -> Void) {
+    init(viewModel: PlaceDetailViewModel, onOpenBallot: (() -> Void)? = nil, onBack: @escaping () -> Void) {
         _viewModel = State(initialValue: viewModel)
+        self.onOpenBallot = onOpenBallot
         self.onBack = onBack
     }
 
@@ -156,7 +159,7 @@ struct PlaceDetailView: View {
     private func groupContent(_ intel: PlaceIntelligence) -> some View {
         switch viewModel.group {
         // This page opens over the Place dashboard, where the ballot card is.
-        case .today: PlaceTodayDetailContent(intel: intel, vm: viewModel, onOpenBallot: onBack)
+        case .today: PlaceTodayDetailContent(intel: intel, vm: viewModel, onOpenBallot: onOpenBallot ?? onBack)
         case .yourHome: PlaceHomeDetailContent(intel: intel, vm: viewModel)
         case .risk: PlaceRiskDetailContent(intel: intel, vm: viewModel)
         case .block: PlaceBlockDetailContent(intel: intel, vm: viewModel)
