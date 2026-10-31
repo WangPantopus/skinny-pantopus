@@ -69,6 +69,8 @@ import java.time.ZoneId
 @Composable
 fun SendCardScreen(
     onClose: () -> Unit,
+    /** "See it in Sent" on the card just sent: that card's page in Sent. */
+    onSeeInSent: (String) -> Unit = {},
     viewModel: SendCardViewModel = hiltViewModel(),
 ) {
     val cards by viewModel.cards.collectAsStateWithLifecycle()
@@ -104,7 +106,17 @@ fun SendCardScreen(
                     }
                 SendCardPage.Closed -> DoneForTheYear(onClose)
                 SendCardPage.Steps, SendCardPage.Sent ->
-                    season?.let { Steps(it, form, fromName, viewModel, onClose, onTakeBack = { confirmTakeBack = true }) }
+                    season?.let {
+                        Steps(
+                            cards = it,
+                            form = form,
+                            fromName = fromName,
+                            viewModel = viewModel,
+                            onClose = onClose,
+                            onTakeBack = { confirmTakeBack = true },
+                            onSeeInSent = onSeeInSent,
+                        )
+                    }
             }
         }
         if (page == SendCardPage.Steps && form.step == SendCardStep.Look && form.preview != null) {
@@ -163,6 +175,7 @@ private fun Steps(
     viewModel: SendCardViewModel,
     onClose: () -> Unit,
     onTakeBack: () -> Unit,
+    onSeeInSent: (String) -> Unit,
 ) {
     if (form.tookBack && form.step == SendCardStep.To) {
         DeskNote(
@@ -199,7 +212,15 @@ private fun Steps(
         }
         SendCardStep.Sent ->
             form.sent?.let { card ->
-                SentCardSection(card = card, cards = cards, title = "On its way", form = form, onTakeBack = onTakeBack, onClose = onClose)
+                SentCardSection(
+                    card = card,
+                    cards = cards,
+                    title = "On its way",
+                    form = form,
+                    onTakeBack = onTakeBack,
+                    onClose = onClose,
+                    onSeeInSent = { onSeeInSent(card.id) },
+                )
             }
     }
 }
@@ -356,25 +377,22 @@ private fun DoneForTheYear(onClose: () -> Unit) {
     }
 }
 
-/** "Take your card back?" */
+/**
+ * "Take your card back?" (the card screens and Sent). Taking back a card sent today frees the day ([freesToday]); one
+ * sent before doesn't, so the dialog doesn't say so then.
+ */
 @Composable
-private fun TakeBackDialog(
+internal fun TakeBackDialog(
     byEmail: Boolean,
     onTakeBack: () -> Unit,
     onKeep: () -> Unit,
+    freesToday: Boolean = true,
 ) {
+    val first = if (byEmail) "The link in their email will say you took it back." else "It won’t go out with the morning mail."
     AlertDialog(
         onDismissRequest = onKeep,
         title = { Text("Take your card back?") },
-        text = {
-            Text(
-                if (byEmail) {
-                    "The link in their email will say you took it back. You can send a card again today."
-                } else {
-                    "It won’t go out with the morning mail. You can send a card again today."
-                },
-            )
-        },
+        text = { Text(if (freesToday) "$first You can send a card again today." else first) },
         confirmButton = {
             TextButton(onClick = onTakeBack, modifier = Modifier.testTag("sendCardTakeBackConfirm")) {
                 Text("Take it back", color = PantopusColors.cardWax, fontWeight = FontWeight.SemiBold)
@@ -385,7 +403,10 @@ private fun TakeBackDialog(
     )
 }
 
-/** A sent card: just now ("On its way") or today's card, with when it arrives, Take it back and Back to your mail. */
+/**
+ * A sent card: just now ("On its way", with "See it in Sent") or today's card, with when it arrives, Take it back and
+ * Back to your mail.
+ */
 @Composable
 internal fun SentCardSection(
     card: SentHolidayCard,
@@ -394,6 +415,7 @@ internal fun SentCardSection(
     form: SendCardForm,
     onTakeBack: () -> Unit,
     onClose: () -> Unit,
+    onSeeInSent: (() -> Unit)? = null,
 ) {
     val zone = HolidayCardTimes.zone(cards.timeZone)
     Column(
@@ -437,6 +459,15 @@ internal fun SentCardSection(
                 )
             }
             CardButton("Back to your mail", onClick = onClose, modifier = Modifier.testTag("sendCardBackToMail"))
+            if (onSeeInSent != null) {
+                CardButton(
+                    "See it in Sent",
+                    onClick = onSeeInSent,
+                    kind = CardButtonKind.Words,
+                    icon = PantopusIcon.Send,
+                    modifier = Modifier.testTag("sendCardSeeInSent"),
+                )
+            }
         }
         Text(
             "One card a day. You can send another tomorrow.",

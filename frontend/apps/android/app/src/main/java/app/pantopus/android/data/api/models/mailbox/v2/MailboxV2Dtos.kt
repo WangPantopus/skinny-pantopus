@@ -17,6 +17,16 @@ data class DrawerListResponse(
     val homes: List<MailHome>? = null,
     /** The hold in effect, or the next one; null when there's none (SRV-5). */
     @Json(name = "vacation_hold") val vacationHold: MailVacationHold? = null,
+    /** What the person has sent: anything at all, and the cards waiting for the 7 a.m. pickup. */
+    val sent: MailSentSummary? = null,
+)
+
+/** `sent` on `GET /api/mailbox/v2/drawers`: Sent has something in it; the flag is up while [waiting] > 0. */
+@JsonClass(generateAdapter = true)
+data class MailSentSummary(
+    val any: Boolean = false,
+    /** Cards to a person still waiting for the carrier's 7 a.m. pickup. */
+    val waiting: Int = 0,
 )
 
 /**
