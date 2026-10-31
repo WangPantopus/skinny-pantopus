@@ -304,10 +304,11 @@ If you don't know the sender, you can safely ignore this email.
  * @param {string} opts.senderName - who the card is from, as the recipient sees it
  * @param {string} opts.expiresAt - when the card stops waiting (ISO)
  * @param {boolean} opts.sealed - sealed until Christmas morning
+ * @param {string} [opts.timeZone] - the sender's clock: its day is the one the card's page shows a reader near them
  * @returns {{ subject: string, heading: string, lines: string[], button: string, footnote: string, footer: string[] }}
  */
-function cardWaitingEmailContent({ senderName, expiresAt, sealed }) {
-  const until = new Date(expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+function cardWaitingEmailContent({ senderName, expiresAt, sealed, timeZone = 'UTC' }) {
+  const until = new Date(expiresAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone });
   return {
     subject: `${senderName} sent you a Christmas card on Pantopus`,
     heading: 'You have a Christmas card',
@@ -330,9 +331,10 @@ function cardWaitingEmailContent({ senderName, expiresAt, sealed }) {
  * @param {string} opts.claimLink - the card's link
  * @param {string} opts.expiresAt - when the card stops waiting (ISO)
  * @param {boolean} opts.sealed - sealed until Christmas morning
+ * @param {string} [opts.timeZone] - the sender's clock (cardWaitingEmailContent)
  */
-async function sendCardWaitingEmail({ toEmail, senderName, claimLink, expiresAt, sealed }) {
-  const words = cardWaitingEmailContent({ senderName, expiresAt, sealed });
+async function sendCardWaitingEmail({ toEmail, senderName, claimLink, expiresAt, sealed, timeZone }) {
+  const words = cardWaitingEmailContent({ senderName, expiresAt, sealed, timeZone });
   const safeLink = escapeHtml(claimLink);
   const nameFirst = `<strong>${escapeHtml(senderName)}</strong>${escapeHtml(words.lines[0].slice(senderName.length))}`;
 
