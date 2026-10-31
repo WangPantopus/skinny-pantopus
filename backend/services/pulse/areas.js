@@ -63,14 +63,16 @@ async function homeAreaContext(userId) {
       pendingPostcard: row.verification_status === 'pending_postcard' }));
   const primary = homes.find(home => home.id === preferences?.default_home_id) || homes[0] || null;
   if (!homes.length) return { homes, primary, areas: [], matches: [], verifiedAreaIds: new Set() };
-  const matches = await checked(db.rpc('pulse_home_area_matches', { p_home_ids: homes.map(home => home.id) }));
-  const ids = [...new Set((matches || []).map(match => match.area_id))];
-  const areas = ids.length ? await checked(openAreas(db.from('PulseArea').select(AREA_SELECT)).in('id', ids)) : [];
+  // pulse_home_area_matches' rows (open areas only), each with its area's AREA_SELECT fields, in one read.
+  const rows = await checked(db.rpc('pulse_home_area_context', { p_home_ids: homes.map(home => home.id) })) || [];
+  const matches = rows.map(({ home_id, area_id, inside, distance_m }) => ({ home_id, area_id, inside, distance_m }));
+  const areas = [...new Map(rows.map(row => [row.area_id, { id: row.area_id, kind: row.kind, name: row.name,
+    slug: row.slug, parent_id: row.parent_id, state: row.state, opened_at: row.opened_at }])).values()];
   const verified = new Set(homes.filter(home => home.verified).map(home => home.id));
-  const opened = new Set((areas || []).map(area => area.id));
-  const verifiedAreaIds = new Set((matches || []).filter(match => match.inside === true
+  const opened = new Set(areas.map(area => area.id));
+  const verifiedAreaIds = new Set(matches.filter(match => match.inside === true
     && verified.has(match.home_id) && opened.has(match.area_id)).map(match => match.area_id));
-  return { homes, primary, areas: areas || [], matches: matches || [], verifiedAreaIds };
+  return { homes, primary, areas, matches, verifiedAreaIds };
 }
 
 async function myAreas(userId, loadedContext) {

@@ -177,8 +177,8 @@ fun SignUpScreen(
                 )
             }
 
-            if (viewModel.arrivedByInvite) {
-                InvitedNote()
+            if (viewModel.arrivedByInvite && state.inviteSender != SignUpViewModel.InviteSender.Invalid) {
+                InvitedNote(SignUpViewModel.invitedLine(state.inviteSender))
             }
 
             OAuthButtonGroup(
@@ -321,7 +321,7 @@ fun SignUpScreen(
  * iOS `SignUpView.invitedNote`.
  */
 @Composable
-private fun InvitedNote() {
+private fun InvitedNote(text: String) {
     Row(
         modifier =
             Modifier
@@ -341,7 +341,7 @@ private fun InvitedNote() {
             tint = PantopusColors.primary600,
         )
         Text(
-            text = SignUpViewModel.INVITED_MESSAGE,
+            text = text,
             style = PantopusTextStyle.small,
             color = PantopusColors.appText,
         )

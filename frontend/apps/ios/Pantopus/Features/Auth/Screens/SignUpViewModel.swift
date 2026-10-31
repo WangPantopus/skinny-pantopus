@@ -92,6 +92,17 @@ public final class SignUpViewModel {
     public private(set) var topLevelError: AuthError?
     public private(set) var didSucceed: Bool = false
 
+    /// Whose invite a friend's link carries, for Create account's note.
+    public enum InviteSender: Equatable, Sendable {
+        case named(String)
+        /// The link's code isn't a live invite: no note.
+        case invalid
+    }
+
+    /// `nil` until the link's code is read, and when the read fails (the
+    /// general invited line stays).
+    public private(set) var inviteSender: InviteSender?
+
     public init() {}
 
     // MARK: - Validation
@@ -261,6 +272,14 @@ public final class SignUpViewModel {
         return nil
     }
 
+    /// The Invite code field as Google or Apple sign-in sends it, so a friend's
+    /// link credits them whichever way the account is made: the trimmed code,
+    /// or nil when it is empty or not shaped like one.
+    var oauthInviteCode: String? {
+        let code = inviteCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        return code.range(of: "^[A-Za-z0-9_-]{6,12}$", options: .regularExpression) == nil ? nil : code
+    }
+
     func signIn(with provider: OAuthProvider, using auth: AuthManager) async {
         topLevelError = nil
         if let blocked = oauthPrerequisiteMessage() {
@@ -270,7 +289,7 @@ public final class SignUpViewModel {
         isSubmitting = true
         defer { isSubmitting = false }
         do {
-            try await auth.signIn(with: provider)
+            try await auth.signIn(with: provider, inviteCode: oauthInviteCode)
         } catch OAuthWebAuthenticationError.cancelled {
             return
         } catch let error as AuthError {
@@ -284,6 +303,25 @@ public final class SignUpViewModel {
 
     public func acknowledgeSuccess() {
         didSucceed = false
+    }
+
+    /// Reads whose invite the link's code is (`GET /api/users/public/join/:code`,
+    /// no sign-in), so the note can say "Sam invited you to Pantopus" as web's
+    /// join page does. Offline or a server error leaves the general line.
+    func loadInviteSender(code: String?, client: APIClient = .shared) async {
+        let code = code?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !code.isEmpty, inviteSender == nil else { return }
+        do {
+            let lookup: PublicJoinLookup = try await client.request(AuthEndpoints.publicJoin(code: code))
+            let name = lookup.referrerName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !lookup.valid {
+                inviteSender = .invalid
+            } else if !name.isEmpty {
+                inviteSender = .named(name)
+            }
+        } catch {
+            // The general line stays.
+        }
     }
 
     public func clearError(for field: SignUpField) {
