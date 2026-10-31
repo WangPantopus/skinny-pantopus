@@ -142,15 +142,9 @@ fun MailboxRootScreen(
     LaunchedEffect(selectedTab, selectedDrawer, homes) {
         if (selectedTab == MailboxTab.Vault && selectedDrawer != MailboxDrawer.Sent) vault.show(selectedDrawer, homes)
     }
-    // Sent reads what was sent when it opens (again after a while: a pickup or an arrival may have come).
-    LaunchedEffect(selectedDrawer, zone) {
-        if (selectedDrawer == MailboxDrawer.Sent) sentList.show(zone)
-    }
+    SentReads(selectedDrawer, zone, sentList)
     // Back on the Mailbox after a while (or the next morning, or from paying a bill): today's mail, not what was read before.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        viewModel.refreshIfStale()
-        if (selectedDrawer == MailboxDrawer.Sent) sentList.show(zone)
-    }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshIfStale() }
 
     Box(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("mailboxRoot")) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -448,6 +442,21 @@ private fun LazyListScope.counterItems(
             }
             item(key = "counterEnd") { MailCounterEnd(state.hasMore, state.loadMoreError, viewModel::retryLoadMore) }
         }
+    }
+}
+
+/** Sent reads what was sent when it opens, and when the Mailbox shows again after a while (a pickup may have come). */
+@Composable
+private fun SentReads(
+    selectedDrawer: MailboxDrawer,
+    zone: ZoneId,
+    sentList: MailSentViewModel,
+) {
+    LaunchedEffect(selectedDrawer, zone) {
+        if (selectedDrawer == MailboxDrawer.Sent) sentList.show(zone)
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (selectedDrawer == MailboxDrawer.Sent) sentList.show(zone)
     }
 }
 
