@@ -271,9 +271,7 @@ describe('PropertyIntelligenceService', () => {
   });
 
   describe('getHomeAttomPropertyDetail', () => {
-    it('returns saved home payload and seeds raw ATTOM cache without refetching', async () => {
-      mockMaybeSingle.mockResolvedValue({ data: null, error: null });
-
+    it('returns saved home payload without refetching or writing the raw ATTOM cache', async () => {
       const savedPayload = {
         provider: 'attom',
         endpoint: '/property/detail',
@@ -291,19 +289,7 @@ describe('PropertyIntelligenceService', () => {
       expect(result.source).toBe('home');
       expect(result.attomPayload).toEqual(savedPayload);
       expect(global.fetch).not.toHaveBeenCalled();
-      expect(mockUpsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          home_id: MOCK_HOME_ID,
-          raw_payload: expect.objectContaining({
-            endpoints: expect.objectContaining({
-              property_detail: expect.objectContaining({
-                response: MOCK_ATTOM_DETAIL,
-              }),
-            }),
-          }),
-        }),
-        { onConflict: 'home_id' },
-      );
+      expect(mockFrom).not.toHaveBeenCalled();
     });
 
     it('fetches live detail, caches the full raw response, and persists it onto Home', async () => {
