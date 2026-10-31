@@ -321,13 +321,7 @@ private fun MailboxList(
     }
     val searching = selectedTab == MailboxTab.Vault && search != null
     val showingSent = selectedDrawer == MailboxDrawer.Sent
-    val endReached: () -> Unit by rememberUpdatedState {
-        when {
-            showingSent -> if ((sentState as? MailSentState.Loaded)?.hasMore == true) sent.list.loadMore()
-            !searching && (state as? MailboxUiState.Loaded)?.hasMore == true -> viewModel.loadMoreIfNeeded()
-            else -> Unit
-        }
-    }
+    val endReached by rememberUpdatedState { loadNextPage(showingSent, searching, state, sent.list, viewModel) }
     // Near the end of the pieces (or of Sent): the next page.
     LaunchedEffect(listState, state, sentState) {
         snapshotFlow {
@@ -454,6 +448,20 @@ private fun LazyListScope.counterItems(
             }
             item(key = "counterEnd") { MailCounterEnd(state.hasMore, state.loadMoreError, viewModel::retryLoadMore) }
         }
+    }
+}
+
+/** Near the end of the list: Sent's next 25 (it knows when there are none), or the open drawer's next page. */
+private fun loadNextPage(
+    showingSent: Boolean,
+    searching: Boolean,
+    state: MailboxUiState,
+    sent: MailSentViewModel,
+    viewModel: MailboxRootViewModel,
+) {
+    when {
+        showingSent -> sent.loadMore()
+        !searching && (state as? MailboxUiState.Loaded)?.hasMore == true -> viewModel.loadMoreIfNeeded()
     }
 }
 
