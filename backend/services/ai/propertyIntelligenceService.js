@@ -313,19 +313,11 @@ function buildDetailResponseFromStoredPayload(attomPayload) {
   return null;
 }
 
-async function seedRawAttomCacheFromHomePayload(home, existingRawPayload = null) {
-  const stored = getStoredAttomPropertyDetail(home);
-  if (!stored) return existingRawPayload;
-  if (getRawPayloadResponse(existingRawPayload, 'property_detail')) return existingRawPayload;
-
-  const detailData = buildDetailResponseFromStoredPayload(stored);
-  if (!detailData) return existingRawPayload;
-
-  return setCachedRawAttom(home.id, home, { property_detail: detailData }, existingRawPayload);
-}
-
 async function persistAttomPropertyDetailOnHome(home, attomPayload) {
   if (!home?.id || !attomPayload) return;
+  // A row read without niche_data can't show what's stored there, so it never
+  // writes: that would replace the stored record and anything kept beside it.
+  if (home.niche_data === undefined) return;
   if (getStoredAttomPropertyDetail(home)) return;
 
   const nicheData = home.niche_data && typeof home.niche_data === 'object'
@@ -700,8 +692,10 @@ function buildAttomPropertyDetailResult(detailData, fetchedAtIso = new Date().to
 
 async function getHomeAttomPropertyDetail(home) {
   const storedPayload = getStoredAttomPropertyDetail(home);
+  // The Home's own record answers without writing the raw cache: a copy on
+  // every read pushed that row's expiry out each time, so its value estimate
+  // never refreshed. The value lookup copies the record there when it's missing.
   if (storedPayload) {
-    await seedRawAttomCacheFromHomePayload(home);
     return {
       attomPayload: storedPayload,
       source: 'home',

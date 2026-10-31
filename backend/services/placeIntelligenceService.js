@@ -1169,7 +1169,13 @@ async function composeExemptionCheck(home, tier) {
     })];
   }
   try {
-    const result = await exemptionCheckService.getExemptionCheck(home);
+    // The check answers from the county record the Home stores. Place's Home
+    // row leaves niche_data out, so it's read here for this section only;
+    // without it the check asked ATTOM again and rewrote the record on every load.
+    const { data: stored, error } = await supabaseAdmin
+      .from('Home').select('niche_data').eq('id', home.id).maybeSingle();
+    if (error) throw error;
+    const result = await exemptionCheckService.getExemptionCheck({ ...home, niche_data: stored ? stored.niche_data : null });
     if (result.status === 'partial') {
       // not_checked: only the state's program is shown, so it is the source.
       return [serializePlaceSection('exemption_check', {
