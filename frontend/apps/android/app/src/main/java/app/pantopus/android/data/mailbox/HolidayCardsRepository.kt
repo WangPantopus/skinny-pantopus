@@ -143,12 +143,19 @@ class HolidayCardsRepository
 
             private val movedOnFlow = MutableSharedFlow<String>(extraBufferCapacity = 8)
 
-            /** A take-back refused because the card moved on (picked up, opened) or is gone: Sent and the flag read again. */
+            /**
+             * A sent card moved on (picked up or opened) or is gone: a take-back was refused, or its page read it in another
+             * state than Sent shows. Sent and the Mailbox's flag read again.
+             */
             val movedOn: SharedFlow<String> = movedOnFlow.asSharedFlow()
+
+            fun announceMovedOn(cardId: String) {
+                movedOnFlow.tryEmit(cardId)
+            }
 
             private val sentReadFlow = MutableSharedFlow<SentCard>(extraBufferCapacity = 8)
 
-            /** A sent card as its page just read it: Sent's row says the same. */
+            /** A sent card as its page just read it (Sent compares it with what it shows). */
             val sentRead: SharedFlow<SentCard> = sentReadFlow.asSharedFlow()
 
             private val showSentFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)

@@ -142,10 +142,12 @@ class MailSentViewModel
             viewModelScope.launch { HolidayCardsRepository.takenBack.collect { drop(it) } }
             // Sent from the card screens: once Sent has been read, it reads again with the new card.
             viewModelScope.launch { HolidayCardsRepository.cardSent.collect { if (lastReadAt != null) refresh() } }
-            // Too late to take back (picked up or opened meanwhile), here or on its page: read where everything is now.
+            // A card moved on (picked up or opened meanwhile; too late to take back, or its page found it so): read where
+            // everything is now. The Mailbox reads its flag again on the same news.
             viewModelScope.launch { HolidayCardsRepository.movedOn.collect { if (lastReadAt != null) refresh() } }
-            // Its page read a card that moved on since the list was read: its row says the same.
-            viewModelScope.launch { HolidayCardsRepository.sentRead.collect { replace(it) } }
+            viewModelScope.launch {
+                HolidayCardsRepository.sentRead.collect { if (movedOn(it)) HolidayCardsRepository.announceMovedOn(it.id) }
+            }
         }
 
         /** Sent opened: read it the first time, after a while, or on a new day ([zone]: the sender's own clock). */
@@ -237,11 +239,10 @@ class MailSentViewModel
             if (loaded.removeAll { it.id == id }) publish()
         }
 
-        private fun replace(card: SentCard) {
-            val at = loaded.indexOfFirst { it.id == card.id }
-            if (at < 0 || (loaded[at].status == card.status && loaded[at].canTakeBack == card.canTakeBack)) return
-            loaded[at] = card
-            publish()
+        /** The list shows [card] in another state than its page just read (the pickup or an arrival came since). */
+        private fun movedOn(card: SentCard): Boolean {
+            val shown = loaded.firstOrNull { it.id == card.id } ?: return false
+            return shown.status != card.status || shown.canTakeBack != card.canTakeBack
         }
 
         private fun publish() {
