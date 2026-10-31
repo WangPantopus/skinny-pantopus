@@ -1930,38 +1930,8 @@ router.post(
       });
 
       // ============ REFERRAL CONVERSION ============
-      if (invite_code) {
-        try {
-          const { data: referral } = await supabaseAdmin
-            .from('UserReferral')
-            .select('id, referrer_id')
-            .eq('invite_code', invite_code)
-            .is('referred_user_id', null)
-            .maybeSingle();
-
-          if (referral && referral.referrer_id !== userId) {
-            await supabaseAdmin
-              .from('UserReferral')
-              .update({
-                referred_user_id: userId,
-                converted_at: new Date().toISOString(),
-              })
-              .eq('id', referral.id);
-            logger.info('Referral conversion recorded', {
-              userId,
-              referrerId: referral.referrer_id,
-              invite_code,
-            });
-          }
-        } catch (refErr) {
-          // Non-critical — don't block registration
-          logger.warn('Failed to record referral conversion', {
-            error: refErr.message,
-            userId,
-            invite_code,
-          });
-        }
-      }
+      // Non-critical: creditReferralJoin logs its own failures and never blocks registration.
+      if (invite_code) await creditReferralJoin(userId, invite_code);
 
       // ============ SEND VERIFICATION EMAIL ============
       // Sent through our own SMTP (admin.generateLink already returned
@@ -3841,6 +3811,58 @@ function generateInviteCode() {
   return code;
 }
 
+// The link a person shares to invite someone, on this deployment's web address
+// (pantopus.com in production, like Plans links), so staging and local links open their own site.
+function inviteUrl(code) {
+  const base = (process.env.PUBLIC_WEB_URL || process.env.APP_URL || 'https://pantopus.com').trim().replace(/\/+$/, '');
+  return `${base}/join/${code}`;
+}
+
+// Credit the inviter whose link a new account signed up with. A person's link is
+// their stable code row (referred_user_id null); everyone who joins with it gets a
+// row of their own, so one link credits each person it brings in and keeps working.
+// A code its first joiner used up before this change still names its inviter.
+// Never throws: a missed credit must not fail sign-up.
+async function creditReferralJoin(userId, code) {
+  try {
+    const { data: link, error: linkErr } = await supabaseAdmin
+      .from('UserReferral')
+      .select('referrer_id')
+      .eq('invite_code', code)
+      .maybeSingle();
+    if (linkErr) throw linkErr;
+    if (!link || link.referrer_id === userId) return;
+
+    const { data: credited, error: creditedErr } = await supabaseAdmin
+      .from('UserReferral')
+      .select('id')
+      .eq('referred_user_id', userId)
+      .limit(1);
+    if (creditedErr) throw creditedErr;
+    if (credited?.length) return;
+
+    // invite_code is unique, so the joiner's row carries a fresh code nobody shares.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const { error } = await supabaseAdmin.from('UserReferral').insert({
+        referrer_id: link.referrer_id,
+        invite_code: generateInviteCode(),
+        referred_user_id: userId,
+        converted_at: new Date().toISOString(),
+        source: 'join_link',
+      });
+      if (!error) {
+        inviteRewardService.forgetInviteProgress(link.referrer_id);
+        logger.info('Referral conversion recorded', { userId, referrerId: link.referrer_id });
+        return;
+      }
+      if (error.code !== '23505') throw error;
+    }
+    throw new Error('invite code collision after retry');
+  } catch (err) {
+    logger.warn('Failed to record referral conversion', { error: err.message, userId });
+  }
+}
+
 // ============================================================
 // GET /api/users/me/invite-code
 // Returns the user's stable invite code (creates one if needed)
@@ -3863,7 +3885,7 @@ router.get('/me/invite-code', verifyToken, async (req, res) => {
     if (existing) {
       return res.json({
         invite_code: existing.invite_code,
-        invite_url: `https://pantopus.com/join/${existing.invite_code}`,
+        invite_url: inviteUrl(existing.invite_code),
       });
     }
 
@@ -3898,7 +3920,7 @@ router.get('/me/invite-code', verifyToken, async (req, res) => {
         }
         return res.json({
           invite_code: retry_code,
-          invite_url: `https://pantopus.com/join/${retry_code}`,
+          invite_url: inviteUrl(retry_code),
         });
       }
       logger.error('Failed to create invite code', { error: insertErr.message, userId });
@@ -3907,7 +3929,7 @@ router.get('/me/invite-code', verifyToken, async (req, res) => {
 
     res.json({
       invite_code,
-      invite_url: `https://pantopus.com/join/${invite_code}`,
+      invite_url: inviteUrl(invite_code),
     });
   } catch (err) {
     logger.error('invite-code error', { error: err.message, userId: req.user?.id });

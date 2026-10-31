@@ -251,7 +251,7 @@ object TodayDetailMapper {
     private const val MAILBOX_SIGNAL_KIND = "mail"
     private const val MAILBOX_ROUTE = "/app/mailbox"
 
-    private const val SHARE_FALLBACK = "Today's Pantopus briefing — ${InviteLinks.DOWNLOAD_URL}"
+    private val shareFallback get() = "Today's Pantopus briefing — ${InviteLinks.siteUrl}"
 
     /**
      * What "Share today's briefing" sends: the weather, a public weather alert and place-level signals, with a
@@ -271,8 +271,8 @@ object TodayDetailMapper {
                 signals.filter { it.kind in SHAREABLE_SIGNAL_KINDS }.mapNotNull { it.label }.joinToString(" · "),
             )
         val sentences = parts.map { it.trim('.', ' ') }.filter { it.isNotEmpty() }
-        if (sentences.isEmpty()) return SHARE_FALLBACK
-        return "Today's briefing: ${sentences.joinToString(". ")}.\nShared from Pantopus: ${InviteLinks.DOWNLOAD_URL}"
+        if (sentences.isEmpty()) return shareFallback
+        return "Today's briefing: ${sentences.joinToString(". ")}.\nShared from Pantopus: ${InviteLinks.siteUrl}"
     }
 
     /** The share text for the screen's state: the prepared message, or just the link while loading or failed. */
@@ -283,7 +283,7 @@ object TodayDetailMapper {
                 is TodayDetailUiState.Alert -> state.content
                 else -> null
             }
-        return content?.share?.message?.ifBlank { null } ?: SHARE_FALLBACK
+        return content?.share?.message?.ifBlank { null } ?: shareFallback
     }
 
     private fun parseInstant(iso: String?): Instant? = iso?.let { runCatching { Instant.parse(it) }.getOrNull() }

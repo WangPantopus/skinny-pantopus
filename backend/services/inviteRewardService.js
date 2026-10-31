@@ -41,6 +41,11 @@ function setCache(userId, data) {
   _cache.set(userId, { data, expiresAt: Date.now() + CACHE_TTL_MS });
 }
 
+/** Drop a cached count once someone joins with the user's link, so their next read shows it. */
+function forgetInviteProgress(userId) {
+  _cache.delete(userId);
+}
+
 // ── Core functions ────────────────────────────────────────────────
 
 /**
@@ -160,6 +165,7 @@ module.exports = {
   FEATURE_KEYS,
   FEATURE_TIERS,
   getInviteProgress,
+  forgetInviteProgress,
   checkFeatureAccess,
   requireFeature,
 };

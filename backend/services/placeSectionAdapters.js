@@ -249,13 +249,14 @@ async function composeSunriseSunset(home) {
 // ════════════════════════════════════════════════════════════
 // The national replacement for seasonalEngine's two-city gate. Heat comes
 // from the NWS HeatRisk ImageServer; cold is derived from the temperature
-// forecast the caller already fetched for `weather`, so the freeze half
-// costs no extra provider call.
+// forecast the caller fetches for the weather section, so the freeze half
+// costs no extra provider call. `forecast` may be a promise: the heat reads
+// don't need it, so they go out while it is still loading.
 //
 // HeatRisk is published once daily, so a 6 h budget at geohash-5 (~5 km,
 // twice the raster's 2.5 km cell) keeps the day fresh while collapsing a
 // whole neighbourhood onto one fetch.
-async function composeHeatCold(home, weather) {
+async function composeHeatCold(home, forecast) {
   const ll = homeLatLng(home);
   if (!ll) return [serializePlaceSection('heat_cold', { status: 'unavailable' })];
 
@@ -311,6 +312,7 @@ async function composeHeatCold(home, weather) {
       }
     }
 
+    const weather = await forecast;
     const outlook = buildHeatColdOutlook({
       heatRisk: heatFetchFailed ? null : payload,
       heatRiskFailed: heatFetchFailed,
