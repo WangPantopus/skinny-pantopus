@@ -158,9 +158,9 @@ fun TrustChip(sender: MailSender) {
     }
 }
 
-/** One step of the trail: a dot on the line, what happened and when. */
+/** One step of the trail: a dot on the line, what happened and when (the envelope's trail, and a card's in Sent). */
 @Composable
-private fun TrailRow(
+internal fun TrailRow(
     step: MailTrailStep,
     isLast: Boolean,
 ) {

@@ -216,10 +216,11 @@ object MailPieceMapper {
         cameToday: Boolean,
     ): String {
         // Said in words: no "·" for a screen reader to read out, and Pantopus's own letters already say who they're from.
+        // A Christmas card's sender needs no proven home, so it claims none.
         val spokenSender =
             when (sender) {
                 MailSender.Pantopus -> null
-                MailSender.Neighbor -> "a Pantopus neighbor at a verified address"
+                MailSender.Neighbor -> if (row.card != null) "a Pantopus neighbor" else "a Pantopus neighbor at a verified address"
                 MailSender.PantopusBusiness -> "a business on Pantopus"
                 else -> sender.line.lowercase(Locale.US)
             }
