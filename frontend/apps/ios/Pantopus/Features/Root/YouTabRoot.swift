@@ -410,6 +410,8 @@ public enum YouRoute: Hashable {
     case mailRoutingQueue
     /// Send a Christmas card, or today's card once it's sent (`holiday_cards`).
     case christmasCards
+    /// A card in Sent (`mailbox`): what they got, its trail, and Take it back.
+    case mailSentCard(id: String)
     /// Family Mail Party — household co-opening (discover / join / start /
     /// react / hand off). Reached from the Mailbox root overflow menu.
     case mailParty
@@ -665,7 +667,7 @@ public struct YouTabRoot: View {
              .creatorAudienceMembers, .broadcastDetail, .creatorInbox,
              .creatorInboxConversation, .fanInbox, .cancelClaim, .editGig,
              .transferOwnership, .mailRoutingQueue, .mailDay, .propertyDetails, .propertyCorrection,
-             .christmasCards:
+             .christmasCards, .mailSentCard:
             true
         // Forms and wizards with their own Close.
         case .logMaintenance, .editMaintenance, .startPoll, .editAccessCode, .addCalendarEvent,
@@ -1210,6 +1212,7 @@ public struct YouTabRoot: View {
             }
         )
         model.onOpenChristmasCards = { path.append(.christmasCards) }
+        model.onOpenSentCard = { id in path.append(.mailSentCard(id: id)) }
         return model
     }
 
@@ -1221,7 +1224,19 @@ public struct YouTabRoot: View {
         case .mailboxRoot:
             MailboxRootView(viewModel: makeMailboxRootModel())
         case .christmasCards:
-            HolidayCardFlowView(viewModel: HolidayCardFlowViewModel(fromName: MailPieceRecipient.personName)) {
+            HolidayCardFlowView(
+                viewModel: HolidayCardFlowViewModel(fromName: MailPieceRecipient.personName),
+                onSeeInSent: { cardId in
+                    // Back to the Mailbox, which shows Sent and the card.
+                    Task { @MainActor in
+                        pop()
+                        NotificationCenter.default.post(name: .mailboxOpenSent, object: cardId)
+                    }
+                },
+                onClose: { Task { @MainActor in pop() } }
+            )
+        case let .mailSentCard(id):
+            MailSentPieceView(viewModel: MailSentPieceViewModel(id: id)) {
                 Task { @MainActor in pop() }
             }
         case .communityMail:
@@ -3177,7 +3192,7 @@ extension YouRoute {
         // Launch cut #10 (Mailbox): received mail, the vault and records, My
         // mail day, vacation hold, stamps, mail tasks and search.
         case .mailboxRoot, .mailboxMap, .mailboxSearch, .mailItemDetail, .vacationHold, .mailRoutingQueue,
-             .mailDay, .stamps, .mailTask, .mailTaskList, .homeRecords:
+             .mailDay, .stamps, .mailTask, .mailTaskList, .homeRecords, .mailSentCard:
             LaunchFeatures.mailbox
         // Launch cuts #12 + #10: sending a Christmas card.
         case .christmasCards:

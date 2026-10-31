@@ -138,6 +138,8 @@ struct HolidayCardSentView: View {
     /// "On its way" just after sending, "Today's card" after that.
     let title: String
     let onDone: () -> Void
+    /// "See it in Sent", just after sending.
+    var onSeeInSent: (() -> Void)?
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
@@ -192,6 +194,22 @@ struct HolidayCardSentView: View {
                 }
                 HolidayCardWaxButton(title: "Back to your mail", action: onDone)
                     .accessibilityIdentifier("sendCardBackToMail")
+                if let onSeeInSent {
+                    Button(action: onSeeInSent) {
+                        HStack(spacing: 6) {
+                            Icon(.send, size: 16, color: HolidayCardDesk.link(scheme))
+                            Text("See it in Sent")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(HolidayCardDesk.link(scheme))
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityIdentifier("sendCardSeeInSent")
+                }
             }
             .padding(.top, Spacing.s4)
             muted("One card a day. You can send another tomorrow.").padding(.top, Spacing.s3)
