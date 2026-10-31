@@ -75,11 +75,40 @@ export interface PropertySuggestionsResponse {
   attom_property_detail: AttomPropertyDetailPayload | null;
 }
 
+/** One label / value row of a county record, worded and formatted by the server. */
+export interface CountyRecordRow {
+  id: string;
+  label: string;
+  value: string;
+  /** Numbers, measurements and codes (the apps draw them monospaced). */
+  mono?: boolean;
+}
+
+export interface CountyRecordSection {
+  id: string;
+  title: string;
+  rows: CountyRecordRow[];
+  /** Caption under the section, e.g. the value estimate's "isn't an appraisal". */
+  note?: string | null;
+}
+
+/** A verified owner's ATTOM record as labeled sections (backend/serializers/countyRecordSerializer.js). */
+export interface CountyRecord {
+  sections: CountyRecordSection[];
+  /** "From county records via ATTOM · updated Sep 28, 2026" */
+  footer: string | null;
+  as_of: string | null;
+}
+
 export interface HomePropertyDetailResponse {
   home: Home;
+  /** The raw ATTOM bundle; verified owners only. */
   attom_property_detail: AttomPropertyDetailPayload | null;
   source: 'home' | 'cache' | 'attom' | 'unavailable' | string;
-  unavailable_reason?: 'NO_PROPERTY_FOUND' | 'ATTOM_UNAVAILABLE' | 'ATTOM_NOT_CONFIGURED' | string | null;
+  /** OWNER_ONLY: the viewer isn't a verified owner, so only the Home's own facts come. */
+  unavailable_reason?: 'NO_PROPERTY_FOUND' | 'ATTOM_UNAVAILABLE' | 'ATTOM_NOT_CONFIGURED' | 'OWNER_ONLY' | string | null;
+  /** The county record as labeled sections; verified owners only (older servers leave it out). */
+  county_record?: CountyRecord | null;
 }
 
 /**
