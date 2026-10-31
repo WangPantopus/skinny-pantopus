@@ -55,6 +55,8 @@ data class MailLetterCard(
     val note: String,
     /** It hadn't been opened before this visit: it opens from its envelope. */
     val firstOpen: Boolean,
+    /** The picture's height at 960 pixels wide, from the server, for a picture the app doesn't carry. */
+    val pictureHeight: Int? = null,
 )
 
 /**
@@ -170,6 +172,7 @@ data class MailLetter(
                 mailedOn = detail.postmark?.date ?: detail.createdAt,
                 note = (detail.contentText ?: detail.content).orEmpty().trim(),
                 firstOpen = firstOpen,
+                pictureHeight = card.height,
             )
         }
 

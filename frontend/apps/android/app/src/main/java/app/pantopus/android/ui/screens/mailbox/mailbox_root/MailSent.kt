@@ -493,9 +493,9 @@ private fun SentRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                row.card.card
-                    ?.design
-                    ?.let { TiltedThumb(it, width = 30.dp, tilt = -3f) }
+                row.card.card?.let { face ->
+                    face.design?.let { TiltedThumb(it, width = 30.dp, tilt = -3f, pictureHeight = face.height, paper = face.paper) }
+                }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(row.title, fontSize = 13.sp, lineHeight = 18.sp, color = PantopusColors.appTextStrong)
                     if (row.line.isNotEmpty()) {

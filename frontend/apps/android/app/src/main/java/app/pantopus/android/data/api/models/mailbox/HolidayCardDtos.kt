@@ -7,9 +7,9 @@ import com.squareup.moshi.JsonClass
 
 /**
  * `GET /api/mailbox/cards` (launch keys `holiday_cards` + `mailbox`; 404 while either is off): what sending a Christmas
- * card needs. The season's pictures (the app carries the pictures themselves, by [HolidayCardDesign.id]), whether
- * sending is open (until December 31 ends where the sender lives), the arrivals open now, and today's card once it's
- * sent (one a day).
+ * card needs. The season's pictures (the app carries the first 17 itself and loads any other from the website, by
+ * [HolidayCardDesign.id]) and the collections they're shown in, whether sending is open (until December 31 ends where
+ * the sender lives), the arrivals open now, and today's card once it's sent (one a day).
  */
 @JsonClass(generateAdapter = true)
 data class HolidayCardsResponse(
@@ -19,7 +19,10 @@ data class HolidayCardsResponse(
     @Json(name = "closes_on") val closesOn: String? = null,
     /** The note on the back: up to this many letters. */
     @Json(name = "message_limit") val messageLimit: Int = 300,
+    /** Every picture, in number order. */
     val designs: List<HolidayCardDesign> = emptyList(),
+    /** The collections "Pick a card" shows, in order; none from an older server (one grid of every picture then). */
+    val collections: List<HolidayCardCollection> = emptyList(),
     val arrivals: HolidayCardArrivals = HolidayCardArrivals(),
     /** The sender's next 7 a.m. round, where they live: when the carrier picks today's card up. */
     @Json(name = "next_round_at") val nextRoundAt: String? = null,
@@ -31,13 +34,28 @@ data class HolidayCardsResponse(
     val today: SentHolidayCard? = null,
 )
 
-/** One of the season's pictures: the caption printed under it and the colour of its paper. */
+/** One of the season's pictures: the caption printed under it, the colour of its paper and the collection it's in. */
 @JsonClass(generateAdapter = true)
 data class HolidayCardDesign(
     val id: String,
     val number: Int? = null,
     val caption: String = "",
     val paper: String? = null,
+    /** The id of the collection it's shown in. */
+    val collection: String? = null,
+    /** The picture's height at 960 pixels wide, so it keeps its shape before it loads. */
+    val height: Int? = null,
+)
+
+/** A collection on "Pick a card" (Christmas as a Kid …): its name, who it's for, and its pictures in order. */
+@JsonClass(generateAdapter = true)
+data class HolidayCardCollection(
+    val id: String,
+    val name: String = "",
+    /** Who it's for, in a line under the row of names. */
+    val line: String = "",
+    /** Its pictures' ids, in the order the grid shows them. */
+    val designs: List<String> = emptyList(),
 )
 
 /**
@@ -223,6 +241,8 @@ data class SentCardFace(
     val caption: String? = null,
     val paper: String? = null,
     val year: Int? = null,
+    /** The picture's height at 960 pixels wide (null for a picture the server doesn't know). */
+    val height: Int? = null,
 )
 
 /**
