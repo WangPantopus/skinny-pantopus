@@ -272,20 +272,7 @@ struct LoginView: View {
                     }
                     .navigationBarBackButtonHidden(true)
                 case let .signUp(inviteCode):
-                    SignUpView(
-                        inviteCode: inviteCode,
-                        onClose: { if !path.isEmpty { path.removeLast() } },
-                        onOpenLegal: { document in path.append(.legal(document)) },
-                        onSuccess: { email in
-                            // Backend hard-gates login on email_confirmed_at
-                            // today (see docs/mobile/auth-backend-contracts.md
-                            // §"Backend gap discovered"). Route through the
-                            // verify-email surface until soft-gate lands;
-                            // we hand it the email so the body copy + resend
-                            // CTA render correctly.
-                            path = [.verifyEmail(email: email, token: nil)]
-                        }
-                    )
+                    signUpScreen(inviteCode: inviteCode)
                 case .forgotPassword:
                     ForgotPasswordView {
                         if !path.isEmpty { path.removeLast() }
@@ -393,6 +380,29 @@ struct LoginView: View {
 
     private func resendVerification() {
         Task { await viewModel.resendVerification(using: auth) }
+    }
+}
+
+private extension LoginView {
+    /// Create account. A friend's link that arrives while it is open swaps the code on the screen already showing,
+    /// which filled in its code and inviter only when it opened; one screen per code starts Create account over for
+    /// the new link, as Android does.
+    func signUpScreen(inviteCode: String?) -> some View {
+        SignUpView(
+            inviteCode: inviteCode,
+            onClose: { if !path.isEmpty { path.removeLast() } },
+            onOpenLegal: { document in path.append(.legal(document)) },
+            onSuccess: { email in
+                // Backend hard-gates login on email_confirmed_at
+                // today (see docs/mobile/auth-backend-contracts.md
+                // §"Backend gap discovered"). Route through the
+                // verify-email surface until soft-gate lands;
+                // we hand it the email so the body copy + resend
+                // CTA render correctly.
+                path = [.verifyEmail(email: email, token: nil)]
+            }
+        )
+        .id(inviteCode)
     }
 }
 
