@@ -33,6 +33,11 @@ struct LoginView: View {
     @State private var showRemoveConfirmation = false
     @State private var deepLink = DeepLinkRouter.shared
     @FocusState private var focusedField: LoginField?
+    /// Over the Place funnel, an X that closes Log in back to the address
+    /// preview. Only this first screen shows it: a screen pushed from here
+    /// (Create account from a friend's link, Forgot password, Terms) keeps
+    /// just its own close or back.
+    var onClose: (() -> Void)?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -243,6 +248,18 @@ struct LoginView: View {
             }
             .modifier(LoginKeyboardReveal(isEditing: focusedField != nil))
             .background(Theme.Color.appSurface)
+            .overlay(alignment: .topTrailing) {
+                if let onClose {
+                    Button(action: onClose) {
+                        Icon(.x, size: 20, color: Theme.Color.appTextSecondary)
+                            .frame(width: Spacing.s12, height: Spacing.s12)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Back to address preview")
+                    .accessibilityIdentifier("place.launch.dismissLogin")
+                    .padding(.trailing, Spacing.s4)
+                }
+            }
             .navigationBarHidden(true)
             .swipesBackFromEdge()
             .navigationDestination(for: AuthRoute.self) { route in

@@ -24,17 +24,9 @@ struct PlaceLaunchHost: View {
             onCreateAccount: { showAuth = true }
         )
         .fullScreenCover(isPresented: $showAuth) {
-            LoginView()
-                .overlay(alignment: .topTrailing) {
-                    Button { showAuth = false } label: {
-                        Icon(.x, size: 20, color: Theme.Color.appTextSecondary)
-                            .frame(width: Spacing.s12, height: Spacing.s12)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Back to address preview")
-                    .accessibilityIdentifier("place.launch.dismissLogin")
-                    .padding(.trailing, Spacing.s4)
-                }
+            // Log in's own X closes back to the address preview; screens pushed
+            // from Log in keep only theirs.
+            LoginView { showAuth = false }
         }
         // Workstream 1.4 — RN AuthGate parity: a deferred protected (or
         // auth-owned) deep link auto-presents the existing Sign-in cover
