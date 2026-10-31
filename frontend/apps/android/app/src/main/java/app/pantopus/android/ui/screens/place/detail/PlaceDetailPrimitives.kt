@@ -5,8 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -24,10 +22,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -149,24 +151,34 @@ fun PlaceDetailSectionLabel(text: String) {
     )
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PlaceSourceNote(
     name: String,
     asOf: String? = null,
 ) {
-    // Wraps as whole pieces: at large font sizes a Row squeezed the time to one letter per line.
-    FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(text = name, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextMuted)
-        if (asOf != null) {
-            Text("·", fontSize = 12.sp, color = PantopusColors.appTextMuted.copy(alpha = 0.5f))
-            Text(asOf, fontSize = 12.sp, color = PantopusColors.appTextMuted)
+    // One text: a long source ("AirNow · <monitor>, within 50 miles") wraps as a sentence with the time after it,
+    // at any font size. Separate pieces put the dot at the start of its own line.
+    val note =
+        buildAnnotatedString {
+            withStyle(SpanStyle(fontWeight = FontWeight.Medium)) { append(name) }
+            if (asOf != null) {
+                // The no-break space keeps the dot at the end of the source's line.
+                append(' ')
+                withStyle(SpanStyle(color = PantopusColors.appTextMuted.copy(alpha = 0.5f))) { append('·') }
+                append(' ')
+                append(asOf)
+            }
         }
-    }
+    Text(
+        text = note,
+        fontSize = 12.sp,
+        color = PantopusColors.appTextMuted,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp)
+                .semantics { contentDescription = if (asOf != null) "$name, $asOf" else name },
+    )
 }
 
 /** A tappable link to an official page, e.g. the source behind a section's guidance. */

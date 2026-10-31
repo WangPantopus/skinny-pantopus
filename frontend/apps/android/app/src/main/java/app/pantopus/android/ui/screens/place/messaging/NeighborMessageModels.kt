@@ -136,11 +136,12 @@ fun PlaceActionRowLabel(
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.appText,
             )
+            // Two lines: on a narrow phone one line cut the sentence off mid-word.
             Text(
                 text = subtitle,
                 fontSize = 12.5.sp,
                 color = PantopusColors.appTextMuted,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }
