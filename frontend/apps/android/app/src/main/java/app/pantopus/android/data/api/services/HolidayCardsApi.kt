@@ -1,6 +1,7 @@
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
+import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardBody
 import app.pantopus.android.data.api.models.mailbox.SendHolidayCardResponse
@@ -34,6 +35,16 @@ interface HolidayCardsApi {
     suspend fun send(
         @Body body: SendHolidayCardBody,
     ): SendHolidayCardResponse
+
+    /**
+     * `POST /api/mailbox/cards/preview` — route `backend/routes/mailbox.js` (before `POST /cards`): the card exactly as
+     * the other person will see it, after every check sending runs; it stores and sends nothing. The same errors as
+     * [send].
+     */
+    @POST("api/mailbox/cards/preview")
+    suspend fun preview(
+        @Body body: SendHolidayCardBody,
+    ): HolidayCardPreview
 
     /**
      * `POST /api/mailbox/cards/:id/take-back` — route `backend/routes/mailbox.js:1988`: before the 7 a.m. pickup (by

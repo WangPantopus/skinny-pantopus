@@ -25,6 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -60,9 +61,10 @@ import coil.compose.AsyncImage
 import java.time.ZoneId
 
 /**
- * Send a Christmas card (launch keys `holiday_cards` + `mailbox`): the four steps on the cream desk, with the back arrow
- * and the step dots in the header; today's card once it's sent; and "done for this year" after December 31. Back (the
- * arrow or the system's) goes a step back, and from the first step or a sent card back to the Mailbox.
+ * Send a Christmas card (launch keys `holiday_cards` + `mailbox`): the five steps on the cream desk, with the back arrow
+ * and the step dots in the header (step 5, "Look it over", keeps "Seal and send" under it); today's card once it's sent;
+ * and "done for this year" after December 31. Back (the arrow or the system's) goes a step back with everything kept,
+ * and from the first step or a sent card back to the Mailbox. Each step opens at its top.
  */
 @Composable
 fun SendCardScreen(
@@ -79,6 +81,8 @@ fun SendCardScreen(
 
     val season = cards
     val page = SendCardPage.of(season, form)
+    val scroll = rememberScrollState()
+    LaunchedEffect(form.step) { scroll.scrollTo(0) }
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.cardDesk).testTag("sendCard")) {
         StepHeader(title = page.title(form), step = form.step.takeIf { page == SendCardPage.Steps }, onBack = back)
         Column(
@@ -86,7 +90,7 @@ fun SendCardScreen(
                 Modifier
                     .weight(1f)
                     .imePadding()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scroll)
                     .padding(bottom = Spacing.s6),
         ) {
             when (page) {
@@ -102,6 +106,9 @@ fun SendCardScreen(
                 SendCardPage.Steps, SendCardPage.Sent ->
                     season?.let { Steps(it, form, fromName, viewModel, onClose, onTakeBack = { confirmTakeBack = true }) }
             }
+        }
+        if (page == SendCardPage.Steps && form.step == SendCardStep.Look && form.preview != null) {
+            LookFooter(byEmail = form.to is CardRecipient.Email, form = form, onSend = viewModel::send)
         }
     }
     if (confirmTakeBack) {
@@ -163,16 +170,8 @@ private fun Steps(
             modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s2),
         )
     }
+    ToLine(form)
     val to = form.to
-    if (to != null && form.step in setOf(SendCardStep.Pick, SendCardStep.Write, SendCardStep.Seal)) {
-        Text(
-            "To ${to.label}",
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            color = PantopusColors.cardTextQuiet,
-            modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s1),
-        )
-    }
     val design = cards.designs.firstOrNull { it.id == form.design }
     when (form.step) {
         SendCardStep.To -> ToStep(form, viewModel)
@@ -192,8 +191,12 @@ private fun Steps(
             }
         SendCardStep.Seal ->
             if (design != null && to != null) {
-                SealStep(cards, to, design, fromName, form, onArrival = viewModel::chooseArrival, onSend = viewModel::send)
+                SealStep(cards, to, design, fromName, form, onArrival = viewModel::chooseArrival, onLook = viewModel::look)
             }
+        SendCardStep.Look -> {
+            val preview = form.preview
+            if (design != null && to != null && preview != null) LookStep(cards, to, design, preview)
+        }
         SendCardStep.Sent ->
             form.sent?.let { card ->
                 SentCardSection(card = card, cards = cards, title = "On its way", form = form, onTakeBack = onTakeBack, onClose = onClose)
@@ -201,7 +204,21 @@ private fun Steps(
     }
 }
 
-/** The back arrow, the title, and four dots: wax red for the steps done and the current one (longer), cream ahead. */
+/** "To Maya O." over steps 2 to 5, once who it's to is chosen. */
+@Composable
+private fun ToLine(form: SendCardForm) {
+    val to = form.to ?: return
+    if (form.step !in setOf(SendCardStep.Pick, SendCardStep.Write, SendCardStep.Seal, SendCardStep.Look)) return
+    Text(
+        "To ${to.label}",
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        color = PantopusColors.cardTextQuiet,
+        modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s1),
+    )
+}
+
+/** The back arrow, the title, and five dots: wax red for the steps done and the current one (longer), cream ahead. */
 @Composable
 private fun StepHeader(
     title: String,

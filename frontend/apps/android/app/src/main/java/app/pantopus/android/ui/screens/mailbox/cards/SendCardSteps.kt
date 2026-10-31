@@ -601,7 +601,10 @@ internal fun WriteStep(
 
 // ── Step 4: seal it for the day ──────────────────────────────
 
-/** The sealed envelope, when it arrives, until when it can be taken back, and Seal and send. */
+/**
+ * The sealed envelope, when it arrives, until when it can be taken back, and "Look it over" (step 5, where it's sent
+ * from). Why it can't go on shows under the choices.
+ */
 @Composable
 internal fun SealStep(
     cards: HolidayCardsResponse,
@@ -610,7 +613,7 @@ internal fun SealStep(
     fromName: String,
     form: SendCardForm,
     onArrival: (String) -> Unit,
-    onSend: () -> Unit,
+    onLook: () -> Unit,
 ) {
     val zone = HolidayCardTimes.zone(cards.timeZone)
     val options = if (to is CardRecipient.Email) cards.arrivals.email else (form.theirs?.arrivals ?: cards.arrivals.person)
@@ -635,16 +638,7 @@ internal fun SealStep(
                 ArrivalChoice(title, detail, selected = form.arrival == arrival, tag = "sendCardArrival.$arrival") { onArrival(arrival) }
             }
         }
-        // Before it's sent there's no knowing their clock; the sent card says the time on this one.
-        DeskNote(
-            if (to is CardRecipient.Email) {
-                "You can take it back until they open it."
-            } else {
-                "You can take it back until the carrier picks it up at 7 a.m. their time."
-            },
-            modifier = Modifier.padding(top = 14.dp),
-        )
-        form.sendError?.let {
+        form.sealError?.let {
             Text(
                 it,
                 fontSize = 14.sp,
@@ -654,11 +648,20 @@ internal fun SealStep(
                 modifier = Modifier.padding(top = Spacing.s3).semantics { liveRegion = LiveRegionMode.Assertive }.testTag("sendCardError"),
             )
         }
+        // Before it's sent there's no knowing their clock; the sent card says the time on this one.
+        DeskNote(
+            if (to is CardRecipient.Email) {
+                "You can take it back until they open it."
+            } else {
+                "You can take it back until the carrier picks it up at 7 a.m. their time."
+            },
+            modifier = Modifier.padding(top = 14.dp),
+        )
         CardButton(
-            "Seal and send",
-            onClick = onSend,
+            "Look it over",
+            onClick = onLook,
             enabled = form.arrival != null,
-            busy = form.sending,
+            busy = form.previewing,
             modifier = Modifier.padding(top = Spacing.s5).testTag("sendCardSend"),
         )
     }
@@ -751,7 +754,7 @@ private fun envelopePreview(
         postmarkTown = null,
         postmarkDay = "",
         postmarkYear = "",
-        stamp = MailStamp.forPiece(design.id),
+        stamp = MailStamp.forCard(design.number, design.id) ?: MailStamp.forPiece(design.id),
         note = null,
         meta = "",
         accessibilityLabel =
