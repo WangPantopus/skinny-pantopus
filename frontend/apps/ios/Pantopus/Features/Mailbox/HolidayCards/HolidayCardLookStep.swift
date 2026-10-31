@@ -299,6 +299,7 @@ struct HolidayCardLookStep: View {
             design: card?.design ?? design.id,
             caption: card?.caption ?? design.caption,
             paper: card?.paper ?? design.paper,
+            height: card?.height ?? design.height,
             year: card?.year ?? cards.year,
             mailedOn: envelope.postmarkDate
         )
@@ -317,11 +318,17 @@ struct HolidayCardLookStep: View {
 
     /// The back on its own, the size of the picture side.
     private var backOnly: some View {
-        HolidayCardFront(design: card?.design ?? design.id, caption: nil, paper: card?.paper ?? design.paper, year: cards.year)
-            .hidden()
-            .overlay { back }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("On the back: \(note) From \(HolidayCardWords.withoutPeriod(from)).")
+        HolidayCardFront(
+            design: card?.design ?? design.id,
+            caption: nil,
+            paper: card?.paper ?? design.paper,
+            height: card?.height ?? design.height,
+            year: cards.year
+        )
+        .hidden()
+        .overlay { back }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("On the back: \(note) From \(HolidayCardWords.withoutPeriod(from)).")
     }
 
     private func sectionLabel(_ text: String) -> some View {

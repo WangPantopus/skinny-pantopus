@@ -174,11 +174,13 @@ private struct MailSentRow: View {
                     VStack(alignment: .leading, spacing: Spacing.s2) {
                         MailPieceView(model: .sent(piece))
                         HStack(spacing: 10) {
-                            HolidayCardPictureView(design: piece.card.design, paper: piece.card.paper, thumb: true)
-                                .frame(width: 30)
-                                .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
-                                .shadow(color: MailPaper.cardShadow.opacity(0.25), radius: 3, x: 0, y: 2)
-                                .rotationEffect(.degrees(-3))
+                            HolidayCardPictureView(
+                                design: piece.card.design, paper: piece.card.paper, height: piece.card.height, thumb: true
+                            )
+                            .frame(width: 30)
+                            .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+                            .shadow(color: MailPaper.cardShadow.opacity(0.25), radius: 3, x: 0, y: 2)
+                            .rotationEffect(.degrees(-3))
                             VStack(alignment: .leading, spacing: Spacing.s0) {
                                 Text(verbatim: MailSentWords.toLine(piece))
                                     .foregroundStyle(Theme.Color.appTextStrong)

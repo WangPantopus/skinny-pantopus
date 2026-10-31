@@ -4,8 +4,8 @@
 //
 //  The first three steps of sending a Christmas card (the web's
 //  `SendCardFlow`): who it's for (a person by name, or an email address for
-//  someone not on Pantopus), pick one of the season's pictures, and write a
-//  note on the back of it.
+//  someone not on Pantopus), pick one of the season's pictures from its
+//  collection, and write a note on the back of it.
 //
 
 import SwiftUI
@@ -246,16 +246,35 @@ struct HolidayCardPickStep: View {
     @Bindable var viewModel: HolidayCardFlowViewModel
     let cards: HolidayCardsResponse
     @State private var large: HolidayCardDesign?
+    /// The collection picked in the row; until then the one holding the card
+    /// already chosen (back from step 3), else the first.
+    @State private var collectionId: String?
     @Environment(\.colorScheme) private var scheme
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: Spacing.s3, alignment: .top), count: 3)
 
     var body: some View {
+        let collections = cards.pickableCollections
+        let shown = collections.first { $0.id == collectionId }
+            ?? viewModel.designId.flatMap { id in collections.first { $0.designs.contains(id) } }
+            ?? collections.first
+        // A server without collections: one grid of every picture, as before.
+        let designs = shown.map { cards.designs(in: $0) } ?? cards.designs
         VStack(spacing: Spacing.s6) {
-            LazyVGrid(columns: columns, spacing: Spacing.s4) {
-                ForEach(cards.designs) { design in
-                    tile(design)
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                if let shown {
+                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                        HolidayCardCollectionRow(collections: collections, shown: shown) { collectionId = $0.id }
+                        if !shown.line.isEmpty {
+                            Text(shown.line)
+                                .font(.system(size: 14))
+                                .foregroundStyle(HolidayCardDesk.muted(scheme))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("sendCardCollectionLine")
+                        }
+                    }
                 }
+                grid(designs, label: shown?.name)
             }
             VStack(spacing: 10) {
                 if let picked = viewModel.design {
@@ -273,6 +292,29 @@ struct HolidayCardPickStep: View {
         .sheet(item: $large) { design in
             largeCard(design)
         }
+        // The collection's small pictures, and the chosen card's large one, before they're needed.
+        .task(id: shown?.id) { HolidayCardPicture.loadAhead(designs.map(\.id), thumb: true) }
+        .task(id: viewModel.designId) {
+            if let chosen = viewModel.designId { HolidayCardPicture.loadAhead([chosen]) }
+        }
+    }
+
+    /// The pictures three across, a caption under each. VoiceOver names the
+    /// grid after its collection.
+    @ViewBuilder
+    private func grid(_ designs: [HolidayCardDesign], label: String?) -> some View {
+        let grid = LazyVGrid(columns: columns, spacing: Spacing.s4) {
+            ForEach(designs) { design in
+                tile(design)
+            }
+        }
+        if let label {
+            grid
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(label)
+        } else {
+            grid
+        }
     }
 
     private func tile(_ design: HolidayCardDesign) -> some View {
@@ -281,7 +323,7 @@ struct HolidayCardPickStep: View {
             if selected { large = design } else { viewModel.designId = design.id }
         } label: {
             VStack(spacing: 6) {
-                HolidayCardPictureView(design: design.id, paper: design.paper, thumb: true)
+                HolidayCardPictureView(design: design.id, paper: design.paper, height: design.height, thumb: true)
                     .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                     .overlay {
                         if selected {
@@ -317,7 +359,7 @@ struct HolidayCardPickStep: View {
     /// The picture large, to choose it or close.
     private func largeCard(_ design: HolidayCardDesign) -> some View {
         VStack(spacing: Spacing.s4) {
-            HolidayCardFront(design: design.id, caption: design.caption, paper: design.paper, year: cards.year)
+            HolidayCardFront(design: design.id, caption: design.caption, paper: design.paper, height: design.height, year: cards.year)
                 .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                 .shadow(color: MailPaper.cardShadow.opacity(0.3), radius: 18, x: 0, y: 12)
                 .frame(maxWidth: 420)
@@ -343,6 +385,18 @@ struct HolidayCardPickStep: View {
     }
 }
 
+private extension HolidayCardsResponse {
+    /// The collections in the row, in the server's order: those with a picture.
+    var pickableCollections: [HolidayCardCollection] {
+        collections.filter { !designs(in: $0).isEmpty }
+    }
+
+    /// A collection's pictures in its grid order.
+    func designs(in collection: HolidayCardCollection) -> [HolidayCardDesign] {
+        collection.designs.compactMap { id in designs.first { $0.id == id } }
+    }
+}
+
 // MARK: - Step 3: write on the back
 
 struct HolidayCardWriteStep: View {
@@ -357,7 +411,7 @@ struct HolidayCardWriteStep: View {
         let empty = viewModel.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         VStack(spacing: Spacing.s3) {
             HolidayCardFlip(showBack: showBack) {
-                HolidayCardFront(design: design.id, caption: design.caption, paper: design.paper, year: cards.year)
+                HolidayCardFront(design: design.id, caption: design.caption, paper: design.paper, height: design.height, year: cards.year)
                     .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                     .shadow(color: MailPaper.cardShadow.opacity(0.24), radius: 13, x: 0, y: 12)
             } back: {

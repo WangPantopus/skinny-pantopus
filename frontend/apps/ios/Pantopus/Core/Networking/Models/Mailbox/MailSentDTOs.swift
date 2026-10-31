@@ -91,12 +91,14 @@ public struct MailSentPiece: Decodable, Sendable, Hashable, Identifiable {
         }
     }
 
-    /// The picture sent, its caption, paper and year.
+    /// The picture sent, its caption, paper, height and year.
     public struct Card: Decodable, Sendable, Hashable {
         public let design: String
         public let number: Int?
         public let caption: String?
         public let paper: String?
+        /// The picture's height at 960 wide: its shape while it loads.
+        public let height: Int?
         public let year: Int
 
         public init(from decoder: any Decoder) throws {
@@ -105,11 +107,12 @@ public struct MailSentPiece: Decodable, Sendable, Hashable, Identifiable {
             number = try? c.decodeIfPresent(Int.self, forKey: .number)
             caption = try? c.decodeIfPresent(String.self, forKey: .caption)
             paper = try? c.decodeIfPresent(String.self, forKey: .paper)
+            height = try? c.decodeIfPresent(Int.self, forKey: .height)
             year = (try? c.decodeIfPresent(Int.self, forKey: .year)) ?? 2026
         }
 
         private enum CodingKeys: String, CodingKey {
-            case design, number, caption, paper, year
+            case design, number, caption, paper, height, year
         }
     }
 

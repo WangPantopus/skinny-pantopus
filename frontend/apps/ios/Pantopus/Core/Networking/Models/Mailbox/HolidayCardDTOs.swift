@@ -19,7 +19,8 @@ public enum HolidayCardArrival: String, Sendable, Hashable, CaseIterable {
 }
 
 /// `GET /api/mailbox/cards` — route `backend/routes/mailbox.js:1776`: whether
-/// sending is open, the pictures, the arrivals open now and today's card.
+/// sending is open, the pictures and their collections, the arrivals open
+/// now and today's card.
 public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
     public let open: Bool
     public let holiday: String
@@ -28,7 +29,11 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
     public let closesOn: String?
     /// The most letters a note can have.
     public let messageLimit: Int
+    /// Every picture, in number order.
     public let designs: [HolidayCardDesign]
+    /// The pictures' collections in the order Pick a card shows them;
+    /// empty from a server without collections (one grid of every picture).
+    public let collections: [HolidayCardCollection]
     /// The arrivals open now for a person found by name, and by email.
     public let personArrivals: [HolidayCardArrival]
     public let emailArrivals: [HolidayCardArrival]
@@ -41,7 +46,7 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
     public let today: SentHolidayCard?
 
     private enum CodingKeys: String, CodingKey {
-        case open, holiday, year, designs, arrivals, today
+        case open, holiday, year, designs, collections, arrivals, today
         case closesOn = "closes_on"
         case messageLimit = "message_limit"
         case nextRoundAt = "next_round_at"
@@ -62,6 +67,7 @@ public struct HolidayCardsResponse: Decodable, Sendable, Hashable {
         closesOn = try? c.decodeIfPresent(String.self, forKey: .closesOn)
         messageLimit = (try? c.decodeIfPresent(Int.self, forKey: .messageLimit)) ?? 300
         designs = try c.decode([HolidayCardDesign].self, forKey: .designs)
+        collections = (try? c.decodeIfPresent([HolidayCardCollection].self, forKey: .collections)) ?? []
         let arrivals = try? c.decodeIfPresent(Arrivals.self, forKey: .arrivals)
         personArrivals = (arrivals?.person ?? []).compactMap(HolidayCardArrival.init(rawValue:))
         emailArrivals = (arrivals?.email ?? []).compactMap(HolidayCardArrival.init(rawValue:))
@@ -94,15 +100,42 @@ public struct HolidayCardArrivalsFor: Decodable, Sendable, Hashable {
     }
 }
 
-/// One of the season's pictures: the app carries the picture itself
-/// (`Assets.xcassets/HolidayCards/<id>`); this is its caption and the colour
-/// of its paper.
+/// One of the season's pictures: the app carries the first 17 itself
+/// (`Assets.xcassets/HolidayCards/<id>`) and loads any other from the
+/// website (`HolidayCardPicture`); this is its caption, the colour of its
+/// paper and its height.
 public struct HolidayCardDesign: Decodable, Sendable, Hashable, Identifiable {
     public let id: String
     public let number: Int
     public let caption: String
     /// The picture's own border colour, `#rrggbb`.
     public let paper: String
+    /// The picture's height at 960 wide: its shape while it loads.
+    public let height: Int?
+}
+
+/// A collection of the season's pictures ("Christmas with Friends"): who
+/// it's for, and its pictures in grid order. A picture can move between
+/// collections; its number never changes.
+public struct HolidayCardCollection: Decodable, Sendable, Hashable, Identifiable {
+    public let id: String
+    public let name: String
+    /// Who it's for: "For the friends who feel like family."
+    public let line: String
+    /// Its pictures' ids, in grid order.
+    public let designs: [String]
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, line, designs
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        line = (try? c.decodeIfPresent(String.self, forKey: .line)) ?? ""
+        designs = (try? c.decodeIfPresent([String].self, forKey: .designs)) ?? []
+    }
 }
 
 /// A card as its sender sees it: today's card, or the answer to sending it.
@@ -323,6 +356,9 @@ public struct MailCard: Decodable, Sendable, Hashable {
     public let number: Int?
     public let caption: String?
     public let paper: String?
+    /// The picture's height at 960 wide: its shape while it loads (nil for
+    /// a picture the server doesn't know).
+    public let height: Int?
     public let holiday: String?
     public let year: Int
     public let arrival: String?
@@ -330,7 +366,7 @@ public struct MailCard: Decodable, Sendable, Hashable {
     public let sealed: Bool
 
     private enum CodingKeys: String, CodingKey {
-        case design, number, caption, paper, holiday, year, arrival, sealed
+        case design, number, caption, paper, height, holiday, year, arrival, sealed
         case sealedUntil = "sealed_until"
     }
 
@@ -340,6 +376,7 @@ public struct MailCard: Decodable, Sendable, Hashable {
         number = design.number
         caption = design.caption
         paper = design.paper
+        height = design.height
         holiday = "christmas"
         self.year = year
         arrival = nil
@@ -352,6 +389,7 @@ public struct MailCard: Decodable, Sendable, Hashable {
         number = card.number
         caption = card.caption
         paper = card.paper
+        height = card.height
         holiday = card.holiday
         year = card.year
         arrival = card.arrival
@@ -370,6 +408,7 @@ public struct MailCard: Decodable, Sendable, Hashable {
         number = try? c.decodeIfPresent(Int.self, forKey: .number)
         caption = try? c.decodeIfPresent(String.self, forKey: .caption)
         paper = try? c.decodeIfPresent(String.self, forKey: .paper)
+        height = try? c.decodeIfPresent(Int.self, forKey: .height)
         holiday = try? c.decodeIfPresent(String.self, forKey: .holiday)
         year = (try? c.decodeIfPresent(Int.self, forKey: .year)) ?? 2026
         arrival = try? c.decodeIfPresent(String.self, forKey: .arrival)
