@@ -20,6 +20,9 @@ public struct DrawerListResponse: Decodable, Sendable, Hashable {
     public let homes: [MailboxHome]
     /// The vacation hold in effect, or the next one; nil when none (SRV-5).
     public let vacationHold: MailVacationHold?
+    /// What this person has sent: anything at all, and the cards still
+    /// waiting for the 7 a.m. pickup (the flag is up). Nil from an older server.
+    public let sent: MailSent?
 
     private enum CodingKeys: String, CodingKey {
         case drawers
@@ -27,6 +30,7 @@ public struct DrawerListResponse: Decodable, Sendable, Hashable {
         case delivery
         case homes
         case vacationHold = "vacation_hold"
+        case sent
     }
 
     public init(from decoder: any Decoder) throws {
@@ -36,6 +40,25 @@ public struct DrawerListResponse: Decodable, Sendable, Hashable {
         delivery = try? c.decodeIfPresent(MailDelivery.self, forKey: .delivery)
         homes = (try? c.decodeIfPresent([MailboxHome].self, forKey: .homes)) ?? []
         vacationHold = try? c.decodeIfPresent(MailVacationHold.self, forKey: .vacationHold)
+        sent = try? c.decodeIfPresent(MailSent.self, forKey: .sent)
+    }
+
+    /// Sent at a glance (`sent` on `GET /api/mailbox/v2/drawers`).
+    public struct MailSent: Decodable, Sendable, Hashable {
+        /// Something sent and not taken back.
+        public let any: Bool
+        /// Cards to a person still before the 7 a.m. pickup.
+        public let waiting: Int
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            any = (try? c.decodeIfPresent(Bool.self, forKey: .any)) ?? false
+            waiting = (try? c.decodeIfPresent(Int.self, forKey: .waiting)) ?? 0
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case any, waiting
+        }
     }
 
     /// A vacation hold (Mail build contract, SRV-5): `scheduled` or `active`,

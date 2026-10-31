@@ -83,6 +83,18 @@ enum class MailStamp {
 
     companion object {
         fun forPiece(id: String): MailStamp = entries[(id.hashCode() and Int.MAX_VALUE) % entries.size]
+
+        /**
+         * A Christmas card's stamp goes with its picture's number, the same on every app: 1 Fir, 2 Peak, 3 River, 4 Fir
+         * … The server's [number], else the picture's own ("christmas-2026-08" is 8); null without either.
+         */
+        fun forCard(
+            number: Int?,
+            design: String,
+        ): MailStamp? {
+            val picture = number ?: design.substringAfterLast('-').toIntOrNull() ?: return null
+            return entries[(picture - 1).mod(entries.size)]
+        }
     }
 }
 

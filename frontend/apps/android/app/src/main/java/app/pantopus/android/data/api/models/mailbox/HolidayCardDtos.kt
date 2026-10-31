@@ -1,5 +1,7 @@
 package app.pantopus.android.data.api.models.mailbox
 
+import app.pantopus.android.data.api.models.mailbox.v2.MailCard
+import app.pantopus.android.data.api.models.mailbox.v2.MailPostmark
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -105,4 +107,67 @@ data class SendHolidayCardResponse(
 @JsonClass(generateAdapter = true)
 data class TakeBackHolidayCardResponse(
     @Json(name = "taken_back") val takenBack: Boolean = false,
+)
+
+/**
+ * `POST /api/mailbox/cards/preview` (the body of sending one): exactly what the other person will see, from the same
+ * checks and lookups as sending it. Nothing is stored or sent. A person's card: the piece as their Mailbox draws it and
+ * when it comes; by email: the email they get and the page its link opens.
+ */
+@JsonClass(generateAdapter = true)
+data class HolidayCardPreview(
+    val piece: HolidayCardPreviewPiece,
+    /** The day it goes into their mailbox by their clock ("2026-12-11"); null by email. */
+    @Json(name = "arrives_on") val arrivesOn: String? = null,
+    /** The day a sealed card opens ("2026-12-25"); null when it isn't sealed. */
+    @Json(name = "opens_on") val opensOn: String? = null,
+    /** How many days it stays sealed once it's in their mailbox. */
+    @Json(name = "sealed_days") val sealedDays: Int? = null,
+    @Json(name = "take_back_until") val takeBackUntil: String? = null,
+    /** The email they get, for a card sent to an email address. */
+    val email: HolidayCardPreviewEmail? = null,
+    /** The page the email's link opens, for a card sent to an email address. */
+    @Json(name = "link_page") val linkPage: HolidayCardPreviewLinkPage? = null,
+)
+
+/** The card as a piece in their Mailbox: the name it really carries, its postmark and the card. */
+@JsonClass(generateAdapter = true)
+data class HolidayCardPreviewPiece(
+    val id: String = "preview",
+    val kind: String? = null,
+    @Json(name = "sender_display") val senderDisplay: String = "",
+    @Json(name = "sender_trust") val senderTrust: String = "pantopus_user",
+    @Json(name = "sender_business_name") val senderBusinessName: String? = null,
+    val subject: String? = null,
+    /** The note on the back, trimmed. */
+    val content: String? = null,
+    @Json(name = "created_at") val createdAt: String? = null,
+    /** When it goes into their mailbox; null by email. */
+    @Json(name = "delivered_at") val deliveredAt: String? = null,
+    val postmark: MailPostmark? = null,
+    val card: MailCard? = null,
+)
+
+/**
+ * The email a card to an email address sends: its subject, the heading, two sentences, the button, the footnote and the
+ * footer's lines.
+ */
+@JsonClass(generateAdapter = true)
+data class HolidayCardPreviewEmail(
+    val subject: String = "",
+    val heading: String = "",
+    val lines: List<String> = emptyList(),
+    val button: String = "",
+    val footnote: String = "",
+    val footer: List<String> = emptyList(),
+)
+
+/** The page the email's link opens: who it's from, whether it's sealed, and the address it went to (masked). */
+@JsonClass(generateAdapter = true)
+data class HolidayCardPreviewLinkPage(
+    @Json(name = "sender_name") val senderName: String = "",
+    @Json(name = "sender_verified") val senderVerified: Boolean = false,
+    val sealed: Boolean = false,
+    @Json(name = "sent_to") val sentTo: String = "",
+    @Json(name = "sent_on") val sentOn: String? = null,
 )

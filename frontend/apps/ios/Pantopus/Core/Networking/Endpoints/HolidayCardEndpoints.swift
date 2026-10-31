@@ -28,6 +28,13 @@ public enum HolidayCardEndpoints {
         Endpoint(method: .post, path: "/api/mailbox/cards", body: body)
     }
 
+    /// `POST /api/mailbox/cards/preview` — route `backend/routes/mailbox.js`
+    /// (next to `POST /cards`). The same body and every check sending runs,
+    /// storing and sending nothing: what the other person will see.
+    public static func preview(_ body: SendHolidayCardBody) -> Endpoint {
+        Endpoint(method: .post, path: "/api/mailbox/cards/preview", body: body)
+    }
+
     /// `POST /api/mailbox/cards/:id/take-back` — route
     /// `backend/routes/mailbox.js:1988`. Until the carrier's 7 a.m. pickup (by
     /// email: until they open it).
