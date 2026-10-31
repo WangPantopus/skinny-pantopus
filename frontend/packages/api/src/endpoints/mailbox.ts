@@ -5,6 +5,7 @@
 
 import { get, post, put, del, patch } from '../client';
 import type { Mail, AdCampaign, ApiResponse } from '@pantopus/types';
+import type { MailItemV2 } from './mailboxV2';
 
 export interface MailboxSummary {
   total_mail: number;
@@ -691,6 +692,81 @@ export async function sendHolidayCard(data: {
   to: { user_id: string } | { email: string };
 }): Promise<{ card: SentHolidayCard }> {
   return post<{ card: SentHolidayCard }>('/api/mailbox/cards', data);
+}
+
+/**
+ * What the other person will get, before it's sent: the same body and the same checks as sending it, with nothing
+ * stored or sent.
+ */
+export interface HolidayCardPreview {
+  /** Their Mailbox's piece for it, as sending it would store it: the name the card carries, its postmark by their clock. */
+  piece: MailItemV2;
+  /** The day it goes into their mailbox, by their clock; null by email. */
+  arrives_on: string | null;
+  /** Sealed cards: the day the seal lifts, and how many days it waits sealed in their mailbox. */
+  opens_on: string | null;
+  sealed_days: number | null;
+  take_back_until: string | null;
+  /** By email: the email they get, in its own words. */
+  email: { subject: string; heading: string; lines: string[]; button: string; footnote: string; footer?: string[] } | null;
+  /** By email: the page its link opens (the address masked, as on that page). */
+  link_page: { sender_name: string; sender_verified: boolean; sealed: boolean; sent_to: string; sent_on: string } | null;
+}
+
+/** POST /api/mailbox/cards/preview */
+export async function previewHolidayCard(data: Parameters<typeof sendHolidayCard>[0]): Promise<HolidayCardPreview> {
+  return post<HolidayCardPreview>('/api/mailbox/cards/preview', data);
+}
+
+// ============ SENT (launch key mailbox) ============
+
+/**
+ * A card in its sender's Sent: where it is now and how it reached them, never whether it was opened, nor the other
+ * person's ids, address or time zone. Days (`arrives_on`, `opens_on`, `postmarked_on`) are by their clock.
+ */
+export interface SentPiece {
+  id: string;
+  kind: 'card';
+  sent_at: string;
+  /** Their name as it was when sent; by email the masked address, or whoever claimed it. */
+  to_name: string | null;
+  by_email: boolean;
+  arrival: HolidayCardArrival | null;
+  /** To a person: before the 7 a.m. pickup, picked up (a Christmas-morning card on its way), in their mailbox. */
+  status: 'waiting' | 'picked_up' | 'delivered' | 'claimed' | 'expired' | 'email_waiting';
+  arrives_at: string | null;
+  arrives_on: string | null;
+  opens_on: string | null;
+  sealed: boolean;
+  can_take_back: boolean;
+  take_back_until: string | null;
+  /** The envelope as it reaches them: no postmark until the carrier has it. */
+  envelope: { from: string; postmarked_on: string | null };
+  card: { design: string | null; number: number | null; caption: string | null; paper: string | null; year: number | null };
+}
+
+/** A step of a sent card's trail: `at` an instant (shown by the sender's clock), `on` a day by theirs. */
+export interface SentTrailStep {
+  step: 'sealed' | 'emailed' | 'picked_up' | 'delivered' | 'opens' | 'joined' | 'returned';
+  at?: string | null;
+  on?: string | null;
+  done: boolean;
+}
+
+/** One card in Sent, with the sender's own note (also while it's sealed for them) and its trail. */
+export interface SentPieceDetail extends SentPiece {
+  note: string;
+  trail: SentTrailStep[];
+}
+
+/** GET /api/mailbox/sent: newest first, `limit` at a time (25 unless asked); `next` is the cursor for the page after. */
+export async function getSentCards(params?: { before?: string; limit?: number }): Promise<{ items: SentPiece[]; next: string | null }> {
+  return get<{ items: SentPiece[]; next: string | null }>('/api/mailbox/sent', params);
+}
+
+/** GET /api/mailbox/sent/:id (its sender only). */
+export async function getSentCard(id: string): Promise<{ item: SentPieceDetail }> {
+  return get<{ item: SentPieceDetail }>(`/api/mailbox/sent/${encodeURIComponent(id)}`);
 }
 
 /** POST /api/mailbox/cards/:id/take-back: before the 7 a.m. pickup (by email: before they open it). */

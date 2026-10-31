@@ -19,6 +19,7 @@ import useMailAddressee, { type Addressee } from '@/components/mailbox/useMailAd
 import { useMailboxContext } from '@/contexts/MailboxContext';
 import ErrorState from '@/components/ui/ErrorState';
 import SendCardRow from '@/components/mailbox/cards/SendCardRow';
+import SentList from '@/components/mailbox/sent/SentList';
 
 // ── Types ────────────────────────────────────────────────────
 type DrawerParam = MailboxDrawer;
@@ -58,7 +59,36 @@ export default function DrawerLayout({
   children: React.ReactNode;
   params: Promise<{ drawer: string }>;
 }) {
-  const { drawer: drawerParam } = use(params);
+  const { drawer } = use(params);
+  // Sent isn't a drawer of incoming mail: it lists what you sent (no drawer list to load).
+  if (drawer === 'sent') return <SentLayout>{children}</SentLayout>;
+  return <DrawerList drawerParam={drawer}>{children}</DrawerList>;
+}
+
+/** Sent beside the card open from it, as Incoming sits beside a letter (phones show one at a time). */
+function SentLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const selectedId = pathname.match(/\/mailbox\/sent\/([^/]+)/)?.[1];
+  return (
+    <div className="md:flex md:h-full md:overflow-hidden">
+      <div
+        className={`flex flex-col md:h-full flex-shrink-0 md:border-r border-app-border bg-app ${
+          selectedId ? 'hidden md:flex md:w-[380px] lg:w-[400px]' : 'w-full md:w-[380px] lg:w-[400px]'
+        }`}
+      >
+        <h2 className="sr-only">Sent</h2>
+        <div className="md:flex-1 md:overflow-y-auto">
+          <SentList selectedId={selectedId} />
+        </div>
+      </div>
+      <div className={`md:flex-1 min-w-0 md:overflow-hidden ${selectedId ? '' : 'hidden md:block'}`}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function DrawerList({ drawerParam, children }: { drawerParam: string; children: React.ReactNode }) {
   const drawer = drawerParam as DrawerParam;
   const pathname = usePathname();
   const router = useRouter();
