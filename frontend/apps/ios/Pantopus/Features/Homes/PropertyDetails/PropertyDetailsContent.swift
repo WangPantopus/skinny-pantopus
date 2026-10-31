@@ -59,6 +59,23 @@ public struct PropertyFactRow: Identifiable, Sendable, Hashable {
     }
 }
 
+/// One titled card of read-only record rows: the county record's Building,
+/// Lot, Parcel & records… sections.
+public struct PropertyRecordSection: Identifiable, Sendable, Hashable {
+    public let id: String
+    public let title: String
+    public let rows: [PropertyFactRow]
+    /// Caption under the card (the value estimate's "isn't an appraisal").
+    public let note: String?
+
+    public init(id: String, title: String, rows: [PropertyFactRow], note: String? = nil) {
+        self.id = id
+        self.title = title
+        self.rows = rows
+        self.note = note
+    }
+}
+
 /// Status pill spec attached to a verification source row.
 public struct SourcePillSpec: Sendable, Hashable {
     public let label: String
@@ -102,7 +119,10 @@ public struct MismatchBannerData: Sendable, Hashable {
 public struct PropertyDetailsContent: Sendable, Hashable {
     public let address: PropertyAddress
     public let propertyFacts: [PropertyFactRow]
-    public let records: [PropertyFactRow]
+    /// The county record's sections; empty for anyone but a verified owner.
+    public let recordSections: [PropertyRecordSection]
+    /// Where the record came from and when, under its last section.
+    public let recordFooter: String?
     public let verification: [VerificationSource]
     /// Non-nil when external sources disagree — drives the mismatch banner
     /// and the sticky "Request correction" CTA. `nil` for the clean state.
@@ -111,13 +131,15 @@ public struct PropertyDetailsContent: Sendable, Hashable {
     public init(
         address: PropertyAddress,
         propertyFacts: [PropertyFactRow],
-        records: [PropertyFactRow],
+        recordSections: [PropertyRecordSection],
+        recordFooter: String? = nil,
         verification: [VerificationSource],
         banner: MismatchBannerData? = nil
     ) {
         self.address = address
         self.propertyFacts = propertyFacts
-        self.records = records
+        self.recordSections = recordSections
+        self.recordFooter = recordFooter
         self.verification = verification
         self.banner = banner
     }
