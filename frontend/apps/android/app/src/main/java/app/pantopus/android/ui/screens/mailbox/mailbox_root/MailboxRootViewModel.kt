@@ -256,9 +256,11 @@ class MailboxRootViewModel
             viewModelScope.launch {
                 MailboxRepository.mailChanged.collect { if (_state.value !is MailboxUiState.Loading) refreshQuietly() }
             }
-            // A card sent or taken back (from Sent or the card screens): the flag and whether Sent shows are read again.
+            // A card sent, taken back, or too late to take back (picked up meanwhile): the flag and whether Sent shows are
+            // read again.
             viewModelScope.launch { HolidayCardsRepository.cardSent.collect { readDrawersAndShow() } }
             viewModelScope.launch { HolidayCardsRepository.takenBack.collect { readDrawersAndShow() } }
+            viewModelScope.launch { HolidayCardsRepository.movedOn.collect { readDrawersAndShow() } }
             // "See it in Sent" after sending a card.
             viewModelScope.launch { HolidayCardsRepository.showSent.collect { openSent() } }
         }

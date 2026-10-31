@@ -88,9 +88,14 @@ class HolidayCardsRepository
         /** `POST /api/mailbox/cards/:id/take-back`: the day's card is free again, and it leaves Sent. */
         suspend fun takeBack(cardId: String): NetworkResult<TakeBackHolidayCardResponse> {
             val result = safeApiCall { api.takeBack(cardId) }
-            if (result is NetworkResult.Success) {
-                latestFlow.update { cards -> if (cards?.today?.id == cardId) cards.copy(today = null) else cards }
-                takenBackFlow.tryEmit(cardId)
+            when (result) {
+                is NetworkResult.Success -> {
+                    latestFlow.update { cards -> if (cards?.today?.id == cardId) cards.copy(today = null) else cards }
+                    takenBackFlow.tryEmit(cardId)
+                }
+                // Refused: it was picked up or opened meanwhile, or it's gone. Sent and the flag read where it is now.
+                is NetworkResult.Failure ->
+                    if (result.error is NetworkError.ClientError || result.error is NetworkError.NotFound) movedOnFlow.tryEmit(cardId)
             }
             return result
         }
@@ -101,10 +106,13 @@ class HolidayCardsRepository
             limit: Int = SENT_PAGE,
         ): NetworkResult<SentMailResponse> = safeApiCall { api.sent(before, limit) }
 
-        /** `GET /api/mailbox/sent/:id`: one card the person sent, with their note and its trail. */
+        /** `GET /api/mailbox/sent/:id`: one card the person sent, with their note and its trail (Sent's row follows it). */
         suspend fun sentCard(id: String): NetworkResult<SentCard> =
             when (val result = safeApiCall { api.sentCard(id) }) {
-                is NetworkResult.Success -> NetworkResult.Success(result.data.item)
+                is NetworkResult.Success -> {
+                    sentReadFlow.tryEmit(result.data.item)
+                    NetworkResult.Success(result.data.item)
+                }
                 is NetworkResult.Failure -> result
             }
 
@@ -132,6 +140,16 @@ class HolidayCardsRepository
 
             /** A card taken back, from the send screens or from Sent: Sent drops it and the flag comes down. */
             val takenBack: SharedFlow<String> = takenBackFlow.asSharedFlow()
+
+            private val movedOnFlow = MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+            /** A take-back refused because the card moved on (picked up, opened) or is gone: Sent and the flag read again. */
+            val movedOn: SharedFlow<String> = movedOnFlow.asSharedFlow()
+
+            private val sentReadFlow = MutableSharedFlow<SentCard>(extraBufferCapacity = 8)
+
+            /** A sent card as its page just read it: Sent's row says the same. */
+            val sentRead: SharedFlow<SentCard> = sentReadFlow.asSharedFlow()
 
             private val showSentFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 

@@ -109,7 +109,9 @@ class MailSentCardViewModel
                                 is NetworkError.NotFound -> "This card isn’t here any more."
                                 else -> result.error.mailMessage(online = network.isOnline.value, doing = "take your card back")
                             }
-                        read()
+                        // Refused (picked up or opened meanwhile, or gone): the page shows where it is now. Not reached
+                        // (offline, Pantopus in trouble): the page stays as it is, with why under it.
+                        if (result.error is NetworkError.ClientError || result.error is NetworkError.NotFound) read()
                     }
                 }
                 _takingBack.value = false

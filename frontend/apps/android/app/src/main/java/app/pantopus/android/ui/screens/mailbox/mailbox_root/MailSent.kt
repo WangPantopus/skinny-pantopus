@@ -142,6 +142,10 @@ class MailSentViewModel
             viewModelScope.launch { HolidayCardsRepository.takenBack.collect { drop(it) } }
             // Sent from the card screens: once Sent has been read, it reads again with the new card.
             viewModelScope.launch { HolidayCardsRepository.cardSent.collect { if (lastReadAt != null) refresh() } }
+            // Too late to take back (picked up or opened meanwhile), here or on its page: read where everything is now.
+            viewModelScope.launch { HolidayCardsRepository.movedOn.collect { if (lastReadAt != null) refresh() } }
+            // Its page read a card that moved on since the list was read: its row says the same.
+            viewModelScope.launch { HolidayCardsRepository.sentRead.collect { replace(it) } }
         }
 
         /** Sent opened: read it the first time, after a while, or on a new day ([zone]: the sender's own clock). */
@@ -220,13 +224,10 @@ class MailSentViewModel
             _takeBackError.value = null
             viewModelScope.launch {
                 when (val result = cards.takeBack(id)) {
-                    // The repository says it was taken back; [drop] takes it out of the list.
+                    // The repository says it was taken back; [drop] takes it out of the list. Too late, it says so
+                    // too, and the list reads again ([HolidayCardsRepository.movedOn]): the row shows where it is now.
                     is NetworkResult.Success -> Unit
-                    is NetworkResult.Failure -> {
-                        _takeBackError.value = id to takeBackMessage(result.error)
-                        // Too late: it was picked up (or opened) meanwhile, so its row says so now.
-                        refresh()
-                    }
+                    is NetworkResult.Failure -> _takeBackError.value = id to takeBackMessage(result.error)
                 }
                 _takingBack.value = null
             }
@@ -234,6 +235,13 @@ class MailSentViewModel
 
         private fun drop(id: String) {
             if (loaded.removeAll { it.id == id }) publish()
+        }
+
+        private fun replace(card: SentCard) {
+            val at = loaded.indexOfFirst { it.id == card.id }
+            if (at < 0 || (loaded[at].status == card.status && loaded[at].canTakeBack == card.canTakeBack)) return
+            loaded[at] = card
+            publish()
         }
 
         private fun publish() {
@@ -363,7 +371,7 @@ object MailSentWords {
             stamp = card.card?.let { MailStamp.forCard(it.number, it.design.orEmpty()) } ?: MailStamp.forPiece(card.id),
             note = null,
             meta = "",
-            accessibilityLabel = "Christmas card from ${from.removeSuffix(".")} to $to, $state.",
+            accessibilityLabel = "Christmas card from $from to $to, $state.",
             card = MailPieceCard(design = design, sealed = card.sealed),
         )
     }
