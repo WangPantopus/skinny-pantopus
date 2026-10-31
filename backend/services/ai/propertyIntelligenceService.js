@@ -740,6 +740,16 @@ async function getHomeAttomPropertyDetail(home) {
   };
 }
 
+/**
+ * ATTOM's value estimate for a home as last cached (Place asks for it), or
+ * null. Never asks ATTOM itself: Property details shows only what's on file.
+ */
+async function getCachedAttomValue(homeId) {
+  const cached = await getCachedRawAttom(homeId, { allowExpired: true });
+  const avm = getRawPayloadResponse(cached?.rawPayload, 'attomavm_detail')?.property?.[0]?.avm;
+  return avm && typeof avm === 'object' && !Array.isArray(avm) ? avm : null;
+}
+
 // ── Public API ─────────────────────────────────────────────────────────────
 
 /**
@@ -875,6 +885,7 @@ async function fetchAttomPropertyDetailSnapshot(p) {
 module.exports = {
   getProfile,
   getHomeAttomPropertyDetail,
+  getCachedAttomValue,
   CACHE_TTL_DAYS,
   fetchAttomPropertyDetailSnapshot,
   fetchAttomPropertyDetailBundle,
