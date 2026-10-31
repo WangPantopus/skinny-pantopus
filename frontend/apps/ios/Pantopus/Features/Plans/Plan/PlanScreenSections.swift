@@ -13,6 +13,7 @@ struct PlanScreenSections: View {
     let viewModel: PlanScreenViewModel
     let onOpenHost: (String) -> Void
     let onOpenRequests: () -> Void
+    let onInvite: () -> Void
     let onOpenChat: () -> Void
     let onChange: () -> Void
     let onCancel: () -> Void
@@ -23,6 +24,11 @@ struct PlanScreenSections: View {
             VStack(alignment: .leading, spacing: Spacing.s4) {
                 switch viewModel.mode {
                 case .browsing:
+                    if let invite = viewModel.openInvite {
+                        let words = PlanInviteCopy.banner(card: card, invite: invite)
+                        PlanBanner(tone: .success, icon: .partyPopper, title: words.title, message: words.message)
+                            .accessibilityIdentifier("planInviteBanner")
+                    }
                     PlanBrowsingSection(card: card, onOpenHost: onOpenHost)
                 case .requested:
                     PlanRequestedSection(card: card, myRequest: viewModel.plan?.myRequest)
@@ -35,6 +41,7 @@ struct PlanScreenSections: View {
                         viewModel: viewModel,
                         card: card,
                         onOpenRequests: onOpenRequests,
+                        onInvite: onInvite,
                         onOpenChat: onOpenChat,
                         onChange: onChange,
                         onCancel: onCancel,

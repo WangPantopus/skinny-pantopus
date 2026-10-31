@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -105,25 +106,30 @@ internal fun rowEnd(
     mine: Boolean,
 ): PlanRowEnd =
     when {
-        mine && plan.standing == PlanViewerStanding.HOSTING -> {
-            val requests = plan.requestsCount ?: 0
-            if (requests > 0) {
-                PlanRowEnd.Status(if (requests == 1) "1 request" else "$requests requests", PantopusIcon.Bell, PantopusColors.primary600)
-            } else {
-                // The subtitle already says "You're hosting" (board F2); iOS shows how many are going here too.
-                PlanRowEnd.Note("${plan.goingCount} going")
-            }
-        }
+        mine && plan.standing == PlanViewerStanding.HOSTING -> hostingEnd(plan)
         plan.standing == PlanViewerStanding.REQUESTED -> PlanRowEnd.Status("Requested", PantopusIcon.Clock)
         plan.standing == PlanViewerStanding.WAITLISTED ->
             PlanRowEnd.Status(plan.viewer?.waitlistPosition?.let { "On the waitlist · ${ordinal(it)}" } ?: "On the waitlist")
         plan.standing == PlanViewerStanding.IN -> PlanRowEnd.Status("You're in", PantopusIcon.Check, PantopusColors.success)
+        plan.standing == PlanViewerStanding.NONE && plan.myInvite?.status == "pending" ->
+            PlanRowEnd.Status("Invited", PantopusIcon.UserPlus, PantopusColors.primary600)
         mine -> PlanRowEnd.Chevron
         plan.planState == PlanState.LIVE -> PlanRowEnd.Note("${plan.goingCount} going")
         plan.isFull -> PlanRowEnd.Note("Full")
         plan.spotsLeft == 1 -> PlanRowEnd.Note("1 spot")
         else -> PlanRowEnd.Note("${plan.spotsLeft} spots")
     }
+
+/** A hosted plan's row end: its requests, else how many are going. */
+private fun hostingEnd(plan: PlanDto): PlanRowEnd {
+    val requests = plan.requestsCount ?: 0
+    return if (requests > 0) {
+        PlanRowEnd.Status(if (requests == 1) "1 request" else "$requests requests", PantopusIcon.Bell, PantopusColors.primary600)
+    } else {
+        // The subtitle already says "You're hosting" (board F2); iOS shows how many are going here too.
+        PlanRowEnd.Note("${plan.goingCount} going")
+    }
+}
 
 /** "1st", "2nd", "3rd", "4th". */
 internal fun ordinal(n: Int): String {
@@ -587,6 +593,9 @@ internal fun mainAction(plan: PlanDto): PlanMainAction? {
         else ->
             when {
                 plan.planState == PlanState.ENDED || plan.planState == PlanState.CANCELLED -> null
+                // The host's invitation: "I'm in" (as on iOS).
+                plan.myInvite?.isOpen == true && (viewer?.canAsk == true || viewer?.cannotAskReason == "full_use_waitlist") ->
+                    PlanMainAction(if (plan.isFull) "Join the waitlist" else "I'm in", isPrimary = true, asks = true)
                 viewer == null -> PlanMainAction("Ask to join", isPrimary = true, asks = true)
                 viewer.canAsk -> PlanMainAction(if (plan.isFull) "Join the waitlist" else "Ask to join", isPrimary = true, asks = true)
                 viewer.cannotAskReason == "full_use_waitlist" -> PlanMainAction("Join the waitlist", isPrimary = true, asks = true)
@@ -810,6 +819,7 @@ internal fun PlanPostedContent(
     onShare: () -> Unit,
     onSeePlan: () -> Unit,
     onDone: () -> Unit,
+    onInvite: (() -> Unit)? = null,
 ) {
     val scroll = rememberScrollState()
     Column(
@@ -834,7 +844,11 @@ internal fun PlanPostedContent(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-                PlanIconTile(icon = PantopusIcon.Link, background = PantopusColors.primary100, tint = PantopusColors.primary700)
+                PlanIconTile(
+                    icon = if (onInvite != null) PantopusIcon.UserPlus else PantopusIcon.Link,
+                    background = PantopusColors.primary100,
+                    tint = PantopusColors.primary700,
+                )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Invite friends",
@@ -843,17 +857,25 @@ internal fun PlanPostedContent(
                     )
                     Text(
                         text =
-                            if (plan.isAtHome) {
-                                "They see the plan's card, never your address."
-                            } else {
-                                "They see the plan's card and its area."
+                            when {
+                                // People invited are in when they say yes (planInvites.js), as on iOS.
+                                onInvite != null && plan.isAtHome ->
+                                    "People you invite are in when they say yes, and see your address then."
+                                onInvite != null -> "People you invite are in as soon as they say yes."
+                                plan.isAtHome -> "They see the plan's card, never your address."
+                                else -> "They see the plan's card and its area."
                             },
                         style = PantopusTextStyle.small,
                         color = PantopusColors.appTextSecondary,
                     )
                 }
             }
-            GhostButton(title = "Share link", onClick = onShare)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (onInvite != null) {
+                    GhostButton(title = "Invite", onClick = onInvite, modifier = Modifier.weight(1f).testTag("planPostedInvite"))
+                }
+                GhostButton(title = "Share link", onClick = onShare, modifier = Modifier.weight(1f))
+            }
         }
         PrimaryButton(title = "See your plan", onClick = onSeePlan, modifier = Modifier.height(50.dp))
         PlanTextButton(title = "Done", onClick = onDone)

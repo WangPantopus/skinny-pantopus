@@ -299,6 +299,8 @@ struct PlansMapView: View {
 /// Why a plan opens: to read it, straight to "Ask to join" (J3), or into its chat.
 enum PlanOpenIntent: Hashable {
     case view, ask, chat
+    /// Opened from an email or text invitation: the plan opens it for this account first.
+    case invite(token: String)
 }
 
 extension PlansMapView {

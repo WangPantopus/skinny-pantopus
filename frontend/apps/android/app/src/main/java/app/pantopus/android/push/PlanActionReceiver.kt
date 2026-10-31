@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import app.pantopus.android.MainActivity
 import app.pantopus.android.R
 import app.pantopus.android.core.security.AppLockManager
+import app.pantopus.android.data.api.models.plans.AskToJoinBody
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
@@ -102,7 +103,16 @@ class PlanActionReceiver : BroadcastReceiver() {
             STILL_COMING -> plans.stillComing(planId, coming = true)
             CANT_MAKE_IT_CHANGED -> plans.stillComing(planId, coming = false)
             CANT_MAKE_IT -> plans.withdraw(planId)
+            // An invitation: from the lock screen it's just them; they can change who's coming on the plan (as on iOS).
+            IM_IN -> plans.ask(planId, AskToJoinBody(partySize = 1, note = null)).asUnit()
+            CANT_MAKE_IT_INVITE -> plans.declineInvite(planId).asUnit()
             else -> missing()
+        }
+
+    private fun <T> NetworkResult<T>.asUnit(): NetworkResult<Unit> =
+        when (this) {
+            is NetworkResult.Success -> NetworkResult.Success(Unit)
+            is NetworkResult.Failure -> this
         }
 
     private fun missing(): NetworkResult<Unit> = NetworkResult.Failure(NetworkError.NotFound)
@@ -162,6 +172,7 @@ class PlanActionReceiver : BroadcastReceiver() {
         const val CATEGORY_REQUEST = "PLAN_REQUEST"
         const val CATEGORY_REMINDER = "PLAN_REMINDER"
         const val CATEGORY_CHANGED = "PLAN_CHANGED"
+        const val CATEGORY_INVITE = "PLAN_INVITE"
 
         const val ACCEPT = "PLAN_ACCEPT"
         const val DECLINE = "PLAN_DECLINE"
@@ -169,8 +180,11 @@ class PlanActionReceiver : BroadcastReceiver() {
         const val CANT_MAKE_IT = "PLAN_CANT_MAKE_IT"
         const val STILL_COMING = "PLAN_STILL_COMING"
         const val CANT_MAKE_IT_CHANGED = "PLAN_CANT_MAKE_IT_CHANGED"
+        const val IM_IN = "PLAN_IM_IN"
+        const val CANT_MAKE_IT_INVITE = "PLAN_CANT_MAKE_IT_INVITE"
 
-        private val ACTIONS = setOf(ACCEPT, DECLINE, ON_MY_WAY, CANT_MAKE_IT, STILL_COMING, CANT_MAKE_IT_CHANGED)
+        private val ACTIONS =
+            setOf(ACCEPT, DECLINE, ON_MY_WAY, CANT_MAKE_IT, STILL_COMING, CANT_MAKE_IT_CHANGED, IM_IN, CANT_MAKE_IT_INVITE)
 
         /** Refusals that mean "the host must confirm sharing their address first" (H10). */
         private val ADDRESS_CODES = setOf("confirm_shares_address", "confirm_shares_address_required", "needs_address_confirmation")
@@ -200,6 +214,7 @@ class PlanActionReceiver : BroadcastReceiver() {
                     DECLINE -> "Couldn't decline $who"
                     ON_MY_WAY -> "Couldn't send “On my way”"
                     STILL_COMING -> "Couldn't send “Still coming”"
+                    IM_IN -> "Couldn't say you're in"
                     else -> "Couldn't tell the host you can't make it"
                 }
             val reason =
@@ -229,6 +244,9 @@ class PlanActionReceiver : BroadcastReceiver() {
                         Button(STILL_COMING, "Still coming", needsUnlock = false),
                         Button(CANT_MAKE_IT_CHANGED, "Can't make it", needsUnlock = true),
                     )
+                // An invitation (never a playdate's, which asks the kids' ages first).
+                CATEGORY_INVITE ->
+                    listOf(Button(IM_IN, "I'm in", needsUnlock = true), Button(CANT_MAKE_IT_INVITE, "Can't make it", needsUnlock = true))
                 else -> null
             }
     }

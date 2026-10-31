@@ -26,6 +26,7 @@ const featureFlagService = require('../services/featureFlagService');
 const ballotSummary = require('../services/ballot/summary');
 const ballotGovernments = require('../services/ballot/governments');
 const { publicPlan } = require('../services/plans/planPublic');
+const planInvites = require('../services/plans/planInvites');
 
 // ============================================================
 // Public Preview Endpoints
@@ -33,21 +34,41 @@ const { publicPlan } = require('../services/plans/planPublic');
 // no user IDs, no exact addresses, no PII.
 // ============================================================
 
-// ── GET /api/public/plans/:id ───────────────────────────────
+// ── GET /api/public/plans/:id[?invite=<token>] ──────────────
 // Nearby Plans share page (web /plans/:id). Area only: no host user id, no
 // point, no viewer; a playdate answers only its kind and city (planPublic.js).
+// With an invitation's token, `invite` says whose it is and, for an email
+// invitation, a hint of the address to sign up with (planInvites.publicInvite).
 router.get('/plans/:id', async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try {
     const plan = await publicPlan(req.params.id);
     if (!plan) return res.status(404).json({ error: 'not_found', message: "This plan isn't available." });
-    recordFunnelEvent('plan_share_opened', { meta: { plan_id: req.params.id, kind: plan.kind } });
-    return res.json(plan);
+    const invite = typeof req.query.invite === 'string' ? await planInvites.publicInvite(req.params.id, req.query.invite) : null;
+    recordFunnelEvent('plan_share_opened', { meta: { plan_id: req.params.id, kind: plan.kind, ...(invite ? { invite: invite.channel } : {}) } });
+    return res.json(invite ? { ...plan, invite } : plan);
   } catch (err) {
     console.error('[public/plans] failed:', err.message);
     return res.status(500).json({ error: 'server_error', message: 'Something went wrong. Please try again.' });
   }
 });
+
+// ── POST /api/public/plans/invites/unsubscribe ──────────────
+// "Don't send me invitations" from a Plans invitation email: { token } from the
+// web page, or the mail app's one-click POST to …/unsubscribe/:token (RFC 8058).
+// Every invitation row for the address stops emails to it.
+async function unsubscribeInvites(token, res) {
+  try {
+    const done = await planInvites.unsubscribe(token);
+    if (!done) return res.status(404).json({ error: 'not_found', message: 'This link isn’t valid.' });
+    return res.json({ ok: true, email_hint: done.email_hint });
+  } catch (err) {
+    console.error('[public/plans/unsubscribe] failed:', err.message);
+    return res.status(500).json({ error: 'server_error', message: 'Something went wrong. Please try again.' });
+  }
+}
+router.post('/plans/invites/unsubscribe', (req, res) => unsubscribeInvites(req.body?.token, res));
+router.post('/plans/invites/unsubscribe/:token', (req, res) => unsubscribeInvites(req.params.token, res));
 
 // ── GET /api/public/gigs/:id ────────────────────────────────
 router.get('/gigs/:id', async (req, res) => {

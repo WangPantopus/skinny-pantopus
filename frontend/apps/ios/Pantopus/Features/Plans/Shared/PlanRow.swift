@@ -82,6 +82,19 @@ struct PlanRowModel: Identifiable, Equatable {
                 accessibilityLabel: "You're hosting. " + row.accessibilityLabel
             )
         }
+        // An invitation not answered yet: "Sam invited you · Sun 1:25 PM".
+        if viewer?.requestStatus == nil, let invite = card.myInvite, invite.status == .pending {
+            let row = listed(card, trailing: .status("Invited", .userPlus), now: now)
+            let host = PlanCardLines.firstName(card.host.displayName)
+            return PlanRowModel(
+                id: row.id,
+                kind: row.kind,
+                title: row.title,
+                subtitle: "\(host) invited you · \(row.subtitle)",
+                trailing: row.trailing,
+                accessibilityLabel: "\(host) invited you. " + row.accessibilityLabel
+            )
+        }
         let status: PlanRowTrailing = switch viewer?.requestStatus {
         case .accepted: .status("You're in", .check)
         case .waitlisted: .status(waitlistLabel(viewer?.waitlistPosition), nil)

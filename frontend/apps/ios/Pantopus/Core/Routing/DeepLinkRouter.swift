@@ -234,7 +234,8 @@ final class DeepLinkRouter {
         case creatorAudienceMembers
         /// `/plans/:id` — a Nearby Plan (share links, plan pushes). Opens in
         /// the Plans tab's stack; dropped while the `plans` flag is off.
-        case plan(id: String)
+        /// `?invite=` carries an email or text invitation for the plan to open.
+        case plan(id: String, invite: String?)
         /// `/plans/:id/requests` — the host's requests (H10).
         case planRequests(id: String)
         /// `/plans/new` — the host composer (H1).
@@ -580,7 +581,8 @@ final class DeepLinkRouter {
             // `/plans` (the tab), `/plans/new`, `/plans/:id`, `/plans/:id/requests`.
             guard let id = segments.dropFirst().first, !id.isEmpty else { return .plans }
             if id == "new" { return .planNew }
-            return segments.dropFirst(2).first == "requests" ? .planRequests(id: id) : .plan(id: id)
+            if segments.dropFirst(2).first == "requests" { return .planRequests(id: id) }
+            return .plan(id: id, invite: queryValue("invite", in: comps).flatMap { $0.isEmpty ? nil : $0 })
         case "notifications":
             return .notifications
         case "support-trains", "support_train":

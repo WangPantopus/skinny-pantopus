@@ -18,6 +18,7 @@ const { recordFunnelEvent } = require('../services/funnelEvents');
 const { loadViewer } = require('../services/plans/planViewer');
 const planService = require('../services/plans/planService');
 const planActions = require('../services/plans/planActions');
+const planInvites = require('../services/plans/planInvites');
 const planGames = require('../services/plans/planGames');
 const planPlaces = require('../services/plans/planPlaces');
 const { suggestPlaces } = require('../services/ai/planPlaceSuggest');
@@ -90,10 +91,14 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/plans/mine: hosting, going, asked, waitlisted, and recent (ended in the last two days).
+// GET /api/plans/mine: hosting, going, asked, waitlisted, invited (not answered yet), and recent (ended in the last
+// two days). Email invitations to the person's verified address become theirs first.
 router.get('/mine', async (req, res) => {
   try {
-    const viewer = await loadViewer(req.user, { point: pointFromQuery(req.query), gps: gpsFromQuery(req.query) });
+    const [viewer] = await Promise.all([
+      loadViewer(req.user, { point: pointFromQuery(req.query), gps: gpsFromQuery(req.query) }),
+      planInvites.attachEmailInvites(req.user),
+    ]);
     warmPlaces(viewer);
     return res.json(await planService.listMine(viewer));
   } catch (err) {
@@ -196,20 +201,38 @@ router.post('/places/suggest', aiDraftLimiter, async (req, res) => {
   }
 });
 
+// GET /api/plans/invites/next: right after signing in, the newest invitation the person hasn't opened, so the app
+// opens that plan ({ plan_id } or { plan_id: null }). An email invitation reaches them by their verified address.
+router.get('/invites/next', async (req, res) => {
+  try {
+    return res.json(await planInvites.nextInvite(req.user));
+  } catch (err) {
+    return serverError(res, err, 'invites_next', req);
+  }
+});
+
 // GET /api/plans/:id: PlanDetail for the host and people who are in, PlanCard for anyone else allowed to see it.
+// An invitation the person hadn't opened counts as opened.
 router.get('/:id', async (req, res) => {
   try {
-    const viewer = await loadViewer(req.user, { point: pointFromQuery(req.query), gps: gpsFromQuery(req.query) });
+    const [viewer] = await Promise.all([
+      loadViewer(req.user, { point: pointFromQuery(req.query), gps: gpsFromQuery(req.query) }),
+      planInvites.attachEmailInvites(req.user),
+    ]);
     const { plan, body } = await planService.getForViewer(req.params.id, viewer);
+    if (body?.my_invite) planInvites.markOpened(viewer.id, body.id).catch(() => {});
     if (!body) {
       // A playdate someone without a verified address opened from a link (J9):
-      // say only what the public web page says, so the app can explain why.
+      // say only what the public web page says, so the app can explain why,
+      // and who invited them when they hold an invitation.
       if (plan && plan.kind === 'playdate' && viewer.playdatesFlag && !viewer.verified
         && String(plan.host_user_id) !== viewer.id && plan.status === 'open') {
+        const invitedBy = await planInvites.lockedInviteFrom(viewer, plan).catch(() => null);
         return res.status(404).json({
           error: 'needs_verified_address',
           message: 'Playdates are for verified neighbors. Verify your address to see this one.',
           plan: { kind: 'playdate', city: plan.city || null },
+          invited_by: invitedBy,
         });
       }
       return fail(res, 404, 'not_found', "This plan isn't available.");
@@ -318,6 +341,72 @@ router.post('/:id/feedback', async (req, res) => {
     return res.json(await planActions.giveFeedback(req.user, req.params.id, body(req)));
   } catch (err) {
     return serverError(res, err, 'feedback', req);
+  }
+});
+
+// ── Invitations (services/plans/planInvites.js) ─────────────
+
+// GET /api/plans/:id/invites: the host's invitations, each with where it stands.
+router.get('/:id/invites', async (req, res) => {
+  try {
+    return res.json(await planInvites.listForHost(req.user, req.params.id));
+  } catch (err) {
+    return serverError(res, err, 'invites', req);
+  }
+});
+
+// GET /api/plans/:id/invites/people?q=: people the host can invite (connections and people who came to their
+// plans), with where each stands on this plan.
+router.get('/:id/invites/people', requireFeatureFlag('plans_invites'), async (req, res) => {
+  try {
+    return res.json(await planInvites.peopleToInvite(req.user, req.params.id, req.query.q));
+  } catch (err) {
+    return serverError(res, err, 'invite_people', req);
+  }
+});
+
+// POST /api/plans/:id/invites { user_ids?, emails?, confirm_shares_address? }: invite people on Pantopus and by email.
+router.post('/:id/invites', requireFeatureFlag('plans_invites'), async (req, res) => {
+  try {
+    return res.status(201).json(await planInvites.createInvites(req.user, req.params.id, body(req)));
+  } catch (err) {
+    return serverError(res, err, 'invite', req);
+  }
+});
+
+// POST /api/plans/:id/invites/link { confirm_shares_address? }: a one-person link for the host to text.
+router.post('/:id/invites/link', requireFeatureFlag('plans_invites'), async (req, res) => {
+  try {
+    return res.status(201).json(await planInvites.createLinkInvite(req.user, req.params.id, body(req)));
+  } catch (err) {
+    return serverError(res, err, 'invite_link', req);
+  }
+});
+
+// POST /api/plans/:id/invites/claim { token }: the person opened an email or text invitation.
+router.post('/:id/invites/claim', async (req, res) => {
+  try {
+    return res.json(await planInvites.claimInvite(req.user, req.params.id, body(req).token));
+  } catch (err) {
+    return serverError(res, err, 'invite_claim', req);
+  }
+});
+
+// POST /api/plans/:id/invites/decline: "Can't make it". Saying "I'm in" is the ask (POST /:id/requests).
+router.post('/:id/invites/decline', async (req, res) => {
+  try {
+    return res.json(await planInvites.declineInvite(req.user, req.params.id, { io: req.app.get('io') }));
+  } catch (err) {
+    return serverError(res, err, 'invite_decline', req);
+  }
+});
+
+// DELETE /api/plans/:id/invites/:inviteId: the host takes back an invitation nobody said yes to.
+router.delete('/:id/invites/:inviteId', async (req, res) => {
+  try {
+    return res.json(await planInvites.cancelInvite(req.user, req.params.id, req.params.inviteId));
+  } catch (err) {
+    return serverError(res, err, 'invite_cancel', req);
   }
 });
 
