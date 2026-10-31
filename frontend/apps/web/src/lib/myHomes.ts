@@ -60,10 +60,14 @@ export function claimAddress(claim: Pick<MyClaim, 'claim_type' | 'home'>): { lin
 
 /**
  * What a Place page says instead of "no place" while your claim is in review: `what` (Today, Your home…)
- * fills in once it's approved. Names the address you claimed when the server sent it.
+ * fills in once it's approved. Names the address you claimed when the server sent it. When a Pantopus
+ * reviewer asked for more (Request info) and no document answered it yet, it says so; My Homes shows the note.
  */
-export function claimInReviewNote(claim: Pick<MyClaim, 'home'>, what: string): { title: string; description: string } {
+export function claimInReviewNote(claim: Pick<MyClaim, 'home' | 'info_request'>, what: string): { title: string; description: string } {
   const { line, city } = claimedParts(claim);
   const claimed = line ? `You claimed ${[line, city].filter(Boolean).join(', ')}. ` : '';
+  if (claim.info_request && !claim.info_request.responded_at) {
+    return { title: 'Pantopus needs one more thing', description: `${claimed}A reviewer asked for something before they can finish your claim. Check its status to see the note.` };
+  }
   return { title: 'Your claim is in review', description: `${claimed}${what} fills in here once a Pantopus reviewer approves your claim.` };
 }

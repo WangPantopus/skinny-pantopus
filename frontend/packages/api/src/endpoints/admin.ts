@@ -32,6 +32,10 @@ export interface AdminClaim {
     profile_picture_url: string | null;
   } | null;
   evidence_count: number;
+  /** When the last review action (approve, reject, flag, Request info) happened. */
+  reviewed_at?: string | null;
+  /** On a claim waiting on the claimant (Request info): documents they sent after the request. */
+  documents_since_request?: number;
 }
 
 export interface ClaimEvidence {

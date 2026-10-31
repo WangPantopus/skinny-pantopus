@@ -60,15 +60,42 @@ async function mutate({ homeId = null, claimId, actorId, action, reviewToken = n
   if (action === 'withdraw' && (result.withdrawn !== true || result.deleted !== false)) throw failure();
   if (action === 'approve' && (!result.occupancy?.id || result.occupancy.home_id !== result.homeId
     || result.occupancy.user_id !== result.claimantId || result.state !== 'approved')) throw failure();
-  // Notifications are a best-effort consequence of the committed receipt.
-  if (platformAdmin && !result.replayed && ['approve','reject','request_more_info'].includes(action)) {
-    const methods = { approve: 'notifyOwnershipClaimApproved', reject: 'notifyOwnershipClaimRejected', request_more_info: 'notifyOwnershipClaimNeedsMoreInfo' };
+  // Notifications are a best-effort consequence of the committed receipt. The claimant hears every decision, Pantopus's
+  // or a household owner's; only Pantopus asks for more (Request info), and only Pantopus's note reaches them.
+  const method = { approve: 'notifyOwnershipClaimApproved', reject: 'notifyOwnershipClaimRejected',
+    ...(platformAdmin ? { request_more_info: 'notifyOwnershipClaimNeedsMoreInfo' } : {}) }[action];
+  if (method && !result.replayed) {
     try {
-      await require('./notificationService')[methods[action]]({ userId: result.claimantId, homeId: result.homeId,
-        homeName: 'your home', reason: action === 'reject' ? note || undefined : undefined });
+      const claim = await claimForNotice(claimId);
+      const reviewerNote = platformAdmin && typeof note === 'string' && note.trim() ? note.trim() : null;
+      await require('./notificationService')[method]({ userId: result.claimantId, homeId: result.homeId,
+        homeName: claim.address || 'your home', claimId, claimType: claim.claimType,
+        reason: action === 'reject' ? reviewerNote || undefined : undefined, note: reviewerNote });
     } catch (error) { logger.warn('Claim review notification failed after commit', { claimId, errorCode: error.code }); }
   }
   return result;
+}
+// The address the claimant entered (their own claim may name it) and the claim's kind, for its notice.
+async function claimForNotice(claimId) {
+  try {
+    const { data } = await db.from('HomeOwnershipClaim').select('claim_type, home:home_id ( address, address2 )')
+      .eq('id', claimId).maybeSingle();
+    const address = [data?.home?.address, data?.home?.address2].map(part => part?.trim()).filter(Boolean).join(' ');
+    return { address: address || null, claimType: data?.claim_type || null };
+  } catch (_) { return { address: null, claimType: null }; }
+}
+// The first document a claimant adds after Pantopus asked for more (Request info) tells the review team by email.
+// Best effort: the upload stands either way.
+async function tellReviewersAboutReply(claimId) {
+  try {
+    const { data: claim } = await db.from('HomeOwnershipClaim')
+      .select('id, claim_type, state, reviewed_at, claimant_user_id, home:home_id ( city, state )').eq('id', claimId).maybeSingle();
+    if (claim?.state !== 'needs_more_info' || !claim.reviewed_at) return false;
+    const { data: documents, error } = await db.from('HomeVerificationEvidence').select('id')
+      .eq('claim_id', claimId).neq('evidence_type', 'idv').gt('created_at', claim.reviewed_at);
+    if (error || documents?.length !== 1) return false;
+    return await require('./adminAlerts').notifyClaimInfoSent({ claim, home: claim.home });
+  } catch (_) { return false; }
 }
 function sendError(res, error) {
   const safe = error?.code && (Object.hasOwn(MESSAGES, error.code) || error.code === 'CLAIM_REVIEW_UNAVAILABLE') ? error : failure();
@@ -81,4 +108,4 @@ async function recordProvider({ homeId, claimId, actorId, result }) {
   if (typeof receipt.evidenceId !== 'string') throw failure();
   return receipt;
 }
-module.exports = { read, mutate, recordProvider, sendError };
+module.exports = { read, mutate, recordProvider, sendError, tellReviewersAboutReply };

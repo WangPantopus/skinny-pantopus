@@ -62,16 +62,23 @@ async function enrichClaims(claims) {
   }
 
   const claimIds = list.map(c => c.id);
+  const byId = new Map(list.map(c => [c.id, c]));
   let evidenceCountMap = {};
+  const sinceRequestMap = {};
   if (claimIds.length > 0) {
     const { data: evidenceCounts } = await supabaseAdmin
       .from('HomeVerificationEvidence')
-      .select('claim_id, evidence_type')
+      .select('claim_id, evidence_type, created_at')
       .in('claim_id', claimIds);
     // Documents only: a claim's identity check isn't one.
     for (const e of (evidenceCounts || [])) {
       if (e.evidence_type === 'idv') continue;
       evidenceCountMap[e.claim_id] = (evidenceCountMap[e.claim_id] || 0) + 1;
+      // A claim waiting on the claimant (Request info) counts the documents they sent after the request.
+      const claim = byId.get(e.claim_id);
+      if (claim?.state === 'needs_more_info' && claim.reviewed_at && Date.parse(e.created_at) > Date.parse(claim.reviewed_at)) {
+        sinceRequestMap[e.claim_id] = (sinceRequestMap[e.claim_id] || 0) + 1;
+      }
     }
   }
 
@@ -80,6 +87,7 @@ async function enrichClaims(claims) {
     home: homesMap[c.home_id] || null,
     claimant: usersMap[c.claimant_user_id] || null,
     evidence_count: evidenceCountMap[c.id] || 0,
+    documents_since_request: sinceRequestMap[c.id] || 0,
   }));
 }
 
@@ -115,6 +123,7 @@ router.get('/pending-claims', async (req, res) => {
         challenge_state,
         method,
         risk_score,
+        reviewed_at,
         created_at,
         updated_at
       `)
@@ -173,6 +182,7 @@ router.get('/claims', async (req, res) => {
         challenge_state,
         method,
         risk_score,
+        reviewed_at,
         created_at,
         updated_at
       `, { count: 'exact' })

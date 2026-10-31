@@ -22,6 +22,7 @@ const { feeOnApproval, grantVerifiedTypeFee } = require('../services/businessEnt
 const stripeService = require('../stripe/stripeService');
 const s3 = require('../services/s3Service');
 const businessVerificationStorage = require('../services/businessVerificationStorage');
+const notificationService = require('../services/notificationService');
 
 // A reviewer opens each document through a short-lived link instead of a stored URL.
 const DOCUMENT_LINK_SECONDS = 10 * 60;
@@ -203,6 +204,17 @@ router.post('/:evidenceId/reject', async (req, res) => {
 // Shared review logic
 // ============================================================
 
+// The business's owners hear the decision (a turn-down with the reviewer's note). Best effort: the review stands.
+async function tellBusinessOwners(businessId, decision, notes, nonprofit) {
+  try {
+    const { data: business } = await supabaseAdmin.from('User').select('name, username').eq('id', businessId).maybeSingle();
+    await notificationService.notifyBusinessVerificationDecision({ businessId, businessName: business?.name || business?.username,
+      approved: decision === 'approved', note: notes, nonprofit });
+  } catch (err) {
+    logger.warn('Business verification notice failed after review', { businessId, error: err.message });
+  }
+}
+
 async function reviewEvidence(evidenceId, decision, adminUserId, notes) {
   // Fetch evidence row
   const { data: evidence, error: fetchErr } = await supabaseAdmin
@@ -239,6 +251,7 @@ async function reviewEvidence(evidenceId, decision, adminUserId, notes) {
   }
 
   let verificationStatus = null;
+  let nonprofitVerified = false;
 
   if (decision === 'approved') {
     // Upgrade business verification status to document_verified
@@ -286,32 +299,8 @@ async function reviewEvidence(evidenceId, decision, adminUserId, notes) {
           .update({ attributes: attrs, updated_at: now })
           .eq('business_user_id', businessId);
 
-        // Create in-app notification for the business owner
-        try {
-          const { data: owner } = await supabaseAdmin
-            .from('BusinessTeam')
-            .select('user_id')
-            .eq('business_user_id', businessId)
-            .eq('role_base', 'owner')
-            .eq('is_active', true)
-            .maybeSingle();
-
-          if (owner) {
-            await supabaseAdmin
-              .from('Notification')
-              .insert({
-                user_id: owner.user_id,
-                type: 'nonprofit_verified',
-                title: 'Nonprofit Status Verified',
-                body: 'Your 501(c)(3) nonprofit status has been verified. Your platform fee is now 0%.',
-                metadata: { business_user_id: businessId, fee_override_pct: 0 },
-              });
-          }
-        } catch (notifErr) {
-          logger.warn('Failed to send nonprofit verification notification', {
-            businessId, error: notifErr.message,
-          });
-        }
+        // The owners' notice below says the nonprofit status and the 0% fee.
+        nonprofitVerified = true;
 
         logger.info('Nonprofit EIN approved: fee set to 0%, awaiting flag cleared', { businessId });
       }
@@ -336,6 +325,8 @@ async function reviewEvidence(evidenceId, decision, adminUserId, notes) {
     decision,
     notes: notes || null,
   });
+
+  await tellBusinessOwners(businessId, decision, notes, nonprofitVerified);
 
   return {
     data: {

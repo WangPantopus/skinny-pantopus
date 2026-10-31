@@ -1,4 +1,6 @@
+import type { ReactElement } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import EvidencePage from '../src/app/(app)/app/homes/[id]/claim-owner/evidence/page';
 import ResidencyPage from '../src/app/(app)/app/homes/[id]/verify-residency/page';
@@ -25,13 +27,17 @@ beforeEach(() => {
   upload.mockResolvedValue({ message: 'Saved', evidence: {} } as never);
   Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: jest.fn(() => 'upload-operation-a') });
 });
+// The pages read your claims (a reviewer's note) through React Query, which the app's layout provides.
+function show(page: ReactElement) {
+  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{page}</QueryClientProvider>);
+}
 function choose(container: HTMLElement, label = /Lease Agreement/) {
   fireEvent.click(screen.getByRole('button', { name: label }));
   fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
 }
 test('an unknown upload result retries the same claim, file and upload operation without another claim', async () => {
   upload.mockRejectedValueOnce(new Error('Connection interrupted'));
-  const view = render(<EvidencePage />); choose(view.container);
+  const view = show(<EvidencePage />); choose(view.container);
   fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }));
   await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Connection interrupted'));
   expect(push).not.toHaveBeenCalled();
@@ -44,7 +50,7 @@ test('an unknown upload result retries the same claim, file and upload operation
 });
 test('a failed current-session check prevents claim submission and byte upload', async () => {
   assertCurrent.mockRejectedValue(new Error('Session changed'));
-  const view = render(<EvidencePage />); choose(view.container);
+  const view = show(<EvidencePage />); choose(view.container);
   fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }));
   await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Session changed'));
   expect(submit).not.toHaveBeenCalled(); expect(upload).not.toHaveBeenCalled();
@@ -52,7 +58,7 @@ test('a failed current-session check prevents claim submission and byte upload',
 test('a late upload success after session replacement cannot report submission or navigate', async () => {
   let resolve!: (value: never) => void;
   upload.mockImplementation(() => new Promise(done => { resolve = done; }));
-  const view = render(<EvidencePage />); choose(view.container);
+  const view = show(<EvidencePage />); choose(view.container);
   fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }));
   await waitFor(() => expect(upload).toHaveBeenCalled());
   assertCurrent.mockRejectedValue(new Error('Session changed'));
@@ -61,13 +67,13 @@ test('a late upload success after session replacement cannot report submission o
 });
 test('unsupported household challenges do not upload bytes or promise automatic challenge activation', async () => {
   submit.mockResolvedValue({ message: 'Review needed', claim: { id: 'claim-a', status: 'under_review', routing_classification: 'challenge_claim' } });
-  const view = render(<EvidencePage />); choose(view.container);
+  const view = show(<EvidencePage />); choose(view.container);
   fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }));
   await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('dedicated household challenge review')));
   expect(upload).not.toHaveBeenCalled(); expect(push).not.toHaveBeenCalled();
 });
 test('residency manual upload offers only supported residency documents, with one exact private upload', async () => {
-  const view = render(<ResidencyPage />); choose(view.container, /Lease agreement/);
+  const view = show(<ResidencyPage />); choose(view.container, /Lease agreement/);
   expect(screen.queryByRole('button', { name: /Government ID/ })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }));
   await waitFor(() => expect(push).toHaveBeenCalled());
@@ -75,7 +81,7 @@ test('residency manual upload offers only supported residency documents, with on
   expect(upload).toHaveBeenCalledTimes(1);
 });
 test('no file picker is available before opening identity is loaded', () => {
-  opened = false; const view = render(<EvidencePage />);
+  opened = false; const view = show(<EvidencePage />);
   expect(view.container.querySelector('input[type="file"]')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Submit for review' })).not.toBeInTheDocument();
 });
