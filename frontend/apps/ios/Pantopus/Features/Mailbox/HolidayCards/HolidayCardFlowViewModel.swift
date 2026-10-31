@@ -426,7 +426,7 @@ extension HolidayCardFlowViewModel {
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         if let field = (json["details"] as? [[String: Any]])?.first {
             if field["field"] as? String == "to.email" {
-                return "That email address doesn’t look right. Go back to the first step and check it."
+                return "That email address doesn’t look right. Go back to “Who it’s for” and check it."
             }
             if let message = (field["message"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
                 return message

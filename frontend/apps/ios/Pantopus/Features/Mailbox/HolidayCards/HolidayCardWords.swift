@@ -24,9 +24,9 @@ enum HolidayCardWords {
         format(iso, "EEEE, MMMM d", calendar: calendar)
     }
 
-    /// "Dec 10, 2026".
+    /// "December 10, 2026", as the card's link page says it.
     static func dayWithYear(_ iso: String?, calendar: Calendar = .current) -> String {
-        format(iso, "MMM d, yyyy", calendar: calendar)
+        format(iso, "MMMM d, yyyy", calendar: calendar)
     }
 
     /// "7 a.m.", or "7:30 a.m." when it isn't on the hour.

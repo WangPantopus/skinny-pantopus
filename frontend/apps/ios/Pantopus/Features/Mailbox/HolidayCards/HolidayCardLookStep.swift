@@ -321,7 +321,7 @@ struct HolidayCardLookStep: View {
             .hidden()
             .overlay { back }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("On the back: \(note) From \(from).")
+            .accessibilityLabel("On the back: \(note) From \(HolidayCardWords.withoutPeriod(from)).")
     }
 
     private func sectionLabel(_ text: String) -> some View {
