@@ -14,6 +14,8 @@ struct PlanAskSheet: View {
     let card: PlanCardDTO
     /// The request being changed (J5 "Change who's coming").
     let previous: PlanAskPrefill?
+    /// The host invited them: saying they're in lets them in, no request (planInvites.js).
+    var invited = false
     /// Sends the request: nil when it went through, else why not (the server's sentence, as on Android).
     let onSend: (AskToJoinBody) async -> String?
 
@@ -77,7 +79,7 @@ struct PlanAskSheet: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Ask \(hostFirst) to join")
+                Text(invited ? "Join \(hostFirst)'s plan" : "Ask \(hostFirst) to join")
                     .planFont(.h3)
                     .foregroundStyle(Theme.Color.appText)
                     .accessibilityAddTraits(.isHeader)
@@ -225,7 +227,8 @@ struct PlanAskSheet: View {
 
     private var sendTitle: String {
         if previous != nil { return "Update request" }
-        return card.isFull ? "Join the waitlist" : "Send request"
+        if card.isFull { return "Join the waitlist" }
+        return invited ? "I'm in" : "Send request"
     }
 
     private var canSend: Bool {

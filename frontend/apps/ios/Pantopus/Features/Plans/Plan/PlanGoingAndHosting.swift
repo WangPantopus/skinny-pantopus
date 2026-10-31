@@ -263,6 +263,7 @@ struct PlanHostingSection: View {
     let viewModel: PlanScreenViewModel
     let card: PlanCardDTO
     let onOpenRequests: () -> Void
+    let onInvite: () -> Void
     let onOpenChat: () -> Void
     let onChange: () -> Void
     let onCancel: () -> Void
@@ -293,6 +294,7 @@ struct PlanHostingSection: View {
             )
         } else {
             requests
+            invite
             going
             HStack(spacing: 10) {
                 Button(action: onOpenChat) { PlanButtonLabel(title: "Message guests", icon: .messageCircle, kind: .secondary) }
@@ -350,6 +352,37 @@ struct PlanHostingSection: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityIdentifier("planRequestsCard")
+        }
+    }
+
+    /// "Invite friends": people they know, by email or by text (PlanInviteSheet), with how it stands.
+    @ViewBuilder private var invite: some View {
+        if let invites = card.invites, invites.canInvite {
+            Button(action: onInvite) {
+                HStack(spacing: Spacing.s3) {
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .fill(Theme.Color.primary100)
+                        .frame(width: 44, height: 44)
+                        .overlay(Icon(.userPlus, size: 22, color: Theme.Color.primary700))
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Invite friends").planFont(.bodyStrong).foregroundStyle(Theme.Color.appText)
+                        Text(PlanInviteHostLines.summary(invites, atHome: card.placeKind == .home))
+                            .planFont(.small)
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                            .lineLimit(2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Icon(.chevronRight, size: 16, color: Theme.Color.appTextMuted)
+                }
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: Radii.xl2, style: .continuous).fill(Theme.Color.appSurface))
+                .overlay(RoundedRectangle(cornerRadius: Radii.xl2, style: .continuous).stroke(Theme.Color.appBorder, lineWidth: 1))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("planInviteCard")
         }
     }
 
@@ -440,5 +473,20 @@ struct PlanHostingSection: View {
         guard let first = parts.first else { return "Going" }
         parts[0] = first.prefix(1).uppercased() + first.dropFirst()
         return parts.joined(separator: " · ")
+    }
+}
+
+/// The host's invitation summary (the same on Android).
+enum PlanInviteHostLines {
+    /// "3 waiting · 1 said yes", or what inviting does before anyone is invited.
+    static func summary(_ invites: PlanHostInvitesDTO, atHome: Bool) -> String {
+        var parts: [String] = []
+        if invites.invited > 0 { parts.append("\(invites.invited) waiting") }
+        if invites.saidYes > 0 { parts.append("\(invites.saidYes) said yes") }
+        if invites.cantMakeIt > 0 { parts.append("\(invites.cantMakeIt) can't make it") }
+        if !parts.isEmpty { return parts.joined(separator: " · ") }
+        return atHome
+            ? "People on Pantopus, by email or text. They see your address once they say they're in."
+            : "People on Pantopus, by email or text. They're in as soon as they say yes."
     }
 }

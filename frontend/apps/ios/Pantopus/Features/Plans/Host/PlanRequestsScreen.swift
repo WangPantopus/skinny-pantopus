@@ -305,6 +305,14 @@ struct PlanRequestCard: View {
                     StatusChip(party, variant: .neutral).accessibilityLabel(party)
                 }
                 .accessibilityElement(children: .combine)
+                // A forwarded email invitation: the host sees whose address it went to before saying yes.
+                if let address = request.openedInviteTo {
+                    PlanFactRow(icon: .mail, text: "Opened your invitation to \(address)", strong: false)
+                        .accessibilityIdentifier("planRequestInvite")
+                } else if request.invited {
+                    PlanFactRow(icon: .userPlus, text: "You invited them", strong: false)
+                        .accessibilityIdentifier("planRequestInvite")
+                }
                 if let note = request.note, !note.isEmpty {
                     Text("\u{201C}\(note)\u{201D}")
                         .planFont(.body)

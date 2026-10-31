@@ -166,6 +166,7 @@ struct PlanPostedScreen: View {
     @State private var dropped = false
     @State private var areaShown = false
     @State private var landed = 0
+    @State private var showsInvite = false
 
     var body: some View {
         GeometryReader { geo in
@@ -178,6 +179,7 @@ struct PlanPostedScreen: View {
         }
         .sensoryFeedback(.success, trigger: landed)
         .onAppear(perform: drop)
+        .sheet(isPresented: $showsInvite) { PlanInviteSheet(card: plan.card) }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planPosted")
     }
@@ -235,26 +237,35 @@ struct PlanPostedScreen: View {
             }
             PlanCardBox(padding: Spacing.s4) {
                 VStack(alignment: .leading, spacing: 10) {
+                    let canInvite = plan.card.invites?.canInvite == true
                     HStack(spacing: Spacing.s3) {
                         RoundedRectangle(cornerRadius: 13, style: .continuous)
                             .fill(Theme.Color.primary100)
                             .frame(width: 44, height: 44)
-                            .overlay(Icon(.link, size: 22, color: Theme.Color.primary700))
+                            .overlay(Icon(canInvite ? .userPlus : .link, size: 22, color: Theme.Color.primary700))
                         VStack(alignment: .leading, spacing: 0) {
                             Text("Invite friends").planFont(.bodyStrong).foregroundStyle(Theme.Color.appText)
-                            Text(plan.card.placeKind == .home
-                                ? "They see the plan's card, never your address."
-                                : "They see the plan's card and its area.")
+                            Text(inviteLine(canInvite: canInvite))
                                 .planFont(.small)
                                 .foregroundStyle(Theme.Color.appTextSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    if let url = plan.card.shareUrl.flatMap(URL.init(string:)) {
-                        ShareLink(item: url, message: Text(plan.card.title)) {
-                            PlanButtonLabel(title: "Share link", icon: .share, kind: .secondary)
+                    HStack(spacing: 10) {
+                        if canInvite {
+                            Button { showsInvite = true } label: {
+                                PlanButtonLabel(title: "Invite", icon: .userPlus, kind: .secondary)
+                            }
+                            .planButton(.secondary, size: .small)
+                            .accessibilityIdentifier("planPostedInvite")
                         }
-                        .planButton(.secondary, size: .small)
-                        .accessibilityIdentifier("planPostedShare")
+                        if let url = plan.card.shareUrl.flatMap(URL.init(string:)) {
+                            ShareLink(item: url, message: Text(plan.card.title)) {
+                                PlanButtonLabel(title: "Share link", icon: .share, kind: .secondary)
+                            }
+                            .planButton(.secondary, size: .small)
+                            .accessibilityIdentifier("planPostedShare")
+                        }
                     }
                 }
             }
@@ -275,6 +286,18 @@ struct PlanPostedScreen: View {
                 .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: -6)
                 .ignoresSafeArea(edges: .bottom)
         )
+    }
+
+    /// What inviting does: people invited are in when they say yes; the open link shows the card and the area.
+    private func inviteLine(canInvite: Bool) -> String {
+        if canInvite {
+            return plan.card.placeKind == .home
+                ? "People you invite are in when they say yes, and see your address then."
+                : "People you invite are in as soon as they say yes."
+        }
+        return plan.card.placeKind == .home
+            ? "They see the plan's card, never your address."
+            : "They see the plan's card and its area."
     }
 
     /// Board P3 "Post a plan": the pin drops 16 pt in 220 ms with a small

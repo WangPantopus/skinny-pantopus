@@ -321,10 +321,10 @@ final class PlansMapViewModel {
         sheetStop == .peek && phase == .needsLocation ? .half : sheetStop
     }
 
-    /// Your plans, hosting first.
+    /// Your plans: invitations waiting for an answer first, then hosting.
     var yourPlans: [PlanCardDTO] {
         guard let mine else { return [] }
-        return mine.hosting + mine.going + mine.asked + mine.waitlisted
+        return mine.invited + mine.hosting + mine.going + mine.asked + mine.waitlisted
     }
 
     /// Your plans after the type filter: the list's "Your plans" follows the chip, as the map and the days do.

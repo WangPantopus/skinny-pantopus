@@ -157,6 +157,10 @@ struct PlanMainAction: Equatable {
         case .waitlisted: return PlanMainAction(title: "On the waitlist", isPrimary: false)
         default: break
         }
+        // The host's invitation: "I'm in" (as on Android).
+        if card.myInvite?.isOpen == true, viewer.canAsk || viewer.cannotAskReason == .fullUseWaitlist {
+            return PlanMainAction(title: card.isFull ? "Join the waitlist" : "I'm in", isPrimary: true, asks: true)
+        }
         if viewer.canAsk { return PlanMainAction(title: card.isFull ? "Join the waitlist" : "Ask to join", isPrimary: true, asks: true) }
         if viewer.cannotAskReason == .fullUseWaitlist { return PlanMainAction(title: "Join the waitlist", isPrimary: true, asks: true) }
         return nil
@@ -189,6 +193,10 @@ enum PlanCardLines {
     /// board J6 and the Android app. Playdates: "Maya approves each family".
     static func approval(_ card: PlanCardDTO) -> String {
         let first = firstName(card.host.displayName)
+        // The host's invitation: no request (or, opened from another address, the host says yes first), as Android.
+        if card.viewer?.isHost != true, let invite = card.myInvite, invite.isOpen {
+            return invite.needsHostOk ? "\(first) says yes first" : "Invited by \(first) · no request needed"
+        }
         if card.kind == .playdate { return "\(first) approves each family" }
         let rule = card.viewer?.isHost == true ? card.autoRules?.first : card.viewer?.autoRule
         switch rule {
