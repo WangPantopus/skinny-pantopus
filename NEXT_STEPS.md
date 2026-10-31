@@ -611,12 +611,14 @@ Decided October 26–27 (section 0). Four sessions (server, iPhone, Android, web
 
 Decided October 30 (section 0). Christmas cards are built behind `holiday_cards`, which needs `mailbox` on too, and both are off in every hosted environment and store build, so nobody sees a card until you switch them on. With both keys on:
 - **The way in.** At the top of their own Mail, people get "Send a Christmas card".
-- **Four screens.**
+- **Five screens.**
   1. Who it's for: a person found by name, or an email address.
   2. Pick a card: one of your 17 pictures.
   3. Write on the back: a note of up to 300 letters.
   4. Seal it for the day: with the morning mail, sealed until Christmas, or on Christmas morning.
+  5. Look it over: exactly what the other person will get. For a person, that's their Mailbox on the day it comes, the sealed notice if it's sealed, the card sliding out of its envelope, and its back. By email, it's the email, the page its link opens, and the card once they join. "Seal and send" is only here.
 - **One card a day.** A card can be taken back until the carrier's 7 a.m. pickup, which frees the day.
+- **Sent.** A Sent drawer in Mail lists the cards you sent, newest first. Cards still waiting for the 7 a.m. pickup come first, where you can take them back, then the rest by the day you sent them, each saying where it is now. Sent never says whether a card was opened. A card's page shows the card with your note and its trail. While a card waits for the pickup, the mailbox's flag is up. Sent needs only `mailbox`; the flag and everything about sending need `holiday_cards` too.
 - **Receiving.** The card comes as a red envelope. A sealed one stays shut, with its seal and the days left, until 7 a.m. on December 25 where the other person lives. Opening it slides the card out; turning it over shows the note.
 - **Christmas morning.** The 7 a.m. mail notice also counts the sealed cards that open that morning.
 
@@ -634,8 +636,15 @@ Decided October 30 (section 0). Christmas cards are built behind `holiday_cards`
   - Android → iPhone: a sealed card. It showed sealed on the iPhone and stayed unopened; once its seal was lifted, it opened from its envelope there.
 
   After a cold relaunch on both phones and a web reload, every app showed the same three cards opened, and senders saw "Today's card … In their mailbox now."
-- [ ] Before sending, the last screen can't know the other person's clock. It shows the day from the sender's own next morning, which can be one day off for someone in another time zone during the hours between their two 7 a.m.s. After sending, the card always shows the right day and the exact pickup time.
-- [ ] Not checked: real email delivery, pushes on real phones, physical phones, store review, Release builds with `holiday_cards`, and cards switched on in staging or production.
+- [x] Before sending, the last screen shows the arrival day by the other person's own clock ([#3020](https://github.com/WangPantopus/skinny-pantopus/pull/3020)).
+- [x] Look it over and Sent, approved on October 30 ("Yes, draw it", "Approve, write plan", "Go, start them") and built the same day, one PR per part: the server ([#3026](https://github.com/WangPantopus/skinny-pantopus/pull/3026), [#3029](https://github.com/WangPantopus/skinny-pantopus/pull/3029)), the web ([#3030](https://github.com/WangPantopus/skinny-pantopus/pull/3030), [#3037](https://github.com/WangPantopus/skinny-pantopus/pull/3037)), iPhone ([#3042](https://github.com/WangPantopus/skinny-pantopus/pull/3042), [#3045](https://github.com/WangPantopus/skinny-pantopus/pull/3045)) and Android ([#3041](https://github.com/WangPantopus/skinny-pantopus/pull/3041), [#3043](https://github.com/WangPantopus/skinny-pantopus/pull/3043)). There are no new tables, no migration and no new key. The nightly clean-up keeps a card in its sender's Sent after the other person shreds theirs. A card's stamp now comes from its picture's number on every app, so the stamp you look over is the stamp that arrives.
+- [x] The check across the three apps for Look it over and Sent (October 30, against a local backend):
+  - Each app sent a card after looking it over, and another app opened it first: iPhone → web, web → Android, and Android → iPhone (a sealed card, opened once its seal was lifted with the test clock). Each card matched what its sender looked over, apart from the name on the envelope (below).
+  - Sent on all three showed every state. Taking a card back worked before the pickup, from the list and from a card's page. After the pickup it said "The carrier has already picked up your card." and the card stayed. The flag was up while a card waited and down after the pickup or a take-back.
+  - A card by email went through to joining. The email and the page its link opens matched the look word for word. The new person had the card in their Mailbox, and the sender's Sent said "They joined Pantopus and have it".
+  - A cold relaunch on both phones and a web reload kept Sent as it was. With both keys off, no app showed Mail, as today.
+- [x] Kept on purpose: the other person's own Mailbox addresses the envelope with their account name ("Maya Ortiz"). Look it over and Sent show the name the sender knows them by ("Maya O."), so a sender never sees anything they didn't already know.
+- [ ] Not checked: real email delivery, pushes on real phones, physical phones, store review, Release builds with `holiday_cards`, screen readers speaking aloud, and cards switched on in staging or production.
 - [ ] Yours, to switch cards on. Mail goes on first (the Mail section above). How to set each key is in the [flags doc](docs/launch-scope-flags-2026-10-01.md#switching-a-feature-back-on).
   - [ ] Store builds by about December 1, so both stores approve by about December 10. Set the Actions variable `PANTOPUS_LAUNCH_FEATURES` to `mailbox,holiday_cards`, then cut and submit the iOS and Android builds and hold them for manual release. Both apps know the key, so the builds accept it.
   - [ ] On the day: release the apps. Then add `holiday_cards` to the production server's `LAUNCH_FEATURES` and to Vercel's `NEXT_PUBLIC_LAUNCH_FEATURES`, and redeploy the web. Someone still on an older app sees a card as a plain letter; a sealed one says it opens on Christmas morning and stays shut.
