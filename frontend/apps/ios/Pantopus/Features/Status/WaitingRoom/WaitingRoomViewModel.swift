@@ -72,7 +72,6 @@ public final class WaitingRoomViewModel {
     /// Claim reference shown in the waiting room = first 8 chars of the id.
     private static let claimRefLength = 8
 
-    private let seedState: WaitingRoomState
     private var claimId: String?
     /// The claim is a renter's residency document (`claim_type` "resident").
     private var claimIsResidency = false
@@ -90,7 +89,6 @@ public final class WaitingRoomViewModel {
         webPresenter: ConnectWebPresenting? = nil
     ) {
         self.homeId = homeId
-        seedState = state
         self.api = api
         self.webPresenter = webPresenter ?? ConnectWebPresenter()
         authority = HomeDashboardAccess(homeId: homeId, api: api)
@@ -150,15 +148,22 @@ public final class WaitingRoomViewModel {
             let canOpenHome = await opensHomeScreen()
             leavesToMyHomes = !canOpenHome
 
+            // A Pantopus reviewer's open request (Request info) shows with their note; the
+            // seeded frame only fills the room until the claim loads.
             content =
-                seedState == .moreInfoRequested
-                    ? .moreInfoRequested(
+                if let request = claim.openInfoRequest {
+                    .moreInfoRequested(
                         address: home.address,
                         claimRef: ref,
                         submittedOn: Self.dayCaption(claim.createdAt),
+                        note: request.note,
+                        askedOn: Self.dayCaption(request.requestedAt),
+                        residency: claimIsResidency,
+                        approval: claim.approval,
                         canOpenHome: canOpenHome
                     )
-                    : .active(
+                } else {
+                    .active(
                         address: home.address,
                         claimRef: ref,
                         submittedOn: Self.dayCaption(claim.createdAt),
@@ -169,6 +174,7 @@ public final class WaitingRoomViewModel {
                         approval: claim.approval,
                         canOpenHome: canOpenHome
                     )
+                }
             phase = .loaded
         } catch {
             logger.warning("waitingRoom.load failed: \(error.localizedDescription)")

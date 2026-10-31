@@ -218,6 +218,7 @@ export type {
   HouseholdResolutionState,
   HouseholdRemovalVote,
   ClaimApprovalProgress,
+  ClaimInfoRequest,
   ClaimReviewApproval,
   ClaimIdentityCheckState,
   ClaimProofState,

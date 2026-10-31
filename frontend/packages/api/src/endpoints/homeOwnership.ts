@@ -60,10 +60,22 @@ export interface OwnershipClaim {
   has_evidence?: boolean | null;
   /** What a claim in review still needs before it can be approved; null otherwise or when unknown. */
   approval?: ClaimApprovalProgress | null;
+  /** What a Pantopus reviewer asked for (Request info) while the claim waits; null when nothing is asked. */
+  info_request?: ClaimInfoRequest | null;
   /** The address the person claimed (their own entry), on GET /api/homes/my-ownership-claims. */
   home?: { address: string | null; address2: string | null; city: string | null; state: string | null } | null;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * A Pantopus reviewer's request for more on a claim in review: their note (null when they wrote none), when they
+ * asked, and when the claimant's first document after it came in (null until then).
+ */
+export interface ClaimInfoRequest {
+  note: string | null;
+  requested_at: string;
+  responded_at: string | null;
 }
 
 /**

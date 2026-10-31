@@ -10,7 +10,10 @@ test('binds actor, exact Home/claim, displayed snapshot and explicit platform ga
   await service.mutate({ homeId: 'home', claimId: 'claim', actorId: 'actor', action: 'approve', reviewToken: 'a'.repeat(64), note: 'Reviewed' });
   expect(rpc).toHaveBeenCalledWith('mutate_home_claim_review', { p_home_id: 'home', p_claim_id: 'claim', p_actor_id: 'actor', p_action: 'approve',
     p_review_token: 'a'.repeat(64), p_note: 'Reviewed', p_platform_admin: false, p_validity_days: 365 });
-  expect(from).not.toHaveBeenCalled(); expect(notification.notifyOwnershipClaimApproved).not.toHaveBeenCalled(); from.mockRestore();
+  // A household owner's decision reaches the claimant too, without the owner's note; the only read is the claim's address.
+  expect(from.mock.calls.map(([table]) => table)).toEqual(['HomeOwnershipClaim']);
+  expect(notification.notifyOwnershipClaimApproved).toHaveBeenCalledWith(expect.objectContaining({ userId: 'target', homeId: 'home',
+    claimId: 'claim', note: null })); from.mockRestore();
 });
 test('platform authority is explicit and notification failure does not invent rollback', async () => {
   const rpc = jest.fn(async () => ({ data: approved })); db.setRpcMock(rpc); notification.notifyOwnershipClaimApproved.mockRejectedValueOnce(new Error('transport'));
