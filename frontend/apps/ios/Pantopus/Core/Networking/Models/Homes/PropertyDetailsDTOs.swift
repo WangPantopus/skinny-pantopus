@@ -3,10 +3,10 @@
 //  Pantopus
 //
 //  DTOs for `GET /api/homes/:id/property-details` — route
-//  `backend/routes/home.js:2991`. Only the `home` property fields are
-//  modelled; the response's opaque ATTOM `attom_property_detail` payload
-//  + `source` / `unavailable_reason` aren't surfaced by the A13.5 screen
-//  (no clean mapping for the Records / Verification provenance sections).
+//  `backend/routes/home.js:1949`. The `home` property fields and the
+//  verified owner's `county_record` (the ATTOM record as labeled sections)
+//  are modelled; the raw `attom_property_detail` payload + `source` /
+//  `unavailable_reason` aren't surfaced by the A13.5 screen.
 //  Field-for-field parity with the Android `PropertyDetailsDtos.kt`.
 //
 
@@ -108,7 +108,47 @@ public struct PropertyHomeDTO: Decodable, Sendable {
     }
 }
 
+/// `county_record`: the verified owner's ATTOM record as labeled sections,
+/// worded and formatted by `backend/serializers/countyRecordSerializer.js`.
+public struct PropertyCountyRecordDTO: Decodable, Sendable, Hashable {
+    public let sections: [PropertyRecordSectionDTO]
+    /// "From county records via ATTOM · updated Sep 28, 2026".
+    public let footer: String?
+}
+
+/// One titled card of record rows (Building, Lot, Value…).
+public struct PropertyRecordSectionDTO: Decodable, Sendable, Hashable {
+    public let id: String
+    public let title: String
+    public let rows: [PropertyRecordRowDTO]
+    /// Caption under the card, e.g. the value estimate's "isn't an appraisal".
+    public let note: String?
+}
+
+/// One label / value row, shown as the server words it.
+public struct PropertyRecordRowDTO: Decodable, Sendable, Hashable {
+    public let id: String
+    public let label: String
+    public let value: String
+    /// Numbers, measurements and codes render monospaced.
+    public let mono: Bool?
+}
+
 /// Envelope for `GET /api/homes/:id/property-details`.
 public struct PropertyDetailsResponse: Decodable, Sendable {
     public let home: PropertyHomeDTO
+    /// The county record; the server sends it to verified owners only.
+    public let countyRecord: PropertyCountyRecordDTO?
+
+    private enum CodingKeys: String, CodingKey {
+        case home
+        case countyRecord = "county_record"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        home = try c.decode(PropertyHomeDTO.self, forKey: .home)
+        // A record that doesn't decode leaves the home's own facts on screen.
+        countyRecord = try? c.decodeIfPresent(PropertyCountyRecordDTO.self, forKey: .countyRecord)
+    }
 }

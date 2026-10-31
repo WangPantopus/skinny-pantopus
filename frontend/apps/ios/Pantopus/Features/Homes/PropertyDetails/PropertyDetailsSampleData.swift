@@ -20,11 +20,13 @@ public enum PropertyDetailsSampleData {
     )
 
     /// Records section is identical across both frames.
-    private static let records: [PropertyFactRow] = [
-        PropertyFactRow(id: "parcel", label: "Parcel ID", value: "NY-013-0042-019", mono: true),
-        PropertyFactRow(id: "class", label: "Property class", value: "Residential", sub: "Multi-family · 4–6 unit"),
-        PropertyFactRow(id: "zoning", label: "Zoning", value: "R5", mono: true),
-        PropertyFactRow(id: "assessed", label: "Last assessed", value: "$1.24M", sub: "2025 county roll", mono: true)
+    private static let records: [PropertyRecordSection] = [
+        PropertyRecordSection(id: "records", title: "Records", rows: [
+            PropertyFactRow(id: "parcel", label: "Parcel ID", value: "NY-013-0042-019", mono: true),
+            PropertyFactRow(id: "class", label: "Property class", value: "Residential", sub: "Multi-family · 4–6 unit"),
+            PropertyFactRow(id: "zoning", label: "Zoning", value: "R5", mono: true),
+            PropertyFactRow(id: "assessed", label: "Last assessed", value: "$1.24M", sub: "2025 county roll", mono: true)
+        ])
     ]
 
     /// FRAME 1 — all sources agree.
@@ -38,7 +40,7 @@ public enum PropertyDetailsSampleData {
             PropertyFactRow(id: "interior", label: "Interior", value: "845 sq ft", mono: true),
             PropertyFactRow(id: "lot", label: "Lot share", value: "1/6", sub: "6-unit building", mono: true)
         ],
-        records: records,
+        recordSections: records,
         verification: [
             VerificationSource(
                 id: "county",
@@ -80,7 +82,7 @@ public enum PropertyDetailsSampleData {
             PropertyFactRow(id: "interior", label: "Interior", value: "845 sq ft", mono: true),
             PropertyFactRow(id: "lot", label: "Lot share", value: "1/6", sub: "6-unit building", mono: true)
         ],
-        records: records,
+        recordSections: records,
         verification: [
             VerificationSource(
                 id: "county",
