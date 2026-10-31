@@ -1944,7 +1944,9 @@ router.get('/:id', verifyToken, async (req, res) => {
 /**
  * GET /api/homes/:id/property-details
  * Resolve ATTOM-backed property details for a home, using saved home data,
- * raw ATTOM cache, or live ATTOM fetches as needed.
+ * raw ATTOM cache, or live ATTOM fetches as needed. The county record (the
+ * ATTOM bundle and its labeled `county_record` sections) is for verified
+ * owners; everyone else gets the Home's own facts (OWNER_ONLY).
  */
 router.get('/:id/property-details', verifyToken, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');

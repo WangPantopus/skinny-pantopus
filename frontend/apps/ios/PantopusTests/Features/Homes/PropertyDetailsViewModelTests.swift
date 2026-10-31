@@ -94,7 +94,7 @@ final class PropertyDetailsViewModelTests: XCTestCase {
 
     func test_sampleData_monoFlagsOnExpectedRows() {
         let monoIds: Set<String> = ["year", "beds", "baths", "interior", "lot", "parcel", "zoning", "assessed"]
-        let rows = PropertyDetailsSampleData.clean.propertyFacts + PropertyDetailsSampleData.clean.records
+        let rows = PropertyDetailsSampleData.clean.propertyFacts + PropertyDetailsSampleData.clean.recordSections.flatMap(\.rows)
         for row in rows where monoIds.contains(row.id) {
             XCTAssertTrue(row.mono, "Row \(row.id) should render monospaced")
         }
@@ -103,7 +103,7 @@ final class PropertyDetailsViewModelTests: XCTestCase {
     }
 
     func test_sampleData_cleanAndMismatchShareRecords() {
-        XCTAssertEqual(PropertyDetailsSampleData.clean.records, PropertyDetailsSampleData.mismatch.records)
+        XCTAssertEqual(PropertyDetailsSampleData.clean.recordSections, PropertyDetailsSampleData.mismatch.recordSections)
         XCTAssertNil(PropertyDetailsSampleData.clean.banner)
         XCTAssertNotNil(PropertyDetailsSampleData.mismatch.banner)
     }
