@@ -268,9 +268,22 @@ function PickStep({
   const picked = (chosen && byId.get(chosen)) || null;
   const rowRef = useRef<HTMLDivElement>(null);
 
-  // The row scrolls sideways: keep the chosen collection's chip in sight.
+  // On narrow screens the row scrolls sideways (wider ones wrap it): keep the chosen collection's chip in sight, also
+  // after the screen turns. Only the row moves, never the page.
   useEffect(() => {
-    rowRef.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    const row = rowRef.current;
+    if (!row) return undefined;
+    const reveal = () => {
+      const chip = row.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (!chip) return;
+      const box = row.getBoundingClientRect();
+      const at = chip.getBoundingClientRect();
+      if (at.left < box.left + 16) row.scrollLeft -= box.left + 16 - at.left;
+      else if (at.right > box.right - 16) row.scrollLeft += at.right - (box.right - 16);
+    };
+    reveal();
+    window.addEventListener('resize', reveal);
+    return () => window.removeEventListener('resize', reveal);
   }, [shownId]);
 
   // Arrow keys, Home and End move along the row, as tabs do.
@@ -329,7 +342,7 @@ function PickStep({
             aria-label="Collections"
             data-testid="sendCardCollections"
             onKeyDown={onRowKey}
-            className="-mx-4 flex scroll-px-4 gap-2 overflow-x-auto px-4 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="-mx-4 flex scroll-px-4 gap-2 overflow-x-auto px-4 py-1 [scrollbar-width:none] md:flex-wrap md:overflow-visible [&::-webkit-scrollbar]:hidden"
           >
             {shelves.map((collection) => {
               const selected = collection.id === shown.id;
