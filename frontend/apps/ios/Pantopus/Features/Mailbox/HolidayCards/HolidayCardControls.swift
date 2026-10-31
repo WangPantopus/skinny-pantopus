@@ -118,7 +118,8 @@ struct HolidayCardRow: View {
     private func thumbs(_ designs: [String]) -> some View {
         ZStack(alignment: .topLeading) {
             ForEach(Array(designs.enumerated()), id: \.element) { index, design in
-                HolidayCardPictureView(design: design, thumb: true)
+                let known = cards.designs.first { $0.id == design }
+                HolidayCardPictureView(design: design, paper: known?.paper, height: known?.height, thumb: true)
                     .frame(width: 40)
                     .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
                     .shadow(color: MailPaper.cardShadow.opacity(0.28), radius: 4, x: 0, y: 3)
