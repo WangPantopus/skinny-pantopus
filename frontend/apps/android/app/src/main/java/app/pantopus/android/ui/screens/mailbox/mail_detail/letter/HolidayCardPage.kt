@@ -184,6 +184,7 @@ internal fun HolidayCardOutOfEnvelope(
                         paper = card.paper,
                         year = card.year,
                         mailedOn = card.mailedOn,
+                        pictureHeight = card.pictureHeight,
                         modifier = Modifier.shadow(10.dp, shape).clip(shape),
                     )
                 },

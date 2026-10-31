@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.api.models.mailbox.HolidayCardDesign
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SentHolidayCard
 import app.pantopus.android.ui.components.Shimmer
@@ -435,7 +436,7 @@ internal fun SentCardSection(
                 .testTag("sendCardSent"),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        SentCardBox(card, title, arrivalLine(card, zone))
+        SentCardBox(card, cards.designOf(card.design), title, arrivalLine(card, zone))
         takeBackLine(card, zone)?.let {
             Text(
                 it,
@@ -493,6 +494,7 @@ internal fun SentCardSection(
 @Composable
 private fun SentCardBox(
     card: SentHolidayCard,
+    picture: HolidayCardDesign?,
     title: String,
     line: String,
 ) {
@@ -507,7 +509,9 @@ private fun SentCardBox(
                 .padding(Spacing.s4),
         horizontalArrangement = Arrangement.spacedBy(Spacing.s4),
     ) {
-        card.design?.let { design -> TiltedThumb(design, width = 84.dp, tilt = -2f) }
+        card.design?.let { design ->
+            TiltedThumb(design, width = 84.dp, tilt = -2f, pictureHeight = picture?.height, paper = picture?.paper)
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 title.uppercase(),
@@ -571,12 +575,17 @@ private fun takeBackLine(
                 "${HolidayCardTimes.shortDay(card.takeBackUntil, zone)}, when the carrier picks it up."
     }
 
-/** A card's picture, small and tilted, with a soft shadow. */
+/**
+ * A card's picture, small and tilted, with a soft shadow; its [paper] at the picture's shape ([pictureHeight], the
+ * server's) while it loads.
+ */
 @Composable
 internal fun TiltedThumb(
     design: String,
     width: Dp,
     tilt: Float,
+    pictureHeight: Int? = null,
+    paper: String? = null,
 ) {
     val shape = RoundedCornerShape(2.dp)
     AsyncImage(
@@ -585,10 +594,13 @@ internal fun TiltedThumb(
         contentScale = ContentScale.FillBounds,
         modifier =
             Modifier
-                .size(width = width, height = width / HolidayCardArt.pictureAspect(design))
+                .size(width = width, height = width / HolidayCardArt.pictureAspect(design, pictureHeight))
                 .rotate(tilt)
                 .shadow(4.dp, shape)
                 .clip(shape)
-                .background(PantopusColors.cardPaper),
+                .background(HolidayCardArt.paper(paper)),
     )
 }
+
+/** The season's picture with this [id], with its caption, paper and height; null for one it doesn't have. */
+internal fun HolidayCardsResponse.designOf(id: String?): HolidayCardDesign? = designs.firstOrNull { it.id == id }

@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
@@ -41,6 +42,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -157,13 +159,16 @@ private fun Opening(
 
 /**
  * A Christmas card's envelope: whole while it's unopened or sealed until Christmas morning; once opened, torn across the
- * top with the card's picture peeking out.
+ * top with the card's picture peeking out. Wherever it shows (the Mailbox, Sent, the look), the card's picture is
+ * loaded ahead, so the card never comes out of its envelope blank.
  */
 @Composable
 private fun CardOpening(
     piece: MailPieceModel,
     card: MailPieceCard,
 ) {
+    val context = LocalContext.current
+    LaunchedEffect(card.design) { HolidayCardArt.loadAhead(context, card.design) }
     if (!piece.opened || card.sealed) return ChristmasEnvelope(piece, card)
     Box(modifier = Modifier.fillMaxWidth()) {
         val shape = RoundedCornerShape(2.dp)

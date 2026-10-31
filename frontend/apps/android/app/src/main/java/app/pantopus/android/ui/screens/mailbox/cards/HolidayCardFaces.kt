@@ -70,7 +70,8 @@ private class CardScale(
 /**
  * The picture side of a Christmas card: the founder's photo (with its own cream border) and, under it, the strip the
  * app prints as the original card had it: the picture's caption by hand, CHRISTMAS, 2026, and a red postmark with the
- * day it was mailed ([mailedOn]; none while it's being written).
+ * day it was mailed ([mailedOn]; none while it's being written). [pictureHeight] is the server's height for a picture
+ * the app doesn't carry, so the card has its shape (plain paper) while the picture loads.
  */
 @Composable
 fun HolidayCardFront(
@@ -81,13 +82,14 @@ fun HolidayCardFront(
     modifier: Modifier = Modifier,
     mailedOn: String? = null,
     thumb: Boolean = false,
+    pictureHeight: Int? = null,
 ) {
     val paperColor = remember(paper) { HolidayCardArt.paper(paper) }
     BoxWithConstraints(
         modifier =
             modifier
                 .fillMaxWidth()
-                .aspectRatio(HolidayCardArt.cardAspect(design))
+                .aspectRatio(HolidayCardArt.cardAspect(design, pictureHeight))
                 .background(paperColor),
     ) {
         val scale = CardScale(constraints.maxWidth.toFloat(), LocalDensity.current)
@@ -96,7 +98,7 @@ fun HolidayCardFront(
                 model = HolidayCardArt.picture(design, thumb),
                 contentDescription = null,
                 contentScale = ContentScale.FillBounds,
-                modifier = Modifier.fillMaxWidth().aspectRatio(HolidayCardArt.pictureAspect(design)),
+                modifier = Modifier.fillMaxWidth().aspectRatio(HolidayCardArt.pictureAspect(design, pictureHeight)),
             )
             PrintedStrip(caption.orEmpty(), year, mailedOn, scale)
         }

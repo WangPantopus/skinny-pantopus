@@ -83,9 +83,10 @@ data class MailPostmark(
 )
 
 /**
- * `card` on a piece: a Christmas card (launch key `holiday_cards`). The app carries the picture itself, by [design], and
- * prints the [caption], the year and the postmark under it. A card is still a letter (`kind` letter). While [sealed]
- * (until [sealedUntil], 7 a.m. on Christmas morning where the person lives) its note stays on the server.
+ * `card` on a piece: a Christmas card (launch key `holiday_cards`). The app carries the first 17 pictures itself
+ * and loads any other from the website, by [design], and prints the [caption], the year and the postmark under it. A
+ * card is still a letter (`kind` letter). While [sealed] (until [sealedUntil], 7 a.m. on Christmas morning where the
+ * person lives) its note stays on the server.
  */
 @JsonClass(generateAdapter = true)
 data class MailCard(
@@ -100,6 +101,8 @@ data class MailCard(
     val arrival: String? = null,
     @Json(name = "sealed_until") val sealedUntil: String? = null,
     val sealed: Boolean = false,
+    /** The picture's height at 960 pixels wide (null for a picture the server doesn't know). */
+    val height: Int? = null,
 )
 
 /**

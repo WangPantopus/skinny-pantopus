@@ -234,6 +234,7 @@ private fun ColumnScope.BothSides(
                 paper = card.paper,
                 year = card.year,
                 mailedOn = card.mailedOn,
+                pictureHeight = card.pictureHeight,
                 modifier = Modifier.shadow(6.dp, shape).clip(shape),
             )
         },
@@ -476,5 +477,6 @@ private fun sentLetterCard(card: SentCard): MailLetterCard? {
         mailedOn = card.envelope?.postmarkedOn ?: card.sentAt,
         note = card.note.orEmpty().trim(),
         firstOpen = false,
+        pictureHeight = face.height,
     )
 }

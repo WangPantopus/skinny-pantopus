@@ -2,9 +2,11 @@
 
 package app.pantopus.android.ui.screens.mailbox.cards
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +19,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -44,13 +49,21 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.CollectionInfo
+import androidx.compose.ui.semantics.CollectionItemInfo
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.collectionInfo
+import androidx.compose.ui.semantics.collectionItemInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -62,12 +75,14 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
+import app.pantopus.android.data.api.models.mailbox.HolidayCardCollection
 import app.pantopus.android.data.api.models.mailbox.HolidayCardDesign
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.ui.components.firstTapClosesKeyboard
@@ -342,7 +357,12 @@ private fun Hint(
 
 // ── Step 2: pick a card ──────────────────────────────────────
 
-/** The pictures in three columns: a tap chooses one, a second tap shows it large. */
+/**
+ * The pictures in three columns: a tap chooses one, a second tap shows it large. With the server's collections, a row
+ * of their names on one line that scrolls sideways, who the one shown is for, and its pictures. It opens on the
+ * collection that holds the card already chosen (coming back from step 3), else the first; switching keeps the card
+ * chosen. A server without collections: one grid of every picture.
+ */
 @Composable
 internal fun PickStep(
     cards: HolidayCardsResponse,
@@ -352,40 +372,35 @@ internal fun PickStep(
 ) {
     var large by rememberSaveable { mutableStateOf<String?>(null) }
     val picked = cards.designs.firstOrNull { it.id == chosen }
-    Column(modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s3)) {
-        Column(modifier = Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
-            cards.designs.chunked(3).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-                    row.forEach { design ->
-                        DesignTile(
-                            design = design,
-                            selected = design.id == chosen,
-                            onTap = { if (design.id == chosen) large = design.id else onChoose(design.id) },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
-                }
+    val context = LocalContext.current
+    // The chosen card's full picture, for "See it larger" and the back it's written on.
+    LaunchedEffect(chosen) { chosen?.let { HolidayCardArt.loadAhead(context, it) } }
+    val collections = cards.collections.filter { collection -> collection.designs.any { cards.designOf(it) != null } }
+    val opening = collections.firstOrNull { chosen in it.designs } ?: collections.firstOrNull()
+    var shown by rememberSaveable { mutableStateOf(opening?.id) }
+    val collection = collections.firstOrNull { it.id == shown } ?: collections.firstOrNull()
+    Column(modifier = Modifier.padding(top = Spacing.s3)) {
+        if (collection != null) {
+            CollectionRow(collections, shown = collection.id, onShow = { shown = it })
+            if (collection.line.isNotBlank()) {
+                Text(
+                    collection.line,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    color = PantopusColors.cardTextQuiet,
+                    modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s2).testTag("sendCardCollectionLine"),
+                )
             }
         }
-        Column(modifier = Modifier.padding(top = Spacing.s6), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (picked != null) {
-                CardButton(
-                    "See it larger",
-                    onClick = { large = picked.id },
-                    kind = CardButtonKind.Paper,
-                    modifier = Modifier.testTag("sendCardSeeLarger"),
-                )
-            } else {
-                Text(
-                    "Tap a picture to choose it.",
-                    fontSize = 14.sp,
-                    color = PantopusColors.cardTextQuiet,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            CardButton("Write on this card", onClick = onNext, enabled = picked != null, modifier = Modifier.testTag("sendCardWriteOn"))
+        Column(modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = if (collection != null) Spacing.s3 else 0.dp)) {
+            // Every thumb of the collection shown loads at once (the grid isn't lazy), the ones below the fold too.
+            DesignGrid(
+                designs = collection?.designs?.mapNotNull { cards.designOf(it) } ?: cards.designs,
+                label = collection?.name,
+                chosen = chosen,
+                onTap = { design -> if (design == chosen) large = design else onChoose(design) },
+            )
+            PickButtons(picked, onLarge = { large = it }, onNext = onNext)
         }
     }
     cards.designs.firstOrNull { it.id == large }?.let { design ->
@@ -398,6 +413,153 @@ internal fun PickStep(
                 large = null
             },
         )
+    }
+}
+
+/**
+ * The collections' names, in the server's order, on one line that scrolls sideways; the one [shown] is wax red. A
+ * screen reader reads the row as "Collections" and each name as a tab, selected or not.
+ */
+@Composable
+private fun CollectionRow(
+    collections: List<HolidayCardCollection>,
+    shown: String,
+    onShow: (String) -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = Spacing.s4)
+                .semantics { contentDescription = "Collections" }
+                .selectableGroup()
+                .testTag("sendCardCollections"),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        collections.forEach { collection ->
+            CollectionChip(collection, selected = collection.id == shown, onSelect = { onShow(collection.id) })
+        }
+    }
+}
+
+/** A collection's name on a pill: card stock, or wax red while it's shown, and then scrolled into view. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun CollectionChip(
+    collection: HolidayCardCollection,
+    selected: Boolean,
+    onSelect: () -> Unit,
+) {
+    val inView = remember { BringIntoViewRequester() }
+    var size by remember { mutableStateOf(IntSize.Zero) }
+    // The row's margin stays beside it, as at either end of the row.
+    val margin = with(LocalDensity.current) { Spacing.s4.toPx() }
+    LaunchedEffect(selected, size) {
+        if (selected && size != IntSize.Zero) inView.bringIntoView(Rect(-margin, 0f, size.width + margin, size.height.toFloat()))
+    }
+    Box(
+        modifier =
+            Modifier
+                .onSizeChanged { size = it }
+                .bringIntoViewRequester(inView)
+                .heightIn(min = 36.dp)
+                .clip(CircleShape)
+                .background(if (selected) PantopusColors.cardWax else PantopusColors.cardField)
+                .then(if (selected) Modifier else Modifier.border(1.dp, PantopusColors.cardFieldEdge, CircleShape))
+                .selectable(selected = selected, role = Role.Tab, onClick = onSelect)
+                .padding(horizontal = Spacing.s4, vertical = Spacing.s2)
+                .testTag("sendCardCollection.${collection.id}"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            collection.name,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = if (selected) PantopusColors.cardWaxText else PantopusColors.cardTextBody,
+            maxLines = 1,
+        )
+    }
+}
+
+/**
+ * The pictures in three columns. With collections, a screen reader names the grid after the collection ([label]) and
+ * reads it as a grid.
+ */
+@Composable
+private fun DesignGrid(
+    designs: List<HolidayCardDesign>,
+    label: String?,
+    chosen: String?,
+    onTap: (String) -> Unit,
+) {
+    val rows = designs.chunked(3)
+    Column(
+        modifier =
+            Modifier
+                .then(
+                    if (label != null) {
+                        Modifier.semantics {
+                            contentDescription = label
+                            collectionInfo = CollectionInfo(rowCount = rows.size, columnCount = 3)
+                        }
+                    } else {
+                        Modifier
+                    },
+                ).selectableGroup(),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s4),
+    ) {
+        rows.forEachIndexed { rowIndex, row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                row.forEachIndexed { columnIndex, design ->
+                    DesignTile(
+                        design = design,
+                        selected = design.id == chosen,
+                        onTap = { onTap(design.id) },
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .then(
+                                    if (label != null) {
+                                        Modifier.semantics { collectionItemInfo = CollectionItemInfo(rowIndex, 1, columnIndex, 1) }
+                                    } else {
+                                        Modifier
+                                    },
+                                ),
+                    )
+                }
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/** "See it larger" once a card is chosen (else how to choose one), and "Write on this card". */
+@Composable
+private fun PickButtons(
+    picked: HolidayCardDesign?,
+    onLarge: (String) -> Unit,
+    onNext: () -> Unit,
+) {
+    Column(modifier = Modifier.padding(top = Spacing.s6), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (picked != null) {
+            CardButton(
+                "See it larger",
+                onClick = { onLarge(picked.id) },
+                kind = CardButtonKind.Paper,
+                modifier = Modifier.testTag("sendCardSeeLarger"),
+            )
+        } else {
+            Text(
+                "Tap a picture to choose it.",
+                fontSize = 14.sp,
+                color = PantopusColors.cardTextQuiet,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        CardButton("Write on this card", onClick = onNext, enabled = picked != null, modifier = Modifier.testTag("sendCardWriteOn"))
     }
 }
 
@@ -424,7 +586,7 @@ private fun DesignTile(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .aspectRatio(HolidayCardArt.pictureAspect(design.id))
+                    .aspectRatio(HolidayCardArt.pictureAspect(design.id, design.height))
                     .shadow(if (selected) 6.dp else 4.dp, shape)
                     .clip(shape)
                     .background(HolidayCardArt.paper(design.paper))
@@ -483,10 +645,16 @@ private fun LargeCard(
                 caption = design.caption,
                 paper = design.paper,
                 year = year,
+                pictureHeight = design.height,
                 modifier = Modifier.shadow(16.dp, RoundedCornerShape(3.dp)).clip(RoundedCornerShape(3.dp)),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                CardButton("Close", onClick = onClose, kind = CardButtonKind.Paper, modifier = Modifier.weight(1f))
+                CardButton(
+                    "Close",
+                    onClick = onClose,
+                    kind = CardButtonKind.Paper,
+                    modifier = Modifier.weight(1f).testTag("sendCardLargeClose"),
+                )
                 CardButton("Choose this card", onClick = onChoose, modifier = Modifier.weight(1f).testTag("sendCardChooseThis"))
             }
         }
@@ -522,6 +690,7 @@ internal fun WriteStep(
                     caption = design.caption,
                     paper = design.paper,
                     year = year,
+                    pictureHeight = design.height,
                     modifier = Modifier.shadow(10.dp, shape).clip(shape),
                 )
             },
