@@ -329,7 +329,7 @@ function PickStep({
             aria-label="Collections"
             data-testid="sendCardCollections"
             onKeyDown={onRowKey}
-            className="-mx-4 flex scroll-px-4 gap-2 overflow-x-auto px-4 py-1"
+            className="-mx-4 flex scroll-px-4 gap-2 overflow-x-auto px-4 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
             {shelves.map((collection) => {
               const selected = collection.id === shown.id;
