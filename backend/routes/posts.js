@@ -1229,6 +1229,30 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
 
     const isHomeIdentityPost = postAs === 'home' && !!homeContext;
 
+    // Reuse the existing Post primary key for retries of one composer command.
+    const commandId = req.body.clientRequestId;
+    const postId = commandPostId(userId, commandId);
+    const selection = `*, creator:user_id (${SAFE_CREATOR_SELECT}), business_author:business_author_id (${SAFE_CREATOR_SELECT}), home:home_id (id, address, city)`;
+    const readRetry = async () => {
+      const { data, error: readError } = await supabaseAdmin.from('Post')
+        .select(selection).eq('id', postId).maybeSingle();
+      if (readError) throw readError;
+      return data;
+    };
+    // The trust check, the visitor check and the retry lookup don't depend on each other, so they start together.
+    // The checks below still refuse before anything is written; the other two answers are used only once they pass.
+    // The audience guardrails and the Place gate ask about the same person at the same point: one trust check
+    // answers both.
+    const trustStateRead = !isCurator && postAs !== 'persona' && !pulse && !isHomeIdentityPost
+      && effectiveLatitude != null && effectiveLongitude != null
+      ? computeTrustState(userId, effectiveLatitude, effectiveLongitude) : null;
+    // Curator accounts have no home — no visitor detection (platform-owned, not a real neighbor).
+    const visitorRead = !isCurator && postAs !== 'persona' && effectiveLatitude != null && effectiveLongitude != null
+      ? isVisitorAt(userId, effectiveLatitude, effectiveLongitude) : null;
+    visitorRead?.catch(() => {});
+    const retryRead = postId ? readRetry() : null;
+    retryRead?.catch(() => {});
+
     // ── Audience guardrails ──
     // Curator accounts bypass trust-state checks — they are platform-owned, not a real neighbor.
     // Pulse posts use their label and area instead (pulse/compose.js).
@@ -1236,7 +1260,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       if (effectiveLatitude != null && effectiveLongitude != null) {
         const trustState = isHomeIdentityPost
           ? { level: 'verified_resident', roleBase: homeContext.roleBase }
-          : await computeTrustState(userId, effectiveLatitude, effectiveLongitude);
+          : await trustStateRead;
         const roleBase = trustState.roleBase || homeContext?.roleBase || null;
         const check = canPostToAudience({
           postAs: postAs || 'personal',
@@ -1273,7 +1297,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
     if (!isCurator && !pulse && isPlacePost && effectiveLatitude != null && effectiveLongitude != null) {
       const trustState = isHomeIdentityPost
         ? { level: 'verified_resident' }
-        : await computeTrustState(userId, effectiveLatitude, effectiveLongitude);
+        : await trustStateRead;
       const eligibility = canPostToPlace({
         trustLevel: trustState.level,
         gpsTimestamp: gpsTimestamp || null,
@@ -1463,13 +1487,10 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       ]));
     }
 
-    // v1.2: Auto-detect visitor post (user's home is far from posting location)
-    // Curator accounts have no home — skip visitor detection (platform-owned, not a real neighbor)
-    if (!isCurator && postAs !== 'persona' && (targetPlaceId || (effectiveLatitude != null && effectiveLongitude != null))) {
+    // v1.2: Auto-detect visitor post (user's home is far from posting location), started with the checks above
+    if (visitorRead) {
       try {
-        if (effectiveLatitude != null && effectiveLongitude != null) {
-          postData.is_visitor_post = await isVisitorAt(userId, effectiveLatitude, effectiveLongitude);
-        }
+        postData.is_visitor_post = await visitorRead;
       } catch (visitorErr) {
         logger.warn('Visitor detection failed', { error: visitorErr.message, userId });
         // Non-blocking — default to false
@@ -1551,10 +1572,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
     // Compute initial utility_score so the post ranks properly before the background job runs
     postData.utility_score = computeUtilityScore(postData);
 
-    // Reuse the existing Post primary key for retries of one composer command.
     // GPS is refreshed at submit time; it is authorization evidence, not a new draft.
-    const commandId = req.body.clientRequestId;
-    const postId = commandPostId(userId, commandId);
     const requestBody = { ...req.body };
     for (const key of ['clientRequestId', 'gpsTimestamp', 'gpsLatitude', 'gpsLongitude']) delete requestBody[key];
     // Key the stored fingerprint with the client's secret command id: viewers read
@@ -1564,13 +1582,6 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
         value && typeof value === 'object' && !Array.isArray(value)
           ? Object.fromEntries(Object.keys(value).sort().map(key => [key, value[key]])) : value
       )).digest('hex') : null;
-    const selection = `*, creator:user_id (${SAFE_CREATOR_SELECT}), business_author:business_author_id (${SAFE_CREATOR_SELECT}), home:home_id (id, address, city)`;
-    const readRetry = async () => {
-      const { data, error: readError } = await supabaseAdmin.from('Post')
-        .select(selection).eq('id', postId).maybeSingle();
-      if (readError) throw readError;
-      return data;
-    };
     const acknowledgeRetry = async (existing) => {
       if (existing.user_id !== userId || existing.post_metadata?._create_request_hash !== requestHash) {
         return res.status(409).json({ error: 'This post was already saved. Restore the original draft to retry photos, or edit the saved post.' });
@@ -1583,7 +1594,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       }, userId), ...(existing.read_scope ? { pulse: await pulseCard(existing.id, userId) } : {}) });
     };
     if (postId) {
-      const existing = await readRetry();
+      const existing = await retryRead;
       if (existing) return await acknowledgeRetry(existing);
       postData.id = postId;
       postData.post_metadata = { ...postData.post_metadata, _create_request_hash: requestHash };

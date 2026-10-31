@@ -58,6 +58,15 @@ function parsePostGISPoint(point) {
   return null;
 }
 
+// A started read, kept from rejecting unobserved while the steps before it decide; `settled` rethrows its error.
+function settle(promise) {
+  return Promise.resolve(promise).then((value) => ({ value }), (error) => ({ error }));
+}
+function settled({ value, error }) {
+  if (error) throw error;
+  return value;
+}
+
 /**
  * Compute the trust state of a user relative to a geographic point.
  *
@@ -82,39 +91,40 @@ async function computeTrustState(userId, latitude, longitude) {
   if (!userId || latitude == null || longitude == null) return result;
 
   try {
-    // 1) Check if user has any active homes near this location
-    let nearbyHomes = null;
-    try {
-      const rpcResult = await supabaseAdmin.rpc('get_user_homes_near_point', {
-        p_user_id: userId,
-        p_latitude: latitude,
-        p_longitude: longitude,
-        p_radius_meters: NEARBY_RADIUS_METERS,
-      });
-      nearbyHomes = rpcResult?.data || null;
-    } catch (_) {
-      nearbyHomes = null;
-    }
-
-    // If RPC doesn't exist, fall back to manual query
-    if (nearbyHomes && nearbyHomes.length > 0) {
-      const closest = nearbyHomes[0];
-      result.level = 'verified_resident';
-      result.homeId = closest.home_id;
-      result.roleBase = closest.role_base;
-      result.distance = closest.distance_meters;
-      return result;
-    }
-
-    // Fallback: query homes manually with haversine approximation. Only the household
-    // counts (householdHomeIds: trusted, unexpired occupancies, never a pending claim
-    // that anyone can file on any Home; fails closed). Home stores a geography `location`.
-    const householdIds = new Set(await householdHomeIds(userId));
-    const { data: occupancies } = await supabaseAdmin
+    // The home, business and claim inputs are read together, but the answer is still decided in the order below (a
+    // home nearby, then a verified business nearby, then a pending claim nearby) and each step reads only its own
+    // inputs, so a read the answer doesn't need can't change it. A needed read that fails still answers remote_viewer.
+    // Only the household counts (householdHomeIds: trusted, unexpired occupancies, never a pending claim that anyone
+    // can file on any Home; fails closed).
+    const householdRead = settle(householdHomeIds(userId));
+    const occupancyRead = settle(supabaseAdmin
       .from('HomeOccupancy')
       .select('home_id, role, role_base')
       .eq('user_id', userId)
-      .eq('is_active', true);
+      .eq('is_active', true));
+    // The crew's own account (BusinessProfile is keyed by business_user_id).
+    const ownedBusinessRead = settle(supabaseAdmin
+      .from('BusinessProfile')
+      .select('business_user_id')
+      .eq('business_user_id', userId)
+      .maybeSingle());
+    const seatBindingRead = settle(supabaseAdmin
+      .from('SeatBinding')
+      .select('seat:seat_id ( business_user_id, is_active )')
+      .eq('user_id', userId));
+    const teamMembershipRead = settle(supabaseAdmin
+      .from('BusinessTeam')
+      .select('business_user_id, is_active')
+      .eq('user_id', userId));
+    const pendingClaimRead = settle(supabaseAdmin
+      .from('HomeOwnershipClaim')
+      .select('home_id, state')
+      .eq('claimant_user_id', userId)
+      .in('state', ['submitted', 'pending_review', 'pending_challenge_window']));
+
+    // 1) An active household home near this location, by haversine approximation. Home stores a geography `location`.
+    const householdIds = new Set(settled(await householdRead));
+    const { data: occupancies } = settled(await occupancyRead);
     const userHomes = (occupancies || []).filter(h => householdIds.has(h.home_id));
 
     if (userHomes.length > 0) {
@@ -155,19 +165,11 @@ async function computeTrustState(userId, latitude, longitude) {
 
     // 2) Check if user is an in-area verified business owner/team member
     const businessIds = new Set();
-    // The crew's own account (BusinessProfile is keyed by business_user_id).
-    const { data: ownedBusiness } = await supabaseAdmin
-      .from('BusinessProfile')
-      .select('business_user_id')
-      .eq('business_user_id', userId)
-      .maybeSingle();
+    const { data: ownedBusiness } = settled(await ownedBusinessRead);
     if (ownedBusiness?.business_user_id) businessIds.add(ownedBusiness.business_user_id);
 
     // Seat-based: get all business seats for this user via SeatBinding
-    const { data: seatBindings } = await supabaseAdmin
-      .from('SeatBinding')
-      .select('seat:seat_id ( business_user_id, is_active )')
-      .eq('user_id', userId);
+    const { data: seatBindings } = settled(await seatBindingRead);
     for (const sb of seatBindings || []) {
       if (sb.seat?.business_user_id && sb.seat?.is_active !== false) {
         businessIds.add(sb.seat.business_user_id);
@@ -175,10 +177,7 @@ async function computeTrustState(userId, latitude, longitude) {
     }
 
     // Fallback: also check legacy BusinessTeam
-    const { data: teamMemberships } = await supabaseAdmin
-      .from('BusinessTeam')
-      .select('business_user_id, is_active')
-      .eq('user_id', userId);
+    const { data: teamMemberships } = settled(await teamMembershipRead);
     for (const tm of teamMemberships || []) {
       if (tm?.business_user_id && tm?.is_active !== false) businessIds.add(tm.business_user_id);
     }
@@ -222,11 +221,7 @@ async function computeTrustState(userId, latitude, longitude) {
     }
 
     // 3) Check for pending ownership claims (incoming resident)
-    const { data: pendingClaims } = await supabaseAdmin
-      .from('HomeOwnershipClaim')
-      .select('home_id, state')
-      .eq('claimant_user_id', userId)
-      .in('state', ['submitted', 'pending_review', 'pending_challenge_window']);
+    const { data: pendingClaims } = settled(await pendingClaimRead);
 
     if (pendingClaims && pendingClaims.length > 0) {
       const claimHomeIds = pendingClaims.map(c => c.home_id);
