@@ -163,10 +163,13 @@ public final class SignUpViewModel {
     /// True once any field carries user input; drives the discard prompt.
     /// An address filled in for the person (an emailed invitation's); leaving it as it is isn't input.
     public var suggestedEmail = ""
+    /// The code a friend's join link filled in; leaving it as it is isn't input either.
+    public var suggestedInviteCode = ""
 
     public var hasInput: Bool {
         let typedEmail = email == suggestedEmail ? "" : email
-        return ![typedEmail, password, confirmPassword, username, firstName, middleName, lastName, phoneNumber, inviteCode]
+        let typedInviteCode = inviteCode == suggestedInviteCode ? "" : inviteCode
+        return ![typedEmail, password, confirmPassword, username, firstName, middleName, lastName, phoneNumber, typedInviteCode]
             .allSatisfy(\.isEmpty) || dateOfBirth != nil || agreedToTerms
     }
 
