@@ -45,7 +45,7 @@ public struct MailboxRootView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: Spacing.s0) {
-                        MailboxHero(model: viewModel.hero, accountId: accountId)
+                        MailboxHero(model: viewModel.hero, accountId: accountId) { viewModel.selectSent() }
                             .padding(.horizontal, Spacing.s4)
                             .padding(.top, 6)
                             .id(Self.heroAnchor)
@@ -95,6 +95,15 @@ public struct MailboxRootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .mailboxMailChanged)) { _ in
             viewModel.markListStale()
+        }
+        // "See it in Sent" after sending: Sent, then that card.
+        .onReceive(NotificationCenter.default.publisher(for: .mailboxOpenSent)) { note in
+            viewModel.showSentAfterSending(note.object as? String)
+        }
+        // A card taken back on its page: gone from Sent; the flag follows.
+        .onReceive(NotificationCenter.default.publisher(for: .mailboxSentChanged)) { note in
+            if let id = note.object as? String { viewModel.sent.dropPiece(id) }
+            Task { await viewModel.sentChanged() }
         }
         .onAppear { Analytics.track(.screenMailboxRootViewed) }
     }
@@ -201,7 +210,10 @@ private struct MailboxPieceList: View {
     let viewModel: MailboxRootViewModel
 
     var body: some View {
-        if viewModel.isLive, viewModel.showsClosedHome, let home = viewModel.homesWaitingForProof.first {
+        if viewModel.showsSent {
+            MailSentShelf(viewModel: viewModel.sent) { piece in viewModel.openSentCard(piece.id) }
+                .padding(.bottom, Spacing.s4)
+        } else if viewModel.isLive, viewModel.showsClosedHome, let home = viewModel.homesWaitingForProof.first {
             MailClosedHomeDrawer(
                 home: home,
                 onVerify: { viewModel.onVerifyHome?(home.homeId) },

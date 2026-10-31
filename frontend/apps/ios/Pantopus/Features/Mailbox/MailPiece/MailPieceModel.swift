@@ -199,6 +199,9 @@ struct MailPieceModel: Identifiable, Hashable {
     /// A Christmas card (`holiday_cards`): the red envelope, sealed until
     /// Christmas morning or with its picture peeking out once opened.
     var card: MailCard?
+    /// Cancelled by the carrier's postmark. A card in its sender's Sent that
+    /// still waits for the 7 a.m. pickup isn't yet.
+    var isPostmarked = true
 
     /// One sentence: "Bill from Alder Creek Water, verified utility, sealed,
     /// $42.10 due Fri, Nov 7."
