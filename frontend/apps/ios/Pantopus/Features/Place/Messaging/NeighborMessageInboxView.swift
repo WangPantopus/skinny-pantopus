@@ -34,11 +34,16 @@ struct NeighborMessageInboxView: View {
         case .loading:
             InboxSkeleton()
         case .empty:
-            EmptyState(
-                icon: .inbox,
-                headline: "No messages yet",
-                subcopy: "When a verified neighbor on your block sends you a heads-up, it'll show up here."
-            )
+            // In a scroll view so a pull checks again for a heads-up that just came.
+            ScrollView {
+                EmptyState(
+                    icon: .inbox,
+                    headline: "No messages yet",
+                    subcopy: "When a verified neighbor on your block sends you a heads-up, it'll show up here."
+                )
+                .containerRelativeFrame(.vertical)
+            }
+            .refreshable { await viewModel.refresh() }
         case let .error(message):
             ErrorState(message: message) { await viewModel.load() }
         case let .loaded(messages):

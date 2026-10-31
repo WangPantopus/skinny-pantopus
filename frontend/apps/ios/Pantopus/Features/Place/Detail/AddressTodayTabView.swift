@@ -293,6 +293,7 @@ struct AddressTodayTabView: View {
             rootTabs.selected = .place
             return
         }
+        rootTabs.placeBallotHomeId = homeId
         DeepLinkRouter.shared.handle(path: "/place/\(homeId)")
     }
 }

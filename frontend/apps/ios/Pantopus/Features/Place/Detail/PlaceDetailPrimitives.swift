@@ -28,8 +28,13 @@ struct PlaceDetailHeader: View {
                     .background(Theme.Color.appSurface)
                     .clipShape(Circle())
                     .shadow(color: .black.opacity(0.06), radius: 1, x: 0, y: 1)
+                    // A 44-pt target around the 34-pt circle, as Ask has; the
+                    // negative padding keeps the circle and title where they were.
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .padding(-5)
             .accessibilityLabel("Back")
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
@@ -97,19 +102,23 @@ struct PlaceSourceNote: View {
     var asOf: String?
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text(name)
-                .fontWeight(.medium)
-            if let asOf {
-                Text("·").opacity(0.5).accessibilityHidden(true)
-                Text(asOf)
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .font(Theme.Font.caption)
-        .foregroundStyle(Theme.Color.appTextMuted)
-        .padding(.top, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // One text: a long source ("AirNow · <monitor>, within 50 miles")
+        // wraps as a sentence with the time after it. Three texts in a row put
+        // the time beside the source's second line.
+        note
+            .font(Theme.Font.caption)
+            .foregroundStyle(Theme.Color.appTextMuted)
+            .accessibilityLabel(asOf.map { "\(name), \($0)" } ?? name)
+            .padding(.top, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var note: Text {
+        let source = Text(name).fontWeight(.medium)
+        guard let asOf else { return source }
+        let dot = Text("·").foregroundStyle(Theme.Color.appTextMuted.opacity(0.5))
+        // The no-break space keeps the dot at the end of the source's line.
+        return Text("\(source)\u{00A0}\(dot) \(asOf)")
     }
 }
 

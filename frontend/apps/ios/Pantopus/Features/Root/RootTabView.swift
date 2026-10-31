@@ -124,6 +124,9 @@ public final class RootTabModel {
     /// Changes each time the Place tab is tapped again while already on its
     /// root, so the root scrolls back to the top.
     public var placeReselectedAtRoot: UUID?
+    /// "Open your ballot" (Today, or Place's Today page): this Home's Your
+    /// Place scrolls to its ballot card once, then clears it (as on Android).
+    public var placeBallotHomeId: String?
     /// The side menu is open (each tab's menu button sets it; the drawer,
     /// hosted by `RootTabView`, clears it when it closes).
     public var showsNavigationMenu = false

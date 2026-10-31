@@ -31,6 +31,10 @@ struct PlaceDashboardView: View {
     private let isRoot: Bool
     /// Changes when the Place tab is tapped again on this dashboard: back to the top.
     private let scrollToTop: UUID?
+    /// "Open your ballot" brought the person here: scroll to the ballot card,
+    /// then `onBallotShown` clears the request.
+    private let showsBallot: Bool
+    private let onBallotShown: () -> Void
     private let onOpenMenu: () -> Void
 
     init(
@@ -38,11 +42,15 @@ struct PlaceDashboardView: View {
         isActive: Bool = true,
         isRoot: Bool = false,
         scrollToTop: UUID? = nil,
+        showsBallot: Bool = false,
+        onBallotShown: @escaping () -> Void = {},
         onOpenMenu: @escaping () -> Void = {}
     ) {
         self.isActive = isActive
         self.isRoot = isRoot
         self.scrollToTop = scrollToTop
+        self.showsBallot = showsBallot
+        self.onBallotShown = onBallotShown
         self.onOpenMenu = onOpenMenu
         _viewModel = State(initialValue: viewModel)
     }
@@ -109,9 +117,15 @@ struct PlaceDashboardView: View {
             guard isActive else { viewModel.discardTemporaryCopy()
                 return
             }
-            await viewModel.load()
-            // Also on coming back from the notifications list, so a read bell loses its dot.
-            await viewModel.refreshUnread()
+            // Today's "Open your ballot" opens the tab on another Home: SwiftUI
+            // cancels this new dashboard's task as it starts and doesn't start
+            // it again, which left Home tools without its shortcuts. The reads
+            // finish outside the task.
+            await Task {
+                await viewModel.load()
+                // Also on coming back from the notifications list, so a read bell loses its dot.
+                await viewModel.refreshUnread()
+            }.value
         }
         .refreshable { await viewModel.refresh() }
         .refreshesOnStoreChange(onBackground: viewModel.discardTemporaryCopy) { if isActive { await viewModel.load() } }
@@ -231,6 +245,7 @@ struct PlaceDashboardView: View {
                         // "This season" and leaves the civic group.
                         if let ballot = Self.ballot(in: intel) {
                             seasonBlock(ballot.card, asOf: ballot.asOf)
+                                .id(Self.ballotAnchor)
                         }
                         ForEach(Self.groups(intel), id: \.group) { group in
                             groupBlock(
@@ -254,10 +269,23 @@ struct PlaceDashboardView: View {
             .onChange(of: scrollToTop) { _, _ in
                 withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(Self.topAnchor, anchor: .top) }
             }
+            // Also when the dashboard first shows loaded, as it does after Today's "Open your ballot".
+            .onChange(of: showsBallot, initial: true) { _, shows in
+                guard shows else { return }
+                Task { @MainActor in
+                    // One pass for the cards to lay out before the scroll.
+                    await Task.yield()
+                    if Self.ballot(in: intel) != nil {
+                        withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(Self.ballotAnchor, anchor: .top) }
+                    }
+                    onBallotShown()
+                }
+            }
         }
     }
 
     private static let topAnchor = "place.top"
+    private static let ballotAnchor = "place.ballot"
 
     /// The verify banner and Home tools; a claim in review has its status instead.
     @ViewBuilder
@@ -335,7 +363,7 @@ struct PlaceDashboardView: View {
             // Ask sits at the end of the address row, under the bell and menu,
             // so the title row keeps room for the status chip.
             HStack(spacing: Spacing.s2) {
-                addressButton(intel.place.label)
+                addressButton(intel.place)
                 Spacer(minLength: 0)
                 AskPantopusButton(accessibilityIdentifier: "place.askPantopus") {
                     askTopic = .place(homeId: viewModel.homeId)
@@ -363,14 +391,17 @@ struct PlaceDashboardView: View {
     }
 
     /// The address is the way to your homes: switch, add or manage them.
-    private func addressButton(_ label: String) -> some View {
-        Button { showSwitcher = true } label: {
+    private func addressButton(_ place: PlaceAddressRef) -> some View {
+        let label = place.label
+        return Button { showSwitcher = true } label: {
             HStack(spacing: 5) {
                 Icon(.mapPin, size: 14, strokeWidth: 2, color: Theme.Color.appTextSecondary)
-                Text(label)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Theme.Color.appText)
-                    .lineLimit(1)
+                // The whole address when it fits; else the street alone, rather
+                // than the address cut inside the city ("…Court, Ca…").
+                ViewThatFits(in: .horizontal) {
+                    addressText(label)
+                    addressText(place.line1.isEmpty ? label : place.line1)
+                }
                 Icon(.chevronDown, size: 14, strokeWidth: 2.25, color: Theme.Color.appTextSecondary)
             }
             .padding(.horizontal, 10)
@@ -385,6 +416,13 @@ struct PlaceDashboardView: View {
         .accessibilityLabel("Your homes, \(label)")
         .accessibilityHint("Switch home or add a home")
         .accessibilityIdentifier("place.addressSwitcher")
+    }
+
+    private func addressText(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(Theme.Color.appText)
+            .lineLimit(1)
     }
 
     // MARK: - This season (Ballot P0)

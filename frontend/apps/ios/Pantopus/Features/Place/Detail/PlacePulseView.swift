@@ -21,6 +21,9 @@ final class PlacePulseViewModel {
     }
 
     private(set) var state: State = .loading
+    /// A pull to refresh failed while the pulse is on screen: it stays, and
+    /// this shows as a toast. The view clears it after display.
+    var refreshFailureMessage: String?
     let homeId: String
     private let api: APIClient
 
@@ -42,10 +45,13 @@ final class PlacePulseViewModel {
         do {
             let response: NeighborhoodPulse = try await api.request(AIEndpoints.pulse(homeId: homeId))
             state = .loaded(response.pulse)
-        } catch let error as APIError {
-            state = .error(message: error.errorDescription ?? "Couldn't load your pulse.")
         } catch {
-            state = .error(message: "Couldn't load your pulse.")
+            let message = (error as? APIError)?.errorDescription ?? "Couldn't load your pulse."
+            if case .loaded = state {
+                refreshFailureMessage = message
+            } else {
+                state = .error(message: message)
+            }
         }
     }
 }
@@ -67,6 +73,8 @@ struct PlacePulseView: View {
         .background(Theme.Color.appBg)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        .refreshFailureToast($viewModel.refreshFailureMessage)
         .task { await viewModel.load() }
     }
 
@@ -102,6 +110,8 @@ struct PlacePulseView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, Spacing.s10)
             }
+            // Like the other Place pages: the pulse stays while it reads again.
+            .refreshable { await viewModel.refresh() }
         case let .error(message):
             ErrorState(message: message) { await viewModel.refresh() }
         }
