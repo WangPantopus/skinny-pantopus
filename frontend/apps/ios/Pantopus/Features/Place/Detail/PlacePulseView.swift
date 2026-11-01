@@ -191,13 +191,17 @@ private struct SignalCard: View {
                 }
                 .frame(width: 36, height: 36)
                 VStack(alignment: .leading, spacing: 3) {
+                    // The column takes the card's width before the trailing Spacer, at full height: a title measured
+                    // wider than it was placed was cut to one line ("Fall is gutter season in the Pacific Nort…").
                     Text(signal.title)
                         .font(.system(size: 14.5, weight: .semibold))
                         .foregroundStyle(Theme.Color.appText)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(signal.detail)
                         .font(.system(size: 13))
                         .lineSpacing(2)
                         .foregroundStyle(Theme.Color.appTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                     if let action = signal.actions?.first {
                         Text(action.label)
                             .font(.system(size: 13, weight: .semibold))
@@ -205,6 +209,7 @@ private struct SignalCard: View {
                             .padding(.top, 2)
                     }
                 }
+                .layoutPriority(1)
                 Spacer(minLength: 0)
             }
         }
