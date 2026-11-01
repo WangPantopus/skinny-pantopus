@@ -161,13 +161,15 @@ struct ProfileTogetherSection: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .subheadline) private var scaledDisc: CGFloat = 30
 
-    /// The picture column fits two faces and "+N" only when a people line
-    /// needs it; otherwise each sentence starts right after its icon.
+    /// The picture column is as wide as the widest picture: an icon or one
+    /// face, or overlapping faces and "+N" (the drawing's 70 pt for three),
+    /// so the sentences line up without a gap.
     private var pictureWidth: CGFloat {
-        let hasPeople = lines.contains { line in
-            if case .people = line.leading { true } else { false }
-        }
-        return min(scaledDisc, 44) * (hasPeople ? 7.0 / 3.0 : 1)
+        let disc = min(scaledDisc, 44)
+        let faces = lines.map { line in
+            if case let .people(people, more) = line.leading { people.count + (more > 0 ? 1 : 0) } else { 1 }
+        }.max() ?? 1
+        return disc + CGFloat(max(faces, 1) - 1) * disc * 2 / 3
     }
 
     /// The hairline starts where the sentences do.
