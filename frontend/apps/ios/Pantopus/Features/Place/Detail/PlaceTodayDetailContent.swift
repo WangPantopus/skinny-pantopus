@@ -2328,9 +2328,10 @@ private struct RadonReportControl: View {
     }
 }
 
-/// A date row that stays readable at accessibility text sizes: the compact
-/// picker's date chip grows until its inline label is squeezed to a column one
-/// letter wide, so the label moves above the picker there.
+/// A date row: its title, then the date on a chip that opens the system
+/// calendar. The chip always reads like "Nov 10, 2026": the compact picker
+/// sized its chip for another date and squeezed a longer one into "11/10/26".
+/// At accessibility text sizes the title moves above the chip.
 private struct PlaceDateRow: View {
     let title: String
     @Binding var date: Date
@@ -2338,21 +2339,45 @@ private struct PlaceDateRow: View {
     /// What VoiceOver reads when the title alone doesn't say whose date it is.
     var accessibilityLabel: String?
     @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var choosing = false
 
     var body: some View {
         if typeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
-                picker
-                    .labelsHidden()
+                chip
             }
         } else {
-            picker
+            HStack(spacing: 8) {
+                Text(title)
+                Spacer(minLength: 0)
+                chip
+            }
         }
     }
 
-    private var picker: some View {
-        DatePicker(title, selection: $date, in: range, displayedComponents: .date)
-            .accessibilityLabel(accessibilityLabel ?? title)
+    private var chip: some View {
+        Button {
+            choosing = true
+        } label: {
+            Text(date, format: .dateTime.month(.abbreviated).day().year())
+                .font(.body)
+                .foregroundStyle(choosing ? Theme.Color.primaryInk : Theme.Color.appText)
+                .padding(.horizontal, 12)
+                .frame(minHeight: 34)
+                .background(Theme.Color.appBorder, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel ?? title)
+        .accessibilityValue(Text(date, format: .dateTime.month(.wide).day().year()))
+        .popover(isPresented: $choosing) {
+            DatePicker(title, selection: $date, in: range, displayedComponents: .date)
+                .datePickerStyle(.graphical)
+                .labelsHidden()
+                .accessibilityLabel(accessibilityLabel ?? title)
+                .frame(width: 320)
+                .padding(Spacing.s2)
+                .presentationCompactAdaptation(.popover)
+        }
     }
 }
