@@ -40,6 +40,7 @@ import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
+import app.pantopus.android.ui.screens.profile.ProfilePinCopy
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilterSheet
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsTab
@@ -162,6 +163,7 @@ fun MyPostsScreen(
                 onRestore = { viewModel.unarchive(target.postId) },
                 onDelete = { viewModel.requestDelete(target.postId) },
                 onCancel = { viewModel.cancelKebab() },
+                onToggleProfilePin = { viewModel.toggleProfilePin(target) },
             )
         }
     }
@@ -220,6 +222,7 @@ private fun KebabSheetContent(
     onRestore: () -> Unit,
     onDelete: () -> Unit,
     onCancel: () -> Unit,
+    onToggleProfilePin: () -> Unit = {},
 ) {
     Column(
         modifier =
@@ -248,6 +251,14 @@ private fun KebabSheetContent(
                 icon = PantopusIcon.Archive,
                 testTag = "kebab-archive",
                 onClick = onArchive,
+            )
+        }
+        target.profilePinned?.let { pinned ->
+            ActionRow(
+                label = if (pinned) ProfilePinCopy.UNPIN else ProfilePinCopy.PIN,
+                icon = PantopusIcon.Pin,
+                testTag = "kebab-profile-pin",
+                onClick = onToggleProfilePin,
             )
         }
         ActionRow(

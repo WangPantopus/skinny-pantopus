@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.core.identity.ProfileChanges
 import app.pantopus.android.data.api.models.feed.FeedPost
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
@@ -43,6 +44,8 @@ class ProfilePostCards internal constructor(
     private val posts: PostsRepository,
     private val viewerId: () -> String?,
     private val onToast: (String) -> Unit,
+    /** A pin changed: the Pinned row reads again. */
+    private val onPinsChanged: () -> Unit = {},
 ) {
     private val _cards = MutableStateFlow<List<PulsePostCardContent>>(emptyList())
 
@@ -95,7 +98,26 @@ class ProfilePostCards internal constructor(
     }
 
     /** Whether the card's "Post options" menu has anything in it. */
-    fun hasOptions(card: PulsePostCardContent): Boolean = card.actions.canShareExternally || card.actions.canReport
+    fun hasOptions(card: PulsePostCardContent): Boolean = profilePostHasOptions(card)
+
+    /** "Pin to profile" / "Unpin from profile" on your own post (PRF step 5); a 4th pin shows the server's sentence. */
+    fun toggleProfilePin(postId: String) {
+        val pinned = rows.firstOrNull { it.id == postId }?.profilePinned ?: return
+        _optionsPostId.value = null
+        scope.launch {
+            when (val result = posts.setProfilePin(postId, !pinned)) {
+                is NetworkResult.Success -> {
+                    val now = result.data.profilePinned
+                    rows = rows.map { if (it.id == postId) it.copy(profilePinned = now) else it }
+                    rebuild()
+                    onToast(if (now) ProfilePinCopy.PINNED else ProfilePinCopy.UNPINNED)
+                    ProfileChanges.notifyChanged()
+                    onPinsChanged()
+                }
+                is NetworkResult.Failure -> onToast(result.error.displayMessage(ProfilePinCopy.FAILED))
+            }
+        }
+    }
 
     fun openOptions(postId: String) {
         _optionsPostId.value = postId
@@ -303,6 +325,7 @@ internal fun ProfilePostOptionsSheet(
     onShare: () -> Unit,
     onReport: () -> Unit,
     onDismiss: () -> Unit,
+    onToggleProfilePin: () -> Unit = {},
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -317,6 +340,13 @@ internal fun ProfilePostOptionsSheet(
             Text(text = "Post options", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
             if (card.actions.canShareExternally) {
                 OptionRow(label = "Share…", testTag = "profilePostOptionsShare", onClick = onShare)
+            }
+            card.actions.profilePinned?.let { pinned ->
+                OptionRow(
+                    label = if (pinned) ProfilePinCopy.UNPIN else ProfilePinCopy.PIN,
+                    testTag = "profilePostOptionsProfilePin",
+                    onClick = onToggleProfilePin,
+                )
             }
             if (card.actions.canReport) {
                 OptionRow(label = "Report post", testTag = "profilePostOptionsReport", isDestructive = true, onClick = onReport)
@@ -386,3 +416,7 @@ internal fun profileCardColors(
 /** A post as a visitor's card in Preview as: no viewer (no owner menus), the counts as the server sent them. */
 internal fun profilePreviewCard(post: FeedPost): PulsePostCardContent =
     profileCardColors(post, pulseCardContent(post = post, viewerId = null, surface = null, live = PulseCardLiveValues.of(post)))
+
+/** Whether a profile card's "Post options" menu has anything in it: share, report, or your own post's pin. */
+internal fun profilePostHasOptions(card: PulsePostCardContent): Boolean =
+    card.actions.canShareExternally || card.actions.canReport || card.actions.profilePinned != null

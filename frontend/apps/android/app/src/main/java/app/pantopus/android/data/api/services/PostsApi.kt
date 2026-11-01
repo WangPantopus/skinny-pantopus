@@ -3,6 +3,7 @@
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.feed.FeedResponse
+import app.pantopus.android.data.api.models.feed.ProfilePinResponse
 import app.pantopus.android.data.api.models.posts.CommentLikeResponse
 import app.pantopus.android.data.api.models.posts.MyPostsResponse
 import app.pantopus.android.data.api.models.posts.PlaceEligibilityResponse
@@ -180,6 +181,31 @@ interface PostsApi {
         @Query("limit") limit: Int,
         @Query("as") audience: String,
     ): FeedResponse
+
+    /** PRF SRV-3: a person's pinned posts (newest pin first, at most 3). Route `backend/routes/posts.js:3952`. */
+    @GET("api/posts/user/{userId}/pinned")
+    suspend fun pinnedPosts(
+        @Path("userId") userId: String,
+    ): FeedResponse
+
+    /** Preview as: your pinned posts as one audience sees them (`anyone` gets none, `sign_in_required`). */
+    @GET("api/posts/user/{userId}/pinned")
+    suspend fun pinnedPostsAs(
+        @Path("userId") userId: String,
+        @Query("as") audience: String,
+    ): FeedResponse
+
+    /** Pin your own post to your profile; a 4th answers 409 `PROFILE_PIN_LIMIT`. Route `backend/routes/posts.js:3090`. */
+    @POST("api/posts/{id}/profile-pin")
+    suspend fun pinToProfile(
+        @Path("id") id: String,
+    ): ProfilePinResponse
+
+    /** Route `backend/routes/posts.js:3121`. */
+    @DELETE("api/posts/{id}/profile-pin")
+    suspend fun unpinFromProfile(
+        @Path("id") id: String,
+    ): ProfilePinResponse
 
     /** `GET /api/posts/saved` — the viewer's saved posts they can still open (offset paging over saves). */
     @GET("api/posts/saved")

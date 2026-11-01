@@ -91,6 +91,8 @@ class PublicProfileViewModelTest {
         coEvery { profileTabs.portfolio(any(), any()) } returns NetworkResult.Success(PortfolioListResponse())
         // "You and …" reads nothing here: the section stays hidden.
         coEvery { repo.inCommon(any()) } returns NetworkResult.Failure(NetworkError.NotFound)
+        // No pinned posts read here either: the Pinned row stays hidden.
+        coEvery { posts.pinnedPosts(any()) } returns NetworkResult.Failure(NetworkError.NotFound)
         // Your own page's extras: none of them read here.
         coEvery { localProfiles.me() } returns NetworkResult.Failure(NetworkError.NotFound)
         coEvery { insights.monthlyReceipt(any(), any()) } returns NetworkResult.Failure(NetworkError.NotFound)

@@ -135,6 +135,8 @@ internal fun pulseCardContent(
                 pulseTopic = topic,
                 canKeepOpen = openAsk && !live.keptOpen,
                 canCloseAsk = openAsk,
+                // Seeded posts are never yours.
+                profilePinned = post.profilePinned.takeIf { isOwner },
             ),
         status = statusFor(post, live),
         repostedBy = repostedByText(post.repostedBy),

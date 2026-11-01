@@ -408,6 +408,7 @@ class PublicProfileViewModel
                 posts = posts,
                 viewerId = { (authRepository.state.value as? AuthRepository.State.SignedIn)?.user?.id },
                 onToast = { _toastMessage.value = it },
+                onPinsChanged = { pins.load(userId) },
             )
 
         /** Drives the "Unfollow …?" confirm, so one tap on Following never unfollows. */
@@ -881,8 +882,9 @@ class PublicProfileViewModel
                         // (`src/app/user/[id].tsx:322`).
                         _connection.value = ProfileConnection.Blocked
                         _isBlockedByViewer.value = true
-                        // A block shares nothing: "You and …" leaves at once.
+                        // A block shares nothing: "You and …" and the Pinned row leave at once.
                         inCommon.clear()
+                        pins.clear()
                         _toastMessage.value = "User blocked"
                     }
                     is NetworkResult.Failure -> {
@@ -1033,6 +1035,7 @@ class PublicProfileViewModel
                     _state.value = PublicProfileUiState.Loaded(build(profile, kind, firstFrame))
                     val viewer = signedInId()
                     if (kind == PublicProfileKind.Local && viewer != null && viewer != profile.id) inCommon.load(profile.id, viewer)
+                    if (kind == PublicProfileKind.Local) pins.load(profile.id)
                     coroutineScope {
                         // The relationship decides the header's buttons: read it beside the posts, not after them.
                         val relationship = async { loadRelationship(profile.id) }
@@ -1070,6 +1073,9 @@ class PublicProfileViewModel
 
         /** "You and …" on someone else's profile (PRF step 4). */
         internal val inCommon = ProfileInCommonLoader(viewModelScope, repo)
+
+        /** The Pinned row (PRF step 5). */
+        internal val pins = ProfilePinsLoader(viewModelScope, posts)
 
         fun endPreview() = preview.end()
 

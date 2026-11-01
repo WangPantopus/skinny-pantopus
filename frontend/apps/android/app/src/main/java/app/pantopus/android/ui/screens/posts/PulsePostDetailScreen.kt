@@ -62,6 +62,7 @@ import app.pantopus.android.ui.screens.compose.pulse.PulseSafetyAlertKind
 import app.pantopus.android.ui.screens.feed.pulse.PostStatusPill
 import app.pantopus.android.ui.screens.feed.pulse.PulseEventDetails
 import app.pantopus.android.ui.screens.feed.pulse.pulseEventDetails
+import app.pantopus.android.ui.screens.profile.ProfilePinCopy
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBarAction
@@ -341,6 +342,12 @@ fun PulsePostDetailScreen(
                 }
                 if (viewModel.canCloseAsk) {
                     OverflowAction(label = "Close", testTag = "pulseAskClose") { viewModel.beginCloseAsk() }
+                }
+                viewModel.profilePinned?.let { pinned ->
+                    OverflowAction(
+                        label = if (pinned) ProfilePinCopy.UNPIN else ProfilePinCopy.PIN,
+                        testTag = "pulsePostDetail-profilePin",
+                    ) { viewModel.toggleProfilePin() }
                 }
                 if (viewModel.isOwner) {
                     OverflowAction(label = "Edit post", testTag = "pulsePostDetail-edit") {

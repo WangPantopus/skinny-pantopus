@@ -66,6 +66,8 @@ enum class OwnerTip(val key: String) {
     Photo("photo"),
     Tagline("tagline"),
     Skills("skills"),
+    Prompt("prompt"),
+    Pin("pin"),
 }
 
 /**
@@ -205,6 +207,8 @@ sealed interface ProfilePreviewState {
         val cards: List<PulsePostCardContent>,
         /** `as=anyone`: signed-out visitors can't read posts, so the page says "Posts are for neighbors". */
         val signInRequired: Boolean,
+        /** The pinned posts that audience sees (none for `anyone`). */
+        val pinned: List<FeedPost> = emptyList(),
     ) : ProfilePreviewState
 
     /** That audience can't open your profile at all (private, or "Who can find you" narrower than them). */
@@ -243,7 +247,9 @@ class ProfilePreviewLoader(
                     is NetworkResult.Success -> {
                         val rows = (posts.previewProfilePosts(userId, audience.apiValue) as? NetworkResult.Success)?.data
                         val shown = rows?.posts.orEmpty()
+                        val pinned = (posts.previewPinnedPosts(userId, audience.apiValue) as? NetworkResult.Success)?.data?.posts
                         ProfilePreviewState.Loaded(
+                            pinned = pinned.orEmpty(),
                             audience = audience,
                             content = content(profile.data, shown),
                             cards = shown.map(::profilePreviewCard),

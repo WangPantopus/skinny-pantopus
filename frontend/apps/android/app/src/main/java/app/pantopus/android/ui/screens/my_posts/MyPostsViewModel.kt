@@ -14,6 +14,7 @@ package app.pantopus.android.ui.screens.my_posts
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.identity.ProfileChanges
 import app.pantopus.android.data.api.models.feed.FeedCursor
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.posts.MyPostsResponse
@@ -27,6 +28,7 @@ import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.feed.pulse.PostStatus
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
+import app.pantopus.android.ui.screens.profile.ProfilePinCopy
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilter
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivitySortOrder
 import app.pantopus.android.ui.screens.shared.filter_sheet.FilterOption
@@ -74,6 +76,8 @@ object MyPostsTab {
 data class MyPostsKebabTarget(
     val postId: String,
     val isArchived: Boolean,
+    /** PRF step 5: whether it's pinned to your profile; null (unknown, or archived) hides the item. */
+    val profilePinned: Boolean? = null,
 )
 
 /** Presentation contract for the destructive delete confirmation alert. */
@@ -558,7 +562,9 @@ class MyPostsViewModel
         // MARK: - Mutations
 
         fun requestKebab(dto: MyPostDto) {
-            _kebabTarget.value = MyPostsKebabTarget(postId = dto.id, isArchived = isArchived(dto))
+            val archived = isArchived(dto)
+            _kebabTarget.value =
+                MyPostsKebabTarget(postId = dto.id, isArchived = archived, profilePinned = dto.profilePinned.takeUnless { archived })
         }
 
         fun cancelKebab() {
@@ -572,6 +578,22 @@ class MyPostsViewModel
 
         fun cancelDelete() {
             _deleteTarget.value = null
+        }
+
+        /** "Pin to profile" / "Unpin from profile" (PRF step 5); a 4th pin shows the server's sentence. */
+        fun toggleProfilePin(target: MyPostsKebabTarget) {
+            val pinned = target.profilePinned ?: return
+            _kebabTarget.value = null
+            viewModelScope.launch {
+                when (val result = postsRepo.setProfilePin(target.postId, !pinned)) {
+                    is NetworkResult.Success -> {
+                        _toastMessage.value = if (result.data.profilePinned) ProfilePinCopy.PINNED else ProfilePinCopy.UNPINNED
+                        ProfileChanges.notifyChanged()
+                        postsRefresh.notifyPostsDidChange()
+                    }
+                    is NetworkResult.Failure -> _toastMessage.value = result.error.displayMessage(ProfilePinCopy.FAILED)
+                }
+            }
         }
 
         /**

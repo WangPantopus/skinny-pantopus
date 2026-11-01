@@ -63,6 +63,8 @@ data class FeedPost(
     @Json(name = "media_thumbnails") val mediaThumbnails: List<String> = emptyList(),
     @Json(name = "media_types") val mediaTypes: List<String> = emptyList(),
     @Json(name = "media_live_urls") val mediaLiveUrls: List<String> = emptyList(),
+    /** PRF SRV-3: on your own posts only, whether the post is pinned to your profile; missing when unknown. */
+    @Json(name = "profile_pinned") val profilePinned: Boolean? = null,
     val creator: FeedPostCreator? = null,
     val visibility: String? = null,
     @Json(name = "read_scope") val readScope: String? = null,
@@ -167,4 +169,11 @@ data class RegisterPushTokenRequest(
     val token: String,
     val platform: String,
     val deviceId: String? = null,
+)
+
+/** `POST` / `DELETE /api/posts/:id/profile-pin` (PRF SRV-3). */
+@JsonClass(generateAdapter = true)
+data class ProfilePinResponse(
+    @Json(name = "post_id") val postId: String,
+    @Json(name = "profile_pinned") val profilePinned: Boolean,
 )

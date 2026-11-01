@@ -13,6 +13,7 @@ import app.pantopus.android.data.analytics.AnalyticsResult
 import app.pantopus.android.data.api.models.ai.AIDraftPostRequest
 import app.pantopus.android.data.api.models.identity.LocalProfileUpdateRequest
 import app.pantopus.android.data.api.models.identity.OwnLocalProfileResponse
+import app.pantopus.android.data.api.models.profile.ProfilePromptDto
 import app.pantopus.android.data.api.models.settings.PrivacySettingsUpdate
 import app.pantopus.android.data.api.models.users.ProfileUpdateRequest
 import app.pantopus.android.data.api.models.users.UserProfile
@@ -22,6 +23,7 @@ import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.identity.LocalProfileRepository
 import app.pantopus.android.data.network.NetworkMonitor
+import app.pantopus.android.data.posts.PostsRepository
 import app.pantopus.android.data.privacy.PrivacyRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.data.upload.UploadFile
@@ -182,6 +184,8 @@ class EditProfileViewModel
         private val localProfiles: LocalProfileRepository,
         /** "Who sees your city" (`show_neighborhood`). */
         private val privacy: PrivacyRepository,
+        /** Your pinned posts (PRF step 5): the editor lists them with Unpin. */
+        private val posts: PostsRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<EditProfileUiState>(EditProfileUiState.Loading)
         val state: StateFlow<EditProfileUiState> = _state.asStateFlow()
@@ -208,6 +212,20 @@ class EditProfileViewModel
         /** "Who sees your city"; null until read (the row then shows no value). */
         private val _cityAudience = MutableStateFlow<CityAudience?>(null)
         internal val cityAudience: StateFlow<CityAudience?> = _cityAudience.asStateFlow()
+
+        /** Your prompt answers (PRF step 5), in order; Save sends them as `profile_prompts` when they changed. */
+        private val _prompts = MutableStateFlow<List<ProfilePromptDto>>(emptyList())
+        internal val prompts: StateFlow<List<ProfilePromptDto>> = _prompts.asStateFlow()
+        private var savedPrompts: List<ProfilePromptDto> = emptyList()
+
+        /** True when the answers differ from the saved ones. */
+        val arePromptsDirty: Boolean get() = _prompts.value != savedPrompts
+
+        /** Your pinned posts; Unpin saves at once. */
+        internal val pins = ProfilePinsLoader(viewModelScope, posts)
+        private val _unpinning = MutableStateFlow<String?>(null)
+        internal val unpinning: StateFlow<String?> = _unpinning.asStateFlow()
+        private var ownId: String? = null
 
         /** The preview card's color seed and trust line, from your account read. */
         private val _ownFacts = MutableStateFlow<EditOwnFacts?>(null)
@@ -331,14 +349,17 @@ class EditProfileViewModel
 
         /** Skills ride their own PUT, so they widen the form's dirty state
          *  without appearing in [aggregate]. */
-        val isDirty: Boolean get() = aggregate.isDirty || isSkillsDirty
+        val isDirty: Boolean get() = aggregate.isDirty || isSkillsDirty || arePromptsDirty
 
         /** True when the working skill list differs from the last-saved one. */
         val isSkillsDirty: Boolean get() = _skills.value != _savedSkills.value
 
         /** The skill list counts as one dirty field on the sticky pill. */
         val dirtyFieldCount: Int
-            get() = activeFields().count { _fields.value[it]?.isDirty == true } + if (isSkillsDirty) 1 else 0
+            get() =
+                activeFields().count { _fields.value[it]?.isDirty == true } +
+                    (if (isSkillsDirty) 1 else 0) +
+                    (if (arePromptsDirty) 1 else 0)
 
         /** Whether the add-skill CTA can fire — an empty input or a full
          *  list would only produce a no-op or a server rejection. */
@@ -476,6 +497,8 @@ class EditProfileViewModel
         private fun seedProfile(profile: UserProfile) {
             hydrate(profile)
             _ownFacts.value = EditOwnFacts(seed = profile.id, trust = profileTrust(profile.residency, profile.createdAt, city = null))
+            if (ownId != profile.id) pins.load(profile.id)
+            ownId = profile.id
             // Skills have their own PUT and are absent from the PATCH echo.
             _skills.value = profile.skills.orEmpty()
             _savedSkills.value = _skills.value
@@ -553,6 +576,7 @@ class EditProfileViewModel
             _fields.value = map
             _skills.value = _savedSkills.value
             _skillDraft.value = ""
+            _prompts.value = savedPrompts
             usernameCheck.reset(usernameCheck.current, usernameCheck.currentIsMadeUp)
         }
 
@@ -584,7 +608,10 @@ class EditProfileViewModel
                 return
             }
             val neighborNameDirty = _neighbors.value != null && _fields.value[EditProfileField.NeighborName]?.isDirty == true
-            val fieldsDirty = EditProfileField.entries.any { it != EditProfileField.NeighborName && _fields.value[it]?.isDirty == true }
+            val accountFieldsDirty =
+                EditProfileField.entries.any { it != EditProfileField.NeighborName && _fields.value[it]?.isDirty == true }
+            // Prompts ride the same profile PATCH as the account fields.
+            val fieldsDirty = arePromptsDirty || accountFieldsDirty
             val skillsDirty = isSkillsDirty
             if (!fieldsDirty && !skillsDirty && !neighborNameDirty) return
             if (!networkMonitor.isOnline.value) {
@@ -623,6 +650,44 @@ class EditProfileViewModel
                     Analytics.track(AnalyticsEvent.FormEditProfileSubmit(result = AnalyticsResult.SUCCESS))
                 }
                 _isSaving.value = false
+            }
+        }
+
+        /** Puts [answer] for [prompt] in the form (a new prompt goes last); Save sends the list. A blank answer removes it. */
+        internal fun setPromptAnswer(
+            prompt: ProfilePrompt,
+            answer: String,
+        ) {
+            // The server's rule: plain text, runs of spaces and line breaks become one space.
+            val text = answer.trim().replace(Regex("\\s+"), " ").take(ProfilePrompt.ANSWER_LIMIT)
+            val list = _prompts.value.filterNot { it.key == prompt.key && text.isEmpty() }
+            _prompts.value =
+                when {
+                    text.isEmpty() -> list
+                    list.any { it.key == prompt.key } -> list.map { if (it.key == prompt.key) it.copy(answer = text) else it }
+                    else -> (list + ProfilePromptDto(prompt.key, text)).take(ProfilePrompt.MAX)
+                }
+        }
+
+        internal fun removePrompt(prompt: ProfilePrompt) {
+            _prompts.value = _prompts.value.filterNot { it.key == prompt.key }
+        }
+
+        /** Unpins one of your posts at once (PRF step 5); the profile's Pinned row reads again. */
+        internal fun unpin(postId: String) {
+            if (_unpinning.value != null) return
+            _unpinning.value = postId
+            viewModelScope.launch {
+                when (val result = posts.setProfilePin(postId, pinned = false)) {
+                    is NetworkResult.Success -> {
+                        _toast.value = EditProfileToast(ProfilePinCopy.UNPINNED, isError = false)
+                        ProfileChanges.notifyChanged()
+                        ownId?.let(pins::load)
+                    }
+                    is NetworkResult.Failure ->
+                        _toast.value = EditProfileToast(result.error.displayMessage(ProfilePinCopy.FAILED), isError = true)
+                }
+                _unpinning.value = null
             }
         }
 
@@ -744,6 +809,9 @@ class EditProfileViewModel
         private fun hydrate(profile: UserProfile) {
             _email.value = profile.email
             _emailVerified.value = profile.verified
+            // Answers for prompts this app doesn't know (a newer catalog) are left out, as on the profile.
+            savedPrompts = profile.prompts.orEmpty().filter { ProfilePrompt.of(it.key) != null }
+            _prompts.value = savedPrompts
             // A just-uploaded avatar wins over the PATCH echo: `PATCH
             // /api/users/profile` never touches `profile_picture_url`, so a
             // stale row would otherwise flip the block back to initials.
@@ -853,6 +921,7 @@ class EditProfileViewModel
                 twitter = trimmed(EditProfileField.Twitter),
                 instagram = trimmed(EditProfileField.Instagram),
                 facebook = trimmed(EditProfileField.Facebook),
+                profilePrompts = _prompts.value.takeIf { arePromptsDirty },
             )
         }
 

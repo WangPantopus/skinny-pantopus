@@ -268,6 +268,14 @@ internal fun OwnerTips(
                         )
                     OwnerTip.Skills ->
                         Triple(PantopusIcon.Hand, "Add what you help with", "Neighbors look for help nearby. Only you see this tip.")
+                    OwnerTip.Prompt ->
+                        Triple(
+                            PantopusIcon.MessageCircle,
+                            "Answer a prompt",
+                            "Give neighbors an easy way to start talking. Only you see this tip.",
+                        )
+                    OwnerTip.Pin ->
+                        Triple(PantopusIcon.Pin, "Pin a post", "Show up to 3 posts first on your profile. Only you see this tip.")
                 }
             Row(
                 modifier =
@@ -752,6 +760,7 @@ internal fun OwnerPreviewFrame(
                 onOpenLink = onOpenLink,
                 postCards = preview.cards,
                 mode = ProfileFrameMode.Preview(audience = preview.audience, onDone = onDone),
+                pinned = preview.pinned.map(::pinnedCard),
             )
         }
         else ->

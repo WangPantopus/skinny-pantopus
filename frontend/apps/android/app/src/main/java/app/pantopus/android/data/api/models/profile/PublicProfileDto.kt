@@ -59,6 +59,8 @@ data class PublicProfileDto(
     val usernameIsGenerated: Boolean? = null,
     /** PRF SRV-1: what the person did around the neighborhood; null when the counts couldn't be read. */
     val contributions: ProfileContributions? = null,
+    /** PRF SRV-2: the person's prompt answers in saved order (the app owns the prompt text). */
+    val prompts: List<ProfilePromptDto>? = null,
     /** Set on a Preview as answer (`?as=`): the audience the server answered as. */
     @Json(name = "preview_as") val previewAs: String? = null,
 ) {
@@ -88,3 +90,10 @@ data class PublicProfileDto(
                 else -> state
             }
 }
+
+/** One prompt answer (PRF SRV-2): [key] from the catalog, [answer] 1–120 characters of plain text. */
+@JsonClass(generateAdapter = true)
+data class ProfilePromptDto(
+    val key: String,
+    val answer: String,
+)

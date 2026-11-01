@@ -15,6 +15,8 @@ import com.squareup.moshi.JsonClass
 data class MyPostDto(
     val id: String,
     @Json(name = "user_id") val userId: String? = null,
+    /** PRF SRV-3: whether the post is pinned to your profile; missing when unknown. */
+    @Json(name = "profile_pinned") val profilePinned: Boolean? = null,
     val title: String? = null,
     val content: String? = null,
     @Json(name = "post_type") val postType: String? = null,

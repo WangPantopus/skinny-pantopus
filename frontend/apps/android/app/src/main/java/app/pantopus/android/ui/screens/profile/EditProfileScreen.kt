@@ -116,7 +116,12 @@ fun EditProfileScreen(
     val neighborPhotoBusy = viewModel.neighborPhotoBusy.collectAsStateWithLifecycle().value
     val cityAudience = viewModel.cityAudience.collectAsStateWithLifecycle().value
     val ownFacts = viewModel.ownFacts.collectAsStateWithLifecycle().value
+    val prompts = viewModel.prompts.collectAsStateWithLifecycle().value
+    val pinnedPosts = viewModel.pins.state.collectAsStateWithLifecycle().value
+    val unpinning = viewModel.unpinning.collectAsStateWithLifecycle().value
     var showCitySheet by rememberSaveable { mutableStateOf(false) }
+    var showPromptPicker by rememberSaveable { mutableStateOf(false) }
+    var answeringPrompt by rememberSaveable { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
@@ -234,6 +239,20 @@ fun EditProfileScreen(
                             cityValue = cityAudience?.label,
                             onOpenCity = { showCitySheet = true },
                             onOpenMyHomes = onOpenMyHomes,
+                            promptsSlot = {
+                                EditPromptsGroup(
+                                    prompts = prompts,
+                                    onOpen = { answeringPrompt = it.key },
+                                    onAdd = { showPromptPicker = true },
+                                )
+                            },
+                            pinnedSlot = {
+                                EditPinnedGroup(
+                                    pinned = pinnedPosts?.map(::pinnedCard),
+                                    unpinning = unpinning,
+                                    onUnpin = viewModel::unpin,
+                                )
+                            },
                         ),
                 )
             is EditProfileUiState.Error ->
@@ -246,6 +265,33 @@ fun EditProfileScreen(
                 )
         }
 
+        if (showPromptPicker) {
+            PromptPickerSheet(
+                used = prompts.map { it.key }.toSet(),
+                onPick = { prompt ->
+                    showPromptPicker = false
+                    answeringPrompt = prompt.key
+                },
+                onDismiss = { showPromptPicker = false },
+            )
+        }
+        answeringPrompt?.let(ProfilePrompt::of)?.let { prompt ->
+            val existing = prompts.firstOrNull { it.key == prompt.key }
+            PromptAnswerSheet(
+                prompt = prompt,
+                initial = existing?.answer.orEmpty(),
+                canRemove = existing != null,
+                onSave = { answer ->
+                    answeringPrompt = null
+                    viewModel.setPromptAnswer(prompt, answer)
+                },
+                onRemove = {
+                    answeringPrompt = null
+                    viewModel.removePrompt(prompt)
+                },
+                onDismiss = { answeringPrompt = null },
+            )
+        }
         if (showCitySheet) {
             CityAudienceSheet(
                 selected = cityAudience ?: CityAudience.Connections,
@@ -363,6 +409,9 @@ internal data class EditorExtras(
     val cityValue: String? = null,
     val onOpenCity: () -> Unit = {},
     val onOpenMyHomes: () -> Unit = {},
+    /** PRF step 5: Prompts (after About you) and Pinned posts (after Helps with). */
+    val promptsSlot: @Composable () -> Unit = {},
+    val pinnedSlot: @Composable () -> Unit = {},
 )
 
 /** The preview card from the form as typed: the name and photo neighbors see, @username, the trust line, tagline, bio. */
@@ -447,9 +496,11 @@ private fun EditProfileSections(
             draftErrorSlot = bioDraftErrorSlot,
         )
     }
+    extras.promptsSlot()
     // Skills live in `UserSkill`, not on `User`, so this group commits
     // through `PUT /api/users/skills` inside the same Save.
     FormFieldGroup("Helps with") { skillsSlot() }
+    extras.pinnedSlot()
     FormFieldGroup("Links") {
         TextRow(
             field = EditProfileField.Website,

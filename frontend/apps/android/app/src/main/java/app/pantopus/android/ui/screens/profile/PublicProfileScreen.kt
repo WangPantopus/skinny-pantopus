@@ -114,6 +114,8 @@ fun PublicProfileScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val inCommon by viewModel.inCommon.state.collectAsStateWithLifecycle()
+    val pinnedPosts by viewModel.pins.state.collectAsStateWithLifecycle()
+    val pinnedCards = remember(pinnedPosts) { pinnedPosts?.map(::pinnedCard) }
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val usernameShareForm by usernameShare.form.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
@@ -272,6 +274,7 @@ fun PublicProfileScreen(
                                 postCardActions = postCardActions,
                                 // Nothing shared shows on your own page or across a block.
                                 inCommon = inCommon.takeIf { !content.isOwner && connection != ProfileConnection.Blocked },
+                                pinned = pinnedCards.takeIf { connection != ProfileConnection.Blocked },
                                 onOpenInCommon = { target ->
                                     when (target) {
                                         is InCommonTarget.Plan -> onOpenPlan(target.id)
@@ -529,6 +532,7 @@ fun PublicProfileScreen(
                     },
                     onReport = { viewModel.postCards.beginReport(card.id) },
                     onDismiss = { viewModel.postCards.dismissOptions() },
+                    onToggleProfilePin = { viewModel.postCards.toggleProfilePin(card.id) },
                 )
             }
         }
@@ -907,6 +911,8 @@ internal fun LocalProfileLoadedFrame(
     mode: ProfileFrameMode = ProfileFrameMode.Visitor,
     inCommon: ProfileInCommon? = null,
     onOpenInCommon: (InCommonTarget) -> Unit = {},
+    /** The Pinned row; null until read (then the "Pin a post" tip waits too). */
+    pinned: List<PinnedCard>? = null,
 ) {
     val owner = mode as? ProfileFrameMode.Owner
     val preview = mode as? ProfileFrameMode.Preview
@@ -931,9 +937,26 @@ internal fun LocalProfileLoadedFrame(
                 onTrustClick = onTrustClick,
                 accountNameLine = owner?.extras?.accountNameLine,
             ) {
-                ProfileFrameHeaderActions(mode = mode, content = content, header = header, actions = actions, callbacks = callbacks)
+                ProfileFrameHeaderActions(
+                    mode = mode,
+                    content = content,
+                    header = header,
+                    actions = actions,
+                    callbacks = callbacks,
+                    hasNoPins = pinned?.isEmpty() == true,
+                )
             }
             YouAndCard(firstName = firstName, inCommon = inCommon, onOpen = onOpenInCommon)
+            GetToKnowCard(
+                firstName = firstName,
+                prompts = content.profile.prompts,
+                onEdit = callbacks.onEditProfile.takeIf { owner != null },
+            )
+            PinnedRow(
+                cards = pinned.orEmpty(),
+                onOpen = postCardActions.onOpen.takeIf { preview == null },
+                onEdit = callbacks.onEditProfile.takeIf { owner != null },
+            )
             Spacer(Modifier.height(28.dp))
             if (preview?.audience == PreviewAudience.Anyone) {
                 // Signed-out visitors can't read posts: no tabs, no posts, as the drawing's "anyone" frame.
@@ -1023,6 +1046,7 @@ private fun ProfileFrameHeaderActions(
     header: PublicProfileHeader,
     actions: ProfileActionsState,
     callbacks: ProfileActionCallbacks,
+    hasNoPins: Boolean,
 ) {
     val firstName = profileFirstName(header)
     when (mode) {
@@ -1030,8 +1054,9 @@ private fun ProfileFrameHeaderActions(
         is ProfileFrameMode.Owner -> {
             OwnerHeaderActions(onEditProfile = callbacks.onEditProfile, onPreviewAs = mode.actions.onPreviewAs)
             OwnerTips(
-                tips = ownerTips(content, header, mode.extras),
-                onOpen = { callbacks.onEditProfile() },
+                tips = ownerTips(content, header, mode.extras, hasNoPins),
+                // Pins come from a post's ⋯ menu: "Pin a post" opens My posts; the rest open the editor.
+                onOpen = { tip -> if (tip == OwnerTip.Pin) mode.navigation.onSeeAllPosts() else callbacks.onEditProfile() },
                 onDismiss = mode.actions.onDismissTip,
             )
         }
@@ -1072,12 +1097,15 @@ internal fun ownerTips(
     content: PublicProfileContent,
     header: PublicProfileHeader,
     extras: OwnerExtras?,
+    hasNoPins: Boolean = false,
 ): List<OwnerTip> {
     if (extras == null) return emptyList()
     return listOfNotNull(
         OwnerTip.Photo.takeIf { extras.localProfileRead && header.avatarUrl.isNullOrBlank() },
         OwnerTip.Tagline.takeIf { header.tagline == null },
         OwnerTip.Skills.takeIf { content.stats.skills.isEmpty() },
+        OwnerTip.Prompt.takeIf { promptAnswers(content.profile.prompts).isEmpty() },
+        OwnerTip.Pin.takeIf { hasNoPins && content.posts.isNotEmpty() },
     ).filter { it.key !in extras.dismissedTips }.take(OWNER_TIPS_SHOWN)
 }
 

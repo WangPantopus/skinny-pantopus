@@ -503,7 +503,7 @@ internal fun ProfilePulseCards(
                         onTap = { actions.onOpen(card.id) },
                         onPrimaryReaction = react,
                         onRSVP = react.takeIf { card.attendees != null },
-                        onOverflow = { actions.onOptions(card.id) }.takeIf { card.actions.canShareExternally || card.actions.canReport },
+                        onOverflow = { actions.onOptions(card.id) }.takeIf { profilePostHasOptions(card) },
                         onToggleSave = { actions.onToggleSave(card.id) },
                         onToggleRepost = { actions.onToggleRepost(card.id) },
                     )

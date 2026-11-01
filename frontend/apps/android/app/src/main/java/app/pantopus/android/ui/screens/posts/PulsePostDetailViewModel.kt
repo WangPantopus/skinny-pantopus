@@ -6,6 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.identity.ProfileChanges
 import app.pantopus.android.data.api.models.posts.PostCommentDto
 import app.pantopus.android.data.api.models.posts.PostCommentRequest
 import app.pantopus.android.data.api.models.posts.PostDetailDto
@@ -23,6 +24,7 @@ import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.feed.pulse.PostStatus
+import app.pantopus.android.ui.screens.profile.ProfilePinCopy
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.PostCommentRow
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.PostReactionCounts
 import app.pantopus.android.ui.screens.shared.content_detail.headers.PostIntent
@@ -174,6 +176,27 @@ class PulsePostDetailViewModel
          * True when the signed-in user authored the post on screen. The
          * screen uses this to gate the Edit / Delete overflow actions.
          */
+        /** Your own post: whether it's pinned to your profile (PRF step 5); null hides the menu item. */
+        val profilePinned: Boolean?
+            get() = (_state.value as? PulsePostDetailUiState.Loaded)?.content?.post?.profilePinned?.takeIf { isOwner }
+
+        /** "Pin to profile" / "Unpin from profile"; a 4th pin shows the server's sentence. */
+        fun toggleProfilePin() {
+            val pinned = profilePinned ?: return
+            dismissOverflowMenu()
+            viewModelScope.launch {
+                when (val result = repo.setProfilePin(postId, !pinned)) {
+                    is NetworkResult.Success -> {
+                        _toastMessage.value = if (result.data.profilePinned) ProfilePinCopy.PINNED else ProfilePinCopy.UNPINNED
+                        ProfileChanges.notifyChanged()
+                        postsRefresh.notifyPostsDidChange()
+                        load()
+                    }
+                    is NetworkResult.Failure -> _toastMessage.value = result.error.displayMessage(ProfilePinCopy.FAILED)
+                }
+            }
+        }
+
         val isOwner: Boolean
             get() {
                 val loaded = _state.value as? PulsePostDetailUiState.Loaded ?: return false
