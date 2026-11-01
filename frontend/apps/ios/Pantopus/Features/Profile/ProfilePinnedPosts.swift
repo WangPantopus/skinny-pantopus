@@ -93,6 +93,8 @@ struct ProfilePinnedRow: View {
                         .accessibilityIdentifier("publicProfilePinned_\(post.id)")
                     }
                 }
+                // Every card as tall as the tallest.
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, Spacing.s5)
             }
         }
