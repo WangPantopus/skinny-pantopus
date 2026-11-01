@@ -608,8 +608,9 @@ export function derivePulse(intel: PlaceIntelligence): DerivedPulse {
     };
   }
 
-  // 3) All clear — assert only what we actually know.
-  const airGood = aqiData != null && (aqiData.category === 'good' || aqiData.category === 'moderate');
+  // 3) All clear — assert only what we actually know. Moderate air (AQI 51–100) is said as moderate, never as good.
+  const airClause =
+    aqiData?.category === 'good' ? 'air is good' : aqiData?.category === 'moderate' ? 'air quality is moderate' : null;
   const alertsKnownClear =
     alerts != null && alerts.status === 'ready' &&
     (!alerts.data || (alerts.data as PlaceAlertsData).active.length === 0);
@@ -626,15 +627,15 @@ export function derivePulse(intel: PlaceIntelligence): DerivedPulse {
       variant: 'allclear',
       mainIcon: CloudOff,
       chip: { label: 'Alerts unavailable', tone: 'neutral' },
-      title: airGood
-        ? "Air is good on your block today. Weather alerts aren't available right now."
+      title: airClause
+        ? `${airClause.replace(/^./, (c) => c.toUpperCase())} on your block today. Weather alerts aren't available right now.`
         : "Air quality and weather alerts aren't available for your block right now.",
       nudge,
     };
   }
 
   const clauses: string[] = [];
-  if (airGood) clauses.push('air is good');
+  if (airClause) clauses.push(airClause);
   clauses.push('there are no active alerts');
   const tail = ` ${clauses.join(' and ').replace(/^./, (c) => c.toUpperCase())}.`;
   const title = `All clear on your block today.${tail}`;
