@@ -266,7 +266,12 @@ public struct PublicProfileView: View {
         .sheet(
             isPresented: $showEditProfile,
             onDismiss: { Task { await viewModel.refresh() } },
-            content: { EditProfileView() }
+            content: {
+                EditProfileView {
+                    showEditProfile = false
+                    open(.myHomes)
+                }
+            }
         )
         // A stray tap on Following never unfollows: it asks first, as Connected
         // does. An alert, like Block's, so Cancel shows beside Unfollow (as on

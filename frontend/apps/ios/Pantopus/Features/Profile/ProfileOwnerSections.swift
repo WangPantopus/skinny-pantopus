@@ -165,6 +165,8 @@ public enum ProfileOwnerDestination: Hashable, Sendable {
     case savedPlaces
     case settings
     case help
+    /// The editor's "Home address" row.
+    case myHomes
     /// Debug builds only: the developer rows the Me screen listed.
     case developerTools
 }

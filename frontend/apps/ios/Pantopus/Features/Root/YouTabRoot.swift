@@ -518,7 +518,10 @@ public struct YouTabRoot: View {
                     Text("You'll need to sign in again to use your account. Signing out removes what Pantopus saved on this phone.")
                 }
                 .sheet(isPresented: $showsEditProfile) {
-                    EditProfileView()
+                    EditProfileView {
+                        showsEditProfile = false
+                        path.append(.myHomes)
+                    }
                 }
                 .sheet(item: $systemSheet) { request in request.makeView() }
                 .findPeopleSheet(isPresented: $showFindPeople)
@@ -766,6 +769,7 @@ public struct YouTabRoot: View {
         case .supportTrains: .supportTrains
         case .savedPlaces: .savedPlaces
         case .settings: .settings
+        case .myHomes: .myHomes
         case .help, .developerTools: .helpCenter
         }
     }

@@ -120,6 +120,18 @@ final class EditProfileViewModel {
     /// Bio "Generate with AI" leg state.
     var bioDraftState: EditProfileBioDraftState = .idle
 
+    /// The name and photo neighbors see (`GET`/`PATCH /api/local-profiles/me`).
+    /// Its name field saves with the form's Save; a photo change saves at once,
+    /// as on Privacy before.
+    let neighbors: NeighborsSeeYouViewModel
+    /// "Who sees your city": `public`, `followers` (connections and household,
+    /// the default) or `private` (`show_neighborhood`, `GET`/`PATCH
+    /// /api/privacy/settings`). Nil until read.
+    var cityAudience: String?
+    /// The preview card's trust line, and your account id for its avatar color.
+    var previewFacts = ProfileTrustFacts(isVerifiedNeighbor: false, city: nil, joined: nil)
+    var accountId: String?
+
     let api: APIClient
     /// The profile the You screen already read (You: fresh 10 minutes),
     /// so the form fills in the first frame.
@@ -133,6 +145,7 @@ final class EditProfileViewModel {
         store = ScreenStore.store(for: api)
         self.uploader = uploader
         usernameCheck = UsernameAvailabilityChecker(api: api)
+        neighbors = NeighborsSeeYouViewModel(api: api, uploader: uploader)
         for field in EditProfileField.allCases {
             fields[field] = FormFieldState(id: field.rawValue, originalValue: "")
         }
@@ -211,7 +224,7 @@ final class EditProfileViewModel {
     /// Skills ride their own PUT, so they widen the form's dirty state
     /// without appearing in `aggregate`.
     var isDirty: Bool {
-        aggregate.isDirty || isSkillsDirty
+        aggregate.isDirty || isSkillsDirty || neighbors.isNameChanged
     }
 
     /// True when the working skill list differs from the last-saved one.
@@ -223,7 +236,7 @@ final class EditProfileViewModel {
     /// last-saved baseline. Drives the A13.9 sticky "N unsaved" pill.
     /// The skill list counts as one such field.
     var dirtyFieldCount: Int {
-        fields.values.filter(\.isDirty).count + (isSkillsDirty ? 1 : 0)
+        fields.values.filter(\.isDirty).count + (isSkillsDirty ? 1 : 0) + (neighbors.isNameChanged ? 1 : 0)
     }
 
     /// Revert all unsaved edits to the last-saved baseline.
@@ -237,6 +250,7 @@ final class EditProfileViewModel {
         }
         skills = savedSkills
         skillDraft = ""
+        if let shown = neighbors.loaded?.profile.displayName { neighbors.editName(shown) }
     }
 
     /// Runs all validators and returns the first failing field id, if any.
@@ -270,7 +284,8 @@ final class EditProfileViewModel {
         }
         let fieldsDirty = aggregate.isDirty
         let skillsDirty = isSkillsDirty
-        guard fieldsDirty || skillsDirty else { return false }
+        let nameDirty = neighbors.isNameChanged
+        guard fieldsDirty || skillsDirty || nameDirty else { return false }
         if !NetworkMonitor.shared.isOnline {
             // P15: don't silently queue. Surface the error inline.
             toast = ToastMessage(
@@ -307,6 +322,11 @@ final class EditProfileViewModel {
             } catch {
                 failure = failure ?? (error as? APIError)?.errorDescription ?? "Couldn't save skills."
             }
+        }
+        if nameDirty {
+            // The name neighbors see: its own route, its own checks.
+            await neighbors.saveName()
+            if let error = neighbors.nameError { failure = failure ?? error }
         }
         if let failure {
             toast = ToastMessage(text: failure, kind: .error)

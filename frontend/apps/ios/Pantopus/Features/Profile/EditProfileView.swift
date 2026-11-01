@@ -2,27 +2,44 @@
 //  EditProfileView.swift
 //  Pantopus
 //
-//  Edit Profile screen. Fields mirror `updateProfileSchema` at
-//  `backend/routes/users.js:324-351`. Section ordering matches the P10
-//  design: About, Skills, Contact, Address, Social, Visibility.
+//  Edit Profile screen (the 11-01 redesign, `Edit.dc.html`): a live preview
+//  card ("How neighbors see you · updates as you type"), then "Neighbors see
+//  this" (photo and name neighbors see, username, tagline, about you, helps
+//  with, links) and "Only you see this" (account name, email and phone with
+//  "Show on my profile", date of birth, address, home address, who sees your
+//  city, who can open your profile). Fields mirror `updateProfileSchema` at
+//  `backend/routes/users.js:324-351`.
 //
-//  Skills are the one group that doesn't ride the profile PATCH — they
-//  commit through `PUT /api/users/skills` in the same `save()`.
+//  Skills (`PUT /api/users/skills`) and the name neighbors see (`PATCH
+//  /api/local-profiles/me`) ride the same Save; a photo for neighbors and who
+//  sees your city save at once.
 //
 
+import PhotosUI
 import SwiftUI
 
 /// Edit Profile screen — presents as a sheet from the You tab.
 public struct EditProfileView: View {
     @State var viewModel: EditProfileViewModel
-    @Environment(\.dismiss) private var dismiss
+    /// The photo neighbors see: the picker, and the photo it picked.
+    @State var showsNeighborPhotoPicker = false
+    @State var neighborPhotoSelection: PhotosPickerItem?
+    /// "Who sees your city": Everyone, Connections and household, Only me.
+    @State var showsCityChoices = false
+    /// Leaving for My homes with unsaved edits asks first.
+    @State var showsLeaveWithChanges = false
+    @Environment(\.dismiss) var dismiss
+    /// "Home address" opens My homes (the host closes this editor first).
+    let onOpenMyHomes: (@MainActor () -> Void)?
 
-    public init() {
+    public init(onOpenMyHomes: (@MainActor () -> Void)? = nil) {
         _viewModel = State(initialValue: EditProfileViewModel())
+        self.onOpenMyHomes = onOpenMyHomes
     }
 
     init(viewModel: EditProfileViewModel) {
         _viewModel = State(initialValue: viewModel)
+        onOpenMyHomes = nil
     }
 
     public var body: some View {
@@ -48,6 +65,32 @@ public struct EditProfileView: View {
         // edits without the Close button's "Discard changes?" prompt.
         .interactiveDismissDisabled(viewModel.isDirty)
         .task { await viewModel.load() }
+        .task { await viewModel.loadNeighborsAndCity() }
+        .photosPicker(isPresented: $showsNeighborPhotoPicker, selection: $neighborPhotoSelection, matching: .images)
+        .onChange(of: neighborPhotoSelection) { _, item in
+            guard let item else { return }
+            neighborPhotoSelection = nil
+            uploadNeighborPhoto(item)
+        }
+        .confirmationDialog("Who sees your city", isPresented: $showsCityChoices, titleVisibility: .visible) {
+            ForEach(EditProfileViewModel.cityAudienceChoices, id: \.self) { value in
+                Button(EditProfileViewModel.cityAudienceLabel(value)) {
+                    Task { await viewModel.setCityAudience(value) }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Your street address is never shown. This is who sees your city on your profile.")
+        }
+        .alert("Discard your changes?", isPresented: $showsLeaveWithChanges) {
+            Button("Keep editing", role: .cancel) {}
+            Button("Discard", role: .destructive) {
+                viewModel.discardChanges()
+                onOpenMyHomes?()
+            }
+        } message: {
+            Text("Save them first, or discard them to open My homes.")
+        }
         .onAppear { Analytics.track(.screenEditProfileViewed) }
         .overlay(alignment: .bottom) {
             if let toast = viewModel.toast {
@@ -120,12 +163,17 @@ public struct EditProfileView: View {
             onClose: { dismiss() },
             onCommit: { Task { await viewModel.save() } },
             content: {
-                avatarSection
-                aboutSection
+                previewSection
+                neighborsHeader
+                neighborsSection
                 skillsSection
+                socialSection
+                onlyYouHeader
+                accountSection
+                accountPhotoSection
                 contactSection
                 addressSection
-                socialSection
+                placeSection
                 visibilitySection
             },
             stickyBottom: {

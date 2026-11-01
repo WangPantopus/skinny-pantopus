@@ -25,14 +25,16 @@ extension EditProfileView {
         .padding(.bottom, Spacing.s2)
     }
 
-    var aboutSection: some View {
-        FormFieldGroup("About") {
-            usernameField
+    /// The account's name: only you (and home verification) use it.
+    var accountSection: some View {
+        FormFieldGroup("Account name") {
             textField(.firstName, label: "First name")
             textField(.middleName, label: "Middle name (optional)")
             textField(.lastName, label: "Last name")
-            taglineField
-            bioField
+            Text("Used for your account and home verification.")
+                .pantopusTextStyle(.caption)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -40,7 +42,7 @@ extension EditProfileView {
     /// they commit through the same Save so the group sits inline with
     /// the rest of the form (`backend/routes/users.js:2246`).
     var skillsSection: some View {
-        FormFieldGroup("Skills") {
+        FormFieldGroup("Helps with") {
             EditProfileSkillsBlock(
                 skills: viewModel.skills,
                 draft: viewModel.skillDraft,
@@ -58,12 +60,22 @@ extension EditProfileView {
             // false`. `updateProfileSchema` exposes no `email` key, so
             // the field is read-only until the backend adds it.
             readOnlyEmail
+            contactVisibilityToggle(
+                .showEmail,
+                label: "Show on my profile",
+                subtitle: "Neighbors who open your profile can see your email address."
+            )
             textField(
                 .phoneNumber,
                 label: "Phone (optional)",
                 placeholder: "+15555550123",
                 keyboardType: .phonePad,
                 contentType: .telephoneNumber
+            )
+            contactVisibilityToggle(
+                .showPhone,
+                label: "Show on my profile",
+                subtitle: "Neighbors who open your profile can see your phone number."
             )
             dateOfBirthField
         }
@@ -90,7 +102,7 @@ extension EditProfileView {
     }
 
     var socialSection: some View {
-        FormFieldGroup("Social") {
+        FormFieldGroup("Links") {
             textField(
                 .website,
                 label: "Website",
@@ -111,18 +123,8 @@ extension EditProfileView {
         // stays omitted; the 3-way `profileVisibility` enum and the two
         // contact-visibility booleans below are the schema's full set
         // (`backend/routes/users.js:797-800`).
-        FormFieldGroup("Visibility") {
+        FormFieldGroup("Who can open your profile") {
             visibilityPicker
-            contactVisibilityToggle(
-                .showEmail,
-                label: "Show Email on Profile",
-                subtitle: "Neighbors viewing your profile can see your email address."
-            )
-            contactVisibilityToggle(
-                .showPhone,
-                label: "Show Phone on Profile",
-                subtitle: "Neighbors viewing your profile can see your phone number."
-            )
         }
     }
 

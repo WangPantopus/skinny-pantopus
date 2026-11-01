@@ -3243,7 +3243,7 @@ public struct HubTabRoot: View {
             // it for both Close and save-success pop. Inside a
             // NavigationStack push, `dismiss()` pops to the previous
             // route, so wiring an explicit `onClose` is unnecessary.
-            EditProfileView()
+            EditProfileView { push(.myHomes) }
         case .reviewClaims:
             ReviewClaimsView(
                 viewModel: ReviewClaimsViewModel { claimId in
