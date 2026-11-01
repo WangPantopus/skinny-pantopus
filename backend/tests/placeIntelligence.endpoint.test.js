@@ -297,7 +297,8 @@ describe('GET /api/homes/:id/intelligence', () => {
       const alert = sectionsById(res.body).alerts.data.active[0];
 
       expect(alert.event).toBe('Wind Advisory');
-      expect(alert.severity).toBe('warning');
+      // The level is the product's own name (an advisory), not the hazard's CAP severity.
+      expect(alert.severity).toBe('advisory');
       expect(alert.headline).toBe('Wind Advisory issued June 7 at 7:00AM PDT until June 7 at 7:00PM PDT');
       expect(alert.headline).not.toBe(alert.event);
       expect(alert.description).toContain('gusts up to 45 mph');

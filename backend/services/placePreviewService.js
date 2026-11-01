@@ -471,7 +471,7 @@ function calmFacts(byId) {
   const air = ready(byId.get('air_quality'));
   if (air && air.category === 'good') facts.push('good air today');
   const alerts = ready(byId.get('alerts'));
-  if (alerts && Array.isArray(alerts.active) && alerts.active.length === 0) facts.push('no active alerts');
+  if (alerts && Array.isArray(alerts.active) && alerts.active.length === 0) facts.push('no active weather alerts');
   const seismic = ready(byId.get('seismic'));
   if (seismic && /^[AB]$/i.test(String(seismic.design_category))) facts.push('low earthquake demand');
   return facts;

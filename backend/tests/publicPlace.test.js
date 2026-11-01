@@ -426,7 +426,7 @@ describe('GET /api/public/place', () => {
       expect(res.body.aha).toMatchObject({ section_id: null, tone: 'info', headline: 'Some public information is still missing' });
       expect(res.body.aha.detail).toMatch(/minimal flood risk/i);
       expect(res.body.aha.detail).toMatch(/good air today/i);
-      expect(res.body.aha.detail).toMatch(/no active alerts/i);
+      expect(res.body.aha.detail).toMatch(/no active weather alerts/i);
     });
   });
 

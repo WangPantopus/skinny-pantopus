@@ -37,8 +37,9 @@ describe('placeIntelligenceSerializer — section envelope', () => {
       asOf: '2024-01-01T00:00:00.000Z',
     });
 
-    // Exactly the contract keys, nothing more, nothing less.
-    expect(Object.keys(section).sort()).toEqual(ENVELOPE_KEYS);
+    // Exactly the contract keys, plus the area covered and the kind of
+    // evidence that risk & environment sections with a reading carry.
+    expect(Object.keys(section).sort()).toEqual([...ENVELOPE_KEYS, 'evidence', 'scope'].sort());
 
     expect(section).toEqual({
       id: 'flood',
@@ -51,6 +52,8 @@ describe('placeIntelligenceSerializer — section envelope', () => {
       coverage: 'full',
       unavailable_reason: null,
       data: floodData,
+      scope: { kind: 'point', label: "This address's map point" },
+      evidence: { kind: 'map_classification', label: 'Map classification' },
     });
   });
 
