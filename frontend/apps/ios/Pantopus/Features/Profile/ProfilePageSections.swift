@@ -4,9 +4,10 @@
 //
 //  The parts of a person's profile below the header (the 11-01 redesign,
 //  `Main.dc.html` and `About.dc.html`): the "wants to connect" banner, the
-//  About tab (what they help with, what Pantopus verified, their links;
-//  never the bio again) and the Work tab (portfolio, posted tasks, reviews),
-//  which shows only when there is work to show.
+//  About tab (what they help with, what they did around the neighborhood,
+//  what Pantopus verified, their links; never the bio again) and the Work
+//  tab (portfolio, posted tasks, reviews), which shows only when there is
+//  work to show.
 //
 
 import SwiftUI
@@ -60,9 +61,9 @@ struct ProfileRequestBanner: View {
 
 // MARK: - About
 
-/// The About tab (`About.dc.html`): Helps with, Verified (in plain words),
-/// Links. Only the parts that have something in them; never the bio, which
-/// the header already shows.
+/// The About tab (`About.dc.html`): Helps with, Around the neighborhood,
+/// Verified (in plain words), Links. Only the parts that have something in
+/// them; never the bio, which the header already shows.
 @MainActor
 struct LocalProfileAboutSection: View {
     let content: NeighborProfileContent
@@ -91,6 +92,14 @@ struct LocalProfileAboutSection: View {
                     .accessibilityIdentifier("publicProfileNeighborSkills")
                 }
             }
+            if !contributionRows.isEmpty {
+                section("Around the neighborhood") {
+                    card(contributionRows) { row in
+                        AboutCountRowView(row: row)
+                    }
+                }
+                .accessibilityIdentifier("publicProfileContributions")
+            }
             if !verifiedRows.isEmpty {
                 section("Verified") {
                     card(verifiedRows) { row in
@@ -113,7 +122,7 @@ struct LocalProfileAboutSection: View {
                 }
                 .accessibilityIdentifier("publicProfileLinks")
             }
-            if content.skills.isEmpty, verifiedRows.isEmpty, links.isEmpty {
+            if content.skills.isEmpty, contributionRows.isEmpty, verifiedRows.isEmpty, links.isEmpty {
                 Text("\(header.firstName) hasn't added anything here yet.")
                     .scaledFont(15)
                     .foregroundStyle(Theme.Color.appTextMuted)
@@ -160,6 +169,44 @@ struct LocalProfileAboutSection: View {
         )
     }
 
+    /// What they did around the neighborhood (PRF SRV-1): only the counts
+    /// above zero; none from an older server or a failed count.
+    private var contributionRows: [AboutCountRow] {
+        guard let counts = profile.contributions else { return [] }
+        var rows: [AboutCountRow] = []
+        let trains = counts.supportTrainsHelped
+        if trains > 0 {
+            rows.append(AboutCountRow(
+                id: "trains",
+                icon: .handCoins,
+                tone: .home,
+                lead: "Helped on ",
+                count: "\(trains) Support \(trains == 1 ? "Train" : "Trains")"
+            ))
+        }
+        let plans = counts.plansHosted
+        if plans > 0 {
+            rows.append(AboutCountRow(
+                id: "plans",
+                icon: .calendar,
+                tone: .plan,
+                lead: "Hosted ",
+                count: "\(plans) \(plans == 1 ? "plan" : "plans")"
+            ))
+        }
+        let marks = counts.helpfulMarks
+        if marks > 0 {
+            rows.append(AboutCountRow(
+                id: "helpful",
+                icon: .lightbulb,
+                tone: .helpful,
+                lead: "Neighbors marked \(header.firstName)'s posts helpful ",
+                count: marks == 1 ? "once" : "\(marks) times"
+            ))
+        }
+        return rows
+    }
+
     /// Only what the profile read shows: the verified home (its city when
     /// they share it; the method isn't sent) and the confirmed email.
     private var verifiedRows: [AboutRow] {
@@ -198,7 +245,27 @@ struct LocalProfileAboutSection: View {
 struct AboutRow: Identifiable {
     enum Tone {
         case home
+        case plan
+        case helpful
         case neutral
+
+        var color: Color {
+            switch self {
+            case .home: Theme.Color.home
+            case .plan: Theme.Color.categoryPlanWalk
+            case .helpful: Theme.Color.warmAmber
+            case .neutral: Theme.Color.appTextSecondary
+            }
+        }
+
+        var background: Color {
+            switch self {
+            case .home: Theme.Color.homeBg
+            case .plan: Theme.Color.categoryPlanWalkTint
+            case .helpful: Theme.Color.warmAmberBg
+            case .neutral: Theme.Color.appSurfaceSunken
+            }
+        }
     }
 
     let id: String
@@ -240,11 +307,7 @@ private struct AboutRowView: View {
 
     var body: some View {
         HStack(spacing: Spacing.s3) {
-            Icon(row.icon, size: disc * 0.53, color: row.tone == .home ? Theme.Color.home : Theme.Color.appTextSecondary)
-                .frame(width: disc, height: disc)
-                .background(row.tone == .home ? Theme.Color.homeBg : Theme.Color.appSurfaceSunken)
-                .clipShape(Circle())
-                .accessibilityHidden(true)
+            AboutIconDisc(icon: row.icon, tone: row.tone, size: disc)
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.title)
                     .scaledFont(15, weight: .semibold)
@@ -267,6 +330,53 @@ private struct AboutRowView: View {
         .frame(minHeight: 56)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// A count around the neighborhood: "Hosted **2 plans**".
+struct AboutCountRow: Identifiable {
+    let id: String
+    let icon: PantopusIcon
+    let tone: AboutRow.Tone
+    let lead: String
+    let count: String
+}
+
+@MainActor
+private struct AboutCountRowView: View {
+    let row: AboutCountRow
+
+    @ScaledMetric(relativeTo: .subheadline) private var disc: CGFloat = 32
+
+    var body: some View {
+        HStack(spacing: Spacing.s3) {
+            AboutIconDisc(icon: row.icon, tone: row.tone, size: disc)
+            (Text(verbatim: row.lead) + Text(verbatim: row.count).fontWeight(.semibold))
+                .scaledFont(15)
+                .foregroundStyle(Theme.Color.appText)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: Spacing.s0)
+        }
+        .padding(.horizontal, Spacing.s4)
+        .padding(.vertical, 10)
+        .frame(minHeight: 56)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// The tinted circle an About row starts with.
+@MainActor
+private struct AboutIconDisc: View {
+    let icon: PantopusIcon
+    let tone: AboutRow.Tone
+    let size: CGFloat
+
+    var body: some View {
+        Icon(icon, size: size * 0.53, color: tone.color)
+            .frame(width: size, height: size)
+            .background(tone.background)
+            .clipShape(Circle())
+            .accessibilityHidden(true)
     }
 }
 

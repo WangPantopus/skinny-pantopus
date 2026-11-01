@@ -445,6 +445,15 @@ public struct PublicProfileView: View {
         }
     }
 
+    /// A plan opens on the Plans tab and a Support Train where trains live,
+    /// as their links do.
+    private func openTogether(_ target: ProfileTogetherLine.Target) {
+        switch target {
+        case let .plan(id): DeepLinkRouter.shared.handle(path: "/plans/\(id)")
+        case let .supportTrain(id): DeepLinkRouter.shared.handle(path: "/support-trains/\(id)")
+        }
+    }
+
     /// The share sheet can't present while the username sheet is still
     /// going away, so it opens a moment later.
     private func shareAfterSheet(_ url: URL?) {
@@ -492,6 +501,13 @@ public struct PublicProfileView: View {
                     )
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("publicProfileLocalHeader")
+
+                    let together = viewModel.togetherLines(for: payload)
+                    if !together.isEmpty {
+                        ProfileTogetherSection(firstName: payload.header.firstName, lines: together, onOpen: openTogether)
+                            .padding(.horizontal, Spacing.s5)
+                            .padding(.top, 28)
+                    }
 
                     LocalProfileTabStrip(
                         tabs: tabs,

@@ -216,4 +216,11 @@ public enum PublicProfileEndpoints {
     public static func profile(id: String, previewAs audience: String) -> Endpoint {
         Endpoint(method: .get, path: "/api/users/id/\(id)", query: ["as": audience])
     }
+
+    /// `GET /api/users/:id/in-common` — what you and this person share: people
+    /// you both know, plans, Support Trains and skills (PRF SRV-1). Route
+    /// `backend/routes/users.js:3846`.
+    public static func inCommon(userId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/users/\(userId)/in-common")
+    }
 }

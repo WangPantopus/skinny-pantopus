@@ -64,6 +64,9 @@ public struct PublicProfile: Decodable, Sendable, Hashable, Identifiable {
     public let skills: [String]
     /// True when the server made the username up (user_…, or the pre-October-7 kind built from the email address).
     public let usernameIsGenerated: Bool
+    /// What they did around the neighborhood (PRF SRV-1); nil from an older
+    /// server or when the counts couldn't be read.
+    public let contributions: ProfileContributions?
 
     private enum CodingKeys: String, CodingKey {
         case id, username, usernameIsGenerated
@@ -80,6 +83,7 @@ public struct PublicProfile: Decodable, Sendable, Hashable, Identifiable {
         case reviewCount = "review_count"
         case followersCount = "followers_count"
         case reviews, socialLinks, skills
+        case contributions
     }
 
     public init(from decoder: any Decoder) throws {
@@ -107,6 +111,8 @@ public struct PublicProfile: Decodable, Sendable, Hashable, Identifiable {
         reviews = try (c.decodeIfPresent([PublicProfileReview].self, forKey: .reviews)) ?? []
         socialLinks = try c.decodeIfPresent(JSONValue.self, forKey: .socialLinks)
         skills = try (c.decodeIfPresent([String].self, forKey: .skills)) ?? []
+        // A malformed part hides "Around the neighborhood", never the profile.
+        contributions = try? c.decodeIfPresent(ProfileContributions.self, forKey: .contributions)
         usernameIsGenerated = try c.decodeIfPresent(Bool.self, forKey: .usernameIsGenerated) ?? false
     }
 
@@ -145,5 +151,129 @@ public struct PublicProfile: Decodable, Sendable, Hashable, Identifiable {
         guard case let .object(map) = residency ?? .null,
               case let .bool(value) = map["verified"] ?? .null else { return false }
         return value
+    }
+}
+
+/// `contributions` on the profile reads (PRF SRV-1): the same numbers for
+/// every viewer. Route `backend/routes/users.js:3700`.
+public struct ProfileContributions: Decodable, Sendable, Hashable {
+    /// Support Trains they signed up to help (each train once).
+    public let supportTrainsHelped: Int
+    /// Plans they hosted that took place.
+    public let plansHosted: Int
+    /// Helpful marks other people gave their posts.
+    public let helpfulMarks: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case supportTrainsHelped = "support_trains_helped"
+        case plansHosted = "plans_hosted"
+        case helpfulMarks = "helpful_marks"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        supportTrainsHelped = try c.decodeIfPresent(Int.self, forKey: .supportTrainsHelped) ?? 0
+        plansHosted = try c.decodeIfPresent(Int.self, forKey: .plansHosted) ?? 0
+        helpfulMarks = try c.decodeIfPresent(Int.self, forKey: .helpfulMarks) ?? 0
+    }
+}
+
+/// `GET /api/users/:id/in-common` — what you and this person share, only as
+/// far as you may already see it (PRF SRV-1). Route `backend/routes/users.js:3846`.
+public struct ProfileInCommon: Decodable, Sendable, Hashable {
+    /// Someone connected to both of you, by the name neighbors see.
+    public struct Person: Decodable, Sendable, Hashable, Identifiable {
+        public let id: String
+        public let name: String
+        public let avatarURL: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case id, name
+            case avatarURL = "avatar_url"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(String.self, forKey: .id)
+            name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+            avatarURL = try c.decodeIfPresent(String.self, forKey: .avatarURL)
+        }
+    }
+
+    /// An upcoming plan you're both in.
+    public struct Plan: Decodable, Sendable, Hashable, Identifiable {
+        public let id: String
+        public let title: String
+        public let kind: PlanKind?
+        public let startsAt: String?
+        public let endsAt: String?
+        /// Who hosts it: you, them or someone else.
+        public let hostId: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case id, title, kind
+            case startsAt = "starts_at"
+            case endsAt = "ends_at"
+            case hostId = "host_id"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(String.self, forKey: .id)
+            title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
+            // A kind this app doesn't know yet still shows the plan.
+            kind = try? c.decodeIfPresent(PlanKind.self, forKey: .kind)
+            startsAt = try c.decodeIfPresent(String.self, forKey: .startsAt)
+            endsAt = try c.decodeIfPresent(String.self, forKey: .endsAt)
+            hostId = try c.decodeIfPresent(String.self, forKey: .hostId)
+        }
+    }
+
+    /// A Support Train you both signed up to help.
+    public struct Train: Decodable, Sendable, Hashable, Identifiable {
+        public let id: String
+        public let title: String
+
+        private enum CodingKeys: String, CodingKey {
+            case id, title
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(String.self, forKey: .id)
+            title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
+        }
+    }
+
+    private struct Connections: Decodable {
+        let count: Int?
+        let people: [Person]?
+    }
+
+    /// How many people you both know; `people` names at most two of them.
+    public let connectionCount: Int
+    public let people: [Person]
+    public let plans: [Plan]
+    public let supportTrains: [Train]
+    public let skills: [String]
+
+    private enum CodingKeys: String, CodingKey {
+        case connections, plans, skills
+        case supportTrains = "support_trains"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let connections = try c.decodeIfPresent(Connections.self, forKey: .connections)
+        people = connections?.people ?? []
+        connectionCount = max(connections?.count ?? 0, people.count)
+        plans = try c.decodeIfPresent([Plan].self, forKey: .plans) ?? []
+        supportTrains = try c.decodeIfPresent([Train].self, forKey: .supportTrains) ?? []
+        skills = try c.decodeIfPresent([String].self, forKey: .skills) ?? []
+    }
+
+    /// Nothing in common that you may see.
+    public var isEmpty: Bool {
+        connectionCount == 0 && plans.isEmpty && supportTrains.isEmpty && skills.isEmpty
     }
 }

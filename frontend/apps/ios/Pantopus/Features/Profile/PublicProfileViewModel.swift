@@ -381,6 +381,9 @@ public final class PublicProfileViewModel {
     /// How many portfolio items the person has, read once so Work shows only
     /// when there's work to show. Nil until read, and after a failed read.
     public private(set) var portfolioCount: Int?
+    /// What you and this person share, for "You and <name>" (PRF SRV-1). Nil
+    /// for your own profile and previews, until read, and after a failed read.
+    public private(set) var inCommon: ProfileInCommon?
     /// When the Local posts were read. A post on this profile changed
     /// elsewhere after that (its page, the feed) makes the next opening re-read them.
     private var postsReadAt: Date?
@@ -921,10 +924,12 @@ public final class PublicProfileViewModel {
                 // The buttons' relationship read runs beside the posts read,
                 // so a slow posts read doesn't hold Connect either.
                 async let relationship: Void = loadRelationship(id: profile.id)
+                async let together: Void = loadInCommon(id: profile.id)
                 let rows = await loadUserPosts(id: profile.id, force: force || postsChangedElsewhere)
                 postsLoading = false
                 state = .loaded(build(from: profile, kind: kind, posts: rows.map { project(post: $0) }))
                 await relationship
+                await together
                 await loadPortfolioCount(id: profile.id)
             } else {
                 state = .loaded(build(from: profile, kind: kind, posts: []))
@@ -1172,6 +1177,35 @@ public final class PublicProfileViewModel {
     /// True when someone is signed in (the relationship read needs it).
     public var hasSignedInViewer: Bool {
         currentUserId != nil
+    }
+
+    /// "You and <name>": at most two lines; none once you block them.
+    public func togetherLines(for payload: PublicProfileContent) -> [ProfileTogetherLine] {
+        guard let inCommon, !payload.isOwner, connection != .blocked else { return [] }
+        return ProfileTogetherLine.lines(
+            from: inCommon,
+            firstName: payload.header.firstName,
+            viewerId: currentUserId,
+            profileId: payload.profile.id
+        )
+    }
+
+    /// What you share, read beside the posts. Only for a signed-in visitor;
+    /// nothing in common, an older server (404) or a failed read hides it.
+    private func loadInCommon(id: String) async {
+        guard previewAudience == nil, let currentUserId, currentUserId != id else {
+            inCommon = nil
+            return
+        }
+        do {
+            let shared = try await client.request(PublicProfileEndpoints.inCommon(userId: id), as: ProfileInCommon.self)
+            inCommon = shared.isEmpty ? nil : shared
+        } catch {
+            // Leaving the screen cancels the read: nothing failed, so nothing changes.
+            if Task.isCancelled { return }
+            logger.debug("In-common read failed: \(error)")
+            inCommon = nil
+        }
     }
 
     /// What tapping "Verified neighbor" explains.
