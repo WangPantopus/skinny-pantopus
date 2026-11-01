@@ -120,7 +120,7 @@ private struct EditProfilePinnedRow: View {
                 Text("Unpin")
                     .scaledFont(15)
                     .foregroundStyle(Theme.Color.primaryInk)
-                    .hitArea(horizontal: 8, vertical: 12)
+                    .hitArea(horizontal: 8, vertical: 13)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Unpin \(ProfilePinnedPost.title(post))")
