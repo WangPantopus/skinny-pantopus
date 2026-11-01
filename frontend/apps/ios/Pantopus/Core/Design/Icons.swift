@@ -355,6 +355,12 @@ public enum PantopusIcon: String, CaseIterable, Sendable {
     // chip, calendar-plus CTA, and the bell-off mute affordance.
     case quote
     case cloudSun = "cloud-sun"
+    /// Today's hourly strip and daily forecast: the sky for each condition.
+    case cloudMoon = "cloud-moon"
+    case cloudFog = "cloud-fog"
+    case cloudSnow = "cloud-snow"
+    case cloudHail = "cloud-hail"
+    case cloudLightning = "cloud-lightning"
     case shirt
     case xCircle = "x-circle"
     case bellOff = "bell-off"
@@ -735,6 +741,11 @@ public enum PantopusIcon: String, CaseIterable, Sendable {
         // onto the badge-plus variant.
         case .quote: "quote.bubble"
         case .cloudSun: "cloud.sun"
+        case .cloudMoon: "cloud.moon"
+        case .cloudFog: "cloud.fog"
+        case .cloudSnow: "cloud.snow"
+        case .cloudHail: "cloud.sleet"
+        case .cloudLightning: "cloud.bolt"
         case .shirt: "tshirt.fill"
         case .xCircle: "xmark.circle"
         case .bellOff: "bell.slash"

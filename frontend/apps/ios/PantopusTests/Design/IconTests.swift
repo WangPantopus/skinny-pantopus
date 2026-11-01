@@ -117,7 +117,9 @@ final class IconTests: XCTestCase {
         // Calendarly — second batch surfaced during per-screen parity sweep.
         "arrow-right-circle", "link-2-off", "calendar-search", "git-merge",
         // Nearby Plans (board P1) — one glyph per plan kind.
-        "plan-watch", "plan-playdate", "plan-pickup", "plan-walk", "plan-study", "location-arrow"
+        "plan-watch", "plan-playdate", "plan-pickup", "plan-walk", "plan-study", "location-arrow",
+        // Today's hourly strip and daily forecast (the November 2026 redesign): the sky per condition.
+        "cloud-moon", "cloud-fog", "cloud-snow", "cloud-hail", "cloud-lightning"
     ]
 
     func testInventoryMatches() {

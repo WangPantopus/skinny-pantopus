@@ -160,7 +160,7 @@ struct PlaceDetailView: View {
         switch viewModel.group {
         // This page opens over the Place dashboard, where the ballot card is.
         case .today: PlaceTodayDetailContent(intel: intel, vm: viewModel, onOpenBallot: onOpenBallot ?? onBack)
-        case .yourHome: PlaceHomeDetailContent(intel: intel, vm: viewModel)
+        case .yourHome: PlaceHomeDetailContent(intel: intel, vm: viewModel, onAsk: askAction)
         case .risk: PlaceRiskDetailContent(intel: intel, vm: viewModel)
         case .block: PlaceBlockDetailContent(intel: intel, vm: viewModel)
         case .money: PlaceMoneyDetailContent(intel: intel, vm: viewModel)

@@ -113,6 +113,8 @@ final class PlansTodayModel {
 }
 
 struct PlansTodayCards: View {
+    /// The space goes above the cards (Today puts them under its agenda) instead of below.
+    var gapAbove = false
     @State private var model = PlansTodayModel()
     @State private var flags = PlansFlags.shared
     @Environment(RootTabModel.self) private var rootTabs
@@ -141,8 +143,8 @@ struct PlansTodayCards: View {
                 }
             }
         }
-        // Space below the cards only when there are any.
-        .padding(.bottom, model.hosting.isEmpty && model.going.isEmpty && model.recent.isEmpty ? 0 : Spacing.s4)
+        // Space beside the cards only when there are any.
+        .padding(gapAbove ? .top : .bottom, model.hosting.isEmpty && model.going.isEmpty && model.recent.isEmpty ? 0 : Spacing.s4)
         .task(id: flags.plans) { await model.load() }
         .refreshesOnStoreChange(affects: { PlansStoreReads.affects($0) }, perform: { await model.load() })
         .accessibilityElement(children: .contain)

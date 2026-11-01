@@ -27,6 +27,8 @@ struct PlaceSectionView: View {
     var verifiesFirst = false
     /// The place's time zone: its clocks (sun times, the weather's time) read on it.
     var timeZone: TimeZone?
+    /// Its own card surface; off for a row inside a glance group's surface.
+    var chrome = true
 
     private var cardState: PlaceSectionCardState {
         let state = PlacePresentation.cardState(env)
@@ -46,6 +48,7 @@ struct PlaceSectionView: View {
                 title: PlacePresentation.config(for: env.id).title,
                 reason: PlacePresentation.lockReason(env),
                 cta: PlacePresentation.lockCta(env.band, verifiesFirst: verifiesFirst),
+                chrome: chrome,
                 onTap: lockHandler
             )
         } else {
@@ -61,11 +64,12 @@ struct PlaceSectionView: View {
                 title: "Verified homes nearby",
                 reason: PlacePresentation.lockReason(env),
                 cta: PlacePresentation.lockCta(env.band, verifiesFirst: verifiesFirst),
+                chrome: chrome,
                 onTap: lockHandler
             )
         } else if let density = env.blockDensity,
                   env.status == .ready || env.status == .partial || env.status == .stale {
-            PlaceDensityCard(bucket: density.bucket, label: density.label, ctaTitle: nil, onTap: onOpen)
+            PlaceDensityCard(bucket: density.bucket, label: density.label, ctaTitle: nil, chrome: chrome, onTap: onOpen)
         } else {
             PlaceSectionCard(
                 icon: .users,
@@ -73,7 +77,8 @@ struct PlaceSectionView: View {
                 state: cardState,
                 caption: env.unavailableReason,
                 onTap: onOpen,
-                onRetry: onRetry
+                onRetry: onRetry,
+                chrome: chrome
             )
         }
     }
@@ -99,7 +104,8 @@ struct PlaceSectionView: View {
             onTap: onOpen,
             onRetry: onRetry,
             errorTitle: wording.title,
-            retryTitle: wording.retry
+            retryTitle: wording.retry,
+            chrome: chrome
         )
     }
 }
