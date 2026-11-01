@@ -45,12 +45,18 @@ struct InboxSplitView<List: View, Destination: View>: View {
         .navigationSplitViewStyle(.balanced)
     }
 
-    @ViewBuilder private var leadingColumn: some View {
-        if path.routes.first == .search {
-            destination(.search)
-        } else {
+    /// Search covers the list instead of replacing it, so the list keeps its place for when search closes.
+    private var leadingColumn: some View {
+        let searching = path.routes.first == .search
+        return ZStack {
             list { listIsEmpty = $0 }
                 .environment(\.selectedConversationRowId, selectedRowId)
+                .opacity(searching ? 0 : 1)
+                .allowsHitTesting(!searching)
+                .accessibilityHidden(searching)
+            if searching {
+                destination(.search)
+            }
         }
     }
 
