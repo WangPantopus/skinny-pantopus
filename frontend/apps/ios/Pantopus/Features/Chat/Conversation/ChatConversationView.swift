@@ -2382,6 +2382,8 @@ private struct FanUpgradeBenefit: View {
 private struct ChatConversationHeader: View {
     /// A Nearby Plan's chat counts "people" (board A4).
     @Environment(\.chatPlanContext) private var planContext
+    /// Beside the chat list on a wide screen the list is the way back, so Back stays out.
+    @Environment(\.chatConversationShowsBack) private var showsBack
     let mode: ChatConversationMode
     let counterparty: ChatCounterparty
     let creatorContext: ChatCreatorThreadContext
@@ -2399,18 +2401,21 @@ private struct ChatConversationHeader: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            Button(action: onBack) {
-                Icon(.chevronLeft, size: 20, color: Theme.Color.appText)
-                    .frame(width: 32, height: 32)
-                    .hitArea(horizontal: 6, vertical: 6)
+            if showsBack {
+                Button(action: onBack) {
+                    Icon(.chevronLeft, size: 20, color: Theme.Color.appText)
+                        .frame(width: 32, height: 32)
+                        .hitArea(horizontal: 6, vertical: 6)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Back")
             identity
             Spacer(minLength: Spacing.s0)
             trailingActions
         }
-        .padding(.horizontal, 10)
+        .padding(.leading, showsBack ? 10 : Spacing.s4)
+        .padding(.trailing, 10)
         .padding(.vertical, 6)
         .frame(height: mode == .creatorThread ? 64 : 56)
         .background(Theme.Color.appSurface)

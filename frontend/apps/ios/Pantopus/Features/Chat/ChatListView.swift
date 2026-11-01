@@ -17,17 +17,21 @@ public struct ChatListView: View {
     private let onOpenConversation: @MainActor (ConversationRowContent) -> Void
     private let onCompose: @MainActor () -> Void
     private let onOpenSearch: @MainActor () -> Void
+    /// Whether the list has no conversations, for the conversation column beside it on a wide screen.
+    private let onEmptyChange: @MainActor (Bool) -> Void
 
     init(
         viewModel: ChatListViewModel = ChatListViewModel(),
         onOpenConversation: @escaping @MainActor (ConversationRowContent) -> Void = { _ in },
         onCompose: @escaping @MainActor () -> Void = {},
-        onOpenSearch: @escaping @MainActor () -> Void = {}
+        onOpenSearch: @escaping @MainActor () -> Void = {},
+        onEmptyChange: @escaping @MainActor (Bool) -> Void = { _ in }
     ) {
         _viewModel = State(initialValue: viewModel)
         self.onOpenConversation = onOpenConversation
         self.onCompose = onCompose
         self.onOpenSearch = onOpenSearch
+        self.onEmptyChange = onEmptyChange
     }
 
     public var body: some View {
@@ -55,6 +59,7 @@ public struct ChatListView: View {
             perform: { viewModel.refreshAfterChange() }
         )
         .onDisappear { viewModel.teardown() }
+        .onChange(of: viewModel.state.isEmpty, initial: true) { _, isEmpty in onEmptyChange(isEmpty) }
         .accessibilityIdentifier("chatList")
     }
 
@@ -244,6 +249,10 @@ public struct ChatListView: View {
 private extension ChatListState {
     var isLoading: Bool {
         if case .loading = self { true } else { false }
+    }
+
+    var isEmpty: Bool {
+        if case .empty = self { true } else { false }
     }
 }
 
