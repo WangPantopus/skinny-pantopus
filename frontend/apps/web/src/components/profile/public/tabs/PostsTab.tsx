@@ -33,6 +33,8 @@ interface PostsTabProps {
   onSayHi?: () => void;
   /** Your own profile: an empty list speaks to you. */
   isOwner?: boolean;
+  /** The person's account id: their initials on the cards use their own color, as in the header. */
+  authorColorSeed?: string;
 }
 
 const emptyCard = 'rounded-2xl border border-app bg-surface px-5 py-6 flex flex-col items-center text-center';
@@ -58,6 +60,7 @@ export default function PostsTab({
   justJoined = false,
   onSayHi,
   isOwner = false,
+  authorColorSeed,
 }: PostsTabProps) {
   const queryClient = useQueryClient();
   const [detailPostId, setDetailPostId] = useState<string | null>(null);
@@ -198,6 +201,7 @@ export default function PostsTab({
             currentUserId={currentUserId}
             isLiking={likingIds.has(post.id)}
             showToast={(message) => toast.info(message)}
+            authorColorSeed={authorColorSeed}
           />
         ))}
       </div>

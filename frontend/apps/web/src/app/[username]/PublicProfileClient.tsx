@@ -1188,6 +1188,7 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
               justJoined={joinedRecently(profile.created_at || profile.createdAt)}
               onSayHi={viewerReady && !isOwnProfile && canMessage ? handleMessage : undefined}
               isOwner={showOwnerOnly}
+              authorColorSeed={profile.id}
             />
             {postsHasMore && userPosts.length > 0 && !blocked && (
               <button
