@@ -523,7 +523,7 @@ private fun LiveBody(
         }
         item(key = "header-assign") { SectionHeader(title = "Hand it to") }
         if (rosterIsEmpty) {
-            item(key = "roster-empty") { RosterEmptyCard() }
+            item(key = "roster-empty") { RosterEmptyCard(restricted = session.rosterRestricted) }
         } else {
             items(session.members, key = { it.userId }) { member ->
                 MemberRow(
@@ -625,7 +625,7 @@ private fun ReactionRow(
 }
 
 @Composable
-private fun RosterEmptyCard() {
+private fun RosterEmptyCard(restricted: Boolean) {
     Column(
         verticalArrangement = Arrangement.spacedBy(Spacing.s1),
         modifier =
@@ -637,13 +637,18 @@ private fun RosterEmptyCard() {
                 .testTag("mailParty_rosterEmpty"),
     ) {
         Text(
-            text = "No one to hand this to",
+            text = if (restricted) "Member assignment unavailable" else "No one to hand this to",
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             color = PantopusColors.appText,
         )
         Text(
-            text = "Only household members can take this item. Invite someone to your home first.",
+            text =
+                if (restricted) {
+                    "You can still take part. Your home permissions don't include the household member list."
+                } else {
+                    "Only household members can take this item. Invite someone to your home first."
+                },
             fontSize = 11.sp,
             color = PantopusColors.appTextSecondary,
         )
