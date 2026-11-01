@@ -1351,6 +1351,11 @@ function ProfileContent({ username, initialProfile, ownerHome = false }: PublicP
               city={city}
               emailConfirmed={Boolean(viewProfile.verified)}
               socialLinks={viewProfile.socialLinks || viewProfile.social_links || null}
+              // Only what the person chose to show: your own read carries your email and phone either way.
+              contact={{
+                email: (viewProfile.showEmail ?? viewProfile.show_email) ? viewProfile.email : null,
+                phone: (viewProfile.showPhone ?? viewProfile.show_phone) ? (viewProfile.phoneNumber || viewProfile.phone_number) : null,
+              }}
               onSkill={launchFeatures.openGigs && !isOwnProfile ? handleRequestHire : undefined}
             >
               {hasContributions(viewProfile.contributions) ? (

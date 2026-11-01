@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Globe, Link2, Mail, ShieldCheck } from 'lucide-react';
+import { Globe, Link2, Mail, Phone, ShieldCheck } from 'lucide-react';
 
 const LINK_LABELS: Array<[key: string, label: string]> = [
   ['website', 'Website'],
@@ -56,6 +56,8 @@ interface AboutTabProps {
   /** The account's email is confirmed. */
   emailConfirmed: boolean;
   socialLinks?: Record<string, unknown> | null;
+  /** The email and phone the person chose to show on their profile ("Show on my profile" in Edit profile). */
+  contact?: { email?: string | null; phone?: string | null };
   /** A skill's action while Open Gigs is on (a hire request); without one the skills are plain chips. */
   onSkill?: () => void;
   /** Sections the profile adds later (Around the neighborhood), after Helps with. */
@@ -73,6 +75,7 @@ export default function AboutTab({
   city = null,
   emailConfirmed,
   socialLinks = null,
+  contact,
   onSkill,
   children,
 }: AboutTabProps) {
@@ -80,7 +83,9 @@ export default function AboutTab({
     .map(([key, label]) => ({ key, label, url: safeLink(socialLinks?.[key]) }))
     .filter((link): link is { key: string; label: string; url: URL } => link.url !== null);
   const anyVerified = verifiedNeighbor || emailConfirmed;
-  const empty = skills.length === 0 && !anyVerified && links.length === 0 && !children;
+  const email = contact?.email?.trim() || null;
+  const phone = contact?.phone?.trim() || null;
+  const empty = skills.length === 0 && !anyVerified && links.length === 0 && !email && !phone && !children;
 
   if (empty) {
     return (
@@ -131,6 +136,39 @@ export default function AboutTab({
               />
             )}
           </div>
+        </Section>
+      )}
+
+      {(email || phone) && (
+        <Section title="Contact">
+          <ul className="rounded-2xl border border-app bg-surface divide-y divide-app overflow-hidden">
+            {email ? (
+              <li>
+                <a href={`mailto:${email}`} className="min-h-[3.5rem] px-4 py-3 flex items-center gap-3 hover-bg-app">
+                  <span aria-hidden="true" className="w-8 h-8 shrink-0 rounded-full bg-app-surface-sunken text-app-secondary flex items-center justify-center">
+                    <Mail className="w-[1.0625rem] h-[1.0625rem]" />
+                  </span>
+                  <span className="min-w-0 flex flex-col gap-0.5">
+                    <span className="text-[0.9375rem] leading-5 font-semibold text-app">Email</span>
+                    <span className="text-[0.8125rem] leading-[1.125rem] text-app-link [overflow-wrap:anywhere]">{email}</span>
+                  </span>
+                </a>
+              </li>
+            ) : null}
+            {phone ? (
+              <li>
+                <a href={`tel:${phone.replace(/[^\d+]/g, '')}`} className="min-h-[3.5rem] px-4 py-3 flex items-center gap-3 hover-bg-app">
+                  <span aria-hidden="true" className="w-8 h-8 shrink-0 rounded-full bg-app-surface-sunken text-app-secondary flex items-center justify-center">
+                    <Phone className="w-[1.0625rem] h-[1.0625rem]" />
+                  </span>
+                  <span className="min-w-0 flex flex-col gap-0.5">
+                    <span className="text-[0.9375rem] leading-5 font-semibold text-app">Phone</span>
+                    <span className="text-[0.8125rem] leading-[1.125rem] text-app-link">{phone}</span>
+                  </span>
+                </a>
+              </li>
+            ) : null}
+          </ul>
         </Section>
       )}
 
