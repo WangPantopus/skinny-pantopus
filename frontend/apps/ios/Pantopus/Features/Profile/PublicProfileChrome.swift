@@ -438,6 +438,13 @@ struct PublicProfilePostsFeed: View {
     /// `true` when the viewer blocked this neighbour: a block hides both
     /// people's posts, so the card says so and invites nothing.
     var hiddenByBlock = false
+    /// Your own profile: the empty state offers no "Say hi" (nobody
+    /// messages themselves).
+    var isOwnProfile = false
+    /// Joined in the last 14 days: an empty list says "<name> just joined".
+    var joinedRecently = false
+    /// The first read of the posts is still out: skeleton cards, not "No posts yet".
+    var isLoading = false
     /// The Local profile's posts as Pulse cards (photos, video, links,
     /// Helpful, Save, Repost, the post menu). Nil keeps the plain cards.
     var pulseCards: ProfilePostCardsModel?
@@ -445,7 +452,19 @@ struct PublicProfilePostsFeed: View {
     var onOpenPost: @MainActor (String) -> Void = { _ in }
 
     var body: some View {
-        if hiddenByBlock || isEmpty {
+        if kind == .local, isLoading, isEmpty, !hiddenByBlock {
+            VStack(spacing: Spacing.s3) {
+                FeedSkeletonCard(withTitle: true)
+                FeedSkeletonCard()
+            }
+            .padding(.horizontal, Spacing.s5)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Loading posts")
+            .accessibilityIdentifier("publicProfilePostsLoading")
+        } else if kind == .local, hiddenByBlock || isEmpty {
+            localEmptyCard
+                .padding(.horizontal, Spacing.s5)
+        } else if hiddenByBlock || isEmpty {
             emptyState
                 .padding(.horizontal, Spacing.s4)
         } else if kind == .local, let pulseCards {
@@ -482,15 +501,8 @@ struct PublicProfilePostsFeed: View {
     /// Full-width rows as in Pulse: the same card, its controls, and the
     /// same post page behind a tap.
     private func pulseFeed(_ model: ProfilePostCardsModel) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text(headerLabel)
-                .font(.system(size: 11, weight: .semibold))
-                .tracking(0.6)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .textCase(.uppercase)
-                .accessibilityAddTraits(.isHeader)
-                .padding(.horizontal, Spacing.s4)
-
+        // The Posts tab above names the list, so no "Recent posts" label.
+        VStack(alignment: .leading, spacing: Spacing.s0) {
             LazyVStack(spacing: Spacing.s0) {
                 ForEach(model.cards) { card in
                     pulseCard(card, model: model)
@@ -530,6 +542,109 @@ struct PublicProfilePostsFeed: View {
     }
 
     // MARK: Empty state
+
+    /// A person's empty or unavailable posts (`NewNeighbor.dc.html`): a card
+    /// that says why, with "Say hi" when a hello is the useful next step.
+    private var localEmptyCard: some View {
+        VStack(spacing: Spacing.s0) {
+            ZStack {
+                Circle()
+                    .fill(localTone.disc)
+                    .frame(width: 56, height: 56)
+                Icon(localTone.icon, size: 26, color: localTone.accent)
+            }
+            .accessibilityHidden(true)
+            Text(localHeadline)
+                .scaledFont(17, weight: .semibold)
+                .foregroundStyle(Theme.Color.appText)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 14)
+                .accessibilityAddTraits(.isHeader)
+            Text(localBody)
+                .scaledFont(15)
+                .foregroundStyle(Theme.Color.appTextMuted)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 300)
+                .padding(.top, 6)
+            if let cta = localCTA {
+                Button(action: cta.action) {
+                    HStack(spacing: Spacing.s2) {
+                        Icon(cta.icon, size: 17, strokeWidth: 2.25, color: Theme.Color.appText)
+                        Text(cta.title)
+                            .scaledFont(16, weight: .semibold)
+                            .foregroundStyle(Theme.Color.appText)
+                    }
+                    .padding(.horizontal, Spacing.s5)
+                    .frame(minHeight: 44)
+                    .overlay(Capsule().strokeBorder(Theme.Color.appBorderStrong, lineWidth: 1))
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 18)
+                .accessibilityIdentifier(loadFailed ? "publicProfilePostsRetry" : "publicProfilePostsEmptyCTA")
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
+        .padding(.horizontal, Spacing.s6)
+        .background(Theme.Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radii.xl, style: .continuous)
+                .stroke(Theme.Color.appBorder, lineWidth: 1)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(emptyStateIdentifier)
+    }
+
+    /// The empty card's disc color, glyph color and glyph.
+    private struct EmptyTone {
+        let disc: Color
+        let accent: Color
+        let icon: PantopusIcon
+    }
+
+    /// The empty card's button.
+    private struct EmptyAction {
+        let title: String
+        let icon: PantopusIcon
+        let action: @MainActor () -> Void
+    }
+
+    private var localTone: EmptyTone {
+        if loadFailed { return EmptyTone(disc: Theme.Color.appSurfaceSunken, accent: Theme.Color.appTextSecondary, icon: .alertCircle) }
+        if showsHiddenByBlock { return EmptyTone(disc: Theme.Color.appSurfaceSunken, accent: Theme.Color.appTextSecondary, icon: .eyeOff) }
+        return EmptyTone(disc: Theme.Color.homeBg, accent: Theme.Color.home, icon: isOwnProfile ? .pencil : .hand)
+    }
+
+    private var localHeadline: String {
+        if loadFailed { return "Couldn't load posts" }
+        if showsHiddenByBlock { return "Posts hidden" }
+        if isOwnProfile { return "You haven't posted yet" }
+        if joinedRecently, let first = Self.firstName(localName) { return "\(first) just joined" }
+        return "No posts yet"
+    }
+
+    private var localBody: String {
+        let first = Self.firstName(localName)
+        if loadFailed { return "Check your connection and try again." }
+        if showsHiddenByBlock {
+            return "You blocked \(first ?? "this person"). Neither of you sees the other's posts while the block is on."
+        }
+        if isOwnProfile { return "Your posts show up here, the way neighbors see them." }
+        if joinedRecently { return "No posts yet. A quick hello goes a long way." }
+        return "\(first ?? "They") hasn't posted yet. A quick hello goes a long way."
+    }
+
+    /// Try again after a failed read; Say hi otherwise, except on your own
+    /// profile and for someone you blocked.
+    private var localCTA: EmptyAction? {
+        if loadFailed { return EmptyAction(title: "Try again", icon: .refreshCw, action: onRetry) }
+        if showsHiddenByBlock || isOwnProfile { return nil }
+        return EmptyAction(title: "Say hi", icon: .messageSquare, action: onEmptyCTA)
+    }
 
     private var emptyState: some View {
         VStack(spacing: Spacing.s0) {
@@ -661,56 +776,29 @@ struct PublicProfilePostsFeed: View {
     }
 }
 
-// MARK: - A21.2 Local tab strip
+// MARK: - Profile tab strip
 
-/// Underline-active tab strip for the Local Beacon profile archetype
-/// (Posts · About · Portfolio · Gigs · Reviews). Mirrors the design's
-/// `TabStrip` — and the persona `BeaconProfileTabStrip` — so both
-/// archetypes read identically. Scrolls horizontally so the marketplace
-/// tabs survive the larger dynamic-type sizes.
+/// Posts | About (| Work) under a person's header (`Main.dc.html`): 44 pt
+/// tabs with the post count beside Posts and a 2 pt line under the chosen
+/// one. Scrolls sideways when the larger text sizes need the room.
 @MainActor
 struct LocalProfileTabStrip: View {
+    let tabs: [LocalProfileTab]
+    /// The posts shown, beside Posts; nil leaves it off.
     let postCount: Int?
-    /// Server-side review total, badged on the Reviews tab the way
-    /// `postCount` badges Posts. `nil` hides the badge.
-    var reviewCount: Int?
     let selected: LocalProfileTab
     let onSelect: @MainActor (LocalProfileTab) -> Void
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Spacing.s6) {
-                // Launch cut #4 (Open gigs): no Gigs tab.
-                ForEach(LocalProfileTab.launchCases) { tab in
-                    let isActive = tab == selected
-                    Button {
-                        onSelect(tab)
-                    } label: {
-                        VStack(spacing: Spacing.s2) {
-                            HStack(spacing: Spacing.s1) {
-                                Text(tab.label)
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(isActive ? Theme.Color.primaryInkStrong : Theme.Color.appTextSecondary)
-                                if let count = badgeCount(for: tab) {
-                                    Text("\(count)")
-                                        .font(.system(size: 10.5))
-                                        .foregroundStyle(Theme.Color.appTextMuted)
-                                }
-                            }
-                            Rectangle()
-                                .fill(isActive ? Theme.Color.primaryInk : Color.clear)
-                                .frame(height: 2)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("publicProfileLocalTab_\(tab.rawValue)")
-                    .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
+            HStack(spacing: 28) {
+                ForEach(tabs) { tab in
+                    tabButton(tab, isActive: tab == selected)
                 }
-                Spacer(minLength: Spacing.s0)
             }
         }
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-        .overlay(alignment: .bottom) {
+        .background(alignment: .bottom) {
             Rectangle()
                 .fill(Theme.Color.appBorder)
                 .frame(height: 1)
@@ -718,67 +806,38 @@ struct LocalProfileTabStrip: View {
         .accessibilityIdentifier("publicProfileLocalTabStrip")
     }
 
-    private func badgeCount(for tab: LocalProfileTab) -> Int? {
-        switch tab {
-        case .posts: postCount
-        case .reviews: reviewCount
-        default: nil
+    private func tabButton(_ tab: LocalProfileTab, isActive: Bool) -> some View {
+        let count = tab == .posts ? postCount.map(Self.countLabel) : nil
+        return Button {
+            onSelect(tab)
+        } label: {
+            HStack(spacing: 6) {
+                Text(tab.label)
+                    .scaledFont(16, weight: .semibold)
+                    .foregroundStyle(isActive ? Theme.Color.appText : Theme.Color.appTextMuted)
+                if let count {
+                    Text(count)
+                        .scaledFont(16, weight: .medium)
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                }
+            }
+            .padding(.vertical, Spacing.s2)
+            .frame(minHeight: 44)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(isActive ? Theme.Color.primaryInk : Color.clear)
+                    .frame(height: 2)
+            }
+            .contentShape(Rectangle())
         }
-    }
-}
-
-// MARK: - A21.2 Local About tab
-
-/// About tab of the Local Beacon profile. Carries the neighbourhood
-/// substance the older four-tab neighbour layout spread across
-/// About / Reviews / Verifications, so nothing is lost when the designed
-/// two-tab archetype takes over.
-@MainActor
-struct LocalProfileAboutSection: View {
-    let content: NeighborProfileContent
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s0) {
-            NeighborSectionTitle("Bio")
-            Text(content.bio ?? "No bio yet")
-                .font(.system(size: PantopusTextStyle.body.size))
-                .foregroundStyle(content.bio == nil ? Theme.Color.appTextSecondary : Theme.Color.appTextStrong)
-                .lineSpacing(4)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            if !content.skills.isEmpty {
-                NeighborSectionTitle("Helps with")
-                NeighborSkillChips(skills: content.skills)
-            }
-
-            NeighborSectionTitle("Verifications")
-            NeighborVerificationLedger(items: content.verifications)
-
-            reviews
-
-            if let mutuals = content.mutuals {
-                NeighborSectionTitle("Neighbors in common")
-                NeighborMutualsStrip(mutuals: mutuals)
-            }
-
-            if let welcome = content.welcome {
-                NeighborWelcomeCard(welcome: welcome)
-                    .padding(.top, Spacing.s3)
-            }
-        }
-        .padding(.bottom, Spacing.s5)
-        .accessibilityIdentifier("publicProfileLocalAbout")
+        .buttonStyle(.plain)
+        .accessibilityLabel(count.map { "\(tab.label), \($0)" } ?? tab.label)
+        .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
+        .accessibilityIdentifier("publicProfileLocalTab_\(tab.rawValue)")
     }
 
-    @ViewBuilder private var reviews: some View {
-        if content.reviews.isEmpty {
-            NeighborSectionTitle("Reviews")
-            NeighborReviewsEmptyCard(name: content.hero.name)
-        } else {
-            NeighborSectionTitle("Reviews", action: "\(content.reviewCount)")
-            VStack(alignment: .leading, spacing: Spacing.s3) {
-                ForEach(content.reviews) { NeighborReviewCard(card: $0) }
-            }
-        }
+    /// The person's posts read stops at 50, so a full page says "50+".
+    private static func countLabel(_ count: Int) -> String {
+        count >= 50 ? "50+" : "\(count)"
     }
 }

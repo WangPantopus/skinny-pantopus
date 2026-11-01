@@ -28,6 +28,9 @@ public final class ProfilePostCardsModel {
     public private(set) var actionRevision = 0
     /// Action feedback ("Saved to your bookmarks."), shown by the profile's toast.
     @ObservationIgnored var onToast: (@MainActor (String) -> Void)?
+    /// Whose profile this is: their own posts wear their profile color, as
+    /// the header above them does (`ProfileAvatarColor`).
+    @ObservationIgnored var profileUserId: String?
 
     @ObservationIgnored private var posts: [FeedPostDTO] = []
     @ObservationIgnored private var overrides: [String: Override] = [:]
@@ -237,7 +240,12 @@ public final class ProfilePostCardsModel {
                 live.shareCount = value.shareCount ?? live.shareCount
             }
             live.pending = pending[post.id] ?? []
-            return PulseFeedViewModel.card(for: post, viewerId: viewerId, surface: nil, live: live)
+            var card = PulseFeedViewModel.card(for: post, viewerId: viewerId, surface: nil, live: live)
+            // Every post here is the person's own; one written for a business keeps the business look.
+            if let profileUserId, post.businessAuthorId == nil {
+                card.avatarColor = ProfileAvatarColor(userId: profileUserId).color
+            }
+            return card
         }
     }
 }

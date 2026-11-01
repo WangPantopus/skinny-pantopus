@@ -33,6 +33,13 @@ public struct PublicProfileView: View {
     @State private var shareURL: URL?
     /// The "Pick a username for your link" sheet, asked before the first share.
     @State private var usernameShare: UsernameShareSheetModel?
+    /// The Connect sheet: the note, Send request, or just follow.
+    @State private var showConnectSheet = false
+    /// "What does Verified neighbor mean?" after a tap on the trust line.
+    @State private var showTrustExplainer = false
+    /// The editor, opened from your own profile's Edit profile.
+    @State private var showEditProfile = false
+    @Environment(\.dynamicTypeSize) private var typeSize
     private let onBack: @MainActor () -> Void
     private let onOpenMessages: @MainActor (PublicProfile) -> Void
     private let onEditPersona: @MainActor () -> Void
@@ -105,8 +112,17 @@ public struct PublicProfileView: View {
                     }
                 }
             }
-            // Nobody blocks or reports themselves.
+            // Nobody follows, blocks or reports themselves.
             if !viewModel.isOwnProfileLoaded {
+                // Follow moved here (and into the Connect sheet) from the old Follow row;
+                // Unfollow keeps its confirm.
+                if viewModel.canFollow, viewModel.relationshipLoaded, viewModel.connection != .blocked {
+                    if viewModel.isFollowing {
+                        Button("Unfollow") { viewModel.showUnfollowConfirm = true }
+                    } else {
+                        Button("Follow") { Task { await viewModel.toggleFollow() } }
+                    }
+                }
                 // Someone you blocked can be unblocked here, as in Settings → Blocked users.
                 if viewModel.isBlockedByViewer {
                     Button("Unblock this user") {
@@ -178,23 +194,55 @@ public struct PublicProfileView: View {
         }
         // RN gates the same `DELETE /api/relationships/:id` behind a
         // "Disconnect · Remove this connection?" alert
-        // (`src/app/connections.tsx:69-77`), so tapping "Connected" here
-        // confirms before it removes the edge.
-        .confirmationDialog(
+        // (`src/app/connections.tsx:69-77`), so Connected ▾ → Disconnect
+        // confirms before it removes the edge. An alert, so Cancel always
+        // shows (iOS 27 shows a confirmation dialog as a popover with none).
+        .alert(
             disconnectTitle,
             isPresented: Binding(
                 get: { viewModel.showDisconnectConfirm },
                 set: { viewModel.showDisconnectConfirm = $0 }
-            ),
-            titleVisibility: .visible
+            )
         ) {
-            Button("Remove", role: .destructive) {
+            Button("Cancel", role: .cancel) { viewModel.cancelDisconnect() }
+                .accessibilityIdentifier("publicProfileDisconnectCancel")
+            Button("Disconnect", role: .destructive) {
                 Task { await viewModel.disconnect() }
             }
-            Button("Cancel", role: .cancel) { viewModel.cancelDisconnect() }
+            .accessibilityIdentifier("publicProfileDisconnectConfirm")
         } message: {
-            Text("Remove this connection?")
+            Text("You'll stop seeing each other's connections-only posts. They aren't notified.")
         }
+        .alert(
+            withdrawTitle,
+            isPresented: Binding(
+                get: { viewModel.showWithdrawConfirm },
+                set: { viewModel.showWithdrawConfirm = $0 }
+            )
+        ) {
+            Button("Cancel", role: .cancel) {}
+                .accessibilityIdentifier("publicProfileWithdrawCancel")
+            Button("Withdraw", role: .destructive) {
+                Task { await viewModel.withdrawRequest() }
+            }
+            .accessibilityIdentifier("publicProfileWithdrawConfirm")
+        } message: {
+            Text("They aren't notified. You can send a new request later.")
+        }
+        .alert("Verified neighbor", isPresented: $showTrustExplainer) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(trustExplainer)
+        }
+        .sheet(isPresented: $showConnectSheet) {
+            connectSheet
+        }
+        // Your own profile's Edit profile; the profile reads itself again after.
+        .sheet(
+            isPresented: $showEditProfile,
+            onDismiss: { Task { await viewModel.refresh() } },
+            content: { EditProfileView() }
+        )
         // A stray tap on Following never unfollows: it asks first, as Connected
         // does. An alert, like Block's, so Cancel shows beside Unfollow (as on
         // web and Android).
@@ -265,9 +313,32 @@ public struct PublicProfileView: View {
     /// Names the neighbor being disconnected, per the destructive-confirm
     /// rule. Falls back to the generic title before the profile resolves.
     private var disconnectTitle: String {
-        guard case let .loaded(payload) = viewModel.state else { return "Disconnect" }
-        let name = payload.header.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? "Disconnect" : "Disconnect from \(name)"
+        blockName.map { "Disconnect from \($0)?" } ?? "Disconnect?"
+    }
+
+    private var withdrawTitle: String {
+        blockName.map { "Withdraw your request to \($0)?" } ?? "Withdraw your request?"
+    }
+
+    private var trustExplainer: String {
+        guard case let .loaded(payload) = viewModel.state else { return "" }
+        return viewModel.trustExplainer(for: payload.header)
+    }
+
+    @ViewBuilder private var connectSheet: some View {
+        if case let .loaded(payload) = viewModel.state {
+            ConnectSheet(
+                firstName: payload.header.firstName,
+                name: payload.header.displayName,
+                showsInitials: payload.header.hasName,
+                avatarURL: payload.header.avatarURL,
+                color: payload.header.avatarColor,
+                isFollowing: viewModel.isFollowing,
+                onSend: { note in await viewModel.sendConnectionRequest(note: note) },
+                onFollow: { await viewModel.followFromConnectSheet() }
+            )
+            .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.fraction(0.78), .large])
+        }
     }
 
     @ViewBuilder private var reportSheet: some View {
@@ -317,70 +388,72 @@ public struct PublicProfileView: View {
         }
     }
 
-    // MARK: - A21.2 Local Beacon profile
+    // MARK: - Someone's profile (11-01 redesign)
 
-    /// The designed Local archetype: green Home banner, overlapping
-    /// `BeaconIdentityBlock` with Connect + Message, a Posts · About tab
-    /// strip, and the `LocalPostCard` feed (or the "Quiet for now" empty
-    /// state) beneath it.
+    /// A person's profile (`Main.dc.html`): Back and ⋯ on the page itself, no
+    /// banner; the header (photo, name, trust line, tagline, bio) with the
+    /// buttons for your relationship; then Posts | About, and Work when there
+    /// is work to show.
     private func localLayout(
         _ payload: PublicProfileContent,
         neighbor: NeighborProfileContent
     ) -> some View {
-        ContentDetailShell(
-            title: nil,
-            onBack: onBack,
-            topBarAction: ContentDetailTopBarAction(
-                icon: .moreHorizontal,
-                accessibilityLabel: "More"
-            ) {
-                Task { @MainActor in viewModel.showOverflow = true }
-            },
-            header: {
-                VStack(spacing: Spacing.s0) {
-                    PublicProfileBanner(kind: .local)
-                    BeaconIdentityBlock(
-                        identity: .home,
+        let tabs = viewModel.localTabs(for: payload)
+        let selected = tabs.contains(viewModel.selectedLocalTab) ? viewModel.selectedLocalTab : .posts
+        return VStack(spacing: Spacing.s0) {
+            ProfileTopBar(
+                onBack: onBack,
+                moreLabel: payload.isOwner ? "More: share your profile" : "More: share, follow, block or report"
+            ) { viewModel.showOverflow = true }
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.s0) {
+                    ProfilePageHeader(
                         name: payload.header.displayName,
+                        showsInitials: payload.header.hasName,
                         handle: payload.header.handle,
-                        tierLabel: nil,
-                        isVerifiedNeighbor: payload.header.isVerifiedNeighbor,
-                        locality: payload.header.locality,
-                        bio: payload.stats.bio,
-                        isVerified: payload.header.isVerified,
                         avatarURL: payload.header.avatarURL,
-                        stats: payload.stats.stats,
-                        avatarName: payload.header.hasName ? nil : ""
-                    ) {
-                        identityActions(for: payload)
-                    }
-                }
-                .accessibilityIdentifier("publicProfileLocalHeader")
-            },
-            body: {
-                VStack(alignment: .leading, spacing: Spacing.s4) {
-                    followRow
+                        color: payload.header.avatarColor,
+                        trust: ProfileTrustFacts(
+                            isVerifiedNeighbor: payload.header.isVerifiedNeighbor,
+                            city: payload.header.trustCity,
+                            joined: payload.header.joinedLabel
+                        ),
+                        tagline: payload.header.tagline,
+                        bio: payload.stats.bio,
+                        onTrustTap: { showTrustExplainer = true },
+                        actions: { localActions(for: payload) }
+                    )
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("publicProfileLocalHeader")
 
                     LocalProfileTabStrip(
-                        postCount: viewModel.connection == .blocked || payload.posts.isEmpty ? nil : payload.posts.count,
-                        reviewCount: payload.profile.reviewCount.flatMap { $0 > 0 ? $0 : nil },
-                        selected: viewModel.selectedLocalTab
+                        tabs: tabs,
+                        postCount: viewModel.connection == .blocked || viewModel.postCards.cards.isEmpty
+                            ? nil
+                            : viewModel.postCards.cards.count,
+                        selected: selected
                     ) { viewModel.selectedLocalTab = $0 }
-                        .padding(.horizontal, Spacing.s4)
+                        .padding(.top, 28)
+                        .padding(.horizontal, Spacing.s5)
 
-                    localTabContent(payload, neighbor: neighbor)
+                    localTabContent(payload, neighbor: neighbor, tab: selected)
                 }
-                .padding(.top, Spacing.s4)
+                .padding(.bottom, Spacing.s10)
             }
-        )
+            // Its own task: SwiftUI cancels a refresh's task once the content it
+            // reloads changes, which would cut off the relationship read after the posts.
+            .refreshable { await Task { await viewModel.refresh() }.value }
+        }
+        .background(Theme.Color.appBg)
     }
 
     @ViewBuilder
     private func localTabContent(
         _ payload: PublicProfileContent,
-        neighbor: NeighborProfileContent
+        neighbor: NeighborProfileContent,
+        tab: LocalProfileTab
     ) -> some View {
-        switch viewModel.selectedLocalTab {
+        switch tab {
         case .posts:
             PublicProfilePostsFeed(
                 kind: .local,
@@ -391,21 +464,111 @@ public struct PublicProfileView: View {
                 loadFailed: viewModel.postsLoadFailed,
                 onRetry: retryLoad,
                 hiddenByBlock: viewModel.connection == .blocked,
+                isOwnProfile: payload.isOwner,
+                joinedRecently: payload.header.joinedRecently,
+                isLoading: viewModel.postsLoading,
                 pulseCards: viewModel.postCards,
                 onOpenPost: onOpenPost
             )
+            .padding(.top, Spacing.s3)
         case .about:
-            LocalProfileAboutSection(content: neighbor)
-                .padding(.horizontal, Spacing.s4)
-        case .portfolio:
-            ProfilePortfolioSection(userId: payload.profile.id, isOwnProfile: payload.isOwner)
-                .padding(.horizontal, Spacing.s4)
-        case .gigs:
-            ProfileGigsSection(userId: payload.profile.id, onOpenGig: onOpenGig)
-                .padding(.horizontal, Spacing.s4)
-        case .reviews:
-            ProfileGigReviewsSection(userId: payload.profile.id, onOpenReviewer: onOpenProfile)
-                .padding(.horizontal, Spacing.s4)
+            LocalProfileAboutSection(content: neighbor, header: payload.header, profile: payload.profile)
+                .padding(.horizontal, Spacing.s5)
+                .padding(.top, Spacing.s5)
+        case .work:
+            LocalProfileWorkSection(
+                userId: payload.profile.id,
+                isOwnProfile: payload.isOwner,
+                showsPortfolio: payload.isOwner || (viewModel.portfolioCount ?? 0) > 0,
+                showsTasks: LaunchFeatures.openGigs && (payload.profile.gigsPosted ?? 0) > 0,
+                showsReviews: (payload.profile.reviewCount ?? 0) > 0,
+                onOpenGig: onOpenGig,
+                onOpenReviewer: onOpenProfile
+            )
+            .padding(.horizontal, Spacing.s5)
+            .padding(.top, Spacing.s5)
+        }
+    }
+
+    /// The header's buttons for where you stand with this person:
+    /// - none: Connect (opens the Connect sheet) + Message
+    /// - request sent: Message + Requested (tap to withdraw, with a confirm)
+    /// - request received: "<name> wants to connect" with Accept / Not now, above Message
+    /// - connected: Message + Connected ▾ (Disconnect, with a confirm)
+    /// - blocked: none (the posts say so; ⋯ unblocks)
+    /// - your own profile: Edit profile, never Message or Connect
+    @ViewBuilder
+    private func localActions(for payload: PublicProfileContent) -> some View {
+        if payload.isOwner {
+            ProfileActionButton(title: "Edit profile", icon: .pencil)
+                .button { showEditProfile = true }
+                .accessibilityIdentifier("publicProfileEditProfile")
+        } else if viewModel.connection != .blocked {
+            let message = ProfileActionButton(title: "Message", icon: .messageSquare, style: .secondary)
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                if viewModel.relationshipLoaded, viewModel.connection == .pendingReceived {
+                    ProfileRequestBanner(
+                        name: payload.header.firstName,
+                        isWorking: viewModel.connectState == .inFlight,
+                        onAccept: { Task { await viewModel.connect() } },
+                        onDecline: { Task { await viewModel.declineRequest() } }
+                    )
+                    message.button { onOpenMessages(payload.profile) }
+                        .accessibilityIdentifier("publicProfileMessageCta")
+                } else {
+                    ProfileActionRow {
+                        relationshipButtons(for: payload, message: message)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func relationshipButtons(for payload: PublicProfileContent, message: ProfileActionButton) -> some View {
+        let openMessages: @MainActor () -> Void = { onOpenMessages(payload.profile) }
+        if viewModel.relationshipLoaded, viewModel.canFollow {
+            switch viewModel.connection {
+            case .none, .blocked, .pendingReceived:
+                ProfileActionButton(title: "Connect", icon: .userPlus)
+                    .button { showConnectSheet = true }
+                    .disabled(viewModel.connectState == .inFlight)
+                    .accessibilityIdentifier("publicProfileConnectCta")
+                message.button(action: openMessages)
+                    .accessibilityIdentifier("publicProfileMessageCta")
+            case .pendingSent:
+                ProfileActionButton(title: "Message", icon: .messageSquare)
+                    .button(action: openMessages)
+                    .accessibilityIdentifier("publicProfileMessageCta")
+                ProfileActionButton(title: "Requested", icon: .clock, style: .secondary)
+                    .button(spoken: "Requested. Withdraw request") { viewModel.showWithdrawConfirm = true }
+                    .disabled(viewModel.connectState == .inFlight)
+                    .accessibilityIdentifier("publicProfileConnectCta")
+            case .connected:
+                ProfileActionButton(title: "Message", icon: .messageSquare)
+                    .button(action: openMessages)
+                    .accessibilityIdentifier("publicProfileMessageCta")
+                Menu {
+                    Button("Disconnect", role: .destructive) { viewModel.showDisconnectConfirm = true }
+                } label: {
+                    ProfileActionButton(title: "Connected", icon: .check, style: .secondary, showsChevron: true)
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .disabled(viewModel.connectState == .inFlight)
+                .accessibilityLabel("Connected. Options")
+                .accessibilityIdentifier("publicProfileConnectCta")
+            }
+        } else {
+            if viewModel.hasSignedInViewer, !viewModel.relationshipLoaded, !viewModel.relationshipReadFailed {
+                // Holds Connect's place until the relationship read answers;
+                // a failed read leaves it out rather than guessing.
+                Shimmer(height: 48, cornerRadius: Radii.lg)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityHidden(true)
+            }
+            message.button(action: openMessages)
+                .accessibilityIdentifier("publicProfileMessageCta")
         }
     }
 
@@ -487,43 +650,6 @@ public struct PublicProfileView: View {
         )
     }
 
-    /// T3 — plain Follow / Following for an ordinary neighbor.
-    ///
-    /// The A21.2 Local header is spec'd at exactly two buttons (Connect +
-    /// Message), so the follow control lives here, directly beneath the
-    /// identity block — the same slot RN puts its action row in
-    /// (`src/app/user/[id].tsx:522-569`). Hidden on your own profile and
-    /// when signed out, matching RN, and until the relationship has loaded.
-    /// A compact button like the header's, not a full-width bar a stray tap
-    /// lands on, and Following asks before it unfollows.
-    @ViewBuilder private var followRow: some View {
-        // A blocked profile keeps no Follow control (the server refuses the
-        // follow in both directions).
-        if viewModel.canFollow, viewModel.relationshipLoaded, viewModel.connection != .blocked {
-            HStack(spacing: Spacing.s0) {
-                if viewModel.isFollowing {
-                    BeaconHeaderGhostButton(
-                        title: "Following",
-                        icon: .check,
-                        accessibilityLabel: "Following. Tap to unfollow"
-                    ) {
-                        viewModel.showUnfollowConfirm = true
-                    }
-                    .accessibilityIdentifier("publicProfileFollowButton")
-                } else {
-                    BeaconHeaderPrimaryButton(title: "Follow", icon: .plus) {
-                        Task { await viewModel.toggleFollow() }
-                    }
-                    .accessibilityIdentifier("publicProfileFollowButton")
-                }
-                Spacer(minLength: Spacing.s0)
-            }
-            .disabled(viewModel.isFollowInFlight)
-            .opacity(viewModel.isFollowInFlight ? 0.6 : 1)
-            .padding(.horizontal, Spacing.s4)
-        }
-    }
-
     /// Glyph paired with the Connect control's current label.
     private var connectIcon: PantopusIcon {
         switch viewModel.connection {
@@ -591,7 +717,8 @@ public struct PublicProfileView: View {
                 .accessibilityIdentifier("publicProfileConnectCta")
             }
             // Someone you blocked can't be messaged (the block says so); Settings unblocks.
-            if viewModel.connection != .blocked {
+            // Nobody messages themselves.
+            if !payload.isOwner, viewModel.connection != .blocked {
                 BeaconHeaderPrimaryButton(title: "Message", icon: .messageSquare) {
                     onOpenMessages(payload.profile)
                 }
@@ -626,25 +753,44 @@ public struct PublicProfileView: View {
     }
 }
 
+/// The profile's shape while it loads: photo, name, trust line, bio, the two
+/// buttons, then the tabs.
 private struct LoadingLayout: View {
     let onBack: @MainActor () -> Void
 
     var body: some View {
-        VStack(spacing: Spacing.s0) {
-            ContentDetailTopBar(title: nil, onBack: onBack, action: nil)
-            VStack(spacing: Spacing.s4) {
-                Shimmer(width: 72, height: 72, cornerRadius: 36)
-                    .padding(.top, Spacing.s5)
-                Shimmer(width: 160, height: 22, cornerRadius: Radii.sm)
-                Shimmer(width: 220, height: 12, cornerRadius: Radii.sm)
-                Shimmer(height: 80, cornerRadius: Radii.lg)
-                    .padding(.horizontal, Spacing.s4)
-                Shimmer(height: 42, cornerRadius: Radii.lg)
-                    .padding(.horizontal, Spacing.s4)
+        VStack(alignment: .leading, spacing: Spacing.s0) {
+            ProfileTopBar(onBack: onBack, moreLabel: "More", onMore: nil)
+            VStack(alignment: .leading, spacing: Spacing.s0) {
+                HStack(spacing: Spacing.s4) {
+                    Shimmer(width: 84, height: 84, cornerRadius: 42)
+                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                        Shimmer(width: 170, height: 26, cornerRadius: Radii.sm)
+                        Shimmer(width: 90, height: 14, cornerRadius: Radii.sm)
+                    }
+                }
+                Shimmer(width: 250, height: 14, cornerRadius: Radii.sm)
+                    .padding(.top, 18)
+                Shimmer(height: 16, cornerRadius: Radii.sm)
+                    .padding(.top, 18)
+                Shimmer(width: 220, height: 16, cornerRadius: Radii.sm)
+                    .padding(.top, Spacing.s2)
+                HStack(spacing: 10) {
+                    Shimmer(height: 48, cornerRadius: Radii.lg)
+                    Shimmer(height: 48, cornerRadius: Radii.lg)
+                }
+                .padding(.top, 18)
+                Shimmer(width: 140, height: 20, cornerRadius: Radii.sm)
+                    .padding(.top, Spacing.s8)
+                Shimmer(height: 140, cornerRadius: Radii.xl)
+                    .padding(.top, Spacing.s4)
             }
+            .padding(.horizontal, Spacing.s5)
+            .padding(.top, Spacing.s2)
             Spacer()
         }
         .background(Theme.Color.appBg)
+        .accessibilityIdentifier("publicProfileLoading")
     }
 }
 
@@ -655,7 +801,7 @@ private struct ErrorLayout: View {
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
-            ContentDetailTopBar(title: nil, onBack: onBack, action: nil)
+            ProfileTopBar(onBack: onBack, moreLabel: "More", onMore: nil)
             EmptyState(
                 icon: .alertCircle,
                 headline: "Couldn't load this profile",

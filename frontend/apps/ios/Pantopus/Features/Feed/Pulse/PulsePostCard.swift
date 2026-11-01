@@ -120,6 +120,9 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
     public let authorInitials: String
     public let authorVerified: Bool
     public let avatarTint: FeedAvatarTint
+    /// Replaces the tint's color: a person's profile colors their own cards
+    /// with their profile color (`ProfileAvatarColor`).
+    public var avatarColor: Color?
     public let meta: String
     public let intent: PulseIntent
     public let title: String?
@@ -281,6 +284,7 @@ public struct PulsePostCard: View {
             FeedAvatar(
                 initials: content.authorInitials,
                 tint: content.avatarTint,
+                color: content.avatarColor,
                 verified: content.authorVerified,
                 size: 32
             )
