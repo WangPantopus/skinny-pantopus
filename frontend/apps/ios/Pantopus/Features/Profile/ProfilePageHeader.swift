@@ -191,7 +191,7 @@ public enum ProfileAvatarColor: Int, CaseIterable, Sendable, Hashable {
         case .green: Theme.Color.successSolid
         case .violet: Theme.Color.magic
         case .rose: Theme.Color.rose
-        // The slate token that stays #475569 in dark mode (Accent/Slate turns pale there).
+        // The slate token that keeps its color in dark mode (Accent/Slate turns pale there).
         case .slate: Theme.Color.categoryRecords
         }
     }
