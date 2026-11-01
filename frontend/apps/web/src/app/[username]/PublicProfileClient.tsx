@@ -3,8 +3,8 @@
 
 import { useState, useEffect, useCallback, useId, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
-import { Camera, ChevronDown, ChevronLeft, Ellipsis, Eye, HandHeart, Lock, Pencil, PenLine, Share, UserPlus } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Camera, ChevronDown, ChevronLeft, Ellipsis, Eye, HandHeart, Lock, MessageSquareQuote, Pencil, PenLine, Pin, Share, UserPlus } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { buildUserProfileShareUrl, chosenUsername } from '@pantopus/utils';
 import type { UserProfile, User, GigListItem, Review, Post } from '@pantopus/types';
@@ -22,6 +22,8 @@ import { buttonRow, primaryButton, secondaryButton } from '@/components/profile/
 import { ReliabilityPanel } from '@/components/profile/public/cards';
 import { AboutTab, AroundTheNeighborhood, MissionsTab, PostsTab, WorkTab, hasContributions } from '@/components/profile/public/tabs';
 import YouAndSection from '@/components/profile/public/YouAndSection';
+import GetToKnowSection from '@/components/profile/public/GetToKnowSection';
+import PinnedPostsRow from '@/components/profile/public/PinnedPostsRow';
 import type { PortfolioEntry } from '@/components/profile/public/tabs/PortfolioTab';
 import { launchFeatures } from '@/lib/featureFlags';
 import { authPageHref } from '@/lib/auth-utils';
@@ -534,6 +536,13 @@ function ProfileContent({ username, initialProfile, ownerHome = false }: PublicP
   // Your own profile: the name and photo neighbors see (your Local Profile) and, in Preview as, the audience's read.
   const ownerCandidate = Boolean(currentUser?.id && profile?.id && currentUser.id === profile.id);
   const ownLocalProfile = useOwnLocalProfile({ enabled: ownerCandidate });
+  // Your own pinned posts (the same read as your Pinned row): with none, a tip suggests pinning one.
+  const ownPinned = useQuery({
+    queryKey: queryKeys.personPinned(String(profile?.id ?? '')),
+    queryFn: () => api.posts.getUserPinnedPosts(String(profile?.id)),
+    enabled: ownerCandidate,
+    staleTime: 60 * 1000,
+  });
   const previewGeneration = useRef(0);
   const ownerId = ownerCandidate ? profile?.id : null;
   useEffect(() => {
@@ -1277,6 +1286,16 @@ function ProfileContent({ username, initialProfile, ownerHome = false }: PublicP
       detail: 'Neighbors who need a hand can find you. Only you see this tip.',
       onOpen: () => router.push('/app/profile/edit#helps-with'),
     },
+    !(Array.isArray(shownProfile.prompts) && shownProfile.prompts.length > 0) && {
+      key: 'prompt', icon: <MessageSquareQuote className="w-5 h-5" />, title: 'Answer a prompt',
+      detail: 'Give neighbors an easy way to start a conversation. Only you see this tip.',
+      onOpen: () => router.push('/app/profile/edit#prompts'),
+    },
+    ownPinned.status === 'success' && (ownPinned.data?.posts ?? []).length === 0 && userPosts.length > 0 && {
+      key: 'pin', icon: <Pin className="w-5 h-5" />, title: 'Pin a post',
+      detail: 'Keep up to 3 posts at the top of your profile, from a post’s ⋯ menu. Only you see this tip.',
+      onOpen: () => router.push('/app/my-pulse'),
+    },
   ].filter(Boolean) : [];
 
   const ownerPostsLink = showOwnerOnly && userPosts.length > 0 ? (
@@ -1436,8 +1455,22 @@ function ProfileContent({ username, initialProfile, ownerHome = false }: PublicP
                 // A signed-in visitor once who's looking is known: never your own profile, a preview or a block.
                 enabled={Boolean(viewerReady && signedIn && currentUser?.id && profile.id && !isOwnProfile && !blocked)}
               />
+              <GetToKnowSection
+                firstName={firstName}
+                prompts={viewProfile.prompts}
+                editHref={showOwnerOnly ? '/app/profile/edit#prompts' : null}
+              />
             </div>
             <div className="min-w-0 mt-7 lg:mt-0">
+              <PinnedPostsRow
+                personId={String(profile.id)}
+                // Signed in and allowed to see their posts; a preview reads as its audience (the "anyone" one has none).
+                enabled={Boolean(mounted && viewerReady && signedIn && profile.id && !anyoneView && !blocked
+                  && (!previewing || previewReady))}
+                audience={previewing && previewAudience !== 'anyone' ? previewAudience : null}
+                editHref={showOwnerOnly ? '/app/profile/edit#pinned' : null}
+                inert={previewing}
+              />
               {!mounted ? (
                 <div aria-hidden="true" className="h-11 border-b border-app" />
               ) : anyoneView ? (

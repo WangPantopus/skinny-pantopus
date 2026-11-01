@@ -443,6 +443,26 @@ export async function getUserPosts(userId: string, params?: {
   return get(`/api/posts/user/${userId}`, params);
 }
 
+/**
+ * Up to 3 posts this person pinned to their profile, newest pin first, filtered as their posts are for you (signed in
+ * only). `as` previews your own as that audience; `anyone` answers `sign_in_required`.
+ */
+export async function getUserPinnedPosts(userId: string, params?: {
+  as?: 'anyone' | 'neighbors' | 'connections';
+}): Promise<{ posts: Post[]; sign_in_required?: boolean; preview_as?: string }> {
+  return get(`/api/posts/user/${userId}/pinned`, params);
+}
+
+/** Pins one of your own posts to your profile; a 4th answers 409 PROFILE_PIN_LIMIT with a sentence to show. */
+export async function pinPostToProfile(postId: string): Promise<{ post_id: string; profile_pinned: true; profile_pinned_at: string }> {
+  return post(`/api/posts/${postId}/profile-pin`);
+}
+
+/** Takes one of your posts off your profile's Pinned row (also fine when it wasn't pinned). */
+export async function unpinPostFromProfile(postId: string): Promise<{ post_id: string; profile_pinned: false }> {
+  return del(`/api/posts/${postId}/profile-pin`);
+}
+
 // ============ REPORTS ============
 
 export async function reportPost(postId: string, data: {

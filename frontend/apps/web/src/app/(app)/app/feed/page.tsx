@@ -26,6 +26,7 @@ import InquiryChatDrawer from '@/components/discover/InquiryChatDrawer';
 import { useAreaPicker } from '@/hooks/useAreaPicker';
 import { useFeedPreferences } from '@/hooks/useFeedPreferences';
 import { useFeedData, type FilterType } from '@/hooks/useFeedData';
+import { useProfilePin } from '@/hooks/useProfilePin';
 import { useNewPostsPill } from '@/hooks/useNewPostsPill';
 import { useActiveSportsEvents } from '@/hooks/useActiveSportsEvents';
 import {
@@ -117,6 +118,8 @@ export default function FeedPage() {
   const hasViewingArea = area.viewingLat != null && area.viewingLng != null;
 
   const surfaceParam = searchParams?.get('surface');
+  // Pin to profile / Unpin from profile on your own posts' ⋯ menus (the feed's copy updates with the server's answer).
+  const profilePin = useProfilePin();
   const feed = useFeedData({
     initialSurface: (surfaceParam === 'personas' && launchFeatures.beacon) || surfaceParam === 'connections' ? surfaceParam : 'place',
     viewingLat: area.viewingLat,
@@ -721,6 +724,7 @@ export default function FeedPage() {
                               onSave={feed.handleSave}
                               onDelete={feed.handleDelete}
                               onEdit={setEditingPost}
+                              onProfilePin={profilePin}
                               onComment={handleOpenDetail}
                               onOpenDetail={handleOpenDetail}
                               onReport={handleReport}

@@ -7,6 +7,7 @@ import * as api from '@pantopus/api';
 import type { Post } from '@pantopus/types';
 import { PostCard, PostDetailPanel } from '@/components/feed';
 import { patchPostInFeedCaches } from '@/hooks/useFeedData';
+import { useProfilePin } from '@/hooks/useProfilePin';
 import ReportModal from '@/components/ui/ReportModal';
 import { toast } from '@/components/ui/toast-store';
 
@@ -31,7 +32,7 @@ interface PostsTabProps {
   justJoined?: boolean;
   /** Message the person from an empty list; left out where messaging isn't open. */
   onSayHi?: () => void;
-  /** Your own profile: an empty list speaks to you. */
+  /** Your own profile: an empty list speaks to you, and your posts' ⋯ menus offer Pin to profile. */
   isOwner?: boolean;
   /** The person's account id: their initials on the cards use their own color, as in the header. */
   authorColorSeed?: string;
@@ -72,6 +73,11 @@ export default function PostsTab({
   const patch = (postId: string, changes: Partial<Post>) => {
     onPostsChange((prev) => prev.map((p) => (p.id === postId ? { ...p, ...changes } : p)));
     patchPostInFeedCaches(queryClient, postId, changes);
+  };
+
+  const profilePin = useProfilePin();
+  const handleProfilePin = async (post: Post, pin: boolean) => {
+    if (await profilePin(post, pin)) onPostsChange((prev) => prev.map((p) => (p.id === post.id ? { ...p, profile_pinned: pin } : p)));
   };
 
   // The state the person chose goes with each request, so a re-send can't flip it back.
@@ -198,6 +204,7 @@ export default function PostsTab({
             onOpenDetail={(id) => setDetailPostId(id)}
             onSave={handleSave}
             onReport={(id) => setReportPostId(id)}
+            onProfilePin={isOwner ? handleProfilePin : undefined}
             currentUserId={currentUserId}
             isLiking={likingIds.has(post.id)}
             showToast={(message) => toast.info(message)}

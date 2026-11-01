@@ -10,7 +10,7 @@ import type { Post, MatchedBusiness } from '@pantopus/api';
 import type { User } from '@pantopus/types';
 import {
   MessageCircle, Star, CalendarDays, Search as SearchIcon, Megaphone, AlertTriangle,
-  Pencil, Siren, Tag, Wrench, Newspaper, Trophy, Compass, User as UserIcon, ShieldAlert,
+  Pencil, Siren, Tag, Wrench, Newspaper, Trophy, Compass, User as UserIcon, ShieldAlert, Pin, PinOff,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { CommentThread, EditPostDialog } from '@/components/feed';
@@ -27,6 +27,7 @@ import ErrorState from '@/components/ui/ErrorState';
 import PostMetadata from '@/components/feed/PostMetadata';
 import { canSharePost, sharePostLink } from '@/components/feed/sharePostLink';
 import { patchPostInFeedCaches, removePostFromFeedCaches } from '@/hooks/useFeedData';
+import { canOfferProfilePin, useProfilePin } from '@/hooks/useProfilePin';
 import { launchFeatures } from '@/lib/featureFlags';
 import { fetchMe } from '@/lib/me';
 import { usePostDetail } from '@/hooks/usePostDetail';
@@ -56,6 +57,8 @@ export default function PostDetailPage() {
   const postId = params.id as string;
 
   const queryClient = useQueryClient();
+  // Pin to profile / Unpin from profile for your own post (the kept copy updates with the server's answer).
+  const profilePin = useProfilePin();
   const [user, setUser] = useState<User | null>(null);
   const [commentPosting, setCommentPosting] = useState(false);
   const [toast, setToast] = useState('');
@@ -557,6 +560,18 @@ export default function PostDetailPage() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
+                </button>
+              )}
+              {isOwn && canOfferProfilePin(post) && (
+                <button
+                  onClick={() => { void profilePin(post, !post.profile_pinned); }}
+                  className="p-2 text-app-text-muted hover:text-app hover-bg-app rounded-lg transition"
+                  title={post.profile_pinned ? 'Unpin from profile' : 'Pin to profile'}
+                  aria-label={post.profile_pinned ? 'Unpin from profile' : 'Pin to profile'}
+                >
+                  {post.profile_pinned
+                    ? <PinOff className="w-4 h-4" aria-hidden="true" />
+                    : <Pin className="w-4 h-4" aria-hidden="true" />}
                 </button>
               )}
               {isOwn && (

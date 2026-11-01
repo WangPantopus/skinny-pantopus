@@ -12,6 +12,8 @@ import ErrorState from '@/components/ui/ErrorState';
 import { confirmStore } from '@/components/ui/confirm-store';
 import UsernameField, { type UsernameStatus } from '@/components/profile/UsernameField';
 import NeighborPhotoField from '@/components/profile/edit/NeighborPhotoField';
+import PromptsField from '@/components/profile/edit/PromptsField';
+import PinnedPostsField from '@/components/profile/edit/PinnedPostsField';
 import ProfileAvatar from '@/components/profile/public/atoms/ProfileAvatar';
 import { joinedText } from '@/components/profile/public/ProfileHeader';
 import { useOwnLocalProfile, usePrivacySettings } from '@/lib/me';
@@ -208,7 +210,7 @@ function LinkRow({ icon, title, detail, value, href, onOpen }: {
 
 /**
  * Edit profile, in two parts: "Neighbors see this" (the photo and name neighbors see, username, tagline, about you,
- * what you help with, links) and "Only you see this" (your account name and photo, email, phone, birthday, address,
+ * prompts, what you help with, pinned posts, links) and "Only you see this" (your account name and photo, email, phone, birthday, address,
  * and the settings for your home and city), with a live preview of how neighbors see you at the top. One Save saves
  * it all, the name neighbors see included; the photo neighbors see saves as soon as you pick it.
  */
@@ -221,7 +223,7 @@ export default function EditProfilePage() {
     skills, newSkill, setNewSkill, addSkill, removeSkill,
     addressVerified, setAddressVerified,
     profilePictureUrl, setProfilePictureUrl,
-    showContact, setShowContact, hasChanges,
+    showContact, setShowContact, prompts, setPrompts, hasChanges,
     loadProfile, saveProfile,
   } = useProfileForm();
 
@@ -267,9 +269,10 @@ export default function EditProfilePage() {
       scrolled.current = true;
       const target = document.getElementById(id);
       target?.scrollIntoView({ block: 'start' });
-      // A field to type in first (never a hidden file picker, or a chip's Remove button).
+      // A field to type in first (never a hidden file picker, or a chip's Remove button), else the first button that
+      // only opens something (never one that changes something at once, such as Unpin).
       const field = target?.querySelector<HTMLElement>('textarea, input:not([type="hidden"]):not([type="file"])')
-        ?? target?.querySelector<HTMLElement>('button');
+        ?? target?.querySelector<HTMLElement>('button:not([data-anchor-skip])');
       field?.focus({ preventScroll: true });
     }, 50);
     return () => window.clearTimeout(timer);
@@ -484,6 +487,12 @@ export default function EditProfilePage() {
               </div>
             </div>
 
+            <PromptsField
+              prompts={prompts}
+              onChange={setPrompts}
+              error={(fieldErrors as Record<string, string | undefined>).prompts}
+            />
+
             {/* What you help with */}
             <section id="helps-with" aria-labelledby="edit-helps-with" className="mt-4 rounded-2xl border border-app bg-surface p-4 scroll-mt-24">
               <h3 id="edit-helps-with" className="text-[1.0625rem] leading-[1.375rem] font-semibold text-app">Helps with</h3>
@@ -530,6 +539,8 @@ export default function EditProfilePage() {
                 </button>
               </div>
             </section>
+
+            {user?.id ? <PinnedPostsField accountId={String(user.id)} /> : null}
 
             {/* Links */}
             <section aria-labelledby="edit-links" className="mt-4 rounded-2xl border border-app bg-surface p-4">

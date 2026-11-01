@@ -99,11 +99,30 @@ export interface UseProfileFormReturn {
   /** "Show on my profile" for your email and phone (saved with the rest). */
   showContact: { showEmail: boolean; showPhone: boolean };
   setShowContact: React.Dispatch<React.SetStateAction<{ showEmail: boolean; showPhone: boolean }>>;
-  /** True when anything on the form differs from what was saved (fields, skills, the two switches). */
+  /**
+   * Your prompts in saved order (SRV-2's `prompts`), saved with the rest. Keys this web build doesn't know (a newer
+   * catalog) stay in the list untouched, so a save never drops them.
+   */
+  prompts: ProfilePrompt[];
+  setPrompts: React.Dispatch<React.SetStateAction<ProfilePrompt[]>>;
+  /** True when anything on the form differs from what was saved (fields, skills, the two switches, prompts). */
   hasChanges: boolean;
   loadProfile: () => Promise<void>;
   /** Saves the form; `neighborName`, when given, becomes the name neighbors see (your Local Profile) in the same save. */
   saveProfile: (e?: React.FormEvent, extras?: { neighborName?: string }) => Promise<void>;
+}
+
+export interface ProfilePrompt {
+  key: string;
+  answer: string;
+}
+
+function promptsOf(userData: Me | null | undefined): ProfilePrompt[] {
+  const list = (userData as { prompts?: unknown } | null | undefined)?.prompts;
+  return Array.isArray(list)
+    ? list.filter((p): p is ProfilePrompt => Boolean(p) && typeof p.key === 'string' && typeof p.answer === 'string')
+      .map(({ key, answer }) => ({ key, answer }))
+    : [];
 }
 
 function contactOf(userData: Me | null | undefined) {
@@ -157,6 +176,8 @@ export function useProfileForm(): UseProfileFormReturn {
   const [profilePictureUrl, setProfilePictureUrl] = useState<string | null>(kept ? (kept.profilePicture || kept.profile_picture_url || null) : null);
   const [showContact, setShowContact] = useState(() => contactOf(kept));
   const shownContact = useRef(contactOf(kept));
+  const [prompts, setPrompts] = useState<ProfilePrompt[]>(() => promptsOf(kept));
+  const shownPrompts = useRef(promptsOf(kept));
 
   // Track initial form snapshot for isDirty
   const initialSnapshot = useRef<ProfileFormData>(kept ? profileFormData(kept) : INITIAL_FORM);
@@ -169,9 +190,13 @@ export function useProfileForm(): UseProfileFormReturn {
   const shownSkills = useRef(skills);
   const showContactRef = useRef(showContact);
   showContactRef.current = showContact;
+  const promptsRef = useRef(prompts);
+  promptsRef.current = prompts;
+  const promptsChanged = JSON.stringify(prompts) !== JSON.stringify(shownPrompts.current);
   const hasChanges = isDirty
     || JSON.stringify(skills) !== JSON.stringify(shownSkills.current)
-    || JSON.stringify(showContact) !== JSON.stringify(shownContact.current);
+    || JSON.stringify(showContact) !== JSON.stringify(shownContact.current)
+    || promptsChanged;
 
   const setField = useCallback((field: keyof ProfileFormData, value: string) => {
     dispatch({ type: 'SET_FIELD', field, value });
@@ -210,7 +235,8 @@ export function useProfileForm(): UseProfileFormReturn {
       // Your typing wins over a newer copy: it replaces only an unchanged form.
       const untouched = JSON.stringify(formRef.current) === JSON.stringify(initialSnapshot.current)
         && JSON.stringify(skillsRef.current) === JSON.stringify(shownSkills.current)
-        && JSON.stringify(showContactRef.current) === JSON.stringify(shownContact.current);
+        && JSON.stringify(showContactRef.current) === JSON.stringify(shownContact.current)
+        && JSON.stringify(promptsRef.current) === JSON.stringify(shownPrompts.current);
       shown.current = true;
       if (!untouched) return;
 
@@ -222,6 +248,8 @@ export function useProfileForm(): UseProfileFormReturn {
       shownSkills.current = userData.skills || [];
       setShowContact(contactOf(userData));
       shownContact.current = contactOf(userData);
+      setPrompts(promptsOf(userData));
+      shownPrompts.current = promptsOf(userData);
       setAddressVerified(!!userData.address_verified);
       setProfilePictureUrl(userData.profilePicture || userData.profile_picture_url || null);
     } catch (err) {
@@ -275,6 +303,8 @@ export function useProfileForm(): UseProfileFormReturn {
 
       updates.showEmail = showContact.showEmail;
       updates.showPhone = showContact.showPhone;
+      // The list replaces the saved one, so it travels only when you changed it.
+      if (promptsChanged) updates.profile_prompts = prompts.map(({ key, answer }) => ({ key, answer: answer.trim() }));
 
       updates.website = form.website.trim();
       updates.linkedin = form.linkedin.trim();
@@ -302,6 +332,10 @@ export function useProfileForm(): UseProfileFormReturn {
       setMe(saved);
       profileSaved = true;
       initialSnapshot.current = { ...form };
+      // The reply carries the saved prompts; an older server's reply without them keeps what you sent.
+      const savedPrompts = Array.isArray((saved as { prompts?: unknown }).prompts) ? promptsOf(saved as Me) : prompts;
+      shownPrompts.current = savedPrompts;
+      setPrompts(savedPrompts);
       const savedSkills = await api.users.updateSkills(skills);
       setMe({ skills: savedSkills?.skills ?? skills });
       shownSkills.current = skills;
@@ -335,6 +369,8 @@ export function useProfileForm(): UseProfileFormReturn {
       const code = (err as { data?: { code?: string }; code?: string } | null)?.data?.code
         || (err as { code?: string } | null)?.code;
       if (typeof code === 'string' && code.startsWith('USERNAME_')) fields.username = message;
+      // A prompt list the server refused: its sentence goes under Prompts.
+      if (code === 'PROFILE_PROMPTS_INVALID') (fields as Record<string, string | undefined>).prompts = message;
       setFieldErrors(fields);
       // One rejected field: its own message. Several: point at the highlighted fields.
       const rejected = Object.values(fields).filter((m): m is string => Boolean(m));
@@ -342,7 +378,7 @@ export function useProfileForm(): UseProfileFormReturn {
     } finally {
       setSaving(false);
     }
-  }, [form, skills, showContact, router]);
+  }, [form, skills, showContact, prompts, promptsChanged, router]);
 
   const addSkill = useCallback(() => {
     if (newSkill.trim() && !skills.includes(newSkill.trim())) {
@@ -378,6 +414,8 @@ export function useProfileForm(): UseProfileFormReturn {
     setProfilePictureUrl,
     showContact,
     setShowContact,
+    prompts,
+    setPrompts,
     hasChanges,
     loadProfile,
     saveProfile,
