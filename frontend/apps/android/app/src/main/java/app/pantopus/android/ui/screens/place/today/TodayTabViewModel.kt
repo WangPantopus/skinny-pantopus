@@ -54,7 +54,7 @@ import kotlin.math.abs
 
 private const val SAVED_ANCHOR_TOLERANCE = 0.000001
 
-/** The agenda reads its tasks once more through a new access when a token refresh retired the first. */
+/** The agenda reads its tasks once more when a token refresh mid-read left the first read unanswered. */
 private const val TASK_READ_ATTEMPTS = 2
 
 /** Contract §4, Today: a copy older than this gets the quiet "Couldn't refresh" line when a refresh fails. */
@@ -176,8 +176,8 @@ class TodayTabViewModel
             tasksJob?.cancel()
             tasksJob =
                 viewModelScope.launch {
-                    // A task access belongs to the sign-in it was made under: a token refresh (a cold start) retires
-                    // it, and every read through it then fails. Read once more through a new one.
+                    // A token refresh mid-read (a cold start) retires the task access it was made under, or makes the
+                    // store set the answer aside and hand back nothing. Read once more, through a new access if needed.
                     repeat(TASK_READ_ATTEMPTS) {
                         val access =
                             agendaAccess?.takeIf { it.first == id && it.second.isCurrent }?.second
@@ -192,6 +192,7 @@ class TodayTabViewModel
                                 return@repeat
                             }
                         if (homeId != id) return@launch
+                        if (stored.data == null && stored.failure == null) return@repeat
                         val tasks = stored.data?.tasks
                         when {
                             tasks != null -> _agendaTasks.value = tasks
