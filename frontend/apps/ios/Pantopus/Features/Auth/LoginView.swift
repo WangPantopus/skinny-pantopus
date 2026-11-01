@@ -260,60 +260,64 @@ struct LoginView: View {
                     .padding(.trailing, Spacing.s4)
                 }
             }
+            .readableColumn()
             .navigationBarHidden(true)
             .swipesBackFromEdge()
             .navigationDestination(for: AuthRoute.self) { route in
-                switch route {
-                case .login:
-                    EmptyView()
-                case let .legal(document):
-                    LegalContentView(document: document) {
-                        if !path.isEmpty { path.removeLast() }
+                Group {
+                    switch route {
+                    case .login:
+                        EmptyView()
+                    case let .legal(document):
+                        LegalContentView(document: document) {
+                            if !path.isEmpty { path.removeLast() }
+                        }
+                        .navigationBarBackButtonHidden(true)
+                    case let .signUp(inviteCode):
+                        signUpScreen(inviteCode: inviteCode)
+                    case .forgotPassword:
+                        ForgotPasswordView {
+                            if !path.isEmpty { path.removeLast() }
+                        }
+                    case let .resetPassword(token):
+                        SetNewPasswordView(
+                            token: token,
+                            onBack: { if !path.isEmpty { path.removeLast() } },
+                            onContinue: { path = [] }
+                        )
+                    case let .verifyEmail(email, token):
+                        VerifyEmailView(
+                            email: email,
+                            token: token,
+                            softGate: true,
+                            onDone: { path = [] },
+                            onChangeEmail: { _ in
+                                // Route back to signup so the user can re-enter
+                                // an email. The backend's email-change flow is
+                                // documented in `docs/mobile/auth-backend-contracts.md`
+                                // §2; today we restart signup with the new value.
+                                path = [.signUp(inviteCode: nil)]
+                            },
+                            onConfirmed: continueToLogin(confirmedEmail:)
+                        )
+                    case let .verifyEmailLanding(token, email):
+                        VerifyEmailLandingView(
+                            email: email,
+                            token: token,
+                            // No session after verification (backend revokes it),
+                            // so Continue drops back to login to sign in, from the
+                            // address that was just confirmed.
+                            onContinue: { continueToLogin(confirmedEmail: email) },
+                            onUseDifferentEmail: { path = [.signUp(inviteCode: nil)] }
+                        )
+                    case let .error(authError):
+                        AuthErrorView(
+                            error: authError,
+                            onRetry: nil
+                        ) { if !path.isEmpty { path.removeLast() } }
                     }
-                    .navigationBarBackButtonHidden(true)
-                case let .signUp(inviteCode):
-                    signUpScreen(inviteCode: inviteCode)
-                case .forgotPassword:
-                    ForgotPasswordView {
-                        if !path.isEmpty { path.removeLast() }
-                    }
-                case let .resetPassword(token):
-                    SetNewPasswordView(
-                        token: token,
-                        onBack: { if !path.isEmpty { path.removeLast() } },
-                        onContinue: { path = [] }
-                    )
-                case let .verifyEmail(email, token):
-                    VerifyEmailView(
-                        email: email,
-                        token: token,
-                        softGate: true,
-                        onDone: { path = [] },
-                        onChangeEmail: { _ in
-                            // Route back to signup so the user can re-enter
-                            // an email. The backend's email-change flow is
-                            // documented in `docs/mobile/auth-backend-contracts.md`
-                            // §2; today we restart signup with the new value.
-                            path = [.signUp(inviteCode: nil)]
-                        },
-                        onConfirmed: continueToLogin(confirmedEmail:)
-                    )
-                case let .verifyEmailLanding(token, email):
-                    VerifyEmailLandingView(
-                        email: email,
-                        token: token,
-                        // No session after verification (backend revokes it),
-                        // so Continue drops back to login to sign in, from the
-                        // address that was just confirmed.
-                        onContinue: { continueToLogin(confirmedEmail: email) },
-                        onUseDifferentEmail: { path = [.signUp(inviteCode: nil)] }
-                    )
-                case let .error(authError):
-                    AuthErrorView(
-                        error: authError,
-                        onRetry: nil
-                    ) { if !path.isEmpty { path.removeLast() } }
                 }
+                .readableColumn()
             }
             .onAppear {
                 viewModel.prepare(using: auth)

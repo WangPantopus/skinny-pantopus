@@ -31,7 +31,9 @@ public struct PlansTabRoot: View {
                 .toolbar(.hidden, for: .navigationBar)
                 .swipesBackFromEdge()
                 .navigationDestination(for: PlansRoute.self) { route in
+                    // The map fills a wide screen; the plan pages keep a readable column.
                     PlansDestination(route: route, path: $plansPath) { hostRequest = PlansHostRequest(start: $0) }
+                        .readableColumn()
                 }
         }
         .accessibilityIdentifier("plansTabRoot")

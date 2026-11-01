@@ -765,9 +765,11 @@ public struct HubTabRoot: View {
     public var body: some View {
         NavigationStack(path: navigationPathBinding) {
             stackRoot
+                .readableColumn()
                 .swipesBackFromEdge()
                 .navigationDestination(for: HubRoute.self) { route in
                     launchScopedDestination(for: route) { path.append($0) }
+                        .readableColumn()
                         .modifier(OwnHeaderBar(drawsOwnHeader: route.isAvailableAtLaunch && Self.drawsOwnHeader(route)))
                 }
             #if DEBUG

@@ -101,10 +101,12 @@ public struct PulseTabRoot: View {
                     )
                 }
             }
+            .readableColumn()
             .toolbar(.hidden, for: .navigationBar)
             .swipesBackFromEdge()
             .navigationDestination(for: PulseRoute.self) { route in
                 destination(for: route)
+                    .readableColumn()
                     .toolbar(.hidden, for: .navigationBar)
             }
         }

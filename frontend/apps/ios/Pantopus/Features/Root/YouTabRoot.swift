@@ -504,6 +504,7 @@ public struct YouTabRoot: View {
                 onLogOut: { showsSignOutConfirm = true },
                 onClose: onClose
             )
+            .readableColumn()
             .toolbar(.hidden, for: .navigationBar)
             .swipesBackFromEdge()
             .task {
@@ -513,6 +514,7 @@ public struct YouTabRoot: View {
             }
             .navigationDestination(for: YouRoute.self) { route in
                 launchScopedDestination(for: route)
+                    .readableColumn()
                     .modifier(OwnHeaderBar(drawsOwnHeader: route.isAvailableAtLaunch && Self.drawsOwnHeader(route)))
             }
             .confirmationDialog(
