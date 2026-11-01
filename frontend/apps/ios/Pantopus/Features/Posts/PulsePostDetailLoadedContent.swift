@@ -225,12 +225,3 @@ extension PostDetailDTO {
         return "Alert type: \(label)"
     }
 }
-
-#Preview {
-    @Previewable @State var composer = ""
-    PulsePostDetailLoadedContent(
-        detail: PulsePostDetailSampleData.populated,
-        composerText: $composer,
-        isSendingComment: false
-    )
-}

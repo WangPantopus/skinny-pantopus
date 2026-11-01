@@ -448,6 +448,15 @@ private struct ErrorLayout: View {
     }
 }
 
+#Preview {
+    @Previewable @State var composer = ""
+    PulsePostDetailLoadedContent(
+        detail: PulsePostDetailSampleData.populated,
+        composerText: $composer,
+        isSendingComment: false
+    )
+}
+
 extension PostDetailDTO {
     /// Deal metadata uses the same existing detail line as Lost & Found.
     var dealDetailLine: String? {
