@@ -120,6 +120,7 @@ export default function PinnedPostsRow({ personId, enabled, audience = null, edi
                 <span className="flex-1 px-3 pt-3 pb-3.5 flex flex-col justify-between gap-2.5">
                   <span className="text-[0.9375rem] leading-5 font-semibold text-app line-clamp-3 [overflow-wrap:anywhere]">{postFirstLine(post)}</span>
                   <span className="text-[0.8125rem] leading-[1.125rem] text-app-muted">
+                    <span className="sr-only">, </span>
                     <span className={`font-semibold ${KIND_TEXT}`} style={kindText(post.post_type || 'general')}>{config.label}</span>
                     {count ? ` · ${count}` : ''}
                   </span>

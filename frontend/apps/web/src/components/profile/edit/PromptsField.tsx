@@ -69,7 +69,10 @@ export default function PromptsField({ prompts, onChange, error }: PromptsFieldP
               >
                 <span className="min-w-0 flex-1 flex flex-col gap-0.5">
                   <span className="text-[0.8125rem] leading-[1.125rem] font-semibold text-app-muted">{promptText(prompt.key)}</span>
-                  <span className="text-[0.9375rem] leading-5 text-app [overflow-wrap:anywhere]">{prompt.answer}</span>
+                  <span className="text-[0.9375rem] leading-5 text-app [overflow-wrap:anywhere]">
+                    <span className="sr-only"> </span>
+                    {prompt.answer}
+                  </span>
                 </span>
                 <ChevronRight aria-hidden="true" className="w-4 h-4 shrink-0 text-app-muted" />
               </button>
