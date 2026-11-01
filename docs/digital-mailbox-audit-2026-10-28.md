@@ -192,3 +192,53 @@ this local setup artifact was not treated as a mailbox authorization defect.
 
 The repair is for review only: no merge, deployment, hosted database/configuration
 change, real-person delivery, payment or app-store submission was performed.
+
+## October 31 follow-up — remaining flows on PR #3081
+
+The follow-up continued against the isolated local backend, database, private
+storage and SMTP capture, using synthetic accounts in Chrome, the iOS simulator
+and Android emulator. It adds two repairs to the earlier PR changes:
+
+- Web now refreshes opened rows and unopened counts after every successful
+  detail read, including direct links and Retry after a storage failure. The
+  same refresh includes letters inside an expanded bundle. Failed reads leave
+  unopened state unchanged.
+- iOS and Android keep a successfully joined Mail Party usable when the member
+  cannot read the optional household directory. The assignment section explains
+  that restriction; joining and reactions still work. Other roster failures
+  retain their error/retry state. No directory permission was broadened.
+
+### Additional observed coverage
+
+| Flow | Result |
+| --- | --- |
+| Private enclosure | Sent a real multipart upload with a household letter. Chrome opened its signed attachment; iOS Quick Look and Android's document viewer read its final sentence. Unauthorized and pre-delivery detail access were denied. |
+| Corrupt storage and Retry | Replaced only the synthetic letter object with invalid bytes. All three clients showed recoverable errors, and the database remained unopened. Restoring the object and retrying recovered the full letter and enclosure. On web, the repaired list and unopened counts refreshed without a reload. |
+| Mail Party | Rebuilt iOS and Android apps created/joined sessions, displayed the restricted assignment state, sent reactions with visible echo, and left/rejoined successfully. The member's directory endpoint continued to deny access. |
+| Android Christmas compose | Completed picture selection/preview, writing, recipient, arrival and send. Daily-cap rejection was visible. A synthetic previous-day fixture allowed the next send; success and Sent showed the saved note and Christmas-morning arrival. Future Christmas delivery was not advanced. |
+| Email card claim | Web sent to a synthetic external email. Local SMTP captured a local claim link without the private note. The sender could not claim it; the intended authenticated recipient claimed, opened and flipped the card. The note survived reload. |
+| Held bundle | The existing local reconciliation job grouped two letters into one bundle and scheduled all three records for 07:00 on the return date, correctly crossing the daylight-saving offset change. All clients showed the held count. Android's end-early confirmation preserved the hold on Cancel and ended it on confirmation, rescheduling delivery to the next local morning. |
+| Delivered bundle | Before delivery the bundle endpoint denied access. After advancing only the three local delivery timestamps, web, iOS and Android opened the bundle and read a child's final sentence. Web also exercised the second child and its opened-row refresh. This is not a wall-clock production scheduler check. |
+| Tasks and home records | Web created a task from the letter and retained its High priority after reload. iOS read the task and correctly rejected completion by a member without task-edit permission. A web-created asset and linked letter appeared on iOS; opening the linked letter and returning to the asset worked. |
+| Community and Mail Day settings | Web and iOS rendered the empty local Community view; the iOS category control worked. Web saved a new Mail Day time and retained it after reload. |
+
+### Validation and limits for this follow-up
+
+- Web TypeScript, targeted ESLint and the existing two mailbox-related suites
+  passed (10 tests). Lint retained existing `no-explicit-any` warnings.
+- iOS simulator build, changed-file SwiftFormat/SwiftLint and the existing
+  Mail Party view-model suite passed (13 tests).
+- Android debug assembly, ktlint and detekt passed. Both rebuilt native apps
+  were installed and used for the flows above.
+- No new unit tests, schema changes or hosted changes were made. PR #3081 is
+  for review; it must remain unmerged for this request.
+- Heavy shared-host load slowed cold starts and navigation. Android displayed
+  a startup ANR after installation, then recovered after relaunch; its exact
+  cause was not isolated. Subsequent flows worked, but this is not a clean
+  performance or smoothness certification.
+- Physical devices, hosted storage, provider email/SMS, native claim deep links,
+  push/background delivery, all business roles, payments/rewards, certified
+  signing, AI, carrier integrations and actual Christmas release remain
+  unverified in this pass. Local SMTP capture verifies the local email flow,
+  not delivery through an external provider. This record does not claim every
+  button, device size or optional subpage has passed.

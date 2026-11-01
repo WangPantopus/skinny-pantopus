@@ -408,6 +408,7 @@ async function loadOpenedItem(qc: QueryClient, itemId: string) {
   qc.invalidateQueries({ queryKey: mailboxKeys.counter() });
   qc.invalidateQueries({ queryKey: mailboxKeys.mailDaySummary() });
   qc.invalidateQueries({ queryKey: [...mailboxKeys.all, 'drawer'] });
+  qc.invalidateQueries({ queryKey: [...mailboxKeys.all, 'bundle'] });
   return detail;
 }
 
