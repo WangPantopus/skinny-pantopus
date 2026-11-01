@@ -67,11 +67,13 @@ enum PlacePresentation {
         return nil
     }
 
-    /// "9:12 AM" — the freshness clock.
-    static func fmtTime(_ iso: String?) -> String? {
+    /// "9:12 AM" — the freshness clock, on the place's clock when its zone is
+    /// known, so every time on Today and Place reads the same.
+    static func fmtTime(_ iso: String?, timeZone: TimeZone? = nil) -> String? {
         guard let d = parseISO(iso) else { return nil }
         let f = DateFormatter()
         f.dateFormat = "h:mm a"
+        if let timeZone { f.timeZone = timeZone }
         return f.string(from: d)
     }
 
@@ -113,41 +115,50 @@ enum PlacePresentation {
         return parse.date(from: String(raw.prefix(10)) + "T12:00")
     }
 
-    /// Parses a LOCAL wall-clock datetime with no zone or seconds
-    /// ("2026-06-12T05:19") — the shape sunrise/sunset arrive in.
-    private static let localDateTimeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd'T'HH:mm"
-        f.timeZone = .current
-        return f
-    }()
+    /// The place's calendar: its own time zone when known, else the phone's.
+    static func placeCalendar(_ timeZone: TimeZone?) -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone ?? .current
+        return calendar
+    }
 
-    /// "today", or "as of Sep 24" when cached sun times belong to an earlier
-    /// day (their own local wall-clock date, e.g. "2026-09-24T06:59").
-    static func fmtSunDay(_ iso: String) -> String? {
-        let parse = DateFormatter()
-        parse.locale = Locale(identifier: "en_US_POSIX")
-        parse.timeZone = .current
-        parse.dateFormat = "yyyy-MM-dd"
-        guard let day = parse.date(from: String(iso.prefix(10))) else { return nil }
-        if Calendar.current.isDateInToday(day) { return "today" }
+    /// The place's day a sunrise or sunset belongs to ("2026-09-24"): the
+    /// wall-clock date as written, or an instant's date at the place.
+    private static func sunDayKey(_ iso: String, calendar: Calendar) -> String? {
+        guard let tee = iso.firstIndex(of: "T") else { return iso.count == 10 ? iso : nil }
+        let clock = iso[iso.index(after: tee)...]
+        let zoned = clock.contains("Z") || clock.contains("+") || clock.dropFirst(5).contains("-")
+        if zoned, let date = parseISO(iso) { return SkyNote.dayKey(date, calendar: calendar) }
+        return String(iso[..<tee])
+    }
+
+    /// "today", or "as of Sep 24" when the sun times belong to an earlier day
+    /// at the place: the server's `date` when it sends one, else the wall
+    /// clock's own date, counted on the place's calendar, not the phone's.
+    static func fmtSunDay(_ sun: PlaceSunriseSunsetData, timeZone: TimeZone? = nil, now: Date = Date()) -> String? {
+        fmtSunDay(sun.date ?? sun.sunrise, timeZone: timeZone, now: now)
+    }
+
+    static func fmtSunDay(_ iso: String, timeZone: TimeZone? = nil, now: Date = Date()) -> String? {
+        let calendar = placeCalendar(timeZone)
+        guard let key = sunDayKey(iso, calendar: calendar), let day = parseCalendarDay(key) else { return nil }
+        if key == SkyNote.dayKey(now, calendar: calendar) { return "today" }
         let out = DateFormatter()
         out.locale = Locale(identifier: "en_US_POSIX")
-        out.timeZone = .current
+        out.timeZone = TimeZone(identifier: "UTC")
         out.dateFormat = "MMM d"
         return "as of \(out.string(from: day))"
     }
 
-    /// "6:42a" — the compact sun clock. Sunrise/sunset are local
-    /// wall-clock times with no zone (unlike the `as_of` instants), so
-    /// parse them directly; fall back to the ISO instant parser.
-    static func fmtSunClock(_ iso: String) -> String {
-        let date = localDateTimeFormatter.date(from: String(iso.prefix(16))) ?? parseISO(iso)
-        guard let date else { return "" }
-        let cal = Calendar.current
-        var h = cal.component(.hour, from: date)
-        let m = String(format: "%02d", cal.component(.minute, from: date))
+    /// "6:42a" — the compact sun clock. Sunrise and sunset arrive as the
+    /// place's own wall-clock times with no zone ("2026-06-12T05:19"): the
+    /// clock is read off the string, as the Today sun arc reads it
+    /// (`SkyMoment.clockMinutes`); an instant is read on the place's clock.
+    static func fmtSunClock(_ iso: String, timeZone: TimeZone? = nil) -> String {
+        guard let minutes = SkyMoment.clockMinutes(iso, calendar: placeCalendar(timeZone)) else { return "" }
+        let whole = Int(minutes)
+        var h = whole / 60
+        let m = String(format: "%02d", whole % 60)
         let suffix = h >= 12 ? "p" : "a"
         h = h % 12
         if h == 0 { h = 12 }
@@ -220,9 +231,9 @@ enum PlacePresentation {
     }
 
     /// The freshness stamp for a section (only weather + your_home show one).
-    static func asOf(for env: PlaceSectionEnvelope) -> String? {
+    static func asOf(for env: PlaceSectionEnvelope, timeZone: TimeZone? = nil) -> String? {
         switch env.id {
-        case .weather: fmtTime(env.asOf)
+        case .weather: timeZone.flatMap { fmtTime(env.asOf, timeZone: $0) }
         case .yourHome, .censusContext: fmtMonthYear(env.asOf)
         default: nil
         }
@@ -231,7 +242,7 @@ enum PlacePresentation {
     // ── the reading: build value/chip/caption/dot from typed data ─
 
     // swiftlint:disable:next cyclomatic_complexity function_body_length
-    static func reading(for env: PlaceSectionEnvelope) -> PlaceSectionReading {
+    static func reading(for env: PlaceSectionEnvelope, timeZone: TimeZone? = nil) -> PlaceSectionReading {
         switch env.id {
         case .weather:
             guard let d = env.weather else { return .init() }
@@ -248,7 +259,10 @@ enum PlacePresentation {
                 : .init(value: "\(n) active", statusDot: Theme.Color.error)
         case .sunriseSunset:
             guard let d = env.sunriseSunset else { return .init() }
-            return .init(value: "\(fmtSunClock(d.sunrise)) · \(fmtSunClock(d.sunset))")
+            let times = "\(fmtSunClock(d.sunriseClock, timeZone: timeZone)) · \(fmtSunClock(d.sunsetClock, timeZone: timeZone))"
+            // Times kept from an earlier day say so, as the Today sun card's source line does.
+            guard let day = fmtSunDay(d, timeZone: timeZone), day != "today" else { return .init(value: times) }
+            return .init(value: "\(times) · \(day)")
         case .goodDayTo:
             guard let d = env.goodDayTo else { return .init() }
             // Lead with what the row says yes to; a row of no's still reads

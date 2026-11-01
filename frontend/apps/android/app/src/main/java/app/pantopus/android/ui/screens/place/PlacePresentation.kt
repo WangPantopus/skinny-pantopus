@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.PlaceSectionStatus
+import app.pantopus.android.data.api.models.place.PlaceSunriseSunsetData
 import app.pantopus.android.data.api.models.place.PlaceTier
 import app.pantopus.android.data.api.models.place.RealRentState
 import app.pantopus.android.data.api.models.place.SeismicDesignCategory
@@ -112,21 +113,30 @@ object PlacePresentation {
                 ?: runCatching { Instant.parse(it) }.getOrNull()
         }
 
-    /** "9:12 AM" — the freshness clock. */
-    fun fmtTime(iso: String?): String? {
+    /**
+     * "9:12 AM" — the freshness clock, on the place's clock ([zone], the home's `time_zone`). Null without a zone:
+     * every clock time shown for a place is in its zone, and an unknown zone shows none (TPR contract).
+     */
+    fun fmtTime(
+        iso: String?,
+        zone: ZoneId? = ZoneId.systemDefault(),
+    ): String? {
         val instant = parseInstant(iso) ?: return null
         return DateTimeFormatter
             .ofPattern("h:mm a", Locale.US)
-            .withZone(ZoneId.systemDefault())
+            .withZone(zone ?: return null)
             .format(instant)
     }
 
-    /** "May 2026" — the property as-of stamp. */
-    fun fmtMonthYear(iso: String?): String? {
+    /** "May 2026" — the property as-of stamp, in the place's zone when it is known. */
+    fun fmtMonthYear(
+        iso: String?,
+        zone: ZoneId? = ZoneId.systemDefault(),
+    ): String? {
         val instant = parseInstant(iso) ?: return null
         return DateTimeFormatter
             .ofPattern("MMM yyyy", Locale.US)
-            .withZone(ZoneId.systemDefault())
+            .withZone(zone ?: ZoneId.systemDefault())
             .format(instant)
     }
 
@@ -149,20 +159,24 @@ object PlacePresentation {
     }
 
     /**
-     * "today", or "as of Sep 24" when cached sun times belong to an earlier
-     * day (their own local wall-clock date, e.g. "2026-09-24T06:59").
+     * "today", or "as of Sep 24" when the sun times belong to another day at the place: their `date` (or their own
+     * wall-clock date) against today's date in the place's [zone], never the phone's (contract §1).
      */
-    fun fmtSunDay(iso: String): String? {
-        val day = runCatching { java.time.LocalDate.parse(iso.substringBefore('T')) }.getOrNull() ?: return null
-        if (day == java.time.LocalDate.now()) return "today"
+    fun fmtSunDay(
+        data: PlaceSunriseSunsetData,
+        zone: ZoneId?,
+    ): String? {
+        val day = data.localDate(zone) ?: return null
+        if (day == java.time.LocalDate.now(zone ?: ZoneId.systemDefault())) return "today"
         return "as of " + day.format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
     }
 
     /**
-     * "6:42a" — the compact sun clock. Sunrise/sunset arrive as LOCAL
-     * wall-clock with no zone or seconds ("2026-06-12T05:19"), so parse
-     * them as a LocalDateTime and read the hour/minute directly (no zone
-     * conversion); fall back to an instant for safety.
+     * "6:42a" — the compact sun clock. Pass the place's wall clock
+     * ([PlaceSunriseSunsetData.localSunrise]): a LOCAL time with no zone
+     * or seconds ("2026-06-12T05:19"), read as a LocalDateTime for its
+     * hour and minute (no zone conversion); an instant falls back to the
+     * phone's zone for safety.
      */
     fun fmtSunClock(iso: String): String {
         val t =
@@ -236,18 +250,25 @@ object PlacePresentation {
             PlaceSectionId.UNKNOWN -> PlaceSectionDisplayConfig(PantopusIcon.MapPin, "Place")
         }
 
-    /** Freshness stamp (only weather + your_home + census show one). */
-    fun asOf(env: PlaceSectionEnvelope): String? =
+    /** Freshness stamp (only weather + your_home + census show one), on the place's clock ([zone]). */
+    fun asOf(
+        env: PlaceSectionEnvelope,
+        zone: ZoneId? = ZoneId.systemDefault(),
+    ): String? =
         when (env.sectionId) {
-            PlaceSectionId.WEATHER -> fmtTime(env.asOf)
-            PlaceSectionId.YOUR_HOME, PlaceSectionId.CENSUS_CONTEXT -> fmtMonthYear(env.asOf)
+            PlaceSectionId.WEATHER -> fmtTime(env.asOf, zone)
+            PlaceSectionId.YOUR_HOME, PlaceSectionId.CENSUS_CONTEXT -> fmtMonthYear(env.asOf, zone)
             else -> null
         }
 
     // ── the reading: build value/chip/caption/dot from typed data ─
 
+    /** [zone]: the place's (`PlaceIntelligence.homeZone`), for the sun times and their day. */
     @Suppress("CyclomaticComplexMethod", "LongMethod")
-    fun reading(env: PlaceSectionEnvelope): PlaceSectionReading =
+    fun reading(
+        env: PlaceSectionEnvelope,
+        zone: ZoneId? = ZoneId.systemDefault(),
+    ): PlaceSectionReading =
         when (env.sectionId) {
             PlaceSectionId.WEATHER -> {
                 val d = env.weather ?: return PlaceSectionReading()
@@ -269,7 +290,10 @@ object PlacePresentation {
             }
             PlaceSectionId.SUNRISE_SUNSET -> {
                 val d = env.sunriseSunset ?: return PlaceSectionReading()
-                PlaceSectionReading(value = "${fmtSunClock(d.sunrise)} · ${fmtSunClock(d.sunset)}")
+                val times = "${fmtSunClock(d.localSunrise(zone))} · ${fmtSunClock(d.localSunset(zone))}"
+                // Another day's times say so, as Today's sun card does: never read as today's.
+                val day = fmtSunDay(d, zone)?.takeUnless { it == "today" }
+                PlaceSectionReading(value = day?.let { "$times · $it" } ?: times)
             }
             PlaceSectionId.GOOD_DAY_TO -> {
                 val d = env.goodDayTo ?: return PlaceSectionReading()

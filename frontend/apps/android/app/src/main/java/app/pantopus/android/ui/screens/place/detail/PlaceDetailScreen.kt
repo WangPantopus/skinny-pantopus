@@ -38,6 +38,7 @@ import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.place.FullWidthShimmer
+import app.pantopus.android.ui.screens.place.LocalPlaceZone
 import app.pantopus.android.ui.screens.place.PlaceDeniedState
 import app.pantopus.android.ui.screens.place.PlaceDetailGroup
 import app.pantopus.android.ui.screens.place.PlacePresentation
@@ -163,6 +164,7 @@ private fun LoadedDetail(
                 LocalPlaceDetailRetry provides viewModel::refresh,
                 LocalPlaceDetailVerify provides detailVerify,
                 LocalPlaceDetailVerifiesFirst provides current.intelligence.verifiesFirst,
+                LocalPlaceZone provides current.intelligence.homeZone,
             ) {
                 GroupContent(
                     group = viewModel.group,
@@ -319,11 +321,12 @@ fun PlaceDetailFallbackCard(
     }
     val cardState = PlacePresentation.cardState(env)
     val isLive = cardState == PlaceSectionCardState.LOADED || cardState == PlaceSectionCardState.STALE
-    val reading = if (isLive) PlacePresentation.reading(env) else PlaceSectionReading()
+    val zone = LocalPlaceZone.current
+    val reading = if (isLive) PlacePresentation.reading(env, zone) else PlaceSectionReading()
     PlaceSectionCard(
         title = cfg.title,
         icon = cfg.icon,
-        asOf = if (isLive) PlacePresentation.asOf(env) else null,
+        asOf = if (isLive) PlacePresentation.asOf(env, zone) else null,
         state = cardState,
         value = reading.value,
         caption = if (cardState == PlaceSectionCardState.UNAVAILABLE) env.unavailableReason else reading.caption,
