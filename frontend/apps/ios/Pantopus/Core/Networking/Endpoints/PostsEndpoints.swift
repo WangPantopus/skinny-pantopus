@@ -137,6 +137,28 @@ public enum PostsEndpoints {
         return Endpoint(method: .get, path: "/api/posts/user/\(userId)", query: query)
     }
 
+    /// `GET /api/posts/user/:userId/pinned` — up to three posts the person
+    /// pinned to their profile, newest pin first, filtered like their posts
+    /// for you; `previewAs` is the owner's Preview as (PRF SRV-3). Route
+    /// `backend/routes/posts.js:3952`.
+    public static func userPinnedPosts(userId: String, previewAs: String? = nil) -> Endpoint {
+        Endpoint(method: .get, path: "/api/posts/user/\(userId)/pinned", query: previewAs.map { ["as": $0] } ?? [:])
+    }
+
+    /// `POST /api/posts/:id/profile-pin` — pins your own post to your
+    /// profile. A fourth pin answers 409 with the sentence to show
+    /// ("You can pin up to 3 posts. Unpin one first."). Route
+    /// `backend/routes/posts.js:3090`.
+    public static func pinToProfile(postId: String) -> Endpoint {
+        Endpoint(method: .post, path: "/api/posts/\(postId)/profile-pin")
+    }
+
+    /// `DELETE /api/posts/:id/profile-pin` — unpins it (also fine when it
+    /// wasn't pinned). Route `backend/routes/posts.js:3121`.
+    public static func unpinFromProfile(postId: String) -> Endpoint {
+        Endpoint(method: .delete, path: "/api/posts/\(postId)/profile-pin")
+    }
+
     /// `GET /api/posts/saved` — the viewer's saved posts they can still
     /// open, newest save first; offset paging over saves.
     public static func savedPosts(limit: Int = 50, offset: Int = 0) -> Endpoint {

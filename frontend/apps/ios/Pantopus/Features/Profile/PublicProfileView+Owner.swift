@@ -56,6 +56,8 @@ extension PublicProfileView {
 
                     ownerTips(payload, owner: owner)
 
+                    promptsAndPins(payload, firstName: Self.firstWord(name), mode: .owner)
+
                     LocalProfileTabStrip(
                         tabs: tabs,
                         postCount: viewModel.postCards.cards.isEmpty ? nil : viewModel.postCards.cards.count,
@@ -96,13 +98,15 @@ extension PublicProfileView {
 
     @ViewBuilder
     private func ownerTips(_ payload: PublicProfileContent, owner: OwnerPageModel) -> some View {
-        let tips = owner.tips(for: payload.profile)
+        let canPin = viewModel.pinnedReadSucceeded && viewModel.pinnedPosts.isEmpty && !viewModel.postCards.cards.isEmpty
+        let tips = owner.tips(for: payload.profile, canPin: canPin)
         if !tips.isEmpty {
             VStack(spacing: Spacing.s3) {
                 ForEach(tips) { tip in
                     ProfileOwnerTipCard(
                         tip: tip,
-                        onOpen: { showEditProfile = true },
+                        // Pins are made from a post's ⋯ menu, in My posts; the rest in the editor.
+                        onOpen: { if tip == .pinPost { open(.myPosts) } else { showEditProfile = true } },
                         onDismiss: { owner.dismiss(tip) }
                     )
                 }
@@ -254,6 +258,35 @@ extension PublicProfileView {
         }
     }
 
+    // MARK: - Prompts and pins
+
+    enum ExtrasMode {
+        case visitor, owner, preview
+    }
+
+    /// "Get to know <name>" and "Pinned", between the header (or "You and")
+    /// and the tabs. On your own profile Edit opens the editor; a preview
+    /// shows them without opening anything.
+    @ViewBuilder
+    func promptsAndPins(_ payload: PublicProfileContent, firstName: String, mode: ExtrasMode) -> some View {
+        let edit: (@MainActor () -> Void)? = mode == .owner ? { showEditProfile = true } : nil
+        let prompts = ProfilePromptCatalog.shown(payload.profile.prompts)
+        if !prompts.isEmpty {
+            ProfilePromptsCard(firstName: firstName, prompts: prompts, onEdit: edit)
+                .padding(.horizontal, Spacing.s5)
+                .padding(.top, 28)
+        }
+        if !viewModel.pinnedPosts.isEmpty, viewModel.connection != .blocked {
+            ProfilePinnedRow(posts: viewModel.pinnedPosts, onEdit: edit, onOpen: onOpenPost)
+                .padding(.top, 28)
+                .allowsHitTesting(mode != .preview)
+        }
+    }
+
+    static func firstWord(_ name: String) -> String {
+        name.split(separator: " ").first.map(String.init) ?? name
+    }
+
     // MARK: - Preview as
 
     /// The chooser closed: open the preview it picked.
@@ -301,6 +334,8 @@ extension PublicProfileView {
                     )
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("publicProfileLocalHeader")
+
+                    promptsAndPins(payload, firstName: payload.header.firstName, mode: .preview)
 
                     if audience == .anyone {
                         // Signed-out visitors can't read posts (or pins).

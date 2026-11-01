@@ -80,7 +80,7 @@ public final class ProfilePostCardsModel {
 
     /// Whether the card's "Post options" menu has anything in it.
     func hasOptions(_ card: PulsePostCardContent) -> Bool {
-        shareURL(postId: card.id) != nil || card.actions.canReport
+        shareURL(postId: card.id) != nil || card.actions.canReport || pinTitle(postId: card.id) != nil
     }
 
     // MARK: - Taps
@@ -160,6 +160,20 @@ public final class ProfilePostCardsModel {
     }
 
     // MARK: - Post menu
+
+    /// "Pin to profile" / "Unpin from profile" on your own posts (the server
+    /// marks only those); nil hides it.
+    func pinTitle(postId: String) -> String? {
+        guard let post = post(postId) else { return nil }
+        return ProfilePins.shared.menuTitle(postId, server: post.profilePinned)
+    }
+
+    /// Pins or unpins your post; the toast says what happened, or why not.
+    func togglePin(postId: String) async {
+        guard let post = post(postId) else { return }
+        let toast = await ProfilePins.shared.toggle(postId, server: post.profilePinned, client: client)
+        onToast?(toast.text)
+    }
 
     /// The public web link handed to the share sheet; nil unless the post is public.
     func shareURL(postId: String) -> URL? {

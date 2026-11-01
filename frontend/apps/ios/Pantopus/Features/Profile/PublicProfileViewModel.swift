@@ -384,6 +384,12 @@ public final class PublicProfileViewModel {
     /// What you and this person share, for "You and <name>" (PRF SRV-1). Nil
     /// for your own profile and previews, until read, and after a failed read.
     public private(set) var inCommon: ProfileInCommon?
+    /// The person's pinned posts (PRF SRV-3), newest pin first. Empty when
+    /// they have none, for a signed-out visitor, in the "Anyone" preview and
+    /// after a failed read (or an older server).
+    public private(set) var pinnedPosts: [FeedPostDTO] = []
+    /// True once the pinned read answered: the server knows pins.
+    public private(set) var pinnedReadSucceeded = false
     /// When the Local posts were read. A post on this profile changed
     /// elsewhere after that (its page, the feed) makes the next opening re-read them.
     private var postsReadAt: Date?
@@ -925,11 +931,13 @@ public final class PublicProfileViewModel {
                 // so a slow posts read doesn't hold Connect either.
                 async let relationship: Void = loadRelationship(id: profile.id)
                 async let together: Void = loadInCommon(id: profile.id)
+                async let pins: Void = loadPinned(id: profile.id)
                 let rows = await loadUserPosts(id: profile.id, force: force || postsChangedElsewhere)
                 postsLoading = false
                 state = .loaded(build(from: profile, kind: kind, posts: rows.map { project(post: $0) }))
                 await relationship
                 await together
+                await pins
                 await loadPortfolioCount(id: profile.id)
             } else {
                 state = .loaded(build(from: profile, kind: kind, posts: []))
@@ -1188,6 +1196,36 @@ public final class PublicProfileViewModel {
             viewerId: currentUserId,
             profileId: payload.profile.id
         )
+    }
+
+    /// Re-reads the Pinned row: a pin changed in a ⋯ menu somewhere.
+    public func reloadPinned() async {
+        guard UserSocialEndpoints.isUUID(resolvedUserId) else { return }
+        await loadPinned(id: resolvedUserId)
+    }
+
+    /// The Pinned row, read beside the posts. Signed-out visitors can't read
+    /// posts, so neither they nor the "Anyone" preview get pins.
+    private func loadPinned(id: String) async {
+        guard currentUserId != nil, previewAudience != .anyone else {
+            pinnedPosts = []
+            pinnedReadSucceeded = false
+            return
+        }
+        do {
+            let response = try await client.request(
+                PostsEndpoints.userPinnedPosts(userId: id, previewAs: previewAudience?.rawValue),
+                as: FeedResponse.self
+            )
+            pinnedPosts = Array(response.posts.prefix(ProfilePins.maxPins))
+            pinnedReadSucceeded = true
+        } catch {
+            // Leaving the screen cancels the read: nothing failed, so nothing changes.
+            if Task.isCancelled { return }
+            logger.debug("Pinned read failed: \(error)")
+            pinnedPosts = []
+            pinnedReadSucceeded = false
+        }
     }
 
     /// What you share, read beside the posts. Only for a signed-in visitor;

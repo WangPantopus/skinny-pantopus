@@ -67,6 +67,9 @@ public struct PublicProfile: Decodable, Sendable, Hashable, Identifiable {
     /// What they did around the neighborhood (PRF SRV-1); nil from an older
     /// server or when the counts couldn't be read.
     public let contributions: ProfileContributions?
+    /// "Get to know <name>" answers in saved order (PRF SRV-2); nil from an
+    /// older server.
+    public let prompts: [ProfilePrompt]?
 
     private enum CodingKeys: String, CodingKey {
         case id, username, usernameIsGenerated
@@ -83,7 +86,7 @@ public struct PublicProfile: Decodable, Sendable, Hashable, Identifiable {
         case reviewCount = "review_count"
         case followersCount = "followers_count"
         case reviews, socialLinks, skills
-        case contributions
+        case contributions, prompts
     }
 
     public init(from decoder: any Decoder) throws {
@@ -113,6 +116,7 @@ public struct PublicProfile: Decodable, Sendable, Hashable, Identifiable {
         skills = try (c.decodeIfPresent([String].self, forKey: .skills)) ?? []
         // A malformed part hides "Around the neighborhood", never the profile.
         contributions = try? c.decodeIfPresent(ProfileContributions.self, forKey: .contributions)
+        prompts = try? c.decodeIfPresent([ProfilePrompt].self, forKey: .prompts)
         usernameIsGenerated = try c.decodeIfPresent(Bool.self, forKey: .usernameIsGenerated) ?? false
     }
 
@@ -275,5 +279,32 @@ public struct ProfileInCommon: Decodable, Sendable, Hashable {
     /// Nothing in common that you may see.
     public var isEmpty: Bool {
         connectionCount == 0 && plans.isEmpty && supportTrains.isEmpty && skills.isEmpty
+    }
+}
+
+/// One "Get to know" answer (`profile_prompts`, PRF SRV-2): a key from the
+/// catalog (`ProfilePromptCatalog`; the apps own the words) and the answer,
+/// 1–120 characters.
+public struct ProfilePrompt: Codable, Sendable, Hashable, Identifiable {
+    public let key: String
+    public let answer: String
+
+    public var id: String {
+        key
+    }
+
+    public init(key: String, answer: String) {
+        self.key = key
+        self.answer = answer
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case key, answer
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        key = try c.decodeIfPresent(String.self, forKey: .key) ?? ""
+        answer = try c.decodeIfPresent(String.self, forKey: .answer) ?? ""
     }
 }

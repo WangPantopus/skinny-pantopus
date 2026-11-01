@@ -864,3 +864,20 @@ public final class PulsePostDetailViewModel {
         }
     }
 }
+
+// MARK: - Pin to profile
+
+extension PulsePostDetailViewModel {
+    /// "Pin to profile" / "Unpin from profile" on your own post (PRF SRV-3);
+    /// nil hides it.
+    var profilePinTitle: String? {
+        guard isOwner, case let .loaded(content) = state else { return nil }
+        return ProfilePins.shared.menuTitle(content.post.id, server: content.post.profilePinned)
+    }
+
+    func toggleProfilePin() async {
+        guard case let .loaded(content) = state else { return }
+        let toast = await ProfilePins.shared.toggle(content.post.id, server: content.post.profilePinned, client: client)
+        showToast(toast.text, kind: toast.kind)
+    }
+}

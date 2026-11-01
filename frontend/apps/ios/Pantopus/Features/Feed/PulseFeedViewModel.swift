@@ -1339,3 +1339,19 @@ private struct FeedQuery: Equatable {
     let sportsMode: String?
     let eventKey: String?
 }
+
+// MARK: - Pin to profile
+
+extension PulseFeedViewModel {
+    /// "Pin to profile" / "Unpin from profile" on your own posts (PRF SRV-3;
+    /// the server marks only those); nil hides it.
+    func profilePinTitle(postId: String) -> String? {
+        guard let post = loadedItems.first(where: { $0.id == postId }) else { return nil }
+        return ProfilePins.shared.menuTitle(postId, server: post.profilePinned)
+    }
+
+    func toggleProfilePin(postId: String) async {
+        guard let post = loadedItems.first(where: { $0.id == postId }) else { return }
+        toastMessage = await ProfilePins.shared.toggle(postId, server: post.profilePinned, client: api).text
+    }
+}

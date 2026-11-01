@@ -3,9 +3,9 @@
 //  Pantopus
 //
 //  The modals behind a profile's Pulse cards (`ProfilePostCardsModel`): the
-//  card's "Post options" menu (Share…, Report post), Pulse's report-reason
-//  picker and the system share sheet. Copy and ids follow the Pulse feed's
-//  (`FeedPostActionSurfaces`).
+//  card's "Post options" menu (Share…, Pin to profile on your own posts,
+//  Report post), Pulse's report-reason picker and the system share sheet.
+//  Copy and ids follow the Pulse feed's (`FeedPostActionSurfaces`).
 //
 
 import SwiftUI
@@ -71,6 +71,13 @@ struct ProfilePostCardSurfaces: ViewModifier {
                     }
                 }
                 .accessibilityIdentifier("profilePostOptionsShare")
+            }
+            if let pinTitle = model.pinTitle(postId: card.id) {
+                Button(pinTitle) {
+                    model.overflowPostId = nil
+                    Task { await model.togglePin(postId: card.id) }
+                }
+                .accessibilityIdentifier("profilePostOptionsPin")
             }
             if card.actions.canReport {
                 Button("Report post", role: .destructive) {

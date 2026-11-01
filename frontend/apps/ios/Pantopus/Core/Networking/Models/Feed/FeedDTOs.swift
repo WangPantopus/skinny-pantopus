@@ -77,6 +77,9 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
     /// `media_types[i] == "live_photo"`, empty string otherwise.
     public let mediaLiveURLs: [String]
     public let creator: PostCreatorDTO?
+    /// Your own post only: whether it's pinned to your profile (PRF SRV-3).
+    /// Nil on other people's posts, in previews, and when the server couldn't tell.
+    public let profilePinned: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -112,6 +115,7 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case mediaTypes = "media_types"
         case mediaLiveURLs = "media_live_urls"
         case creator
+        case profilePinned = "profile_pinned"
     }
 
     /// Tolerant (Pulse S2): only `id` and `created_at` are required; any
@@ -157,6 +161,7 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         mediaTypes = c.lenient([String].self, forKey: .mediaTypes) ?? []
         mediaLiveURLs = c.lenient([String].self, forKey: .mediaLiveURLs) ?? []
         creator = c.lenient(PostCreatorDTO.self, forKey: .creator)
+        profilePinned = c.lenient(Bool.self, forKey: .profilePinned)
     }
 }
 

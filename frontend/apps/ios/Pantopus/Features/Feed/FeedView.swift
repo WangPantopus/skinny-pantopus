@@ -1278,6 +1278,13 @@ private struct FeedPostActionSurfaces: ViewModifier {
                 }
                 .accessibilityIdentifier("pulseFeedOverflowShare")
             }
+            if let pinTitle = viewModel.profilePinTitle(postId: row.id) {
+                Button(pinTitle) {
+                    dismissOverflow()
+                    run { await viewModel.toggleProfilePin(postId: row.id) }
+                }
+                .accessibilityIdentifier("pulseFeedOverflowProfilePin")
+            }
             Button("Hide this post") {
                 dismissOverflow()
                 run { await viewModel.hidePost(postId: row.id) }

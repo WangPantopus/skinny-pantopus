@@ -20,6 +20,8 @@ public enum ProfileOwnerTip: String, CaseIterable, Sendable, Hashable, Identifia
     case addPhoto
     case writeTagline
     case addSkills
+    case answerPrompt
+    case pinPost
 
     public var id: String {
         rawValue
@@ -30,6 +32,8 @@ public enum ProfileOwnerTip: String, CaseIterable, Sendable, Hashable, Identifia
         case .addPhoto: "Add a photo"
         case .writeTagline: "Write a tagline"
         case .addSkills: "Add what you help with"
+        case .answerPrompt: "Answer a prompt"
+        case .pinPost: "Pin a post"
         }
     }
 
@@ -38,6 +42,8 @@ public enum ProfileOwnerTip: String, CaseIterable, Sendable, Hashable, Identifia
         case .addPhoto: "Your initials show until you do. Only you see this tip."
         case .writeTagline: "One line about you, in bold under your name. Only you see this tip."
         case .addSkills: "Neighbors look for help nearby. Only you see this tip."
+        case .answerPrompt: "A short answer gives neighbors something to say hi about. Only you see this tip."
+        case .pinPost: "Show your best posts first: use ⋯ on a post. Only you see this tip."
         }
     }
 
@@ -46,6 +52,8 @@ public enum ProfileOwnerTip: String, CaseIterable, Sendable, Hashable, Identifia
         case .addPhoto: .camera
         case .writeTagline: .pencil
         case .addSkills: .hand
+        case .answerPrompt: .messageSquare
+        case .pinPost: .pin
         }
     }
 }
@@ -164,7 +172,8 @@ public final class OwnerPageModel {
     // MARK: - Tips
 
     /// Up to two tips that still apply and weren't dismissed on this device.
-    func tips(for profile: PublicProfile) -> [ProfileOwnerTip] {
+    /// `canPin`: the server knows pins, you have posts and none is pinned.
+    func tips(for profile: PublicProfile, canPin: Bool) -> [ProfileOwnerTip] {
         let applies: [ProfileOwnerTip] = ProfileOwnerTip.allCases.filter { tip in
             switch tip {
             case .addPhoto:
@@ -172,6 +181,9 @@ public final class OwnerPageModel {
                     ?? ((profile.profilePictureURL ?? profile.avatarURL) == nil)
             case .writeTagline: (profile.tagline ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             case .addSkills: profile.skills.isEmpty
+            // Only once the server knows prompts (an older one sends none).
+            case .answerPrompt: profile.prompts != nil && ProfilePromptCatalog.shown(profile.prompts).isEmpty
+            case .pinPost: canPin
             }
         }
         return Array(applies.filter { !dismissedTips.contains($0) }.prefix(2))

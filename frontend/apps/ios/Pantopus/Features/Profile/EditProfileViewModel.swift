@@ -131,6 +131,13 @@ final class EditProfileViewModel {
     /// The preview card's trust line, and your account id for its avatar color.
     var previewFacts = ProfileTrustFacts(isVerifiedNeighbor: false, city: nil, joined: nil)
     var accountId: String?
+    /// "Get to know" answers as you edit them and as last saved (PRF SRV-2);
+    /// they ride the profile PATCH. Nil while the server doesn't know prompts.
+    var prompts: [ProfilePrompt]?
+    var savedPrompts: [ProfilePrompt]?
+    /// Your pinned posts, for "Pinned posts" (PRF SRV-3). Nil until read, and
+    /// after a failed read or from an older server (the section hides).
+    var pinnedPosts: [FeedPostDTO]?
 
     let api: APIClient
     /// The profile the You screen already read (You: fresh 10 minutes),
@@ -224,7 +231,7 @@ final class EditProfileViewModel {
     /// Skills ride their own PUT, so they widen the form's dirty state
     /// without appearing in `aggregate`.
     var isDirty: Bool {
-        aggregate.isDirty || isSkillsDirty || neighbors.isNameChanged
+        aggregate.isDirty || isSkillsDirty || neighbors.isNameChanged || isPromptsDirty
     }
 
     /// True when the working skill list differs from the last-saved one.
@@ -237,6 +244,7 @@ final class EditProfileViewModel {
     /// The skill list counts as one such field.
     var dirtyFieldCount: Int {
         fields.values.filter(\.isDirty).count + (isSkillsDirty ? 1 : 0) + (neighbors.isNameChanged ? 1 : 0)
+            + (isPromptsDirty ? 1 : 0)
     }
 
     /// Revert all unsaved edits to the last-saved baseline.
@@ -250,6 +258,7 @@ final class EditProfileViewModel {
         }
         skills = savedSkills
         skillDraft = ""
+        prompts = savedPrompts
         if let shown = neighbors.loaded?.profile.displayName { neighbors.editName(shown) }
     }
 
@@ -282,7 +291,8 @@ final class EditProfileViewModel {
             Analytics.track(.formEditProfileValidationError(field: invalidField.rawValue))
             return false
         }
-        let fieldsDirty = aggregate.isDirty
+        // Prompts ride the profile PATCH.
+        let fieldsDirty = aggregate.isDirty || isPromptsDirty
         let skillsDirty = isSkillsDirty
         let nameDirty = neighbors.isNameChanged
         guard fieldsDirty || skillsDirty || nameDirty else { return false }
@@ -385,6 +395,9 @@ final class EditProfileViewModel {
         seed(.profileVisibility, profile.profileVisibility ?? "public")
         seed(.showEmail, Self.boolString(profile.showEmail))
         seed(.showPhone, Self.boolString(profile.showPhone))
+        // The PATCH echo carries prompts too, so a save re-baselines them.
+        prompts = profile.prompts
+        savedPrompts = profile.prompts
     }
 
     private func seed(_ field: EditProfileField, _ value: String) {
@@ -398,62 +411,6 @@ final class EditProfileViewModel {
     private func validator(for field: EditProfileField) -> FormValidator {
         Self.validators[field] ?? FormValidator { _ in nil }
     }
-
-    /// Static validator table. Each entry mirrors the corresponding Joi
-    /// rule in `updateProfileSchema` (`backend/routes/users.js:324-351`).
-    private static let validators: [EditProfileField: FormValidator] = [
-        // Checked again by the server; empty keeps the current username.
-        .username: FormValidator { value in
-            let username = UsernameAvailabilityChecker.normalize(value)
-            return username.isEmpty ? nil : AuthValidation.username(username)
-        },
-        // Required name fields — Joi `.string().min(1).max(255)`.
-        .firstName: .all([.required("First name"), .maxLength(255)]),
-        .lastName: .all([.required("Last name"), .maxLength(255)]),
-        // Optional name fields with length bounds.
-        .middleName: .optionalLength("Middle name", min: 1, max: 255),
-        // `.allow('', null)` text fields — only an upper bound applies.
-        .bio: .maxLength(2000),
-        .tagline: .maxLength(255),
-        // E.164 phone (optional). Empty allowed at the validator layer
-        // but skipped from the PATCH body (see fieldAllowsEmpty).
-        .phoneNumber: .e164Phone(),
-        // ISO-8601 date or empty.
-        .dateOfBirth: .isoDateOrEmpty(),
-        // Optional address fields — Joi enforces min/max only when set.
-        .address: .optionalLength("Address", min: 5, max: 255),
-        .city: .optionalLength("City", min: 2, max: 100),
-        .state: .optionalLength("State", min: 2, max: 50),
-        .zipcode: .optionalLength("Zipcode", min: 3, max: 20),
-        // Social links — Joi `urlOrEmpty`.
-        .website: .urlOrEmpty(),
-        .linkedin: .urlOrEmpty(),
-        .twitter: .urlOrEmpty(),
-        .instagram: .urlOrEmpty(),
-        .facebook: .urlOrEmpty(),
-        // Visibility enum — restrict to the three schema values.
-        .profileVisibility: FormValidator { value in
-            ["public", "registered", "private"].contains(value)
-                ? nil
-                : "Pick a visibility option."
-        },
-        // Boolean-backed toggles — the only invalid state is an unseeded
-        // field, which the loader never produces.
-        .showEmail: FormValidator { value in
-            ["true", "false"].contains(value) ? nil : "Pick an option."
-        },
-        .showPhone: FormValidator { value in
-            ["true", "false"].contains(value) ? nil : "Pick an option."
-        }
-    ]
-
-    /// Whether the schema explicitly allows an empty / null payload for
-    /// the given field — see the Joi declarations at
-    /// `backend/routes/users.js:324-351`.
-    private static let allowsEmpty: Set<EditProfileField> = [
-        .middleName, .bio, .tagline, .dateOfBirth,
-        .website, .linkedin, .twitter, .instagram, .facebook
-    ]
 
     // swiftlint:disable cyclomatic_complexity
 
@@ -494,6 +451,7 @@ final class EditProfileViewModel {
             case .showPhone: update.showPhone = trimmed == "true"
             }
         }
+        if isPromptsDirty { update.profilePrompts = prompts ?? [] }
         return update
     }
     // swiftlint:enable cyclomatic_complexity

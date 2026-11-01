@@ -641,6 +641,22 @@ public extension PulseIntent {
         case .visitorGuide: Theme.Color.info
         }
     }
+
+    /// The soft fill behind the intent's colour: the card chip, a pinned card's top.
+    var tintBackground: Color {
+        switch self {
+        case .all, .generic: Theme.Color.appSurfaceSunken
+        case .ask: Theme.Color.warmAmberBg
+        case .recommend: Theme.Color.successLight
+        case .event: Theme.Color.magicBg
+        case .lost: Theme.Color.roseBg
+        case .alert: Theme.Color.errorBg
+        case .deal: Theme.Color.successBg
+        case .announce: Theme.Color.slateBg
+        case .neighborhoodWin: Theme.Color.warningBg
+        case .visitorGuide: Theme.Color.infoBg
+        }
+    }
 }
 
 /// Right-aligned colored chip in the post header. Resolves intent →
@@ -674,18 +690,7 @@ public struct PulseIntentChip: View {
     }
 
     private var background: Color {
-        switch intent {
-        case .all, .generic: Theme.Color.appSurfaceSunken
-        case .ask: Theme.Color.warmAmberBg
-        case .recommend: Theme.Color.successLight
-        case .event: Theme.Color.magicBg
-        case .lost: Theme.Color.roseBg
-        case .alert: Theme.Color.errorBg
-        case .deal: Theme.Color.successBg
-        case .announce: Theme.Color.slateBg
-        case .neighborhoodWin: Theme.Color.warningBg
-        case .visitorGuide: Theme.Color.infoBg
-        }
+        intent.tintBackground
     }
 }
 

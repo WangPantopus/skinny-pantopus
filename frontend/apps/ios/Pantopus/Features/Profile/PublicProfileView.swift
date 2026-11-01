@@ -347,6 +347,10 @@ public struct PublicProfileView: View {
             Task { await refreshOwnPage() }
         }
         .task(id: viewModel.isOwnProfileLoaded) { await ownerPageAppeared() }
+        // A pin changed in a ⋯ menu (here or on another screen): re-read Pinned.
+        .onChange(of: ProfilePins.shared.revision) {
+            Task { await viewModel.reloadPinned() }
+        }
         .accessibilityIdentifier("publicProfile")
         .task { await viewModel.load() }
     }
@@ -508,6 +512,8 @@ public struct PublicProfileView: View {
                             .padding(.horizontal, Spacing.s5)
                             .padding(.top, 28)
                     }
+
+                    promptsAndPins(payload, firstName: payload.header.firstName, mode: .visitor)
 
                     LocalProfileTabStrip(
                         tabs: tabs,

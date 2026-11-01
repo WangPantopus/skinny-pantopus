@@ -28,6 +28,9 @@ public struct EditProfileView: View {
     @State var showsCityChoices = false
     /// Leaving for My homes with unsaved edits asks first.
     @State var showsLeaveWithChanges = false
+    /// The prompt picker, and the answer being changed.
+    @State var showsPromptPicker = false
+    @State var editingPrompt: ProfilePrompt?
     @Environment(\.dismiss) var dismiss
     /// "Home address" opens My homes (the host closes this editor first).
     let onOpenMyHomes: (@MainActor () -> Void)?
@@ -66,6 +69,9 @@ public struct EditProfileView: View {
         .interactiveDismissDisabled(viewModel.isDirty)
         .task { await viewModel.load() }
         .task { await viewModel.loadNeighborsAndCity() }
+        // Pins are read once the profile says whose they are.
+        .task(id: viewModel.accountId) { await viewModel.loadPinned() }
+        .modifier(EditProfilePromptSheets(viewModel: viewModel, showsPicker: $showsPromptPicker, editing: $editingPrompt))
         .photosPicker(isPresented: $showsNeighborPhotoPicker, selection: $neighborPhotoSelection, matching: .images)
         .onChange(of: neighborPhotoSelection) { _, item in
             guard let item else { return }
@@ -166,7 +172,9 @@ public struct EditProfileView: View {
                 previewSection
                 neighborsHeader
                 neighborsSection
+                promptsSection
                 skillsSection
+                pinnedSection
                 socialSection
                 onlyYouHeader
                 accountSection
