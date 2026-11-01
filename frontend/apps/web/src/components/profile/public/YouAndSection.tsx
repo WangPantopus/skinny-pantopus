@@ -27,7 +27,7 @@ interface YouAndSectionProps {
 interface Line {
   key: string;
   icon: ReactNode;
-  /** The icon's width in px when it is wider than one circle (overlapping avatars). */
+  /** The icon's width in px when it is wider than one circle (overlapping photos). */
   iconWidth?: number;
   text: ReactNode;
   detail?: string | null;
@@ -35,8 +35,8 @@ interface Line {
 }
 
 const MAX_LINES = 2;
-/** One icon circle, and how much each overlapping avatar after the first adds. */
-const CIRCLE = 30;
+/** A photo in the people line (px, as photos are drawn), and how much each overlapping one after the first adds. */
+const PHOTO = 30;
 const OVERLAP_STEP = 20;
 
 function Strong({ children }: { children: ReactNode }) {
@@ -115,7 +115,7 @@ function linesFor(data: InCommon, viewerId: string, personId: string, firstName:
     if (others > 0 && names.length) names.push(`${others} ${others === 1 ? 'other' : 'others'}`);
     lines.push({
       key: 'connections',
-      iconWidth: CIRCLE + OVERLAP_STEP * (people.length + (others > 0 ? 1 : 0) - 1),
+      iconWidth: PHOTO + OVERLAP_STEP * (people.length + (others > 0 ? 1 : 0) - 1),
       icon: (
         <span className="flex">
           {people.map((person, index) => (
@@ -125,11 +125,11 @@ function linesFor(data: InCommon, viewerId: string, personId: string, firstName:
               seed={person.id}
               photoUrl={person.avatar_url}
               size={30}
-              className={`ring-2 ring-app-surface ${index > 0 ? '-ml-2.5' : ''}`}
+              className={`ring-2 ring-app-surface ${index > 0 ? '-ml-[10px]' : ''}`}
             />
           ))}
           {others > 0 ? (
-            <span className={`w-[1.875rem] h-[1.875rem] shrink-0 rounded-full ring-2 ring-app-surface bg-app-surface-sunken text-app-secondary text-[0.6875rem] font-semibold flex items-center justify-center ${people.length ? '-ml-2.5' : ''}`}>
+            <span className={`h-[30px] min-w-[30px] px-[3px] shrink-0 rounded-full ring-2 ring-app-surface bg-app-surface-sunken text-app-secondary text-[0.6875rem] font-semibold flex items-center justify-center ${people.length ? '-ml-[10px]' : ''}`}>
               +{others}
             </span>
           ) : null}
@@ -170,8 +170,9 @@ export default function YouAndSection({ personId, viewerId, firstName, enabled }
   if (!enabled || query.status !== 'success' || !query.data) return null;
   const lines = linesFor(query.data, viewerId, personId, firstName).slice(0, MAX_LINES);
   if (lines.length === 0) return null;
-  // Overlapping avatars can be wider than one circle; every line's text starts after the widest icon.
-  const iconColumn = Math.max(CIRCLE, ...lines.map((line) => line.iconWidth ?? CIRCLE));
+  // Every line's text starts after the widest icon: an icon circle grows with the text size (rem), overlapping photos
+  // don't (px).
+  const photosWidth = Math.max(0, ...lines.map((line) => line.iconWidth ?? 0));
 
   return (
     <section className="mt-7" aria-labelledby={`you-and-${personId}`}>
@@ -182,7 +183,7 @@ export default function YouAndSection({ personId, viewerId, firstName, enabled }
         {lines.map((line) => {
           const body = (
             <>
-              <span aria-hidden="true" className="shrink-0 flex" style={{ width: iconColumn }}>{line.icon}</span>
+              <span aria-hidden="true" className="shrink-0 flex" style={{ width: `max(1.875rem, ${photosWidth}px)` }}>{line.icon}</span>
               <span className="min-w-0 flex flex-col gap-0.5">
                 <span className="text-[0.9375rem] leading-5 text-app [overflow-wrap:anywhere]">{line.text}</span>
                 {line.detail ? (
