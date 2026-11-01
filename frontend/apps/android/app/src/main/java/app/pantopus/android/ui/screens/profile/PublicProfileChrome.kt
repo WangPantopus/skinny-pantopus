@@ -545,17 +545,10 @@ private fun postsCardCopy(
             ctaIcon = PantopusIcon.EyeOff,
         )
     }
-    if (isOwnProfile) {
-        return PostsCardCopy(
-            icon = PantopusIcon.Home,
-            headline = "Quiet for now",
-            body = "You haven't shared any posts on your profile yet.",
-            ctaLabel = null,
-            ctaIcon = PantopusIcon.MessageSquare,
-        )
-    }
     val body =
-        if (firstName != null) {
+        if (isOwnProfile) {
+            "You haven't shared any posts on your profile yet."
+        } else if (firstName != null) {
             "No posts yet from $firstName. Say hi or send a message to break the ice."
         } else {
             "No posts yet — say hi or send a message to break the ice."
@@ -564,7 +557,7 @@ private fun postsCardCopy(
         icon = PantopusIcon.Home,
         headline = "Quiet for now",
         body = body,
-        ctaLabel = "Send a message",
+        ctaLabel = if (isOwnProfile) null else "Send a message",
         ctaIcon = PantopusIcon.MessageSquare,
     )
 }
