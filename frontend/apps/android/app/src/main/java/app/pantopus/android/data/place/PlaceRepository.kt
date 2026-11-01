@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.models.place.BlockInviteResult
 import app.pantopus.android.data.api.models.place.BlockStatusResponse
 import app.pantopus.android.data.api.models.place.FridgeCardResponse
 import app.pantopus.android.data.api.models.place.FridgeCardsResponse
+import app.pantopus.android.data.api.models.place.HomeChangesResponse
 import app.pantopus.android.data.api.models.place.HomeUnlistedResponse
 import app.pantopus.android.data.api.models.place.IssueFridgeCardRequest
 import app.pantopus.android.data.api.models.place.IssueResidencyClaimRequest
@@ -112,6 +113,12 @@ class PlaceRepository
             latitude: Double?,
             longitude: Double?,
         ): NetworkResult<GeoPlaceSearchResponse> = safeApiCall { geoApi.searchPlaces(query, latitude, longitude) }
+
+        /** What changed at a Home since the last visit (TPR contract §7); a 404 (older server) is a failure, shown as nothing. */
+        suspend fun homeChanges(
+            homeId: String,
+            since: String?,
+        ): NetworkResult<HomeChangesResponse> = safeApiCall { placeApi.homeChanges(homeId, since) }
 
         /**
          * The grouped section envelopes for a home. Pass [sections] to

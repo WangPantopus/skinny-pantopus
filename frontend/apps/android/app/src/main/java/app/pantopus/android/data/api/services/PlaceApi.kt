@@ -1,6 +1,7 @@
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.place.AddressCalendarResponse
+import app.pantopus.android.data.api.models.place.HomeChangesResponse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlacePreview
 import app.pantopus.android.data.api.models.place.SetPickupDayRequest
@@ -38,6 +39,16 @@ interface PlaceApi {
         @Path("id") homeId: String,
         @Query("sections") sections: String? = null,
     ): PlaceIntelligence
+
+    /**
+     * What changed at this Home since [since], this account's last visit (TPR contract §7): real, dated changes, newest
+     * first. No [since] (a first visit) answers nothing; an older server answers 404.
+     */
+    @GET("api/homes/{id}/changes")
+    suspend fun homeChanges(
+        @Path("id") homeId: String,
+        @Query("since") since: String?,
+    ): HomeChangesResponse
 
     /** [intelligence] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
     @GET("api/homes/{id}/intelligence?ballot=1")

@@ -147,6 +147,20 @@ fun PlaceDashboardScreen(
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val homeShortcuts by viewModel.homeShortcuts.collectAsStateWithLifecycle()
     val worthTasks by viewModel.worthTasks.collectAsStateWithLifecycle()
+    val changes by viewModel.changes.collectAsStateWithLifecycle()
+    var showChanges by remember { mutableStateOf(false) }
+    val changeRoutes =
+        ChangeRoutes(
+            onOpenSection = { slug -> onOpenSection(homeId, slug) },
+            onOpenDocuments = {
+                viewModel.reloadOnReturn()
+                onOpenHomeShortcut(PlaceHomeShortcut.DOCUMENTS)
+            },
+            onOpenHomeTools = {
+                viewModel.reloadOnReturn()
+                onOpenHomeTools()
+            },
+        )
     // A Home this account can no longer read (left, removed, deleted): the Place tab moves on.
     LaunchedEffect(state) {
         if ((state as? PlaceDashboardUiState.Error)?.unavailable == true) onPlaceUnavailable(homeId)
@@ -219,6 +233,11 @@ fun PlaceDashboardScreen(
                     onAsk = onAsk?.let { ask -> { ask(AIScreenContext.place(homeId, null, "Your Place")) } },
                     tasks = worthTasks,
                     onOpenTask = onOpenTask,
+                    changes = placeChangeItems(changes, current.intelligence.homeZone, changeRoutes),
+                    changesFooter =
+                        changes?.takeIf { it.total > minOf(it.items.size, CHANGES_SHOWN) }?.let { answer ->
+                            { PlaceChangesFooter(total = answer.total, onOpen = { showChanges = true }) }
+                        },
                 )
         }
     }
@@ -237,6 +256,15 @@ fun PlaceDashboardScreen(
                 showVerify = false
                 onOpenVerificationStatus()
             },
+        )
+    }
+
+    changes?.takeIf { showChanges }?.let { answer ->
+        PlaceChangesSheet(
+            changes = answer,
+            zone = (state as? PlaceDashboardUiState.Loaded)?.intelligence?.homeZone,
+            routes = changeRoutes,
+            onDismiss = { showChanges = false },
         )
     }
 
@@ -304,6 +332,8 @@ internal fun PlaceDashboardContent(
     tasks: List<HomeTaskDto> = emptyList(),
     /** What changed since the last visit, for "Worth a look". */
     changes: List<WorthItem> = emptyList(),
+    /** "See all N changes" when the server has more than "Worth a look" shows. */
+    changesFooter: (@Composable () -> Unit)? = null,
     /** A task's existing detail page. */
     onOpenTask: ((taskId: String) -> Unit)? = null,
 ) {
@@ -390,7 +420,11 @@ internal fun PlaceDashboardContent(
                 )
             }
             item(key = "worth") {
-                PlaceWorthALook(items = worth, modifier = Modifier.padding(horizontal = 16.dp).padding(top = 24.dp))
+                PlaceWorthALook(
+                    items = worth,
+                    footer = changesFooter.takeIf { worth.any { it.key.startsWith("change.") } },
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(top = 24.dp),
+                )
             }
             // Movers (Wedge v2 D5): the first-week checklist for a recent move-in, under "Worth a look".
             item(key = "justMoved") {

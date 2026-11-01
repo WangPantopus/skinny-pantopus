@@ -6,12 +6,14 @@ import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
 import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.api.models.notifications.personalBellCount
+import app.pantopus.android.data.api.models.place.HomeChangesResponse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.safeApiCall
+import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.homes.HomeDashboardAccessRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.notifications.NotificationsRepository
@@ -81,6 +83,18 @@ class PlaceDashboardViewModel
         val worthTasks: StateFlow<List<HomeTaskDto>> = _worthTasks.asStateFlow()
         private var worthAccess: Pair<String, HomeTaskAccess>? = null
         private var worthJob: Job? = null
+
+        /** When this account last saw this Home's dashboard, on the phone (unit tests build this without Hilt). */
+        @Inject lateinit var visits: PlaceLastVisitStore
+
+        /** The signed-in account, which keys the last visit (unit tests build this without Hilt). */
+        @Inject lateinit var tokens: TokenStorage
+
+        private val _changes = MutableStateFlow<HomeChangesResponse?>(null)
+
+        /** What changed since the last visit (TPR brief 7.3): null on a first visit, after an error or from an older server. */
+        val changes: StateFlow<HomeChangesResponse?> = _changes.asStateFlow()
+        private var changesReadFor: String? = null
 
         private var homeId: String? = null
 
@@ -301,7 +315,10 @@ class PlaceDashboardViewModel
             val failure = stored.failure
             when {
                 // The move-in date (the movers card) rides on the intelligence.
-                data != null -> _state.value = PlaceDashboardUiState.Loaded(data, data.moveInDate, claim)
+                data != null -> {
+                    _state.value = PlaceDashboardUiState.Loaded(data, data.moveInDate, claim)
+                    homeId?.let(::readChanges)
+                }
                 // Access ended (contract §3): the store dropped the copy, and the server's answer shows.
                 failure.refusesStoredCopy ->
                     _state.value =
@@ -319,6 +336,24 @@ class PlaceDashboardViewModel
                 RefreshNotice(stored.fetchedAt) { refresh() }.takeIf {
                     stored.showsRefreshFailure(StoreKind.PLACE) || (asked && stored.data != null && stored.failure != null)
                 }
+        }
+
+        /**
+         * "Changed since your last visit", once per visit to this Home's dashboard, after it shows loaded data: the time
+         * kept from the last answer goes as `since`, and this answer's `until` is kept for the next visit. A first visit
+         * (no time kept) only starts the record; an error or an older server (404) shows nothing and keeps the old time.
+         */
+        private fun readChanges(id: String) {
+            if (!::visits.isInitialized || !::tokens.isInitialized || changesReadFor == id) return
+            changesReadFor = id
+            viewModelScope.launch {
+                val account = tokens.userId()?.takeIf { it.isNotBlank() } ?: return@launch
+                val since = visits.since(account, id)
+                val answer = (repo.homeChanges(id, since) as? NetworkResult.Success)?.data ?: return@launch
+                if (homeId != id) return@launch
+                _changes.value = answer.takeIf { since != null && it.items.isNotEmpty() }
+                answer.until?.takeIf { it.isNotBlank() }?.let { visits.remember(account, id, it) }
+            }
         }
 
         private companion object {
