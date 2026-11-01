@@ -1,6 +1,5 @@
 package app.pantopus.android.ui.screens.place.detail
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -22,7 +20,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -37,6 +36,8 @@ import app.pantopus.android.ui.screens.place.PlaceValueAccess
 import app.pantopus.android.ui.screens.place.components.PlaceChevron
 import app.pantopus.android.ui.screens.place.components.PlaceIconTile
 import app.pantopus.android.ui.screens.place.components.PlaceLockedCard
+import app.pantopus.android.ui.screens.place.components.PlaceSystemsTimeline
+import app.pantopus.android.ui.screens.place.components.PlaceTextButton
 import app.pantopus.android.ui.screens.place.components.PlaceTileTone
 import app.pantopus.android.ui.screens.place.valueAccess
 import app.pantopus.android.ui.theme.PantopusColors
@@ -48,10 +49,13 @@ import kotlin.math.max
  * A system at the very end of its life still gets a visible sliver of
  * bar — a zero-width fill reads as "no data" rather than "out of time".
  */
-private const val MIN_VISIBLE_LIFE_FRACTION = 0.02
 
 @Composable
-fun PlaceHomeDetailContent(intel: PlaceIntelligence) {
+fun PlaceHomeDetailContent(
+    intel: PlaceIntelligence,
+    /** "Add or correct an install year": Ask Pantopus about this page, the existing correction path. */
+    onCorrectYear: (() -> Unit)? = null,
+) {
     val env = intel.section(PlaceSectionId.YOUR_HOME)
     val data = env?.yourHome
 
@@ -80,7 +84,7 @@ fun PlaceHomeDetailContent(intel: PlaceIntelligence) {
         PlaceDetailSectionLabel("Systems")
         val systems = systemsEnv.homeSystems
         if (systems != null && systemsEnv.isLive()) {
-            SystemsCard(systems)
+            SystemsCard(systems, onCorrectYear)
             PlaceSourceNote(systemsEnv.source.orEmpty(), "typical service life")
         } else {
             PlaceDetailFallbackCard(systemsEnv)
@@ -132,60 +136,27 @@ private fun ValueSection(
  * range: it is a range, not a countdown to failure.
  */
 @Composable
-private fun SystemsCard(data: PlaceHomeSystemsData) {
+private fun SystemsCard(
+    data: PlaceHomeSystemsData,
+    onCorrectYear: (() -> Unit)?,
+) {
     PlaceDetailCard {
         Text(data.summary.headline, fontSize = 13.5.sp, color = PantopusColors.appTextStrong)
-        Spacer(modifier = Modifier.height(10.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            data.systems.forEach { system ->
-                val tone =
-                    when (system.status) {
-                        "past_expected" -> PantopusColors.error
-                        "aging" -> PantopusColors.warning
-                        "ok" -> PantopusColors.home
-                        else -> PantopusColors.appTextMuted
-                    }
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            system.label,
-                            fontSize = 14.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = PantopusColors.appText,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            system.installedYear?.let { "$it · ${system.ageYears} yrs" } ?: "Year unknown",
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = tone,
-                        )
-                    }
-                    Box(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .height(5.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(PantopusColors.appSurfaceSunken),
-                    ) {
-                        val frac = (system.lifeRemaining ?: 0.0).coerceIn(MIN_VISIBLE_LIFE_FRACTION, 1.0).toFloat()
-                        Box(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth(frac)
-                                    .height(5.dp)
-                                    .clip(RoundedCornerShape(3.dp))
-                                    .background(tone),
-                        )
-                    }
-                    Text(
-                        "${system.sourceLabel} · typical ${system.typicalLifeLow}\u2013${system.typicalLifeHigh} yrs",
-                        fontSize = 11.5.sp,
-                        color = PantopusColors.appTextMuted,
-                    )
-                }
-            }
+        Spacer(modifier = Modifier.height(12.dp))
+        // The systems timeline (TPR brief 7.4): install year to now against the typical service-life range.
+        PlaceSystemsTimeline(data.systems)
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            "Age isn't condition: beyond a typical range isn't proof of failure.",
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            color = PantopusColors.appTextSecondary,
+        )
+        onCorrectYear?.let { correct ->
+            PlaceTextButton(
+                "Add or correct an install year",
+                modifier = Modifier.padding(top = 8.dp).clickable(role = Role.Button, onClick = correct).testTag("placeHome.correctYear"),
+            )
         }
     }
 }

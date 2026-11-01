@@ -53,6 +53,7 @@ import kotlinx.coroutines.delay
  */
 
 @Composable
+@Suppress("LongMethod")
 fun PlaceDetailHeader(
     title: String,
     address: String,
@@ -64,28 +65,33 @@ fun PlaceDetailHeader(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp)
+                .padding(horizontal = 7.dp)
                 .padding(top = 6.dp, bottom = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // A 48 dp target around the 34 dp circle.
         Box(
-            modifier =
-                Modifier
-                    .size(34.dp)
-                    .shadow(1.dp, CircleShape, clip = false)
-                    .clip(CircleShape)
-                    .background(PantopusColors.appSurface)
-                    .clickable(onClick = onBack),
+            modifier = Modifier.size(48.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onBack),
             contentAlignment = Alignment.Center,
         ) {
-            PantopusIconImage(
-                icon = PantopusIcon.ChevronLeft,
-                contentDescription = "Back",
-                size = 20.dp,
-                strokeWidth = 2.5f,
-                tint = PantopusColors.appTextStrong,
-            )
+            Box(
+                modifier =
+                    Modifier
+                        .size(34.dp)
+                        .shadow(1.dp, CircleShape, clip = false)
+                        .clip(CircleShape)
+                        .background(PantopusColors.appSurface),
+                contentAlignment = Alignment.Center,
+            ) {
+                PantopusIconImage(
+                    icon = PantopusIcon.ChevronLeft,
+                    contentDescription = "Back",
+                    size = 20.dp,
+                    strokeWidth = 2.5f,
+                    tint = PantopusColors.appTextStrong,
+                )
+            }
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -109,20 +115,28 @@ fun PlaceDetailHeader(
             Box(
                 modifier =
                     Modifier
-                        .size(34.dp)
-                        .shadow(1.dp, CircleShape, clip = false)
+                        .size(48.dp)
                         .clip(CircleShape)
-                        .background(PantopusColors.appSurface)
-                        .clickable(onClick = onAsk)
+                        .clickable(role = Role.Button, onClick = onAsk)
                         .testTag("placeDetail.askPantopus"),
                 contentAlignment = Alignment.Center,
             ) {
-                PantopusIconImage(
-                    icon = PantopusIcon.Sparkles,
-                    contentDescription = "Ask Pantopus",
-                    size = 18.dp,
-                    tint = PantopusColors.magic,
-                )
+                Box(
+                    modifier =
+                        Modifier
+                            .size(34.dp)
+                            .shadow(1.dp, CircleShape, clip = false)
+                            .clip(CircleShape)
+                            .background(PantopusColors.appSurface),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    PantopusIconImage(
+                        icon = PantopusIcon.Sparkles,
+                        contentDescription = "Ask Pantopus",
+                        size = 18.dp,
+                        tint = PantopusColors.magic,
+                    )
+                }
             }
         }
     }

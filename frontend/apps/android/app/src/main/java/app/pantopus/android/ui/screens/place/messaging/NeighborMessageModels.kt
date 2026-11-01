@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.screens.place.components.PlaceChevron
 import app.pantopus.android.ui.screens.place.components.PlaceIconTile
 import app.pantopus.android.ui.screens.place.components.PlaceTileTone
-import app.pantopus.android.ui.screens.place.components.placeCard
+import app.pantopus.android.ui.screens.place.components.placeCardChrome
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 
@@ -111,7 +111,7 @@ fun PlaceMessagesActionRow(
         icon = icon,
         title = title,
         subtitle = subtitle,
-        modifier = modifier.fillMaxWidth().placeCard().clickable(onClick = onTap),
+        modifier = modifier.fillMaxWidth().placeCardChrome().clickable(onClick = onTap),
     )
 }
 

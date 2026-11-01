@@ -1163,6 +1163,7 @@ data class PlaceHomeSystem(
     @Json(name = "source_label") val sourceLabel: String = "",
     val confidence: String = "low",
     @Json(name = "source_ref") val sourceRef: String? = null,
+    @Json(name = "last_service") val lastService: PlaceSystemService? = null,
     val note: String = "",
 )
 
@@ -1174,6 +1175,15 @@ data class PlaceHomeSystemsSummary(
     @Json(name = "confirmed_count") val confirmedCount: Int = 0,
     @Json(name = "total_count") val totalCount: Int = 0,
     val headline: String = "",
+)
+
+/** The newest completed maintenance-log entry for a system (TPR contract §5); only for viewers who see the log. */
+@JsonClass(generateAdapter = true)
+data class PlaceSystemService(
+    /** YYYY-MM-DD. */
+    val date: String = "",
+    @Json(name = "source_label") val sourceLabel: String = "",
+    val title: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -1342,6 +1352,10 @@ data class PlaceSectionEnvelope(
     /** Why there is no data — a coverage gap or a lock reason. */
     val unavailableReason: String?,
     val data: PlaceSectionData?,
+    /** The area the reading covers (TPR contract §4); null without a reading and from older servers. */
+    val scope: PlaceSectionScope? = null,
+    /** What kind of evidence the reading is (TPR contract §4): never a home measurement. */
+    val evidence: PlaceSectionScope? = null,
 ) {
     val sectionId: PlaceSectionId get() = PlaceSectionId.from(id)
     val groupId: PlaceGroup get() = PlaceGroup.from(group)
@@ -1395,6 +1409,12 @@ data class PlaceGroupBlock(
 ) {
     val groupId: PlaceGroup get() = PlaceGroup.from(group)
 }
+
+/** A reading's area covered or kind of evidence (TPR contract §4): a token for logic and the words to show. */
+data class PlaceSectionScope(
+    val kind: String,
+    val label: String,
+)
 
 /**
  * Who is looking at a Home's Place. [role] picks which sections apply:

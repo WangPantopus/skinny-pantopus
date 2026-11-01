@@ -1,5 +1,6 @@
 package app.pantopus.android.ui.screens.place
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -19,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,9 +56,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
 import app.pantopus.android.data.ai.AIScreenContext
+import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
 import app.pantopus.android.data.api.models.place.BallotGovernments
-import app.pantopus.android.data.api.models.place.PlaceGroupBlock
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceTier
 import app.pantopus.android.ui.components.EmptyState
@@ -65,16 +69,20 @@ import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.ballot.BallotGovernmentsSheet
 import app.pantopus.android.ui.screens.ballot.BallotPlacement
-import app.pantopus.android.ui.screens.ballot.BallotSeasonBlock
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.homes.waitingLabel
 import app.pantopus.android.ui.screens.place.components.JustMovedCard
+import app.pantopus.android.ui.screens.place.components.LocalPlaceFlatRows
 import app.pantopus.android.ui.screens.place.components.PlaceChip
 import app.pantopus.android.ui.screens.place.components.PlaceChipModel
 import app.pantopus.android.ui.screens.place.components.PlaceChipTone
-import app.pantopus.android.ui.screens.place.components.PlaceGroupLabel
-import app.pantopus.android.ui.screens.place.components.PlaceHeroCard
-import app.pantopus.android.ui.screens.place.components.PlaceLockedCard
+import app.pantopus.android.ui.screens.place.components.PlaceHairline
+import app.pantopus.android.ui.screens.place.components.PlaceHomeCard
+import app.pantopus.android.ui.screens.place.components.PlaceWorthALook
+import app.pantopus.android.ui.screens.place.components.WorthItem
+import app.pantopus.android.ui.screens.place.components.placeSurface
+import app.pantopus.android.ui.screens.place.components.rememberGlanceOpen
+import app.pantopus.android.ui.screens.place.detail.TodayAskEntry
 import app.pantopus.android.ui.screens.place.messaging.PlaceMessagesActionRow
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifyMethod
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifySheet
@@ -128,6 +136,8 @@ fun PlaceDashboardScreen(
     onOpenVerificationStatus: () -> Unit = {},
     /** Ask Pantopus about this Home (AI assistant phase 1); null hides the button. */
     onAsk: ((AIScreenContext) -> Unit)? = null,
+    /** A household task's own page ("Worth a look"). */
+    onOpenTask: ((taskId: String) -> Unit)? = null,
     viewModel: PlaceDashboardViewModel = hiltViewModel(key = "place-$homeId"),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -136,6 +146,7 @@ fun PlaceDashboardScreen(
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val homeShortcuts by viewModel.homeShortcuts.collectAsStateWithLifecycle()
+    val worthTasks by viewModel.worthTasks.collectAsStateWithLifecycle()
     // A Home this account can no longer read (left, removed, deleted): the Place tab moves on.
     LaunchedEffect(state) {
         if ((state as? PlaceDashboardUiState.Error)?.unavailable == true) onPlaceUnavailable(homeId)
@@ -206,6 +217,8 @@ fun PlaceDashboardScreen(
                     scrollToBallot = scrollToBallot,
                     onBallotOpened = onBallotOpened,
                     onAsk = onAsk?.let { ask -> { ask(AIScreenContext.place(homeId, null, "Your Place")) } },
+                    tasks = worthTasks,
+                    onOpenTask = onOpenTask,
                 )
         }
     }
@@ -248,7 +261,13 @@ fun PlaceDashboardScreen(
     }
 }
 
-/** The loaded dashboard. [onOpenSwitcher] opens the homes sheet, from the address under "Your Place". */
+/**
+ * The loaded dashboard (TPR brief 6), top to bottom: the header, a claim's banner, the home card (where the viewer
+ * stands, the facts, the verify step, the tools), "Worth a look" and the first-week card, "Your home at a glance" (seven
+ * folded groups holding every section row, Today's Pulse and the ballot), Verified neighbors, the privacy row, Ask.
+ * [onOpenSwitcher] opens the homes sheet, from the address under "Your Place".
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 @Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
 internal fun PlaceDashboardContent(
@@ -281,25 +300,47 @@ internal fun PlaceDashboardContent(
     claim: OwnershipClaimDto? = null,
     /** The claim's Waiting Room: its checklist, documents and withdraw. */
     onOpenClaimStatus: () -> Unit = {},
+    /** The household's tasks this viewer can read, for "Worth a look". */
+    tasks: List<HomeTaskDto> = emptyList(),
+    /** What changed since the last visit, for "Worth a look". */
+    changes: List<WorthItem> = emptyList(),
+    /** A task's existing detail page. */
+    onOpenTask: ((taskId: String) -> Unit)? = null,
 ) {
     val isVerified = intel.tier == PlaceTier.T4
     // Verifying is the next step for a claimed resident and for a private setup (by mail). Guests and service
     // providers can't verify, so they get no verify prompts; older servers don't say, and claimed decides.
     val showsVerify = !isVerified && (intel.verifyAvailable ?: (intel.tier == PlaceTier.T3))
-    val pulse = PlacePresentation.derivePulse(intel)
     val ballot = BallotPlacement.ballot(intel)
     var ballotGovernments by remember { mutableStateOf<BallotGovernments?>(null) }
+    val (openGroups, toggleGroup) = rememberGlanceOpen(homeId)
+    val ballotRequester = remember { BringIntoViewRequester() }
+    // Header, home card, Worth a look and the first-week card come before the glance; a refresh line and a claim's
+    // banner add one each.
+    val glanceIndex = GLANCE_PRECEDING_ITEMS + listOf(refreshNotice != null, claim != null).count { it }
     LaunchedEffect(scrollToBallot, ballot) {
         if (scrollToBallot) {
             if (ballot != null) {
-                // Header, tools, moving checklist, Pulse, spacer and privacy row always precede the card.
-                val precedingItems =
-                    BALLOT_PRECEDING_FIXED_ITEMS + listOf(refreshNotice != null, showsVerify || claim != null, isVerified).count { it }
-                listState.scrollToItem(precedingItems)
+                // "Open your ballot": the Civic group opens on its ballot card.
+                if (GlanceGroup.CIVIC.key !in openGroups) toggleGroup(GlanceGroup.CIVIC.key)
+                listState.scrollToItem(glanceIndex)
+                withFrameNanos { }
+                ballotRequester.bringIntoView()
             }
             onBallotOpened()
         }
     }
+    val worth =
+        remember(intel, tasks, changes) {
+            placeWorthItems(
+                intel = intel,
+                tasks = tasks,
+                changes = changes,
+                onOpenDetail = onOpenDetail,
+                onOpenTask = onOpenTask,
+                onOpenTasks = { onOpenHomeShortcut(PlaceHomeShortcut.TASKS) },
+            )
+        }
 
     // Every clock time on the dashboard is the home's (TPR contract), whatever the phone's zone.
     CompositionLocalProvider(LocalPlaceZone provides intel.homeZone) {
@@ -331,26 +372,28 @@ internal fun PlaceDashboardContent(
                         action = "Check claim status",
                     )
                 }
-            } else if (showsVerify) {
-                item {
-                    PlaceVerifyBanner(
-                        onTap = onVerify,
-                        modifier = Modifier.padding(horizontal = 16.dp).padding(top = 8.dp),
-                    )
-                }
             }
-            item {
-                if (claim == null) {
-                    PlaceHomeToolsCard(
-                        shortcuts = homeShortcuts,
-                        onOpen = onOpenHomeTools,
-                        onShortcut = onOpenHomeShortcut,
-                        modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp),
-                    )
-                }
+            item(key = "home") {
+                PlaceHomeCard(
+                    intel = intel,
+                    claimInReview = claim != null,
+                    zone = intel.homeZone,
+                    shortcuts = homeShortcuts,
+                    showsTools = claim == null,
+                    onOpenHomeTools = onOpenHomeTools,
+                    onOpenShortcut = onOpenHomeShortcut,
+                    // The verify step stays near the top until the home is verified (the same sheet as the banner).
+                    onVerify = onVerify.takeIf { showsVerify && claim == null },
+                    onOpenHome = { onOpenDetail(PlaceDetailGroup.YOUR_HOME) },
+                    onRetry = onRetry,
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(top = 8.dp),
+                )
             }
-            // Movers first (Wedge v2 D5): the first-week checklist for a recent move-in.
-            item {
+            item(key = "worth") {
+                PlaceWorthALook(items = worth, modifier = Modifier.padding(horizontal = 16.dp).padding(top = 24.dp))
+            }
+            // Movers (Wedge v2 D5): the first-week checklist for a recent move-in, under "Worth a look".
+            item(key = "justMoved") {
                 // Per-home ticks and dismissal are keyed by id; never let the
                 // empty default (previews, snapshots) collapse households together.
                 if (homeId.isNotBlank()) {
@@ -366,32 +409,28 @@ internal fun PlaceDashboardContent(
                     )
                 }
             }
-            item {
-                PlaceHeroCard(
-                    variant = pulse.variant,
-                    chip = pulse.chip,
-                    heroIcon = pulse.heroIcon,
-                    headline = pulse.title,
-                    nudgeIcon = pulse.nudgeIcon,
-                    nudgeText = pulse.nudgeText.orEmpty(),
-                    // Pulse is the household's: a claim's card opens the address's Today.
-                    onTap = if (claim == null) onOpenPulse else ({ onOpenDetail(PlaceDetailGroup.TODAY) }),
-                    modifier =
-                        Modifier
-                            .padding(horizontal = 16.dp)
-                            .padding(top = if (showsVerify || claim != null) 12.dp else 14.dp),
+            item(key = "glance") {
+                PlaceGlanceSection(
+                    intel = intel,
+                    openGroups = openGroups,
+                    onToggle = toggleGroup,
+                    actions =
+                        GlanceActions(
+                            claimInReview = claim != null,
+                            showsVerify = showsVerify,
+                            onOpenDetail = onOpenDetail,
+                            onOpenPulse = onOpenPulse,
+                            onVerify =
+                                onVerify.takeUnless {
+                                    claim != null || (intel.tier == PlaceTier.T3 && intel.verifyAvailable == false)
+                                },
+                            onRetry = onRetry,
+                            onOpenPrivacyMirror = onOpenPrivacyMirror,
+                            onOpenGovernments = { ballotGovernments = it },
+                            ballotRequester = ballotRequester,
+                        ),
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(top = 28.dp),
                 )
-            }
-            item { Spacer(modifier = Modifier.height(20.dp)) }
-            // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does. It follows
-            // Today's Pulse, as on iOS: verify, Home tools, movers, the Pulse, then this line.
-            item {
-                if (claim == null) {
-                    PrivacyMirrorRow(
-                        onOpen = onOpenPrivacyMirror,
-                        modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
-                    )
-                }
             }
             if (isVerified) {
                 item {
@@ -399,44 +438,25 @@ internal fun PlaceDashboardContent(
                         address = intel.place.label,
                         onComposeMessage = onComposeMessage,
                         onOpenInbox = onOpenInbox,
-                        modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp).padding(top = 28.dp),
                     )
                 }
             }
-            // Ballot P0 (ballot_p0): the "Your ballot" card leads under
-            // "This season" and leaves the civic group.
-            if (ballot != null) {
-                item(key = "ballot") {
-                    BallotSeasonBlock(
-                        placed = ballot,
-                        onOpenGovernments = ballot.card.governments?.let { governments -> { ballotGovernments = governments } },
-                        modifier = Modifier.padding(horizontal = Spacing.s4).padding(bottom = Spacing.s6),
-                    )
-                }
-            }
-            items(items = BallotPlacement.groups(intel), key = { it.group }) { group ->
-                PlaceGroupBlockView(
-                    group = group,
-                    onOpenDetail = onOpenDetail,
-                    onVerify = onVerify.takeUnless { claim != null || (intel.tier == PlaceTier.T3 && intel.verifyAvailable == false) },
-                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
-                    onRetry = onRetry,
-                    verifiesFirst = intel.verifiesFirst,
-                )
-            }
+            // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does.
             if (claim == null) {
                 item {
-                    PlaceIdentityEntry(
-                        onOpen = { onOpenDetail(PlaceDetailGroup.IDENTITY) },
-                        modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
+                    PrivacyMirrorRow(
+                        onOpen = onOpenPrivacyMirror,
+                        modifier = Modifier.padding(horizontal = 16.dp).padding(top = 20.dp),
                     )
                 }
             }
-            if (showsVerify) {
+            onAsk?.let { ask ->
                 item {
-                    PlaceVerifyLockedGroup(
-                        onVerify = onVerify,
-                        modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
+                    TodayAskEntry(
+                        "Ask Pantopus about your home",
+                        ask,
+                        Modifier.padding(horizontal = 16.dp).padding(top = 12.dp).testTag("place.askEntry"),
                     )
                 }
             }
@@ -453,7 +473,8 @@ internal fun PlaceDashboardContent(
     }
 }
 
-private const val BALLOT_PRECEDING_FIXED_ITEMS = 6
+/** The header, the home card, "Worth a look" and the first-week card precede the glance in the list. */
+private const val GLANCE_PRECEDING_ITEMS = 4
 
 /** "Private by default. See what neighbors see of this address." (Wedge v2 §2). */
 @Composable
@@ -468,12 +489,13 @@ private fun PrivacyMirrorRow(
                 .clip(RoundedCornerShape(12.dp))
                 .background(PantopusColors.appSurfaceSunken)
                 .clickable(onClick = onOpen)
+                .heightIn(min = 48.dp)
                 .padding(horizontal = 14.dp, vertical = 10.dp)
                 .testTag("place.privacyMirror"),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PantopusIconImage(PantopusIcon.ShieldCheck, null, size = 15.dp, strokeWidth = 2.25f, tint = PantopusColors.home)
+        PantopusIconImage(PantopusIcon.ShieldCheck, null, size = 15.dp, strokeWidth = 2.25f, tint = PantopusColors.appTextSecondary)
         Text(
             "Private by default. See what neighbors see of this address.",
             fontSize = 13.sp,
@@ -484,34 +506,7 @@ private fun PrivacyMirrorRow(
     }
 }
 
-@Composable
-private fun PlaceGroupBlockView(
-    group: PlaceGroupBlock,
-    onOpenDetail: (PlaceDetailGroup) -> Unit,
-    onVerify: (() -> Unit)?,
-    modifier: Modifier = Modifier,
-    onRetry: (() -> Unit)? = null,
-    verifiesFirst: Boolean = false,
-) {
-    val detail = PlaceDetailGroup.forGroup(group.groupId)
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(9.dp)) {
-        PlaceGroupLabel(text = group.label)
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            group.sections.forEach { section ->
-                PlaceSectionView(
-                    env = section,
-                    onOpen = detail?.let { d -> { onOpenDetail(d) } },
-                    onVerify = onVerify,
-                    onClaim = onVerify,
-                    onRetry = onRetry,
-                    verifiesFirst = verifiesFirst,
-                )
-            }
-        }
-    }
-}
-
-// W7 — verified-neighbor messaging entry (verified residents only).
+// W7 — verified-neighbor messaging entry (verified residents only): both actions on one surface.
 @Composable
 private fun PlaceMessagesEntry(
     address: String,
@@ -519,59 +514,30 @@ private fun PlaceMessagesEntry(
     onOpenInbox: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(9.dp)) {
-        PlaceGroupLabel(text = "Verified neighbors")
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            PlaceMessagesActionRow(
-                icon = PantopusIcon.MessageSquarePlus,
-                title = "Message a neighbor",
-                subtitle = "Send a private heads-up to a home on your block.",
-                onTap = { onComposeMessage(address) },
-            )
-            PlaceMessagesActionRow(
-                icon = PantopusIcon.Inbox,
-                title = "Your inbox",
-                subtitle = "Heads-ups from verified neighbors nearby.",
-                onTap = onOpenInbox,
-            )
-        }
-    }
-}
-
-// The Identity page (residency letters and passes) has no card group of its
-// own on the dashboard, so it gets this entry.
-@Composable
-private fun PlaceIdentityEntry(
-    onOpen: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(9.dp)) {
-        PlaceGroupLabel(text = "Identity")
-        PlaceMessagesActionRow(
-            icon = PantopusIcon.IdCard,
-            title = "Residency letters & passes",
-            subtitle = "Prove where you live, on your terms.",
-            onTap = onOpen,
-            modifier = Modifier.testTag("place.identityEntry"),
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "Verified neighbors",
+            fontSize = 18.sp,
+            lineHeight = 23.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = (-0.2).sp,
+            color = PantopusColors.appText,
+            modifier = Modifier.padding(start = 2.dp).semantics { heading() },
         )
-    }
-}
-
-@Composable
-private fun PlaceVerifyLockedGroup(
-    onVerify: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(9.dp)) {
-        PlaceGroupLabel(text = "Locked until you verify")
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            PlacePresentation.verifyLockedItems.forEach { item ->
-                PlaceLockedCard(
-                    title = item.title,
-                    reason = item.reason,
-                    cta = "Verify address",
-                    icon = item.icon,
-                    onTap = onVerify,
+        CompositionLocalProvider(LocalPlaceFlatRows provides true) {
+            Column(modifier = Modifier.fillMaxWidth().placeSurface()) {
+                PlaceMessagesActionRow(
+                    icon = PantopusIcon.MessageSquarePlus,
+                    title = "Message a neighbor",
+                    subtitle = "Send a private heads-up to a home on your block.",
+                    onTap = { onComposeMessage(address) },
+                )
+                PlaceHairline()
+                PlaceMessagesActionRow(
+                    icon = PantopusIcon.Inbox,
+                    title = "Your inbox",
+                    subtitle = "Heads-ups from verified neighbors nearby.",
+                    onTap = onOpenInbox,
                 )
             }
         }
