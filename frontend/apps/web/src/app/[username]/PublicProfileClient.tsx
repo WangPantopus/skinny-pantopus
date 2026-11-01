@@ -1038,6 +1038,10 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
       ? [{ key: 'block', label: blockedByMe ? 'Unblock user' : 'Block user', onSelect: blockedByMe ? handleUnblock : handleBlock, disabled: actionLoading }]
       : []),
     ...(signedIn && !previewing ? [{ key: 'report', label: 'Report profile', onSelect: handleReport }] : []),
+    // Launch cut #4 (Open Gigs): "Request / Hire" opens the open-post composer.
+    ...(launchFeatures.openGigs && signedIn && !previewing && !blocked
+      ? [{ key: 'hire', label: 'Request / Hire', onSelect: handleRequestHire }]
+      : []),
   ];
 
   const topRow = previewing ? null : (
