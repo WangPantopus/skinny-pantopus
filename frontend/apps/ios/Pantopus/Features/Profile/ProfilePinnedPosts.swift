@@ -36,9 +36,13 @@ final class ProfilePins {
         return changed[postId] ?? server
     }
 
-    /// "Pin to profile" or "Unpin from profile"; nil hides the item.
-    func menuTitle(_ postId: String, server: Bool?) -> String? {
-        isPinned(postId, server: server).map { $0 ? "Unpin from profile" : "Pin to profile" }
+    /// "Pin to profile" or "Unpin from profile"; nil hides the item. A post
+    /// that can't show on your profile (a plan's post, one written for a
+    /// business) isn't offered Pin, as on web; a pinned one can still be unpinned.
+    func menuTitle(_ postId: String, server: Bool?, canShowOnProfile: Bool = true) -> String? {
+        guard let pinned = isPinned(postId, server: server) else { return nil }
+        if !pinned, !canShowOnProfile { return nil }
+        return pinned ? "Unpin from profile" : "Pin to profile"
     }
 
     /// Pins or unpins your post and says what happened, or the server's

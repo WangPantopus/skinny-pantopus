@@ -872,7 +872,11 @@ extension PulsePostDetailViewModel {
     /// nil hides it.
     var profilePinTitle: String? {
         guard isOwner, case let .loaded(content) = state else { return nil }
-        return ProfilePins.shared.menuTitle(content.post.id, server: content.post.profilePinned)
+        return ProfilePins.shared.menuTitle(
+            content.post.id,
+            server: content.post.profilePinned,
+            canShowOnProfile: content.post.showOnProfile != false
+        )
     }
 
     func toggleProfilePin() async {

@@ -165,7 +165,11 @@ public final class ProfilePostCardsModel {
     /// marks only those); nil hides it.
     func pinTitle(postId: String) -> String? {
         guard let post = post(postId) else { return nil }
-        return ProfilePins.shared.menuTitle(postId, server: post.profilePinned)
+        return ProfilePins.shared.menuTitle(
+            postId,
+            server: post.profilePinned,
+            canShowOnProfile: post.showOnProfile != false && post.businessAuthorId == nil
+        )
     }
 
     /// Pins or unpins your post; the toast says what happened, or why not.

@@ -1036,7 +1036,7 @@ extension MyPostsViewModel {
     /// isn't archived (PRF SRV-3; nil when the server didn't say).
     func profilePinTitle(postId: String) -> String? {
         guard let post = posts.first(where: { $0.id == postId }), post.archivedAt == nil else { return nil }
-        return ProfilePins.shared.menuTitle(postId, server: post.profilePinned)
+        return ProfilePins.shared.menuTitle(postId, server: post.profilePinned, canShowOnProfile: post.showOnProfile != false)
     }
 
     func toggleProfilePin(postId: String) async {

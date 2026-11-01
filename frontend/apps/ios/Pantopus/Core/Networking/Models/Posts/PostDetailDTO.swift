@@ -273,6 +273,8 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
     /// Your own post only: whether it's pinned to your profile (PRF SRV-3);
     /// nil on other people's posts and when the server couldn't tell.
     public let profilePinned: Bool?
+    /// False for a post that never shows on its author's profile (a plan's post).
+    public let showOnProfile: Bool?
 
     /// A moderator removed the post: neighbors can't see it or reply.
     public var isRemovedByModerator: Bool {
@@ -321,6 +323,7 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         case claimMode = "claim_mode"
         case postMetadata = "post_metadata"
         case profilePinned = "profile_pinned"
+        case showOnProfile = "show_on_profile"
     }
 
     /// Tolerant (Pulse S2): only `id` and `created_at` are required; any
@@ -376,6 +379,7 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         claimMode = c.lenient(String.self, forKey: .claimMode)
         keptOpenAt = c.lenient(PostLifecycleMetadata.self, forKey: .postMetadata)?.keptOpenAt
         profilePinned = c.lenient(Bool.self, forKey: .profilePinned)
+        showOnProfile = c.lenient(Bool.self, forKey: .showOnProfile)
     }
 }
 
@@ -430,6 +434,7 @@ extension PostDetailDTO {
         claimMode = post.claimMode
         keptOpenAt = post.keptOpenAt
         profilePinned = post.profilePinned
+        showOnProfile = post.showOnProfile
     }
 }
 

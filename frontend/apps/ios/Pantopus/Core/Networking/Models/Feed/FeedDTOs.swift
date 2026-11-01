@@ -80,6 +80,8 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
     /// Your own post only: whether it's pinned to your profile (PRF SRV-3).
     /// Nil on other people's posts, in previews, and when the server couldn't tell.
     public let profilePinned: Bool?
+    /// False for a post that never shows on its author's profile (a plan's post).
+    public let showOnProfile: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -116,6 +118,7 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case mediaLiveURLs = "media_live_urls"
         case creator
         case profilePinned = "profile_pinned"
+        case showOnProfile = "show_on_profile"
     }
 
     /// Tolerant (Pulse S2): only `id` and `created_at` are required; any
@@ -162,6 +165,7 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         mediaLiveURLs = c.lenient([String].self, forKey: .mediaLiveURLs) ?? []
         creator = c.lenient(PostCreatorDTO.self, forKey: .creator)
         profilePinned = c.lenient(Bool.self, forKey: .profilePinned)
+        showOnProfile = c.lenient(Bool.self, forKey: .showOnProfile)
     }
 }
 

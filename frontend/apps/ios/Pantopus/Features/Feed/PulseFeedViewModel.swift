@@ -1347,7 +1347,11 @@ extension PulseFeedViewModel {
     /// the server marks only those); nil hides it.
     func profilePinTitle(postId: String) -> String? {
         guard let post = loadedItems.first(where: { $0.id == postId }) else { return nil }
-        return ProfilePins.shared.menuTitle(postId, server: post.profilePinned)
+        return ProfilePins.shared.menuTitle(
+            postId,
+            server: post.profilePinned,
+            canShowOnProfile: post.showOnProfile != false && post.businessAuthorId == nil
+        )
     }
 
     func toggleProfilePin(postId: String) async {
