@@ -11,6 +11,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import * as api from '@pantopus/api';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
+import { personColor, personInitials } from '@/lib/personColor';
 import { PostMediaPreview, resolvePostMediaSlots } from './PostMediaGrid';
 import { PostLinkContent } from './LinkPreviewCard';
 import LinkPreviewCard from './LinkPreviewCard';
@@ -87,6 +88,11 @@ interface PostCardProps {
   isSaving?: boolean;
   surface?: string;
   showToast?: (msg: string) => void;
+  /**
+   * On a person's own profile, their account id: the author's initials then sit on the person's own color, as in the
+   * profile header (and on iOS and Android). The feed colors initials by post kind.
+   */
+  authorColorSeed?: string;
 }
 
 function PostCard({
@@ -108,6 +114,7 @@ function PostCard({
   isSaving,
   surface,
   showToast,
+  authorColorSeed,
 }: PostCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [solving, setSolving] = useState(false);
@@ -216,9 +223,9 @@ function PostCard({
         ) : (
           <div
             className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold ring-2"
-            style={{ background: config.color }}
+            style={{ background: authorColorSeed ? personColor(authorColorSeed) : config.color }}
           >
-            {creatorInitial}
+            {authorColorSeed ? personInitials(creatorName) || creatorInitial : creatorInitial}
           </div>
         )}
         <div className="flex-1 min-w-0">

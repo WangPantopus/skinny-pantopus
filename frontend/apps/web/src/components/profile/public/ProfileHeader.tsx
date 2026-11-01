@@ -1,282 +1,193 @@
 'use client';
 
-import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import Badge from './atoms/Badge';
-import TrustChip from './atoms/TrustChip';
-import ResidencyHomeBlock, { type ResidencyPayload } from './ResidencyHomeBlock';
-import { launchFeatures } from '@/lib/featureFlags';
-import { UserRound } from 'lucide-react';
-import { usernameHandle } from '@pantopus/utils';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { CalendarDays, MapPin, ShieldCheck } from 'lucide-react';
+import BottomSheet from '@/components/ui/BottomSheet';
+import ProfileAvatar from './atoms/ProfileAvatar';
 
-type ViewerContext = 'public' | 'neighborhood' | 'follower' | 'owner';
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function joinedDate(joinedAt: string | null | undefined): Date | null {
+  if (!joinedAt) return null;
+  const date = new Date(joinedAt);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** "Joined Oct 2026", or "Joined this week" in someone's first seven days. */
+export function joinedText(joinedAt: string | null | undefined): string | null {
+  const date = joinedDate(joinedAt);
+  if (!date) return null;
+  if (Date.now() - date.getTime() < 7 * DAY_MS) return 'Joined this week';
+  return `Joined ${date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
+}
+
+/** Joined in the last `days` days: an empty profile then reads "<name> just joined". */
+export function joinedRecently(joinedAt: string | null | undefined, days = 14): boolean {
+  const date = joinedDate(joinedAt);
+  return Boolean(date && Date.now() - date.getTime() < days * DAY_MS);
+}
+
+/** The first word of the name, for "Connect with Rowan?" and the like. */
+export function firstWord(name: string): string {
+  return name.trim().split(/\s+/)[0] || name;
+}
 
 interface ProfileHeaderProps {
-  profile: Record<string, unknown>;
-  fullName: string;
-  /** False when `fullName` is the stand-in for a person with no name: the avatar then shows no initial. */
+  /** The name this viewer sees: other people see the name neighbors see. */
+  name: string;
+  /** False when `name` is the stand-in for a person with no name: the avatar then shows no initials. */
   hasName?: boolean;
-  /** The username to show as @handle; null when the server made it up. */
+  /** The username the person chose, without "@"; null when the server made it up. */
   handle?: string | null;
-  residency?: ResidencyPayload | null;
-  showOwnerOnly: boolean;
-  /** Owner previews show the visitor controls without acting on the owner. */
-  previewOnly?: boolean;
-  ownerPreviewContext: ViewerContext;
-  onOwnerPreviewChange: (ctx: ViewerContext) => void;
-  // Trust data
-  trustBadges: Array<{ icon: string; text: string; color: string }>;
-  displayRating: number;
-  displayReviewCount: number;
-  /** Null when the profile carries no response time; the chip is then left out. */
-  responseTimeLabel: string | null;
-  reliabilityLabel: string;
-  reliabilityDetail: string;
-  // Actions
-  followState: boolean;
-  /** False for a personally blocked target, or while that check is unavailable. */
-  canFollow?: boolean;
-  /** The viewer's connection with this person, once read; Connect shows only then, as in the apps. */
-  connectionState?: 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'blocked';
-  canConnect?: boolean;
-  onConnect?: () => void;
-  actionLoading: boolean;
-  shareCopied: boolean;
-  onFollow: () => void;
-  onMessage: () => void;
-  onRequestHire: () => void;
-  onShare: () => void;
-  /**
-   * N04 — `POST /api/users/:userId/block` (`backend/routes/blocks.js:13`).
-   * Before this the menu item rendered with full hover affordance and did
-   * nothing on click.
-   */
-  onBlock: () => void;
-  /** Set when the viewer has blocked this person: the menu offers Unblock (`DELETE /api/users/:userId/block`). */
-  onUnblock?: () => void;
-  onReport: () => void;
+  photoUrl?: string | null;
+  /** The account id: it picks the color behind the initials. */
+  colorSeed: string;
+  /** A verified home. The read says so only to viewers who may know it. */
+  verifiedNeighbor?: boolean;
+  /** The city, only when the read returns one. */
+  city?: string | null;
+  joinedAt?: string | null;
+  tagline?: string | null;
+  bio?: string | null;
+  /** A line only the owner sees, under the trust line (the private account name). */
+  ownerNote?: ReactNode;
+  /** The buttons and banners under the bio. */
+  children?: ReactNode;
 }
 
-function stringField(value: unknown): string {
-  return typeof value === 'string' ? value : '';
-}
+/** Up to four lines of the bio, with "more" when it runs longer. */
+function Bio({ text }: { text: string }) {
+  const id = useId();
+  const ref = useRef<HTMLParagraphElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [clamped, setClamped] = useState(false);
 
-function numberField(value: unknown): number {
-  return typeof value === 'number' ? value : 0;
-}
-
-// Static class names, so Tailwind keeps them.
-const TRUST_CHIP_COLUMNS: Record<number, string> = {
-  1: 'md:grid-cols-1',
-  2: 'md:grid-cols-2',
-  3: 'md:grid-cols-3',
-  4: 'md:grid-cols-4',
-};
-
-export default function ProfileHeader({
-  profile,
-  fullName,
-  hasName = true,
-  handle = null,
-  residency,
-  showOwnerOnly,
-  previewOnly = false,
-  ownerPreviewContext,
-  onOwnerPreviewChange,
-  trustBadges,
-  displayRating,
-  displayReviewCount,
-  responseTimeLabel,
-  reliabilityLabel,
-  reliabilityDetail,
-  followState,
-  canFollow = true,
-  connectionState = 'none',
-  canConnect = false,
-  onConnect,
-  actionLoading,
-  shareCopied,
-  onFollow,
-  onMessage,
-  onRequestHire,
-  onShare,
-  onBlock,
-  onUnblock,
-  onReport,
-}: ProfileHeaderProps) {
-  const router = useRouter();
-  const showRatingChip = launchFeatures.openGigs || displayReviewCount > 0;
-  const trustChipCount =
-    (showRatingChip ? 1 : 0) + (launchFeatures.openGigs ? 2 : 0) + (responseTimeLabel ? 1 : 0);
-  // Only the person's own tagline: a stand-in line would read as their words.
-  const tagline = stringField(profile.tagline);
-  const avatarUrl = stringField(profile.profile_picture_url) || stringField(profile.avatar_url) || stringField(profile.profilePicture);
-  const createdAt = stringField(profile.created_at) || stringField(profile.createdAt);
-  const joinedLabel = createdAt
-    ? new Date(createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-    : 'Unknown';
-  const gigsCompleted = numberField(profile.gigs_completed);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || expanded) return;
+    const measure = () => setClamped(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [text, expanded]);
 
   return (
+    <div className="mt-1.5">
+      <p
+        id={id}
+        ref={ref}
+        className={`text-base leading-[1.375rem] text-app-strong whitespace-pre-line [overflow-wrap:anywhere] ${expanded ? '' : 'line-clamp-4'}`}
+      >
+        {text}
+      </p>
+      {clamped && !expanded && (
+        <button
+          type="button"
+          aria-expanded={false}
+          aria-controls={id}
+          onClick={() => setExpanded(true)}
+          className="min-h-[44px] min-w-[44px] -my-2.5 text-left text-base font-semibold text-app-link hover:underline"
+        >
+          more
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The top of a person's profile: photo or initials, the name (it wraps, never cut off), @username, one line of what
+ * is true about them (a verified home, the city, when they joined), the tagline and the bio. No banner and no counts:
+ * a neighbor should see who this is and how to say hi.
+ */
+export default function ProfileHeader({
+  name,
+  hasName = true,
+  handle = null,
+  photoUrl = null,
+  colorSeed,
+  verifiedNeighbor = false,
+  city = null,
+  joinedAt = null,
+  tagline = null,
+  bio = null,
+  ownerNote = null,
+  children,
+}: ProfileHeaderProps) {
+  const [explainerOpen, setExplainerOpen] = useState(false);
+  const joined = joinedText(joinedAt);
+  const facts = [city, joined].filter(Boolean) as string[];
+  const first = hasName ? firstWord(name) : 'This neighbor';
+  const joinedMonth = joinedDate(joinedAt)?.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const TrustIcon = verifiedNeighbor ? ShieldCheck : city ? MapPin : CalendarDays;
+  const trustText = (
     <>
-      <div className="h-40 md:h-48 bg-gradient-to-r from-[#0f2340] via-[#1a3557] to-[#2a5f7a]" />
-
-      <div className="w-full px-4 sm:px-6 lg:px-10 xl:px-12 -mt-16">
-        <section className="bg-surface rounded-2xl border border-app p-5 md:p-6 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-end gap-5">
-            {/* Avatar */}
-            <div className="relative w-24 h-24 md:w-28 md:h-28 shrink-0">
-              {avatarUrl ? (
-                <Image
-                  src={avatarUrl}
-                  alt={fullName}
-                  className="w-full h-full rounded-full object-cover border-4 border-white shadow"
-                  width={112}
-                  height={112}
-                  sizes="112px"
-                  quality={75}
-                />
-              ) : (
-                <div className="w-full h-full rounded-full bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 flex items-center justify-center text-white text-4xl font-semibold border-4 border-white shadow">
-                  {hasName ? fullName[0]?.toUpperCase() : <UserRound aria-hidden className="w-12 h-12" />}
-                </div>
-              )}
-              {Boolean(residency?.hasHome && residency?.verified) && (
-                <span className="absolute bottom-1 right-1 w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center border-2 border-white text-xs" title="Verified resident">
-                  ✓
-                </span>
-              )}
-            </div>
-
-            {/* Info */}
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl md:text-3xl font-bold text-app leading-tight">{fullName}</h1>
-              {usernameHandle(handle) ? <p className="text-app-secondary">{usernameHandle(handle)}</p> : null}
-              {tagline ? <p className="text-sm text-app-secondary mt-1">{tagline}</p> : null}
-              <ResidencyHomeBlock residency={residency ?? undefined} />
-
-              <div className="flex flex-wrap gap-2 mt-3">
-                {trustBadges.slice(0, 3).map((badge) => (
-                  <Badge key={badge.text} icon={badge.icon} text={badge.text} color={badge.color} />
-                ))}
-                <Badge icon="📅" text={`Joined ${joinedLabel}`} color="gray" />
-              </div>
-            </div>
-
-            {/* Action buttons (desktop) */}
-            <div className="hidden md:flex gap-2 flex-wrap justify-end">
-              {showOwnerOnly ? (
-                <>
-                  <button
-                    onClick={() => router.push('/app/profile/edit')}
-                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium"
-                  >
-                    Edit Profile
-                  </button>
-                  <button
-                    onClick={() => router.push('/app/profile')}
-                    className="px-4 py-2 bg-surface text-app-strong border border-app-strong rounded-lg hover:bg-surface-raised font-medium"
-                  >
-                    View Analytics
-                  </button>
-                  <select
-                    value={ownerPreviewContext}
-                    onChange={(e) => onOwnerPreviewChange(e.target.value as ViewerContext)}
-                    aria-label="Preview profile as"
-                    className="px-3 py-2 border border-app-strong rounded-lg text-sm text-app-strong"
-                  >
-                    <option value="owner">Preview: Owner</option>
-                    <option value="public">Preview: Public</option>
-                    <option value="neighborhood">Preview: Neighborhood</option>
-                    <option value="follower">Preview: Followers</option>
-                  </select>
-                </>
-              ) : (
-                <>
-                  {/* Someone you blocked can't be messaged (the block says so); Settings unblocks. */}
-                  {connectionState !== 'blocked' && (
-                    <button onClick={onMessage} disabled={previewOnly} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium disabled:opacity-60">Message</button>
-                  )}
-                  {/* Launch cut #4 (Open Gigs): "Request / Hire" opens the open-post composer. */}
-                  {launchFeatures.openGigs && <button onClick={onRequestHire} disabled={previewOnly} className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium disabled:opacity-60">Request / Hire</button>}
-                  {canConnect && onConnect && (
-                    <button
-                      onClick={onConnect}
-                      disabled={previewOnly || actionLoading || connectionState === 'pending_sent'}
-                      aria-label={connectionState === 'connected' ? 'Connected. Remove this connection' : undefined}
-                      className={`px-4 py-2 border rounded-lg font-medium transition disabled:opacity-60 ${
-                        connectionState === 'connected'
-                          ? 'bg-primary-50 text-primary-700 border-primary-300 hover:bg-primary-100'
-                          : 'bg-surface text-app-strong border-app-strong hover:bg-surface-raised'
-                      }`}
-                    >
-                      {connectionState === 'connected'
-                        ? 'Connected'
-                        : connectionState === 'pending_sent'
-                          ? 'Requested'
-                          : connectionState === 'pending_received'
-                            ? 'Accept'
-                            : 'Connect'}
-                    </button>
-                  )}
-                  {canFollow && (
-                    <button
-                      onClick={onFollow}
-                      disabled={previewOnly || actionLoading}
-                      className={`px-4 py-2 border rounded-lg font-medium transition disabled:opacity-60 ${
-                        followState
-                          ? 'bg-primary-50 text-primary-700 border-primary-300 hover:bg-primary-100'
-                          : 'bg-surface text-app-strong border-app-strong hover:bg-surface-raised'
-                      }`}
-                    >
-                      {followState ? 'Following' : 'Follow'}
-                    </button>
-                  )}
-                  <button onClick={onShare} className="px-4 py-2 bg-surface text-app-strong border border-app-strong rounded-lg hover:bg-surface-raised font-medium">
-                    {shareCopied ? 'Copied' : 'Share'}
-                  </button>
-                  <details className="relative">
-                    <summary aria-label="More actions" className="list-none px-3 py-2 bg-surface text-app-strong border border-app-strong rounded-lg hover:bg-surface-raised cursor-pointer">⋯</summary>
-                    <div className="absolute right-0 mt-2 w-40 bg-surface border border-app rounded-lg shadow-sm p-1 z-20">
-                      <button onClick={onReport} disabled={previewOnly} className="w-full text-left px-3 py-2 text-sm text-app-secondary hover:bg-surface-raised rounded disabled:opacity-60">Report profile</button>
-                      <button
-                        onClick={onUnblock ?? onBlock}
-                        disabled={previewOnly || actionLoading}
-                        className="w-full text-left px-3 py-2 text-sm text-app-secondary hover:bg-surface-raised rounded disabled:opacity-60"
-                      >
-                        {onUnblock ? 'Unblock user' : 'Block user'}
-                      </button>
-                    </div>
-                  </details>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Trust chips. Launch cut #4 (Open Gigs): no task count or task reliability, and a rating only once
-              there are reviews (they come from tasks), as in the apps. */}
-          {trustChipCount > 0 && (
-          <div className={`grid grid-cols-1 ${TRUST_CHIP_COLUMNS[trustChipCount]} gap-3 mt-6`}>
-            {showRatingChip && (
-              <TrustChip
-                title="Rating"
-                value={displayReviewCount > 0 ? `${displayRating.toFixed(1)} ★` : 'New'}
-                detail={displayReviewCount > 0 ? `${displayReviewCount} reviews` : 'Be their first review'}
-              />
-            )}
-            {launchFeatures.openGigs && <TrustChip title="Completed" value={gigsCompleted} detail="as worker" />}
-            {responseTimeLabel && <TrustChip title="Response" value={responseTimeLabel} detail="typical response time" />}
-            {launchFeatures.openGigs && (
-              <TrustChip
-                title="Reliability"
-                value={reliabilityLabel}
-                detail={reliabilityDetail}
-              />
-            )}
-          </div>
-          )}
-        </section>
-      </div>
+      <TrustIcon
+        aria-hidden="true"
+        className={`mt-[1.5px] w-[1.0625rem] h-[1.0625rem] shrink-0 ${verifiedNeighbor ? 'text-app-home' : 'text-app-muted'}`}
+        strokeWidth={2}
+      />
+      <span>
+        {verifiedNeighbor && <span className="font-semibold text-app-home">Verified neighbor</span>}
+        {verifiedNeighbor && facts.length > 0 ? ' · ' : ''}
+        {facts.join(' · ')}
+      </span>
     </>
+  );
+
+  return (
+    <div className="flex flex-col">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <ProfileAvatar name={hasName ? name : null} seed={colorSeed} photoUrl={photoUrl} size={84} />
+        <div className="min-w-0 flex-1 basis-[11rem] flex flex-col gap-0.5">
+          <h1 className="text-[1.75rem] leading-[2.125rem] font-bold text-app [overflow-wrap:anywhere]">{name}</h1>
+          {handle ? <p className="text-[0.9375rem] leading-5 text-app-muted [overflow-wrap:anywhere]">@{handle}</p> : null}
+        </div>
+      </div>
+
+      {(verifiedNeighbor || facts.length > 0) && (
+        verifiedNeighbor ? (
+          // What "Verified neighbor" means, one tap away.
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            onClick={() => setExplainerOpen(true)}
+            className="mt-1 self-start min-h-[44px] py-3 -mb-2 flex items-start gap-1.5 text-left text-[0.9375rem] leading-5 text-app-muted hover:underline decoration-app-border-strong underline-offset-2"
+          >
+            {trustText}
+            <span className="sr-only">. What this means</span>
+          </button>
+        ) : (
+          <p className="mt-3.5 flex items-start gap-1.5 text-[0.9375rem] leading-5 text-app-muted">{trustText}</p>
+        )
+      )}
+
+      {ownerNote}
+
+      {tagline ? (
+        <p className="mt-3.5 text-[1.0625rem] leading-[1.375rem] font-semibold text-app [overflow-wrap:anywhere]">{tagline}</p>
+      ) : null}
+      {bio ? <Bio text={bio} /> : null}
+
+      {children}
+
+      <BottomSheet open={explainerOpen} onClose={() => setExplainerOpen(false)} title="Verified neighbor">
+        <div className="flex items-start gap-3">
+          <span aria-hidden="true" className="w-9 h-9 shrink-0 rounded-full bg-app-home-bg text-app-home flex items-center justify-center">
+            <ShieldCheck className="w-[1.125rem] h-[1.125rem]" />
+          </span>
+          <div className="text-[0.9375rem] leading-5 text-app">
+            <p>
+              {city
+                ? `Pantopus confirmed ${first} lives in ${city}. Their address is never shown.`
+                : `Pantopus confirmed where ${first} lives. Their address is never shown.`}
+            </p>
+            {joinedMonth ? <p className="mt-2 text-app-muted">{first} joined Pantopus in {joinedMonth}.</p> : null}
+          </div>
+        </div>
+      </BottomSheet>
+    </div>
   );
 }
