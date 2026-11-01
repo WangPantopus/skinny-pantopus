@@ -211,18 +211,24 @@ extension PlaceDetailViewModel {
         }
     }
 
+    /// The place's time zone, once the copy names it.
+    var placeTimeZone: TimeZone? {
+        if case let .loaded(intel) = state { return intel.timeZone.flatMap(TimeZone.init(identifier:)) }
+        return nil
+    }
+
     @ViewBuilder
     private func liveOrUnavailableCard(_ env: PlaceSectionEnvelope, cfg: PlaceSectionDisplayConfig) -> some View {
         let state = PlacePresentation.cardState(env)
         let isLive = state == .loaded || state == .stale
-        let reading = isLive ? PlacePresentation.reading(for: env) : PlaceSectionReading()
+        let reading = isLive ? PlacePresentation.reading(for: env, timeZone: placeTimeZone) : PlaceSectionReading()
         // "Try again" on a section that failed to load re-reads this page.
         let retry: () -> Void = { Task { await self.refresh() } }
         let wording = PlacePresentation.errorWording(for: env.id)
         PlaceSectionCard(
             icon: cfg.icon,
             title: cfg.title,
-            asOf: isLive ? PlacePresentation.asOf(for: env) : nil,
+            asOf: isLive ? PlacePresentation.asOf(for: env, timeZone: placeTimeZone) : nil,
             state: state,
             value: reading.value,
             caption: state == .unavailable ? env.unavailableReason : reading.caption,

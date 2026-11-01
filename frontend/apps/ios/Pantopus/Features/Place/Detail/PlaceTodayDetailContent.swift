@@ -150,8 +150,17 @@ struct PlaceTodayDetailContent: View {
 
     private var skyCalendar: Calendar {
         var calendar = Calendar.autoupdatingCurrent
-        if let name = intel.timeZone, let zone = TimeZone(identifier: name) { calendar.timeZone = zone }
+        if let placeTimeZone { calendar.timeZone = placeTimeZone }
         return calendar
+    }
+
+    /// The place's zone; while it is unknown no clock time is shown for it.
+    private var placeTimeZone: TimeZone? {
+        intel.timeZone.flatMap(TimeZone.init(identifier:))
+    }
+
+    private func placeTime(_ iso: String?) -> String? {
+        placeTimeZone.flatMap { PlacePresentation.fmtTime(iso, timeZone: $0) }
     }
 
     /// The air reading for the sky: smoke veils it, and bad air leads the card.
@@ -203,7 +212,10 @@ struct PlaceTodayDetailContent: View {
                     streetLights: SkyStreet.lights(vm.section(.blockDensity, in: intel)?.blockDensity?.bucket.rawValue),
                     calendar: skyCalendar
                 ) { withAnimation { proxy.scrollTo("todayAddressCalendar", anchor: .top) } }
-                PlaceSourceNote(name: weather.source ?? "Source unavailable", asOf: PlacePresentation.fmtTime(weather.asOf))
+                PlaceSourceNote(
+                    name: weather.source ?? "Source unavailable",
+                    asOf: placeTime(weather.asOf)
+                )
             } else {
                 vm.fallbackCard(weather)
             }
@@ -221,7 +233,7 @@ struct PlaceTodayDetailContent: View {
             GoodDayRow(tiles: data.tiles)
             PlaceSourceNote(
                 name: "Derived from today's conditions",
-                asOf: PlacePresentation.fmtTime(goodDay.asOf)
+                asOf: placeTime(goodDay.asOf)
             )
         }
     }
@@ -247,7 +259,10 @@ struct PlaceTodayDetailContent: View {
             if let data = aqi.airQuality, aqi.status == .ready || aqi.status == .stale {
                 AqiCard(data: data)
                 // The server names the monitor, or says the reading is a model estimate.
-                PlaceSourceNote(name: aqi.source ?? "AirNow · EPA", asOf: PlacePresentation.fmtTime(aqi.asOf))
+                PlaceSourceNote(
+                    name: aqi.source ?? "AirNow · EPA",
+                    asOf: placeTime(aqi.asOf)
+                )
             } else {
                 vm.fallbackCard(aqi)
             }
@@ -268,7 +283,7 @@ struct PlaceTodayDetailContent: View {
             PlaceDetailSectionLabel(text: "Sun")
             if let data = sun.sunriseSunset {
                 TodaySunArcCard(data: data, calendar: skyCalendar)
-                PlaceSourceNote(name: "Your location", asOf: PlacePresentation.fmtSunDay(data.sunrise))
+                PlaceSourceNote(name: "Your location", asOf: PlacePresentation.fmtSunDay(data, timeZone: placeTimeZone))
             } else {
                 vm.fallbackCard(sun)
             }

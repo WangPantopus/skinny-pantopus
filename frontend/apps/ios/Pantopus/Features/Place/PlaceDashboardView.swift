@@ -251,7 +251,8 @@ struct PlaceDashboardView: View {
                             groupBlock(
                                 group,
                                 canVerify: claim == nil && !(intel.tier == .t3 && intel.verifyAvailable == false),
-                                verifiesFirst: intel.verifiesFirst
+                                verifiesFirst: intel.verifiesFirst,
+                                timeZone: intel.timeZone.flatMap(TimeZone.init(identifier:))
                             )
                         }
                         if claim == nil {
@@ -463,7 +464,7 @@ struct PlaceDashboardView: View {
 
     // MARK: - Group block
 
-    private func groupBlock(_ group: PlaceGroupBlock, canVerify: Bool, verifiesFirst: Bool) -> some View {
+    private func groupBlock(_ group: PlaceGroupBlock, canVerify: Bool, verifiesFirst: Bool, timeZone: TimeZone?) -> some View {
         let detail = PlaceDetailGroup.forGroup(group.group)
         return VStack(alignment: .leading, spacing: 9) {
             PlaceGroupLabel(text: group.label)
@@ -476,7 +477,8 @@ struct PlaceDashboardView: View {
                         onClaim: canVerify ? { showVerify = true } : nil,
                         onRetry: { Task { await viewModel.refresh() } },
                         retrying: viewModel.isRefreshing,
-                        verifiesFirst: verifiesFirst
+                        verifiesFirst: verifiesFirst,
+                        timeZone: timeZone
                     )
                 }
             }

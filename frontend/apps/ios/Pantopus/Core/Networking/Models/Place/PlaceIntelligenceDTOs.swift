@@ -386,15 +386,35 @@ public struct PlaceAlertsData: Decodable, Sendable, Hashable {
 
 /// Sunrise / sunset — rides the NOAA / Open-Meteo feed.
 public struct PlaceSunriseSunsetData: Decodable, Sendable, Hashable {
-    /// ISO 8601.
+    /// The place's wall clock, no zone ("2026-11-01T06:50").
     public let sunrise: String
-    /// ISO 8601.
+    /// The place's wall clock, no zone.
     public let sunset: String
     public let daylightMinutes: Int
+    /// The place's date the times belong to ("2026-11-01"). Nil from older servers.
+    public var date: String?
+    /// The same moments as instants ("2026-11-01T14:50:00Z"). Nil from older servers.
+    public var sunriseUtc: String?
+    public var sunsetUtc: String?
+    /// The place's IANA zone. Nil from older servers.
+    public var timeZone: String?
+
+    /// The instant when the server sends one (it reads right on the place's
+    /// clock wherever the phone is), else the wall-clock string as written.
+    public var sunriseClock: String {
+        sunriseUtc ?? sunrise
+    }
+
+    public var sunsetClock: String {
+        sunsetUtc ?? sunset
+    }
 
     private enum CodingKeys: String, CodingKey {
-        case sunrise, sunset
+        case sunrise, sunset, date
         case daylightMinutes = "daylight_minutes"
+        case sunriseUtc = "sunrise_utc"
+        case sunsetUtc = "sunset_utc"
+        case timeZone = "time_zone"
     }
 }
 
