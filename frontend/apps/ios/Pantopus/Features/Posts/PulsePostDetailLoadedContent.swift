@@ -110,7 +110,7 @@ public struct PulsePostDetailLoadedContent: View {
     public var body: some View {
         ContentDetailShell(
             title: "Post",
-            onBack: showsBack ? onBack : nil,
+            onBack: showsBack ? { onBack() } : nil,
             topBarAction: topBarAction,
             topBarSecondaryAction: topBarSecondaryAction,
             onRefresh: onRefresh,

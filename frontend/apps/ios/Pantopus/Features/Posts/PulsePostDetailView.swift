@@ -407,7 +407,7 @@ private struct LoadingLayout: View {
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
-            ContentDetailTopBar(title: "Post", onBack: showsBack ? onBack : nil, action: nil)
+            ContentDetailTopBar(title: "Post", onBack: showsBack ? { onBack() } : nil, action: nil)
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 Shimmer(width: 220, height: 22, cornerRadius: Radii.sm)
                 Shimmer(height: 16, cornerRadius: Radii.sm)
@@ -435,7 +435,7 @@ private struct ErrorLayout: View {
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
-            ContentDetailTopBar(title: "Post", onBack: showsBack ? onBack : nil, action: nil)
+            ContentDetailTopBar(title: "Post", onBack: showsBack ? { onBack() } : nil, action: nil)
             EmptyState(
                 icon: .alertCircle,
                 headline: "Couldn't load this post",
