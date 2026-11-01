@@ -102,6 +102,7 @@ public struct FeedView: View {
     init(
         viewModel: PulseFeedViewModel? = nil,
         mapViewModel: FeedMapViewModel? = nil,
+        contextBarViewModel: FeedContextBarViewModel? = nil,
         viewMode: Binding<FeedViewMode>? = nil,
         onOpenPost: @escaping @MainActor (String) -> Void = { _ in },
         onCompose: @escaping @MainActor (PulseIntent) -> Void = { _ in },
@@ -121,7 +122,7 @@ public struct FeedView: View {
         _mapViewModel = State(initialValue: map)
         // The feed's area callback references the context bar weakly. A new
         // area moves the map too.
-        _contextBarViewModel = State(initialValue: FeedContextBarViewModel {
+        _contextBarViewModel = State(initialValue: contextBarViewModel ?? FeedContextBarViewModel {
             Task { await resolved.refresh() }
             Task { await map.followChosenArea() }
         })

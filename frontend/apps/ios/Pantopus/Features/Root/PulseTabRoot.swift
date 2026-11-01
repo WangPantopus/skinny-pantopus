@@ -46,10 +46,11 @@ public struct PulseTabRoot: View {
     /// The quiet-state card's meter, held here so a pull to refresh re-reads
     /// it with the feed (as a pull on the old Nearby door did).
     @State private var neighborhood = NeighborhoodViewModel()
-    /// The October 13 feed's models and its List / Map, kept while a fold moves the feed between the stack and
-    /// the two columns.
+    /// The October 13 feed's models (posts and filters, map, viewing area) and its List / Map, kept while a fold
+    /// moves the feed between the stack and the two columns.
     @State private var feed: PulseFeedViewModel
     @State private var feedMap: FeedMapViewModel
+    @State private var feedArea: FeedContextBarViewModel
     @State private var feedViewMode = FeedViewMode.list
 
     /// Starts adding a home (the quiet card's "Set up a home"), in the Place tab.
@@ -70,8 +71,14 @@ public struct PulseTabRoot: View {
         self.onClose = onClose
         self.header = header
         let feed = PulseFeedViewModel()
+        let feedMap = FeedMapViewModel(surface: feed.surface)
         _feed = State(initialValue: feed)
-        _feedMap = State(initialValue: FeedMapViewModel(surface: feed.surface))
+        _feedMap = State(initialValue: feedMap)
+        // The viewing area above the feed, as `FeedView` makes it: a new area refetches the feed and moves the map.
+        _feedArea = State(initialValue: FeedContextBarViewModel {
+            Task { await feed.refresh() }
+            Task { await feedMap.followChosenArea() }
+        })
     }
 
     private var currentUserId: String {
@@ -155,6 +162,7 @@ public struct PulseTabRoot: View {
             FeedView(
                 viewModel: feed,
                 mapViewModel: feedMap,
+                contextBarViewModel: feedArea,
                 viewMode: $feedViewMode,
                 onOpenPost: { postId in
                     path.open(.post(postId: postId), sideBySide: isSideBySide)
