@@ -12,6 +12,7 @@ import UIKit
 
 /// Single row in the chat list.
 public struct ConversationRow: View {
+    @Environment(\.selectedConversationRowId) private var selectedRowId
     private let content: ConversationRowContent
     private let onTap: @MainActor () -> Void
 
@@ -53,13 +54,20 @@ public struct ConversationRow: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier("conversationRow_\(content.id)")
+    }
+
+    /// Open beside the list on a wide screen.
+    private var isSelected: Bool {
+        selectedRowId == content.id
     }
 
     private var rowBackground: some View {
         Group {
-            if content.pinned {
+            if isSelected {
+                Theme.Color.primary100
+            } else if content.pinned {
                 Theme.Color.primary50.opacity(0.5)
             } else {
                 Theme.Color.appSurface

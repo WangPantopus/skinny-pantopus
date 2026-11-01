@@ -11,93 +11,11 @@ import SwiftUI
 
 // swiftlint:disable cyclomatic_complexity multiple_closures_with_trailing_closure
 
-/// Typed routes within the Inbox tab's NavigationStack.
-public enum InboxRoute: Hashable {
-    case conversation(InboxConversationDestination)
-    case compose
-    case search
-    case composeGig(category: String)
-    case composeListing
-    case composePost(intent: String)
-    /// An assistant draft opened in the Pulse composer with its text and
-    /// every other field it carries (event, deal, Lost & Found, Heads Up).
-    case composePostDraft(PulseComposeDraft)
-    /// An assistant Support Train card opened in the start wizard with its story.
-    case startSupportTrain(story: String)
-    /// A person's public profile, opened from a DM header.
-    case publicProfile(userId: String)
-    /// A post opened from a profile's Posts tab.
-    case post(postId: String)
-    /// One of your own posts, edited from its page.
-    case editPost(postId: String)
-}
-
-/// Routing payload for a conversation push — captures the mode the
-/// view-model needs (room id / other-user id / AI sentinel) plus
-/// header presentation data derived from the chat-list row.
-public struct InboxConversationDestination: Hashable, Sendable {
-    public enum Mode: Hashable, Sendable {
-        case room(id: String)
-        case person(otherUserId: String)
-        case ai
-    }
-
-    public let mode: Mode
-    /// Presentation mode for the conversation chrome. `.aiAssistant` for
-    /// the Ask Pantopus thread; `.dm` for human DMs/groups.
-    public let kind: ChatConversationMode
-    public let displayName: String
-    public let initials: String
-    public let identityKind: String?
-    public let verified: Bool
-    public let initialTopic: ChatInitialTopic?
-    /// Message to scroll to on open (set when arriving from Chat Search
-    /// with a body match). `nil` opens the conversation at the latest
-    /// message.
-    public let scrollToMessageId: String?
-    /// For gig-room rows: the backing gig id (unified-conversations
-    /// `gig_id`), so the thread can pin the gig context strip.
-    public let gigId: String?
-    /// The room a chat link named when it opened as a person thread, so the
-    /// link's arrival still completes for that room.
-    public let arrivalRoomId: String?
-    /// Explicit business-inbox context; ordinary chats keep the person's identity.
-    public let asBusinessUserId: String?
-    /// The assistant thread opened at a brief or nudge (`pantopus://assistant?nudge=`).
-    public let assistantNudge: AIAssistantNudge?
-
-    public init(
-        mode: Mode,
-        kind: ChatConversationMode = .dm,
-        displayName: String,
-        initials: String,
-        identityKind: String?,
-        verified: Bool,
-        scrollToMessageId: String? = nil,
-        initialTopic: ChatInitialTopic? = nil,
-        gigId: String? = nil,
-        arrivalRoomId: String? = nil,
-        asBusinessUserId: String? = nil,
-        assistantNudge: AIAssistantNudge? = nil
-    ) {
-        self.mode = mode
-        self.kind = kind
-        self.displayName = displayName
-        self.initials = initials
-        self.identityKind = identityKind
-        self.verified = verified
-        self.scrollToMessageId = scrollToMessageId
-        self.initialTopic = initialTopic
-        self.gigId = gigId
-        self.arrivalRoomId = arrivalRoomId
-        self.asBusinessUserId = asBusinessUserId
-        self.assistantNudge = assistantNudge
-    }
-}
-
 /// NavigationStack wrapper for the Inbox tab.
 public struct InboxTabRoot: View {
     @Environment(AuthManager.self) private var auth
+    /// Regular width (the iPhone Duo open) puts the list and the open conversation side by side.
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var path = RouteStack<InboxRoute>()
     @State private var router = DeepLinkRouter.shared
     /// P6.6 — "Invite to Pantopus" opens the system share sheet with the
@@ -107,22 +25,25 @@ public struct InboxTabRoot: View {
     public init() {}
 
     public var body: some View {
-        NavigationStack(path: navigationPathBinding) {
-            ChatListView(
-                onOpenConversation: { row in
-                    ChatPerformance.signposter.emitEvent("ThreadTap")
-                    path.append(.conversation(destination(from: row)))
-                },
-                onCompose: { path.append(.compose) },
-                onOpenSearch: { path.append(.search) }
-            )
-            .readableColumn()
-            .toolbar(.hidden, for: .navigationBar)
-            .swipesBackFromEdge()
-            .navigationDestination(for: InboxRoute.self) { route in
-                destination(for: route)
-                    .readableColumn()
-                    .toolbar(.hidden, for: .navigationBar)
+        Group {
+            if isSideBySide {
+                InboxSplitView(
+                    path: $path,
+                    list: { chatList(onEmptyChange: $0) },
+                    destination: { destination(for: $0) }
+                )
+            } else {
+                NavigationStack(path: navigationPathBinding) {
+                    chatList()
+                        .readableColumn()
+                        .toolbar(.hidden, for: .navigationBar)
+                        .swipesBackFromEdge()
+                        .navigationDestination(for: InboxRoute.self) { route in
+                            destination(for: route)
+                                .readableColumn()
+                                .toolbar(.hidden, for: .navigationBar)
+                        }
+                }
             }
         }
         .onChange(of: router.pending) { _, pending in
@@ -199,7 +120,7 @@ public struct InboxTabRoot: View {
             let viewerId = currentUserId
             Task { @MainActor in
                 let destination = await Self.linkedConversation(roomId: id, viewerId: viewerId)
-                path.append(.conversation(destination))
+                path.open(.conversation(destination), sideBySide: isSideBySide)
             }
         case let .assistant(nudgeId, conversationId):
             _ = router.consume()
@@ -314,10 +235,10 @@ public struct InboxTabRoot: View {
             ChatSearchView(
                 viewModel: ChatSearchViewModel(
                     onOpenResult: { result in
-                        Task { @MainActor in path.append(.conversation(destination(from: result))) }
+                        Task { @MainActor in path.open(.conversation(destination(from: result)), sideBySide: isSideBySide) }
                     },
                     onCancel: {
-                        Task { @MainActor in if !path.isEmpty { path.removeLast() } }
+                        Task { @MainActor in path.closeSearch(sideBySide: isSideBySide) }
                     }
                 )
             )
@@ -424,6 +345,26 @@ public struct InboxTabRoot: View {
     }
 }
 
+// MARK: - Chat list
+
+private extension InboxTabRoot {
+    var isSideBySide: Bool {
+        horizontalSizeClass == .regular
+    }
+
+    func chatList(onEmptyChange: @escaping @MainActor (Bool) -> Void = { _ in }) -> some View {
+        ChatListView(
+            onOpenConversation: { row in
+                ChatPerformance.signposter.emitEvent("ThreadTap")
+                path.open(.conversation(destination(from: row)), sideBySide: isSideBySide)
+            },
+            onCompose: { path.open(.compose, sideBySide: isSideBySide) },
+            onOpenSearch: { path.openSearch(sideBySide: isSideBySide) },
+            onEmptyChange: onEmptyChange
+        )
+    }
+}
+
 // MARK: - Pantopus AI draft destinations
 
 private extension InboxTabRoot {
@@ -440,6 +381,10 @@ private extension InboxTabRoot {
             verified: false,
             assistantNudge: nudge
         )
+        guard !isSideBySide else {
+            path.open(.conversation(destination), sideBySide: true)
+            return
+        }
         if case let .conversation(top)? = path.last, top.mode == .ai { path.removeLast() }
         path.append(.conversation(destination))
     }
