@@ -5034,6 +5034,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             if (navController.currentBackStackEntry?.id != profileEntry.id) return@openPost
                             navController.navigate(ChildRoutes.pulsePost(postId))
                         },
+                        // Your own profile offers Edit profile where others see Connect and Message.
+                        onEditProfile = editProfile@{
+                            if (navController.currentBackStackEntry?.id != profileEntry.id) return@editProfile
+                            navController.navigate(ChildRoutes.EDIT_PROFILE)
+                        },
                     )
                 }
                 composable(

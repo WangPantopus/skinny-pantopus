@@ -1,4 +1,4 @@
-@file:Suppress("MagicNumber", "PackageNaming", "LongMethod", "LongParameterList")
+@file:Suppress("MagicNumber", "PackageNaming", "LongMethod", "LongParameterList", "TooManyFunctions")
 
 package app.pantopus.android.ui.screens.profile
 
@@ -9,6 +9,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -29,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -39,8 +43,12 @@ import androidx.compose.ui.unit.sp
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.ui.components.BeaconBanner
 import app.pantopus.android.ui.components.BeaconIdentity
+import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCard
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
+import app.pantopus.android.ui.screens.profile.tabs.ProfileGigReviewsSection
+import app.pantopus.android.ui.screens.profile.tabs.ProfileGigsSection
+import app.pantopus.android.ui.screens.profile.tabs.ProfilePortfolioSection
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridStyle
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridWithViewer
 import app.pantopus.android.ui.theme.PantopusColors
@@ -420,6 +428,8 @@ fun PublicProfilePostsFeed(
      */
     pulseCards: List<PulsePostCardContent>? = null,
     cardActions: ProfilePostCardActions = ProfilePostCardActions(),
+    /** Your own profile: the empty card offers no message. */
+    isOwnProfile: Boolean = false,
 ) {
     val cards = pulseCards.takeIf { kind == PublicProfileKind.Local }
     if (cards?.isEmpty() ?: posts.isEmpty()) {
@@ -429,6 +439,7 @@ fun PublicProfilePostsFeed(
             localName = localName,
             loadFailed = loadFailed,
             hiddenByBlock = hiddenByBlock,
+            isOwnProfile = isOwnProfile,
             modifier = Modifier.padding(horizontal = Spacing.s4),
         )
     } else if (cards != null) {
@@ -457,23 +468,29 @@ fun PublicProfilePostsFeed(
     }
 }
 
-/** Full-width rows as in Pulse: the same card, its controls, and the same post page behind a tap. */
+/**
+ * Full-width rows as in Pulse: the same card, its controls, and the same post page behind a tap. The redesigned
+ * profile drops the "RECENT POSTS" heading ([showHeading]): its Posts tab already names them.
+ */
 @Composable
-private fun ProfilePulseCards(
+internal fun ProfilePulseCards(
     cards: List<PulsePostCardContent>,
     actions: ProfilePostCardActions,
+    showHeading: Boolean = true,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().testTag("publicProfilePulsePosts"),
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
-        Text(
-            text = "RECENT POSTS",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = PantopusColors.appTextSecondary,
-            modifier = Modifier.padding(horizontal = Spacing.s4).semantics { heading() },
-        )
+        if (showHeading) {
+            Text(
+                text = "RECENT POSTS",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.appTextSecondary,
+                modifier = Modifier.padding(horizontal = Spacing.s4).semantics { heading() },
+            )
+        }
         Column(modifier = Modifier.fillMaxWidth()) {
             Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(PantopusColors.appBorderSubtle))
             cards.forEach { card ->
@@ -507,54 +524,59 @@ private fun postsCardCopy(
     loadFailed: Boolean,
     localName: String?,
     hiddenByBlock: Boolean = false,
+    isOwnProfile: Boolean = false,
 ): PostsCardCopy {
-    if (loadFailed) {
-        return PostsCardCopy(
-            icon = PantopusIcon.AlertCircle,
-            headline = "Couldn't load posts",
-            body = "Check your connection and try again.",
-            ctaLabel = "Try again",
-            ctaIcon = PantopusIcon.RefreshCw,
-        )
-    }
-    if (persona) {
-        return PostsCardCopy(
-            icon = PantopusIcon.RadioTower,
-            headline = "No broadcasts yet",
-            body = "Be the first to follow — you'll get a ping the moment they go live.",
-            ctaLabel = "Follow",
-            ctaIcon = PantopusIcon.Plus,
-        )
-    }
     // A21.2 names the neighbour when we know them ("No posts yet from
     // Priya. …"); without a name we fall back to the neutral sentence
-    // rather than printing an empty gap. Nothing says when they moved in:
-    // the profile doesn't know.
+    // rather than printing an empty gap.
     val firstName = localName?.split(" ")?.firstOrNull()?.takeIf { it.isNotEmpty() }
-    if (hiddenByBlock) {
-        return PostsCardCopy(
-            icon = PantopusIcon.EyeOff,
-            headline = "Posts hidden",
-            body =
-                "You blocked ${firstName ?: "this person"}. " +
-                    "Neither of you sees the other's posts while the block is on.",
-            ctaLabel = null,
-            ctaIcon = PantopusIcon.EyeOff,
-        )
+    return when {
+        loadFailed ->
+            PostsCardCopy(
+                icon = PantopusIcon.AlertCircle,
+                headline = "Couldn't load posts",
+                body = "Check your connection and try again.",
+                ctaLabel = "Try again",
+                ctaIcon = PantopusIcon.RefreshCw,
+            )
+        persona ->
+            PostsCardCopy(
+                icon = PantopusIcon.RadioTower,
+                headline = "No broadcasts yet",
+                body = "Be the first to follow — you'll get a ping the moment they go live.",
+                ctaLabel = "Follow",
+                ctaIcon = PantopusIcon.Plus,
+            )
+        hiddenByBlock ->
+            PostsCardCopy(
+                icon = PantopusIcon.EyeOff,
+                headline = "Posts hidden",
+                body =
+                    "You blocked ${firstName ?: "this person"}. " +
+                        "Neither of you sees the other's posts while the block is on.",
+                ctaLabel = null,
+                ctaIcon = PantopusIcon.EyeOff,
+            )
+        // Nobody messages themselves (#3092): your own empty profile offers no message.
+        isOwnProfile ->
+            PostsCardCopy(
+                icon = PantopusIcon.Home,
+                headline = "Quiet for now",
+                body = "You haven't shared any posts on your profile yet.",
+                ctaLabel = null,
+                ctaIcon = PantopusIcon.MessageSquare,
+            )
+        else ->
+            PostsCardCopy(
+                icon = PantopusIcon.Home,
+                headline = "Quiet for now",
+                body =
+                    firstName?.let { "No posts yet from $it. Say hi or send a message to break the ice." }
+                        ?: "No posts yet — say hi or send a message to break the ice.",
+                ctaLabel = "Send a message",
+                ctaIcon = PantopusIcon.MessageSquare,
+            )
     }
-    val body =
-        if (firstName != null) {
-            "No posts yet from $firstName. Say hi or send a message to break the ice."
-        } else {
-            "No posts yet — say hi or send a message to break the ice."
-        }
-    return PostsCardCopy(
-        icon = PantopusIcon.Home,
-        headline = "Quiet for now",
-        body = body,
-        ctaLabel = "Send a message",
-        ctaIcon = PantopusIcon.MessageSquare,
-    )
 }
 
 /**
@@ -571,6 +593,7 @@ private fun BeaconPostsEmptyState(
     localName: String? = null,
     loadFailed: Boolean = false,
     hiddenByBlock: Boolean = false,
+    isOwnProfile: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val persona = kind == PublicProfileKind.Persona
@@ -578,7 +601,7 @@ private fun BeaconPostsEmptyState(
     val accent = if (persona) PantopusColors.primary600 else PantopusColors.home
     // A Local profile the viewer blocked (a failed load still says so first).
     val hidden = hiddenByBlock && !loadFailed && !persona
-    val copy = postsCardCopy(persona, loadFailed, localName, hidden)
+    val copy = postsCardCopy(persona, loadFailed, localName, hidden, isOwnProfile)
 
     Column(
         modifier =
@@ -657,32 +680,25 @@ private fun BeaconPostsEmptyState(
     }
 }
 
-// MARK: - A21.2 Local tab strip
+// MARK: - Tabs: Posts · About · Work
 
 /**
- * Underline-active tab strip for the Local Beacon profile archetype
- * (Posts · About · Portfolio · Gigs · Reviews). Mirrors the design's
- * `TabStrip` — and iOS `LocalProfileTabStrip` — so both platforms read
- * identically. Scrolls horizontally so the marketplace tabs survive the
- * larger font scales.
- *
- * [reviewCount] badges the Reviews tab the way [postCount] badges Posts;
- * `null` hides the badge.
+ * Posts · About, and Work only when [tabs] includes it. The strip scrolls sideways when large text makes it
+ * wider than the screen, and each tab is a 48 dp target.
  */
 @Composable
 fun LocalProfileTabStrip(
-    postCount: Int?,
+    tabs: List<LocalProfileTab>,
+    postCount: String?,
     selected: LocalProfileTab,
     onSelect: (LocalProfileTab) -> Unit,
-    reviewCount: Int? = null,
 ) {
     Column(modifier = Modifier.fillMaxWidth().testTag("publicProfileLocalTabStrip")) {
         Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s6),
+            modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = Spacing.s5),
+            horizontalArrangement = Arrangement.spacedBy(28.dp),
         ) {
-            // Launch cut #4 (Open Gigs): no Gigs tab.
-            LocalProfileTab.entries.filter { it != LocalProfileTab.Gigs || LaunchFeatures.openGigs }.forEach { tab ->
+            tabs.forEach { tab ->
                 val active = tab == selected
                 Column(
                     modifier =
@@ -693,32 +709,26 @@ fun LocalProfileTabStrip(
                             // Pinning the column to its label's intrinsic width
                             // restores it, matching iOS's `VStack` sizing.
                             .width(IntrinsicSize.Max)
-                            .clickable { onSelect(tab) }
-                            .testTag("publicProfileLocalTab_${tab.name.lowercase()}")
-                            .semantics { contentDescription = tab.label },
+                            .selectable(selected = active, role = Role.Tab, onClick = { onSelect(tab) })
+                            .testTag("publicProfileLocalTab_${tab.name.lowercase()}"),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Row(
-                        modifier = Modifier.padding(vertical = Spacing.s2),
+                        modifier = Modifier.heightIn(min = 46.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Text(
                             text = tab.label,
-                            fontSize = 13.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (active) PantopusColors.primary700 else PantopusColors.appTextSecondary,
+                            color = if (active) PantopusColors.appText else PantopusColors.appTextMuted,
                         )
-                        val badge =
-                            when (tab) {
-                                LocalProfileTab.Posts -> postCount
-                                LocalProfileTab.Reviews -> reviewCount
-                                else -> null
-                            }
-                        if (badge != null) {
+                        if (tab == LocalProfileTab.Posts && postCount != null) {
                             Text(
-                                text = "$badge",
-                                fontSize = 10.5.sp,
+                                text = postCount,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium,
                                 color = PantopusColors.appTextMuted,
                             )
                         }
@@ -733,56 +743,421 @@ fun LocalProfileTabStrip(
                 }
             }
         }
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(PantopusColors.appBorder),
-        )
+        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(PantopusColors.appBorder))
     }
 }
 
-// MARK: - A21.2 Local About tab
+// MARK: - Posts tab
 
 /**
- * About tab of the Local Beacon profile. Carries the neighbourhood
- * substance the older four-tab neighbour layout spread across
- * About / Reviews / Verifications, so nothing is lost when the designed
- * two-tab archetype takes over.
+ * The Posts tab: Pulse cards, or one card that makes an empty profile look intentional: "<name> just joined"
+ * (joined in the last 14 days) or "No posts yet", both with Say hi. Your own profile offers no Say hi (#3092),
+ * a block says the posts are hidden, and a failed read offers Try again.
  */
 @Composable
-fun LocalProfileAboutSection(content: NeighborProfileContent) {
-    Column(modifier = Modifier.fillMaxWidth().testTag("publicProfileLocalAbout")) {
-        NeighborSectionTitle("Bio")
-        Text(
-            text = content.bio ?: "No bio yet",
-            fontSize = 13.5.sp,
-            color = if (content.bio == null) PantopusColors.appTextSecondary else PantopusColors.appTextStrong,
-            lineHeight = 20.sp,
-        )
-        if (content.skills.isNotEmpty()) {
-            NeighborSectionTitle("Helps with")
-            NeighborSkillChips(content.skills)
+internal fun LocalProfilePosts(
+    cards: List<PulsePostCardContent>,
+    actions: ProfilePostCardActions,
+    firstName: String,
+    joinedRecently: Boolean,
+    isOwnProfile: Boolean,
+    loadFailed: Boolean,
+    hiddenByBlock: Boolean,
+    onSayHi: () -> Unit,
+    onRetry: () -> Unit,
+    loading: Boolean = false,
+) {
+    if (cards.isNotEmpty() && !hiddenByBlock) {
+        ProfilePulseCards(cards = cards, actions = actions, showHeading = false)
+        return
+    }
+    // The first read is still running: placeholders, never a "No posts yet" that turns out wrong.
+    if (loading && !hiddenByBlock && !loadFailed) {
+        LocalPostsSkeleton()
+        return
+    }
+    val empty =
+        when {
+            loadFailed ->
+                LocalPostsEmpty(
+                    icon = PantopusIcon.AlertCircle,
+                    headline = "Couldn't load posts",
+                    body = "Check your connection and try again.",
+                    cta = "Try again",
+                    ctaIcon = PantopusIcon.RefreshCw,
+                    tag = "publicProfilePostsFailed",
+                )
+            hiddenByBlock ->
+                LocalPostsEmpty(
+                    icon = PantopusIcon.EyeOff,
+                    headline = "Posts hidden",
+                    body = "You blocked $firstName. Neither of you sees the other's posts while the block is on.",
+                    tag = "publicProfilePostsHidden",
+                )
+            isOwnProfile ->
+                LocalPostsEmpty(
+                    icon = PantopusIcon.Leaf,
+                    headline = "No posts yet",
+                    body = "What you post on Pulse shows up here for neighbors.",
+                    tag = "publicProfilePostsEmpty",
+                )
+            joinedRecently ->
+                LocalPostsEmpty(
+                    icon = PantopusIcon.Leaf,
+                    headline = "$firstName just joined",
+                    body = "No posts yet. A quick hello goes a long way.",
+                    cta = "Say hi",
+                    tag = "publicProfilePostsEmpty",
+                )
+            else ->
+                LocalPostsEmpty(
+                    icon = PantopusIcon.Leaf,
+                    headline = "No posts yet",
+                    body = "$firstName hasn't posted yet. A quick hello goes a long way.",
+                    cta = "Say hi",
+                    tag = "publicProfilePostsEmpty",
+                )
         }
-        NeighborSectionTitle("Verifications")
-        NeighborVerificationLedger(content.verifications)
-        if (content.reviews.isEmpty()) {
-            NeighborSectionTitle("Reviews")
-            NeighborReviewsEmptyCard(content.hero.name)
-        } else {
-            NeighborSectionTitle("Reviews", action = "${content.reviewCount}")
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-                content.reviews.forEach { NeighborReviewCard(it) }
+    LocalPostsEmptyCard(empty = empty, onCta = if (loadFailed) onRetry else onSayHi)
+}
+
+@Composable
+private fun LocalPostsSkeleton() {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.s5)
+                .testTag("publicProfilePostsLoading")
+                .semantics { contentDescription = "Loading posts" },
+        verticalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        repeat(2) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(Radii.xl))
+                        .background(PantopusColors.appSurface)
+                        .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.xl))
+                        .padding(Spacing.s4),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                    Shimmer(width = 32.dp, height = 32.dp, cornerRadius = Radii.xl)
+                    Shimmer(width = 140.dp, height = 14.dp, cornerRadius = Radii.sm)
+                }
+                Shimmer(width = 280.dp, height = 14.dp, cornerRadius = Radii.sm)
+                Shimmer(width = 200.dp, height = 14.dp, cornerRadius = Radii.sm)
             }
         }
-        content.mutuals?.let {
-            NeighborSectionTitle("Neighbors in common")
-            NeighborMutualsStrip(it)
+    }
+}
+
+private data class LocalPostsEmpty(
+    val icon: PantopusIcon,
+    val headline: String,
+    val body: String,
+    val tag: String,
+    val cta: String? = null,
+    val ctaIcon: PantopusIcon = PantopusIcon.MessageSquare,
+)
+
+@Composable
+private fun LocalPostsEmptyCard(
+    empty: LocalPostsEmpty,
+    onCta: () -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.s5)
+                .clip(RoundedCornerShape(Radii.xl))
+                .background(PantopusColors.appSurface)
+                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.xl))
+                .padding(horizontal = Spacing.s6, vertical = 28.dp)
+                .testTag(empty.tag),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier.size(56.dp).clip(CircleShape).background(PantopusColors.homeBg),
+            contentAlignment = Alignment.Center,
+        ) {
+            PantopusIconImage(icon = empty.icon, contentDescription = null, size = 26.dp, tint = PantopusColors.home)
         }
-        content.welcome?.let {
-            Spacer(Modifier.height(Spacing.s3))
-            NeighborWelcomeCard(it)
+        Text(
+            text = empty.headline,
+            fontSize = 17.sp,
+            lineHeight = 22.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = PantopusColors.appText,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 14.dp).semantics { heading() },
+        )
+        Text(
+            text = empty.body,
+            fontSize = 15.sp,
+            lineHeight = 20.sp,
+            color = PantopusColors.appTextMuted,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 6.dp).widthIn(max = 280.dp),
+        )
+        empty.cta?.let { label ->
+            Row(
+                modifier =
+                    Modifier
+                        .padding(top = 18.dp)
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(Radii.pill))
+                        .border(1.dp, PantopusColors.appBorderStrong, RoundedCornerShape(Radii.pill))
+                        .clickable(role = Role.Button, onClick = onCta)
+                        .padding(horizontal = Spacing.s5, vertical = 10.dp)
+                        .testTag(if (empty.tag == "publicProfilePostsFailed") "publicProfilePostsRetry" else "publicProfilePostsEmptyCTA"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+            ) {
+                PantopusIconImage(icon = empty.ctaIcon, contentDescription = null, size = 18.dp, tint = PantopusColors.appText)
+                Text(text = label, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+            }
+        }
+    }
+}
+
+// MARK: - About tab
+
+/**
+ * About: Helps with, what Pantopus verified in plain words, and links. Never the bio again (it's in the header).
+ * A section with nothing to say is left out; a person with none of them gets one quiet line.
+ */
+@Composable
+fun LocalProfileAboutSection(
+    firstName: String,
+    skills: List<String>,
+    trust: ProfileTrust,
+    emailConfirmed: Boolean,
+    links: List<ProfileLink>,
+    onOpenLink: (String) -> Unit,
+    aroundTheNeighborhood: @Composable () -> Unit = {},
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s5).testTag("publicProfileLocalAbout"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s6),
+    ) {
+        if (skills.isNotEmpty()) {
+            Column {
+                AboutHeading("Helps with")
+                AboutSkillChips(skills)
+            }
+        }
+        aroundTheNeighborhood()
+        val verifiedRows = verifiedRows(firstName, trust, emailConfirmed)
+        if (verifiedRows.isNotEmpty()) {
+            Column {
+                AboutHeading("Verified")
+                AboutCard(tag = "publicProfileAboutVerified") {
+                    verifiedRows.forEachIndexed { index, row ->
+                        if (index > 0) AboutDivider()
+                        AboutRow(row)
+                    }
+                }
+            }
+        }
+        if (links.isNotEmpty()) {
+            Column {
+                AboutHeading("Links")
+                AboutCard(tag = "publicProfileAboutLinks") {
+                    links.forEachIndexed { index, link ->
+                        if (index > 0) AboutDivider()
+                        AboutRow(
+                            AboutRowSpec(
+                                icon = PantopusIcon.Link,
+                                title = link.label,
+                                subtitle = link.display,
+                                onClick = { onOpenLink(link.url) },
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+        if (skills.isEmpty() && verifiedRows.isEmpty() && links.isEmpty()) {
+            Text(
+                text = "$firstName hasn't added anything here yet.",
+                fontSize = 15.sp,
+                lineHeight = 20.sp,
+                color = PantopusColors.appTextMuted,
+                modifier = Modifier.testTag("publicProfileAboutEmpty"),
+            )
+        }
+        Spacer(Modifier.height(Spacing.s5))
+    }
+}
+
+/** One row of an About card; [onClick] makes it a link. */
+internal data class AboutRowSpec(
+    val icon: PantopusIcon,
+    val title: String,
+    val subtitle: String? = null,
+    val iconTint: Color = PantopusColors.appTextSecondary,
+    val iconBg: Color = PantopusColors.appSurfaceSunken,
+    val onClick: (() -> Unit)? = null,
+)
+
+private fun verifiedRows(
+    firstName: String,
+    trust: ProfileTrust,
+    emailConfirmed: Boolean,
+): List<AboutRowSpec> =
+    listOfNotNull(
+        AboutRowSpec(
+            icon = PantopusIcon.ShieldCheck,
+            title = trust.city?.let { "Lives in $it" } ?: "Verified neighbor",
+            subtitle = "Pantopus confirmed $firstName's home. The address itself is never shown.",
+            iconTint = PantopusColors.home,
+            iconBg = PantopusColors.homeBg,
+        ).takeIf { trust.verifiedNeighbor },
+        AboutRowSpec(icon = PantopusIcon.Mail, title = "Email confirmed").takeIf { emailConfirmed },
+    )
+
+@Composable
+internal fun AboutHeading(text: String) {
+    Text(
+        text = text,
+        fontSize = 17.sp,
+        lineHeight = 22.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = PantopusColors.appText,
+        modifier = Modifier.padding(bottom = 10.dp).semantics { heading() },
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AboutSkillChips(skills: List<String>) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().testTag("publicProfileNeighborSkills"),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        skills.forEach { skill ->
+            Text(
+                text = skill,
+                fontSize = 15.sp,
+                lineHeight = 20.sp,
+                color = PantopusColors.appTextStrong,
+                modifier =
+                    Modifier
+                        .clip(RoundedCornerShape(Radii.pill))
+                        .background(PantopusColors.appSurface)
+                        .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.pill))
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
+            )
+        }
+    }
+}
+
+@Composable
+internal fun AboutCard(
+    tag: String,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Radii.xl))
+                .background(PantopusColors.appSurface)
+                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.xl))
+                .testTag(tag),
+    ) {
+        content()
+    }
+}
+
+@Composable
+internal fun AboutDivider() {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 60.dp)
+                .height(1.dp)
+                .background(PantopusColors.appBorder),
+    )
+}
+
+@Composable
+internal fun AboutRow(row: AboutRowSpec) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .then(row.onClick?.let { Modifier.clickable(role = Role.Button, onClick = it) } ?: Modifier)
+                .padding(horizontal = Spacing.s4, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        Box(
+            modifier = Modifier.size(32.dp).clip(CircleShape).background(row.iconBg),
+            contentAlignment = Alignment.Center,
+        ) {
+            PantopusIconImage(icon = row.icon, contentDescription = null, size = 17.dp, tint = row.iconTint)
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = row.title,
+                fontSize = 15.sp,
+                lineHeight = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PantopusColors.appText,
+            )
+            row.subtitle?.let {
+                Text(text = it, fontSize = 13.sp, lineHeight = 18.sp, color = PantopusColors.appTextMuted)
+            }
+        }
+        if (row.onClick != null) {
+            PantopusIconImage(icon = PantopusIcon.ExternalLink, contentDescription = null, size = 16.dp, tint = PantopusColors.appTextMuted)
+        }
+    }
+}
+
+// MARK: - Work tab
+
+/**
+ * Work: the portfolio, reviews and (while Open Gigs is on) gigs that used to be three tabs. Only the parts that
+ * have something show; the tab itself shows only when one does.
+ */
+@Composable
+internal fun LocalProfileWorkSection(
+    userId: String,
+    isOwnProfile: Boolean,
+    work: ProfileWork,
+    onOpenGig: (String) -> Unit,
+    onOpenProfile: (String) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s5).testTag("publicProfileWork"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s6),
+    ) {
+        if (work.portfolioCount > 0) {
+            Column {
+                AboutHeading("Portfolio")
+                ProfilePortfolioSection(userId = userId, isOwnProfile = isOwnProfile)
+            }
+        }
+        if (work.reviewCount > 0) {
+            Column {
+                AboutHeading("Reviews")
+                ProfileGigReviewsSection(userId = userId, onOpenReviewer = onOpenProfile)
+            }
+        }
+        if (work.gigCount > 0 && LaunchFeatures.openGigs) {
+            Column {
+                AboutHeading("Gigs")
+                ProfileGigsSection(userId = userId, onOpenGig = onOpenGig)
+            }
         }
         Spacer(Modifier.height(Spacing.s5))
     }
