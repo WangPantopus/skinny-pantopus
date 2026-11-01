@@ -621,7 +621,7 @@ Decided October 30 (section 0). Christmas cards are built behind `holiday_cards`
 - **The way in.** At the top of their own Mail, people get "Send a Christmas card".
 - **Five screens.**
   1. Who it's for: a person found by name, or an email address.
-  2. Pick a card: one of your 17 pictures.
+  2. Pick a card: 49 pictures in six collections (below).
   3. Write on the back: a note of up to 300 letters.
   4. Seal it for the day: with the morning mail, sealed until Christmas, or on Christmas morning.
   5. Look it over: exactly what the other person will get. For a person, that's their Mailbox on the day it comes, the sealed notice if it's sealed, the card sliding out of its envelope, and its back. By email, it's the email, the page its link opens, and the card once they join. "Seal and send" is only here.
@@ -652,7 +652,22 @@ Decided October 30 (section 0). Christmas cards are built behind `holiday_cards`
   - A card by email went through to joining. The email and the page its link opens matched the look word for word. The new person had the card in their Mailbox, and the sender's Sent said "They joined Pantopus and have it".
   - A cold relaunch on both phones and a web reload kept Sent as it was. With both keys off, no app showed Mail, as today.
 - [x] Kept on purpose: the other person's own Mailbox addresses the envelope with their account name ("Maya Ortiz"). Look it over and Sent show the name the sender knows them by ("Maya O."), so a sender never sees anything they didn't already know.
-- [ ] Not checked: real email delivery, pushes on real phones, physical phones, store review, Release builds with `holiday_cards`, screen readers speaking aloud, and cards switched on in staging or production.
+- [x] Follow-ups on October 31 (founder: "Yes, fix them"): the card email's date follows the sender's clock; taking back an emailed card after its 90 days says "They didn’t open the email in 90 days."; "Your Christmas card arrived" and "Your Christmas card came back" open the card in Sent on all three apps; iPhone screen readers read empty screens with one stop ([#3049](https://github.com/WangPantopus/skinny-pantopus/pull/3049), [#3053](https://github.com/WangPantopus/skinny-pantopus/pull/3053), [#3054](https://github.com/WangPantopus/skinny-pantopus/pull/3054)). When the server can't show the look, step 4 says so and still offers "Seal and send" ([#3055](https://github.com/WangPantopus/skinny-pantopus/pull/3055)).
+- [x] Collections, asked for on October 31 ("each group of pictures here should have their own category"). "Pick a card" shows a row of collection names that scrolls sideways (on a computer screen it wraps), one line about the chosen collection, and its pictures in the same grid as before. The step opens on the first collection, or on the one holding the card already chosen, and switching keeps the chosen card. Nothing else changes, and a collection's name never shows on a card. Built one PR per part: the server ([#3060](https://github.com/WangPantopus/skinny-pantopus/pull/3060)), the web ([#3061](https://github.com/WangPantopus/skinny-pantopus/pull/3061)), iPhone ([#3066](https://github.com/WangPantopus/skinny-pantopus/pull/3066)) and Android ([#3067](https://github.com/WangPantopus/skinny-pantopus/pull/3067)). There are no new tables, no migration and no new key.
+  - Christmas as a Kid: your first 17 ("For families with kids, and anyone who misses being one.").
+  - Christmas with Friends: 7 ("For the friends who feel like family."), including "One more movie, like always." and "Good friends. Questionable wrapping skills.", moved here from Love Stories at your word.
+  - Christmas Love Stories: 7 ("For the one you love, near or far.").
+  - Christmas in Your Twenties: 6 ("For first apartments, old roommates and long trips home.").
+  - Christmas Memories: 6 ("For anyone who misses the little things.").
+  - Christmas at Grandma’s House: 6 ("For grandparents, and the grandkids who still come home.").
+  - The 32 new pictures were prepared like the first 17: the printed caption strip cut off, the caption read from it, and the paper colour taken from the border. They are numbered 18 to 49, so the first 17 and their stamps never change. They live on the website (pantopus.com/holiday-cards/). The phones keep the first 17 inside the app and load any other picture from the website, keeping it so it still shows offline. A new collection needs only a server and website update, not new store builds.
+- [x] The check across the three apps for collections (October 31, against a local backend), with a new-picture card sent from each app and opened first on another. Each picture loaded from the website and slid out of its envelope with its caption, postmark and stamp:
+  - web → iPhone ("One more movie, like always.");
+  - iPhone → Android ("My favorite place is beside you.");
+  - Android → web ("One more piece before bed.").
+
+  Each app showed the six collections with their pictures. A cold relaunch on both phones and a web reload kept the cards opened and Sent as it was. Each build session also checked its own app: the phones still showed the pictures they had loaded once the website was unreachable, and with the keys off no app showed Mail, as today.
+- [ ] Not checked: real email delivery, pushes on real phones, physical phones, store review, Release builds with `holiday_cards`, screen readers speaking aloud, pictures loading over a slow or metered phone connection, and cards switched on in staging or production.
 - [ ] Yours, to switch cards on. Mail goes on first (the Mail section above). How to set each key is in the [flags doc](docs/launch-scope-flags-2026-10-01.md#switching-a-feature-back-on).
   - [ ] Store builds by about December 1, so both stores approve by about December 10. Set the Actions variable `PANTOPUS_LAUNCH_FEATURES` to `mailbox,holiday_cards`, then cut and submit the iOS and Android builds and hold them for manual release. Both apps know the key, so the builds accept it.
   - [ ] On the day: release the apps. Then add `holiday_cards` to the production server's `LAUNCH_FEATURES` and to Vercel's `NEXT_PUBLIC_LAUNCH_FEATURES`, and redeploy the web. Someone still on an older app sees a card as a plain letter; a sealed one says it opens on Christmas morning and stays shut.
