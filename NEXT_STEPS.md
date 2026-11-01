@@ -234,6 +234,18 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] 20 email invitations a plan to start. Also 60 invitations a plan, 40 emails a host a day and 5 a day to one address from all hosts together.
 - [x] The email shows only the plan's card (what, when, the area; a playdate leaves out its title), never an address: one email per invitation, no reminders, and a "Don't send me invitations" link. Signing up with the invited address opens the plan. A forwarded email becomes an ordinary ask the host answers, and the host never learns whether an address has an account.
 
+**Made by the founder on November 1 (profiles).** You sent Codex's audit of the profile screens and asked for profiles better than TikTok's, LinkedIn's, Facebook's and Instagram's. You then approved the [drawings](https://claude.ai/artifact/ByuVNev7ZD83Qx45CvFqGs) ("Draw the sample", "Draw the rest") and the [build plan](https://claude.ai/artifact/QEj1mjiuiuVXhWywoWKjMC) ("Yes, start the build"); both pages are private. Progress is in the Profiles section below.
+
+- [x] A profile shows who this neighbor is and what you have in common, not how many followers they have. It has:
+  - the name neighbors see, with "Verified neighbor · city · Joined";
+  - a tagline and bio;
+  - one button for the relationship;
+  - "You and <name>", built from real common ground;
+  - up to three prompts and up to three pinned posts;
+  - then Posts and About.
+- [x] Your own profile is the page neighbors see, with Edit profile and Preview as. Your account name stays private, only you see the tips, and one editor holds the name and photo neighbors see.
+- [x] Two additive database changes, `User.profile_prompts` and `Post.profile_pinned_at`, and no new tables. There is no on/off key: each app switched as its PRs merged. Codex's draft [#3092](https://github.com/WangPantopus/skinny-pantopus/pull/3092) (no Message on your own profile) was folded into the phone builds and closed.
+
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
@@ -657,6 +669,42 @@ Decided October 30 (section 0). Christmas cards are built behind `holiday_cards`
   - [ ] Store builds by about December 1, so both stores approve by about December 10. Set the Actions variable `PANTOPUS_LAUNCH_FEATURES` to `mailbox,holiday_cards`, then cut and submit the iOS and Android builds and hold them for manual release. Both apps know the key, so the builds accept it.
   - [ ] On the day: release the apps. Then add `holiday_cards` to the production server's `LAUNCH_FEATURES` and to Vercel's `NEXT_PUBLIC_LAUNCH_FEATURES`, and redeploy the web. Someone still on an older app sees a card as a plain letter; a sealed one says it opens on Christmas morning and stays shut.
   - [ ] After December 31 sending closes by itself and the "Send a Christmas card" row hides itself. You can take `holiday_cards` off again in January; cards people received stay in their Mail, still shown as cards.
+
+## Profiles (added November 1)
+
+Decided November 1 (section 0). Four sessions built it in parallel on November 1, one each for the server, iPhone, Android and web, from the drawings and the build plan. There is no on/off key. The server is in production and the web has the new profiles now; phones get them with the next store builds.
+
+- **Someone else's profile.** The header, then one button for where you stand: Connect, Requested, Accept or Connected. The Connect sheet takes an optional note, which arrives in their notification, or lets you just follow their posts.
+  - "You and Rowan" shows up to two lines of common ground: a plan you're both in, a Support Train you both help with, people you both know, or skills you share.
+  - Then up to three prompts, up to three pinned posts, and Posts and About.
+  - About adds "Around the neighborhood": the Support Trains they helped, the plans they hosted, and how often neighbors marked their posts helpful.
+  - A brand-new neighbor's profile says "Jordan just joined", with Say hi.
+- **Your own profile.** The same page, with Edit profile and Preview as on the first screen. Preview shows exactly what each audience gets: anyone with the link, neighbors, or your connections. Anyone with the link sees no posts ("Posts are for neighbors").
+- **The editor.** It has two parts, "Neighbors see this" and "Only you see this", with a preview card that updates as you type. The name and photo neighbors see moved into it from Privacy. Prompts and pins are edited here too.
+
+- [x] Server: what you have in common, the "Around the neighborhood" counts and Preview as ([#3098](https://github.com/WangPantopus/skinny-pantopus/pull/3098)); prompts and profile pins ([#3099](https://github.com/WangPantopus/skinny-pantopus/pull/3099)). Both are in production since the morning of November 1. Deploy Backend applied both migrations, `20261101103700_user_profile_prompts` and `20261101103800_post_profile_pinned_at`. Block in the app now also hides a person's posts on their profile, as it already did in the feeds.
+- [x] Web: [#3100](https://github.com/WangPantopus/skinny-pantopus/pull/3100), [#3101](https://github.com/WangPantopus/skinny-pantopus/pull/3101), [#3106](https://github.com/WangPantopus/skinny-pantopus/pull/3106), [#3108](https://github.com/WangPantopus/skinny-pantopus/pull/3108), [#3112](https://github.com/WangPantopus/skinny-pantopus/pull/3112). iPhone: [#3107](https://github.com/WangPantopus/skinny-pantopus/pull/3107), [#3109](https://github.com/WangPantopus/skinny-pantopus/pull/3109), [#3110](https://github.com/WangPantopus/skinny-pantopus/pull/3110), [#3111](https://github.com/WangPantopus/skinny-pantopus/pull/3111), [#3115](https://github.com/WangPantopus/skinny-pantopus/pull/3115). Android: [#3102](https://github.com/WangPantopus/skinny-pantopus/pull/3102), [#3114](https://github.com/WangPantopus/skinny-pantopus/pull/3114), [#3117](https://github.com/WangPantopus/skinny-pantopus/pull/3117), [#3118](https://github.com/WangPantopus/skinny-pantopus/pull/3118), [#3119](https://github.com/WangPantopus/skinny-pantopus/pull/3119).
+- [x] Each app was checked against a shared local backend with made-up people:
+  - a stranger, a connection, someone with a pending request, a new neighbor, and signed out;
+  - Connect with and without a note, follow, accept, decline, withdraw, disconnect, block and unblock;
+  - the owner page and every Preview as audience;
+  - editor saves that stay after a relaunch;
+  - prompts and pins, including the refusal of a fourth pin;
+  - the largest text size, dark mode on iPhone and the web, and slow and failed reads.
+- [x] The final check across the three apps (November 1, on master, against the shared local backend). Each person looked the same on all three:
+  - a neighbor's view of Rowan: the header, "You and Rowan" (a plan and a Support Train), her three prompts, two pins (the connections-only pin hidden), 8 posts, and About;
+  - a connection's view: three pins and 10 posts;
+  - Rowan's own page;
+  - Preview as anyone with the link, which matched the signed-out web page line for line;
+  - Jordan's empty profile.
+
+  A tagline saved on iPhone showed on the web, and one saved on Android showed on iPhone; each change was still there after a relaunch. Pages read well at iPhone's largest text, in dark mode on iPhone, and at Android's font scale 2.0.
+- [ ] Follow-ups, separate from this build:
+  - On all three apps, a plan's post shows its time 8 hours off on the event card: Rowan's 9 AM walk reads 5:00 PM. The card reads plan times the way it reads times typed in the post composer. The bug is older than this build, but a host's plan is now the first post on their own profile.
+  - The same count has different names on each app. A pinned event says "2 going" on the phones and "2 helpful" on the web; a pinned win says "4 likes" on iPhone and "4 helpful" elsewhere. Each app's Pulse cards already name reactions their own way. Choose one set of names for Pulse, and the pinned cards follow.
+  - At 200% text on a phone, the web app's top bar runs about 35 px past the screen edge; the profile itself wraps.
+  - At Android's font scale 2.0, the two-letter initials on Pulse cards overflow their circle in every feed.
+- [ ] Not checked: physical phones, production with real accounts, store builds, and screen readers speaking aloud (their reading order and labels were checked instead).
 
 ## Background backlog
 
