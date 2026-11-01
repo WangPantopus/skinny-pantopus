@@ -168,8 +168,8 @@ struct ProfileTogetherSection: View {
         let disc = min(scaledDisc, 44)
         let faces = lines.map { line in
             if case let .people(people, more) = line.leading { people.count + (more > 0 ? 1 : 0) } else { 1 }
-        }.max() ?? 1
-        return disc + CGFloat(max(faces, 1) - 1) * disc * 2 / 3
+        }
+        return disc + CGFloat(max(faces.max() ?? 1, 1) - 1) * disc * 2 / 3
     }
 
     /// The hairline starts where the sentences do.
