@@ -618,7 +618,7 @@ class PublicProfileViewModel
                             _connectState.value = PublicProfileActionState.Idle
                             // The row moved (withdrawn / already handled) —
                             // re-read the edge rather than leave the button lying.
-                            loadRelationship(userId)
+                            reloadAfterConnectionChange()
                             _toastMessage.value = "That request is no longer pending."
                             return@launch
                         }
@@ -627,6 +627,7 @@ class PublicProfileViewModel
                                 _connectState.value = PublicProfileActionState.Succeeded
                                 _connection.value = ProfileConnection.Connected
                                 _toastMessage.value = "Connected"
+                                reloadAfterConnectionChange()
                             }
                             is NetworkResult.Failure -> failConnect(accepted.error)
                         }
@@ -652,7 +653,7 @@ class PublicProfileViewModel
                         val match = list.data.relationships.firstOrNull { it.otherUser?.id == userId }
                         if (match == null) {
                             _connectState.value = PublicProfileActionState.Idle
-                            loadRelationship(userId)
+                            reloadAfterConnectionChange()
                             _toastMessage.value = "You're not connected to this neighbor."
                             return@launch
                         }
@@ -661,6 +662,7 @@ class PublicProfileViewModel
                                 _connectState.value = PublicProfileActionState.Idle
                                 _connection.value = ProfileConnection.None
                                 _toastMessage.value = "Connection removed"
+                                reloadAfterConnectionChange()
                             }
                             is NetworkResult.Failure -> failConnect(removed.error)
                         }
@@ -672,6 +674,17 @@ class PublicProfileViewModel
         /** Dismiss the confirm without disconnecting. */
         fun cancelDisconnect() {
             _showDisconnectConfirm.value = false
+        }
+
+        /** Drop the old audience's posts before refreshing, including when the new read fails. */
+        private suspend fun reloadAfterConnectionChange() {
+            repo.forgetPublicProfile(userId)
+            if (!UserSocialRepository.isUuid(routeIdentifier)) social.forgetPublicProfile(routeIdentifier)
+            posts.forgetProfilePosts(userId)
+            postCards.show(emptyList(), postCards.actionRevision)
+            _relationshipLoaded.value = false
+            _state.value = PublicProfileUiState.Loading
+            fetch(force = true)
         }
 
         private fun failConnect(error: NetworkError) {

@@ -69,8 +69,10 @@ class PublicProfileViewModelTest {
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { repo.publicProfileCopy(any()) } returns Stored()
+        every { repo.forgetPublicProfile(any()) } returns Unit
         every { social.publicProfileCopy(any()) } returns Stored()
         every { posts.profilePostsCopy(any()) } returns Stored()
+        every { posts.forgetProfilePosts(any()) } returns Unit
         // The launch cut hides the persona chip and the Gigs count; these tests pin them.
         LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
         // Local-kind profiles pull `GET /api/posts/user/:id`; default the
@@ -252,7 +254,8 @@ class PublicProfileViewModelTest {
             signedInAs("viewer")
             coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             coEvery { social.relationship("u1") } returns
-                NetworkResult.Success(UserRelationshipDto(relationship = "pending_received", following = false))
+                NetworkResult.Success(UserRelationshipDto(relationship = "pending_received", following = false)) andThen
+                NetworkResult.Success(UserRelationshipDto(relationship = "connected", following = false))
             coEvery { relationships.pendingRequests() } returns
                 NetworkResult.Success(
                     PendingRequestsResponse(

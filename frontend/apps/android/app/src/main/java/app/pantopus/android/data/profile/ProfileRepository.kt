@@ -44,6 +44,8 @@ class ProfileRepository
 
         fun publicProfileCopy(id: String): Stored<PublicProfileDto> = store.peek(StoreKeys.publicProfile(id))
 
+        fun forgetPublicProfile(id: String) = store.remove(StoreKeys.publicProfile(id))
+
         /** `GET /api/users/profile` — route `backend/routes/users.js:1962`. */
         suspend fun ownProfile(): NetworkResult<ProfileResponse> =
             ownProfileStored().let { it.data?.let { data -> NetworkResult.Success(data) } ?: it.asResult() }
