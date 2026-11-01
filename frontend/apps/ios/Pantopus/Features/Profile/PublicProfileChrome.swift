@@ -438,6 +438,8 @@ struct PublicProfilePostsFeed: View {
     /// `true` when the viewer blocked this neighbour: a block hides both
     /// people's posts, so the card says so and invites nothing.
     var hiddenByBlock = false
+    /// Owners cannot message themselves from their Local profile.
+    var isOwnProfile = false
     /// The Local profile's posts as Pulse cards (photos, video, links,
     /// Helpful, Save, Repost, the post menu). Nil keeps the plain cards.
     var pulseCards: ProfilePostCardsModel?
@@ -556,7 +558,7 @@ struct PublicProfilePostsFeed: View {
                 .frame(maxWidth: 260)
                 .padding(.top, Spacing.s2)
 
-            if !showsHiddenByBlock {
+            if !showsHiddenByBlock, loadFailed || kind != .local || !isOwnProfile {
                 emptyCTAButton
             }
         }
@@ -636,6 +638,9 @@ struct PublicProfilePostsFeed: View {
         if showsHiddenByBlock {
             return "You blocked \(Self.firstName(localName) ?? "this person"). "
                 + "Neither of you sees the other's posts while the block is on."
+        }
+        if isOwnProfile {
+            return "You haven't shared any posts on your profile yet."
         }
         guard let first = Self.firstName(localName) else {
             return "No posts yet — say hi or send a message to break the ice."

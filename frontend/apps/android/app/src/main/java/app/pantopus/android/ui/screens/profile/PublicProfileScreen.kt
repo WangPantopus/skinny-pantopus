@@ -586,6 +586,7 @@ internal fun PublicProfileLoadedFrame(
                                 connection = connection,
                                 connectState = connectState,
                                 canFollow = follow.canFollow && follow.relationshipLoaded,
+                                isOwnProfile = content.isOwner,
                                 onConnect = onConnect,
                                 onMessage = onMessage,
                             )
@@ -623,6 +624,7 @@ internal fun PublicProfileLoadedFrame(
                                 content.isOwner -> onComposeBroadcast
                                 else -> onFollow
                             },
+                        isOwnProfile = content.isOwner,
                     )
                 }
             }
@@ -697,6 +699,7 @@ internal fun LocalProfileLoadedFrame(
                             connection = connection,
                             connectState = connectState,
                             canFollow = follow.canFollow && follow.relationshipLoaded,
+                            isOwnProfile = content.isOwner,
                             onConnect = onConnect,
                             onMessage = onMessage,
                         )
@@ -735,6 +738,7 @@ internal fun LocalProfileLoadedFrame(
                             loadFailed = postsLoadFailed,
                             onRetry = onRetryPosts,
                             hiddenByBlock = connection == ProfileConnection.Blocked,
+                            isOwnProfile = content.isOwner,
                             pulseCards = postCards,
                             cardActions = postCardActions,
                         )
@@ -776,6 +780,7 @@ private fun NeighborHeaderActions(
     connection: ProfileConnection,
     connectState: PublicProfileActionState,
     canFollow: Boolean,
+    isOwnProfile: Boolean,
     onConnect: () -> Unit,
     onMessage: () -> Unit,
 ) {
@@ -785,7 +790,7 @@ private fun NeighborHeaderActions(
         canFollow = canFollow,
         onConnect = onConnect,
     )
-    if (connection == ProfileConnection.Blocked) return
+    if (isOwnProfile || connection == ProfileConnection.Blocked) return
     BeaconHeaderPrimaryButton(
         title = "Message",
         icon = PantopusIcon.MessageSquare,

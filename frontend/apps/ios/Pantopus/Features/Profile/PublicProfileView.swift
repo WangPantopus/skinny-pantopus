@@ -391,6 +391,7 @@ public struct PublicProfileView: View {
                 loadFailed: viewModel.postsLoadFailed,
                 onRetry: retryLoad,
                 hiddenByBlock: viewModel.connection == .blocked,
+                isOwnProfile: payload.isOwner,
                 pulseCards: viewModel.postCards,
                 onOpenPost: onOpenPost
             )
@@ -479,7 +480,8 @@ public struct PublicProfileView: View {
                             kind: payload.kind,
                             posts: payload.posts,
                             onUnlock: { post in viewModel.unlockBroadcast(tierRank: post.targetTierRank) },
-                            onEmptyCTA: { emptyCTAAction(for: payload) }
+                            onEmptyCTA: { emptyCTAAction(for: payload) },
+                            isOwnProfile: payload.isOwner
                         )
                     }
                 }
@@ -591,7 +593,7 @@ public struct PublicProfileView: View {
                 .accessibilityIdentifier("publicProfileConnectCta")
             }
             // Someone you blocked can't be messaged (the block says so); Settings unblocks.
-            if viewModel.connection != .blocked {
+            if !payload.isOwner, viewModel.connection != .blocked {
                 BeaconHeaderPrimaryButton(title: "Message", icon: .messageSquare) {
                     onOpenMessages(payload.profile)
                 }

@@ -414,6 +414,7 @@ fun PublicProfilePostsFeed(
      * people's posts, so the card says so and invites nothing.
      */
     hiddenByBlock: Boolean = false,
+    isOwnProfile: Boolean = false,
     /**
      * The Local profile's posts as Pulse cards (photos, video, links, Helpful, Save, Repost,
      * the post menu). `null` keeps the plain cards.
@@ -429,6 +430,7 @@ fun PublicProfilePostsFeed(
             localName = localName,
             loadFailed = loadFailed,
             hiddenByBlock = hiddenByBlock,
+            isOwnProfile = isOwnProfile,
             modifier = Modifier.padding(horizontal = Spacing.s4),
         )
     } else if (cards != null) {
@@ -507,6 +509,7 @@ private fun postsCardCopy(
     loadFailed: Boolean,
     localName: String?,
     hiddenByBlock: Boolean = false,
+    isOwnProfile: Boolean = false,
 ): PostsCardCopy {
     if (loadFailed) {
         return PostsCardCopy(
@@ -542,6 +545,15 @@ private fun postsCardCopy(
             ctaIcon = PantopusIcon.EyeOff,
         )
     }
+    if (isOwnProfile) {
+        return PostsCardCopy(
+            icon = PantopusIcon.Home,
+            headline = "Quiet for now",
+            body = "You haven't shared any posts on your profile yet.",
+            ctaLabel = null,
+            ctaIcon = PantopusIcon.MessageSquare,
+        )
+    }
     val body =
         if (firstName != null) {
             "No posts yet from $firstName. Say hi or send a message to break the ice."
@@ -571,6 +583,7 @@ private fun BeaconPostsEmptyState(
     localName: String? = null,
     loadFailed: Boolean = false,
     hiddenByBlock: Boolean = false,
+    isOwnProfile: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val persona = kind == PublicProfileKind.Persona
@@ -578,7 +591,7 @@ private fun BeaconPostsEmptyState(
     val accent = if (persona) PantopusColors.primary600 else PantopusColors.home
     // A Local profile the viewer blocked (a failed load still says so first).
     val hidden = hiddenByBlock && !loadFailed && !persona
-    val copy = postsCardCopy(persona, loadFailed, localName, hidden)
+    val copy = postsCardCopy(persona, loadFailed, localName, hidden, isOwnProfile)
 
     Column(
         modifier =
