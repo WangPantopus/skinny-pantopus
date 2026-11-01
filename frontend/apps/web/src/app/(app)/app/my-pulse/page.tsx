@@ -9,6 +9,7 @@ import { getAuthToken } from '@pantopus/api';
 import type { Post } from '@pantopus/types';
 import { EditPostDialog, PostCard, PostDetailPanel } from '@/components/feed';
 import { patchPostInFeedCaches, removePostFromFeedCaches } from '@/hooks/useFeedData';
+import { useProfilePin } from '@/hooks/useProfilePin';
 import ReportModal from '@/components/ui/ReportModal';
 import { toast } from '@/components/ui/toast-store';
 import ErrorState from '@/components/ui/ErrorState';
@@ -248,6 +249,15 @@ export default function MyPulsePage() {
     setSavedNextOffset((offset) => (offset == null ? offset : Math.max(0, offset - 1)));
   };
 
+  // Pin to profile / Unpin from profile from a post's ⋯ menu; the list shows the new state once the server agrees.
+  const profilePin = useProfilePin();
+  const handleProfilePin = useCallback(async (post: Post, pin: boolean) => {
+    if (!(await profilePin(post, pin))) return;
+    const pinned = (p: Post): Post => (p.id === post.id ? { ...p, profile_pinned: pin } : p);
+    setPosts((prev) => prev.map(pinned));
+    setSaved((prev) => prev.map(pinned));
+  }, [profilePin]);
+
   const handleDelete = async (postId: string) => {
     try {
       await api.posts.deletePost(postId);
@@ -333,6 +343,7 @@ export default function MyPulsePage() {
               onSave={handleSave}
               onDelete={handleDelete}
               onEdit={setEditingPost}
+              onProfilePin={handleProfilePin}
               onReport={(id) => setReportPostId(id)}
               onSolved={(id) => {
                 const solved = (p: Post): Post => p.id === id ? { ...p, state: 'solved' } : p;
