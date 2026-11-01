@@ -2828,7 +2828,8 @@ router.get('/:id', optionalAuth, async (req, res) => {
     }, userId, authorRows);
 
     res.json({
-      post: isOwner ? responsePost : readerPostView(responsePost),
+      // The author's menu offers Pin to profile / Unpin from profile (PRF SRV-3).
+      post: isOwner ? { ...responsePost, profile_pinned: Boolean(post.profile_pinned_at) } : readerPostView(responsePost),
     });
   } catch (err) {
     logger.error('Post fetch error', { error: err.message, postId: req.params.id });
@@ -3054,6 +3055,82 @@ router.post('/:id/unarchive', verifyToken, async (req, res) => {
   } catch (err) {
     logger.error('Post unarchive error', { error: err.message, postId: req.params.id });
     res.status(500).json({ error: 'Failed to restore post' });
+  }
+});
+
+// ============ PROFILE PINS (PRF CONTRACT.md SRV-3) ============
+// A person pins up to three of their own posts to the top of their profile (GET /user/:userId/pinned shows them).
+// Post.profile_pinned_at, never is_pinned, which is the platform's feed-wide pin (PATCH /global-pin/:id).
+
+const PROFILE_PIN_LIMIT = 3;
+const PROFILE_PIN_LIMIT_REPLY = { error: 'You can pin up to 3 posts. Unpin one first.', code: 'PROFILE_PIN_LIMIT' };
+const PROFILE_PIN_POST_SELECT = 'id, user_id, archived_at, archive_reason, moderation_state, show_on_profile, profile_visibility_scope, post_as, profile_pinned_at';
+
+// The post when it's the viewer's own, or the reply that refuses it.
+async function ownPostForProfilePin(postId, userId) {
+  if (!UUID_RE.test(String(postId))) return { reply: [404, { error: 'Post not found' }] };
+  const { data: post, error } = await supabaseAdmin.from('Post').select(PROFILE_PIN_POST_SELECT).eq('id', postId).maybeSingle();
+  if (error) throw error;
+  if (!post) return { reply: [404, { error: 'Post not found' }] };
+  if (post.user_id !== userId) {
+    return { reply: [403, { error: 'You can only pin your own posts.', code: 'PROFILE_PIN_NOT_YOURS' }] };
+  }
+  return { post };
+}
+
+// Your pins on posts that still show (archived ones drop off the profile and free their place), oldest first.
+async function profilePins(userId) {
+  const { data, error } = await supabaseAdmin.from('Post').select('id, profile_pinned_at')
+    .eq('user_id', userId).not('profile_pinned_at', 'is', null).is('archived_at', null)
+    .order('profile_pinned_at', { ascending: true }).order('id', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+router.post('/:id/profile-pin', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { post, reply } = await ownPostForProfilePin(req.params.id, userId);
+    if (reply) return res.status(reply[0]).json(reply[1]);
+    // Only a post the profile shows: not archived or removed, not hidden from the profile, not written for a business.
+    if (post.archived_at || post.archive_reason === 'moderation' || post.moderation_state === 'removed'
+        || post.show_on_profile === false || post.profile_visibility_scope === 'hidden' || post.post_as === 'business') {
+      return res.status(409).json({ error: 'This post isn\'t on your profile, so it can\'t be pinned there.', code: 'PROFILE_PIN_NOT_ON_PROFILE' });
+    }
+    if (post.profile_pinned_at) return res.json({ post_id: post.id, profile_pinned: true, profile_pinned_at: post.profile_pinned_at });
+    if ((await profilePins(userId)).length >= PROFILE_PIN_LIMIT) return res.status(409).json(PROFILE_PIN_LIMIT_REPLY);
+
+    const pinnedAt = new Date().toISOString();
+    const { error } = await supabaseAdmin.from('Post').update({ profile_pinned_at: pinnedAt })
+      .eq('id', post.id).eq('user_id', userId).is('profile_pinned_at', null);
+    if (error) throw error;
+    // Two pins at once can pass the check above together: the three earliest stay, and a later one is taken back.
+    const pins = await profilePins(userId);
+    if (!pins.slice(0, PROFILE_PIN_LIMIT).some((pin) => pin.id === post.id)) {
+      await supabaseAdmin.from('Post').update({ profile_pinned_at: null }).eq('id', post.id).eq('profile_pinned_at', pinnedAt);
+      return res.status(409).json(PROFILE_PIN_LIMIT_REPLY);
+    }
+    const mine = pins.find((pin) => pin.id === post.id);
+    res.json({ post_id: post.id, profile_pinned: true, profile_pinned_at: mine?.profile_pinned_at || pinnedAt });
+  } catch (err) {
+    logger.error('Profile pin error', { error: err.message, postId: req.params.id });
+    res.status(500).json({ error: 'Failed to pin the post' });
+  }
+});
+
+router.delete('/:id/profile-pin', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { post, reply } = await ownPostForProfilePin(req.params.id, userId);
+    if (reply) return res.status(reply[0]).json(reply[1]);
+    if (post.profile_pinned_at) {
+      const { error } = await supabaseAdmin.from('Post').update({ profile_pinned_at: null }).eq('id', post.id).eq('user_id', userId);
+      if (error) throw error;
+    }
+    res.json({ post_id: post.id, profile_pinned: false });
+  } catch (err) {
+    logger.error('Profile unpin error', { error: err.message, postId: req.params.id });
+    res.status(500).json({ error: 'Failed to unpin the post' });
   }
 });
 
@@ -3730,12 +3807,16 @@ router.post('/:postId/comments/:commentId/like', verifyToken, async (req, res) =
 
 // ============ USER POSTS ============
 
-router.get('/user/:userId', verifyToken, async (req, res) => {
+// GET /user/:userId and /user/:userId/pinned: a person's posts as this viewer may see them on the person's profile (or,
+// for the owner's `?as=`, as that audience would). `pinned`: only the posts they pinned to their profile (PRF SRV-3),
+// newest pin first, never archived ones.
+async function sendProfilePosts(req, res, { pinned = false } = {}) {
   try {
     const { userId } = req.params;
     const requestingUserId = req.user.id;
     const { limit = 20, cursorCreatedAt, cursorId, include_archived: includeArchived } = req.query;
-    const parsedLimit = parseInt(limit);
+    const parsedLimit = pinned ? PROFILE_PIN_LIMIT : parseInt(limit);
+    const page = (rows) => (pinned ? {} : { pagination: buildCursorPagination(rows, parsedLimit) });
 
     // Preview as (utils/profilePreview.js): the owner reads their posts the way one audience would.
     const preview = previewAudience(req, userId);
@@ -3743,7 +3824,7 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
     const audience = preview.audience;
     if (audience === 'anyone') {
       // Signed-out visitors can't read anyone's posts.
-      return res.json({ posts: [], pagination: buildCursorPagination([], parsedLimit), sign_in_required: true, preview_as: audience });
+      return res.json({ posts: [], ...page([]), sign_in_required: true, preview_as: audience });
     }
 
     // v1.1: Determine viewer relationship to filter visible surfaces
@@ -3753,20 +3834,22 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
 
     if (!isOwn && !audience) {
       // Check if there's an accepted relationship (connection), and whether either person blocked
-      // the other: profile blocks (UserBlock) hide posts in both directions, as canViewPost does.
-      const [blocked, { data: connectionData }] = await Promise.all([
+      // the other: profile blocks (UserBlock) hide posts in both directions, as canViewPost does, and so does
+      // Block in the app (a blocked Relationship), as on the profile itself and in the feeds.
+      const [blocked, { data: relationship, error: relationshipError }] = await Promise.all([
         blockService.isBlocked(userId, requestingUserId),
         supabaseAdmin
           .from('Relationship')
-          .select('id')
-          .eq('status', 'accepted')
+          .select('id, status')
+          .in('status', ['accepted', 'blocked'])
           .or(`and(requester_id.eq.${requestingUserId},addressee_id.eq.${userId}),and(requester_id.eq.${userId},addressee_id.eq.${requestingUserId})`)
           .maybeSingle(),
       ]);
-      if (blocked) {
-        return res.json({ posts: [], pagination: buildCursorPagination([], parsedLimit) });
+      if (relationshipError) throw relationshipError;
+      if (blocked || relationship?.status === 'blocked') {
+        return res.json({ posts: [], ...page([]) });
       }
-      connection = connectionData;
+      connection = relationship?.status === 'accepted' ? relationship : null;
     }
 
     // Profile previews honor both:
@@ -3781,17 +3864,18 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
 
     let query = supabaseAdmin.from('Post')
       .select(`*, creator:user_id (${SAFE_CREATOR_SELECT}), home:home_id (id, address, city)`)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(parsedLimit);
+      .eq('user_id', userId);
+    query = pinned
+      ? query.not('profile_pinned_at', 'is', null).order('profile_pinned_at', { ascending: false })
+      : query.order('created_at', { ascending: false });
+    query = query.order('id', { ascending: false }).limit(parsedLimit);
 
     // A previewed audience is verified in no Pulse area, so it reads only posts without a verified-neighbors wall.
     query = audience ? scopeAccessForHomes(null).query(query) : (await postScopeAccess(requestingUserId)).query(query);
 
     // Archived posts are left out of every list except the owner's own My posts,
     // which asks for them to fill its Archived tab (and to restore them).
-    if (!(isOwn && includeArchived === 'true')) query = query.is('archived_at', null);
+    if (pinned || !(isOwn && includeArchived === 'true')) query = query.is('archived_at', null);
 
     if (isOwn) {
       // Own profile: see everything (no filters on visibility), the posts written for a business too, so the
@@ -3806,7 +3890,7 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
       query = query.or('post_as.is.null,post_as.neq.business');
     }
 
-    query = applyCursorCondition(query, cursorCreatedAt, cursorId);
+    if (!pinned) query = applyCursorCondition(query, cursorCreatedAt, cursorId);
 
     const { data: posts, error } = await query;
     if (error) {
@@ -3855,14 +3939,17 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
     // Pages follow the rows read, not the posts left after the checks, so a short page isn't the end.
     res.json({
       posts: serialized,
-      pagination: buildCursorPagination(posts || [], parsedLimit),
+      ...page(posts || []),
       ...(audience ? { preview_as: audience } : {}),
     });
   } catch (err) {
-    logger.error('User posts fetch error', { error: err.message });
+    logger.error('User posts fetch error', { error: err.message, pinned });
     res.status(500).json({ error: 'Failed to fetch user posts' });
   }
-});
+}
+
+router.get('/user/:userId', verifyToken, (req, res) => sendProfilePosts(req, res));
+router.get('/user/:userId/pinned', verifyToken, (req, res) => sendProfilePosts(req, res, { pinned: true }));
 
 // ============ REPORT ============
 
