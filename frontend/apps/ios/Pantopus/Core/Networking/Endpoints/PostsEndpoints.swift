@@ -118,19 +118,45 @@ public enum PostsEndpoints {
     /// `GET /api/posts/user/:userId` — paged list of posts authored by a
     /// user. Active posts only, unless the signed-in user asks for their own
     /// list with `includeArchived` ("My posts"); the backend ignores the
-    /// flag for anyone else's list.
+    /// flag for anyone else's list. `previewAs` (`anyone`, `neighbors`,
+    /// `connections`) is the owner's Preview as: the list that audience
+    /// sees (route `backend/routes/posts.js:3733`).
     public static func userPosts(
         userId: String,
         limit: Int = 50,
         cursorCreatedAt: String? = nil,
         cursorId: String? = nil,
-        includeArchived: Bool = false
+        includeArchived: Bool = false,
+        previewAs: String? = nil
     ) -> Endpoint {
         var query: [String: String] = ["limit": String(limit)]
         if let cursorCreatedAt { query["cursorCreatedAt"] = cursorCreatedAt }
         if let cursorId { query["cursorId"] = cursorId }
         if includeArchived { query["include_archived"] = "true" }
+        if let previewAs { query["as"] = previewAs }
         return Endpoint(method: .get, path: "/api/posts/user/\(userId)", query: query)
+    }
+
+    /// `GET /api/posts/user/:userId/pinned` — up to three posts the person
+    /// pinned to their profile, newest pin first, filtered like their posts
+    /// for you; `previewAs` is the owner's Preview as (PRF SRV-3). Route
+    /// `backend/routes/posts.js:3952`.
+    public static func userPinnedPosts(userId: String, previewAs: String? = nil) -> Endpoint {
+        Endpoint(method: .get, path: "/api/posts/user/\(userId)/pinned", query: previewAs.map { ["as": $0] } ?? [:])
+    }
+
+    /// `POST /api/posts/:id/profile-pin` — pins your own post to your
+    /// profile. A fourth pin answers 409 with the sentence to show
+    /// ("You can pin up to 3 posts. Unpin one first."). Route
+    /// `backend/routes/posts.js:3090`.
+    public static func pinToProfile(postId: String) -> Endpoint {
+        Endpoint(method: .post, path: "/api/posts/\(postId)/profile-pin")
+    }
+
+    /// `DELETE /api/posts/:id/profile-pin` — unpins it (also fine when it
+    /// wasn't pinned). Route `backend/routes/posts.js:3121`.
+    public static func unpinFromProfile(postId: String) -> Endpoint {
+        Endpoint(method: .delete, path: "/api/posts/\(postId)/profile-pin")
     }
 
     /// `GET /api/posts/saved` — the viewer's saved posts they can still
@@ -205,5 +231,18 @@ public enum PublicProfileEndpoints {
     /// `GET /api/users/id/:id` — route `backend/routes/users.js:2041`.
     public static func profile(id: String) -> Endpoint {
         Endpoint(method: .get, path: "/api/users/id/\(id)")
+    }
+
+    /// Your own profile as `audience` (`anyone`, `neighbors`, `connections`)
+    /// sees it: the owner-only Preview as. Route `backend/routes/users.js:3755`.
+    public static func profile(id: String, previewAs audience: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/users/id/\(id)", query: ["as": audience])
+    }
+
+    /// `GET /api/users/:id/in-common` — what you and this person share: people
+    /// you both know, plans, Support Trains and skills (PRF SRV-1). Route
+    /// `backend/routes/users.js:3846`.
+    public static func inCommon(userId: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/users/\(userId)/in-common")
     }
 }

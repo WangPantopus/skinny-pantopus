@@ -220,7 +220,13 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
 
     /// A failed archive, restore or delete puts the row back and says so,
     /// like the post page.
-    public var toastMessage: String?
+    public var toastMessage: String? {
+        // Every message is an error unless a pin says otherwise.
+        didSet { if toastMessage != nil { toastKind = .error } }
+    }
+
+    /// How the toast reads: an error unless an action went through.
+    public private(set) var toastKind: ToastKind = .error
 
     // MARK: - Dependencies
 
@@ -1020,6 +1026,24 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
             formatter.dateFormat = "MMM d"
             return formatter.string(from: date)
         }
+    }
+}
+
+// MARK: - Pin to profile
+
+extension MyPostsViewModel {
+    /// "Pin to profile" / "Unpin from profile" for one of your posts that
+    /// isn't archived (PRF SRV-3; nil when the server didn't say).
+    func profilePinTitle(postId: String) -> String? {
+        guard let post = posts.first(where: { $0.id == postId }), post.archivedAt == nil else { return nil }
+        return ProfilePins.shared.menuTitle(postId, server: post.profilePinned, canShowOnProfile: post.showOnProfile != false)
+    }
+
+    func toggleProfilePin(postId: String) async {
+        guard let post = posts.first(where: { $0.id == postId }) else { return }
+        let toast = await ProfilePins.shared.toggle(postId, server: post.profilePinned, client: api)
+        toastMessage = toast.text
+        toastKind = toast.kind
     }
 }
 

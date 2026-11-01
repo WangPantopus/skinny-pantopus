@@ -25,9 +25,9 @@ public struct MyPostsView: View {
         @Bindable var bindable = viewModel
         return ListOfRowsView(dataSource: viewModel)
             .overlay(alignment: .bottom) {
-                // A failed archive, restore or delete says so (the row is already back).
+                // A failed archive, restore or delete says so (the row is already back); so does a pin.
                 if let toast = viewModel.toastMessage {
-                    ToastView(message: ToastMessage(text: toast, kind: .error))
+                    ToastView(message: ToastMessage(text: toast, kind: viewModel.toastKind))
                         .padding(.bottom, 96)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .dismissToast(after: toast, minimum: 2.5) {
@@ -68,6 +68,12 @@ public struct MyPostsView: View {
                         .accessibilityIdentifier("kebab-restore")
                     }
                 } else {
+                    if let pinTitle = viewModel.profilePinTitle(postId: target.postId) {
+                        Button(pinTitle) {
+                            Task { await viewModel.toggleProfilePin(postId: target.postId) }
+                        }
+                        .accessibilityIdentifier("kebab-profile-pin")
+                    }
                     Button("Archive post") {
                         archive(postId: target.postId)
                     }

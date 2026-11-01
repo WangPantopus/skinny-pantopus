@@ -3,6 +3,8 @@
 
 import Foundation
 
+// swiftlint:disable file_length
+
 /// Public-profile credential supplied by the identity serializer.
 public struct FeedAuthorCredentialDTO: Decodable, Sendable, Hashable {
     public let status: String?
@@ -268,6 +270,11 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
     public let claimMode: String?
     /// The asker already used "Keep open 7 more days" (`post_metadata.kept_open_at`).
     public let keptOpenAt: String?
+    /// Your own post only: whether it's pinned to your profile (PRF SRV-3);
+    /// nil on other people's posts and when the server couldn't tell.
+    public let profilePinned: Bool?
+    /// False for a post that never shows on its author's profile (a plan's post).
+    public let showOnProfile: Bool?
 
     /// A moderator removed the post: neighbors can't see it or reply.
     public var isRemovedByModerator: Bool {
@@ -315,6 +322,8 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         case expiresAt = "expires_at"
         case claimMode = "claim_mode"
         case postMetadata = "post_metadata"
+        case profilePinned = "profile_pinned"
+        case showOnProfile = "show_on_profile"
     }
 
     /// Tolerant (Pulse S2): only `id` and `created_at` are required; any
@@ -369,6 +378,8 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         expiresAt = c.lenient(String.self, forKey: .expiresAt)
         claimMode = c.lenient(String.self, forKey: .claimMode)
         keptOpenAt = c.lenient(PostLifecycleMetadata.self, forKey: .postMetadata)?.keptOpenAt
+        profilePinned = c.lenient(Bool.self, forKey: .profilePinned)
+        showOnProfile = c.lenient(Bool.self, forKey: .showOnProfile)
     }
 }
 
@@ -422,6 +433,8 @@ extension PostDetailDTO {
         expiresAt = post.expiresAt
         claimMode = post.claimMode
         keptOpenAt = post.keptOpenAt
+        profilePinned = post.profilePinned
+        showOnProfile = post.showOnProfile
     }
 }
 
@@ -494,5 +507,22 @@ public struct PlaceEligibilityResponse: Decodable, Sendable, Hashable {
         case readOnly
         case reason
         case trustLevel
+    }
+}
+
+/// `POST` / `DELETE /api/posts/:id/profile-pin` reply (PRF SRV-3).
+public struct ProfilePinResponse: Decodable, Sendable, Hashable {
+    public let postId: String?
+    public let profilePinned: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case postId = "post_id"
+        case profilePinned = "profile_pinned"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        postId = c.lenient(String.self, forKey: .postId)
+        profilePinned = c.lenient(Bool.self, forKey: .profilePinned) ?? false
     }
 }

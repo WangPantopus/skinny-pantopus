@@ -40,20 +40,19 @@ public enum PublicProfileKind: String, Sendable, Equatable, Hashable {
     case local
 }
 
-/// A21.2 — the tab strip on the Local Beacon profile archetype. Separate
-/// from `ProfileTab` so the persona path keeps its own body untouched.
+/// The tabs on a person's profile (the 11-01 redesign): Posts and About, and
+/// Work only when there is work to show. Separate from `ProfileTab` so the
+/// persona path keeps its own body untouched.
 ///
-/// Posts · About are the designed pair; Portfolio · Gigs · Reviews carry
-/// the marketplace surfaces a verified neighbour actually has —
-/// `GET /api/files/portfolio/:userId` (`backend/routes/files.js:526`),
-/// `GET /api/gigs?user_id=…` (`backend/routes/gigs.js:2089`) and
-/// `GET /api/reviews/user/:userId` (`backend/routes/reviews.js:149`).
+/// Work holds the portfolio, the tasks they posted (with Open gigs on) and
+/// their reviews: `GET /api/files/portfolio/:userId`
+/// (`backend/routes/files.js:526`), `GET /api/gigs?user_id=…`
+/// (`backend/routes/gigs.js:2089`) and `GET /api/reviews/user/:userId`
+/// (`backend/routes/reviews.js:149`).
 public enum LocalProfileTab: String, Sendable, Equatable, Hashable, CaseIterable, Identifiable {
     case posts
     case about
-    case portfolio
-    case gigs
-    case reviews
+    case work
 
     public var id: String {
         rawValue
@@ -63,16 +62,8 @@ public enum LocalProfileTab: String, Sendable, Equatable, Hashable, CaseIterable
         switch self {
         case .posts: "Posts"
         case .about: "About"
-        case .portfolio: "Portfolio"
-        case .gigs: "Gigs"
-        case .reviews: "Reviews"
+        case .work: "Work"
         }
-    }
-
-    /// First-launch scope: the tabs shown. The Gigs tab is launch cut #4
-    /// (Open gigs).
-    public static var launchCases: [LocalProfileTab] {
-        allCases.filter { $0 != .gigs || LaunchFeatures.openGigs }
     }
 }
 
@@ -196,6 +187,18 @@ public struct PublicProfileHeader: Sendable, Equatable, Hashable {
     public let isVerifiedNeighbor: Bool
     /// False when `displayName` is the stand-in for someone with no name: the avatar shows no initials.
     public let hasName: Bool
+    /// One line about them, shown in bold under the name.
+    public let tagline: String?
+    /// The city the trust line names: the verified home's city, else the
+    /// profile's. Nil when the read leaves it out (their "Who can see your
+    /// general area" setting).
+    public let trustCity: String?
+    /// "Joined Oct 2026", or "Joined this week".
+    public let joinedLabel: String?
+    /// Joined in the last 14 days: an empty Posts tab says "<name> just joined".
+    public let joinedRecently: Bool
+    /// Their avatar color on the profile screens (`ProfileAvatarColor`).
+    public let avatarColor: ProfileAvatarColor
 
     public init(
         displayName: String,
@@ -206,7 +209,12 @@ public struct PublicProfileHeader: Sendable, Equatable, Hashable {
         identityBadges: [IdentityPillarBadge],
         tierLabel: String? = nil,
         isVerifiedNeighbor: Bool = false,
-        hasName: Bool = true
+        hasName: Bool = true,
+        tagline: String? = nil,
+        trustCity: String? = nil,
+        joinedLabel: String? = nil,
+        joinedRecently: Bool = false,
+        avatarColor: ProfileAvatarColor = .sky
     ) {
         self.displayName = displayName
         self.handle = handle
@@ -217,6 +225,17 @@ public struct PublicProfileHeader: Sendable, Equatable, Hashable {
         self.tierLabel = tierLabel
         self.isVerifiedNeighbor = isVerifiedNeighbor
         self.hasName = hasName
+        self.tagline = tagline
+        self.trustCity = trustCity
+        self.joinedLabel = joinedLabel
+        self.joinedRecently = joinedRecently
+        self.avatarColor = avatarColor
+    }
+
+    /// The first word of the name ("Rowan"), for "Connect with Rowan?".
+    public var firstName: String {
+        let first = displayName.split(separator: " ").first.map(String.init) ?? displayName
+        return first.isEmpty ? "them" : first
     }
 }
 
@@ -345,11 +364,32 @@ public final class PublicProfileViewModel {
     /// `true` when the Local post feed couldn't load. The feed then offers
     /// Try again instead of the "Quiet for now" empty state.
     public private(set) var postsLoadFailed: Bool = false
+    /// True while a first read of the posts is out: the header and buttons
+    /// already show and only the Posts tab waits.
+    public private(set) var postsLoading: Bool = false
     /// The Local profile's posts drawn as Pulse cards: photos and videos,
     /// tappable links, Helpful, Save, Repost, share and report.
     public let postCards: ProfilePostCardsModel
     /// Drives the "Unfollow …?" confirm, so one tap on Following never unfollows.
     public var showUnfollowConfirm: Bool = false
+    /// Drives the "Withdraw your request?" confirm behind Requested.
+    public var showWithdrawConfirm: Bool = false
+    /// True when the block check or `GET /api/users/:id/relationship` failed:
+    /// the header leaves the relationship button out instead of guessing.
+    /// Until either answers, it holds the button's place.
+    public private(set) var relationshipReadFailed: Bool = false
+    /// How many portfolio items the person has, read once so Work shows only
+    /// when there's work to show. Nil until read, and after a failed read.
+    public private(set) var portfolioCount: Int?
+    /// What you and this person share, for "You and <name>" (PRF SRV-1). Nil
+    /// for your own profile and previews, until read, and after a failed read.
+    public private(set) var inCommon: ProfileInCommon?
+    /// The person's pinned posts (PRF SRV-3), newest pin first. Empty when
+    /// they have none, for a signed-out visitor, in the "Anyone" preview and
+    /// after a failed read (or an older server).
+    public private(set) var pinnedPosts: [FeedPostDTO] = []
+    /// True once the pinned read answered: the server knows pins.
+    public private(set) var pinnedReadSucceeded = false
     /// When the Local posts were read. A post on this profile changed
     /// elsewhere after that (its page, the feed) makes the next opening re-read them.
     private var postsReadAt: Date?
@@ -363,6 +403,10 @@ public final class PublicProfileViewModel {
     /// Follow / Connect affordances in `loadRelationship(id:)`.
     private var profileKind: PublicProfileKind = .persona
     private let currentUserId: String?
+    /// Your own profile shown as this audience would see it (Preview as): every
+    /// read carries `?as=`, nothing is read about a relationship, and the page
+    /// renders as a visitor's. Nil for the real profile.
+    public let previewAudience: ProfileAudience?
     private let client: APIClient
     /// The screen store (Instant Screens, "Other people": fresh 5 minutes,
     /// not saved on the phone). The profile and its posts come from it; the
@@ -374,16 +418,19 @@ public final class PublicProfileViewModel {
     init(
         userId: String,
         currentUserId: String? = PublicProfileViewModel.signedInUserId(),
-        client: APIClient = .shared
+        client: APIClient = .shared,
+        previewAudience: ProfileAudience? = nil
     ) {
         routeIdentifier = userId
         resolvedUserId = userId
         self.currentUserId = currentUserId
+        self.previewAudience = previewAudience
         self.client = client
         store = ScreenStore.store(for: client)
         postCards = ProfilePostCardsModel(viewerId: currentUserId, client: client, store: store)
         postCards.onToast = { [weak self] message in self?.toastMessage = message }
-        showStoredCopy()
+        // A preview always reads fresh: what the audience sees, not a saved copy.
+        if previewAudience == nil { showStoredCopy() }
     }
 
     /// The signed-in user, so `isOwner` (and the owner chrome behind it)
@@ -411,6 +458,7 @@ public final class PublicProfileViewModel {
     private func showStoredCopy() {
         guard let profile = store.peek(profileEndpoint, as: PublicProfile.self)?.value else { return }
         resolvedUserId = profile.id
+        postCards.profileUserId = profile.id
         let kind = derivedKind(from: profile)
         profileKind = kind
         var rows: [FeedPostDTO] = []
@@ -475,7 +523,7 @@ public final class PublicProfileViewModel {
         guard connectState != .inFlight else { return }
         switch connection {
         case .none:
-            await sendConnectionRequest()
+            if let failure = await sendConnectionRequest() { toastMessage = failure }
         case .pendingReceived:
             await acceptConnectionRequest()
         case .connected:
@@ -485,28 +533,128 @@ public final class PublicProfileViewModel {
         }
     }
 
-    /// `POST /api/relationships/requests` (relationships.js:67).
-    private func sendConnectionRequest() async {
+    /// `POST /api/relationships/requests` (relationships.js:193), with the
+    /// Connect sheet's note when there is one: the server sends it as the
+    /// request notification's text and keeps no copy. Returns what went
+    /// wrong, or nil once the request is out.
+    @discardableResult
+    public func sendConnectionRequest(note: String? = nil) async -> String? {
+        guard connectState != .inFlight else { return nil }
         connectState = .inFlight
-        let body = ConnectionRequestBody(addresseeId: resolvedUserId)
+        let body = ConnectionRequestBody(addresseeId: resolvedUserId, message: note)
         do {
-            _ = try await client.request(
+            let response = try await client.request(
                 RelationshipsEndpoints.sendRequest(body: body),
                 as: ConnectionRequestResponse.self
             )
+            profileChanged()
+            // They had asked first: the server connected you both instead.
+            if response.message?.localizedCaseInsensitiveContains("established") == true {
+                connectState = .succeeded
+                connection = .connected
+                toastMessage = "Connected"
+                await reloadAfterConnectionChange()
+                return nil
+            }
             connectState = .succeeded
             connection = .pendingSent
-            profileChanged()
             toastMessage = "Connection request sent"
+            return nil
         } catch let error as APIError {
-            let message = friendlyMessage(for: error)
+            let message = error.errorDescription ?? "Couldn't send the request. Try again."
             connectState = .failed(message: message)
-            toastMessage = message
             logger.warning("Connect failed: \(error)")
+            return message
         } catch {
             connectState = .failed(message: "Something went wrong")
-            toastMessage = "Couldn't send the request"
             logger.warning("Connect failed: \(error)")
+            return "Couldn't send the request. Try again."
+        }
+    }
+
+    /// The Connect sheet's "Just follow <name>'s public posts". Returns what
+    /// went wrong, or nil once following.
+    public func followFromConnectSheet() async -> String? {
+        guard !isFollowing else { return nil }
+        guard canFollow, relationshipLoaded else { return "Following isn't available right now. Try again." }
+        toastMessage = nil
+        await toggleFollow()
+        guard isFollowing else {
+            // The sheet says it instead of a toast hidden behind it.
+            let failure = toastMessage ?? "Couldn't follow. Try again."
+            toastMessage = nil
+            return failure
+        }
+        if case let .loaded(payload) = state {
+            toastMessage = "\(payload.header.firstName)'s public posts will show up in your Pulse."
+        }
+        return nil
+    }
+
+    /// Requested → Withdraw: finds your pending request in
+    /// `GET /api/relationships/requests/sent` (relationships.js:914) and
+    /// deletes it (`DELETE /api/relationships/:id`, relationships.js:779),
+    /// which either person may do. They aren't notified.
+    public func withdrawRequest() async {
+        showWithdrawConfirm = false
+        guard connection == .pendingSent, connectState != .inFlight else { return }
+        connectState = .inFlight
+        do {
+            let sent = try await client.request(ConnectionsEndpoints.sentRequests, as: SentRequestsResponse.self)
+            guard let match = sent.requests.first(where: { $0.addressee?.id == resolvedUserId }) else {
+                connectState = .idle
+                profileChanged()
+                await reloadAfterConnectionChange()
+                toastMessage = "That request is no longer pending."
+                return
+            }
+            _ = try await client.request(ConnectionsEndpoints.disconnect(id: match.id), as: RelationshipActionEcho.self)
+            connectState = .idle
+            connection = .none
+            profileChanged()
+            toastMessage = "Request withdrawn"
+        } catch let error as APIError {
+            let message = error.errorDescription ?? "Couldn't withdraw the request."
+            connectState = .failed(message: message)
+            toastMessage = message
+            logger.warning("Withdraw failed: \(error)")
+        } catch {
+            connectState = .failed(message: "Something went wrong")
+            toastMessage = "Couldn't withdraw the request."
+            logger.warning("Withdraw failed: \(error)")
+        }
+    }
+
+    /// "Not now" on a request they sent you: finds it in
+    /// `GET /api/relationships/requests/pending` (relationships.js:890) and
+    /// declines it (`POST /api/relationships/:id/reject`, relationships.js:471),
+    /// which removes it so they can ask again later. They aren't notified.
+    public func declineRequest() async {
+        guard connection == .pendingReceived, connectState != .inFlight else { return }
+        connectState = .inFlight
+        do {
+            let pending = try await client.request(RelationshipsEndpoints.pending, as: PendingRequestsResponse.self)
+            guard let match = pending.requests.first(where: { $0.requester?.id == resolvedUserId }) else {
+                connectState = .idle
+                profileChanged()
+                await reloadAfterConnectionChange()
+                toastMessage = "That request is no longer pending."
+                return
+            }
+            _ = try await client.request(RelationshipsEndpoints.reject(id: match.id), as: RelationshipActionEcho.self)
+            connectState = .idle
+            connection = .none
+            profileChanged()
+            toastMessage = "Request declined"
+        } catch let error as APIError {
+            let message = error.errorDescription ?? "Couldn't decline the request."
+            connectState = .failed(message: message)
+            toastMessage = message
+            logger.warning("Decline failed: \(error)")
+        } catch {
+            connectState = .failed(message: "Something went wrong")
+            toastMessage = "Couldn't decline the request."
+            logger.warning("Decline failed: \(error)")
         }
     }
 
@@ -756,8 +904,14 @@ public final class PublicProfileViewModel {
 
     private func fetch(force: Bool) async {
         do {
-            let profile = try await store.load(profileEndpoint, as: PublicProfile.self, kind: .otherPeople, force: force).value
+            let profile: PublicProfile = if let previewAudience {
+                // Not through the store: a preview's answers never stand in for the real profile.
+                try await client.request(PublicProfileEndpoints.profile(id: resolvedUserId, previewAs: previewAudience.rawValue))
+            } else {
+                try await store.load(profileEndpoint, as: PublicProfile.self, kind: .otherPeople, force: force).value
+            }
             resolvedUserId = profile.id
+            postCards.profileUserId = profile.id
             let kind = derivedKind(from: profile)
             profileKind = kind
             // A21.2 — the Local archetype renders a real neighbourhood post
@@ -766,11 +920,29 @@ public final class PublicProfileViewModel {
             // empty list on purpose: that endpoint returns plain posts, not
             // tier-gated broadcasts, and feeding them into the broadcast
             // card would invent a visibility chip the API never sent.
-            let rows = kind == .local
-                ? await loadUserPosts(id: profile.id, force: force || postsChangedElsewhere)
-                : []
-            state = .loaded(build(from: profile, kind: kind, posts: rows.map { project(post: $0) }))
-            await loadRelationship(id: profile.id)
+            if kind == .local {
+                // Nothing on screen yet: the header and buttons show now, so a
+                // slow posts read holds only the Posts tab.
+                if case .loaded = state {} else {
+                    postsLoading = true
+                    state = .loaded(build(from: profile, kind: kind, posts: []))
+                }
+                // The buttons' relationship read runs beside the posts read,
+                // so a slow posts read doesn't hold Connect either.
+                async let relationship: Void = loadRelationship(id: profile.id)
+                async let together: Void = loadInCommon(id: profile.id)
+                async let pins: Void = loadPinned(id: profile.id)
+                let rows = await loadUserPosts(id: profile.id, force: force || postsChangedElsewhere)
+                postsLoading = false
+                state = .loaded(build(from: profile, kind: kind, posts: rows.map { project(post: $0) }))
+                await relationship
+                await together
+                await pins
+                await loadPortfolioCount(id: profile.id)
+            } else {
+                state = .loaded(build(from: profile, kind: kind, posts: []))
+                await loadRelationship(id: profile.id)
+            }
         } catch is CancellationError {
             return
         } catch let error as APIError {
@@ -807,11 +979,12 @@ public final class PublicProfileViewModel {
     /// poses. Requires auth, so a signed-out viewer just gets the resting
     /// state (and no Follow affordance).
     private func loadRelationship(id: String) async {
-        guard currentUserId != nil, currentUserId != id else {
+        guard previewAudience == nil, currentUserId != nil, currentUserId != id else {
             canFollow = false
             isFollowing = false
             return
         }
+        relationshipReadFailed = false
 
         // Personal UserBlock rows are deliberately distinct from the
         // Relationship graph: GET /:id/relationship reports only the
@@ -838,9 +1011,12 @@ public final class PublicProfileViewModel {
                     return
                 }
             } catch {
+                // Leaving the screen cancels the read: nothing failed, so nothing changes.
+                if Task.isCancelled { return }
                 logger.warning("Blocked-list load failed: \(error)")
                 canFollow = false
                 isFollowing = false
+                relationshipReadFailed = true
                 toastMessage = "Couldn't verify block status. Actions are unavailable."
                 return
             }
@@ -862,8 +1038,10 @@ public final class PublicProfileViewModel {
             }
             relationshipLoaded = true
         } catch {
+            if Task.isCancelled { return }
             logger.debug("Relationship load failed: \(error)")
             relationshipLoaded = false
+            relationshipReadFailed = true
             toastMessage = "Couldn't load connection status. Try again later."
         }
     }
@@ -927,6 +1105,9 @@ public final class PublicProfileViewModel {
     /// Pulse cards.
     private func loadUserPosts(id: String, force: Bool) async -> [FeedPostDTO] {
         let readRevision = postCards.actionRevision
+        if let previewAudience {
+            return await loadPreviewPosts(id: id, audience: previewAudience, readRevision: readRevision)
+        }
         do {
             let snapshot = try await store.load(
                 PostsEndpoints.userPosts(userId: id),
@@ -946,6 +1127,131 @@ public final class PublicProfileViewModel {
             postCards.show([], readRevision: readRevision)
             return []
         }
+    }
+
+    /// How many portfolio items there are, so Work shows only when there's
+    /// work to show. Your own read includes private documents
+    /// (`GET /api/files/portfolio`); someone else's is the public list. A
+    /// failed read leaves it nil and Work stays hidden (yours stays shown).
+    /// The posts the audience sees (`?as=`); signed-out visitors see none
+    /// (`sign_in_required`), so "anyone" reads nothing.
+    private func loadPreviewPosts(id: String, audience: ProfileAudience, readRevision: Int) async -> [FeedPostDTO] {
+        guard audience != .anyone else {
+            postCards.show([], readRevision: readRevision)
+            return []
+        }
+        do {
+            let response = try await client.request(
+                PostsEndpoints.userPosts(userId: id, previewAs: audience.rawValue),
+                as: FeedResponse.self
+            )
+            postsLoadFailed = false
+            postCards.show(response.posts, readRevision: readRevision)
+            return response.posts
+        } catch {
+            logger.debug("Preview posts load failed: \(error)")
+            postsLoadFailed = true
+            postCards.show([], readRevision: readRevision)
+            return []
+        }
+    }
+
+    private func loadPortfolioCount(id: String) async {
+        // A preview counts what everyone can see: the public list.
+        let isOwn = currentUserId == id && previewAudience == nil
+        do {
+            let response = try await client.request(
+                isOwn ? ProfileTabsEndpoints.myPortfolio() : ProfileTabsEndpoints.portfolio(userId: id),
+                as: PortfolioListResponse.self
+            )
+            portfolioCount = response.files.count
+        } catch {
+            logger.debug("Portfolio count failed: \(error)")
+            portfolioCount = nil
+        }
+    }
+
+    /// The tabs to show: Posts and About, and Work when the person has a
+    /// portfolio, reviews or (with Open gigs on) posted tasks. Your own
+    /// profile always has Work, where "Add portfolio item" lives.
+    public func localTabs(for payload: PublicProfileContent) -> [LocalProfileTab] {
+        let profile = payload.profile
+        let hasWork = (portfolioCount ?? 0) > 0
+            || (profile.reviewCount ?? 0) > 0
+            || (LaunchFeatures.openGigs && (profile.gigsPosted ?? 0) > 0)
+        return hasWork || payload.isOwner ? [.posts, .about, .work] : [.posts, .about]
+    }
+
+    /// True when someone is signed in (the relationship read needs it).
+    public var hasSignedInViewer: Bool {
+        currentUserId != nil
+    }
+
+    /// "You and <name>": at most two lines; none once you block them.
+    public func togetherLines(for payload: PublicProfileContent) -> [ProfileTogetherLine] {
+        guard let inCommon, !payload.isOwner, connection != .blocked else { return [] }
+        return ProfileTogetherLine.lines(
+            from: inCommon,
+            firstName: payload.header.firstName,
+            viewerId: currentUserId,
+            profileId: payload.profile.id
+        )
+    }
+
+    /// Re-reads the Pinned row: a pin changed in a ⋯ menu somewhere.
+    public func reloadPinned() async {
+        guard UserSocialEndpoints.isUUID(resolvedUserId) else { return }
+        await loadPinned(id: resolvedUserId)
+    }
+
+    /// The Pinned row, read beside the posts. Signed-out visitors can't read
+    /// posts, so neither they nor the "Anyone" preview get pins.
+    private func loadPinned(id: String) async {
+        guard currentUserId != nil, previewAudience != .anyone else {
+            pinnedPosts = []
+            pinnedReadSucceeded = false
+            return
+        }
+        do {
+            let response = try await client.request(
+                PostsEndpoints.userPinnedPosts(userId: id, previewAs: previewAudience?.rawValue),
+                as: FeedResponse.self
+            )
+            pinnedPosts = Array(response.posts.prefix(ProfilePins.maxPins))
+            pinnedReadSucceeded = true
+        } catch {
+            // Leaving the screen cancels the read: nothing failed, so nothing changes.
+            if Task.isCancelled { return }
+            logger.debug("Pinned read failed: \(error)")
+            pinnedPosts = []
+            pinnedReadSucceeded = false
+        }
+    }
+
+    /// What you share, read beside the posts. Only for a signed-in visitor;
+    /// nothing in common, an older server (404) or a failed read hides it.
+    private func loadInCommon(id: String) async {
+        guard previewAudience == nil, let currentUserId, currentUserId != id else {
+            inCommon = nil
+            return
+        }
+        do {
+            let shared = try await client.request(PublicProfileEndpoints.inCommon(userId: id), as: ProfileInCommon.self)
+            inCommon = shared.isEmpty ? nil : shared
+        } catch {
+            // Leaving the screen cancels the read: nothing failed, so nothing changes.
+            if Task.isCancelled { return }
+            logger.debug("In-common read failed: \(error)")
+            inCommon = nil
+        }
+    }
+
+    /// What tapping "Verified neighbor" explains.
+    public func trustExplainer(for header: PublicProfileHeader) -> String {
+        if let city = header.trustCity {
+            return "Pantopus confirmed \(header.firstName) lives in \(city). Their address is never shown."
+        }
+        return "Pantopus confirmed \(header.firstName)'s home address. The address itself is never shown."
     }
 
     private func project(post: FeedPostDTO) -> PublicProfilePost {
@@ -1004,7 +1310,12 @@ public final class PublicProfileViewModel {
             // The chip needs the verified home itself: unverified people get the
             // neighbor layout too while creators are cut.
             isVerifiedNeighbor: hasHomeResidency(profile),
-            hasName: profile.hasName
+            hasName: profile.hasName,
+            tagline: profile.tagline,
+            trustCity: trustCity(profile),
+            joinedLabel: Self.joinedLabel(profile.createdAt),
+            joinedRecently: Self.joinedWithin(days: 14, iso: profile.createdAt),
+            avatarColor: ProfileAvatarColor(userId: profile.id)
         )
 
         var stats: [ProfileStatCell] = []
@@ -1052,7 +1363,8 @@ public final class PublicProfileViewModel {
         let neighbor = kind == .local
             ? buildNeighbor(from: profile, reviews: reviewCards, posts: posts)
             : nil
-        let isOwner = currentUserId.map { $0 == profile.id } ?? false
+        // A preview is rendered the way the audience sees it, not as yours.
+        let isOwner = previewAudience == nil && (currentUserId.map { $0 == profile.id } ?? false)
         // A Beacon (`PublicPersona.handle`) lives in a different namespace
         // from `User.username` — persona handles are generated independently
         // (`identityProfiles.generateUniqueAudienceHandle`) and the persona
@@ -1183,6 +1495,45 @@ public final class PublicProfileViewModel {
 
     private func firstName(_ name: String) -> String {
         name.split(separator: " ").first.map(String.init) ?? name
+    }
+
+    /// The city the trust line names: the verified home's city when there is
+    /// one, else the profile's own. The read leaves both out for viewers the
+    /// person's "Who can see your general area" setting doesn't name.
+    private func trustCity(_ profile: PublicProfile) -> String? {
+        var homeCity: String?
+        if case let .object(map) = profile.residency ?? .null, case let .string(city) = map["city"] ?? .null {
+            homeCity = city
+        }
+        let city = hasHomeResidency(profile) ? (homeCity ?? profile.city) : profile.city
+        guard let city = city?.trimmingCharacters(in: .whitespacesAndNewlines), !city.isEmpty else { return nil }
+        return city
+    }
+
+    /// "Joined Oct 2026", or "Joined this week" in someone's first seven days.
+    static func joinedLabel(_ iso: String?, now: Date = Date()) -> String? {
+        guard let date = joinedDate(iso) else { return nil }
+        if now.timeIntervalSince(date) < 7 * 86400 { return "Joined this week" }
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate("MMMyyyy")
+        return "Joined \(formatter.string(from: date))"
+    }
+
+    /// Whether the account is younger than `days`.
+    static func joinedWithin(days: Int, iso: String?, now: Date = Date()) -> Bool {
+        guard let date = joinedDate(iso) else { return false }
+        return now.timeIntervalSince(date) < Double(days) * 86400
+    }
+
+    /// `created_at`, with or without fractional seconds; Postgres sends six
+    /// digits ("…:56.123456+00:00"), which are cut to three when the plain
+    /// read fails.
+    private static func joinedDate(_ iso: String?) -> Date? {
+        guard var raw = iso, !raw.isEmpty else { return nil }
+        if let date = PlanTime.parse(raw) { return date }
+        guard let range = raw.range(of: #"\.\d{4,}"#, options: .regularExpression) else { return nil }
+        raw.replaceSubrange(range, with: raw[range].prefix(4))
+        return PlanTime.parse(raw)
     }
 
     /// P6.5 — Kind heuristic. A profile with a verified residency

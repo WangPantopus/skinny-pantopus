@@ -3,6 +3,8 @@
 
 import SwiftUI
 
+// swiftlint:disable file_length type_body_length
+
 /// Pulse post detail entry point.
 @MainActor
 public struct PulsePostDetailView: View {
@@ -87,6 +89,10 @@ public struct PulsePostDetailView: View {
                         } else if let detail = viewModel.conversation {
                             onEdit(detail.post.id)
                         }
+                    }
+                    if let pinTitle = viewModel.profilePinTitle {
+                        Button(pinTitle) { Task { await viewModel.toggleProfilePin() } }
+                            .accessibilityIdentifier("pulsePostProfilePin")
                     }
                     if viewModel.canKeepAskOpen {
                         Button("Keep open 7 more days") {

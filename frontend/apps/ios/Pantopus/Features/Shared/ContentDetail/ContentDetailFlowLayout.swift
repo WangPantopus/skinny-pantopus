@@ -26,7 +26,7 @@ struct ContentDetailFlowLayout: Layout {
         var y: CGFloat = 0
         var lineHeight: CGFloat = 0
         for sub in subviews {
-            let size = sub.sizeThatFits(.unspecified)
+            let size = Self.size(of: sub, maxWidth: maxWidth)
             if x + size.width > maxWidth {
                 x = 0
                 y += lineHeight + spacing
@@ -43,7 +43,7 @@ struct ContentDetailFlowLayout: Layout {
         var y: CGFloat = bounds.minY
         var lineHeight: CGFloat = 0
         for sub in subviews {
-            let size = sub.sizeThatFits(.unspecified)
+            let size = Self.size(of: sub, maxWidth: bounds.width)
             if x + size.width > bounds.maxX {
                 x = bounds.minX
                 y += lineHeight + spacing
@@ -53,5 +53,13 @@ struct ContentDetailFlowLayout: Layout {
             x += size.width + spacing
             lineHeight = max(lineHeight, size.height)
         }
+    }
+
+    /// A child's own size, but never wider than the row: at the larger text
+    /// sizes a long chip wraps its text instead of running off the edge.
+    private static func size(of sub: LayoutSubview, maxWidth: CGFloat) -> CGSize {
+        let ideal = sub.sizeThatFits(.unspecified)
+        guard maxWidth.isFinite, ideal.width > maxWidth else { return ideal }
+        return sub.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
     }
 }

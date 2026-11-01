@@ -120,6 +120,9 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
     public let authorInitials: String
     public let authorVerified: Bool
     public let avatarTint: FeedAvatarTint
+    /// Replaces the tint's color: a person's profile colors their own cards
+    /// with their profile color (`ProfileAvatarColor`).
+    public var avatarColor: Color?
     public let meta: String
     public let intent: PulseIntent
     public let title: String?
@@ -281,6 +284,7 @@ public struct PulsePostCard: View {
             FeedAvatar(
                 initials: content.authorInitials,
                 tint: content.avatarTint,
+                color: content.avatarColor,
                 verified: content.authorVerified,
                 size: 32
             )
@@ -637,6 +641,22 @@ public extension PulseIntent {
         case .visitorGuide: Theme.Color.info
         }
     }
+
+    /// The soft fill behind the intent's colour: the card chip, a pinned card's top.
+    var tintBackground: Color {
+        switch self {
+        case .all, .generic: Theme.Color.appSurfaceSunken
+        case .ask: Theme.Color.warmAmberBg
+        case .recommend: Theme.Color.successLight
+        case .event: Theme.Color.magicBg
+        case .lost: Theme.Color.roseBg
+        case .alert: Theme.Color.errorBg
+        case .deal: Theme.Color.successBg
+        case .announce: Theme.Color.slateBg
+        case .neighborhoodWin: Theme.Color.warningBg
+        case .visitorGuide: Theme.Color.infoBg
+        }
+    }
 }
 
 /// Right-aligned colored chip in the post header. Resolves intent →
@@ -670,18 +690,7 @@ public struct PulseIntentChip: View {
     }
 
     private var background: Color {
-        switch intent {
-        case .all, .generic: Theme.Color.appSurfaceSunken
-        case .ask: Theme.Color.warmAmberBg
-        case .recommend: Theme.Color.successLight
-        case .event: Theme.Color.magicBg
-        case .lost: Theme.Color.roseBg
-        case .alert: Theme.Color.errorBg
-        case .deal: Theme.Color.successBg
-        case .announce: Theme.Color.slateBg
-        case .neighborhoodWin: Theme.Color.warningBg
-        case .visitorGuide: Theme.Color.infoBg
-        }
+        intent.tintBackground
     }
 }
 

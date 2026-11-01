@@ -354,9 +354,7 @@ final class ProfileTabsViewModelTests: XCTestCase {
     func testProfileTabStripCarriesPortfolio() {
         XCTAssertEqual(ProfileTab.allCases, [.about, .reviews, .gigs, .portfolio])
         XCTAssertEqual(ProfileTab.portfolio.label, "Portfolio")
-        XCTAssertEqual(
-            LocalProfileTab.allCases,
-            [.posts, .about, .portfolio, .gigs, .reviews]
-        )
+        // A person's profile folds Portfolio, Gigs and Reviews into Work (11-01 redesign).
+        XCTAssertEqual(LocalProfileTab.allCases, [.posts, .about, .work])
     }
 }

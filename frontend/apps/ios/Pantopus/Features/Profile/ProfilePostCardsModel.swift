@@ -28,6 +28,9 @@ public final class ProfilePostCardsModel {
     public private(set) var actionRevision = 0
     /// Action feedback ("Saved to your bookmarks."), shown by the profile's toast.
     @ObservationIgnored var onToast: (@MainActor (String) -> Void)?
+    /// Whose profile this is: their own posts wear their profile color, as
+    /// the header above them does (`ProfileAvatarColor`).
+    @ObservationIgnored var profileUserId: String?
 
     @ObservationIgnored private var posts: [FeedPostDTO] = []
     @ObservationIgnored private var overrides: [String: Override] = [:]
@@ -77,7 +80,7 @@ public final class ProfilePostCardsModel {
 
     /// Whether the card's "Post options" menu has anything in it.
     func hasOptions(_ card: PulsePostCardContent) -> Bool {
-        shareURL(postId: card.id) != nil || card.actions.canReport
+        shareURL(postId: card.id) != nil || card.actions.canReport || pinTitle(postId: card.id) != nil
     }
 
     // MARK: - Taps
@@ -158,6 +161,24 @@ public final class ProfilePostCardsModel {
 
     // MARK: - Post menu
 
+    /// "Pin to profile" / "Unpin from profile" on your own posts (the server
+    /// marks only those); nil hides it.
+    func pinTitle(postId: String) -> String? {
+        guard let post = post(postId) else { return nil }
+        return ProfilePins.shared.menuTitle(
+            postId,
+            server: post.profilePinned,
+            canShowOnProfile: post.showOnProfile != false && post.businessAuthorId == nil
+        )
+    }
+
+    /// Pins or unpins your post; the toast says what happened, or why not.
+    func togglePin(postId: String) async {
+        guard let post = post(postId) else { return }
+        let toast = await ProfilePins.shared.toggle(postId, server: post.profilePinned, client: client)
+        onToast?(toast.text)
+    }
+
     /// The public web link handed to the share sheet; nil unless the post is public.
     func shareURL(postId: String) -> URL? {
         guard post(postId)?.canShareExternally == true else { return nil }
@@ -237,7 +258,12 @@ public final class ProfilePostCardsModel {
                 live.shareCount = value.shareCount ?? live.shareCount
             }
             live.pending = pending[post.id] ?? []
-            return PulseFeedViewModel.card(for: post, viewerId: viewerId, surface: nil, live: live)
+            var card = PulseFeedViewModel.card(for: post, viewerId: viewerId, surface: nil, live: live)
+            // Every post here is the person's own; one written for a business keeps the business look.
+            if let profileUserId, post.businessAuthorId == nil {
+                card.avatarColor = ProfileAvatarColor(userId: profileUserId).color
+            }
+            return card
         }
     }
 }
