@@ -82,14 +82,17 @@ function Tier({ label, children }: { label: string; children: React.ReactNode })
 
 // ── The calm top card: nothing urgent, here's why ──────────────
 // When weather alerts weren't checked it says so instead: an unchecked day is not an all-clear.
+// Nor is a day with an advisory, though nothing needs attention.
 function AllClearSummary({
   summary,
   cleared,
   alertsChecked,
+  advisories,
 }: {
   summary: string;
   cleared: { icon: LucideIcon; label: string }[];
   alertsChecked: boolean;
+  advisories: number;
 }) {
   const Icon = alertsChecked ? ShieldCheck : CloudOff;
   return (
@@ -100,7 +103,7 @@ function AllClearSummary({
         </span>
         <div className="flex-1 min-w-0">
           <div className="text-[18px] font-bold text-app-text leading-[23px] -tracking-[0.015em]">
-            {alertsChecked ? 'All clear today' : 'Weather alerts unavailable'}
+            {!alertsChecked ? 'Weather alerts unavailable' : advisories > 0 ? 'Nothing urgent today' : 'All clear today'}
           </div>
           <p className="text-[14px] text-app-text-muted leading-5 mt-1">
             {summary ||
@@ -186,7 +189,12 @@ export default function PulseStreamView({
       <DetailHeader title="Today's Pulse" address={address} backHref="/app/place" />
       <div className="px-4 sm:px-5 pt-1 pb-16">
         {ranked.urgent ? null : (
-          <AllClearSummary summary={ranked.summary} cleared={ranked.cleared} alertsChecked={ranked.alertsChecked} />
+          <AllClearSummary
+            summary={ranked.summary}
+            cleared={ranked.cleared}
+            alertsChecked={ranked.alertsChecked}
+            advisories={ranked.advisories}
+          />
         )}
 
         {ranked.tiers.map((tier) => (

@@ -57,6 +57,8 @@ export interface RankedStream {
   cleared: ClearedFact[];
   /** False when weather alerts weren't checked (`noaa` in the pulse's partial failures): no all-clear then. */
   alertsChecked: boolean;
+  /** Active weather alerts that aren't urgent (an advisory): nothing needs attention, but the day isn't all clear. */
+  advisories: number;
   /** The pulse's own one-line summary (the all-clear subtitle). */
   summary: string;
 }
@@ -157,12 +159,19 @@ export function rankPulse(pulse: NeighborhoodPulse['pulse']): RankedStream {
     .filter((tier) => tier.signals.length > 0);
 
   const urgent = buckets.attention.length > 0;
+  // A weather signal is an active NWS alert; a calm one (an advisory) ranks
+  // "when you have a minute", but it is still an alert.
+  const advisories = ordered.filter(
+    (s) => s.signal_type === 'weather' && !isUrgentColor(s.color) && s.color !== 'green',
+  ).length;
 
   // The all-clear facts assert only what the pulse actually reports. With
   // nothing urgent, "No active alerts" holds only when the weather service was
-  // checked; air / weather are claimed only when a calm (green) signal is present.
+  // checked and listed none; air / weather are claimed only when a calm (green)
+  // signal is present.
   const alertsChecked = !(pulse.meta?.partial_failures ?? []).includes('noaa');
-  const cleared: ClearedFact[] = alertsChecked ? [{ icon: BellOff, label: 'No active alerts' }] : [];
+  const cleared: ClearedFact[] =
+    alertsChecked && advisories === 0 ? [{ icon: BellOff, label: 'No active alerts' }] : [];
   if (ordered.some((s) => s.signal_type === 'air_quality' && s.color === 'green')) {
     cleared.push({ icon: Wind, label: 'Air quality good' });
   }
@@ -170,5 +179,5 @@ export function rankPulse(pulse: NeighborhoodPulse['pulse']): RankedStream {
     cleared.push({ icon: CloudSun, label: 'Mild, clear weather' });
   }
 
-  return { urgent, tiers, cleared, alertsChecked, summary: pulse.summary ?? '' };
+  return { urgent, tiers, cleared, alertsChecked, advisories, summary: pulse.summary ?? '' };
 }

@@ -563,8 +563,12 @@ extension PlacePresentation {
             )
         }
 
-        // 3) All clear — assert only what we actually know.
-        let airGood = aqiData != nil && (aqiData?.category == .good || aqiData?.category == .moderate)
+        // 3) All clear — assert only what we actually know. Moderate air (AQI 51–100) is said as moderate, never as good.
+        let airClause: String? = switch aqiData?.category {
+        case .good: "air is good"
+        case .moderate: "air quality is moderate"
+        default: nil
+        }
         let alertsKnownClear = alerts?.status == .ready && (alerts?.alerts?.active.isEmpty ?? true)
 
         let billData = bill?.status == .ready ? bill?.billBenchmark : nil
@@ -575,11 +579,11 @@ extension PlacePresentation {
 
         // Alerts that weren't checked are never an all-clear: say what's unknown, in a neutral chip.
         guard alertsKnownClear else {
+            let air = airClause.map { $0.prefix(1).uppercased() + $0.dropFirst() + " on your block today. " }
             return PlaceDerivedPulse(
                 variant: .allClear,
-                title: airGood
-                    ? "Air is good on your block today. Weather alerts aren't available right now."
-                    : "Air quality and weather alerts aren't available for your block right now.",
+                title: air.map { $0 + "Weather alerts aren't available right now." }
+                    ?? "Air quality and weather alerts aren't available for your block right now.",
                 chip: PlaceChipModel(tone: .neutral, text: "Alerts unavailable"),
                 heroIcon: .cloudOff,
                 nudgeIcon: .lightbulb,
@@ -588,7 +592,7 @@ extension PlacePresentation {
         }
 
         var clauses: [String] = []
-        if airGood { clauses.append("air is good") }
+        if let airClause { clauses.append(airClause) }
         clauses.append("there are no active alerts")
         let joined = clauses.joined(separator: " and ")
         let title = "All clear on your block today. " + joined.prefix(1).uppercased() + joined.dropFirst() + "."
