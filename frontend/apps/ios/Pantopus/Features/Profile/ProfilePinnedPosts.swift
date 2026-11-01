@@ -17,35 +17,35 @@ import SwiftUI
 /// item before its list is read again.
 @MainActor
 @Observable
-public final class ProfilePins {
-    public static let shared = ProfilePins()
+final class ProfilePins {
+    static let shared = ProfilePins()
     /// The server keeps at most three pins.
-    public static let maxPins = 3
+    static let maxPins = 3
 
     /// Pins changed in this session, by post id.
     private var changed: [String: Bool] = [:]
     /// Bumps on every change, so your profile re-reads its Pinned row.
-    public private(set) var revision = 0
+    private(set) var revision = 0
 
     /// Whether your post is pinned; nil when the server didn't say (other
     /// people's posts, an older server), which hides the menu item.
-    public func isPinned(_ postId: String, server: Bool?) -> Bool? {
+    func isPinned(_ postId: String, server: Bool?) -> Bool? {
         changed[postId] ?? server
     }
 
     /// "Pin to profile" or "Unpin from profile"; nil hides the item.
-    public func menuTitle(_ postId: String, server: Bool?) -> String? {
+    func menuTitle(_ postId: String, server: Bool?) -> String? {
         isPinned(postId, server: server).map { $0 ? "Unpin from profile" : "Pin to profile" }
     }
 
     /// Pins or unpins your post and says what happened, or the server's
     /// sentence (a fourth pin: "You can pin up to 3 posts. Unpin one first.").
-    public func toggle(_ postId: String, server: Bool?, client: APIClient = .shared) async -> ToastMessage {
+    func toggle(_ postId: String, server: Bool?, client: APIClient = .shared) async -> ToastMessage {
         await set(postId, pinned: !(isPinned(postId, server: server) ?? false), client: client)
     }
 
     /// Pins (or unpins) your post and says what happened.
-    public func set(_ postId: String, pinned pin: Bool, client: APIClient = .shared) async -> ToastMessage {
+    func set(_ postId: String, pinned pin: Bool, client: APIClient = .shared) async -> ToastMessage {
         do {
             let endpoint = pin ? PostsEndpoints.pinToProfile(postId: postId) : PostsEndpoints.unpinFromProfile(postId: postId)
             let response = try await client.request(endpoint, as: ProfilePinResponse.self)
@@ -63,7 +63,7 @@ public final class ProfilePins {
     }
 
     /// Forget the session's changes (sign-out).
-    public func reset() {
+    func reset() {
         changed = [:]
         revision += 1
     }
