@@ -269,18 +269,27 @@ extension PublicProfileView {
     /// shows them without opening anything.
     @ViewBuilder
     func promptsAndPins(_ payload: PublicProfileContent, firstName: String, mode: ExtrasMode) -> some View {
-        let edit: (@MainActor () -> Void)? = mode == .owner ? { showEditProfile = true } : nil
         let prompts = ProfilePromptCatalog.shown(payload.profile.prompts)
         if !prompts.isEmpty {
-            ProfilePromptsCard(firstName: firstName, prompts: prompts, onEdit: edit)
+            ProfilePromptsCard(firstName: firstName, prompts: prompts, onEdit: editAction(for: mode))
                 .padding(.horizontal, Spacing.s5)
                 .padding(.top, 28)
         }
-        if !viewModel.pinnedPosts.isEmpty, viewModel.connection != .blocked {
-            ProfilePinnedRow(posts: viewModel.pinnedPosts, onEdit: edit, onOpen: onOpenPost)
+        if showsPinned {
+            ProfilePinnedRow(posts: viewModel.pinnedPosts, onEdit: editAction(for: mode), onOpen: onOpenPost)
                 .padding(.top, 28)
                 .allowsHitTesting(mode != .preview)
         }
+    }
+
+    private var showsPinned: Bool {
+        !viewModel.pinnedPosts.isEmpty && viewModel.connection != .blocked
+    }
+
+    /// Edit opens the editor, on your own profile only.
+    private func editAction(for mode: ExtrasMode) -> (@MainActor () -> Void)? {
+        guard mode == .owner else { return nil }
+        return { showEditProfile = true }
     }
 
     static func firstWord(_ name: String) -> String {
