@@ -87,7 +87,7 @@ struct AddressTodayTabView: View {
                     .kerning(-0.4)
                     .foregroundStyle(Theme.Color.appText)
                 // The date beside the title (the f1-today-tab design); it turns over at midnight.
-                TimelineView(.everyMinute) { minute in
+                TimelineView(.everyClockMinute) { minute in
                     Text(minute.date.formatted(
                         Date.FormatStyle(timeZone: placeTimeZone)
                             .weekday(.abbreviated)

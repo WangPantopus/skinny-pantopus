@@ -16,10 +16,12 @@ struct TodaySunArcCard: View {
     var calendar: Calendar = .autoupdatingCurrent
 
     var body: some View {
-        TimelineView(.everyMinute) { minute in
+        TimelineView(.everyClockMinute) { minute in
             TodaySunArcContent(
                 data: data,
-                moment: SkyMoment.at(minute.date, sunrise: data.sunrise, sunset: data.sunset, calendar: calendar)
+                moment: SkyMoment.at(minute.date, sunrise: data.sunriseClock, sunset: data.sunsetClock, calendar: calendar),
+                now: minute.date,
+                isToday: PlacePresentation.fmtSunDay(data, timeZone: calendar.timeZone, now: minute.date) == "today"
             )
         }
         .accessibilityIdentifier("todaySunArc")
@@ -29,6 +31,9 @@ struct TodaySunArcCard: View {
 private struct TodaySunArcContent: View {
     let data: PlaceSunriseSunsetData
     let moment: SkyMoment
+    let now: Date
+    /// The times are today's at the place: only then does a countdown make sense.
+    let isToday: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var travelled = 0.0
@@ -47,10 +52,19 @@ private struct TodaySunArcContent: View {
         "\(data.daylightMinutes / 60)h \(data.daylightMinutes % 60)m"
     }
 
-    /// "Sunset in 3h 10m" by day; "Sunrise in 5h 54m" by night.
-    private var next: String {
-        let minutesLeft = up ? moment.sunset - moment.minutes
-            : (moment.minutes < moment.sunrise ? moment.sunrise - moment.minutes : moment.sunrise + 1440 - moment.minutes)
+    /// "Sunset in 3h 10m" by day; "Sunrise in 5h 54m" by night; nil for
+    /// another day's times. Counted between instants when the server sends
+    /// them, so the repeated hour the night the clocks go back counts once.
+    private var next: String? {
+        guard isToday else { return nil }
+        let minutesLeft: Double
+        if let rise = data.sunriseUtc.flatMap(SkyMoment.instant), let set = data.sunsetUtc.flatMap(SkyMoment.instant) {
+            let target = now < rise ? rise : (now <= set ? set : rise.addingTimeInterval(86400))
+            minutesLeft = target.timeIntervalSince(now) / 60
+        } else {
+            minutesLeft = up ? moment.sunset - moment.minutes
+                : (moment.minutes < moment.sunrise ? moment.sunrise - moment.minutes : moment.sunrise + 1440 - moment.minutes)
+        }
         let whole = max(Int(minutesLeft.rounded()), 1)
         let span = whole >= 60 ? "\(whole / 60)h \(whole % 60)m" : "\(whole)m"
         return up ? "Sunset in \(span)" : "Sunrise in \(span)"
@@ -89,13 +103,15 @@ private struct TodaySunArcContent: View {
                 HStack(alignment: .top) {
                     sunTime(icon: .sunrise, label: "Sunrise", minutes: moment.sunrise, alignment: .leading)
                     Spacer(minLength: 8)
-                    Text(next)
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(Theme.Color.warning)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(Theme.Color.warningBg))
-                    Spacer(minLength: 8)
+                    if let next {
+                        Text(next)
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(Theme.Color.warning)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Capsule().fill(Theme.Color.warningBg))
+                        Spacer(minLength: 8)
+                    }
                     sunTime(icon: .sunset, label: "Sunset", minutes: moment.sunset, alignment: .trailing)
                 }
             }
@@ -103,7 +119,7 @@ private struct TodaySunArcContent: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             "Sunrise \(clock(moment.sunrise)), sunset \(clock(moment.sunset)), \(data.daylightMinutes / 60) hours "
-                + "\(data.daylightMinutes % 60) minutes of daylight. \(next)."
+                + "\(data.daylightMinutes % 60) minutes of daylight." + (next.map { " \($0)." } ?? "")
         )
         .onAppear { move(to: target) }
         .onChange(of: target) { _, value in move(to: value) }

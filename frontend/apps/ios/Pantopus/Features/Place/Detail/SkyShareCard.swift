@@ -58,7 +58,7 @@ struct SkyShareCardView: View {
     let card: SkyShareCard
 
     var body: some View {
-        let moment = SkyMoment.at(card.date, sunrise: card.sun?.sunrise, sunset: card.sun?.sunset, calendar: card.calendar)
+        let moment = SkyMoment.at(card.date, sunrise: card.sun?.sunriseClock, sunset: card.sun?.sunsetClock, calendar: card.calendar)
         ZStack(alignment: .topLeading) {
             Canvas { context, size in
                 TodaySkyPainter(

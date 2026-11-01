@@ -58,14 +58,19 @@ struct TodaySkyHero: View {
     var body: some View {
         // The minute timeline moves the sky from day to dusk while the tab
         // stays open, even when the frame-by-frame motion is off.
-        TimelineView(.everyMinute) { minute in
+        TimelineView(.everyClockMinute) { minute in
             let hours = SkyScrub.hours(data.hourly, after: minute.date)
             let picked = scrub.flatMap { hours.indices.contains($0) ? hours[$0] : nil }
-            let nowMoment = SkyMoment.at(minute.date, sunrise: sun?.sunrise, sunset: sun?.sunset, calendar: calendar)
+            let nowMoment = SkyMoment.at(minute.date, sunrise: sun?.sunriseClock, sunset: sun?.sunsetClock, calendar: calendar)
             let nowNote = SkyNote.pick(now: minute.date, moment: nowMoment, weather: data, pickups: pickups, air: air, calendar: calendar)
             let when = picked?.date ?? minute.date
             let shown = picked.map { SkyScrub.weather(data, at: $0, calendar: calendar) } ?? data
-            let moment = picked == nil ? nowMoment : SkyMoment.at(when, sunrise: sun?.sunrise, sunset: sun?.sunset, calendar: calendar)
+            let moment = picked == nil ? nowMoment : SkyMoment.at(
+                when,
+                sunrise: sun?.sunriseClock,
+                sunset: sun?.sunsetClock,
+                calendar: calendar
+            )
             let note = picked == nil ? nowNote : SkyNote.pick(
                 now: when,
                 moment: moment,
