@@ -26,6 +26,8 @@ struct PlaceDashboardView: View {
     @State private var askTopic: AIAskTopic?
     /// The glance groups open on this home, remembered on the device.
     @State private var openGroups: Set<PlaceGlanceGroup> = []
+    /// "See all N" changes since the last visit.
+    @State private var showsChanges = false
     /// Homes whose first-week card was just dismissed here (its store isn't observed).
     @State private var movedCardDismissed: Set<String> = []
 
@@ -157,6 +159,21 @@ struct PlaceDashboardView: View {
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.hidden)
+        }
+        .sheet(isPresented: $showsChanges) {
+            if case let .loaded(intel) = viewModel.state {
+                PlaceChangesSheet(
+                    changes: viewModel.changes,
+                    total: viewModel.changesTotal,
+                    calendar: PlacePresentation.placeCalendar(intel.timeZone.flatMap(TimeZone.init(identifier:))),
+                    onOpen: { change in
+                        showsChanges = false
+                        openChange(change)
+                    },
+                    onClose: { showsChanges = false }
+                )
+                .presentationDetents([.medium, .large])
+            }
         }
         .sheet(item: $ballotGovernments) { sheet in
             BallotGovernmentsView(
@@ -442,10 +459,17 @@ struct PlaceDashboardView: View {
     @ViewBuilder
     private func worthALook(_ intel: PlaceIntelligence) -> some View {
         let items = Array(attentionItems(intel).prefix(3))
+        let shownChanges = items.filter { $0.id.hasPrefix("change.") }.count
         let moveIn = JustMovedCard.shows(homeId: viewModel.homeId, moveInDate: viewModel.moveInDate)
             && !movedCardDismissed.contains(viewModel.homeId)
         if !items.isEmpty || moveIn {
-            PlaceSectionHeading(title: "Worth a look")
+            PlaceSectionHeading(title: "Worth a look") {
+                if viewModel.changesTotal > shownChanges {
+                    PlaceInlineAction(title: "See all \(viewModel.changesTotal)", identifier: "place.changes.seeAll") {
+                        showsChanges = true
+                    }
+                }
+            }
             if !items.isEmpty {
                 PlaceWorthALook(items: items)
             }
@@ -464,13 +488,22 @@ struct PlaceDashboardView: View {
 
     private func attentionItems(_ intel: PlaceIntelligence) -> [PlaceAttentionItem] {
         let sections = intel.groups.flatMap(\.sections)
-        var items: [PlaceAttentionItem] = []
+        let calendar = PlacePresentation.placeCalendar(intel.timeZone.flatMap(TimeZone.init(identifier:)))
+        // What changed since the last visit leads, with its date and origin.
+        var items: [PlaceAttentionItem] = viewModel.changes.prefix(3).map { change in
+            PlaceAttentionItem(
+                id: "change.\(change.id)",
+                icon: change.icon,
+                title: change.title,
+                detail: change.detail ?? "Changed since your last visit",
+                origin: change.originLine(calendar: calendar)
+            ) { openChange(change) }
+        }
         if let systems = sections.first(where: { $0.id == .homeSystems }), systems.access != .locked,
            systems.status == .ready || systems.status == .stale, let data = systems.homeSystems,
            let item = PlaceAttentionItem.systems(data, open: { viewModel.onOpenDetail(.yourHome) }) {
             items.append(item)
         }
-        let calendar = PlacePresentation.placeCalendar(intel.timeZone.flatMap(TimeZone.init(identifier:)))
         let openTasks = {
             viewModel.reloadOnReturn()
             viewModel.onOpenHomeShortcut(.tasks)
@@ -506,6 +539,23 @@ struct PlaceDashboardView: View {
             })
         }
         return items
+    }
+
+    /// A change opens where it happened: Today (an alert, the pickup
+    /// schedule), Documents, the Home's systems, or Home tools' activity.
+    private func openChange(_ change: PlaceChange) {
+        switch change.route?.screen {
+        case "today": viewModel.onOpenDetail(.today)
+        case "documents":
+            viewModel.reloadOnReturn()
+            viewModel.onOpenHomeShortcut(.documents)
+        case "place_detail":
+            let group = change.route?.group.map(PlaceGroup.init(rawValue:)).flatMap(PlaceDetailGroup.forGroup)
+            viewModel.onOpenDetail(group ?? .yourHome)
+        default:
+            viewModel.reloadOnReturn()
+            viewModel.onOpenHubHome()
+        }
     }
 
     // MARK: - Your home at a glance

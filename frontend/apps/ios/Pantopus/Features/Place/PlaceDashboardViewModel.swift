@@ -47,6 +47,13 @@ final class PlaceDashboardViewModel {
     /// ones. Household roles only; a refusal leaves none and shows no error.
     private(set) var tasks: [HomeTaskDTO] = []
     private var taskAccess: HomeTaskAccess?
+    /// What changed since the last visit, newest first, and how many in all.
+    private(set) var changes: [PlaceChange] = []
+    private(set) var changesTotal = 0
+    /// This visit's `since` and when it began: changes are read once a visit
+    /// (a pull to refresh reads them again from the same time).
+    private var visitSince: String?
+    private var visitStartedAt: Date?
 
     private let api: APIClient
     private var reloadPending = false
@@ -133,6 +140,7 @@ final class PlaceDashboardViewModel {
         await claimRead
         await shortcuts
         await refreshTasks()
+        await refreshChanges(again: false)
     }
 
     /// Home tools can change the privacy projection while this view is
@@ -152,6 +160,40 @@ final class PlaceDashboardViewModel {
         await claimRead
         await shortcuts
         await refreshTasks()
+        await refreshChanges(again: true)
+    }
+
+    /// A visit is this dashboard showing loaded data, coming back within the
+    /// hour included. The first visit only remembers its time; later ones ask
+    /// what changed since the last, and remember the server's `until` once it
+    /// answers. An error or an older server (404) shows nothing and keeps the
+    /// last visit's time for the next one.
+    private func refreshChanges(again: Bool) async {
+        guard case let .loaded(intel) = state else { return }
+        let fresh = visitStartedAt.map { Date().timeIntervalSince($0) < 3600 } ?? false
+        if fresh, !again { return }
+        if !fresh {
+            visitStartedAt = Date()
+            visitSince = PlaceLastVisit.read(homeId: homeId)
+        }
+        guard let since = visitSince else {
+            changes = []
+            changesTotal = 0
+            if !fresh { PlaceLastVisit.write(intel.generatedAt, homeId: homeId) }
+            return
+        }
+        do {
+            let response: PlaceChangesResponse = try await api.request(PlaceEndpoints.changes(homeId: homeId, since: since))
+            guard !Task.isCancelled else { return }
+            changes = response.items
+            changesTotal = max(response.total ?? 0, response.items.count)
+            PlaceLastVisit.write(response.until ?? intel.generatedAt, homeId: homeId)
+        } catch {
+            if !again {
+                changes = []
+                changesTotal = 0
+            }
+        }
     }
 
     /// The tasks list, as Home tools reads it (`GET /api/homes/:id/tasks`).
