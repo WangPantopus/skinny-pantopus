@@ -50,18 +50,24 @@ function buildAqiSignal(aqiResult) {
 
   const aqi = aqiResult.aqi;
   const isElevated = aqi.aqi > 100;
+  // 51–100 is EPA's "moderate": acceptable, but not good air, and unusually
+  // sensitive people may feel it. Green is kept for good air only, since the
+  // apps read a green air signal as "Air quality good".
+  const isModerate = !isElevated && aqi.aqi > 50;
 
   return {
     signal_type: 'air_quality',
     priority: isElevated ? 9 : 3,
     title: isElevated
       ? `Air quality alert: AQI ${aqi.aqi} (${aqi.category})`
-      : `Air quality is ${(aqi.category || 'good').toLowerCase()}`,
+      : `Air quality is ${(aqi.category || (isModerate ? 'moderate' : 'good')).toLowerCase()}`,
     detail: isElevated
       ? `AQI ${aqi.aqi} — ${aqi.category}. ${aqi.pollutant} is the primary pollutant. Consider limiting outdoor activity.`
-      : `AQI ${aqi.aqi} — no concerns today.`,
+      : isModerate
+        ? `AQI ${aqi.aqi} — unusually sensitive people should consider limiting prolonged exertion.`
+        : `AQI ${aqi.aqi} — no concerns today.`,
     icon: 'wind',
-    color: isElevated ? 'red' : 'green',
+    color: isElevated ? 'red' : isModerate ? 'gray' : 'green',
   };
 }
 
@@ -213,8 +219,9 @@ function buildSummary(propertyProfile, aqiSignal, weatherSignals, seasonalCtx, a
     parts.push("We couldn't check for weather alerts on your block right now");
   }
 
+  // The air signal's own words: a moderate reading is never summed up as good.
   if (aqiSignal) {
-    parts.push(`AQI is ${(aqiSignal.title.includes('alert') ? 'elevated' : 'good')}`);
+    parts.push(aqiSignal.title);
   }
 
   if (seasonalCtx.primary_season) {
