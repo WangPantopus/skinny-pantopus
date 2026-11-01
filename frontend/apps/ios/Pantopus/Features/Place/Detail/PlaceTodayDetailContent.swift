@@ -386,6 +386,7 @@ extension PlaceTodayDetailContent {
             today: card?.data.today ?? SkyNote.dayKey(Date(), calendar: skyCalendar),
             events: card?.data.upcoming ?? [],
             household: vm.calendarHomeId != nil,
+            guest: intel.viewer?.role == "nonresident",
             ballot: electionData?.ballotCard,
             election: electionData?.ballotCard == nil ? nil : electionData,
             canOpenBallot: onOpenBallot != nil,
@@ -531,10 +532,21 @@ extension PlaceTodayDetailContent {
     private func setupSummary(open: Int, saved: Bool) -> String? {
         if open > 0 { return open == 1 ? "1 optional item" : "\(open) optional items" }
         if saved { return "Reminders need your home on Pantopus" }
-        return radonState?.task.map(RadonToday.message)
+        if let task = radonState?.task { return RadonToday.message(task) }
+        // A question put off with "Not now" stays one tap away, uncounted.
+        guard let until = radonState?.dismissedUntil, until > Date() else { return nil }
+        return "Radon question put off until \(until.formatted(.dateTime.month(.abbreviated).day().locale(.autoupdatingCurrent)))"
     }
 
-    private func setupAction(title: String, detail: String, identifier: String, action: @escaping () -> Void) -> some View {
+    /// A row that opens something: `expanded` set means it opens here (a
+    /// chevron that turns), else it goes somewhere (a chevron to the side).
+    private func setupAction(
+        title: String,
+        detail: String,
+        identifier: String,
+        expanded: Bool? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -547,7 +559,8 @@ extension PlaceTodayDetailContent {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                Icon(.chevronRight, size: 16, strokeWidth: 2.25, color: Theme.Color.appTextMuted)
+                Icon(expanded == nil ? .chevronRight : .chevronDown, size: 16, strokeWidth: 2.25, color: Theme.Color.appTextMuted)
+                    .rotationEffect(.degrees(expanded == true ? 180 : 0))
                     .accessibilityHidden(true)
             }
             .padding(.vertical, 10)
@@ -557,6 +570,7 @@ extension PlaceTodayDetailContent {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
+        .accessibilityValue(expanded.map { $0 ? "Expanded" : "Collapsed" } ?? "")
         .accessibilityIdentifier(identifier)
     }
 
@@ -568,7 +582,8 @@ extension PlaceTodayDetailContent {
             setupAction(
                 title: state.task == nil ? "Add radon test information" : "Radon test",
                 detail: state.task.map(RadonToday.message) ?? "Add a report, record that you're unsure, or come back later.",
-                identifier: "today.setup.radon"
+                identifier: "today.setup.radon",
+                expanded: radonItemOpen && !state.hidden
             ) {
                 // Coming back to a question put off with "Not now" asks it again.
                 if state.task == nil, state.dismissedUntil != nil {

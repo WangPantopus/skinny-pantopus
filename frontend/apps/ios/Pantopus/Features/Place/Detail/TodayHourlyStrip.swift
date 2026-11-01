@@ -59,8 +59,10 @@ struct TodayHourlyStrip: View {
         ScrollView(.horizontal, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(bands) { band in bandView(band) }
+                // The rain line only when some hour has a real chance of it.
+                let showsPrecip = cells.contains { $0.precip != nil }
                 HStack(spacing: 0) {
-                    ForEach(cells) { cell in cellView(cell) }
+                    ForEach(cells) { cell in cellView(cell, showsPrecip: showsPrecip) }
                 }
             }
             .padding(.horizontal, 6)
@@ -74,7 +76,7 @@ struct TodayHourlyStrip: View {
         )
     }
 
-    private func cellView(_ cell: Cell) -> some View {
+    private func cellView(_ cell: Cell, showsPrecip: Bool) -> some View {
         VStack(spacing: 5) {
             Text(cell.label)
                 .font(.system(size: 12, weight: cell.isNow ? .bold : .medium))
@@ -85,11 +87,13 @@ struct TodayHourlyStrip: View {
                 .font(.system(size: 15, weight: .semibold))
                 .monospacedDigit()
                 .foregroundStyle(Theme.Color.appText)
-            // Keeps every column the same height whether or not it has a chance of rain.
-            Text(cell.precip ?? " ")
-                .font(.system(size: 11, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(Theme.Color.info)
+            if showsPrecip {
+                // Keeps every column the same height whether or not it has a chance of rain.
+                Text(cell.precip ?? " ")
+                    .font(.system(size: 11, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.Color.info)
+            }
         }
         .lineLimit(1)
         .minimumScaleFactor(0.8)

@@ -183,7 +183,7 @@ struct TodayOwnerLabel: View {
     private var icon: PantopusIcon {
         switch owner {
         case .address: .mapPin
-        case .household: .house
+        case .household, .home: .house
         case .plan, .going: .users
         }
     }

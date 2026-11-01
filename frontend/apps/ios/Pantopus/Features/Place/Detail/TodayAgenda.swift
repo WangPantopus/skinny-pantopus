@@ -32,6 +32,8 @@ struct TodayAgendaItem: Identifiable, Equatable {
     enum Owner: String {
         case address = "For this address"
         case household = "Your household"
+        /// The household's pickup day as a guest sees it.
+        case home = "This home's pickup day"
         case plan = "Your plan"
         case going = "Going"
     }
@@ -124,6 +126,8 @@ enum TodayAgenda {
         var events: [PlaceCalendarEvent] = []
         /// The household can change this home's pickup schedule.
         var household = false
+        /// A guest sees the household's dates as the home's, not theirs.
+        var guest = false
         var ballot: BallotSummary?
         /// The election's name and date ("November 3 general election", "2026-11-03").
         var election: PlaceCivicElectionData?
@@ -185,7 +189,7 @@ enum TodayAgenda {
             icon: icon(event.kind),
             title: event.title,
             subtitle: relative(day, inputs: inputs),
-            owner: event.isHousehold ? .household : .address,
+            owner: event.isHousehold ? (inputs.guest ? .home : .household) : .address,
             details: details,
             source: (event.source ?? "Pantopus registry") + (event.confidence == "unverified" ? " · unconfirmed, please double-check" : ""),
             actions: actions
