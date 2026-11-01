@@ -18,7 +18,9 @@ struct TodayHourlyStrip: View {
     /// Active alerts, ranked; the first two that touch the strip are marked.
     let alerts: [PlaceWeatherAlert]
     let calendar: Calendar
-    @ScaledMetric(relativeTo: .body) private var cellWidth: CGFloat = 54
+    /// Fixed like the strip's type (the app's text doesn't grow with the text-size setting), so a
+    /// large setting doesn't spread a few hours across the whole width.
+    private let cellWidth: CGFloat = 54
 
     /// One column of the strip: now, or a forecast hour.
     struct Cell: Identifiable {
@@ -58,7 +60,11 @@ struct TodayHourlyStrip: View {
     private func strip(_ cells: [Cell], bands: [Band]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(bands) { band in bandView(band) }
+                ForEach(Array(Self.rows(bands).enumerated()), id: \.offset) { _, row in
+                    ZStack(alignment: .leading) {
+                        ForEach(row) { band in bandView(band) }
+                    }
+                }
                 // The rain line only when some hour has a real chance of it.
                 let showsPrecip = cells.contains { $0.precip != nil }
                 HStack(spacing: 0) {
@@ -173,6 +179,19 @@ extension TodayHourlyStrip {
             )
         }
         return Array(all.prefix(2))
+    }
+
+    /// Alerts that don't share an hour share a line above the strip.
+    static func rows(_ bands: [Band]) -> [[Band]] {
+        var rows: [[Band]] = []
+        for band in bands {
+            if let index = rows.firstIndex(where: { $0.allSatisfy { $0.last < band.first || band.last < $0.first } }) {
+                rows[index].append(band)
+            } else {
+                rows.append([band])
+            }
+        }
+        return rows
     }
 
     /// "2 AM"; the first hour of a new day says the day ("Mon").

@@ -945,7 +945,7 @@ struct AddressCalendarCard: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 Spacer(minLength: 0)
                 if homeId != nil {
-                    Button(picking ? "Cancel" : "Pickup schedule") {
+                    Button {
                         weekday = calendar.pickupSchedule?.weekday ?? ""
                         frequency = calendar.pickupSchedule?.recyclingFrequency ?? "not_set"
                         nextDate = calendar.pickupSchedule?.recyclingNextDate ?? ""
@@ -954,9 +954,14 @@ struct AddressCalendarCard: View {
                         errorText = nil
                         flyerMessage = nil
                         picking.toggle()
+                    } label: {
+                        // A 44-pt target around the short label.
+                        Text(picking ? "Cancel" : "Pickup schedule")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.Color.primaryInk)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
                     }
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primaryInk)
                     .accessibilityIdentifier("addressCalendarPickupToggle")
                     .disabled(saving != nil)
                 }
@@ -1000,12 +1005,15 @@ struct AddressCalendarCard: View {
                             .font(.system(size: 13.5))
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     }
-                    Button("Show every date") { self.selectedDay = nil }
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.Color.primaryInk)
-                        .frame(minHeight: 44)
-                        .accessibilityHint("Shows the whole two weeks again.")
-                        .accessibilityIdentifier("addressCalendarShowAll")
+                    Button { self.selectedDay = nil } label: {
+                        Text("Show every date")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.Color.primaryInk)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityHint("Shows the whole two weeks again.")
+                    .accessibilityIdentifier("addressCalendarShowAll")
                 }
             }
 
