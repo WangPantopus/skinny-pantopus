@@ -373,10 +373,31 @@ public struct PlaceWeatherAlert: Decodable, Sendable, Hashable, Identifiable {
     public let headline: String
     /// Body copy / instruction.
     public let description: String
-    /// ISO 8601.
+    /// ISO 8601: when the hazard begins.
     public let onset: String?
-    /// ISO 8601.
+    /// ISO 8601: when the hazard ends.
     public let ends: String?
+    /// When the bulletin was issued, took effect and expires (ISO 8601). Nil from older servers.
+    public var sent: String?
+    public var effective: String?
+    public var expires: String?
+    /// The issuing office ("NWS Portland OR"). Nil from older servers.
+    public var senderName: String?
+    /// The affected areas as the provider writes them. Nil from older servers.
+    public var area: String?
+    /// The provider's full text, not shortened. Nil from older servers.
+    public var originalDescription: String?
+    public var originalInstruction: String?
+    /// The provider's page for the alert, when there is one.
+    public var detailsUrl: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, event, severity, headline, description, onset, ends, sent, effective, expires, area
+        case senderName = "sender_name"
+        case originalDescription = "original_description"
+        case originalInstruction = "original_instruction"
+        case detailsUrl = "details_url"
+    }
 }
 
 /// NWS active alerts — an empty `active` list renders "No active alerts".
@@ -1272,6 +1293,14 @@ public struct PlaceCalendarEvent: Decodable, Sendable, Hashable, Identifiable {
     public var movedFrom: String?
     public var holiday: String?
     public var shiftDays: Int?
+    /// "household" for the household's own schedule, "address" for a general
+    /// date at the address. Nil from older servers (then `scope` says it).
+    public var audience: String?
+
+    /// The household's own date rather than a general one for the address.
+    public var isHousehold: Bool {
+        audience.map { $0 == "household" } ?? (scope == "home")
+    }
 
     public var holidayMoveLine: String? {
         guard movedFrom != nil, let holiday, !holiday.isEmpty, let shiftDays, shiftDays > 0 else { return nil }
@@ -1290,7 +1319,7 @@ public struct PlaceCalendarEvent: Decodable, Sendable, Hashable, Identifiable {
         case leadDays = "lead_days"
         case sourceUrl = "source_url"
         case movedFrom = "moved_from"
-        case holiday
+        case holiday, audience
         case shiftDays = "shift_days"
     }
 }

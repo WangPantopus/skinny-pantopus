@@ -2,9 +2,11 @@
 //  AddressTodayTabView.swift
 //  Pantopus
 //
-//  The Today tab as its own screen (Wedge v2 D2): weather now, what to do
-//  with it, the address calendar, then air, alerts and sun, for the
-//  person's primary place. The hub briefing (`TodayDetailView`) is still
+//  The Today tab as its own screen (Wedge v2 D2; the November 2026
+//  redesign's order is in `PlaceTodayDetailContent`): any advisory, the sky
+//  and the hours ahead, what's coming up at home, air and daylight, then
+//  setup and the full conditions, for the person's primary place. The hub
+//  briefing (`TodayDetailView`) is still
 //  reachable from a morning-push deep link; this is what the tab shows
 //  on its own. With no place but a claim in review, it is the claimed
 //  address's public Today under the claim's status. Parity twin of
@@ -361,7 +363,7 @@ private struct AddressTodayLoaded: View {
     @State private var scope = HomeClaimSessionScope(api: .shared)
     @State private var savedAnchorMatches = false
     @State private var sessionChanged = false
-    /// The assistant, opened from the box at the top about this day.
+    /// The assistant, opened from the box at the end about this day.
     @State private var askTopic: AIAskTopic?
 
     var body: some View {
@@ -373,58 +375,12 @@ private struct AddressTodayLoaded: View {
                 case .loading:
                     PlaceDetailSkeleton()
                 case let .loaded(intel):
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 0) {
-                            if let claim {
-                                // My homes' words for what the claim waits on; its Waiting Room has the steps.
-                                PlaceVerifyBanner(
-                                    icon: .clock,
-                                    message: "Your claim is in review. \(claim.waitingLabel).",
-                                    action: "Check claim status",
-                                    identifier: "today.claimBanner"
-                                ) { openClaimStatus(claim) }
-                                    .padding(.bottom, 12)
+                    ScrollViewReader { proxy in
+                        loadedScroll(intel)
+                            // Tapping Today again on its page goes back to the top.
+                            .onChange(of: rootTabs.todayReselected) { _, _ in
+                                withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(Self.topAnchor, anchor: .top) }
                             }
-                            // The assistant reads a claimed Home's public view, as this screen shows it.
-                            AskPantopusBox { askTopic = .today(homeId: viewModel.savedPlaceId == nil ? viewModel.homeId : nil) }
-                                .padding(.bottom, 12)
-                            // Nearby Plans on the day (A1, A2): nothing unless the `plans` flag is on.
-                            if PlansFlags.shared.plans { PlansTodayCards() }
-                            if savedAnchorMatches {
-                                StatusChip("Saved place · Only you", variant: .neutral)
-                                    .padding(.bottom, 12)
-                            }
-                            PlaceTodayDetailContent(
-                                intel: intel,
-                                vm: viewModel,
-                                showHomeRadon: savedPlace == nil && claim == nil,
-                                onOpenBallot: onOpenPlace
-                            )
-                            if savedPlace != nil {
-                                remindersRow.padding(.top, 12)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, Spacing.s10)
-                    }
-                    // The home-screen widget shows what Today just showed for this place.
-                    .task(id: WidgetSource(intel: intel, fallback: viewModel.fallbackCalendar)) {
-                        guard scope.isCurrent,
-                              PlaceStoreReads.allowsCopy(homeId: viewModel.homeId, savedPlaceId: viewModel.savedPlaceId) else {
-                            WidgetSnapshotStore.shared.clearToday()
-                            return
-                        }
-                        WidgetSnapshotStore.shared.writeToday(TodayWidgetSnapshot(intel: intel, viewModel: viewModel))
-                    }
-                    .refreshable {
-                        guard scope.isCurrent else { sessionChanged = true
-                            return
-                        }
-                        await viewModel.refresh()
-                        guard scope.isCurrent else { sessionChanged = true
-                            return
-                        }
-                        await loadSavedAnchor()
                     }
                 case let .error(message):
                     if viewModel.accessDenied, let claim {
@@ -453,20 +409,60 @@ private struct AddressTodayLoaded: View {
         }
     }
 
-    private var remindersRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Get reminders for this address")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Theme.Color.appText)
-            Text("Pickup and radon reminders need your home on Pantopus.")
-                .font(.system(size: 14)).foregroundStyle(Theme.Color.appTextSecondary)
-            GhostButton(title: "Add your home") { onAddHome() }
+    private static let topAnchor = "today.top"
+
+    private func loadedScroll(_ intel: PlaceIntelligence) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Color.clear.frame(height: 0).id(Self.topAnchor)
+                if let claim {
+                    // My homes' words for what the claim waits on; its Waiting Room has the steps.
+                    PlaceVerifyBanner(
+                        icon: .clock,
+                        message: "Your claim is in review. \(claim.waitingLabel).",
+                        action: "Check claim status",
+                        identifier: "today.claimBanner"
+                    ) { openClaimStatus(claim) }
+                        .padding(.bottom, 12)
+                }
+                if savedAnchorMatches {
+                    StatusChip("Saved place · Only you", variant: .neutral)
+                        .padding(.bottom, 4)
+                }
+                // Plans cards (with `plans` on), the saved place's reminders row and Ask
+                // Pantopus come with the tab; the assistant reads a claimed Home's public view.
+                PlaceTodayDetailContent(
+                    intel: intel,
+                    vm: viewModel,
+                    showHomeRadon: savedPlace == nil && claim == nil,
+                    onOpenBallot: onOpenPlace,
+                    tab: TodayTabExtras(savedPlace: savedPlace != nil, onAddHome: onAddHome) {
+                        askTopic = .today(homeId: viewModel.savedPlaceId == nil ? viewModel.homeId : nil)
+                    }
+                )
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, Spacing.s10)
         }
-        .padding(16)
-        .background(Theme.Color.appSurface)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
-        .accessibilityIdentifier("todaySavedPlaceReminders")
+        // The home-screen widget shows what Today just showed for this place.
+        .task(id: WidgetSource(intel: intel, fallback: viewModel.fallbackCalendar)) {
+            guard scope.isCurrent,
+                  PlaceStoreReads.allowsCopy(homeId: viewModel.homeId, savedPlaceId: viewModel.savedPlaceId) else {
+                WidgetSnapshotStore.shared.clearToday()
+                return
+            }
+            WidgetSnapshotStore.shared.writeToday(TodayWidgetSnapshot(intel: intel, viewModel: viewModel))
+        }
+        .refreshable {
+            guard scope.isCurrent else { sessionChanged = true
+                return
+            }
+            await viewModel.refresh()
+            guard scope.isCurrent else { sessionChanged = true
+                return
+            }
+            await loadSavedAnchor()
+        }
     }
 
     private func checkSavedAnchor() async throws -> Bool {
