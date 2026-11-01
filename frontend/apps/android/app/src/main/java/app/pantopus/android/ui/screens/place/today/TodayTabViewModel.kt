@@ -653,7 +653,7 @@ sealed interface TodayTabUiState {
         /** Still the day this copy was read on, at the home: Today turns over at the home's midnight. */
         fun isSameDay(now: Long = System.currentTimeMillis()): Boolean {
             // Midnight in the home's time zone (contract §4); the phone's when the reply has none.
-            val zone = intelligence.timeZone?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
+            val zone = intelligence.homeZone ?: ZoneId.systemDefault()
             return Instant.ofEpochMilli(fetchedAt).atZone(zone).toLocalDate() == Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
         }
     }

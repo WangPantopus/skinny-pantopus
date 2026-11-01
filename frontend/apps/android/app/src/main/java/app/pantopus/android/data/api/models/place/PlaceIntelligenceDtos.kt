@@ -4,6 +4,11 @@ import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
+import java.time.Instant
+import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 
 /**
  * The Place Intelligence section-envelope contract. Mirrors the web
@@ -314,12 +319,50 @@ data class PlaceAlertsData(
 /** Sunrise / sunset — rides the NOAA / Open-Meteo feed. */
 @JsonClass(generateAdapter = true)
 data class PlaceSunriseSunsetData(
-    /** ISO 8601. */
+    /** The place's wall clock ("2026-11-01T06:50", no zone); older servers wrote it in the fetch day's UTC offset. */
     val sunrise: String,
-    /** ISO 8601. */
+    /** The place's wall clock, as [sunrise]. */
     val sunset: String,
     @Json(name = "daylight_minutes") val daylightMinutes: Int,
-)
+    /** The place's local date these times belong to (YYYY-MM-DD); null from older servers. */
+    val date: String? = null,
+    /** The sunrise instant (ISO 8601, "Z"); null from older servers. */
+    @Json(name = "sunrise_utc") val sunriseUtc: String? = null,
+    /** The sunset instant (ISO 8601, "Z"); null from older servers. */
+    @Json(name = "sunset_utc") val sunsetUtc: String? = null,
+) {
+    /** The sunrise on the place's clock in [zone] ("2026-11-01T06:50"): the instant when sent, else the wall clock as written. */
+    fun localSunrise(zone: ZoneId?): String = localClock(sunriseUtc, sunrise, zone)
+
+    /** The sunset on the place's clock in [zone], as [localSunrise]. */
+    fun localSunset(zone: ZoneId?): String = localClock(sunsetUtc, sunset, zone)
+
+    /** The place's local date of these times: [date] when sent, else the sunrise's own date. */
+    fun localDate(zone: ZoneId?): LocalDate? =
+        date?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+            ?: runCatching { LocalDate.parse(localSunrise(zone).take(DATE_LENGTH)) }.getOrNull()
+
+    private fun localClock(
+        instant: String?,
+        wall: String,
+        zone: ZoneId?,
+    ): String {
+        // A zone-less wall clock is already the place's; an instant (or an offset string) is read in the place's zone.
+        val at =
+            instant?.let(::parseInstant)
+                ?: wall.takeIf { it.length > DATE_TIME_LENGTH && it.drop(DATE_TIME_LENGTH).any { c -> c in "Z+-" } }
+                    ?.let(::parseInstant)
+        if (at == null || zone == null) return wall
+        return at.atZone(zone).toLocalDateTime().truncatedTo(ChronoUnit.MINUTES).toString()
+    }
+
+    private fun parseInstant(raw: String): Instant? = runCatching { OffsetDateTime.parse(raw).toInstant() }.getOrNull()
+
+    private companion object {
+        const val DATE_LENGTH = 10
+        const val DATE_TIME_LENGTH = 16
+    }
+}
 
 // ─── Risk & readiness payloads ───────────────────────────────
 
@@ -1369,7 +1412,10 @@ data class PlaceIntelligence(
     @Json(name = "move_in_date") val moveInDate: String? = null,
     /** The home's IANA time zone (Today turns over at its midnight); null without coordinates and from older servers. */
     @Json(name = "time_zone") val timeZone: String? = null,
-)
+) {
+    /** [timeZone] as a zone: every clock time shown for this place is read in it (TPR contract); null when unknown. */
+    val homeZone: ZoneId? get() = timeZone?.let { runCatching { ZoneId.of(it) }.getOrNull() }
+}
 
 // ─── Anonymous T0 preview (`GET /api/public/place`) ──────────
 

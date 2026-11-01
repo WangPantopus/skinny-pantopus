@@ -65,7 +65,10 @@ fun TodaySunArcCard(
     data: PlaceSunriseSunsetData,
     timeZone: ZoneId = ZoneId.systemDefault(),
 ) {
-    val moment = SkyMoment.at(rememberMinuteClock(timeZone), data.sunrise, data.sunset)
+    val now = rememberMinuteClock(timeZone)
+    val moment = SkyMoment.at(now, data.localSunrise(timeZone), data.localSunset(timeZone))
+    // Another day's times (an older server's cache, a provider outage) keep their "as of" day: no countdown from them.
+    val today = data.localDate(timeZone)?.let { it == now.toLocalDate() } ?: true
     val up = moment.minutes >= moment.sunrise && moment.minutes <= moment.sunset
     val target =
         when {
@@ -82,19 +85,20 @@ fun TodaySunArcCard(
             travelled.animateTo(target.toFloat(), spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessVeryLow))
         }
     }
+    // Counted in real time: on the day the clocks change, wall-clock minutes are an hour off around the change.
     val minutesLeft =
         when {
-            up -> moment.sunset - moment.minutes
-            moment.minutes < moment.sunrise -> moment.sunrise - moment.minutes
-            else -> moment.sunrise + 1440 - moment.minutes
+            up -> SkyMoment.minutesUntil(now, moment.sunset)
+            moment.minutes < moment.sunrise -> SkyMoment.minutesUntil(now, moment.sunrise)
+            else -> SkyMoment.minutesUntil(now, moment.sunrise, nextDay = true)
         }
     val whole = minutesLeft.roundToInt().coerceAtLeast(1)
     val span = if (whole >= 60) "${whole / 60}h ${whole % 60}m" else "${whole}m"
-    val next = if (up) "Sunset in $span" else "Sunrise in $span"
+    val next = (if (up) "Sunset in $span" else "Sunrise in $span").takeIf { today }
     val daylight = "${data.daylightMinutes / 60}h ${data.daylightMinutes % 60}m"
     val spoken =
         "Sunrise ${clock(moment.sunrise)}, sunset ${clock(moment.sunset)}, ${data.daylightMinutes / 60} hours " +
-            "${data.daylightMinutes % 60} minutes of daylight. $next."
+            "${data.daylightMinutes % 60} minutes of daylight." + (next?.let { " $it." } ?: "")
     PlaceDetailCard(
         modifier = Modifier.testTag("todaySunArc").clearAndSetSemantics { contentDescription = spoken },
         padding = 16.dp,
@@ -103,17 +107,19 @@ fun TodaySunArcCard(
         Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.Top) {
             SunTime(PantopusIcon.Sunrise, "Sunrise", clock(moment.sunrise), Alignment.Start)
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                Text(
-                    next,
-                    fontSize = 12.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = PantopusColors.warning,
-                    modifier =
-                        Modifier
-                            .clip(CircleShape)
-                            .background(PantopusColors.warningBg)
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
-                )
+                next?.let {
+                    Text(
+                        it,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PantopusColors.warning,
+                        modifier =
+                            Modifier
+                                .clip(CircleShape)
+                                .background(PantopusColors.warningBg)
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                    )
+                }
             }
             SunTime(PantopusIcon.Sunset, "Sunset", clock(moment.sunset), Alignment.End)
         }

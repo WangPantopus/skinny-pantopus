@@ -66,9 +66,9 @@ class PlacePresentationTest {
 
     @Test
     fun `sunrise sunset formats local wall clock`() {
-        // Sunrise/sunset arrive as zone-less local times ("…T05:19").
+        // Sunrise/sunset arrive as zone-less local times ("…T05:19"); the captured day is long past, so it says so.
         val reading = PlacePresentation.reading(fixture().section(PlaceSectionId.SUNRISE_SUNSET))
-        assertEquals("5:19a · 8:59p", reading.value)
+        assertEquals("5:19a · 8:59p · as of Jun 12", reading.value)
     }
 
     @Test

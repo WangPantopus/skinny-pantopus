@@ -37,6 +37,7 @@ import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.PlaceSectionStatus
 import app.pantopus.android.data.api.models.place.PlaceTier
 import app.pantopus.android.ui.components.RefreshOnStoreChange
+import app.pantopus.android.ui.screens.place.LocalPlaceZone
 import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.components.PlaceChip
 import app.pantopus.android.ui.screens.place.components.PlaceDensityCard
@@ -81,7 +82,9 @@ fun PlaceRiskDetailContent(
             intel.section(id)?.let { RiskCard(it) }
         }
     }
-    intel.section(PlaceSectionId.FLOOD)?.let { PlaceSourceNote("FEMA · USGS · USFS", PlacePresentation.fmtMonthYear(it.asOf)) }
+    intel.section(PlaceSectionId.FLOOD)?.let {
+        PlaceSourceNote("FEMA · USGS · USFS", PlacePresentation.fmtMonthYear(it.asOf, intel.homeZone))
+    }
 
     val health =
         listOf(PlaceSectionId.LEAD_RADON, PlaceSectionId.DRINKING_WATER, PlaceSectionId.ENVIRONMENTAL_HAZARDS).mapNotNull {
@@ -223,7 +226,7 @@ private fun RiskCard(env: PlaceSectionEnvelope) {
         PlaceDetailFallbackCard(env)
         return
     }
-    val reading = PlacePresentation.reading(env)
+    val reading = PlacePresentation.reading(env, LocalPlaceZone.current)
     val summary =
         when (env.sectionId) {
             PlaceSectionId.FLOOD -> env.flood?.plainMeaning
@@ -508,7 +511,7 @@ fun PlaceBlockDetailContent(
         } else {
             PlaceDetailFallbackCard(env)
         }
-        PlaceSourceNote("U.S. Census · American Community Survey", PlacePresentation.fmtMonthYear(env.asOf))
+        PlaceSourceNote("U.S. Census · American Community Survey", PlacePresentation.fmtMonthYear(env.asOf, intel.homeZone))
     }
     PlaceDetailSectionLabel("Recent permits nearby")
     PlaceDetailCard(padding = 16.dp) {

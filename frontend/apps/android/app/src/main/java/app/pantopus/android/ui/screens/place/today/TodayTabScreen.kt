@@ -197,8 +197,7 @@ private fun TodayAddressLine(place: PlaceAddressRef) {
 }
 
 private fun todayPlaceZone(state: TodayTabUiState): ZoneId =
-    (state as? TodayTabUiState.Loaded)?.intelligence?.timeZone
-        ?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
+    (state as? TodayTabUiState.Loaded)?.intelligence?.homeZone ?: ZoneId.systemDefault()
 
 /**
  * Contract §3: a failed read shows "Couldn't refresh" once the copy is past its max shown age, and at once when the
