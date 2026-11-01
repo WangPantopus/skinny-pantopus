@@ -226,7 +226,10 @@ async function pulseCard(postId, userId) {
 // The one read check every path uses (this file keeps calling it canViewPost).
 const {
   canReadPost: canViewPost, readablePosts, postScopeAccess, isPubliclyShareable, POST_READ_SELECT, canReadReply, onlyShownReplies,
+  audienceCanReadPost,
 } = require('../services/pulse/readAccess');
+const { scopeAccessForHomes } = require('../services/pulse/readScopes');
+const { previewAudience, PREVIEW_VIEWER_ID } = require('../utils/profilePreview');
 
 const TOPIC_VALUES = PULSE_TOPICS;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -3734,11 +3737,21 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
     const { limit = 20, cursorCreatedAt, cursorId, include_archived: includeArchived } = req.query;
     const parsedLimit = parseInt(limit);
 
-    // v1.1: Determine viewer relationship to filter visible surfaces
-    const isOwn = userId === requestingUserId;
-    let connection = null;
+    // Preview as (utils/profilePreview.js): the owner reads their posts the way one audience would.
+    const preview = previewAudience(req, userId);
+    if (preview.refusal) return res.status(preview.refusal.status).json(preview.refusal.body);
+    const audience = preview.audience;
+    if (audience === 'anyone') {
+      // Signed-out visitors can't read anyone's posts.
+      return res.json({ posts: [], pagination: buildCursorPagination([], parsedLimit), sign_in_required: true, preview_as: audience });
+    }
 
-    if (!isOwn) {
+    // v1.1: Determine viewer relationship to filter visible surfaces
+    const isOwn = !audience && userId === requestingUserId;
+    // A previewed `connections` audience counts as connected, `neighbors` doesn't (and neither has a block to check).
+    let connection = audience === 'connections' ? { previewed: true } : null;
+
+    if (!isOwn && !audience) {
       // Check if there's an accepted relationship (connection), and whether either person blocked
       // the other: profile blocks (UserBlock) hide posts in both directions, as canViewPost does.
       const [blocked, { data: connectionData }] = await Promise.all([
@@ -3773,7 +3786,8 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
       .order('id', { ascending: false })
       .limit(parsedLimit);
 
-    query = (await postScopeAccess(requestingUserId)).query(query);
+    // A previewed audience is verified in no Pulse area, so it reads only posts without a verified-neighbors wall.
+    query = audience ? scopeAccessForHomes(null).query(query) : (await postScopeAccess(requestingUserId)).query(query);
 
     // Archived posts are left out of every list except the owner's own My posts,
     // which asks for them to fill its Archived tab (and to restore them).
@@ -3829,16 +3843,20 @@ router.get('/user/:userId', verifyToken, async (req, res) => {
         return true;
       });
       // And never a post its own page would refuse this viewer (household, private, a Beacon tier).
-      filtered = await readablePosts(filtered, requestingUserId);
+      filtered = audience
+        ? filtered.filter((post) => audienceCanReadPost(post, audience))
+        : await readablePosts(filtered, requestingUserId);
     }
 
     const normalized = filtered.map(r => normalizeFeedPostRow(r, new Set(), new Set()));
-    const serialized = await enrichFeedPosts(normalized, requestingUserId);
+    // A preview is serialized for a visitor: their location precision, and nothing marked as liked or saved.
+    const serialized = await enrichFeedPosts(normalized, audience ? PREVIEW_VIEWER_ID : requestingUserId);
 
     // Pages follow the rows read, not the posts left after the checks, so a short page isn't the end.
     res.json({
       posts: serialized,
       pagination: buildCursorPagination(posts || [], parsedLimit),
+      ...(audience ? { preview_as: audience } : {}),
     });
   } catch (err) {
     logger.error('User posts fetch error', { error: err.message });

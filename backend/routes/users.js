@@ -3588,6 +3588,166 @@ router.post('/me/signals', verifyToken, async (req, res) => {
   }
 });
 
+// Preview as (utils/profilePreview.js): whether that audience could open the profile and see where its owner lives,
+// decided from the owner's settings the way canAccessPublicUserProfile and canSeeProfileArea decide for a real viewer.
+// A failed settings read throws, like theirs.
+async function previewProfileAccess(audience, userData, localProfileRouteMatch) {
+  const { PREVIEW_VIEWER_ID } = require('../utils/profilePreview');
+  const viewerId = audience === 'anyone' ? null : PREVIEW_VIEWER_ID;
+  const { data: settings, error } = await supabaseAdmin
+    .from('UserPrivacySettings')
+    .select('search_visibility, show_neighborhood')
+    .eq('user_id', userData.id)
+    .maybeSingle();
+  if (error) throw error;
+  // "Who can find you" (isSearchable): everyone, only connections, or nobody.
+  const findable = (setting) => setting !== 'nobody' && (setting !== 'mutuals' || audience === 'connections');
+  let canOpen = canViewProfile(viewerId, userData.id, userData.profile_visibility || 'public')
+    && findable(settings?.search_visibility || 'everyone');
+  if (canOpen && localProfileRouteMatch) {
+    const visibility = await require('../utils/identityProfiles')
+      .localProfileVisibilityFor(localProfileRouteMatch, viewerId, userData);
+    canOpen = findable(localProfileRouteMatch.search_visibility || 'everyone') && visibility !== 'private'
+      && (!['connections', 'followers'].includes(visibility) || audience === 'connections');
+  }
+  // "Who sees your city" (canViewProfileField 'neighborhood'): everyone, connections and household (the default), or
+  // only the owner. A previewed audience never lives with the owner.
+  const area = settings?.show_neighborhood || 'followers';
+  const seesArea = userData.account_type === 'business' || area === 'public'
+    || (['followers', 'connections'].includes(area) && audience === 'connections');
+  return { canOpen, seesArea };
+}
+
+// GET /id/:id and /username/:username once the person is found: the profile as this viewer may see it, or, for the
+// owner's `?as=`, as that audience would (PRF CONTRACT.md SRV-1).
+async function sendPublicProfile(req, res, userData, localProfileRouteMatch) {
+  const { previewAudience, PREVIEW_VIEWER_ID } = require('../utils/profilePreview');
+  const preview = previewAudience(req, userData.id);
+  if (preview.refusal) return res.status(preview.refusal.status).json(preview.refusal.body);
+  const audience = preview.audience;
+  const previewed = audience ? { preview_as: audience } : {};
+
+  // A preview reads as someone who isn't the owner: signed out for `anyone`, a stand-in signed-in viewer otherwise.
+  const viewerId = audience ? (audience === 'anyone' ? null : PREVIEW_VIEWER_ID) : (req.user?.id || null);
+  const isOwnProfile = !audience && viewerId === userData.id;
+  const profileVisibility = userData.profile_visibility || 'public';
+  const previewAccess = audience ? await previewProfileAccess(audience, userData, localProfileRouteMatch) : null;
+  let canAccess;
+  if (previewAccess) canAccess = previewAccess.canOpen;
+  else if (localProfileRouteMatch) canAccess = await canAccessLegacyLocalProfileRoute(localProfileRouteMatch, viewerId, userData);
+  else canAccess = await canAccessPublicUserProfile(viewerId, userData.id, profileVisibility);
+  if (!canAccess) {
+    return res.status(403).json({ error: 'This profile is private', ...previewed });
+  }
+  const publicUserData = await withLocalProfileNameForViewer(
+    applyLocalProfilePublicOverlay(userData, localProfileRouteMatch), userData, viewerId, localProfileRouteMatch);
+
+  // Compute live gig counts + fetch skills in parallel
+  const [postedRes, skillsRes] = await Promise.allSettled([
+    supabaseAdmin.from('Gig').select('id', { count: 'exact', head: true }).eq('user_id', userData.id),
+    supabaseAdmin.from('UserSkill').select('skill_name').eq('user_id', userData.id).order('display_order', { ascending: true }),
+  ]);
+
+  const gigsPosted = postedRes.status === 'fulfilled' ? (postedRes.value.count || 0) : 0;
+  const profileSkills = skillsRes.status === 'fulfilled' ? (skillsRes.value.data || []) : [];
+
+  // Fetch reviews for this user
+  let reviews = [];
+  let averageRating = 0;
+  let reviewCount = 0;
+
+  try {
+    const { data: reviewData, count: revCount } = await supabaseAdmin
+      .from('Review')
+      .select('*', { count: 'exact' })
+      .eq('reviewee_id', userData.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (reviewData && reviewData.length > 0) {
+      const { loadChatPeople, reviewerRow } = require('../services/chatPeople');
+      const reviewerIds = [...new Set(reviewData.map(r => r.reviewer_id))];
+      const [{ data: reviewers }, people] = await Promise.all([
+        supabaseAdmin
+          .from('User')
+          .select('id, username, name, first_name, last_name, profile_picture_url')
+          .in('id', reviewerIds),
+        loadChatPeople(reviewerIds),
+      ]);
+
+      // A writer goes by their Local Profile, as on their posts and comments (services/chatPeople.js).
+      const reviewerMap = {};
+      (reviewers || []).forEach(u => { reviewerMap[u.id] = reviewerRow(u, people); });
+
+      reviews = reviewData.map(r => ({
+        ...r,
+        reviewer_name: reviewerMap[r.reviewer_id]?.name ||
+                       reviewerMap[r.reviewer_id]?.first_name ||
+                       chosenUsernameOrNull(reviewerMap[r.reviewer_id]?.username) || 'Anonymous',
+        reviewer_avatar: reviewerMap[r.reviewer_id]?.profile_picture_url || null,
+        reviewer_username: chosenUsernameOrNull(reviewerMap[r.reviewer_id]?.username),
+      }));
+
+      const totalRating = reviews.reduce((sum, r) => sum + r.rating, 0);
+      averageRating = Math.round((totalRating / reviews.length) * 100) / 100;
+      reviewCount = revCount || reviews.length;
+    }
+  } catch (reviewErr) {
+    logger.warn('Could not fetch reviews', { error: reviewErr.message });
+  }
+
+  const { profileContributions } = require('../services/profileContributions');
+  const [residency, showArea, contributions] = await Promise.all([
+    getPublicResidencySummary(userData.id, viewerId),
+    previewAccess ? previewAccess.seesArea : canSeeProfileArea(viewerId, userData),
+    profileContributions(userData.id),
+  ]);
+
+  return res.json({
+    id: publicUserData.id,
+    username: publicUserData.username,
+    usernameIsGenerated: isMadeUpUsername(publicUserData.username, publicUserData.email),
+    firstName: publicUserData.first_name,
+    lastName: publicUserData.last_name,
+    email: isOwnProfile || publicUserData.show_email ? publicUserData.email : null,
+    phoneNumber: isOwnProfile || publicUserData.show_phone ? publicUserData.phone_number : null,
+    phone_number: isOwnProfile || publicUserData.show_phone ? publicUserData.phone_number : null,
+    name: publicUserData.name,
+    bio: publicUserData.bio,
+    tagline: publicUserData.tagline,
+    avatar_url: publicUserData.profile_picture_url,
+    profile_picture_url: publicUserData.profile_picture_url,
+    profilePicture: publicUserData.profile_picture_url,
+    city: showArea ? publicUserData.city : null,
+    state: showArea ? publicUserData.state : null,
+    accountType: publicUserData.account_type,
+    verified: publicUserData.verified,
+    residency: showArea ? residency : { ...residency, city: null, state: null },
+    profileVisibility,
+    profile_visibility: profileVisibility,
+    showEmail: publicUserData.show_email || false,
+    show_email: publicUserData.show_email || false,
+    showPhone: publicUserData.show_phone || false,
+    show_phone: publicUserData.show_phone || false,
+    created_at: publicUserData.created_at,
+    gigs_posted: gigsPosted,
+    // Tasks done as the worker (User's own counter), not the person's posted tasks that got done.
+    gigs_completed: publicUserData.gigs_completed || 0,
+    no_show_count: publicUserData.no_show_count || 0,
+    late_cancel_count: publicUserData.late_cancel_count || 0,
+    reliability_score: publicUserData.reliability_score ?? null,
+    average_rating: averageRating || publicUserData.average_rating || 0,
+    review_count: reviewCount,
+    followers_count: publicUserData.followers_count || 0,
+    reviews: reviews,
+    socialLinks: publicUserData.social_links || {},
+    skills: (profileSkills || []).map(s => s.skill_name),
+    // Support Trains helped, plans hosted, Helpful marks (services/profileContributions.js); null if unreadable.
+    contributions,
+    ...previewed,
+  });
+}
+
 /**
  * GET /api/users/id/:id
  * Get full public profile by user UUID
@@ -3623,117 +3783,7 @@ router.get('/id/:id', optionalAuth, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const viewerId = req.user?.id || null;
-    const isOwnProfile = viewerId === userData.id;
-    const profileVisibility = userData.profile_visibility || 'public';
-    const canAccess = localProfileRouteMatch
-      ? await canAccessLegacyLocalProfileRoute(localProfileRouteMatch, viewerId, userData)
-      : await canAccessPublicUserProfile(viewerId, userData.id, profileVisibility);
-    if (!canAccess) {
-      return res.status(403).json({ error: 'This profile is private' });
-    }
-    const publicUserData = await withLocalProfileNameForViewer(
-      applyLocalProfilePublicOverlay(userData, localProfileRouteMatch), userData, viewerId, localProfileRouteMatch);
-
-    // Compute live gig counts + fetch skills in parallel
-    const [postedRes, skillsRes] = await Promise.allSettled([
-      supabaseAdmin.from('Gig').select('id', { count: 'exact', head: true }).eq('user_id', userData.id),
-      supabaseAdmin.from('UserSkill').select('skill_name').eq('user_id', userData.id).order('display_order', { ascending: true }),
-    ]);
-
-    const gigsPosted = postedRes.status === 'fulfilled' ? (postedRes.value.count || 0) : 0;
-    const profileSkills = skillsRes.status === 'fulfilled' ? (skillsRes.value.data || []) : [];
-
-    // Fetch reviews for this user
-    let reviews = [];
-    let averageRating = 0;
-    let reviewCount = 0;
-
-    try {
-      const { data: reviewData, count: revCount } = await supabaseAdmin
-        .from('Review')
-        .select('*', { count: 'exact' })
-        .eq('reviewee_id', userData.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (reviewData && reviewData.length > 0) {
-        const { loadChatPeople, reviewerRow } = require('../services/chatPeople');
-        const reviewerIds = [...new Set(reviewData.map(r => r.reviewer_id))];
-        const [{ data: reviewers }, people] = await Promise.all([
-          supabaseAdmin
-            .from('User')
-            .select('id, username, name, first_name, last_name, profile_picture_url')
-            .in('id', reviewerIds),
-          loadChatPeople(reviewerIds),
-        ]);
-
-        // A writer goes by their Local Profile, as on their posts and comments (services/chatPeople.js).
-        const reviewerMap = {};
-        (reviewers || []).forEach(u => { reviewerMap[u.id] = reviewerRow(u, people); });
-
-        reviews = reviewData.map(r => ({
-          ...r,
-          reviewer_name: reviewerMap[r.reviewer_id]?.name ||
-                         reviewerMap[r.reviewer_id]?.first_name ||
-                         chosenUsernameOrNull(reviewerMap[r.reviewer_id]?.username) || 'Anonymous',
-          reviewer_avatar: reviewerMap[r.reviewer_id]?.profile_picture_url || null,
-          reviewer_username: chosenUsernameOrNull(reviewerMap[r.reviewer_id]?.username),
-        }));
-
-        const totalRating = reviews.reduce((sum, r) => sum + r.rating, 0);
-        averageRating = Math.round((totalRating / reviews.length) * 100) / 100;
-        reviewCount = revCount || reviews.length;
-      }
-    } catch (reviewErr) {
-      logger.warn('Could not fetch reviews', { error: reviewErr.message });
-    }
-
-    const [residency, showArea] = await Promise.all([
-      getPublicResidencySummary(userData.id, req.user?.id || null),
-      canSeeProfileArea(viewerId, userData),
-    ]);
-
-    res.json({
-      id: publicUserData.id,
-      username: publicUserData.username,
-      usernameIsGenerated: isMadeUpUsername(publicUserData.username, publicUserData.email),
-      firstName: publicUserData.first_name,
-      lastName: publicUserData.last_name,
-      email: isOwnProfile || publicUserData.show_email ? publicUserData.email : null,
-      phoneNumber: isOwnProfile || publicUserData.show_phone ? publicUserData.phone_number : null,
-      phone_number: isOwnProfile || publicUserData.show_phone ? publicUserData.phone_number : null,
-      name: publicUserData.name,
-      bio: publicUserData.bio,
-      tagline: publicUserData.tagline,
-      avatar_url: publicUserData.profile_picture_url,
-      profile_picture_url: publicUserData.profile_picture_url,
-      profilePicture: publicUserData.profile_picture_url,
-      city: showArea ? publicUserData.city : null,
-      state: showArea ? publicUserData.state : null,
-      accountType: publicUserData.account_type,
-      verified: publicUserData.verified,
-      residency: showArea ? residency : { ...residency, city: null, state: null },
-      profileVisibility,
-      profile_visibility: profileVisibility,
-      showEmail: publicUserData.show_email || false,
-      show_email: publicUserData.show_email || false,
-      showPhone: publicUserData.show_phone || false,
-      show_phone: publicUserData.show_phone || false,
-      created_at: publicUserData.created_at,
-      gigs_posted: gigsPosted,
-      // Tasks done as the worker (User's own counter), not the person's posted tasks that got done.
-      gigs_completed: publicUserData.gigs_completed || 0,
-      no_show_count: publicUserData.no_show_count || 0,
-      late_cancel_count: publicUserData.late_cancel_count || 0,
-      reliability_score: publicUserData.reliability_score ?? null,
-      average_rating: averageRating || publicUserData.average_rating || 0,
-      review_count: reviewCount,
-      followers_count: publicUserData.followers_count || 0,
-      reviews: reviews,
-      socialLinks: publicUserData.social_links || {},
-      skills: (profileSkills || []).map(s => s.skill_name),
-    });
+    return await sendPublicProfile(req, res, userData, localProfileRouteMatch);
   } catch (err) {
     logger.error('Public profile fetch by ID error', { error: err.message, errorCode: err.code || null, id: req.params.id });
     res.status(503).json(PROFILE_UNAVAILABLE_REPLY);
@@ -3784,6 +3834,47 @@ router.get('/:id/stats', verifyToken, async (req, res) => {
   } catch (err) {
     logger.error('User stats fetch error', { error: err.message, id: req.params.id });
     res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+/**
+ * GET /api/users/:id/in-common
+ * "You and <name>" on a profile (PRF CONTRACT.md SRV-1): connections, upcoming plans, Support Trains and skills the
+ * viewer and this person share, only what the viewer may already see (services/profileInCommon.js). Nothing on your
+ * own profile, across a block either way, or for a profile you can't open; 503 when something can't be read.
+ */
+router.get('/:id/in-common', verifyToken, async (req, res) => {
+  const { inCommon, emptyInCommon } = require('../services/profileInCommon');
+  try {
+    const viewerId = req.user.id;
+    const { data: target, error } = await supabaseAdmin
+      .from('User')
+      .select('id, profile_visibility')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (error && !isNotAnIdError(error)) throw error;
+    if (!target || await isUnpublishedBusiness(target.id)) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    if (target.id === viewerId) return res.json(emptyInCommon());
+
+    // Block in the app (Relationship) or a profile block (UserProfileBlock), a personal block (UserBlock), or a
+    // profile this viewer can't open (private, hidden from search, blocked by them).
+    const blockService = require('../services/blockService');
+    const [scopedBlock, personalBlock, canOpen] = await Promise.all([
+      isScopedBlocked(viewerId, target.id, 'any'),
+      blockService.isBlocked(viewerId, target.id),
+      canAccessPublicUserProfile(viewerId, target.id, target.profile_visibility || 'public'),
+    ]);
+    if (scopedBlock || personalBlock || !canOpen) return res.json(emptyInCommon());
+
+    return res.json(await inCommon(req.user, target.id));
+  } catch (err) {
+    logger.warn('Profile in-common unavailable', { error: err.message, code: err.code || null, id: req.params.id });
+    return res.status(503).json({
+      error: 'What you have in common can\'t be loaded right now.',
+      code: 'IN_COMMON_UNAVAILABLE',
+    });
   }
 });
 
@@ -4053,13 +4144,24 @@ router.get('/:username', optionalAuth, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const viewerId = req.user?.id || null;
+    // Preview as (utils/profilePreview.js), as on GET /id/:id.
+    const { previewAudience, PREVIEW_VIEWER_ID } = require('../utils/profilePreview');
+    const preview = previewAudience(req, userData.id);
+    if (preview.refusal) return res.status(preview.refusal.status).json(preview.refusal.body);
+    const audience = preview.audience;
+    const previewed = audience ? { preview_as: audience } : {};
+    const viewerId = audience ? (audience === 'anyone' ? null : PREVIEW_VIEWER_ID) : (req.user?.id || null);
     const profileVisibility = userData.profile_visibility || 'public';
-    if (!(await canAccessPublicUserProfile(viewerId, userData.id, profileVisibility))) {
-      return res.status(403).json({ error: 'This profile is private' });
+    const previewAccess = audience ? await previewProfileAccess(audience, userData, null) : null;
+    if (!(previewAccess ? previewAccess.canOpen : await canAccessPublicUserProfile(viewerId, userData.id, profileVisibility))) {
+      return res.status(403).json({ error: 'This profile is private', ...previewed });
     }
     const shownUser = await withLocalProfileNameForViewer(userData, userData, viewerId);
-    const showArea = await canSeeProfileArea(viewerId, userData);
+    const { profileContributions } = require('../services/profileContributions');
+    const [showArea, contributions] = await Promise.all([
+      previewAccess ? previewAccess.seesArea : canSeeProfileArea(viewerId, userData),
+      profileContributions(userData.id),
+    ]);
 
     res.json({
       user: {
@@ -4075,7 +4177,9 @@ router.get('/:username', optionalAuth, async (req, res) => {
         profile_picture_url: shownUser.profile_picture_url,
         memberSince: shownUser.created_at,
         profile_visibility: profileVisibility,
+        contributions,
       },
+      ...previewed,
     });
   } catch (err) {
     logger.error('Public profile fetch error', { error: err.message, errorCode: err.code || null, username: req.params.username });
@@ -4590,119 +4694,7 @@ router.get('/username/:username', optionalAuth, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const viewerId = req.user?.id || null;
-    const isOwnProfile = viewerId === userData.id;
-    const profileVisibility = userData.profile_visibility || 'public';
-    const canAccess = localProfileRouteMatch
-      ? await canAccessLegacyLocalProfileRoute(localProfileRouteMatch, viewerId, userData)
-      : await canAccessPublicUserProfile(viewerId, userData.id, profileVisibility);
-    if (!canAccess) {
-      return res.status(403).json({ error: 'This profile is private' });
-    }
-    const publicUserData = await withLocalProfileNameForViewer(
-      applyLocalProfilePublicOverlay(userData, localProfileRouteMatch), userData, viewerId, localProfileRouteMatch);
-
-    // Compute live gig counts + fetch skills in parallel
-    const [postedRes, skillsRes2] = await Promise.allSettled([
-      supabaseAdmin.from('Gig').select('id', { count: 'exact', head: true }).eq('user_id', userData.id),
-      supabaseAdmin.from('UserSkill').select('skill_name').eq('user_id', userData.id).order('display_order', { ascending: true }),
-    ]);
-
-    const gigsPosted = postedRes.status === 'fulfilled' ? (postedRes.value.count || 0) : 0;
-    const profileSkills2 = skillsRes2.status === 'fulfilled' ? (skillsRes2.value.data || []) : [];
-
-    // Fetch reviews for this user
-    let reviews = [];
-    let averageRating = 0;
-    let reviewCount = 0;
-
-    try {
-      const { data: reviewData, count: revCount } = await supabaseAdmin
-        .from('Review')
-        .select('*', { count: 'exact' })
-        .eq('reviewee_id', userData.id)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (reviewData && reviewData.length > 0) {
-        // Hydrate reviewer info: a writer goes by their Local Profile, as on their posts and comments
-        // (services/chatPeople.js).
-        const { loadChatPeople, reviewerRow } = require('../services/chatPeople');
-        const reviewerIds = [...new Set(reviewData.map(r => r.reviewer_id))];
-        const [{ data: reviewers }, people] = await Promise.all([
-          supabaseAdmin
-            .from('User')
-            .select('id, username, name, first_name, last_name, profile_picture_url')
-            .in('id', reviewerIds),
-          loadChatPeople(reviewerIds),
-        ]);
-
-        const reviewerMap = {};
-        (reviewers || []).forEach(u => { reviewerMap[u.id] = reviewerRow(u, people); });
-
-        reviews = reviewData.map(r => ({
-          ...r,
-          reviewer_name: reviewerMap[r.reviewer_id]?.name ||
-                         reviewerMap[r.reviewer_id]?.first_name ||
-                         chosenUsernameOrNull(reviewerMap[r.reviewer_id]?.username) || 'Anonymous',
-          reviewer_avatar: reviewerMap[r.reviewer_id]?.profile_picture_url || null,
-          reviewer_username: chosenUsernameOrNull(reviewerMap[r.reviewer_id]?.username),
-        }));
-
-        const totalRating = reviews.reduce((sum, r) => sum + r.rating, 0);
-        averageRating = Math.round((totalRating / reviews.length) * 100) / 100;
-        reviewCount = revCount || reviews.length;
-      }
-    } catch (reviewErr) {
-      // If Review table doesn't exist yet, gracefully skip
-      logger.warn('Could not fetch reviews', { error: reviewErr.message });
-    }
-
-    const [residency, showArea] = await Promise.all([
-      getPublicResidencySummary(userData.id, req.user?.id || null),
-      canSeeProfileArea(viewerId, userData),
-    ]);
-
-    res.json({
-      id: publicUserData.id,
-      username: publicUserData.username,
-      usernameIsGenerated: isMadeUpUsername(publicUserData.username, publicUserData.email),
-      firstName: publicUserData.first_name,
-      lastName: publicUserData.last_name,
-      email: isOwnProfile || publicUserData.show_email ? publicUserData.email : null,
-      phoneNumber: isOwnProfile || publicUserData.show_phone ? publicUserData.phone_number : null,
-      phone_number: isOwnProfile || publicUserData.show_phone ? publicUserData.phone_number : null,
-      name: publicUserData.name,
-      bio: publicUserData.bio,
-      tagline: publicUserData.tagline,
-      avatar_url: publicUserData.profile_picture_url,
-      profile_picture_url: publicUserData.profile_picture_url,
-      profilePicture: publicUserData.profile_picture_url,
-      city: showArea ? publicUserData.city : null,
-      state: showArea ? publicUserData.state : null,
-      accountType: publicUserData.account_type,
-      verified: publicUserData.verified,
-      residency: showArea ? residency : { ...residency, city: null, state: null },
-      profileVisibility,
-      profile_visibility: profileVisibility,
-      showEmail: publicUserData.show_email || false,
-      show_email: publicUserData.show_email || false,
-      showPhone: publicUserData.show_phone || false,
-      show_phone: publicUserData.show_phone || false,
-      created_at: publicUserData.created_at,
-      gigs_posted: gigsPosted,
-      // Tasks done as the worker (User's own counter), not the person's posted tasks that got done.
-      gigs_completed: publicUserData.gigs_completed || 0,
-      no_show_count: publicUserData.no_show_count || 0,
-      late_cancel_count: publicUserData.late_cancel_count || 0,
-      reliability_score: publicUserData.reliability_score ?? null,
-      average_rating: averageRating || publicUserData.average_rating || 0,
-      review_count: reviewCount,
-      followers_count: publicUserData.followers_count || 0,
-      reviews: reviews,
-      socialLinks: publicUserData.social_links || {},
-      skills: (profileSkills2 || []).map(s => s.skill_name),
-    });
+    return await sendPublicProfile(req, res, userData, localProfileRouteMatch);
   } catch (err) {
     logger.error('Public profile fetch error', { error: err.message, errorCode: err.code || null });
     res.status(503).json(PROFILE_UNAVAILABLE_REPLY);

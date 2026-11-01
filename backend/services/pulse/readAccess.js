@@ -284,6 +284,33 @@ async function readablePosts(posts, userId) {
   return (posts || []).filter((_, i) => readable[i] === true);
 }
 
+/**
+ * Whether someone of a Preview-as audience (utils/profilePreview.js) may read `post`: canReadPost's walls for a viewer
+ * with no account behind it. `neighbors` is signed in, lives nearby, isn't connected to the author, isn't in their
+ * household and is verified in no Pulse area; `connections` is the same but connected. So household, private, Beacon
+ * and verified-neighbors-only posts never show, and connections-only posts only to `connections`.
+ */
+function audienceCanReadPost(post, audience) {
+  if (!canReadPostModeration(post, null)) return false;
+  if (post.identity_context_type === 'persona') return false;
+  if (post.audience === 'household') return false;
+  if (post.read_scope == null && post.visibility === 'private') return false;
+  if (audience === 'anyone') return isPubliclyShareable(post);
+  if (post.read_scope != null) return post.read_scope === 'public';
+  const connected = audience === 'connections';
+  const targets = Array.isArray(post.distribution_targets) ? post.distribution_targets : [];
+  if (targets.length > 0) {
+    if (targets.includes('place') || targets.includes('public')) return true;
+    if ((targets.includes('connections') || targets.includes('followers')) && connected) return true;
+    return targets.includes('country:US') && post.audience === 'national' && post.origin === 'curator';
+  }
+  if (post.visibility === 'followers' || post.audience === 'followers') return connected;
+  if (post.visibility === 'connections' || post.audience === 'connections') return connected;
+  if (post.visibility === 'public') return true;
+  // A neighbor lives near the author, so the neighborhood, city and radius posts other neighbors read.
+  return ['neighborhood', 'city', 'radius'].includes(post.visibility);
+}
+
 // A reply held for review or removed by moderation (S11) reads only for its author, on a post the
 // viewer can read. `reply` needs `user_id` and `moderation_state`; without the state it reads as hidden.
 function canReadReply(reply, userId) {
@@ -299,4 +326,5 @@ function onlyShownReplies(query, userId) {
 
 module.exports = {
   canReadPost, canReadPostModeration, postScopeAccess, notificationPostFilter, readablePosts, isPubliclyShareable, POST_READ_SELECT, canReadReply, onlyShownReplies,
+  audienceCanReadPost,
 };
