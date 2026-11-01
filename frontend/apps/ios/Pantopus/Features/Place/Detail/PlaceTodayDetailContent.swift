@@ -585,10 +585,12 @@ extension PlaceTodayDetailContent {
                 identifier: "today.setup.radon",
                 expanded: radonItemOpen && !state.hidden
             ) {
-                // Coming back to a question put off with "Not now" asks it again.
+                // Coming back to a question put off with "Not now" asks it again, open.
                 if state.task == nil, state.dismissedUntil != nil {
                     state.dismissedUntil = nil
                     UserDefaults.standard.removeObject(forKey: "radonCard.dismissedUntil.\(state.homeId)")
+                    withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { radonItemOpen = true }
+                    return
                 }
                 withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { radonItemOpen.toggle() }
             }

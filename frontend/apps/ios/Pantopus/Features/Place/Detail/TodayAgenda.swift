@@ -318,14 +318,17 @@ enum TodayAgenda {
         return Int((end.timeIntervalSince(start) / 86400).rounded())
     }
 
-    /// "Today", "Tomorrow", else the weekday ("Wednesday").
+    /// "Today", "Tomorrow", the weekday this week ("Wednesday"), else the date ("Tue, Nov 10").
     static func relative(_ day: String, inputs: Inputs) -> String {
-        switch offset(day, from: inputs.today) {
+        let utc = TimeZone(identifier: "UTC") ?? .current
+        let days = offset(day, from: inputs.today)
+        switch days {
         case 0: return "Today"
         case 1: return "Tomorrow"
         default:
             guard let date = PlacePresentation.parseCalendarDay(day) else { return day }
-            return date.formatted(Date.FormatStyle(timeZone: TimeZone(identifier: "UTC") ?? .current).weekday(.wide))
+            if days >= windowDays { return date.formatted(Date.FormatStyle(timeZone: utc).weekday(.abbreviated).month(.abbreviated).day()) }
+            return date.formatted(Date.FormatStyle(timeZone: utc).weekday(.wide))
         }
     }
 }
