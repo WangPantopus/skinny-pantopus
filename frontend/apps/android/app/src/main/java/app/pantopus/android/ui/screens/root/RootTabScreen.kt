@@ -2315,6 +2315,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     }
     // Place tapped again on its root: one event, which scrolls the root back to the top.
     val placeReselects = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+    val todayReselects = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
     var ballotHomeId by rememberSaveable { mutableStateOf<String?>(null) }
     // Child screens keep the tab they were opened from lit (they used to fall
     // back to Place, which also swallowed taps on Place from those screens).
@@ -2867,6 +2868,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             if (target == PantopusRoute.Place && navController.currentDestination?.route == PantopusRoute.Place.path) {
                                 placeReselects.tryEmit(Unit)
                             }
+                            // Today tapped again on its own page: back to the top, as Place does.
+                            if (target == PantopusRoute.Today && navController.currentDestination?.route == PantopusRoute.Today.path) {
+                                todayReselects.tryEmit(Unit)
+                            }
                             // The Mailbox goes back up to its hero when Mail is tapped again on it.
                             if (target == PantopusRoute.Mail && navController.currentDestination?.route == PantopusRoute.Mail.path) {
                                 MailboxRepository.announceMailboxTop(incoming = false)
@@ -2915,6 +2920,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     TodayTabScreen(
                         onClaim = { navController.navigate(ChildRoutes.ADD_HOME) },
                         onCheckClaim = { homeId -> navController.navigate(ChildRoutes.waitingRoom(homeId)) },
+                        // An agenda task row opens the task's own page.
+                        onOpenTask = { homeId, taskId -> navController.navigate(ChildRoutes.householdTaskDetail(homeId, taskId)) },
+                        scrollToTop = todayReselects,
                         onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                         onOpenMenu = openMenu,
                         onOpenPlace = { homeId ->
@@ -5033,6 +5041,11 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenPost = openPost@{ postId ->
                             if (navController.currentBackStackEntry?.id != profileEntry.id) return@openPost
                             navController.navigate(ChildRoutes.pulsePost(postId))
+                        },
+                        // Your own profile offers Edit profile where others see Connect and Message.
+                        onEditProfile = editProfile@{
+                            if (navController.currentBackStackEntry?.id != profileEntry.id) return@editProfile
+                            navController.navigate(ChildRoutes.EDIT_PROFILE)
                         },
                     )
                 }

@@ -23,6 +23,7 @@ import app.pantopus.android.ui.screens.feed.pulse.PulseCardLiveValues
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
 import app.pantopus.android.ui.screens.feed.pulse.pulseCardContent
 import app.pantopus.android.ui.screens.feed.pulseReportReasons
+import app.pantopus.android.ui.screens.shared.feed.FeedAvatarTint
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.CoroutineScope
@@ -280,7 +281,15 @@ class ProfilePostCards internal constructor(
                             likePending = post.id in liking,
                             savePending = post.id in saving,
                         ),
-                )
+                ).let { card ->
+                    // On a profile the author's avatar matches the header's: one color per person (PRF).
+                    val authorId = post.userId ?: post.creator?.id
+                    if (authorId == null || card.avatarTint == FeedAvatarTint.Violet) {
+                        card
+                    } else {
+                        card.copy(avatarTint = profileAvatarTint(authorId), authorInitials = profileInitials(card.authorName))
+                    }
+                }
             }
     }
 }

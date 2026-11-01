@@ -7,10 +7,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -26,8 +30,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -36,6 +40,8 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.ui.components.BeaconIdentity
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.InviteLinks
@@ -48,9 +54,6 @@ import app.pantopus.android.ui.components.rememberShareTextWithCompletion
 import app.pantopus.android.ui.components.shareText
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
-import app.pantopus.android.ui.screens.profile.tabs.ProfileGigReviewsSection
-import app.pantopus.android.ui.screens.profile.tabs.ProfileGigsSection
-import app.pantopus.android.ui.screens.profile.tabs.ProfilePortfolioSection
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBarAction
@@ -92,6 +95,8 @@ fun PublicProfileScreen(
     onOpenProfile: (String) -> Unit = {},
     /** Opens a post from the Posts tab, as a tap on a Pulse card does. */
     onOpenPost: (String) -> Unit = {},
+    /** Your own profile's Edit profile. */
+    onEditProfile: () -> Unit = {},
     viewModel: PublicProfileViewModel = hiltViewModel(),
     usernameShare: UsernameShareViewModel = hiltViewModel(),
 ) {
@@ -113,11 +118,17 @@ fun PublicProfileScreen(
     val isFollowInFlight by viewModel.isFollowInFlight.collectAsStateWithLifecycle()
     val canFollow by viewModel.canFollow.collectAsStateWithLifecycle()
     val relationshipLoaded by viewModel.relationshipLoaded.collectAsStateWithLifecycle()
+    val relationshipFailed by viewModel.relationshipFailed.collectAsStateWithLifecycle()
     val postsLoadFailed by viewModel.postsLoadFailed.collectAsStateWithLifecycle()
     val postCards by viewModel.postCards.cards.collectAsStateWithLifecycle()
     val postOptionsId by viewModel.postCards.optionsPostId.collectAsStateWithLifecycle()
     val reportingPostId by viewModel.postCards.reportingPostId.collectAsStateWithLifecycle()
     val showUnfollowConfirm by viewModel.showUnfollowConfirm.collectAsStateWithLifecycle()
+    val showConnectSheet by viewModel.showConnectSheet.collectAsStateWithLifecycle()
+    val showWithdrawConfirm by viewModel.showWithdrawConfirm.collectAsStateWithLifecycle()
+    val postsLoading by viewModel.postsLoading.collectAsStateWithLifecycle()
+    var showTrustExplainer by remember { mutableStateOf(false) }
+    val uriHandler = LocalUriHandler.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val shareTextWithCompletion = rememberShareTextWithCompletion()
     val postCardActions =
@@ -181,27 +192,35 @@ fun PublicProfileScreen(
                         if (content.kind == PublicProfileKind.Local && neighbor != null) {
                             LocalProfileLoadedFrame(
                                 content = content,
-                                neighbor = neighbor,
                                 selectedTab = selectedLocalTab,
-                                connectState = connectState,
+                                actions =
+                                    ProfileActionsState(
+                                        isOwner = content.isOwner,
+                                        connection = connection,
+                                        showsConnection = canFollow && relationshipLoaded,
+                                        inFlight = connectState is PublicProfileActionState.InFlight,
+                                        relationshipPending = !content.isOwner && !relationshipLoaded && !relationshipFailed,
+                                    ),
+                                callbacks =
+                                    ProfileActionCallbacks(
+                                        onConnect = viewModel::openConnectSheet,
+                                        onWithdraw = viewModel::requestWithdraw,
+                                        onAccept = { viewModel.connect() },
+                                        onDecline = viewModel::declineRequest,
+                                        onDisconnect = viewModel::requestDisconnect,
+                                        onMessage = { onOpenMessages(content.profile) },
+                                        onEditProfile = onEditProfile,
+                                    ),
                                 onBack = onBack,
                                 onSelectTab = { viewModel.selectLocalTab(it) },
-                                onMessage = { onOpenMessages(content.profile) },
-                                onConnect = { viewModel.connect() },
                                 onOverflow = { viewModel.setShowOverflow(true) },
-                                follow =
-                                    ProfileFollowState(
-                                        canFollow = canFollow,
-                                        isFollowing = isFollowing,
-                                        isInFlight = isFollowInFlight,
-                                        relationshipLoaded = relationshipLoaded,
-                                    ),
-                                connection = connection,
-                                onFollow = { viewModel.follow() },
-                                onUnfollow = { viewModel.requestUnfollow() },
+                                onTrustClick = { showTrustExplainer = true },
+                                hiddenByBlock = connection == ProfileConnection.Blocked,
                                 onOpenGig = onOpenGig,
                                 onOpenProfile = onOpenProfile,
+                                onOpenLink = { url -> runCatching { uriHandler.openUri(url) } },
                                 postsLoadFailed = postsLoadFailed,
+                                postsLoading = postsLoading,
                                 onRetryPosts = { viewModel.refresh() },
                                 postCards = postCards,
                                 postCardActions = postCardActions,
@@ -265,11 +284,22 @@ fun PublicProfileScreen(
                 sheetState = sheetState,
             ) {
                 val loaded = (state as? PublicProfileUiState.Loaded)?.content
+                val canOfferFollow = canFollow && relationshipLoaded && !isBlockedByViewer
                 OverflowSheetContent(
                     // The header's "Share profile" opens this sheet, so it shares first.
                     shareUrl = profileShareUrl(state),
                     isOwnProfile = loaded?.isOwner == true,
                     isBlockedByViewer = isBlockedByViewer,
+                    // Follow lives here and in the Connect sheet now (no separate Follow row). A failed relationship
+                    // read offers neither, rather than guessing.
+                    follow =
+                        loaded
+                            ?.takeIf { it.kind == PublicProfileKind.Local && canOfferFollow }
+                            ?.let { OverflowFollow(profileFirstName(it.header), isFollowing, enabled = !isFollowInFlight) },
+                    onFollow = {
+                        viewModel.setShowOverflow(false)
+                        if (isFollowing) viewModel.requestUnfollow() else viewModel.follow()
+                    },
                     onShare = { url ->
                         viewModel.setShowOverflow(false)
                         // Your own link still on a made-up username: offer to pick one first, once.
@@ -436,14 +466,14 @@ fun PublicProfileScreen(
             val name = (state as? PublicProfileUiState.Loaded)?.content?.header?.displayName?.trim().orEmpty()
             AlertDialog(
                 onDismissRequest = { viewModel.cancelDisconnect() },
-                title = { Text(if (name.isEmpty()) "Disconnect" else "Disconnect from $name") },
-                text = { Text("Remove this connection?") },
+                title = { Text(if (name.isEmpty()) "Disconnect?" else "Disconnect from $name?") },
+                text = { Text("You'll stop seeing each other's connections-only posts.") },
                 confirmButton = {
                     TextButton(
                         onClick = { viewModel.disconnect() },
                         modifier = Modifier.testTag("publicProfileDisconnectConfirm"),
                     ) {
-                        Text("Remove", color = PantopusColors.error)
+                        Text("Disconnect", color = PantopusColors.error)
                     }
                 },
                 dismissButton = {
@@ -456,8 +486,68 @@ fun PublicProfileScreen(
                 },
             )
         }
+        val loadedContent = (state as? PublicProfileUiState.Loaded)?.content
+        // Requested → "Withdraw your request?", so a stray tap never takes it back.
+        if (showWithdrawConfirm) {
+            val firstName = loadedContent?.header?.let(::profileFirstName) ?: "them"
+            AlertDialog(
+                onDismissRequest = { viewModel.cancelWithdraw() },
+                title = { Text("Withdraw your request?") },
+                text = { Text("This takes back your request to $firstName. You can ask again later.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = { viewModel.withdrawRequest() },
+                        modifier = Modifier.testTag("publicProfileWithdrawConfirm"),
+                    ) {
+                        Text("Withdraw", color = PantopusColors.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { viewModel.cancelWithdraw() },
+                        modifier = Modifier.testTag("publicProfileWithdrawCancel"),
+                    ) {
+                        Text("Keep it")
+                    }
+                },
+            )
+        }
+        if (showConnectSheet && loadedContent != null) {
+            ProfileConnectSheet(
+                header = loadedContent.header,
+                firstName = profileFirstName(loadedContent.header),
+                plansOn = DeepLinkRouter.plansEnabled(),
+                isFollowing = isFollowing,
+                canFollow = canFollow && relationshipLoaded,
+                connectState = connectState,
+                onSend = viewModel::sendRequestFromSheet,
+                onJustFollow = viewModel::followFromSheet,
+                onDismiss = viewModel::dismissConnectSheet,
+            )
+        }
+        if (showTrustExplainer && loadedContent != null) {
+            ProfileTrustExplainer(
+                firstName = profileFirstName(loadedContent.header),
+                trust = loadedContent.header.trust,
+                isOwner = loadedContent.isOwner,
+                onDismiss = { showTrustExplainer = false },
+            )
+        }
     }
 }
+
+/** The posts read returns at most [StoreKeys.PROFILE_POSTS_LIMIT]; a full page reads "50+". */
+internal fun postCountLabel(count: Int): String = if (count >= StoreKeys.PROFILE_POSTS_LIMIT) "$count+" else "$count"
+
+/** The name in sentences ("Connect with Rowan?"): the first word of the name neighbors see. */
+internal fun profileFirstName(header: PublicProfileHeader): String =
+    header.displayName
+        .takeIf { header.hasName }
+        ?.trim()
+        ?.removePrefix("@")
+        ?.split(" ")
+        ?.firstOrNull { it.isNotBlank() }
+        ?: "this neighbor"
 
 /**
  * T3 — render state for the plain Follow / Following control. A Beacon
@@ -586,6 +676,7 @@ internal fun PublicProfileLoadedFrame(
                                 connection = connection,
                                 connectState = connectState,
                                 canFollow = follow.canFollow && follow.relationshipLoaded,
+                                isOwnProfile = content.isOwner,
                                 onConnect = onConnect,
                                 onMessage = onMessage,
                             )
@@ -623,6 +714,7 @@ internal fun PublicProfileLoadedFrame(
                                 content.isOwner -> onComposeBroadcast
                                 else -> onFollow
                             },
+                        isOwnProfile = content.isOwner,
                     )
                 }
             }
@@ -631,151 +723,110 @@ internal fun PublicProfileLoadedFrame(
 }
 
 /**
- * A21.2 — the designed Local Beacon profile archetype: green Home banner,
- * overlapping [BeaconIdentityBlock] with Connect + Message, a Posts ·
- * About tab strip, and the local post feed (or the "Quiet for now" empty
- * state) beneath it. `internal` so Paparazzi can render it without Hilt.
- *
- * Mirrors iOS `PublicProfileView.localLayout`.
+ * Someone's profile (PRF, 2026-11-01; `Main.dc.html`): the short header with its trust line and the actions for
+ * this relationship, then Posts · About (· Work when there is work). Your own profile is the same page with Edit
+ * profile in place of Connect and Message. `internal` so Paparazzi can render it without Hilt.
  */
 @Composable
 internal fun LocalProfileLoadedFrame(
     content: PublicProfileContent,
-    neighbor: NeighborProfileContent,
     selectedTab: LocalProfileTab,
-    connectState: PublicProfileActionState,
+    actions: ProfileActionsState,
+    callbacks: ProfileActionCallbacks,
     onBack: () -> Unit,
     onSelectTab: (LocalProfileTab) -> Unit,
-    onMessage: () -> Unit,
-    onConnect: () -> Unit,
     onOverflow: () -> Unit,
-    follow: ProfileFollowState = ProfileFollowState(),
-    connection: ProfileConnection = ProfileConnection.None,
-    onFollow: () -> Unit = {},
-    onUnfollow: () -> Unit = {},
+    onTrustClick: () -> Unit = {},
+    hiddenByBlock: Boolean = false,
     onOpenGig: (String) -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
+    onOpenLink: (String) -> Unit = {},
     postsLoadFailed: Boolean = false,
+    postsLoading: Boolean = false,
     onRetryPosts: () -> Unit = {},
     postCards: List<PulsePostCardContent> = emptyList(),
     postCardActions: ProfilePostCardActions = ProfilePostCardActions(),
 ) {
-    ContentDetailShell(
-        title = null,
-        onBack = onBack,
-        topBarAction =
-            ContentDetailTopBarAction(
-                icon = PantopusIcon.MoreHorizontal,
-                contentDescription = "More",
-                onClick = onOverflow,
-            ),
-        header = {
-            // Box stacks the 120dp banner with the identity block pulled
-            // down to overlap the banner's lower 40dp (banner − overlap).
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .testTag("publicProfileLocalHeader"),
+    val firstName = profileFirstName(content.header)
+    // Work shows when there is work to show, and always on your own profile, where "Add portfolio item" lives.
+    val tabs =
+        listOfNotNull(
+            LocalProfileTab.Posts,
+            LocalProfileTab.About,
+            LocalProfileTab.Work.takeIf { content.work.hasWork || content.isOwner },
+        )
+    // Work leaves when its last item goes; the strip falls back to Posts.
+    val tab = selectedTab.takeIf { it in tabs } ?: LocalProfileTab.Posts
+    Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("publicProfileLocalHeader")) {
+        ProfileTopBar(
+            onBack = onBack,
+            onMore = onOverflow,
+            moreLabel = if (content.isOwner) "More: share your profile" else "More: share, follow, block or report",
+        )
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            ProfileIdentityHeader(
+                header = content.header,
+                bio = content.stats.bio,
+                onTrustClick = onTrustClick,
             ) {
-                PublicProfileBanner(kind = PublicProfileKind.Local)
-                Box(modifier = Modifier.padding(top = 80.dp)) {
-                    BeaconIdentityBlock(
-                        identity = BeaconIdentity.Home,
-                        name = content.header.displayName,
-                        handle = content.header.handle,
-                        tierLabel = null,
-                        isVerifiedNeighbor = content.header.isVerifiedNeighbor,
-                        locality = content.header.locality,
-                        bio = content.stats.bio,
-                        isVerified = content.header.isVerified,
-                        avatarUrl = content.header.avatarUrl,
-                        stats = content.stats.stats,
-                        avatarName = content.header.avatarName,
-                    ) {
-                        NeighborHeaderActions(
-                            connection = connection,
-                            connectState = connectState,
-                            canFollow = follow.canFollow && follow.relationshipLoaded,
-                            onConnect = onConnect,
-                            onMessage = onMessage,
-                        )
-                    }
-                }
+                ProfileHeaderActions(state = actions, callbacks = callbacks, firstName = firstName)
             }
-        },
-        body = {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
-                // A blocked profile keeps no Follow control (the server refuses
-                // the follow in both directions).
-                if (connection != ProfileConnection.Blocked) {
-                    ProfileFollowRow(
-                        follow = follow,
-                        onFollow = onFollow,
-                        onUnfollow = onUnfollow,
-                        modifier = Modifier.padding(horizontal = Spacing.s4),
+            Spacer(Modifier.height(28.dp))
+            LocalProfileTabStrip(
+                tabs = tabs,
+                postCount = postCountLabel(postCards.size).takeIf { postCards.isNotEmpty() && !hiddenByBlock },
+                selected = tab,
+                onSelect = onSelectTab,
+            )
+            Spacer(Modifier.height(Spacing.s3))
+            when (tab) {
+                LocalProfileTab.Posts ->
+                    LocalProfilePosts(
+                        cards = postCards,
+                        actions = postCardActions,
+                        firstName = firstName,
+                        joinedRecently = content.header.trust.joinedRecently,
+                        isOwnProfile = content.isOwner,
+                        loadFailed = postsLoadFailed,
+                        hiddenByBlock = hiddenByBlock,
+                        onSayHi = callbacks.onMessage,
+                        onRetry = onRetryPosts,
+                        loading = postsLoading,
                     )
-                }
-                Box(modifier = Modifier.padding(horizontal = Spacing.s4)) {
-                    LocalProfileTabStrip(
-                        postCount = content.posts.size.takeIf { it > 0 },
-                        selected = selectedTab,
-                        onSelect = onSelectTab,
-                        reviewCount = content.profile.reviewCount?.takeIf { it > 0 },
+                LocalProfileTab.About ->
+                    LocalProfileAboutSection(
+                        firstName = firstName,
+                        skills = content.stats.skills,
+                        trust = content.header.trust,
+                        emailConfirmed = content.profile.verified == true,
+                        links = content.links,
+                        onOpenLink = onOpenLink,
                     )
-                }
-                when (selectedTab) {
-                    LocalProfileTab.Posts ->
-                        PublicProfilePostsFeed(
-                            kind = PublicProfileKind.Local,
-                            posts = content.posts,
-                            onUnlock = {},
-                            onEmptyCta = onMessage,
-                            localName = content.header.displayName,
-                            loadFailed = postsLoadFailed,
-                            onRetry = onRetryPosts,
-                            hiddenByBlock = connection == ProfileConnection.Blocked,
-                            pulseCards = postCards,
-                            cardActions = postCardActions,
-                        )
-                    LocalProfileTab.About ->
-                        Box(modifier = Modifier.padding(horizontal = Spacing.s4)) {
-                            LocalProfileAboutSection(content = neighbor)
-                        }
-                    LocalProfileTab.Portfolio ->
-                        Box(modifier = Modifier.padding(horizontal = Spacing.s4)) {
-                            ProfilePortfolioSection(
-                                userId = content.profile.id,
-                                isOwnProfile = content.isOwner,
-                            )
-                        }
-                    LocalProfileTab.Gigs ->
-                        Box(modifier = Modifier.padding(horizontal = Spacing.s4)) {
-                            ProfileGigsSection(userId = content.profile.id, onOpenGig = onOpenGig)
-                        }
-                    LocalProfileTab.Reviews ->
-                        Box(modifier = Modifier.padding(horizontal = Spacing.s4)) {
-                            ProfileGigReviewsSection(
-                                userId = content.profile.id,
-                                onOpenReviewer = onOpenProfile,
-                            )
-                        }
-                }
+                LocalProfileTab.Work ->
+                    LocalProfileWorkSection(
+                        userId = content.profile.id,
+                        isOwnProfile = content.isOwner,
+                        work = content.work,
+                        onOpenGig = onOpenGig,
+                        onOpenProfile = onOpenProfile,
+                    )
             }
-        },
-    )
+            Spacer(Modifier.height(Spacing.s10))
+        }
+    }
 }
 
 /**
- * The Local header's two actions, Connect and Message (`beacon-primitives.jsx:268-272`).
- * Message doesn't show for someone the viewer blocked: the block says you can't message
- * each other, and the overflow's Unblock or Settings → Blocked users lifts it. Mirrors iOS `identityActions`.
+ * The Local header's two actions, Connect and Message (`beacon-primitives.jsx:268-272`), on the persona frame's
+ * Local branch. Message doesn't show for someone the viewer blocked, nor on your own profile (#3092: nobody
+ * messages themselves). Mirrors iOS `identityActions`.
  */
 @Composable
 private fun NeighborHeaderActions(
     connection: ProfileConnection,
     connectState: PublicProfileActionState,
     canFollow: Boolean,
+    isOwnProfile: Boolean,
     onConnect: () -> Unit,
     onMessage: () -> Unit,
 ) {
@@ -785,7 +836,7 @@ private fun NeighborHeaderActions(
         canFollow = canFollow,
         onConnect = onConnect,
     )
-    if (connection == ProfileConnection.Blocked) return
+    if (isOwnProfile || connection == ProfileConnection.Blocked) return
     BeaconHeaderPrimaryButton(
         title = "Message",
         icon = PantopusIcon.MessageSquare,
@@ -829,54 +880,18 @@ private fun ConnectHeaderButton(
     }
 }
 
-/**
- * T3 — plain Follow / Following for an ordinary neighbour.
- *
- * The A21.2 Local header is spec'd at exactly two buttons (Connect +
- * Message — `beacon-primitives.jsx:268-272`), so the follow control lives
- * directly beneath the identity block, the same slot RN puts its action
- * row in (`src/app/user/[id].tsx:522-569`). Hidden on your own profile and
- * when signed out. Mirrors iOS `PublicProfileView.followRow`: a compact
- * button like the header's, not a full-width bar a stray tap lands on, and
- * Following asks before it unfollows ([onUnfollow] opens the confirm).
- */
-@Composable
-private fun ProfileFollowRow(
-    follow: ProfileFollowState,
-    onFollow: () -> Unit,
-    onUnfollow: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    if (follow.canFollow && follow.relationshipLoaded) {
-        Box(modifier = modifier.testTag("publicProfileFollowButton")) {
-            if (follow.isFollowing) {
-                BeaconHeaderGhostButton(
-                    icon = PantopusIcon.Check,
-                    actionLabel = "Following. Tap to unfollow",
-                    onClick = onUnfollow,
-                    title = "Following",
-                    enabled = !follow.isInFlight,
-                )
-            } else {
-                Box(modifier = Modifier.alpha(if (follow.isInFlight) DISABLED_FOLLOW_ALPHA else 1f)) {
-                    BeaconHeaderPrimaryButton(
-                        title = "Follow",
-                        icon = PantopusIcon.Plus,
-                        onClick = { if (!follow.isInFlight) onFollow() },
-                    )
-                }
-            }
-        }
-    }
-}
-
-private const val DISABLED_FOLLOW_ALPHA = 0.6f
-
 /** The profile's public link (web `/u/:username`, the link web's own profile Share uses), or null without one. */
 private fun profileShareUrl(state: PublicProfileUiState): String? {
     val username = (state as? PublicProfileUiState.Loaded)?.content?.profile?.username
     return username?.takeIf { it.isNotBlank() }?.let(InviteLinks::profileUrl)
 }
+
+/** The ⋯ menu's Follow / Unfollow row; null leaves it out (your own profile, a block, an unknown relationship). */
+private data class OverflowFollow(
+    val firstName: String,
+    val isFollowing: Boolean,
+    val enabled: Boolean,
+)
 
 @Composable
 private fun OverflowSheetContent(
@@ -888,12 +903,21 @@ private fun OverflowSheetContent(
     onUnblock: () -> Unit,
     onReport: () -> Unit,
     onCancel: () -> Unit,
+    follow: OverflowFollow? = null,
+    onFollow: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(bottom = Spacing.s5),
         verticalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
         shareUrl?.let { url -> OverflowSheetRow(label = "Share profile", onClick = { onShare(url) }) }
+        follow?.let {
+            // Unfollow keeps its confirm (10-30); Follow is one tap, as in the Connect sheet.
+            OverflowSheetRow(
+                label = if (it.isFollowing) "Unfollow ${it.firstName}" else "Follow ${it.firstName}'s public posts",
+                onClick = { if (it.enabled) onFollow() },
+            )
+        }
         // Nobody blocks or reports themselves.
         if (!isOwnProfile) {
             // Someone you blocked can be unblocked here, as in Settings → Blocked users.

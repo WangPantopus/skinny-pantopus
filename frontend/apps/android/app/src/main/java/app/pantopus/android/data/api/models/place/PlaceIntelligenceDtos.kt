@@ -304,11 +304,29 @@ data class PlaceWeatherAlert(
     val headline: String,
     /** Body copy / instruction. */
     val description: String,
-    /** ISO 8601. */
+    /** When the hazard begins (ISO 8601). */
     val onset: String? = null,
-    /** ISO 8601. */
+    /** When the hazard ends (ISO 8601). */
     val ends: String? = null,
-)
+    /** When the bulletin was issued (ISO 8601); null from older servers (TPR contract §3, as the fields below). */
+    val sent: String? = null,
+    val effective: String? = null,
+    /** When this bulletin expires or is replaced; not the hazard's end. */
+    val expires: String? = null,
+    /** The issuer, e.g. "NWS Portland OR". */
+    @Json(name = "sender_name") val senderName: String? = null,
+    /** The affected areas as the provider writes them. */
+    val area: String? = null,
+    /** The provider's full text, not cut. */
+    @Json(name = "original_description") val originalDescription: String? = null,
+    @Json(name = "original_instruction") val originalInstruction: String? = null,
+    /** The provider's page for this alert, when there is one. */
+    @Json(name = "details_url") val detailsUrl: String? = null,
+) {
+    /** The official text unedited (description, then instruction), or "" when the server sent only the cut [description]. */
+    val originalText: String
+        get() = listOfNotNull(originalDescription, originalInstruction).map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n\n")
+}
 
 /** NWS active alerts — an empty `active` list renders "No active alerts". */
 @JsonClass(generateAdapter = true)
@@ -1193,6 +1211,8 @@ data class PlaceCalendarEvent(
     @Json(name = "moved_from") val movedFrom: String? = null,
     val holiday: String? = null,
     @Json(name = "shift_days") val shiftDays: Int? = null,
+    /** "household" (the household's own schedule) or "address" (a general date); null from older servers. */
+    val audience: String? = null,
 ) {
     val holidayMoveLine: String?
         get() {
