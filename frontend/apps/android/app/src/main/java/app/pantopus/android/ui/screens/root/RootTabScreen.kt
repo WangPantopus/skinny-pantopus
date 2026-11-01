@@ -6004,7 +6004,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.EDIT_PROFILE) {
-                    EditProfileScreen(onBack = { navController.popBackStack() })
+                    EditProfileScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenMyHomes = { navController.navigate(ChildRoutes.MY_HOMES) },
+                    )
                 }
                 composable(ChildRoutes.SETTINGS_NOTIFICATIONS) {
                     NotificationSettingsScreen(onBack = { navController.popBackStack() })
@@ -6016,6 +6019,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     PrivacySettingsScreen(
                         onBack = { navController.popBackStack() },
                         onOpenDataExport = { navController.navigate(ChildRoutes.SETTINGS_DATA_EXPORT) },
+                        onOpenEditProfile = { navController.navigate(ChildRoutes.EDIT_PROFILE) },
                         onOpenPrivacyPolicy = {
                             navController.navigate(ChildRoutes.settingsLegalContent(LegalDocument.Privacy.rowId))
                         },

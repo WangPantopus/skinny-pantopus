@@ -29,8 +29,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +48,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
+import app.pantopus.android.data.api.models.identity.OwnLocalProfileResponse
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
@@ -79,6 +83,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun EditProfileScreen(
     onBack: () -> Unit,
+    /** "Home address": your homes live in My Homes (the address itself is never shown). */
+    onOpenMyHomes: () -> Unit = {},
     viewModel: EditProfileViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -106,6 +112,11 @@ fun EditProfileScreen(
     val skills = viewModel.skills.collectAsStateWithLifecycle().value
     val skillDraft = viewModel.skillDraft.collectAsStateWithLifecycle().value
     val bioDraftState = viewModel.bioDraftState.collectAsStateWithLifecycle().value
+    val neighbors = viewModel.neighbors.collectAsStateWithLifecycle().value
+    val neighborPhotoBusy = viewModel.neighborPhotoBusy.collectAsStateWithLifecycle().value
+    val cityAudience = viewModel.cityAudience.collectAsStateWithLifecycle().value
+    val ownFacts = viewModel.ownFacts.collectAsStateWithLifecycle().value
+    var showCitySheet by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
@@ -122,10 +133,12 @@ fun EditProfileScreen(
 
     LaunchedEffect(shouldDismiss) {
         if (shouldDismiss) {
-            viewModel.acknowledgeDismiss()
             // Hold the success toast on screen briefly before popping
             // so the user actually sees the confirmation — mirrors iOS.
             delay(700)
+            // Acknowledge only now: clearing the flag first changes this
+            // effect's key, which cancels the wait and the pop with it.
+            viewModel.acknowledgeDismiss()
             onBack()
         }
     }
@@ -200,6 +213,28 @@ fun EditProfileScreen(
                             onDismiss = viewModel::dismissBioDraftError,
                         )
                     },
+                    extras =
+                        EditorExtras(
+                            preview = editPreview(fields, neighbors, avatarUrl, ownFacts, cityAudience),
+                            neighborsAvailable = neighbors != null,
+                            neighborPhotoSlot = {
+                                neighbors?.let { view ->
+                                    NeighborPhotoRow(
+                                        view = view,
+                                        name = fields[EditProfileField.NeighborName]?.value.orEmpty().ifBlank { view.profile.displayName },
+                                        seed = ownFacts?.seed.orEmpty(),
+                                        busy = neighborPhotoBusy,
+                                        onPicked = viewModel::uploadNeighborPhoto,
+                                        onUseAccountPhoto = viewModel::useAccountPhotoForNeighbors,
+                                        onRemove = viewModel::removeNeighborPhoto,
+                                    )
+                                }
+                            },
+                            accountPhotoFollows = neighbors?.followsAccount?.avatarUrl == true,
+                            cityValue = cityAudience?.label,
+                            onOpenCity = { showCitySheet = true },
+                            onOpenMyHomes = onOpenMyHomes,
+                        ),
                 )
             is EditProfileUiState.Error ->
                 EmptyState(
@@ -211,6 +246,16 @@ fun EditProfileScreen(
                 )
         }
 
+        if (showCitySheet) {
+            CityAudienceSheet(
+                selected = cityAudience ?: CityAudience.Connections,
+                onPick = { choice ->
+                    showCitySheet = false
+                    viewModel.setCityAudience(choice)
+                },
+                onDismiss = { showCitySheet = false },
+            )
+        }
         toast?.let { payload ->
             EditProfileToastView(
                 payload = payload,
@@ -261,6 +306,7 @@ internal fun EditProfileLoaded(
     skillsSlot: @Composable () -> Unit = {},
     bioActionSlot: @Composable () -> Unit = {},
     bioDraftErrorSlot: @Composable () -> Unit = {},
+    extras: EditorExtras = EditorExtras(),
 ) {
     Box(
         modifier =
@@ -297,9 +343,53 @@ internal fun EditProfileLoaded(
                 skillsSlot = skillsSlot,
                 bioActionSlot = bioActionSlot,
                 bioDraftErrorSlot = bioDraftErrorSlot,
+                extras = extras,
             )
         }
     }
+}
+
+/**
+ * What the PRF editor adds around the form (`Edit.dc.html`): the live preview, the photo neighbors see, and the rows
+ * that open Home address and "Who sees your city". Defaults keep older callers (and snapshots) on the account form.
+ */
+internal data class EditorExtras(
+    val preview: EditPreview? = null,
+    /** The server keeps Local Profiles: the name and photo neighbors see are edited here. */
+    val neighborsAvailable: Boolean = false,
+    val neighborPhotoSlot: @Composable () -> Unit = {},
+    /** The neighbors' photo still follows the account photo, so changing that one changes theirs too. */
+    val accountPhotoFollows: Boolean = false,
+    val cityValue: String? = null,
+    val onOpenCity: () -> Unit = {},
+    val onOpenMyHomes: () -> Unit = {},
+)
+
+/** The preview card from the form as typed: the name and photo neighbors see, @username, the trust line, tagline, bio. */
+private fun editPreview(
+    fields: Map<EditProfileField, FormFieldState>,
+    neighbors: OwnLocalProfileResponse?,
+    accountPhoto: String?,
+    ownFacts: EditOwnFacts?,
+    cityAudience: CityAudience?,
+): EditPreview? {
+    val facts = ownFacts ?: return null
+
+    fun value(field: EditProfileField) = fields[field]?.value?.trim().orEmpty()
+    val accountName = listOf(value(EditProfileField.FirstName), value(EditProfileField.LastName)).filter { it.isNotEmpty() }
+    // The verified home's city, else the city typed below; neighbors who aren't connections see it only when it shows
+    // to everyone.
+    val typedCity = value(EditProfileField.City).takeIf { it.isNotEmpty() }
+    val city = (facts.trust.city ?: typedCity).takeIf { cityAudience == CityAudience.Everyone }
+    return EditPreview(
+        name = neighbors?.let { value(EditProfileField.NeighborName).ifBlank { it.profile.displayName } } ?: accountName.joinToString(" "),
+        handle = value(EditProfileField.Username).takeIf { it.isNotEmpty() },
+        photoUrl = if (neighbors != null) neighbors.profile.avatarUrl else accountPhoto,
+        seed = facts.seed,
+        trust = facts.trust.copy(city = city),
+        tagline = value(EditProfileField.Tagline).takeIf { it.isNotEmpty() },
+        bio = value(EditProfileField.Bio).takeIf { it.isNotEmpty() },
+    )
 }
 
 @Composable
@@ -313,40 +403,43 @@ private fun EditProfileSections(
     skillsSlot: @Composable () -> Unit = {},
     bioActionSlot: @Composable () -> Unit = {},
     bioDraftErrorSlot: @Composable () -> Unit = {},
+    extras: EditorExtras = EditorExtras(),
 ) {
-    // A13.9 §① — avatar + "Change photo". The photo does not ride the
-    // PATCH body; it has its own multipart route
-    // (`POST /api/upload/profile-picture`), so the block sits above the
-    // field groups rather than inside one.
-    avatarSlot()
-    FormFieldGroup("About") {
+    extras.preview?.let { EditProfilePreviewCard(it) }
+    EditSectionHeader(
+        icon = PantopusIcon.Users,
+        tint = PantopusColors.home,
+        background = PantopusColors.homeBg,
+        title = "Neighbors see this",
+        subtitle = "Shown on your profile and next to your posts, comments and messages.",
+        tag = "editProfileNeighborsSection",
+    )
+    FormFieldGroup("Photo and name") {
+        if (extras.neighborsAvailable) {
+            extras.neighborPhotoSlot()
+            TextRow(
+                field = EditProfileField.NeighborName,
+                label = "Name neighbors see",
+                fields = fields,
+                onUpdate = onUpdate,
+            )
+            FieldHelp("A first name or nickname is fine. Your account name stays private.")
+        } else {
+            // No Local Profiles on this server: neighbors see the account photo, edited here.
+            avatarSlot()
+        }
         // The profile link's username (`UsernameAvailability.kt`).
         usernameSlot()
-        TextRow(
-            field = EditProfileField.FirstName,
-            label = "First name",
-            fields = fields,
-            onUpdate = onUpdate,
-        )
-        TextRow(
-            field = EditProfileField.MiddleName,
-            label = "Middle name (optional)",
-            fields = fields,
-            onUpdate = onUpdate,
-        )
-        TextRow(
-            field = EditProfileField.LastName,
-            label = "Last name",
-            fields = fields,
-            onUpdate = onUpdate,
-        )
+    }
+    FormFieldGroup("About you") {
         TextRow(
             field = EditProfileField.Tagline,
-            label = "Tagline (optional)",
+            label = "Tagline",
             placeholder = "A short headline",
             fields = fields,
             onUpdate = onUpdate,
         )
+        FieldHelp("One line about you. It shows in bold under your name.")
         BioField(
             fields = fields,
             onUpdate = onUpdate,
@@ -356,59 +449,8 @@ private fun EditProfileSections(
     }
     // Skills live in `UserSkill`, not on `User`, so this group commits
     // through `PUT /api/users/skills` inside the same Save.
-    FormFieldGroup("Skills") { skillsSlot() }
-    FormFieldGroup("Contact") {
-        // Note: the design allows editing email when `verified ==
-        // false`. `updateProfileSchema` exposes no `email` key, so
-        // the field is read-only until the backend adds it.
-        ReadOnlyEmailRow(email = email, verified = emailVerified)
-        TextRow(
-            field = EditProfileField.PhoneNumber,
-            label = "Phone (optional)",
-            placeholder = "+15555550123",
-            keyboardType = KeyboardType.Phone,
-            fields = fields,
-            onUpdate = onUpdate,
-        )
-        DateOfBirthField(fields = fields, onUpdate = onUpdate)
-    }
-    FormFieldGroup("Address") {
-        TextRow(
-            field = EditProfileField.Address,
-            label = "Street",
-            placeholder = "123 Main St",
-            fields = fields,
-            onUpdate = onUpdate,
-        )
-        TextRow(
-            field = EditProfileField.City,
-            label = "City",
-            fields = fields,
-            onUpdate = onUpdate,
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-        ) {
-            Box(modifier = Modifier.weight(1f)) {
-                TextRow(
-                    field = EditProfileField.State,
-                    label = "State",
-                    fields = fields,
-                    onUpdate = onUpdate,
-                )
-            }
-            Box(modifier = Modifier.weight(1f)) {
-                TextRow(
-                    field = EditProfileField.Zipcode,
-                    label = "Zip",
-                    fields = fields,
-                    onUpdate = onUpdate,
-                )
-            }
-        }
-    }
-    FormFieldGroup("Social") {
+    FormFieldGroup("Helps with") { skillsSlot() }
+    FormFieldGroup("Links") {
         TextRow(
             field = EditProfileField.Website,
             label = "Website",
@@ -450,27 +492,131 @@ private fun EditProfileSections(
             onUpdate = onUpdate,
         )
     }
-    FormFieldGroup("Visibility") {
-        // Note: the design also calls for a `show_in_neighbor_discovery`
-        // toggle. That key isn't in `updateProfileSchema` today, so it
-        // stays omitted; the 3-way `profileVisibility` enum and the two
-        // contact-visibility booleans below are the schema's full set
-        // (`backend/routes/users.js:797-800`).
-        VisibilityPicker(fields = fields, onUpdate = onUpdate)
+    EditSectionHeader(
+        icon = PantopusIcon.Lock,
+        tint = PantopusColors.appTextStrong,
+        background = PantopusColors.appBorder,
+        title = "Only you see this",
+        subtitle = "Never shown on your profile.",
+        tag = "editProfilePrivateSection",
+    )
+    FormFieldGroup("Account name") {
+        TextRow(
+            field = EditProfileField.FirstName,
+            label = "First name",
+            fields = fields,
+            onUpdate = onUpdate,
+        )
+        TextRow(
+            field = EditProfileField.MiddleName,
+            label = "Middle name (optional)",
+            fields = fields,
+            onUpdate = onUpdate,
+        )
+        TextRow(
+            field = EditProfileField.LastName,
+            label = "Last name",
+            fields = fields,
+            onUpdate = onUpdate,
+        )
+        FieldHelp("Used for your account and home verification.")
+    }
+    if (extras.neighborsAvailable) {
+        FormFieldGroup("Account photo") {
+            avatarSlot()
+            FieldHelp(
+                if (extras.accountPhotoFollows) {
+                    "Neighbors see this photo too until you choose a different one above."
+                } else {
+                    "Only for your account. Neighbors see the photo above."
+                },
+            )
+        }
+    }
+    FormFieldGroup("Contact") {
+        // Note: the design allows editing email when `verified ==
+        // false`. `updateProfileSchema` exposes no `email` key, so
+        // the field is read-only until the backend adds it.
+        ReadOnlyEmailRow(email = email, verified = emailVerified)
         ContactVisibilityToggle(
             field = EditProfileField.ShowEmail,
-            label = "Show Email on Profile",
+            label = "Show on my profile",
             subtitle = "Neighbors viewing your profile can see your email address.",
+            fields = fields,
+            onUpdate = onUpdate,
+        )
+        TextRow(
+            field = EditProfileField.PhoneNumber,
+            label = "Phone (optional)",
+            placeholder = "+15555550123",
+            keyboardType = KeyboardType.Phone,
             fields = fields,
             onUpdate = onUpdate,
         )
         ContactVisibilityToggle(
             field = EditProfileField.ShowPhone,
-            label = "Show Phone on Profile",
+            label = "Show on my profile",
             subtitle = "Neighbors viewing your profile can see your phone number.",
             fields = fields,
             onUpdate = onUpdate,
         )
+        DateOfBirthField(fields = fields, onUpdate = onUpdate)
+    }
+    FormFieldGroup("Home and city") {
+        EditLinkRow(
+            icon = PantopusIcon.Home,
+            title = "Home address",
+            subtitle = "Never shown. Neighbors see \u201cVerified neighbor\u201d and your city.",
+            value = null,
+            tag = "editProfileHomeAddress",
+            onClick = extras.onOpenMyHomes,
+        )
+        EditLinkRow(
+            icon = PantopusIcon.MapPin,
+            title = "Who sees your city",
+            subtitle = null,
+            value = extras.cityValue,
+            tag = "editProfileCityRow",
+            onClick = extras.onOpenCity,
+        )
+        TextRow(
+            field = EditProfileField.Address,
+            label = "Mailing address",
+            placeholder = "123 Main St",
+            fields = fields,
+            onUpdate = onUpdate,
+        )
+        TextRow(
+            field = EditProfileField.City,
+            label = "City",
+            fields = fields,
+            onUpdate = onUpdate,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                TextRow(
+                    field = EditProfileField.State,
+                    label = "State",
+                    fields = fields,
+                    onUpdate = onUpdate,
+                )
+            }
+            Box(modifier = Modifier.weight(1f)) {
+                TextRow(
+                    field = EditProfileField.Zipcode,
+                    label = "Zip",
+                    fields = fields,
+                    onUpdate = onUpdate,
+                )
+            }
+        }
+        FieldHelp("Your street is never shown. Your city shows to the people \u201cWho sees your city\u201d allows.")
+    }
+    FormFieldGroup("Who can see your profile") {
+        VisibilityPicker(fields = fields, onUpdate = onUpdate)
     }
 }
 
@@ -552,7 +698,7 @@ private fun BioField(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             DirtyFieldLabel(
-                label = "Bio",
+                label = "About you",
                 dirty = snapshot?.isDirty == true,
                 modifier = Modifier.weight(1f),
             )

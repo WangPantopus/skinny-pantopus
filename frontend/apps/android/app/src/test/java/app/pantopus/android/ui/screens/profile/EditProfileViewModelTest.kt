@@ -11,7 +11,9 @@ import app.pantopus.android.data.api.models.users.UserProfile
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.identity.LocalProfileRepository
 import app.pantopus.android.data.network.NetworkMonitor
+import app.pantopus.android.data.privacy.PrivacyRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.data.upload.UploadRepository
 import io.mockk.coEvery
@@ -47,6 +49,8 @@ class EditProfileViewModelTest {
     private val uploads: UploadRepository = mockk(relaxed = true)
     private val authRepository: AuthRepository = mockk(relaxed = true)
     private val networkMonitor: NetworkMonitor = mockk()
+    private val localProfiles: LocalProfileRepository = mockk()
+    private val privacy: PrivacyRepository = mockk()
     private val aiDraftRepository: AIDraftRepository = mockk(relaxed = true)
     private val isOnline = MutableStateFlow(true)
 
@@ -54,6 +58,9 @@ class EditProfileViewModelTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { networkMonitor.isOnline } returns isOnline
         every { repo.ownProfileCopy() } returns null
+        // No Local Profile and no city setting here: the editor keeps its account form.
+        coEvery { localProfiles.me() } returns NetworkResult.Failure(NetworkError.NotFound)
+        coEvery { privacy.settings(any()) } returns NetworkResult.Failure(NetworkError.NotFound)
         isOnline.value = true
     }
 
@@ -61,7 +68,16 @@ class EditProfileViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(): EditProfileViewModel = EditProfileViewModel(repo, uploads, authRepository, networkMonitor, aiDraftRepository)
+    private fun viewModel(): EditProfileViewModel =
+        EditProfileViewModel(
+            repo,
+            uploads,
+            authRepository,
+            networkMonitor,
+            aiDraftRepository,
+            localProfiles,
+            privacy,
+        )
 
     private fun seededProfile(): UserProfile =
         UserProfile(

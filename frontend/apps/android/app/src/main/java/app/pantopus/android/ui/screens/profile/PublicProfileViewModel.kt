@@ -1210,10 +1210,18 @@ private val JOINED_MONTH: java.time.format.DateTimeFormatter =
 internal fun profileTrust(
     profile: PublicProfileDto,
     now: Instant = Instant.now(),
+): ProfileTrust = profileTrust(profile.residency, profile.createdAt, profile.city, now)
+
+/** The same facts from the raw fields; the editor's preview card reads them from your account. */
+internal fun profileTrust(
+    residency: Map<String, Any?>?,
+    createdAt: String?,
+    city: String?,
+    now: Instant = Instant.now(),
 ): ProfileTrust {
-    val verified = hasHomeResidency(profile)
-    val homeCity = (profile.residency?.get("city") as? String)?.trim()?.takeIf { verified && it.isNotEmpty() }
-    val joinedAt = profile.createdAt?.let { runCatching { Instant.parse(it) }.getOrNull() }
+    val verified = hasHomeResidency(residency)
+    val homeCity = (residency?.get("city") as? String)?.trim()?.takeIf { verified && it.isNotEmpty() }
+    val joinedAt = createdAt?.let { runCatching { Instant.parse(it) }.getOrNull() }
     val days = joinedAt?.let { Duration.between(it, now).toDays().coerceAtLeast(0) }
     val joined =
         when {
@@ -1223,7 +1231,7 @@ internal fun profileTrust(
         }
     return ProfileTrust(
         verifiedNeighbor = verified,
-        city = homeCity ?: profile.city?.trim()?.takeIf { it.isNotEmpty() },
+        city = homeCity ?: city?.trim()?.takeIf { it.isNotEmpty() },
         joined = joined,
         joinedRecently = days != null && days < JUST_JOINED_DAYS,
     )
@@ -1454,8 +1462,10 @@ private fun buildBadges(profile: PublicProfileDto): List<IdentityPillarBadge> {
     )
 }
 
-private fun hasHomeResidency(profile: PublicProfileDto): Boolean {
-    val r = profile.residency ?: return false
+private fun hasHomeResidency(profile: PublicProfileDto): Boolean = hasHomeResidency(profile.residency)
+
+private fun hasHomeResidency(residency: Map<String, Any?>?): Boolean {
+    val r = residency ?: return false
     val verifiedValue = r["verified"]
     if (verifiedValue is Boolean) return verifiedValue
     return r.isNotEmpty()
