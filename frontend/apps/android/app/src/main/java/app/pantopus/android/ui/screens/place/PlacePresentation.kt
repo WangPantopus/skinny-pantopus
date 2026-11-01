@@ -603,7 +603,7 @@ object PlacePresentation {
             )
         }
 
-        // 3) All clear — assert only what we actually know.
+        // 3) No active weather alerts — assert only what we actually know.
         val airClause = allClearAir(aqiData?.category)
         val alertsKnownClear = alerts?.status == PlaceSectionStatus.READY && (alerts.alerts?.active?.isEmpty() ?: true)
 
@@ -627,17 +627,16 @@ object PlacePresentation {
             )
         }
 
-        val clauses =
-            buildList {
-                airClause?.let(::add)
-                add("there are no active alerts")
-            }
-        val title = "All clear on your block today. " + clauses.joinToString(" and ").replaceFirstChar { it.uppercase() } + "."
+        // Only what was checked: the weather alerts for this address and, when known, its air.
+        val air =
+            aqiData?.takeIf { it.category == AirQualityCategory.GOOD || it.category == AirQualityCategory.MODERATE }
+                ?.let { " Air quality is ${it.categoryLabel.lowercase()} (${it.index})." }
+        val title = "No active weather alerts right now." + air.orEmpty()
 
         return PlaceDerivedPulse(
             variant = PlaceHeroVariant.ALL_CLEAR,
             title = title,
-            chip = PlaceChipModel(PlaceChipTone.SUCCESS, "All clear", PantopusIcon.Check),
+            chip = PlaceChipModel(PlaceChipTone.NEUTRAL, "No active alerts", PantopusIcon.Check),
             heroIcon = PantopusIcon.ShieldCheck,
             nudgeIcon = PantopusIcon.Lightbulb,
             nudgeText = nudge,

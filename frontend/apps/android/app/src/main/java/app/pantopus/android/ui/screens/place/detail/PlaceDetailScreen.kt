@@ -103,7 +103,15 @@ fun PlaceDetailScreen(
                         ErrorState(message = current.message, onRetry = viewModel::refresh)
                     }
                 is PlaceDetailUiState.Loaded ->
-                    LoadedDetail(current, viewModel, verify, refreshing, onBack, onOpenBallot)
+                    LoadedDetail(
+                        current = current,
+                        viewModel = viewModel,
+                        verify = verify,
+                        refreshing = refreshing,
+                        onBack = onBack,
+                        onOpenBallot = onOpenBallot,
+                        onAsk = onAsk?.let { ask -> askAboutSection(viewModel, ask) },
+                    )
             }
         }
     }
@@ -135,6 +143,8 @@ private fun LoadedDetail(
     refreshing: Boolean,
     onBack: () -> Unit,
     onOpenBallot: () -> Unit,
+    /** Ask Pantopus about this page ("Add or correct an install year" on Your home). */
+    onAsk: (() -> Unit)?,
 ) {
     if (viewModel.savedPlaceId != null &&
         (!viewModel.group.supportsSavedPlace || current.intelligence.groups.none { it.groupId in viewModel.group.groups })
@@ -171,6 +181,7 @@ private fun LoadedDetail(
                     intel = current.intelligence,
                     viewModel = viewModel,
                     onOpenBallot = onOpenBallot,
+                    onAsk = onAsk,
                     alertsCheck =
                         if (viewModel.savedPlaceId != null) {
                             savedAlertsCheck(
@@ -193,6 +204,7 @@ private fun GroupContent(
     intel: PlaceIntelligence,
     viewModel: PlaceDetailViewModel,
     onOpenBallot: () -> Unit,
+    onAsk: (() -> Unit)?,
     alertsCheck: TodayAlertsCheck,
 ) {
     when (group) {
@@ -204,7 +216,7 @@ private fun GroupContent(
                 onOpenBallot = onOpenBallot,
                 alertsCheck = alertsCheck,
             )
-        PlaceDetailGroup.YOUR_HOME -> PlaceHomeDetailContent(intel)
+        PlaceDetailGroup.YOUR_HOME -> PlaceHomeDetailContent(intel, onCorrectYear = onAsk)
         PlaceDetailGroup.RISK -> PlaceRiskDetailContent(intel, viewModel)
         PlaceDetailGroup.BLOCK -> PlaceBlockDetailContent(intel, viewModel)
         PlaceDetailGroup.MONEY -> PlaceMoneyDetailContent(intel, viewModel)

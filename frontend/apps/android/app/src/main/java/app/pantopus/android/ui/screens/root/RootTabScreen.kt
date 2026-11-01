@@ -7575,6 +7575,8 @@ private fun PlaceDashboardDestination(
     PlaceDashboardScreen(
         homeId = homeId,
         onOpenSection = { hid, slug -> navController.navigate(ChildRoutes.placeDetail(hid, slug)) },
+        // "Worth a look": an overdue or due task opens its own page.
+        onOpenTask = { taskId -> navController.navigate(ChildRoutes.householdTaskDetail(homeId, taskId)) },
         onSwitchHome = onSwitchHome,
         onAddPlace = { navController.navigate(ChildRoutes.ADD_HOME) },
         // Wedge v2 D3: each door is a real flow, never a status mock-up.

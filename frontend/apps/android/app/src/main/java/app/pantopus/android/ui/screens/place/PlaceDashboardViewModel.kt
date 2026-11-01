@@ -2,15 +2,18 @@ package app.pantopus.android.ui.screens.place
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
 import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
 import app.pantopus.android.data.api.models.notifications.personalBellCount
+import app.pantopus.android.data.api.models.place.HomeChangesResponse
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.api.net.safeApiCall
+import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.homes.HomeDashboardAccessRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.data.notifications.NotificationsRepository
@@ -19,13 +22,19 @@ import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.data.store.Stored
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.homes.HomeCopyGate
+import app.pantopus.android.ui.screens.homes.tasks.HomeTaskAccess
+import app.pantopus.android.ui.screens.homes.tasks.HomeTaskAccessFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/** "Worth a look" reads its tasks once more through a new access when a token refresh retired the first. */
+private const val WORTH_TASK_ATTEMPTS = 2
 
 /**
  * Drives the Place dashboard (C1 verified / C1a claimed). Fetches the
@@ -65,6 +74,28 @@ class PlaceDashboardViewModel
         val homeShortcuts: StateFlow<List<PlaceHomeShortcut>> = _homeShortcuts.asStateFlow()
         private var shortcutsJob: Job? = null
 
+        /** The household's tasks for "Worth a look" (unit tests build this without Hilt). */
+        @Inject lateinit var taskAccess: HomeTaskAccessFactory
+
+        private val _worthTasks = MutableStateFlow<List<HomeTaskDto>>(emptyList())
+
+        /** The tasks this viewer may read here, for overdue and due-today items in "Worth a look" (TPR brief 6.5). */
+        val worthTasks: StateFlow<List<HomeTaskDto>> = _worthTasks.asStateFlow()
+        private var worthAccess: Pair<String, HomeTaskAccess>? = null
+        private var worthJob: Job? = null
+
+        /** When this account last saw this Home's dashboard, on the phone (unit tests build this without Hilt). */
+        @Inject lateinit var visits: PlaceLastVisitStore
+
+        /** The signed-in account, which keys the last visit (unit tests build this without Hilt). */
+        @Inject lateinit var tokens: TokenStorage
+
+        private val _changes = MutableStateFlow<HomeChangesResponse?>(null)
+
+        /** What changed since the last visit (TPR brief 7.3): null on a first visit, after an error or from an older server. */
+        val changes: StateFlow<HomeChangesResponse?> = _changes.asStateFlow()
+        private var changesReadFor: String? = null
+
         private var homeId: String? = null
 
         /** The person's claim in review on this Home, which isn't theirs yet: the server sends its public view. */
@@ -85,7 +116,10 @@ class PlaceDashboardViewModel
             active = true
             if (!householdViewer(homeId)) clearPrivateCopy(homeId)
             val shown = (_state.value as? PlaceDashboardUiState.Loaded)?.takeIf { this.homeId == homeId }
-            if (this.homeId != homeId) _homeShortcuts.value = emptyList()
+            if (this.homeId != homeId) {
+                _homeShortcuts.value = emptyList()
+                _worthTasks.value = emptyList()
+            }
             this.homeId = homeId
             refreshUnread()
             readShortcuts(homeId)
@@ -128,7 +162,7 @@ class PlaceDashboardViewModel
             val id = homeId ?: return
             read(id, force = true, asked = true)
             refreshUnread()
-            readShortcuts(id)
+            readShortcuts(id, forceTasks = true)
         }
 
         /**
@@ -136,17 +170,68 @@ class PlaceDashboardViewModel
          * (`GET /api/homes/:id/dashboard-access`) and gated on the same permissions. The access copy Home tools keeps for
          * an owner or household member shows them at once. A refusal leaves none; a failed read keeps what shows.
          */
-        private fun readShortcuts(id: String) {
+        private fun readShortcuts(
+            id: String,
+            forceTasks: Boolean = false,
+        ) {
             shortcutsJob?.cancel()
             if (_homeShortcuts.value.isEmpty()) {
                 accessRepo.storedAuthority(id)?.takeIf { it.homeId == id && HomeCopyGate.householdAccess(it) }?.let {
                     _homeShortcuts.value = PlaceHomeShortcut.allowedBy(it)
+                    readWorthTasks(id, force = false)
                 }
             }
             shortcutsJob =
                 viewModelScope.launch {
                     val authority = (safeApiCall { accessRepo.read(id) } as? NetworkResult.Success)?.data ?: return@launch
-                    if (homeId == id && authority.homeId == id) _homeShortcuts.value = PlaceHomeShortcut.allowedBy(authority)
+                    if (homeId == id && authority.homeId == id) {
+                        _homeShortcuts.value = PlaceHomeShortcut.allowedBy(authority)
+                        readWorthTasks(id, forceTasks)
+                    }
+                }
+        }
+
+        /**
+         * The tasks for "Worth a look", through the screens' store, when Tasks is among this person's tools here. A refusal
+         * shows none; a failed read keeps what shows.
+         */
+        private fun readWorthTasks(
+            id: String,
+            force: Boolean,
+        ) {
+            if (!::taskAccess.isInitialized) return
+            if (PlaceHomeShortcut.TASKS !in _homeShortcuts.value) {
+                _worthTasks.value = emptyList()
+                return
+            }
+            if (!force && worthJob?.isActive == true && worthAccess?.first == id) return
+            worthJob?.cancel()
+            worthJob =
+                viewModelScope.launch {
+                    // A token refresh mid-read (a cold start) retires the access, or the store sets the answer aside and
+                    // hands back nothing: read once more, through a new access if needed (as Today's agenda does).
+                    repeat(WORTH_TASK_ATTEMPTS) {
+                        val access =
+                            worthAccess?.takeIf { it.first == id && it.second.isCurrent }?.second
+                                ?: taskAccess.create(id, viewModelScope).also { worthAccess = id to it }
+                        val stored =
+                            try {
+                                access.listStored(force)
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (_: IllegalStateException) {
+                                worthAccess = null
+                                return@repeat
+                            }
+                        if (homeId != id) return@launch
+                        if (stored.data == null && stored.failure == null) return@repeat
+                        val tasks = stored.data?.tasks
+                        when {
+                            tasks != null -> _worthTasks.value = tasks
+                            stored.failure.refusesStoredCopy -> _worthTasks.value = emptyList()
+                        }
+                        return@launch
+                    }
                 }
         }
 
@@ -230,7 +315,10 @@ class PlaceDashboardViewModel
             val failure = stored.failure
             when {
                 // The move-in date (the movers card) rides on the intelligence.
-                data != null -> _state.value = PlaceDashboardUiState.Loaded(data, data.moveInDate, claim)
+                data != null -> {
+                    _state.value = PlaceDashboardUiState.Loaded(data, data.moveInDate, claim)
+                    homeId?.let(::readChanges)
+                }
                 // Access ended (contract §3): the store dropped the copy, and the server's answer shows.
                 failure.refusesStoredCopy ->
                     _state.value =
@@ -248,6 +336,24 @@ class PlaceDashboardViewModel
                 RefreshNotice(stored.fetchedAt) { refresh() }.takeIf {
                     stored.showsRefreshFailure(StoreKind.PLACE) || (asked && stored.data != null && stored.failure != null)
                 }
+        }
+
+        /**
+         * "Changed since your last visit", once per visit to this Home's dashboard, after it shows loaded data: the time
+         * kept from the last answer goes as `since`, and this answer's `until` is kept for the next visit. A first visit
+         * (no time kept) only starts the record; an error or an older server (404) shows nothing and keeps the old time.
+         */
+        private fun readChanges(id: String) {
+            if (!::visits.isInitialized || !::tokens.isInitialized || changesReadFor == id) return
+            changesReadFor = id
+            viewModelScope.launch {
+                val account = tokens.userId()?.takeIf { it.isNotBlank() } ?: return@launch
+                val since = visits.since(account, id)
+                val answer = (repo.homeChanges(id, since) as? NetworkResult.Success)?.data ?: return@launch
+                if (homeId != id) return@launch
+                _changes.value = answer.takeIf { since != null && it.items.isNotEmpty() }
+                answer.until?.takeIf { it.isNotBlank() }?.let { visits.remember(account, id, it) }
+            }
         }
 
         private companion object {

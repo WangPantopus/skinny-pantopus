@@ -41,6 +41,7 @@ import app.pantopus.android.ui.screens.place.LocalPlaceZone
 import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.components.PlaceChip
 import app.pantopus.android.ui.screens.place.components.PlaceDensityCard
+import app.pantopus.android.ui.screens.place.components.PlaceEvidenceList
 import app.pantopus.android.ui.screens.place.components.PlaceIconTile
 import app.pantopus.android.ui.screens.place.components.PlaceLockedCard
 import app.pantopus.android.ui.screens.place.components.PlaceTileTone
@@ -63,6 +64,10 @@ fun PlaceRiskDetailContent(
     intel: PlaceIntelligence,
     viewModel: PlaceDetailViewModel,
 ) {
+    // Every topic at a glance first: result, area covered, kind of evidence, source and date; no overall score.
+    PlaceDetailSectionLabel("At a glance")
+    PlaceEvidenceList(intel)
+
     // Heat & cold leads: it is the only thing here with a forecast horizon
     // short enough to act on today. Everything below it is a standing fact.
     intel.section(PlaceSectionId.HEAT_COLD)?.let { env ->

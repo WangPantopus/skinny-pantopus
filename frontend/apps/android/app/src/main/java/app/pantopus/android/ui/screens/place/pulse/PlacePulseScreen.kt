@@ -184,7 +184,7 @@ private fun AllClear(pulse: PulsePayload) {
                 PantopusIconImage(PantopusIcon.ShieldCheck, null, size = 24.dp, strokeWidth = 2f, tint = PantopusColors.home)
             }
             Column {
-                Text("All clear today", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+                Text("No new signals today", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
                 Text(pulse.summary, fontSize = 13.5.sp, lineHeight = 18.sp, color = PantopusColors.appTextSecondary)
             }
         }

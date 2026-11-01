@@ -57,13 +57,14 @@ fun PlaceSectionCard(
     onAction: (() -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
 ) {
+    // Inside a glance group the rows navigate, so their icons are neutral (TPR brief 8).
     val tileTone =
-        if (state == PlaceSectionCardState.UNAVAILABLE || state == PlaceSectionCardState.EMPTY) {
+        if (LocalPlaceFlatRows.current || state == PlaceSectionCardState.UNAVAILABLE || state == PlaceSectionCardState.EMPTY) {
             PlaceTileTone.MUTED
         } else {
             PlaceTileTone.HOME
         }
-    val tappable = Modifier.placeCard().let { m -> onTap?.let { m.clickable(onClick = it) } ?: m }
+    val tappable = Modifier.placeCardChrome().let { m -> onTap?.let { m.clickable(onClick = it) } ?: m }
 
     if (inline && (state == PlaceSectionCardState.LOADED || state == PlaceSectionCardState.STALE)) {
         // ── INLINE: compact single-line reading ──

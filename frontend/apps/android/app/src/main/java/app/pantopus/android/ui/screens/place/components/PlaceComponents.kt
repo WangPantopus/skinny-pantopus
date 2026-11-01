@@ -13,8 +13,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -52,6 +54,15 @@ fun Modifier.placeCard(): Modifier =
         .clip(RoundedCornerShape(16.dp))
         .background(PantopusColors.appSurface)
         .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(16.dp))
+
+/**
+ * Inside one light surface (a glance group, Verified neighbors), Place rows draw no card of their own: no border, no
+ * background (TPR brief 8).
+ */
+val LocalPlaceFlatRows = staticCompositionLocalOf { false }
+
+/** A Place row's card ([placeCard]), or none on a group's surface ([LocalPlaceFlatRows]). */
+fun Modifier.placeCardChrome(): Modifier = composed { if (LocalPlaceFlatRows.current) Modifier else Modifier.placeCard() }
 
 /**
  * One light surface for a group of rows (TPR brief section 8): white, radius 16, a hairline border and no shadow, so
