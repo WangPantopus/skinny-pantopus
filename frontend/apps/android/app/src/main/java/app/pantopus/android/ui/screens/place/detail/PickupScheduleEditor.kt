@@ -23,7 +23,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -34,6 +34,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -59,6 +60,7 @@ import java.time.format.DateTimeFormatter
 private const val WEEKLY_PICKUP_WINDOW_DAYS = 7L
 private const val BIWEEKLY_PICKUP_WINDOW_DAYS = 14L
 private const val WEEKDAY_LABEL_LENGTH = 3
+private val PICKUP_DATE_FORMAT = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy")
 
 private val WEEKDAYS =
     listOf(
@@ -99,7 +101,9 @@ internal fun PickupScheduleEditor(
             Text(label, color = PantopusColors.appText, modifier = Modifier.padding(top = 12.dp))
         }
         if (row != null) {
-            CollectionFields(row, label, locked) { changed -> collections = collections.map { if (it.kind == kind) changed else it } }
+            CollectionFields(row, label, data.today, locked) { changed ->
+                collections = collections.map { if (it.kind == kind) changed else it }
+            }
         }
     }
     Text(
@@ -130,6 +134,7 @@ internal fun PickupScheduleEditor(
 private fun CollectionFields(
     row: PickupCollection,
     label: String,
+    today: String,
     locked: Boolean,
     onChange: (PickupCollection) -> Unit,
 ) {
@@ -171,28 +176,7 @@ private fun CollectionFields(
     if (row.frequency == "weekly") {
         CollectionWeekdays(row, label, locked, onChange)
     }
-    OutlinedTextField(
-        value = row.anchorDate,
-        onValueChange = { onChange(row.copy(anchorDate = it)) },
-        enabled = !locked,
-        label = {
-            Text("$label first collection date")
-        },
-        placeholder = { Text("YYYY-MM-DD") },
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
-    )
-    if (row.frequency != "once") {
-        OutlinedTextField(
-            value = row.untilDate.orEmpty(),
-            onValueChange = { onChange(row.copy(untilDate = it.takeIf(String::isNotEmpty))) },
-            enabled = !locked,
-            label = { Text("$label end date (optional)") },
-            placeholder = { Text("YYYY-MM-DD") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
+    CollectionDates(row, label, today, locked, onChange)
     if (row.frequency == "weekly" && row.interval > 1) {
         Text("The start date anchors the collection week. Weeks begin Monday.", fontSize = 12.sp, color = PantopusColors.appTextSecondary)
     }
@@ -203,6 +187,94 @@ private fun CollectionFields(
             color = PantopusColors.appTextSecondary,
         )
     }
+}
+
+/** The collection's dates, in the system date picker like the radon card's test date. */
+@Composable
+private fun CollectionDates(
+    row: PickupCollection,
+    label: String,
+    today: String,
+    locked: Boolean,
+    onChange: (PickupCollection) -> Unit,
+) {
+    val anchor = runCatching { LocalDate.parse(row.anchorDate) }.getOrNull()
+    if (anchor == null) {
+        GhostButton(
+            if (row.frequency == "once") "Choose the collection date" else "Choose the first collection date",
+            onClick = { onChange(row.copy(anchorDate = suggestedDay(row, today))) },
+            modifier = Modifier.semantics { contentDescription = "$label: choose the collection date" },
+            isEnabled = !locked,
+        )
+    } else {
+        PickupDateButton(
+            if (row.frequency == "once") "Collection date" else "First collection date",
+            anchor,
+            "$label collection date",
+            enabled = !locked,
+        ) { picked ->
+            val day = picked.toString()
+            // The end date can't precede the start.
+            onChange(row.copy(anchorDate = day, untilDate = row.untilDate?.let { maxOf(it, day) }))
+        }
+    }
+    if (row.frequency != "once") {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("End date (optional)", color = PantopusColors.appText, modifier = Modifier.weight(1f))
+            Switch(
+                checked = row.untilDate != null,
+                onCheckedChange = { on -> onChange(row.copy(untilDate = if (on) row.anchorDate.ifEmpty { today } else null)) },
+                enabled = !locked,
+                modifier = Modifier.semantics { contentDescription = "$label end date (optional)" },
+            )
+        }
+        runCatching { LocalDate.parse(row.untilDate.orEmpty()) }.getOrNull()?.let { until ->
+            PickupDateButton("End date", until, "$label end date", enabled = !locked, min = anchor) {
+                onChange(row.copy(untilDate = it.toString()))
+            }
+        }
+    }
+}
+
+/** A collection date; tapping it opens the system date picker. */
+@Composable
+private fun PickupDateButton(
+    title: String,
+    date: LocalDate,
+    description: String,
+    enabled: Boolean,
+    min: LocalDate? = null,
+    onPick: (LocalDate) -> Unit,
+) {
+    val context = LocalContext.current
+    val shown = date.format(PICKUP_DATE_FORMAT)
+    GhostButton(
+        "$title: $shown",
+        onClick = {
+            android.app.DatePickerDialog(
+                context,
+                { _, year, month, day -> onPick(LocalDate.of(year, month + 1, day)) },
+                date.year,
+                date.monthValue - 1,
+                date.dayOfMonth,
+            ).apply {
+                if (min != null) datePicker.minDate = min.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            }.show()
+        },
+        modifier = Modifier.semantics { contentDescription = "$description, $shown" },
+        isEnabled = enabled,
+    )
+}
+
+/** Where choosing a date starts: the home's today, or for a weekly collection the first of its days from today. */
+private fun suggestedDay(
+    row: PickupCollection,
+    today: String,
+): String {
+    val start = runCatching { LocalDate.parse(today) }.getOrNull()
+    if (row.frequency != "weekly" || start == null) return today
+    return (0L until WEEKLY_PICKUP_WINDOW_DAYS).map(start::plusDays)
+        .firstOrNull { WEEKDAYS[it.dayOfWeek.value - 1].first in row.weekdays }?.toString() ?: today
 }
 
 @Composable

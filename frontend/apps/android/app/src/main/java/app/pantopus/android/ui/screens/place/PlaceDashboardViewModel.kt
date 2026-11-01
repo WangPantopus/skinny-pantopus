@@ -123,10 +123,10 @@ class PlaceDashboardViewModel
             reloadPending = true
         }
 
-        /** Pull to refresh and Retry: read now, keeping the dashboard on screen. */
+        /** Pull to refresh and Retry: read now, keeping the dashboard on screen, and say so if it fails. */
         fun refresh() {
             val id = homeId ?: return
-            read(id, force = true)
+            read(id, force = true, asked = true)
             refreshUnread()
             readShortcuts(id)
         }
@@ -176,6 +176,7 @@ class PlaceDashboardViewModel
         private fun read(
             id: String,
             force: Boolean,
+            asked: Boolean = false,
         ) {
             if (!active) return
             readJob?.cancel()
@@ -186,7 +187,7 @@ class PlaceDashboardViewModel
                     val stored = readAuthorized(id, force, version)
                     if (!current(id, version)) return@launch
                     _refreshing.value = false
-                    publish(stored)
+                    publish(stored, asked)
                 }
         }
 
@@ -221,7 +222,10 @@ class PlaceDashboardViewModel
             force: Boolean,
         ): OwnershipClaimDto? = homesRepo.myClaimsStored(force).data?.claims?.firstOrNull { it.homeId == id && it.isInReview }
 
-        private fun publish(stored: Stored<PlaceIntelligence>) {
+        private fun publish(
+            stored: Stored<PlaceIntelligence>,
+            asked: Boolean,
+        ) {
             val data = stored.data
             val failure = stored.failure
             when {
@@ -238,7 +242,12 @@ class PlaceDashboardViewModel
                 _state.value !is PlaceDashboardUiState.Loaded ->
                     _state.value = PlaceDashboardUiState.Error(failure?.displayMessage("Couldn't load your dashboard.") ?: DASHBOARD_FAILED)
             }
-            _refreshNotice.value = RefreshNotice(stored.fetchedAt) { refresh() }.takeIf { stored.showsRefreshFailure(StoreKind.PLACE) }
+            // A pull or Retry that failed says so (the iPhone shows a toast); a read the person didn't ask for stays
+            // quiet until the copy is past its max shown age (contract §3).
+            _refreshNotice.value =
+                RefreshNotice(stored.fetchedAt) { refresh() }.takeIf {
+                    stored.showsRefreshFailure(StoreKind.PLACE) || (asked && stored.data != null && stored.failure != null)
+                }
         }
 
         private companion object {

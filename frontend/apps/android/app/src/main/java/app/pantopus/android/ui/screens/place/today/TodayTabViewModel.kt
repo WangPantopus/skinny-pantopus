@@ -95,6 +95,13 @@ class TodayTabViewModel
         private val _refreshing = MutableStateFlow(false)
         val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
+        /**
+         * The last read was a pull or Retry and it failed while the copy stayed: the screen says so whatever the
+         * copy's age. A read the person didn't ask for stays quiet until the copy is past its max shown age (§3).
+         */
+        private val _pullFailed = MutableStateFlow(false)
+        val pullFailed: StateFlow<Boolean> = _pullFailed.asStateFlow()
+
         /** The home this tab shows, once resolved. */
         var homeId: String? = null
             private set
@@ -278,7 +285,10 @@ class TodayTabViewModel
          * Content on screen stays while it is read again; only a first visit or an error waits on the network. A
          * failed read keeps the content and marks it, so the screen can say how old it is.
          */
-        fun refresh(force: Boolean = true) {
+        fun refresh(
+            force: Boolean = true,
+            asked: Boolean = false,
+        ) {
             if (!active) return
             loadJob?.cancel()
             val version = ++loadVersion
@@ -312,10 +322,16 @@ class TodayTabViewModel
                         }
                         loadHomeToday(homes, id, version, force)
                     } finally {
-                        if (version == loadVersion) _refreshing.value = false
+                        if (version == loadVersion) {
+                            _refreshing.value = false
+                            _pullFailed.value = asked && (_state.value as? TodayTabUiState.Loaded)?.refreshFailed == true
+                        }
                     }
                 }
         }
+
+        /** Pull to refresh and Retry: [refresh] now, saying so if it fails (the iPhone shows a toast). */
+        fun pull() = refresh(force = true, asked = true)
 
         private suspend fun loadHomeToday(
             homes: Stored<MyHomesResponse>,

@@ -104,6 +104,7 @@ fun TodayTabScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     ReportContentShown("today", state.showsContent)
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+    val pullFailed by viewModel.pullFailed.collectAsStateWithLifecycle()
     // Coming back keeps what's on screen; the view model reads again only once it is out of date.
     HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
     RefreshOnStoreChange(viewModel::load)
@@ -136,7 +137,7 @@ fun TodayTabScreen(
             isRefreshing = pulled && refreshing,
             onRefresh = {
                 pulled = true
-                viewModel.refresh()
+                viewModel.pull()
             },
             modifier = Modifier.fillMaxSize(),
         ) {
@@ -144,14 +145,14 @@ fun TodayTabScreen(
                 TodayTabUiState.Loading -> TodayPlaceholders()
                 TodayTabUiState.NoPlace -> NoPlaceCard(onClaim)
                 is TodayTabUiState.ClaimInReview -> ClaimInReviewCard(current.claim) { onCheckClaim(current.claim.homeId) }
-                is TodayTabUiState.Error -> ErrorState(message = current.message, onRetry = viewModel::refresh)
+                is TodayTabUiState.Error -> ErrorState(message = current.message, onRetry = viewModel::pull)
                 is TodayTabUiState.Loaded ->
                     Column(
                         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                     ) {
                         val age = nowMs - current.fetchedAt
-                        if (current.refreshFailed && age > TODAY_MAX_SHOWN_AGE_MS) {
-                            RefreshFailedLine(RefreshNotice(current.fetchedAt, viewModel::refresh), Modifier.padding(bottom = 10.dp))
+                        if (current.showsRefreshFailure(pullFailed, age)) {
+                            RefreshFailedLine(RefreshNotice(current.fetchedAt, viewModel::pull), Modifier.padding(bottom = 10.dp))
                         }
                         if (current.savedAnchorMatches) {
                             StatusChip("Saved place · Only you", modifier = Modifier.padding(bottom = 12.dp))
@@ -160,7 +161,7 @@ fun TodayTabScreen(
                         onAsk?.let { ask -> TodayAskBox(onAsk = { ask(AIScreenContext.today(viewModel.shownHomeId)) }) }
                         // Nearby Plans (A1, A2, A5): today's plan and the day-after card, above the weather.
                         plans?.let { PlansTodayCards(actions = it, modifier = Modifier.padding(bottom = 16.dp)) }
-                        CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::refresh) {
+                        CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::pull) {
                             PlaceTodayDetailContent(
                                 current.intelligence,
                                 viewModel.takeIf { current.calendarHomeId != null },
@@ -198,6 +199,15 @@ private fun TodayAddressLine(place: PlaceAddressRef) {
 private fun todayPlaceZone(state: TodayTabUiState): ZoneId =
     (state as? TodayTabUiState.Loaded)?.intelligence?.timeZone
         ?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
+
+/**
+ * Contract §3: a failed read shows "Couldn't refresh" once the copy is past its max shown age, and at once when the
+ * read was a pull or Retry ([pullFailed]).
+ */
+private fun TodayTabUiState.Loaded.showsRefreshFailure(
+    pullFailed: Boolean,
+    ageMs: Long,
+): Boolean = refreshFailed && (pullFailed || ageMs > TODAY_MAX_SHOWN_AGE_MS)
 
 /** Contract §4: an alert check past 30 minutes is never shown as "no alerts". */
 private fun alertsCheck(
