@@ -58,6 +58,7 @@ public struct NeighborhoodTabRoot: View {
                         onClaimPlace: onAddHome
                     )
                 }
+                .readableColumn()
                 .background(Theme.Color.appBg)
                 // Above the header, where the Pulse segment's feed shows it.
                 .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)

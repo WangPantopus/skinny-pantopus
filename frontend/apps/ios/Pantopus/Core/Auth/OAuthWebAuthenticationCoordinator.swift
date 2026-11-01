@@ -60,6 +60,6 @@ final class OAuthWebAuthenticationCoordinator: NSObject, ASWebAuthenticationPres
         if let activeScene {
             return ASPresentationAnchor(windowScene: activeScene)
         }
-        return UIWindow(frame: UIScreen.main.bounds)
+        return UIWindow()
     }
 }

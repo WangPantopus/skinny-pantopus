@@ -153,6 +153,8 @@ struct RootView: View {
                 case .unknown:
                     SplashView()
                 case .signedOut:
+                    // A readable column on a wide screen, like the tabs (the
+                    // sign-in form sets its own, inside its navigation stack).
                     if showsSessionLogin || auth.sessionEndReason != nil {
                         // A detail sheet may still be dismissing after a 401.
                         // Render sign-in here instead of presenting another
@@ -160,12 +162,14 @@ struct RootView: View {
                         LoginView()
                     } else {
                         PlaceLaunchHost()
+                            .readableColumn()
                     }
                 case let .resumable(hint):
                     // L2 "Continue as X": tokens survived a reinstall (or
                     // the account went dormant) — one presence gesture via
                     // `auth.resume()` before the session is live again.
                     ContinueAsView(hint: hint, sessionEndReason: auth.sessionEndReason)
+                        .readableColumn()
                         .id(hint.userId)
                 case .signedIn:
                     RootTabView()
