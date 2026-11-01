@@ -329,11 +329,11 @@ export function useBooklet(itemId: string, enabled: boolean) {
   });
 }
 
-/** A drawer's Counter, Vault (all of it or one folder) or Archived list, a page at a time ("Show more"). */
+/** A drawer list whose loaded pages refresh together after mail actions. */
 export function useDrawerTab(
-  drawer: 'personal' | 'home' | 'business',
-  tab: 'counter' | 'vault' | 'archived',
-  params?: { folderId?: string; homeId?: string },
+  drawer: 'personal' | 'home' | 'business' | 'earn',
+  tab: 'incoming' | 'counter' | 'vault' | 'archived',
+  params?: { folderId?: string; homeId?: string; limit?: number },
   options?: { enabled?: boolean },
 ) {
   return useInfiniteQuery<MailboxPaginatedResponse<MailItemV2>, MailboxApiError>({

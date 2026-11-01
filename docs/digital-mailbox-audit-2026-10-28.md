@@ -108,3 +108,86 @@ the local backend; the web recipient opened letters created by both platforms.
 The replay establishes the results above; it cannot establish that every mailbox
 path is bug-free. Sensitive fixtures, tokens, screenshots and operator logs remain
 outside this public repository.
+
+## October 31 replay on current master
+
+A fresh audit started from `cc4b29af67` and used a separate local Supabase
+project with a full migration replay, a local API, Chrome, an iPhone 17 Pro
+simulator (iOS 27), and a Pixel 7 emulator (Android API 34). All users, homes
+and letters were synthetic. `mailbox`, `mail_extras` and `holiday_cards` were
+enabled only in this local environment. This section records this replay;
+the broader October 28 results above are historical evidence.
+
+### Repairs from this replay
+
+- Incoming previously copied fetched pages into an append-only list. Opening
+  or filing a letter on page two left a stale row even after its query was
+  invalidated. Incoming now uses the existing infinite drawer query, so all
+  loaded pages refresh after actions. Failed later pages keep the loaded rows
+  and expose a retry without an automatic request loop.
+- The web composer could extend beyond a short or narrow viewport, leaving
+  Send and Close unreachable and the app header above its backdrop. It now
+  uses the existing modal shell with a scrollable body, visible footer and
+  focus management. Validation scrolls into view; Escape in recipient results
+  closes those results without discarding the composer.
+- Editing an address retained its old Home ID, so the visible address could
+  disagree with the actual destination. Both compose modes clear that ID when
+  the text changes and require a new selection.
+- Personal compose exposed bills, notices, ads and payout fields that the API
+  rejects. It now offers letters; business-only fields remain available when
+  an authorized business is selected. Returning to personal sending resets
+  those fields.
+
+### Observed coverage
+
+| Area | October 31 result |
+| --- | --- |
+| Web Incoming | Loaded more than one page; opening and filing a page-two letter updated the row immediately after the repair. Drawer navigation and back navigation worked. |
+| Web actions | Counter, Done, filing, unfile, shred cancellation, shred and restore worked. Folder blank-name validation, creation and reload persistence worked. Plain acknowledgement persisted and appeared in the envelope trail after reload. |
+| Web search | A phrase at the end of fixture letter bodies was returned by search. Search pagination was not exhaustively replayed. |
+| Web compose | Edited-address validation prevented stale routing. A long household letter was sent through the browser and received by the other account. Personal structured compose showed only Letter and omitted payout/return-address fields. Recipient-result Escape preserved the dialog. |
+| Web responsive layout | Checked desktop and 390 × 844 layouts. In the narrow compose check, Send and Cancel remained inside the viewport; an initially off-screen validation error scrolled above the footer after the repair. |
+| iOS sending | Completed recipient selection, confirmation, writing, review and send. An account with household access but no address proof received the verification-required error. After giving the synthetic fixture address proof, retry succeeded; success stayed visible until Done. The web recipient opened the saved letter. |
+| Android sending | Completed all four steps, changed stationery/ink/seal, sent a letter and returned through Done. The web recipient opened its exact saved text. |
+| Cross-platform reading | The household letter composed on web was read through its final sentence on iOS and Android. Android's Counter action appeared in the same Home's iOS Counter. Recipient access succeeded; an unrelated account could not read the letter. |
+| Christmas cards | Web picture selection, writing, flip/preview, recipient selection, arrival choices and send worked. Take-back cancellation preserved the card; confirmed take-back removed it and allowed a replacement. The replacement was received, opened and flipped on both native apps. The delivered web Sent view showed the delivery trail and no take-back action. Only the next-morning delivery choice was sent. |
+| Persistence | A card filed into Taxes on iOS remained there after app relaunch and appeared in Android's Vault after its relaunch. Web folder, Vault and hold state survived reloads. |
+| Holds | Web required dates, saved an active hold, preserved it after reload and cancellation of the end-early confirmation, and ended it after confirmation. Held bundle generation and release jobs were not replayed in this pass. |
+| Connection failure | With only the isolated API stopped, web, iOS and Android showed mailbox errors with retry controls. Restoring the API and using those controls loaded the inboxes. Web detail also showed a recoverable error. |
+
+Scheduled mail was checked as inaccessible before delivery in the household
+letter/card cases. To inspect recipient screens immediately, only the local
+fixtures' delivery timestamps were advanced. This does not verify production
+7 a.m. scheduling or background jobs. Opening item-detail APIs can mark a piece
+read, so those API checks are not evidence of first-open animation timing.
+
+The development API generates a temporary CSRF secret when none is configured.
+Restarting it invalidated the browser's old CSRF cookie: a subsequent write was
+rejected without changing the letter. Signing out/in restored browser writes,
+and acknowledgement then passed. Production requires a configured shared secret;
+this local setup artifact was not treated as a mailbox authorization defect.
+
+### Checks and remaining limits
+
+- Web TypeScript gate: zero errors. Targeted ESLint: zero errors, ten existing
+  `no-explicit-any` warnings in the mailbox query module.
+- Existing backend suites: `homeRecordRoutes`, `homeEffectivePermissions`,
+  `mailDay`, `mailDayNotification`, and `mailboxCheck`: 188 tests passed.
+- Existing web `mailboxCheckCard` and `mailDeliveryRecovery` suites: 10 tests
+  passed. These cover related mailbox/verification UI, not the entire digital
+  Mail flow.
+- Signed local iOS simulator build and Android debug assembly passed; both
+  installed apps were used above. No native source changes were needed for
+  the reproduced defects. No new unit tests were added.
+- Scrolling, transitions, keyboards and back/close controls were exercised in
+  the listed flows; no frame-time, accessibility-device or performance profile
+  was collected. This is not a claim that every button or device size passed.
+- This pass did not reverify external email/SMS claims, push delivery, hosted
+  storage, physical phones, background jobs, every Christmas arrival variant,
+  native Christmas-card composing, enclosures/storage corruption, all business
+  permissions, paid/reward flows, certified signing, AI, physical Mail Day,
+  carrier integrations, or the remaining `mail_extras` subpages. Provider-backed
+  address suggestions were unavailable in the isolated setup.
+
+The repair is for review only: no merge, deployment, hosted database/configuration
+change, real-person delivery, payment or app-store submission was performed.

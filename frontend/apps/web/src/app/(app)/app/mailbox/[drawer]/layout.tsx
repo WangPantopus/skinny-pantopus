@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { MailItemV2 } from '@/types/mailbox';
 import { useQueryClient } from '@tanstack/react-query';
-import { mailboxKeys, useDrawerItems, useMarkItemOpened } from '@/lib/mailbox-queries';
+import { mailboxKeys, useDrawerTab, useMarkItemOpened } from '@/lib/mailbox-queries';
 import { OfferCard } from '@/components/mailbox';
 import { DRAWER_LABELS, isMailboxDrawer, type MailboxDrawer } from '@/components/mailbox/MailboxHeader';
 import MailRow, { deliveryDayLabel } from '@/components/mailbox/MailRow';
@@ -115,32 +115,24 @@ function DrawerList({ drawerParam, children }: { drawerParam: string; children: 
   }, [isLetterLink, isUnknown, drawerParam, router]);
 
   // ── State ───────────────────────────────────────────────
-  const [page, setPage] = useState(1);
-  const [allItems, setAllItems] = useState<MailItemV2[]>([]);
   const [openBundle, setOpenBundle] = useState<string | null>(null);
   const [openingOffers, setOpeningOffers] = useState<Set<string>>(new Set());
 
-  // Reset paging when the drawer (or Home) changes. Done while rendering, not
-  // in an effect: no request goes out for the old page under the new drawer,
-  // and a cached first page is never wiped after it arrives.
+  // Keep bundle expansion scoped to the current drawer. The query owns its
+  // pages, so refetching after an action replaces old rows instead of keeping
+  // an append-only copy of letters that were opened, filed or shredded.
   const listKey = `${drawer}|${homeId ?? ''}`;
   const [pagedDrawer, setPagedDrawer] = useState(listKey);
   if (pagedDrawer !== listKey) {
     setPagedDrawer(listKey);
-    setPage(1);
-    setAllItems([]);
     setOpenBundle(null);
   }
 
-  // ── Data fetching ───────────────────────────────────────
-  // The drawer list is the drawer's incoming mail, like the apps' Incoming
-  // tab: filed and archived pieces leave it.
-  const { data, isPending, isError, isFetching, error, refetch } = useDrawerItems(drawer, {
-    page,
-    limit: 20,
-    tab: 'incoming',
-    homeId,
-  }, { enabled: !isLetterLink && !isUnknown });
+  const {
+    data, isPending, isError, isFetching, error, refetch,
+    hasNextPage, fetchNextPage, isFetchingNextPage, isFetchNextPageError,
+  } = useDrawerTab(drawer, 'incoming', { limit: 20, homeId }, { enabled: !isLetterLink && !isUnknown });
+  const allItems = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data]);
   const markOpened = useMarkItemOpened();
   const queryClient = useQueryClient();
   const { addressee, timeZone, homes } = useMailAddressee();
@@ -176,17 +168,6 @@ function DrawerList({ drawerParam, children }: { drawerParam: string; children: 
   const ownAddress = homes?.find((home) => home.mail_access === 'open')?.address_line ?? null;
   const { deliveryOpening } = useMailboxContext();
 
-  // Accumulate items for infinite scroll. A refetched later page (after a
-  // retry or an invalidation) must not add its rows twice.
-  useEffect(() => {
-    if (!data) return;
-    setAllItems(prev => {
-      if (page === 1) return data.items;
-      const seen = new Set(prev.map(item => item.id));
-      return [...prev, ...data.items.filter(item => !seen.has(item.id))];
-    });
-  }, [data, page]);
-
   // ── Infinite scroll ─────────────────────────────────────
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -195,8 +176,8 @@ function DrawerList({ drawerParam, children }: { drawerParam: string; children: 
     if (!el) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && data?.has_more && !isPending) {
-          setPage(p => p + 1);
+        if (entry.isIntersecting && hasNextPage && !isFetching && !isFetchNextPageError) {
+          void fetchNextPage();
         }
       },
       { rootMargin: '200px' },
@@ -204,7 +185,7 @@ function DrawerList({ drawerParam, children }: { drawerParam: string; children: 
     observer.observe(el);
     return () => observer.disconnect();
     // allItems.length: the sentinel only mounts once rows render.
-  }, [data?.has_more, isPending, allItems.length]);
+  }, [hasNextPage, isFetching, isFetchNextPageError, fetchNextPage, allItems.length]);
 
   // ── Item click ──────────────────────────────────────────
   const selectedItemId = pathname.match(/\/mailbox\/[^/]+\/([^/]+)/)?.[1];
@@ -282,7 +263,7 @@ function DrawerList({ drawerParam, children }: { drawerParam: string; children: 
           {!homeLocked ? lockedHomes.map((home) => <HomeLockedBox key={home.home_id} home={home} compact />) : null}
           {homeLocked ? (
             <HomeLockedBox home={lockedHomes[0]} />
-          ) : isPending && page === 1 ? (
+          ) : isPending ? (
             // Loading: paper-shaped placeholders
             <div className="space-y-5 px-4 py-4" role="status" aria-label="Loading your mail">
               {[1, 2, 3].map((i) => (
@@ -341,13 +322,13 @@ function DrawerList({ drawerParam, children }: { drawerParam: string; children: 
               <div ref={sentinelRef} className="h-4" />
 
               {/* A later page failed: keep the rows, retry that same page */}
-              {isError && page > 1 && (
+              {isError && allItems.length > 0 && (
                 <div role="alert" className="mx-3 my-4 flex items-center justify-between gap-3 rounded-xl border border-app-border bg-app-surface px-4 py-3 text-sm text-app-text-strong">
-                  <p>Couldn&apos;t load more mail. {mailLoadMessage(error)}</p>
+                  <p>{isFetchNextPageError ? "Couldn't load more mail." : "Couldn't refresh your mail."} {mailLoadMessage(error)}</p>
                   <button
                     type="button"
                     disabled={isFetching}
-                    onClick={() => { if (!isFetching) void refetch(); }}
+                    onClick={() => { if (!isFetching) void (isFetchNextPageError ? fetchNextPage() : refetch()); }}
                     className="flex-shrink-0 font-semibold text-primary-600 hover:underline disabled:opacity-50"
                   >
                     Try again
@@ -356,7 +337,7 @@ function DrawerList({ drawerParam, children }: { drawerParam: string; children: 
               )}
 
               {/* Loading more indicator */}
-              {isPending && page > 1 && (
+              {isFetchingNextPage && (
                 <div className="py-4 text-center" role="status" aria-label="Loading more mail">
                   <div className="inline-block w-5 h-5 border-2 border-app-border border-t-gray-600 rounded-full animate-spin" />
                 </div>
