@@ -1479,6 +1479,9 @@ public struct PlaceHomeSystem: Decodable, Sendable, Hashable {
     public let confidence: String
     public let sourceRef: String?
     public let note: String
+    /// The newest completed maintenance-log entry for this system, for viewers
+    /// who can see the log. Nil when there is none or from older servers.
+    public var lastService: PlaceSystemService?
 
     enum CodingKeys: String, CodingKey {
         case key, label, status, source, confidence, note
@@ -1489,6 +1492,19 @@ public struct PlaceHomeSystem: Decodable, Sendable, Hashable {
         case lifeRemaining = "life_remaining"
         case sourceLabel = "source_label"
         case sourceRef = "source_ref"
+        case lastService = "last_service"
+    }
+}
+
+/// A system's last recorded service: "2026-03-14", "Your maintenance log", "Furnace tune-up".
+public struct PlaceSystemService: Decodable, Sendable, Hashable {
+    public let date: String
+    public let sourceLabel: String
+    public let title: String?
+
+    enum CodingKeys: String, CodingKey {
+        case date, title
+        case sourceLabel = "source_label"
     }
 }
 
@@ -1566,9 +1582,14 @@ public struct PlaceSectionEnvelope: Decodable, Sendable, Hashable {
     /// Why there is no data — a coverage gap or a lock reason.
     public let unavailableReason: String?
     public internal(set) var data: PlaceSectionData?
+    /// Risk and environment: the area the result covers ("Clark County (EPA
+    /// radon zone)") and what kind of evidence it is ("Area classification"),
+    /// worded by the server. Nil when unknown and from older servers.
+    public var scope: PlaceLabeledKind?
+    public var evidence: PlaceLabeledKind?
 
     private enum CodingKeys: String, CodingKey {
-        case id, group, band, access, status, source, coverage, data
+        case id, group, band, access, status, source, coverage, data, scope, evidence
         case asOf = "as_of"
         case unavailableReason = "unavailable_reason"
     }
@@ -1585,6 +1606,9 @@ public struct PlaceSectionEnvelope: Decodable, Sendable, Hashable {
         coverage = try container.decode(PlaceCoverage.self, forKey: .coverage)
         unavailableReason = try container.decodeIfPresent(String.self, forKey: .unavailableReason)
         data = Self.decodePayload(id: id, from: container)
+        // A malformed label never fails the section.
+        scope = try? container.decodeIfPresent(PlaceLabeledKind.self, forKey: .scope)
+        evidence = try? container.decodeIfPresent(PlaceLabeledKind.self, forKey: .evidence)
     }
 
     /// Decode the id-specific payload; a malformed payload degrades this
@@ -1626,6 +1650,12 @@ public struct PlaceSectionEnvelope: Decodable, Sendable, Hashable {
         case .unknown: return nil
         }
     }
+}
+
+/// A server-worded label with its machine kind: `{ kind: "county", label: "Clark County (EPA radon zone)" }`.
+public struct PlaceLabeledKind: Decodable, Sendable, Hashable {
+    public let kind: String
+    public let label: String
 }
 
 // MARK: - Typed payload accessors

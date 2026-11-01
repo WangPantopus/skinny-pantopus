@@ -36,6 +36,12 @@ extension View {
     func placeCard() -> some View {
         modifier(PlaceCardStyle())
     }
+
+    /// The card surface, or none for a row inside a group's own surface.
+    @ViewBuilder
+    func placeCard(_ on: Bool) -> some View {
+        if on { placeCard() } else { self }
+    }
 }
 
 // MARK: - Icon tile (`IconTile`)

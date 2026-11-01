@@ -24,6 +24,8 @@ struct PlaceDashboardView: View {
     @State private var ballotGovernments: BallotGovernmentsSheet?
     /// The assistant, opened from the header about this home.
     @State private var askTopic: AIAskTopic?
+    /// The glance groups open on this home, remembered on the device.
+    @State private var openGroups: Set<PlaceGlanceGroup> = []
 
     private let isActive: Bool
     /// The Place tab's root has nothing to go back to: its loading and error
@@ -191,7 +193,7 @@ struct PlaceDashboardView: View {
         let showsVerify = !isVerified && (intel.verifyAvailable ?? (intel.tier == .t3))
         // A claim in review: the public view, with no household tools or verify steps.
         let claim = viewModel.claim
-        let pulse = PlacePresentation.derivePulse(intel)
+        let canVerify = claim == nil && !(intel.tier == .t3 && intel.verifyAvailable == false)
         return ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 0) {
@@ -200,120 +202,85 @@ struct PlaceDashboardView: View {
                         .padding(.top, Spacing.s2)
                         .id(Self.topAnchor)
 
-                    // One order on both apps: verify (the resident's next step), Home tools,
-                    // movers, Today's Pulse, then the privacy line.
-                    leadCards(claim: claim, showsVerify: showsVerify)
-
-                    // Movers first (Wedge v2 D5): the first-week card leads for a recent move-in.
-                    JustMovedCard(
-                        homeId: viewModel.homeId,
-                        moveInDate: viewModel.moveInDate,
-                        needsPickupDay: intel.groups.flatMap(\.sections).compactMap(\.addressCalendar).first?.needsPickupDay,
-                        onOpenDetail: viewModel.onOpenDetail,
-                        onOpenMailDay: viewModel.onOpenMailDay
-                    )
-                    // Its ticks and dismissal are per Home: another Home starts fresh.
-                    .id(viewModel.homeId)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 14)
-
-                    PlaceHeroCard(
-                        variant: pulse.variant,
-                        chip: pulse.chip,
-                        heroIcon: pulse.heroIcon,
-                        headline: pulse.title,
-                        nudgeIcon: pulse.nudgeIcon,
-                        nudgeText: pulse.nudgeText ?? "",
-                        // Both labelled: an unlabelled trailing closure fills only `onTap`, which left the nudge row's
-                        // own button with no action (Android opens Pulse from either). Pulse is the household's:
-                        // a claim's card opens the address's Today.
-                        onNudgeTap: { claim == nil ? viewModel.onOpenPulse() : viewModel.onOpenDetail(.today) },
-                        onTap: { claim == nil ? viewModel.onOpenPulse() : viewModel.onOpenDetail(.today) }
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.top, showsVerify || claim != nil ? 12 : 14)
-
-                    VStack(spacing: 24) {
-                        // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does.
-                        if claim == nil {
-                            privacyMirrorRow
+                    // One order on both apps: the next step (verify, or the claim's
+                    // status), the home and its tools, what's worth a look, the home
+                    // at a glance, then neighbors, privacy and Ask.
+                    leadBanner(claim: claim)
+                    PlaceHomeCard(
+                        intel: intel,
+                        claimInReview: claim != nil,
+                        shortcuts: viewModel.homeShortcuts,
+                        onUnlock: canVerify ? { showVerify = true } : nil,
+                        showsVerify: showsVerify && claim == nil,
+                        onOpenTools: {
+                            viewModel.reloadOnReturn()
+                            viewModel.onOpenHubHome()
+                        },
+                        onShortcut: { shortcut in
+                            viewModel.reloadOnReturn()
+                            viewModel.onOpenHomeShortcut(shortcut)
                         }
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+
+                    VStack(alignment: .leading, spacing: 0) {
+                        worthALook(intel)
+                        glance(intel, claim: claim)
                         if isVerified {
                             messagesEntry(address: intel.place.label)
                         }
-                        // Ballot P0 (ballot_p0): the "Your ballot" card leads under
-                        // "This season" and leaves the civic group.
-                        if let ballot = Self.ballot(in: intel) {
-                            seasonBlock(ballot.card, asOf: ballot.asOf)
-                                .id(Self.ballotAnchor)
-                        }
-                        ForEach(Self.groups(intel), id: \.group) { group in
-                            groupBlock(
-                                group,
-                                canVerify: claim == nil && !(intel.tier == .t3 && intel.verifyAvailable == false),
-                                verifiesFirst: intel.verifiesFirst,
-                                timeZone: intel.timeZone.flatMap(TimeZone.init(identifier:))
-                            )
-                        }
+                        // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does.
                         if claim == nil {
-                            identityEntry
+                            privacyMirrorRow
+                                .padding(.top, 24)
                         }
-                        if showsVerify {
-                            verifyLockedGroup
-                        }
+                        AskPantopusBox(
+                            title: "Ask Pantopus about your home",
+                            subtitle: nil,
+                            spokenLabel: "Ask Pantopus about your home",
+                            identifier: "place.askPantopusEntry"
+                        ) { askTopic = .place(homeId: viewModel.homeId) }
+                            .padding(.top, 24)
                     }
                     .padding(.horizontal, 16)
-                    .padding(.top, 20)
                     .padding(.bottom, Spacing.s10)
                 }
             }
             .onChange(of: scrollToTop) { _, _ in
                 withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(Self.topAnchor, anchor: .top) }
             }
-            // Also when the dashboard first shows loaded, as it does after Today's "Open your ballot".
+            // Also when the dashboard first shows loaded, as it does after Today's "Open your ballot":
+            // Civic opens and the ballot card comes into view.
             .onChange(of: showsBallot, initial: true) { _, shows in
                 guard shows else { return }
                 Task { @MainActor in
-                    // One pass for the cards to lay out before the scroll.
+                    let hasBallot = Self.ballot(in: intel) != nil
+                    if hasBallot { openGroups.insert(.civic) }
+                    // Passes for Civic to open and the cards to lay out before the scroll.
                     await Task.yield()
-                    if Self.ballot(in: intel) != nil {
+                    await Task.yield()
+                    if hasBallot {
                         withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(Self.ballotAnchor, anchor: .top) }
                     }
                     onBallotShown()
                 }
             }
+            .task(id: viewModel.homeId) { loadOpenGroups() }
+            .onChange(of: openGroups) { _, groups in saveOpenGroups(groups) }
         }
     }
 
     private static let topAnchor = "place.top"
     private static let ballotAnchor = "place.ballot"
 
-    /// The verify banner and Home tools; a claim in review has its status instead.
+    /// A claim in review has its status above the home (the verify step lives in the home card).
     @ViewBuilder
-    private func leadCards(claim: OwnershipClaimDTO?, showsVerify: Bool) -> some View {
+    private func leadBanner(claim: OwnershipClaimDTO?) -> some View {
         if let claim {
             claimBanner(claim)
                 .padding(.horizontal, 16)
                 .padding(.top, Spacing.s3)
-        } else {
-            if showsVerify {
-                PlaceVerifyBanner { showVerify = true }
-                    .padding(.horizontal, 16)
-                    .padding(.top, Spacing.s3)
-            }
-            PlaceHomeToolsCard(
-                shortcuts: viewModel.homeShortcuts,
-                onOpen: {
-                    viewModel.reloadOnReturn()
-                    viewModel.onOpenHubHome()
-                },
-                onShortcut: { shortcut in
-                    viewModel.reloadOnReturn()
-                    viewModel.onOpenHomeShortcut(shortcut)
-                }
-            )
-            .padding(.horizontal, Spacing.s4)
-            .padding(.top, Spacing.s3)
         }
     }
 
@@ -462,26 +429,316 @@ struct PlaceDashboardView: View {
         )
     }
 
-    // MARK: - Group block
+    // MARK: - Worth a look
 
-    private func groupBlock(_ group: PlaceGroupBlock, canVerify: Bool, verifiesFirst: Bool, timeZone: TimeZone?) -> some View {
-        let detail = PlaceDetailGroup.forGroup(group.group)
-        return VStack(alignment: .leading, spacing: 9) {
-            PlaceGroupLabel(text: group.label)
-            VStack(spacing: 8) {
-                ForEach(group.sections, id: \.id) { section in
-                    PlaceSectionView(
-                        env: section,
-                        onOpen: detail.map { d in { viewModel.onOpenDetail(d) } },
-                        onVerify: canVerify ? { showVerify = true } : nil,
-                        onClaim: canVerify ? { showVerify = true } : nil,
-                        onRetry: { Task { await viewModel.refresh() } },
-                        retrying: viewModel.isRefreshing,
-                        verifiesFirst: verifiesFirst,
-                        timeZone: timeZone
-                    )
+    /// Only real items, most consequential first (at most three), and the
+    /// first-week card for a recent move-in. Hidden when there is nothing.
+    @ViewBuilder
+    private func worthALook(_ intel: PlaceIntelligence) -> some View {
+        let items = Array(attentionItems(intel).prefix(3))
+        let moveIn = JustMovedCard.shows(homeId: viewModel.homeId, moveInDate: viewModel.moveInDate)
+        if !items.isEmpty || moveIn {
+            PlaceSectionHeading(title: "Worth a look")
+            if !items.isEmpty {
+                PlaceWorthALook(items: items)
+            }
+            // Movers first (Wedge v2 D5): its ticks and dismissal are per Home, so another Home starts fresh.
+            JustMovedCard(
+                homeId: viewModel.homeId,
+                moveInDate: viewModel.moveInDate,
+                needsPickupDay: intel.groups.flatMap(\.sections).compactMap(\.addressCalendar).first?.needsPickupDay,
+                onOpenDetail: viewModel.onOpenDetail,
+                onOpenMailDay: viewModel.onOpenMailDay
+            )
+            .id(viewModel.homeId)
+            .padding(.top, items.isEmpty ? 0 : 10)
+        }
+    }
+
+    private func attentionItems(_ intel: PlaceIntelligence) -> [PlaceAttentionItem] {
+        let sections = intel.groups.flatMap(\.sections)
+        var items: [PlaceAttentionItem] = []
+        if let systems = sections.first(where: { $0.id == .homeSystems }), systems.access != .locked,
+           systems.status == .ready || systems.status == .stale, let data = systems.homeSystems,
+           let item = PlaceAttentionItem.systems(data, open: { viewModel.onOpenDetail(.yourHome) }) {
+            items.append(item)
+        }
+        let calendar = PlacePresentation.placeCalendar(intel.timeZone.flatMap(TimeZone.init(identifier:)))
+        let openTasks = {
+            viewModel.reloadOnReturn()
+            viewModel.onOpenHomeShortcut(.tasks)
+        }
+        let homeId = viewModel.homeId
+        items += PlaceAttentionItem.tasks(
+            viewModel.overdueTasks(calendar: calendar),
+            due: .overdue,
+            homeId: homeId,
+            calendar: calendar,
+            openList: openTasks
+        )
+        items += PlaceAttentionItem.tasks(
+            viewModel.tasksDueToday(calendar: calendar),
+            due: .today,
+            homeId: homeId,
+            calendar: calendar,
+            openList: openTasks
+        )
+        if let exemption = sections.first(where: { $0.id == .exemptionCheck }), exemption.status == .ready,
+           exemption.exemptionCheck?.filingStatus == .noneOnFile {
+            items.append(PlaceAttentionItem(
+                id: "exemption",
+                icon: .landmark,
+                title: "No homestead exemption on file",
+                detail: "The county record shows none. Worth checking whether this home qualifies."
+            ) { viewModel.onOpenDetail(.money) })
+        }
+        if let bill = sections.first(where: { $0.id == .billBenchmark }), bill.status == .ready,
+           let data = bill.billBenchmark, data.comparison == .higher {
+            items.append(PlaceAttentionItem(id: "bill", icon: .zap, title: data.summary, detail: "Worth a look: see how it compares.") {
+                viewModel.onOpenDetail(.money)
+            })
+        }
+        return items
+    }
+
+    // MARK: - Your home at a glance
+
+    private func groupBinding(_ group: PlaceGlanceGroup) -> Binding<Bool> {
+        Binding(
+            get: { openGroups.contains(group) },
+            set: { open in
+                if open { openGroups.insert(group) } else { openGroups.remove(group) }
+            }
+        )
+    }
+
+    private var openGroupsKey: String {
+        let account: String = if case let .signedIn(user) = AuthManager.shared.state { user.id } else { "guest" }
+        return "place.glance.open.\(account).\(viewModel.homeId)"
+    }
+
+    private func loadOpenGroups() {
+        let stored = UserDefaults.standard.stringArray(forKey: openGroupsKey) ?? []
+        openGroups = Set(stored.compactMap(PlaceGlanceGroup.init(rawValue:)))
+    }
+
+    private func saveOpenGroups(_ groups: Set<PlaceGlanceGroup>) {
+        UserDefaults.standard.set(groups.map(\.rawValue).sorted(), forKey: openGroupsKey)
+    }
+
+    /// The sections that belong in each glance group, in the server's order.
+    private static func glanceSections(_ intel: PlaceIntelligence) -> [PlaceGlanceGroup: [PlaceSectionEnvelope]] {
+        Dictionary(grouping: groups(intel).flatMap(\.sections)) { PlaceGlanceGroup.of($0.group) }
+    }
+
+    /// Several sections the address has no data for yet: said once, above the groups.
+    private static func sparse(_ intel: PlaceIntelligence) -> Bool {
+        intel.groups.flatMap(\.sections).filter { $0.access != .locked && $0.status == .unavailable }.count >= 3
+    }
+
+    @ViewBuilder
+    private func glance(_ intel: PlaceIntelligence, claim: OwnershipClaimDTO?) -> some View {
+        let byGroup = Self.glanceSections(intel)
+        let shown = PlaceGlanceGroup.allCases.filter { group in
+            switch group {
+            case .civic: !(byGroup[.civic] ?? []).isEmpty || Self.ballot(in: intel) != nil
+            case .identity: claim == nil || !(byGroup[.identity] ?? []).isEmpty
+            default: !(byGroup[group] ?? []).isEmpty
+            }
+        }
+        PlaceSectionHeading(title: "Your home at a glance", detail: "\(shown.count) sections")
+        if Self.sparse(intel) {
+            Text("Some information isn't available for this address yet.")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .padding(.horizontal, 2)
+                .padding(.bottom, 8)
+                .accessibilityIdentifier("place.glance.sparse")
+        }
+        PlaceGroupSurface {
+            ForEach(Array(shown.enumerated()), id: \.element) { index, group in
+                if index > 0 { PlaceRowDivider() }
+                let sections = byGroup[group] ?? []
+                PlaceGlanceRow(group: group, summary: summary(group, sections: sections, intel: intel), isOpen: groupBinding(group)) {
+                    groupContent(group, sections: sections, intel: intel, claim: claim)
                 }
             }
+        }
+    }
+
+    private func summary(_ group: PlaceGlanceGroup, sections: [PlaceSectionEnvelope], intel: PlaceIntelligence) -> String? {
+        switch group {
+        case .today: PlaceGlanceSummary.today(sections, timeZone: intel.timeZone.flatMap(TimeZone.init(identifier:)))
+        case .home: PlaceGlanceSummary.home(sections)
+        case .risk: PlaceGlanceSummary.risk(sections)
+        case .civic: PlaceGlanceSummary.civic(intel.groups.flatMap(\.sections))
+        case .identity: "Residency letters & passes · what neighbors see"
+        case .block: PlaceGlanceSummary.block(sections)
+        case .costs: PlaceGlanceSummary.plain(sections) ?? "Not available for this address yet"
+        }
+    }
+
+    /// Before verification, for a resident who can take the step (as `loaded` decides).
+    private func showsVerify(_ intel: PlaceIntelligence) -> Bool {
+        intel.tier != .t4 && (intel.verifyAvailable ?? (intel.tier == .t3))
+    }
+
+    private func canVerify(_ intel: PlaceIntelligence, claim: OwnershipClaimDTO?) -> Bool {
+        claim == nil && !(intel.tier == .t3 && intel.verifyAvailable == false)
+    }
+
+    @ViewBuilder
+    private func groupContent(
+        _ group: PlaceGlanceGroup,
+        sections: [PlaceSectionEnvelope],
+        intel: PlaceIntelligence,
+        claim: OwnershipClaimDTO?
+    ) -> some View {
+        let unlocks = canVerify(intel, claim: claim)
+        switch group {
+        case .today:
+            sectionRows(sections, intel: intel, canVerify: unlocks, page: .today)
+            pulseBlock(intel, claim: claim)
+        case .home:
+            homeRows(sections, intel: intel, canVerify: unlocks)
+        case .risk:
+            ForEach(Array(sections.enumerated()), id: \.element.id) { index, env in
+                if index > 0 { PlaceRowDivider() }
+                PlaceEvidenceRow(
+                    env: env,
+                    verifiesFirst: intel.verifiesFirst,
+                    onOpen: { viewModel.onOpenDetail(.risk) },
+                    onUnlock: unlocks ? { showVerify = true } : nil
+                )
+            }
+        case .civic:
+            sectionRows(sections, intel: intel, canVerify: unlocks, page: .civic)
+            // Ballot P0 (ballot_p0): "This season" and the "Your ballot" card; the election row leaves the list meanwhile.
+            if let ballot = Self.ballot(in: intel) {
+                seasonBlock(ballot.card, asOf: ballot.asOf)
+                    .padding(.top, 10)
+                    .id(Self.ballotAnchor)
+            }
+        case .identity:
+            identityRows(sections, intel: intel, claim: claim)
+        case .block, .costs:
+            sectionRows(sections, intel: intel, canVerify: unlocks, page: group.page)
+        }
+        if group != .identity || claim == nil {
+            PlaceInlineAction(title: "Open \(group.page.title)", identifier: "place.glance.\(group.rawValue).open") {
+                viewModel.onOpenDetail(group.page)
+            }
+        }
+    }
+
+    /// The group's sections as lighter rows, each still opening its page.
+    private func sectionRows(
+        _ sections: [PlaceSectionEnvelope],
+        intel: PlaceIntelligence,
+        canVerify: Bool,
+        page: PlaceDetailGroup
+    ) -> some View {
+        ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
+            if index > 0 { PlaceRowDivider() }
+            PlaceSectionView(
+                env: section,
+                onOpen: { viewModel.onOpenDetail(page) },
+                onVerify: canVerify ? { showVerify = true } : nil,
+                onClaim: canVerify ? { showVerify = true } : nil,
+                onRetry: { Task { await viewModel.refresh() } },
+                retrying: viewModel.isRefreshing,
+                verifiesFirst: intel.verifiesFirst,
+                timeZone: intel.timeZone.flatMap(TimeZone.init(identifier:)),
+                chrome: false
+            )
+        }
+    }
+
+    /// Your home's row and the systems timeline (or the systems row's own state).
+    @ViewBuilder
+    private func homeRows(_ sections: [PlaceSectionEnvelope], intel: PlaceIntelligence, canVerify: Bool) -> some View {
+        let others = sections.filter { $0.id != .homeSystems }
+        sectionRows(others, intel: intel, canVerify: canVerify, page: .yourHome)
+        if let systems = sections.first(where: { $0.id == .homeSystems }) {
+            if !others.isEmpty { PlaceRowDivider() }
+            if systems.access != .locked, systems.status == .ready || systems.status == .stale, let data = systems.homeSystems {
+                Button { viewModel.onOpenDetail(.yourHome) } label: {
+                    PlaceSystemsTimeline(data: data)
+                        .padding(.vertical, 10)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens Your home, with each system's full timeline.")
+            } else {
+                sectionRows([systems], intel: intel, canVerify: canVerify, page: .yourHome)
+            }
+        }
+    }
+
+    /// Today's Pulse, inside Today at this address: the chip, the headline,
+    /// the nudge and the way to the whole Pulse (a claim's opens Today).
+    private func pulseBlock(_ intel: PlaceIntelligence, claim: OwnershipClaimDTO?) -> some View {
+        let pulse = PlacePresentation.derivePulse(intel)
+        let open = { claim == nil ? viewModel.onOpenPulse() : viewModel.onOpenDetail(.today) }
+        return VStack(alignment: .leading, spacing: 6) {
+            PlaceRowDivider()
+            HStack {
+                Text("TODAY'S PULSE")
+                    .font(.system(size: 11, weight: .bold))
+                    .kerning(0.77)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                Spacer()
+                PlaceChip(model: pulse.chip)
+            }
+            .padding(.top, 8)
+            Text(pulse.title)
+                .font(.system(size: 14.5, weight: .semibold))
+                .foregroundStyle(Theme.Color.appText)
+                .fixedSize(horizontal: false, vertical: true)
+            if let nudge = pulse.nudgeText, !nudge.isEmpty {
+                Text(nudge)
+                    .font(.system(size: 13))
+                    .lineLimit(3)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+            }
+            PlaceInlineAction(title: claim == nil ? "Open Pulse" : "Open Today", identifier: "place.hero", action: open)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    /// The identity group, residency letters and passes, the steps still
+    /// locked before verification, and what neighbors see.
+    @ViewBuilder
+    private func identityRows(_ sections: [PlaceSectionEnvelope], intel: PlaceIntelligence, claim: OwnershipClaimDTO?) -> some View {
+        sectionRows(sections, intel: intel, canVerify: canVerify(intel, claim: claim), page: .identity)
+        if claim == nil {
+            if !sections.isEmpty { PlaceRowDivider() }
+            Button { viewModel.onOpenDetail(.identity) } label: {
+                PlaceActionRowLabel(icon: .idCard, title: "Residency letters & passes", subtitle: "Prove where you live, on your terms.")
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("place.identityEntry")
+        }
+        if showsVerify(intel) {
+            Text("LOCKED UNTIL YOU VERIFY")
+                .font(.system(size: 11, weight: .bold))
+                .kerning(0.88)
+                .foregroundStyle(Theme.Color.appTextMuted)
+                .padding(.top, 12)
+                .accessibilityAddTraits(.isHeader)
+            ForEach(PlacePresentation.verifyLockedItems) { item in
+                PlaceLockedCard(icon: item.icon, title: item.title, reason: item.reason, cta: "Verify address", chrome: false) {
+                    showVerify = true
+                }
+            }
+        }
+        if claim == nil {
+            PlaceRowDivider()
+            Button(action: viewModel.onOpenPrivacyMirror) {
+                PlaceActionRowLabel(icon: .eye, title: "What neighbors see", subtitle: "Preview this address as a neighbor sees it.")
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("place.glance.privacyMirror")
         }
     }
 
@@ -507,51 +764,26 @@ struct PlaceDashboardView: View {
         .accessibilityIdentifier("place.privacyMirror")
     }
 
-    /// W7 — verified-neighbor messaging entry (verified residents only).
+    /// W7 — verified-neighbor messaging (verified residents only): one group, two rows.
     private func messagesEntry(address: String) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
-            PlaceGroupLabel(text: "Verified neighbors")
-            VStack(spacing: 8) {
-                PlaceMessagesActionRow(
-                    icon: .messageSquarePlus,
-                    title: "Message a neighbor",
-                    subtitle: "Send a private heads-up to a home on your block."
-                ) { viewModel.onComposeMessage(address) }
-                PlaceMessagesActionRow(
-                    icon: .inbox,
-                    title: "Your inbox",
-                    subtitle: "Heads-ups from verified neighbors nearby."
-                ) { viewModel.onOpenInbox() }
-            }
-        }
-    }
-
-    /// The Identity page (residency letters and passes) has no card group of
-    /// its own on the dashboard, so it gets this entry.
-    private var identityEntry: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            PlaceGroupLabel(text: "Identity")
-            PlaceMessagesActionRow(
-                icon: .idCard,
-                title: "Residency letters & passes",
-                subtitle: "Prove where you live, on your terms."
-            ) { viewModel.onOpenDetail(.identity) }
-                .accessibilityIdentifier("place.identityEntry")
-        }
-    }
-
-    private var verifyLockedGroup: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            PlaceGroupLabel(text: "Locked until you verify")
-            VStack(spacing: 8) {
-                ForEach(PlacePresentation.verifyLockedItems) { item in
-                    PlaceLockedCard(
-                        icon: item.icon,
-                        title: item.title,
-                        reason: item.reason,
-                        cta: "Verify address"
-                    ) { showVerify = true }
+        VStack(alignment: .leading, spacing: 0) {
+            PlaceSectionHeading(title: "Verified neighbors", detail: "Private messages")
+            PlaceGroupSurface {
+                Button { viewModel.onComposeMessage(address) } label: {
+                    PlaceActionRowLabel(
+                        icon: .messageSquarePlus,
+                        title: "Message a neighbor",
+                        subtitle: "Send a private heads-up to a home on your block."
+                    )
                 }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("place.messageNeighbor")
+                PlaceRowDivider()
+                Button { viewModel.onOpenInbox() } label: {
+                    PlaceActionRowLabel(icon: .inbox, title: "Your inbox", subtitle: "Heads-ups from verified neighbors nearby.")
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("place.inbox")
             }
         }
     }

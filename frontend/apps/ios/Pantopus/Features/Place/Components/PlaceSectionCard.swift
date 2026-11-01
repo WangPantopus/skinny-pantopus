@@ -50,6 +50,8 @@ struct PlaceSectionCard: View {
     /// The error state's line and its retry button (alerts say they're unavailable).
     var errorTitle = "Couldn't load this"
     var retryTitle = "Try again"
+    /// Its own card surface; off for a row inside a group's surface.
+    var chrome = true
 
     private var tileTone: PlaceIconTile.Tone {
         state == .unavailable || state == .empty ? .muted : .home
@@ -106,8 +108,8 @@ struct PlaceSectionCard: View {
             }
         }
         .padding(.vertical, 12)
-        .padding(.horizontal, 14)
-        .placeCard()
+        .padding(.horizontal, chrome ? 14 : 0)
+        .placeCard(chrome)
     }
 
     /// ── STACKED: header + state body ──
@@ -118,8 +120,9 @@ struct PlaceSectionCard: View {
             body(for: state)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(compact ? 14 : 16)
-        .placeCard()
+        .padding(.vertical, chrome ? (compact ? 14 : 16) : 12)
+        .padding(.horizontal, chrome ? (compact ? 14 : 16) : 0)
+        .placeCard(chrome)
     }
 
     private var header: some View {

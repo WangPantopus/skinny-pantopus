@@ -96,6 +96,11 @@ struct JustMovedCard: View {
         _done = State(initialValue: store.done)
     }
 
+    /// Whether the card (or its retired line) shows for this home now.
+    static func shows(homeId: String, moveInDate: String?) -> Bool {
+        !JustMovedStore(homeId: homeId).isDismissed && isRecentMove(moveInDate)
+    }
+
     private struct Step {
         let id: JustMovedStepId
         let icon: PantopusIcon

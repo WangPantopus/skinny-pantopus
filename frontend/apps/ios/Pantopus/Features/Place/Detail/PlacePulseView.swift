@@ -128,7 +128,8 @@ struct PlacePulseView: View {
                     }
                     .frame(width: 48, height: 48)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("All clear today")
+                        // Only what was checked: no signals, not "all clear" (the summary says what).
+                        Text("No new signals today")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(Theme.Color.appText)
                         Text(pulse.summary)

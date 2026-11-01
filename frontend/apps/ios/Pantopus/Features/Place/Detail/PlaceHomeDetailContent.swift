@@ -7,7 +7,10 @@
 //  equity calculator (private to the resident, never sent to the server
 //  — the codebase's deliberate privacy stance for equity).
 //  The value, assessment and equity are the confirmed owner's; renters and
-//  household members see the Home's facts and systems.
+//  household members see the Home's facts and systems. Systems read as a
+//  timeline (install year to now over the typical range, how each year is
+//  known, the last service where recorded), with Ask Pantopus as the way to
+//  add or correct a year.
 //
 
 import SwiftUI
@@ -15,6 +18,8 @@ import SwiftUI
 struct PlaceHomeDetailContent: View {
     let intel: PlaceIntelligence
     let vm: PlaceDetailViewModel
+    /// Ask Pantopus about this home: its system card records or corrects a year.
+    var onAsk: (() -> Void)?
 
     private var home: PlaceYourHomeData? {
         guard let env = vm.section(.yourHome, in: intel), env.status == .ready || env.status == .stale
@@ -82,73 +87,20 @@ struct PlaceHomeDetailContent: View {
                 PlaceDetailSectionLabel(text: "Systems")
                 if let systems = systemsEnv.homeSystems,
                    systemsEnv.status == .ready || systemsEnv.status == .stale {
-                    SystemsCard(data: systems)
+                    PlaceDetailCard {
+                        VStack(alignment: .leading, spacing: 12) {
+                            PlaceSystemsTimeline(data: systems, full: true)
+                            if let onAsk {
+                                PlaceTextButton(title: "Add or correct an install year", action: onAsk)
+                                    .frame(minHeight: 44)
+                                    .accessibilityHint("Asks Pantopus, which can record the year for this home.")
+                                    .accessibilityIdentifier("place.systems.correct")
+                            }
+                        }
+                    }
                     PlaceSourceNote(name: systemsEnv.source ?? "", asOf: "typical service life")
                 } else {
                     vm.fallbackCard(systemsEnv)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Systems Ledger
-
-/// The record that compounds. Every row shows HOW its year is known, so an
-/// estimate is never dressed up as a fact. The bar is measured against the
-/// HIGH bound of the typical range — a range, not a countdown to failure.
-private struct SystemsCard: View {
-    let data: PlaceHomeSystemsData
-
-    private func tone(_ status: String) -> Color {
-        switch status {
-        case "past_expected": Theme.Color.error
-        case "aging": Theme.Color.warning
-        case "ok": Theme.Color.home
-        default: Theme.Color.appTextMuted
-        }
-    }
-
-    var body: some View {
-        PlaceDetailCard {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(data.summary.headline)
-                    .font(.system(size: 13.5))
-                    .foregroundStyle(Theme.Color.appTextStrong)
-
-                ForEach(data.systems, id: \.key) { system in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(system.label)
-                                .font(.system(size: 14.5, weight: .semibold))
-                                .foregroundStyle(Theme.Color.appText)
-                            Spacer()
-                            // Verbatim: a localized Text groups the year as a number ("1,938").
-                            Text(
-                                verbatim: system.installedYear.map { "\($0) · \(system.ageYears ?? 0) yrs" }
-                                    ?? "Year unknown"
-                            )
-                            .font(.system(size: 12.5, weight: .semibold))
-                            .foregroundStyle(tone(system.status))
-                        }
-
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(Theme.Color.appSurfaceSunken)
-                                Capsule()
-                                    .fill(tone(system.status))
-                                    .frame(width: geo.size.width * max(system.lifeRemaining ?? 0, 0.02))
-                            }
-                        }
-                        .frame(height: 5)
-
-                        Text(
-                            "\(system.sourceLabel) · typical \(system.typicalLifeLow)–\(system.typicalLifeHigh) yrs"
-                        )
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Theme.Color.appTextMuted)
-                    }
-                    .accessibilityElement(children: .combine)
                 }
             }
         }

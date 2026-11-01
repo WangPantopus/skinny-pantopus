@@ -43,6 +43,10 @@ final class PlaceDashboardViewModel {
     /// The person's claim in review on a Home they can't open yet: the server
     /// sends its public view, and its status leads the dashboard (`refreshClaim`).
     private(set) var claim: OwnershipClaimDTO?
+    /// The household's tasks this viewer may read, for "Worth a look"'s overdue
+    /// ones. Household roles only; a refusal leaves none and shows no error.
+    private(set) var tasks: [HomeTaskDTO] = []
+    private var taskAccess: HomeTaskAccess?
 
     private let api: APIClient
     private var reloadPending = false
@@ -128,6 +132,7 @@ final class PlaceDashboardViewModel {
         await fetch(force: force)
         await claimRead
         await shortcuts
+        await refreshTasks()
     }
 
     /// Home tools can change the privacy projection while this view is
@@ -146,6 +151,44 @@ final class PlaceDashboardViewModel {
         await unread
         await claimRead
         await shortcuts
+        await refreshTasks()
+    }
+
+    /// The tasks list, as Home tools reads it (`GET /api/homes/:id/tasks`).
+    private func refreshTasks() async {
+        guard case let .loaded(intel) = state, claim == nil,
+              ["owner", "renter", "member"].contains(intel.viewer?.role ?? "owner") else {
+            tasks = []
+            return
+        }
+        if taskAccess?.isCurrent != true { taskAccess = HomeTaskAccess(homeId: homeId, api: api) }
+        guard let taskAccess else { return }
+        do {
+            tasks = try await taskAccess.list().tasks
+        } catch is CancellationError {
+            return
+        } catch {
+            if case .forbidden = error as? APIError { tasks = [] }
+        }
+    }
+
+    /// Open tasks due before today at the home, soonest first.
+    func overdueTasks(calendar: Calendar, now: Date = Date()) -> [HomeTaskDTO] {
+        let today = calendar.startOfDay(for: now)
+        let due = { (task: HomeTaskDTO) in PlacePresentation.parseISO(task.dueAt) ?? RadonToday.date(task.dueAt) }
+        return tasks
+            .filter { ["open", "in_progress"].contains($0.status) && (due($0).map { $0 < today } ?? false) }
+            .sorted { (due($0) ?? .distantPast) < (due($1) ?? .distantPast) }
+    }
+
+    /// Open tasks due today at the home, soonest first.
+    func tasksDueToday(calendar: Calendar, now: Date = Date()) -> [HomeTaskDTO] {
+        let today = calendar.startOfDay(for: now)
+        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) else { return [] }
+        let due = { (task: HomeTaskDTO) in PlacePresentation.parseISO(task.dueAt) ?? RadonToday.date(task.dueAt) }
+        return tasks
+            .filter { ["open", "in_progress"].contains($0.status) && (due($0).map { $0 >= today && $0 < tomorrow } ?? false) }
+            .sorted { (due($0) ?? .distantPast) < (due($1) ?? .distantPast) }
     }
 
     /// The claim in review on this Home while the person can't open it (My
