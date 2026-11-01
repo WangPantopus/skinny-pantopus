@@ -81,12 +81,15 @@ enum PlaceGlanceGroup: String, CaseIterable, Identifiable {
 // MARK: - Summaries from real values
 
 enum PlaceGlanceSummary {
-    static func today(_ sections: [PlaceSectionEnvelope], timeZone: TimeZone?) -> String? {
+    static func today(_ sections: [PlaceSectionEnvelope]) -> String? {
         var parts: [String] = []
         for env in sections where env.status == .ready || env.status == .stale {
             switch env.id {
             case .weather:
-                if let value = PlacePresentation.reading(for: env, timeZone: timeZone).value { parts.append(value) }
+                // "37° fog", as Android says it.
+                if let weather = env.weather {
+                    parts.append("\(Int(weather.currentTempF.rounded()))° \(weather.conditionLabel.lowercased())")
+                }
             case .airQuality:
                 if let air = env.airQuality { parts.append("air \(air.index) \(air.categoryLabel.lowercased())") }
             case .alerts:
@@ -113,13 +116,16 @@ enum PlaceGlanceSummary {
         }
         if let systems = sections.first(where: { $0.id == .homeSystems })?.homeSystems {
             let past = systems.summary.pastExpectedCount
+            let aging = systems.systems.filter { $0.status == "aging" }.count
             let unknown = systems.systems.filter { $0.installedYear == nil }.count
             if past > 0 {
                 parts.append("\(past) beyond typical range")
+            } else if aging > 0 {
+                parts.append("\(aging) nearing typical range")
             } else if unknown > 0 {
                 parts.append(unknown == 1 ? "1 install year unknown" : "\(unknown) install years unknown")
             } else {
-                parts.append("\(systems.systems.count) systems")
+                parts.append("systems within typical ranges")
             }
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
@@ -128,13 +134,15 @@ enum PlaceGlanceSummary {
     /// The first two results and how many more topics: "Flood: minimal risk ·
     /// Earthquake: design category D · 5 more topics".
     static func risk(_ sections: [PlaceSectionEnvelope]) -> String? {
-        let parts = sections.compactMap { env -> String? in
+        // Topics with a short classification (a chip) lead, then the rest, each in the server's order.
+        let read = sections.compactMap { env -> (chip: Bool, text: String)? in
             guard env.access != .locked, env.status == .ready || env.status == .stale else { return nil }
             let title = PlacePresentation.config(for: env.id).title
             let reading = PlacePresentation.reading(for: env)
             guard let short = reading.chip?.text ?? reading.value.map(firstClause) else { return nil }
-            return "\(title): \(short.prefix(1).lowercased())\(short.dropFirst())"
+            return (reading.chip != nil, "\(title): \(short.prefix(1).lowercased())\(short.dropFirst())")
         }
+        let parts = read.filter(\.chip).map(\.text) + read.filter { !$0.chip }.map(\.text)
         guard !parts.isEmpty else { return nil }
         let more = sections.count - min(parts.count, 2)
         let tail = more > 0 ? ["\(more) more topic\(more == 1 ? "" : "s")"] : []
@@ -220,43 +228,54 @@ struct PlaceEvidenceRow: View {
 
     var body: some View {
         let cfg = PlacePresentation.config(for: env.id)
+        Group {
+            // A row that opens the page is a button; on the Risk page itself it's plain text.
+            if let onOpen {
+                Button(action: onOpen) { content }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens the full result, its source and its limits.")
+            } else {
+                content
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("place.evidence.\(cfg.title)")
+        if env.access == .locked, let onUnlock {
+            PlaceTextButton(title: PlacePresentation.lockCta(env.band, verifiesFirst: verifiesFirst), minHeight: 44) { onUnlock() }
+        }
+    }
+
+    private var content: some View {
         let live = env.access != .locked && (env.status == .ready || env.status == .stale || env.status == .partial)
         let reading = live ? PlacePresentation.reading(for: env) : PlaceSectionReading()
-        Button { onOpen?() } label: {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(cfg.title)
-                        .font(.system(size: 14.5, weight: .semibold))
-                        .foregroundStyle(Theme.Color.appText)
-                    Spacer(minLength: 6)
-                    if let chip = reading.chip {
-                        PlaceChip(model: chip)
-                    }
+        // The chip already says a short result ("Minimal risk"); a longer one reads under the title.
+        let result = resultLine(reading, live: live)
+        return VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(PlacePresentation.config(for: env.id).title)
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appText)
+                Spacer(minLength: 6)
+                if let chip = reading.chip {
+                    PlaceChip(model: chip)
                 }
-                Text(resultLine(reading, live: live))
+            }
+            if !result.isEmpty, result != reading.chip?.text {
+                Text(result)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.Color.appTextStrong)
                     .fixedSize(horizontal: false, vertical: true)
-                if let evidence = Self.evidenceLine(env) {
-                    Text(evidence)
-                        .font(Theme.Font.caption)
-                        .foregroundStyle(Theme.Color.appTextMuted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
             }
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+            if let evidence = Self.evidenceLine(env) {
+                Text(evidence)
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.Color.appTextMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(onOpen == nil)
-        .accessibilityElement(children: .combine)
-        .accessibilityHint(onOpen == nil ? "" : "Opens the full result, its source and its limits.")
-        .accessibilityIdentifier("place.evidence.\(cfg.title)")
-        if env.access == .locked, let onUnlock {
-            PlaceTextButton(title: PlacePresentation.lockCta(env.band, verifiesFirst: verifiesFirst)) { onUnlock() }
-                .frame(minHeight: 44)
-        }
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private func resultLine(_ reading: PlaceSectionReading, live: Bool) -> String {

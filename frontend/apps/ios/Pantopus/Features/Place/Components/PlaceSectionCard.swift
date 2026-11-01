@@ -54,7 +54,9 @@ struct PlaceSectionCard: View {
     var chrome = true
 
     private var tileTone: PlaceIconTile.Tone {
-        state == .unavailable || state == .empty ? .muted : .home
+        if state == .unavailable || state == .empty { return .muted }
+        // Inside a glance group the rows are navigation: a neutral icon, not the home green.
+        return chrome ? .home : .neutral
     }
 
     var body: some View {

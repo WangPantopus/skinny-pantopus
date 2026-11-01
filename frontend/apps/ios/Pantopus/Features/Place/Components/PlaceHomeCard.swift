@@ -107,8 +107,7 @@ struct PlaceHomeCard: View {
                 .font(.system(size: 13.5))
                 .foregroundStyle(Theme.Color.appTextStrong)
                 .fixedSize(horizontal: false, vertical: true)
-            PlaceTextButton(title: "Verify address", action: verify)
-                .frame(minHeight: 44)
+            PlaceTextButton(title: "Verify address", minHeight: 44, action: verify)
                 .accessibilityIdentifier("place.verifyBanner")
         }
         .accessibilityElement(children: .contain)
@@ -134,7 +133,8 @@ struct PlaceHomeCard: View {
 
     private func facts(_ data: PlaceYourHomeData, env: PlaceSectionEnvelope) -> some View {
         let items = Self.facts(data)
-        let columns = typeSize.isAccessibilitySize ? 1 : min(max(items.count, 1), 4)
+        // Up to three facts side by side; four as two rows of two, so none wraps mid-value.
+        let columns = typeSize.isAccessibilitySize ? 1 : (items.count == 4 ? 2 : min(max(items.count, 1), 3))
         return VStack(alignment: .leading, spacing: 10) {
             if !items.isEmpty {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .leading), count: columns), spacing: 10) {
@@ -182,9 +182,11 @@ struct PlaceHomeCard: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let onUnlock {
-                PlaceTextButton(title: PlacePresentation.lockCta(env.band, verifiesFirst: intel.verifiesFirst)) { onUnlock() }
-                    .frame(minHeight: 44)
+            // The verify line above already offers the same step.
+            if let onUnlock, !showsVerify {
+                PlaceTextButton(title: PlacePresentation.lockCta(env.band, verifiesFirst: intel.verifiesFirst), minHeight: 44) {
+                    onUnlock()
+                }
             }
         }
         .accessibilityElement(children: .contain)
@@ -206,7 +208,7 @@ struct PlaceHomeCard: View {
             )
         case 1:
             let only = shortcuts[0]
-            VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
                 toolRow(icon: only.icon, title: only.title, subtitle: nil, identifier: "place.homeTools.\(only.rawValue)") {
                     onShortcut(only)
                 }

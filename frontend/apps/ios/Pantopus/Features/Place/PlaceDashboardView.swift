@@ -26,6 +26,8 @@ struct PlaceDashboardView: View {
     @State private var askTopic: AIAskTopic?
     /// The glance groups open on this home, remembered on the device.
     @State private var openGroups: Set<PlaceGlanceGroup> = []
+    /// Homes whose first-week card was just dismissed here (its store isn't observed).
+    @State private var movedCardDismissed: Set<String> = []
 
     private let isActive: Bool
     /// The Place tab's root has nothing to go back to: its loading and error
@@ -256,10 +258,14 @@ struct PlaceDashboardView: View {
                 guard shows else { return }
                 Task { @MainActor in
                     let hasBallot = Self.ballot(in: intel) != nil
+                    let wasOpen = openGroups.contains(.civic)
                     if hasBallot { openGroups.insert(.civic) }
-                    // Passes for Civic to open and the cards to lay out before the scroll.
-                    await Task.yield()
-                    await Task.yield()
+                    // Civic opens and its cards lay out before the scroll (a pass when it was open already).
+                    if wasOpen {
+                        await Task.yield()
+                    } else {
+                        try? await Task.sleep(for: .milliseconds(350))
+                    }
                     if hasBallot {
                         withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(Self.ballotAnchor, anchor: .top) }
                     }
@@ -437,6 +443,7 @@ struct PlaceDashboardView: View {
     private func worthALook(_ intel: PlaceIntelligence) -> some View {
         let items = Array(attentionItems(intel).prefix(3))
         let moveIn = JustMovedCard.shows(homeId: viewModel.homeId, moveInDate: viewModel.moveInDate)
+            && !movedCardDismissed.contains(viewModel.homeId)
         if !items.isEmpty || moveIn {
             PlaceSectionHeading(title: "Worth a look")
             if !items.isEmpty {
@@ -449,9 +456,9 @@ struct PlaceDashboardView: View {
                 needsPickupDay: intel.groups.flatMap(\.sections).compactMap(\.addressCalendar).first?.needsPickupDay,
                 onOpenDetail: viewModel.onOpenDetail,
                 onOpenMailDay: viewModel.onOpenMailDay
-            )
-            .id(viewModel.homeId)
-            .padding(.top, items.isEmpty ? 0 : 10)
+            ) { movedCardDismissed.insert(viewModel.homeId) }
+                .id(viewModel.homeId)
+                .padding(.top, items.isEmpty ? 0 : 10)
         }
     }
 
@@ -567,15 +574,22 @@ struct PlaceDashboardView: View {
     }
 
     private func summary(_ group: PlaceGlanceGroup, sections: [PlaceSectionEnvelope], intel: PlaceIntelligence) -> String? {
-        switch group {
-        case .today: PlaceGlanceSummary.today(sections, timeZone: intel.timeZone.flatMap(TimeZone.init(identifier:)))
+        let read: String? = switch group {
+        case .today: PlaceGlanceSummary.today(sections)
         case .home: PlaceGlanceSummary.home(sections)
         case .risk: PlaceGlanceSummary.risk(sections)
         case .civic: PlaceGlanceSummary.civic(intel.groups.flatMap(\.sections))
         case .identity: "Residency letters & passes · what neighbors see"
         case .block: PlaceGlanceSummary.block(sections)
-        case .costs: PlaceGlanceSummary.plain(sections) ?? "Not available for this address yet"
+        case .costs: PlaceGlanceSummary.plain(sections)
         }
+        // Nothing to read yet: a lock says why (the rows' own reason), else it isn't available.
+        if let read { return read }
+        if let locked = sections.first(where: { $0.access == .locked }) {
+            let reason = PlacePresentation.lockReason(locked)
+            return reason.hasSuffix(".") ? String(reason.dropLast()) : reason
+        }
+        return sections.isEmpty ? nil : "Not available for this address yet"
     }
 
     /// Before verification, for a resident who can take the step (as `loaded` decides).
@@ -679,7 +693,6 @@ struct PlaceDashboardView: View {
     /// the nudge and the way to the whole Pulse (a claim's opens Today).
     private func pulseBlock(_ intel: PlaceIntelligence, claim: OwnershipClaimDTO?) -> some View {
         let pulse = PlacePresentation.derivePulse(intel)
-        let open = { claim == nil ? viewModel.onOpenPulse() : viewModel.onOpenDetail(.today) }
         return VStack(alignment: .leading, spacing: 6) {
             PlaceRowDivider()
             HStack {
@@ -701,7 +714,10 @@ struct PlaceDashboardView: View {
                     .lineLimit(3)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
-            PlaceInlineAction(title: claim == nil ? "Open Pulse" : "Open Today", identifier: "place.hero", action: open)
+            // A claim's Pulse opens this home's Today page, which the group's own "Open Today" right below does too.
+            if claim == nil {
+                PlaceInlineAction(title: "Open Pulse", identifier: "place.hero", action: viewModel.onOpenPulse)
+            }
         }
         .accessibilityElement(children: .contain)
     }

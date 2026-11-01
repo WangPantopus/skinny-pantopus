@@ -70,7 +70,9 @@ struct PlaceAttentionItem: Identifiable {
         let id = due == .overdue ? "tasks.overdue" : "tasks.today"
         if tasks.count == 1 {
             let path = "/homes/\(homeId)/tasks/\(first.id)"
-            let title = (due == .overdue ? "Overdue: " : "Due today: ") + first.title
+            let prefix = due == .overdue ? "Overdue: " : "Due today: "
+            // A title that already says it ("Overdue: …") isn't prefixed twice.
+            let title = first.title.lowercased().hasPrefix(prefix.lowercased()) ? first.title : prefix + first.title
             let item = PlaceAttentionItem(id: id, icon: .listChecks, title: title, detail: dueLine(first, due: due, calendar)) {
                 DeepLinkRouter.shared.handle(path: path)
             }

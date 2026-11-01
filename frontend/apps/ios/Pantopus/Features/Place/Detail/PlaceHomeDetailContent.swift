@@ -91,8 +91,7 @@ struct PlaceHomeDetailContent: View {
                         VStack(alignment: .leading, spacing: 12) {
                             PlaceSystemsTimeline(data: systems, full: true)
                             if let onAsk {
-                                PlaceTextButton(title: "Add or correct an install year", action: onAsk)
-                                    .frame(minHeight: 44)
+                                PlaceTextButton(title: "Add or correct an install year", minHeight: 44, action: onAsk)
                                     .accessibilityHint("Asks Pantopus, which can record the year for this home.")
                                     .accessibilityIdentifier("place.systems.correct")
                             }

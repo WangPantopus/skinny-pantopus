@@ -72,6 +72,8 @@ struct JustMovedCard: View {
     var needsPickupDay: Bool?
     let onOpenDetail: (PlaceDetailGroup) -> Void
     let onOpenMailDay: () -> Void
+    /// After "Not new here" or "Hide", so the list around the card can close its space.
+    var onDismissed: (() -> Void)?
 
     @State private var dismissed: Bool
     @State private var done: Set<JustMovedStepId>
@@ -81,13 +83,15 @@ struct JustMovedCard: View {
         moveInDate: String?,
         needsPickupDay: Bool? = nil,
         onOpenDetail: @escaping (PlaceDetailGroup) -> Void,
-        onOpenMailDay: @escaping () -> Void
+        onOpenMailDay: @escaping () -> Void,
+        onDismissed: (() -> Void)? = nil
     ) {
         self.homeId = homeId
         self.moveInDate = moveInDate
         self.needsPickupDay = needsPickupDay
         self.onOpenDetail = onOpenDetail
         self.onOpenMailDay = onOpenMailDay
+        self.onDismissed = onDismissed
         // Read this home's ticks and dismissal up front. They were read in an
         // `onAppear` on the Group below, which never fires while the Group is
         // empty, so the card never showed.
@@ -174,6 +178,7 @@ struct JustMovedCard: View {
     private func dismiss() {
         store.dismiss()
         dismissed = true
+        onDismissed?()
     }
 
     /// Five of five: the card retires into one line rather than vanishing.
