@@ -52,6 +52,8 @@ public struct PulseTabRoot: View {
     @State private var feedMap: FeedMapViewModel
     @State private var feedArea: FeedContextBarViewModel
     @State private var feedViewMode = FeedViewMode.list
+    /// What was open beside the feed, for the stack to show after a fold.
+    @State private var routesBeside: [PulseRoute] = []
 
     /// Starts adding a home (the quiet card's "Set up a home"), in the Place tab.
     private let onAddHome: @MainActor () -> Void
@@ -94,6 +96,9 @@ public struct PulseTabRoot: View {
                 } destination: { route in
                     destination(for: route)
                 }
+                .onChange(of: path.routes, initial: true) { _, routes in
+                    routesBeside = routes
+                }
             } else {
                 NavigationStack(path: navigationPathBinding) {
                     feedPage
@@ -106,6 +111,7 @@ public struct PulseTabRoot: View {
                                 .toolbar(.hidden, for: .navigationBar)
                         }
                 }
+                .onAppear { stackRoutesBeside() }
             }
         }
         .accessibilityIdentifier("pulseTabRoot")
@@ -137,6 +143,22 @@ public struct PulseTabRoot: View {
     /// The October 13 feed side by side with the post (the Pulse redesign keeps its own stack).
     private var isSideBySide: Bool {
         horizontalSizeClass == .regular && !LaunchFeatures.pulseRedesign
+    }
+
+    /// Folded, the stack starts at the feed: what was open beside it goes back on top once the stack is up.
+    private func stackRoutesBeside() {
+        let routes = routesBeside
+        routesBeside = []
+        guard !routes.isEmpty else { return }
+        Task { @MainActor in
+            await Task.yield()
+            guard path.routes.isEmpty || path.routes == routes else { return }
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { path.replace(with: []) }
+            await Task.yield()
+            withTransaction(transaction) { path.replace(with: routes) }
+        }
     }
 
     @ViewBuilder private var feedPage: some View {
