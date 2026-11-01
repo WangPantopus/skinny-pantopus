@@ -166,9 +166,11 @@ extension EditProfileView {
         let neighbors = viewModel.neighbors
         let profile = neighbors.loaded?.profile
         let hasPhoto = profile?.avatarUrl != nil
+        // The initials follow the name as you type it, as the preview card's do.
+        let typed = neighbors.nameText.trimmingCharacters(in: .whitespacesAndNewlines)
         return HStack(spacing: Spacing.s3) {
             ProfileAvatarDisc(
-                name: profile?.displayName ?? "",
+                name: typed.isEmpty ? profile?.displayName ?? "" : typed,
                 showsInitials: true,
                 imageURL: profile?.avatarUrl.flatMap(URL.init(string:)),
                 color: ProfileAvatarColor(userId: viewModel.accountId ?? ""),
