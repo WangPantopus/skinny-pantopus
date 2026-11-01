@@ -383,6 +383,7 @@ import app.pantopus.android.ui.screens.plans.today.PlansTodayActions
 import app.pantopus.android.ui.screens.posts.PULSE_POST_DETAIL_ID_KEY
 import app.pantopus.android.ui.screens.posts.PulsePostDetailScreen
 import app.pantopus.android.ui.screens.profile.EditProfileScreen
+import app.pantopus.android.ui.screens.profile.OwnerNavigation
 import app.pantopus.android.ui.screens.profile.PUBLIC_PROFILE_USER_ID_KEY
 import app.pantopus.android.ui.screens.profile.PublicProfileScreen
 import app.pantopus.android.ui.screens.profile.professional.ProfessionalProfileScreen
@@ -491,6 +492,7 @@ import app.pantopus.android.ui.screens.wallet.WalletScreen
 import app.pantopus.android.ui.screens.wallet.scheduling.PaymentsSetupScreen
 import app.pantopus.android.ui.screens.wallet.scheduling.PayoutsEarningsScreen
 import app.pantopus.android.ui.screens.you.YouScreen
+import app.pantopus.android.ui.screens.you.YouViewModel
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import kotlinx.coroutines.flow.Flow
@@ -3162,12 +3164,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             profileEntry.arguments
                                 ?.getString(ChildRoutes.PROFILE_TAB_KEY)
                                 ?.lowercase() == "receipt",
+                        // The cover's ✕.
+                        onClose = { navController.popBackStack() },
                         onOpenPublicProfile = { userId ->
                             navController.navigate(ChildRoutes.publicProfile(userId))
                         },
                         onOpenPulsePost = { postId ->
                             navController.navigate(ChildRoutes.pulsePost(postId))
                         },
+                        onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
                         onInviteOwner = { homeId, email ->
                             navController.navigate(ChildRoutes.inviteOwner(homeId, email))
                         },
@@ -3186,53 +3191,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         onOpenCeremonialMailOpen = { mailId ->
                             navController.navigate(ChildRoutes.ceremonialMailOpen(mailId))
                         },
-                        onOpenMailbox = { navController.openTabRoot(PantopusRoute.Mail) },
                         onOpenEditProfile = {
                             navController.navigate(ChildRoutes.EDIT_PROFILE)
                         },
-                        onOpenPlaceholder = { label ->
-                            navController.navigate(ChildRoutes.placeholder(label))
-                        },
                         onOpenSettings = { navController.navigate(ChildRoutes.MENU) },
                         onOpenHelp = { navController.navigate(ChildRoutes.SETTINGS_HELP) },
-                        onOpenLegal = { navController.navigate(ChildRoutes.SETTINGS_LEGAL) },
-                        onOpenPrivacySettings = { navController.navigate(ChildRoutes.SETTINGS_PRIVACY) },
-                        onOpenOffers = { navController.navigate(ChildRoutes.OFFERS) },
-                        onOpenMyBids = { navController.navigate(ChildRoutes.MY_BIDS) },
-                        onOpenMyTasks = { navController.navigate(ChildRoutes.MY_TASKS) },
                         onOpenMyPosts = { navController.navigate(ChildRoutes.MY_POSTS) },
                         onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
                         onOpenSupportTrains = { navController.navigate(ChildRoutes.SUPPORT_TRAINS) },
-                        onOpenIdentityCenter = { navController.navigate(ChildRoutes.IDENTITY_CENTER) },
-                        onOpenAudienceProfile = { navController.navigate(ChildRoutes.AUDIENCE_PROFILE) },
-                        onOpenCreatorInbox = { navController.navigate(ChildRoutes.CREATOR_INBOX) },
                         onOpenSavedPlaces = { navController.navigate(ChildRoutes.SAVED_PLACES) },
-                        onOpenHomeBills = { homeId -> navController.navigate(ChildRoutes.homeBills(homeId)) },
-                        onOpenHomePets = { homeId -> navController.navigate(ChildRoutes.homePets(homeId)) },
-                        onOpenHomeCalendar = { homeId ->
-                            navController.navigate(ChildRoutes.homeCalendar(homeId))
-                        },
-                        onOpenHomePackages = { homeId ->
-                            navController.navigate(ChildRoutes.homePackages(homeId))
-                        },
-                        onOpenHomePolls = { homeId -> navController.navigate(ChildRoutes.homePolls(homeId)) },
-                        onOpenAccessCodes = { homeId, homeName ->
-                            navController.navigate(ChildRoutes.accessCodes(homeId, homeName))
-                        },
-                        onOpenHomeTasks = { homeId -> navController.navigate(ChildRoutes.homeTasks(homeId)) },
-                        onOpenHomeMaintenance = { homeId ->
-                            navController.navigate(ChildRoutes.homeMaintenance(homeId))
-                        },
-                        onOpenHomeOwners = { homeId -> navController.navigate(ChildRoutes.homeOwners(homeId)) },
-                        onOpenHomeMembers = { homeId -> navController.navigate(ChildRoutes.homeMembers(homeId)) },
-                        onOpenHomeDocs = { homeId -> navController.navigate(ChildRoutes.homeDocs(homeId)) },
-                        onOpenHomeEmergency = { homeId ->
-                            navController.navigate(ChildRoutes.homeEmergency(homeId))
-                        },
-                        onOpenMyHomes = { navController.navigate(ChildRoutes.MY_HOMES) },
-                        onOpenMyListings = { navController.navigate(ChildRoutes.MY_LISTINGS) },
-                        onOpenMyBusinesses = { navController.navigate(ChildRoutes.MY_BUSINESSES) },
-                        onOpenScheduling = { owner -> navController.navigate(SchedulingRoutes.hub(owner.routeKind, owner.ownerRouteId)) },
                     )
                 }
 
@@ -5001,6 +4968,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = ChildRoutes.PUBLIC_PROFILE,
                     arguments = listOf(navArgument(PUBLIC_PROFILE_USER_ID_KEY) { type = NavType.StringType }),
                 ) { profileEntry ->
+                    val youViewModel: YouViewModel = hiltViewModel()
                     PublicProfileScreen(
                         onBack = { navController.popBackStack() },
                         onOpenHandshake = { handle, tierRank ->
@@ -5034,6 +5002,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         // Gigs tab rows open gig detail; review cards open the
                         // reviewer's own public profile.
                         onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
+                        onOpenPlan = { planId -> navController.navigate(PlansRoutes.plan(planId)) },
+                        onOpenSupportTrain = { trainId -> navController.navigate(ChildRoutes.supportTrainDetail(trainId)) },
                         onOpenProfile = { reviewerId ->
                             navController.navigate(ChildRoutes.publicProfile(reviewerId))
                         },
@@ -5047,6 +5017,17 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             if (navController.currentBackStackEntry?.id != profileEntry.id) return@editProfile
                             navController.navigate(ChildRoutes.EDIT_PROFILE)
                         },
+                        // Opened on your own name: the owner page, pushed with Back (☰ → Your profile is the cover).
+                        ownerNavigation =
+                            OwnerNavigation(
+                                onSeeAllPosts = { navController.navigate(ChildRoutes.MY_POSTS) },
+                                onOpenConnections = { navController.navigate(ChildRoutes.CONNECTIONS) },
+                                onOpenSupportTrains = { navController.navigate(ChildRoutes.SUPPORT_TRAINS) },
+                                onOpenSavedPlaces = { navController.navigate(ChildRoutes.SAVED_PLACES) },
+                                onOpenSettings = { navController.navigate(ChildRoutes.MENU) },
+                                onOpenHelp = { navController.navigate(ChildRoutes.SETTINGS_HELP) },
+                                onLogOut = { youViewModel.signOut() },
+                            ),
                     )
                 }
                 composable(
@@ -6033,7 +6014,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     )
                 }
                 composable(ChildRoutes.EDIT_PROFILE) {
-                    EditProfileScreen(onBack = { navController.popBackStack() })
+                    EditProfileScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenMyHomes = { navController.navigate(ChildRoutes.MY_HOMES) },
+                    )
                 }
                 composable(ChildRoutes.SETTINGS_NOTIFICATIONS) {
                     NotificationSettingsScreen(onBack = { navController.popBackStack() })
@@ -6045,6 +6029,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     PrivacySettingsScreen(
                         onBack = { navController.popBackStack() },
                         onOpenDataExport = { navController.navigate(ChildRoutes.SETTINGS_DATA_EXPORT) },
+                        onOpenEditProfile = { navController.navigate(ChildRoutes.EDIT_PROFILE) },
                         onOpenPrivacyPolicy = {
                             navController.navigate(ChildRoutes.settingsLegalContent(LegalDocument.Privacy.rowId))
                         },

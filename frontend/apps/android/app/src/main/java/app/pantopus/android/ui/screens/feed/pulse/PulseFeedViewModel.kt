@@ -12,6 +12,7 @@ package app.pantopus.android.ui.screens.feed.pulse
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.identity.ProfileChanges
 import app.pantopus.android.data.api.models.feed.FeedMuteEntityType
 import app.pantopus.android.data.api.models.feed.FeedPost
 import app.pantopus.android.data.api.models.feed.FeedResponse
@@ -35,6 +36,7 @@ import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.ui.screens.feed.FeedEmptyContent
 import app.pantopus.android.ui.screens.feed.FeedRadiusSuggestion
 import app.pantopus.android.ui.screens.feed.FeedSurface
+import app.pantopus.android.ui.screens.profile.ProfilePinCopy
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -683,6 +685,23 @@ class PulseFeedViewModel
         }
 
         // ── Overflow actions ────────────────────────────────────────────
+
+        /** "Pin to profile" / "Unpin from profile" on your own post (PRF step 5); a 4th pin shows the server's sentence. */
+        fun toggleProfilePin(postId: String) {
+            val pinned = loadedPosts.firstOrNull { it.id == postId }?.profilePinned ?: return
+            viewModelScope.launch {
+                when (val result = repo.setProfilePin(postId, !pinned)) {
+                    is NetworkResult.Success -> {
+                        val now = result.data.profilePinned
+                        loadedPosts = loadedPosts.map { if (it.id == postId) it.copy(profilePinned = now) else it }
+                        _toastMessage.value = if (now) ProfilePinCopy.PINNED else ProfilePinCopy.UNPINNED
+                        ProfileChanges.notifyChanged()
+                        rebuildLoadedState()
+                    }
+                    is NetworkResult.Failure -> _toastMessage.value = result.error.displayMessage(ProfilePinCopy.FAILED)
+                }
+            }
+        }
 
         /**
          * `POST /api/posts/:id/save` — optimistic bookmark toggle with

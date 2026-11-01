@@ -90,6 +90,8 @@ data class PulsePostActions(
     val canKeepOpen: Boolean = false,
     /** The asker's own open Ask: "Close" (S7). */
     val canCloseAsk: Boolean = false,
+    /** Your own post: whether it's pinned to your profile ("Pin to profile" / "Unpin from profile"); null hides both. */
+    val profilePinned: Boolean? = null,
 ) {
     /** Report is offered to everyone except the author. */
     val canReport: Boolean get() = !isOwner && !isSeeded

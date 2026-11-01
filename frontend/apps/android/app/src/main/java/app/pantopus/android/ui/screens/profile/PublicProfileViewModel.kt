@@ -1,4 +1,4 @@
-@file:Suppress("MagicNumber", "PackageNaming", "LongMethod", "TooManyFunctions", "LargeClass")
+@file:Suppress("MagicNumber", "PackageNaming", "LongMethod", "TooManyFunctions", "LargeClass", "LongParameterList")
 
 package app.pantopus.android.ui.screens.profile
 
@@ -6,6 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.identity.ProfileChanges
 import app.pantopus.android.data.api.models.feed.FeedPost
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.net.NetworkError
@@ -14,9 +15,12 @@ import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.blocks.BlocksRepository
 import app.pantopus.android.data.connections.ConnectionsRepository
+import app.pantopus.android.data.identity.LocalProfileRepository
 import app.pantopus.android.data.posts.PostsRepository
+import app.pantopus.android.data.profile.ProfileInsightsRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.data.profile.ProfileTabsRepository
+import app.pantopus.android.data.profile.ProfileTipsStore
 import app.pantopus.android.data.relationships.RelationshipsRepository
 import app.pantopus.android.data.social.UserSocialRepository
 import app.pantopus.android.data.store.StoreKind
@@ -279,13 +283,20 @@ class PublicProfileViewModel
         private val posts: PostsRepository,
         /** The portfolio read decides whether the Work tab shows. */
         private val profileTabs: ProfileTabsRepository,
+        /** Your own page: the name and photo neighbors see, and your account name for the "stays private" line. */
+        localProfiles: LocalProfileRepository,
+        insights: ProfileInsightsRepository,
+        tips: ProfileTipsStore,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
-        /** The raw nav arg — may be a UUID or a `@handle`. */
+        /**
+         * The raw nav arg — may be a UUID or a `@handle`. ☰ → Your profile opens this screen with no arg: then it is
+         * the signed-in person's own page.
+         */
         private val routeIdentifier: String =
-            requireNotNull(savedStateHandle[PUBLIC_PROFILE_USER_ID_KEY]) {
-                "PublicProfileViewModel requires a '$PUBLIC_PROFILE_USER_ID_KEY' nav arg."
-            }
+            savedStateHandle.get<String>(PUBLIC_PROFILE_USER_ID_KEY)
+                ?: (authRepository.state.value as? AuthRepository.State.SignedIn)?.user?.id
+                ?: ""
 
         /**
          * The resolved `User.id`, known only once the profile loads. Every
@@ -397,6 +408,7 @@ class PublicProfileViewModel
                 posts = posts,
                 viewerId = { (authRepository.state.value as? AuthRepository.State.SignedIn)?.user?.id },
                 onToast = { _toastMessage.value = it },
+                onPinsChanged = { pins.load(userId) },
             )
 
         /** Drives the "Unfollow …?" confirm, so one tap on Following never unfollows. */
@@ -418,20 +430,40 @@ class PublicProfileViewModel
         /** Portfolio items from the last read; null until it answers (or after it failed), so Work stays hidden. */
         private var portfolioCount: Int? = null
 
+        /** What only your own page shows: read once the profile is known to be yours. */
+        val owner = OwnerProfileExtras(viewModelScope, localProfiles, insights, relationships, tips)
+
+        /** Preview as: the page as one audience sees it, from the server's `?as=` answers; null when not previewing. */
+        val preview =
+            ProfilePreviewLoader(viewModelScope, repo, posts) { profile, rows ->
+                build(profile, PublicProfileKind.Local, rows.map(::project), forPreview = true)
+            }
+
+        /** The [ProfileChanges] version the shown profile was read at: a name or tagline saved since reads it again. */
+        private var readAtVersion = ProfileChanges.version.value
+
         private var loading = false
         private val _refreshing = MutableStateFlow(false)
         val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
         private val _refreshNotice = MutableStateFlow<RefreshNotice?>(null)
         val refreshNotice: StateFlow<RefreshNotice?> = _refreshNotice.asStateFlow()
 
-        fun load() = startRead(force = false)
+        /** Entry and every return; after Edit profile saved a change (ProfileChanges), it reads again. */
+        fun load() {
+            val changed = ProfileChanges.version.value != readAtVersion
+            readAtVersion = ProfileChanges.version.value
+            startRead(force = changed, spinner = false)
+        }
 
         fun refresh() = startRead(force = true)
 
-        private fun startRead(force: Boolean) {
+        private fun startRead(
+            force: Boolean,
+            spinner: Boolean = force,
+        ) {
             if (loading) return
             loading = true
-            _refreshing.value = force && _state.value is PublicProfileUiState.Loaded
+            _refreshing.value = spinner && _state.value is PublicProfileUiState.Loaded
             if (_state.value !is PublicProfileUiState.Loaded) {
                 profileCopy().data?.let { profile ->
                     userId = profile.id
@@ -850,6 +882,9 @@ class PublicProfileViewModel
                         // (`src/app/user/[id].tsx:322`).
                         _connection.value = ProfileConnection.Blocked
                         _isBlockedByViewer.value = true
+                        // A block shares nothing: "You and …" and the Pinned row leave at once.
+                        inCommon.clear()
+                        pins.clear()
                         _toastMessage.value = "User blocked"
                     }
                     is NetworkResult.Failure -> {
@@ -998,6 +1033,9 @@ class PublicProfileViewModel
                             emptyList()
                         }
                     _state.value = PublicProfileUiState.Loaded(build(profile, kind, firstFrame))
+                    val viewer = signedInId()
+                    if (kind == PublicProfileKind.Local && viewer != null && viewer != profile.id) inCommon.load(profile.id, viewer)
+                    if (kind == PublicProfileKind.Local) pins.load(profile.id)
                     coroutineScope {
                         // The relationship decides the header's buttons: read it beside the posts, not after them.
                         val relationship = async { loadRelationship(profile.id) }
@@ -1016,6 +1054,7 @@ class PublicProfileViewModel
                         relationship.await()
                     }
                     loadWork(profile, kind)
+                    if (signedInId() == profile.id) owner.load(profile.id, force)
                 }
                 is NetworkResult.Failure -> {
                     if (_state.value !is PublicProfileUiState.Loaded ||
@@ -1028,6 +1067,17 @@ class PublicProfileViewModel
                 }
             }
         }
+
+        /** Preview as (owner only): the page exactly as [audience] gets it, until Done. */
+        fun startPreview(audience: PreviewAudience) = preview.start(userId, audience)
+
+        /** "You and …" on someone else's profile (PRF step 4). */
+        internal val inCommon = ProfileInCommonLoader(viewModelScope, repo)
+
+        /** The Pinned row (PRF step 5). */
+        internal val pins = ProfilePinsLoader(viewModelScope, posts)
+
+        fun endPreview() = preview.end()
 
         /** The portfolio read decides whether Work shows; a failed read leaves Work to the reviews alone. */
         private suspend fun loadWork(
@@ -1083,6 +1133,7 @@ class PublicProfileViewModel
             profile: PublicProfileDto,
             kind: PublicProfileKind,
             feed: List<PublicProfilePost>,
+            forPreview: Boolean = false,
         ): PublicProfileContent {
             val header =
                 PublicProfileHeader(
@@ -1113,7 +1164,7 @@ class PublicProfileViewModel
             val neighbor =
                 if (kind == PublicProfileKind.Local) buildNeighbor(profile, reviewCards, feed) else null
             val signedInId = (authRepository.state.value as? AuthRepository.State.SignedIn)?.user?.id
-            val isOwner = signedInId != null && signedInId == profile.id
+            val isOwner = !forPreview && signedInId != null && signedInId == profile.id
             // A Beacon (`PublicPersona.handle`) lives in a different namespace
             // from `User.username` — persona handles are generated
             // independently (`identityProfiles.generateUniqueAudienceHandle`)
@@ -1172,10 +1223,18 @@ private val JOINED_MONTH: java.time.format.DateTimeFormatter =
 internal fun profileTrust(
     profile: PublicProfileDto,
     now: Instant = Instant.now(),
+): ProfileTrust = profileTrust(profile.residency, profile.createdAt, profile.city, now)
+
+/** The same facts from the raw fields; the editor's preview card reads them from your account. */
+internal fun profileTrust(
+    residency: Map<String, Any?>?,
+    createdAt: String?,
+    city: String?,
+    now: Instant = Instant.now(),
 ): ProfileTrust {
-    val verified = hasHomeResidency(profile)
-    val homeCity = (profile.residency?.get("city") as? String)?.trim()?.takeIf { verified && it.isNotEmpty() }
-    val joinedAt = profile.createdAt?.let { runCatching { Instant.parse(it) }.getOrNull() }
+    val verified = hasHomeResidency(residency)
+    val homeCity = (residency?.get("city") as? String)?.trim()?.takeIf { verified && it.isNotEmpty() }
+    val joinedAt = createdAt?.let { runCatching { Instant.parse(it) }.getOrNull() }
     val days = joinedAt?.let { Duration.between(it, now).toDays().coerceAtLeast(0) }
     val joined =
         when {
@@ -1185,7 +1244,7 @@ internal fun profileTrust(
         }
     return ProfileTrust(
         verifiedNeighbor = verified,
-        city = homeCity ?: profile.city?.trim()?.takeIf { it.isNotEmpty() },
+        city = homeCity ?: city?.trim()?.takeIf { it.isNotEmpty() },
         joined = joined,
         joinedRecently = days != null && days < JUST_JOINED_DAYS,
     )
@@ -1416,8 +1475,10 @@ private fun buildBadges(profile: PublicProfileDto): List<IdentityPillarBadge> {
     )
 }
 
-private fun hasHomeResidency(profile: PublicProfileDto): Boolean {
-    val r = profile.residency ?: return false
+private fun hasHomeResidency(profile: PublicProfileDto): Boolean = hasHomeResidency(profile.residency)
+
+private fun hasHomeResidency(residency: Map<String, Any?>?): Boolean {
+    val r = residency ?: return false
     val verifiedValue = r["verified"]
     if (verifiedValue is Boolean) return verifiedValue
     return r.isNotEmpty()

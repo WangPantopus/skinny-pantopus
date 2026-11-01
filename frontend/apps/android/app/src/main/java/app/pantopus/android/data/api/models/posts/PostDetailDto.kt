@@ -99,6 +99,8 @@ data class PostDetailResponse(
 data class PostDetailDto(
     val id: String,
     @Json(name = "user_id") val userId: String,
+    /** PRF SRV-3: on your own post only, whether it's pinned to your profile; missing when unknown. */
+    @Json(name = "profile_pinned") val profilePinned: Boolean? = null,
     val title: String?,
     val content: String = "",
     @Json(name = "post_type") val postType: String?,

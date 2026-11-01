@@ -4,6 +4,7 @@ package app.pantopus.android.data.posts
 
 import app.pantopus.android.data.api.models.feed.FeedPost
 import app.pantopus.android.data.api.models.feed.FeedResponse
+import app.pantopus.android.data.api.models.feed.ProfilePinResponse
 import app.pantopus.android.data.api.models.posts.CommentLikeResponse
 import app.pantopus.android.data.api.models.posts.MyPostsResponse
 import app.pantopus.android.data.api.models.posts.PlaceEligibilityResponse
@@ -245,6 +246,27 @@ class PostsRepository
         }
 
         fun profilePostsCopy(userId: String): Stored<FeedResponse> = store.peek(StoreKeys.profilePosts(userId))
+
+        /** Your posts as one audience sees them (`?as=`, owner only); never stored. */
+        suspend fun previewProfilePosts(
+            userId: String,
+            audience: String,
+        ): NetworkResult<FeedResponse> = safeApiCall { api.profilePostsAs(userId, StoreKeys.PROFILE_POSTS_LIMIT, audience) }
+
+        /** A person's pinned posts (PRF SRV-3); never stored, since pins follow blocks and connections at once. */
+        suspend fun pinnedPosts(userId: String): NetworkResult<FeedResponse> = safeApiCall { api.pinnedPosts(userId) }
+
+        suspend fun previewPinnedPosts(
+            userId: String,
+            audience: String,
+        ): NetworkResult<FeedResponse> = safeApiCall { api.pinnedPostsAs(userId, audience) }
+
+        /** Pins or unpins your own post on your profile; lists showing it read it again. */
+        suspend fun setProfilePin(
+            id: String,
+            pinned: Boolean,
+        ): NetworkResult<ProfilePinResponse> =
+            safeApiCall { if (pinned) api.pinToProfile(id) else api.unpinFromProfile(id) }.also { markPostChanged(id, it) }
 
         /** A changed connection changes the audience; an offline read must not reuse that copy. */
         fun forgetProfilePosts(userId: String) = store.remove(StoreKeys.profilePosts(userId))

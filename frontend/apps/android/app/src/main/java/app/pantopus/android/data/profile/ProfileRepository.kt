@@ -1,5 +1,6 @@
 package app.pantopus.android.data.profile
 
+import app.pantopus.android.data.api.models.profile.ProfileInCommonResponse
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.models.users.ProfileResponse
 import app.pantopus.android.data.api.models.users.ProfileUpdateRequest
@@ -43,6 +44,15 @@ class ProfileRepository
         }
 
         fun publicProfileCopy(id: String): Stored<PublicProfileDto> = store.peek(StoreKeys.publicProfile(id))
+
+        /** Your own profile as one audience sees it (`?as=`); never stored. */
+        suspend fun previewProfile(
+            id: String,
+            audience: String,
+        ): NetworkResult<PublicProfileDto> = safeApiCall { api.publicProfileAs(id, audience) }
+
+        /** "You and …": what you share with [id]; never stored (it follows blocks and connections at once). */
+        suspend fun inCommon(id: String): NetworkResult<ProfileInCommonResponse> = safeApiCall { api.inCommon(id) }
 
         fun forgetPublicProfile(id: String) = store.remove(StoreKeys.publicProfile(id))
 

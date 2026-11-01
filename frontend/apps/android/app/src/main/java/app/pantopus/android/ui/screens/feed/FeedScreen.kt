@@ -108,6 +108,7 @@ import app.pantopus.android.ui.screens.feed.pulse.PulseSportsMode
 import app.pantopus.android.ui.screens.feed.pulse.PulseSportsStarter
 import app.pantopus.android.ui.screens.feed.pulse.PulseSportsStarterRow
 import app.pantopus.android.ui.screens.feed.pulse.PulseTopicChipRow
+import app.pantopus.android.ui.screens.profile.ProfilePinCopy
 import app.pantopus.android.ui.screens.shared.feed.FeedChipItem
 import app.pantopus.android.ui.screens.shared.feed.FeedChipRow
 import app.pantopus.android.ui.screens.shared.feed.FeedComposeFAB
@@ -594,6 +595,10 @@ fun FeedScreen(
         loadedRows.firstOrNull { it.id == id }?.let { row ->
             PostOverflowSheet(
                 row = row,
+                onToggleProfilePin = {
+                    viewModel.dismissOverflow()
+                    viewModel.toggleProfilePin(row.id)
+                },
                 onDismiss = { viewModel.dismissOverflow() },
                 onToggleSave = {
                     viewModel.dismissOverflow()
@@ -846,6 +851,7 @@ private fun PostOverflowSheet(
     onCloseAsk: () -> Unit,
     onReport: () -> Unit,
     onDelete: () -> Unit,
+    onToggleProfilePin: () -> Unit = {},
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val actions = row.actions
@@ -927,6 +933,13 @@ private fun PostOverflowSheet(
                     testTag = "pulseFeedOverflowReport",
                     isDestructive = true,
                     onClick = onReport,
+                )
+            }
+            actions.profilePinned?.let { pinned ->
+                OverflowAction(
+                    label = if (pinned) ProfilePinCopy.UNPIN else ProfilePinCopy.PIN,
+                    testTag = "pulseFeedOverflowProfilePin",
+                    onClick = onToggleProfilePin,
                 )
             }
             if (actions.canDelete) {

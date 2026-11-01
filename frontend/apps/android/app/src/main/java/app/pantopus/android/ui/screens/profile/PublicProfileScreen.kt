@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.profile
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -97,11 +99,23 @@ fun PublicProfileScreen(
     onOpenPost: (String) -> Unit = {},
     /** Your own profile's Edit profile. */
     onEditProfile: () -> Unit = {},
+    /** "You and …": a plan you're both in, a Support Train you both help on. */
+    onOpenPlan: (String) -> Unit = {},
+    onOpenSupportTrain: (String) -> Unit = {},
+    /** ☰ → Your profile: your page as a cover with ✕ (pushed from your own name, it keeps Back). */
+    ownerCover: Boolean = false,
+    /** Where your own page's rows and buttons go (PRF step 2). */
+    ownerNavigation: OwnerNavigation = OwnerNavigation(),
+    /** The `monthly_receipt` push (`?tab=receipt`): last month opens in full. */
+    expandMonthlyReceipt: Boolean = false,
     viewModel: PublicProfileViewModel = hiltViewModel(),
     usernameShare: UsernameShareViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
+    val inCommon by viewModel.inCommon.state.collectAsStateWithLifecycle()
+    val pinnedPosts by viewModel.pins.state.collectAsStateWithLifecycle()
+    val pinnedCards = remember(pinnedPosts) { pinnedPosts?.map(::pinnedCard) }
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val usernameShareForm by usernameShare.form.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
@@ -127,6 +141,13 @@ fun PublicProfileScreen(
     val showConnectSheet by viewModel.showConnectSheet.collectAsStateWithLifecycle()
     val showWithdrawConfirm by viewModel.showWithdrawConfirm.collectAsStateWithLifecycle()
     val postsLoading by viewModel.postsLoading.collectAsStateWithLifecycle()
+    val ownerExtras by viewModel.owner.extras.collectAsStateWithLifecycle()
+    val preview by viewModel.preview.state.collectAsStateWithLifecycle()
+    var showPreviewSheet by rememberSaveable { mutableStateOf(false) }
+    var showReceipt by rememberSaveable { mutableStateOf(false) }
+    var showInvite by rememberSaveable { mutableStateOf(false) }
+    var receiptOpened by rememberSaveable { mutableStateOf(false) }
+    var showLogOutConfirm by rememberSaveable { mutableStateOf(false) }
     var showTrustExplainer by remember { mutableStateOf(false) }
     val uriHandler = LocalUriHandler.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -163,6 +184,23 @@ fun PublicProfileScreen(
         onPauseOrDispose { }
     }
     RefreshOnStoreChange(viewModel::load)
+    // The `monthly_receipt` push opens last month in full, once its receipt has loaded.
+    LaunchedEffect(expandMonthlyReceipt, ownerExtras?.receipt) {
+        if (expandMonthlyReceipt && !receiptOpened && ownerExtras?.receipt != null) {
+            receiptOpened = true
+            showReceipt = true
+        }
+    }
+    // A preview ends with Done or Back, never by leaving the page.
+    BackHandler(enabled = preview != null) { viewModel.endPreview() }
+    // Your own link on a made-up username offers to pick one first, once (as the ⋯ menu's Share does).
+    val shareOwnProfile: (PublicProfileContent) -> Unit = { loaded ->
+        if (usernameShare.shouldAsk(loaded.profile.id, loaded.profile.chosenUsername == null)) {
+            usernameShare.open(loaded.profile.id, loaded.profile.username)
+        } else {
+            profileShareUrl(state)?.let { context.shareText(it) }
+        }
+    }
 
     LaunchedEffect(toast) {
         if (toast != null) {
@@ -189,7 +227,17 @@ fun PublicProfileScreen(
                     is PublicProfileUiState.Loaded -> {
                         val content = s.content
                         val neighbor = content.neighbor
-                        if (content.kind == PublicProfileKind.Local && neighbor != null) {
+                        val currentPreview = preview
+                        if (currentPreview != null && content.isOwner) {
+                            OwnerPreviewFrame(
+                                preview = currentPreview,
+                                onDone = viewModel::endPreview,
+                                onRetry = { viewModel.startPreview(currentPreview.audience) },
+                                onOpenGig = onOpenGig,
+                                onOpenProfile = onOpenProfile,
+                                onOpenLink = { url -> runCatching { uriHandler.openUri(url) } },
+                            )
+                        } else if (content.kind == PublicProfileKind.Local && neighbor != null) {
                             LocalProfileLoadedFrame(
                                 content = content,
                                 selectedTab = selectedLocalTab,
@@ -224,6 +272,41 @@ fun PublicProfileScreen(
                                 onRetryPosts = { viewModel.refresh() },
                                 postCards = postCards,
                                 postCardActions = postCardActions,
+                                // Nothing shared shows on your own page or across a block.
+                                inCommon = inCommon.takeIf { !content.isOwner && connection != ProfileConnection.Blocked },
+                                pinned = pinnedCards.takeIf { connection != ProfileConnection.Blocked },
+                                onOpenInCommon = { target ->
+                                    when (target) {
+                                        is InCommonTarget.Plan -> onOpenPlan(target.id)
+                                        is InCommonTarget.SupportTrain -> onOpenSupportTrain(target.id)
+                                    }
+                                },
+                                mode =
+                                    if (content.isOwner) {
+                                        ProfileFrameMode.Owner(
+                                            extras = ownerExtras,
+                                            cover = ownerCover,
+                                            navigation = ownerNavigation,
+                                            actions =
+                                                OwnerPageActions(
+                                                    onShare = { shareOwnProfile(content) },
+                                                    onPreviewAs = { showPreviewSheet = true },
+                                                    onDismissTip = viewModel.owner::dismissTip,
+                                                    onOpenMonth = { showReceipt = true },
+                                                    onShareMonth = { viewModel.owner.receiptShareMessage()?.let { context.shareText(it) } },
+                                                    onOpenInvite = {
+                                                        if (ownerExtras?.invite != null) {
+                                                            showInvite = true
+                                                        } else {
+                                                            viewModel.owner.inviteShareMessage()?.let { context.shareText(it) }
+                                                        }
+                                                    },
+                                                    onLogOut = { showLogOutConfirm = true },
+                                                ),
+                                        )
+                                    } else {
+                                        ProfileFrameMode.Visitor
+                                    },
                             )
                         } else {
                             PublicProfileLoadedFrame(
@@ -449,6 +532,7 @@ fun PublicProfileScreen(
                     },
                     onReport = { viewModel.postCards.beginReport(card.id) },
                     onDismiss = { viewModel.postCards.dismissOptions() },
+                    onToggleProfilePin = { viewModel.postCards.toggleProfilePin(card.id) },
                 )
             }
         }
@@ -523,6 +607,54 @@ fun PublicProfileScreen(
                 onSend = viewModel::sendRequestFromSheet,
                 onJustFollow = viewModel::followFromSheet,
                 onDismiss = viewModel::dismissConnectSheet,
+            )
+        }
+        if (showPreviewSheet) {
+            PreviewAsSheet(
+                onPick = { audience ->
+                    showPreviewSheet = false
+                    viewModel.startPreview(audience)
+                },
+                onDismiss = { showPreviewSheet = false },
+            )
+        }
+        ownerExtras?.receipt?.takeIf { showReceipt }?.let { receipt ->
+            OwnerReceiptSheet(
+                receipt = receipt,
+                onShare = { viewModel.owner.receiptShareMessage()?.let { context.shareText(it) } },
+                onDismiss = { showReceipt = false },
+            )
+        }
+        ownerExtras?.invite?.takeIf { showInvite }?.let { progress ->
+            OwnerInviteSheet(
+                progress = progress,
+                onShare = viewModel.owner.inviteShareMessage()?.let { message -> { context.shareText(message) } },
+                onDismiss = { showInvite = false },
+            )
+        }
+        // Instant Screens contract §7: the sign-out confirmation says the phone's saved copy goes too.
+        if (showLogOutConfirm) {
+            AlertDialog(
+                onDismissRequest = { showLogOutConfirm = false },
+                title = { Text("Sign out of Pantopus?") },
+                text = {
+                    Text("You'll need to sign in again to use your account. Signing out removes what Pantopus saved on this phone.")
+                },
+                modifier = Modifier.testTag("ownerLogOutDialog"),
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showLogOutConfirm = false
+                            ownerNavigation.onLogOut()
+                        },
+                        modifier = Modifier.testTag("ownerLogOutConfirm"),
+                    ) {
+                        Text("Sign out", color = PantopusColors.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showLogOutConfirm = false }) { Text("Cancel") }
+                },
             )
         }
         if (showTrustExplainer && loadedContent != null) {
@@ -722,10 +854,40 @@ internal fun PublicProfileLoadedFrame(
     )
 }
 
+/** How the page shows: someone else's, your own (owner mode), or your own as one audience sees it. */
+internal sealed interface ProfileFrameMode {
+    data object Visitor : ProfileFrameMode
+
+    data class Owner(
+        val extras: OwnerExtras?,
+        val cover: Boolean,
+        val navigation: OwnerNavigation,
+        val actions: OwnerPageActions,
+    ) : ProfileFrameMode
+
+    data class Preview(
+        val audience: PreviewAudience,
+        val onDone: () -> Unit,
+    ) : ProfileFrameMode
+}
+
+/** Your own page's buttons that stay on the page (the rest go through [OwnerNavigation]). */
+internal data class OwnerPageActions(
+    val onShare: () -> Unit = {},
+    val onPreviewAs: () -> Unit = {},
+    val onDismissTip: (OwnerTip) -> Unit = {},
+    val onOpenMonth: () -> Unit = {},
+    val onShareMonth: () -> Unit = {},
+    val onOpenInvite: () -> Unit = {},
+    val onLogOut: () -> Unit = {},
+)
+
 /**
  * Someone's profile (PRF, 2026-11-01; `Main.dc.html`): the short header with its trust line and the actions for
- * this relationship, then Posts · About (· Work when there is work). Your own profile is the same page with Edit
- * profile in place of Connect and Message. `internal` so Paparazzi can render it without Hilt.
+ * this relationship, then Posts · About (· Work when there is work). Your own profile ([ProfileFrameMode.Owner]) is
+ * the same page with the name neighbors see, Edit profile + Preview as, tips only you see, your latest two posts and
+ * "Your account"; a preview ([ProfileFrameMode.Preview]) is the page as that audience gets it. `internal` so Paparazzi
+ * can render it without Hilt.
  */
 @Composable
 internal fun LocalProfileLoadedFrame(
@@ -746,75 +908,208 @@ internal fun LocalProfileLoadedFrame(
     onRetryPosts: () -> Unit = {},
     postCards: List<PulsePostCardContent> = emptyList(),
     postCardActions: ProfilePostCardActions = ProfilePostCardActions(),
+    mode: ProfileFrameMode = ProfileFrameMode.Visitor,
+    inCommon: ProfileInCommon? = null,
+    onOpenInCommon: (InCommonTarget) -> Unit = {},
+    /** The Pinned row; null until read (then the "Pin a post" tip waits too). */
+    pinned: List<PinnedCard>? = null,
 ) {
-    val firstName = profileFirstName(content.header)
+    val owner = mode as? ProfileFrameMode.Owner
+    val preview = mode as? ProfileFrameMode.Preview
+    // Your own page shows the name and photo neighbors see, never the account's.
+    val header = owner?.extras?.let { ownerHeader(content.header, it) } ?: content.header
+    val firstName = profileFirstName(header)
     // Work shows when there is work to show, and always on your own profile, where "Add portfolio item" lives.
     val tabs =
         listOfNotNull(
             LocalProfileTab.Posts,
             LocalProfileTab.About,
-            LocalProfileTab.Work.takeIf { content.work.hasWork || content.isOwner },
+            LocalProfileTab.Work.takeIf { content.work.hasWork || owner != null },
         )
     // Work leaves when its last item goes; the strip falls back to Posts.
     val tab = selectedTab.takeIf { it in tabs } ?: LocalProfileTab.Posts
     Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("publicProfileLocalHeader")) {
-        ProfileTopBar(
-            onBack = onBack,
-            onMore = onOverflow,
-            moreLabel = if (content.isOwner) "More: share your profile" else "More: share, follow, block or report",
-        )
+        ProfileFrameTopBar(mode = mode, onBack = onBack, onOverflow = onOverflow)
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             ProfileIdentityHeader(
-                header = content.header,
+                header = header,
                 bio = content.stats.bio,
                 onTrustClick = onTrustClick,
+                accountNameLine = owner?.extras?.accountNameLine,
             ) {
-                ProfileHeaderActions(state = actions, callbacks = callbacks, firstName = firstName)
+                ProfileFrameHeaderActions(
+                    mode = mode,
+                    content = content,
+                    header = header,
+                    actions = actions,
+                    callbacks = callbacks,
+                    hasNoPins = pinned?.isEmpty() == true,
+                )
             }
-            Spacer(Modifier.height(28.dp))
-            LocalProfileTabStrip(
-                tabs = tabs,
-                postCount = postCountLabel(postCards.size).takeIf { postCards.isNotEmpty() && !hiddenByBlock },
-                selected = tab,
-                onSelect = onSelectTab,
+            YouAndCard(firstName = firstName, inCommon = inCommon, onOpen = onOpenInCommon)
+            GetToKnowCard(
+                firstName = firstName,
+                prompts = content.profile.prompts,
+                onEdit = callbacks.onEditProfile.takeIf { owner != null },
             )
-            Spacer(Modifier.height(Spacing.s3))
-            when (tab) {
-                LocalProfileTab.Posts ->
-                    LocalProfilePosts(
-                        cards = postCards,
-                        actions = postCardActions,
-                        firstName = firstName,
-                        joinedRecently = content.header.trust.joinedRecently,
-                        isOwnProfile = content.isOwner,
-                        loadFailed = postsLoadFailed,
-                        hiddenByBlock = hiddenByBlock,
-                        onSayHi = callbacks.onMessage,
-                        onRetry = onRetryPosts,
-                        loading = postsLoading,
-                    )
-                LocalProfileTab.About ->
-                    LocalProfileAboutSection(
-                        firstName = firstName,
-                        skills = content.stats.skills,
-                        trust = content.header.trust,
-                        emailConfirmed = content.profile.verified == true,
-                        links = content.links,
-                        onOpenLink = onOpenLink,
-                    )
-                LocalProfileTab.Work ->
-                    LocalProfileWorkSection(
-                        userId = content.profile.id,
-                        isOwnProfile = content.isOwner,
-                        work = content.work,
-                        onOpenGig = onOpenGig,
-                        onOpenProfile = onOpenProfile,
-                    )
+            PinnedRow(
+                cards = pinned.orEmpty(),
+                onOpen = postCardActions.onOpen.takeIf { preview == null },
+                onEdit = callbacks.onEditProfile.takeIf { owner != null },
+            )
+            Spacer(Modifier.height(28.dp))
+            if (preview?.audience == PreviewAudience.Anyone) {
+                // Signed-out visitors can't read posts: no tabs, no posts, as the drawing's "anyone" frame.
+                PostsForNeighborsCard(firstName = firstName)
+            } else {
+                LocalProfileTabStrip(
+                    tabs = tabs,
+                    postCount = postCountLabel(postCards.size).takeIf { postCards.isNotEmpty() && !hiddenByBlock },
+                    selected = tab,
+                    onSelect = onSelectTab,
+                )
+                Spacer(Modifier.height(Spacing.s3))
+                when (tab) {
+                    LocalProfileTab.Posts ->
+                        if (owner != null && postCards.isNotEmpty()) {
+                            OwnerLatestPosts(cards = postCards, actions = postCardActions, onSeeAll = owner.navigation.onSeeAllPosts)
+                        } else {
+                            LocalProfilePosts(
+                                cards = postCards,
+                                actions = postCardActions,
+                                firstName = firstName,
+                                joinedRecently = content.header.trust.joinedRecently,
+                                isOwnProfile = content.isOwner || owner != null,
+                                loadFailed = postsLoadFailed,
+                                hiddenByBlock = hiddenByBlock,
+                                onSayHi = callbacks.onMessage,
+                                onRetry = onRetryPosts,
+                                loading = postsLoading,
+                                interactive = preview == null,
+                            )
+                        }
+                    LocalProfileTab.About ->
+                        LocalProfileAboutSection(
+                            firstName = firstName,
+                            skills = content.stats.skills,
+                            trust = content.header.trust,
+                            emailConfirmed = content.profile.verified == true,
+                            links = content.links,
+                            onOpenLink = onOpenLink,
+                            aroundTheNeighborhood = { AroundTheNeighborhood(firstName, content.profile.contributions) },
+                        )
+                    LocalProfileTab.Work ->
+                        LocalProfileWorkSection(
+                            userId = content.profile.id,
+                            isOwnProfile = content.isOwner,
+                            work = content.work,
+                            onOpenGig = onOpenGig,
+                            onOpenProfile = onOpenProfile,
+                        )
+                }
+            }
+            if (owner != null) {
+                Spacer(Modifier.height(28.dp))
+                OwnerAccountSection(
+                    extras = owner.extras ?: OwnerExtras(),
+                    navigation = owner.navigation,
+                    onOpenMonth = owner.actions.onOpenMonth,
+                    onShareMonth = owner.actions.onShareMonth,
+                    onOpenInvite = owner.actions.onOpenInvite,
+                    onLogOut = owner.actions.onLogOut,
+                )
             }
             Spacer(Modifier.height(Spacing.s10))
         }
     }
 }
+
+/** The bar over the page: a preview's banner, your own page's ✕ (or Back) and Share, or a visitor's Back and ⋯. */
+@Composable
+private fun ProfileFrameTopBar(
+    mode: ProfileFrameMode,
+    onBack: () -> Unit,
+    onOverflow: () -> Unit,
+) {
+    when (mode) {
+        is ProfileFrameMode.Preview -> PreviewBanner(audience = mode.audience, onDone = mode.onDone)
+        is ProfileFrameMode.Owner -> OwnerTopBar(cover = mode.cover, onClose = onBack, onShare = mode.actions.onShare)
+        ProfileFrameMode.Visitor -> ProfileTopBar(onBack = onBack, onMore = onOverflow)
+    }
+}
+
+/** Under the name: a preview's note, your Edit profile and Preview as (then your tips), or a visitor's actions. */
+@Composable
+private fun ProfileFrameHeaderActions(
+    mode: ProfileFrameMode,
+    content: PublicProfileContent,
+    header: PublicProfileHeader,
+    actions: ProfileActionsState,
+    callbacks: ProfileActionCallbacks,
+    hasNoPins: Boolean,
+) {
+    val firstName = profileFirstName(header)
+    when (mode) {
+        is ProfileFrameMode.Preview -> PreviewHeaderActions(audience = mode.audience, firstName = firstName)
+        is ProfileFrameMode.Owner -> {
+            OwnerHeaderActions(onEditProfile = callbacks.onEditProfile, onPreviewAs = mode.actions.onPreviewAs)
+            OwnerTips(
+                tips = ownerTips(content, header, mode.extras, hasNoPins),
+                // Pins come from a post's ⋯ menu: "Pin a post" opens My posts; the rest open the editor.
+                onOpen = { tip -> if (tip == OwnerTip.Pin) mode.navigation.onSeeAllPosts() else callbacks.onEditProfile() },
+                onDismiss = mode.actions.onDismissTip,
+            )
+        }
+        ProfileFrameMode.Visitor -> ProfileHeaderActions(state = actions, callbacks = callbacks, firstName = firstName)
+    }
+}
+
+/** Your own Posts tab: your latest two, then "See all N posts" (My posts). */
+@Composable
+private fun OwnerLatestPosts(
+    cards: List<PulsePostCardContent>,
+    actions: ProfilePostCardActions,
+    onSeeAll: () -> Unit,
+) {
+    ProfilePulseCards(cards = cards.take(OWNER_POSTS_SHOWN), actions = actions, showHeading = false)
+    if (cards.size > OWNER_POSTS_SHOWN) {
+        Spacer(Modifier.height(Spacing.s3))
+        SeeAllPostsButton(label = "See all ${postCountLabel(cards.size)} posts", onClick = onSeeAll)
+    }
+}
+
+/** Your own page shows your latest two posts, then "See all N posts". */
+private const val OWNER_POSTS_SHOWN = 2
+
+/** Your own page's header: the name and photo neighbors see (your Local Profile), once read. */
+internal fun ownerHeader(
+    header: PublicProfileHeader,
+    extras: OwnerExtras,
+): PublicProfileHeader =
+    header.copy(
+        displayName = extras.neighborName?.takeIf { it.isNotBlank() } ?: header.displayName,
+        avatarUrl = if (extras.localProfileRead) extras.neighborPhoto else header.avatarUrl,
+        hasName = header.hasName || !extras.neighborName.isNullOrBlank(),
+    )
+
+/** At most two tips only you see, for what your profile is missing, minus the ones you closed on this phone. */
+internal fun ownerTips(
+    content: PublicProfileContent,
+    header: PublicProfileHeader,
+    extras: OwnerExtras?,
+    hasNoPins: Boolean = false,
+): List<OwnerTip> {
+    if (extras == null) return emptyList()
+    return listOfNotNull(
+        OwnerTip.Photo.takeIf { extras.localProfileRead && header.avatarUrl.isNullOrBlank() },
+        OwnerTip.Tagline.takeIf { header.tagline == null },
+        OwnerTip.Skills.takeIf { content.stats.skills.isEmpty() },
+        OwnerTip.Prompt.takeIf { promptAnswers(content.profile.prompts).isEmpty() },
+        OwnerTip.Pin.takeIf { hasNoPins && content.posts.isNotEmpty() },
+    ).filter { it.key !in extras.dismissedTips }.take(OWNER_TIPS_SHOWN)
+}
+
+private const val OWNER_TIPS_SHOWN = 2
 
 /**
  * The Local header's two actions, Connect and Message (`beacon-primitives.jsx:268-272`), on the persona frame's

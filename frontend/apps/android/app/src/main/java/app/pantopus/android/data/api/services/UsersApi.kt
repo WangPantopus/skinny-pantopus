@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.services
 
+import app.pantopus.android.data.api.models.profile.ProfileInCommonResponse
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.models.settings.AuthMethodsResponse
 import app.pantopus.android.data.api.models.settings.PasswordUpdateBody
@@ -64,6 +65,22 @@ interface UsersApi {
     suspend fun publicProfile(
         @Path("id") id: String,
     ): PublicProfileDto
+
+    /**
+     * Preview as (PRF CONTRACT SRV-1): your own profile exactly as `anyone`, `neighbors` or `connections` get it.
+     * Owner only (403 otherwise). Route `backend/routes/users.js`, `/id/:id`.
+     */
+    @GET("api/users/id/{id}")
+    suspend fun publicProfileAs(
+        @Path("id") id: String,
+        @Query("as") audience: String,
+    ): PublicProfileDto
+
+    /** What you share with someone (PRF SRV-1). Route `backend/routes/users.js:3846`, `/:id/in-common`. */
+    @GET("api/users/{id}/in-common")
+    suspend fun inCommon(
+        @Path("id") id: String,
+    ): ProfileInCommonResponse
 
     @GET("api/users/id/{id}")
     suspend fun publicProfileConditional(

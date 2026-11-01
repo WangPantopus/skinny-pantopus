@@ -477,6 +477,8 @@ internal fun ProfilePulseCards(
     cards: List<PulsePostCardContent>,
     actions: ProfilePostCardActions,
     showHeading: Boolean = true,
+    /** False in a preview: the cards show, but nothing on them reacts. */
+    interactive: Boolean = true,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().testTag("publicProfilePulsePosts"),
@@ -495,15 +497,19 @@ internal fun ProfilePulseCards(
             Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(PantopusColors.appBorderSubtle))
             cards.forEach { card ->
                 val react = { actions.onReact(card.id) }
-                PulsePostCard(
-                    content = card,
-                    onTap = { actions.onOpen(card.id) },
-                    onPrimaryReaction = react,
-                    onRSVP = react.takeIf { card.attendees != null },
-                    onOverflow = { actions.onOptions(card.id) }.takeIf { card.actions.canShareExternally || card.actions.canReport },
-                    onToggleSave = { actions.onToggleSave(card.id) },
-                    onToggleRepost = { actions.onToggleRepost(card.id) },
-                )
+                if (interactive) {
+                    PulsePostCard(
+                        content = card,
+                        onTap = { actions.onOpen(card.id) },
+                        onPrimaryReaction = react,
+                        onRSVP = react.takeIf { card.attendees != null },
+                        onOverflow = { actions.onOptions(card.id) }.takeIf { profilePostHasOptions(card) },
+                        onToggleSave = { actions.onToggleSave(card.id) },
+                        onToggleRepost = { actions.onToggleRepost(card.id) },
+                    )
+                } else {
+                    PulsePostCard(content = card, onTap = null, onPrimaryReaction = {})
+                }
             }
         }
     }
@@ -766,9 +772,11 @@ internal fun LocalProfilePosts(
     onSayHi: () -> Unit,
     onRetry: () -> Unit,
     loading: Boolean = false,
+    /** False in a preview: the cards show, but nothing on them reacts. */
+    interactive: Boolean = true,
 ) {
     if (cards.isNotEmpty() && !hiddenByBlock) {
-        ProfilePulseCards(cards = cards, actions = actions, showHeading = false)
+        ProfilePulseCards(cards = cards, actions = actions, showHeading = false, interactive = interactive)
         return
     }
     // The first read is still running: placeholders, never a "No posts yet" that turns out wrong.

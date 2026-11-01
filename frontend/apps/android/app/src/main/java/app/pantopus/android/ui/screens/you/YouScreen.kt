@@ -19,17 +19,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.BuildConfig
+import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.auth.AuthRepository
-import app.pantopus.android.data.scheduling.SchedulingOwner
 import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
-import app.pantopus.android.ui.screens.you.me.MeView
-import app.pantopus.android.ui.theme.PantopusColors
+import app.pantopus.android.ui.screens.profile.OwnerNavigation
+import app.pantopus.android.ui.screens.profile.PublicProfileScreen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -55,71 +54,37 @@ class YouViewModel
     }
 
 /**
- * "You" tab — the user's identity command center. Hosts [MeView] in
- * the body and keeps the sign-out confirmation + DEBUG deep-link
- * dialogs that the legacy screen exposed.
+ * ☰ → Your profile (PRF step 2): your own profile, the same page neighbors see, in owner mode, shown as a cover with
+ * ✕ and Share. It replaces the Me dashboard; everything the dashboard opened stays reachable from "Your account", ☰
+ * or the Place tab. Keeps the DEBUG deep-link dialogs (debug builds only, as rows under "Your account").
  *
- * @param onOpenPublicProfile Debug-build hook for the "Open public
- *     profile by ID" affordance.
- * @param onOpenPulsePost Debug-build hook for the "Open Pulse post by
- *     ID" affordance.
- * @param onOpenMailbox Pushed by the Personal Mail action tile.
- * @param onOpenPlaceholder Catch-all for action / section taps whose
- *     dedicated screen doesn't exist yet.
- * @param onOpenEditProfile Pushed by the Personal "Edit profile"
- *     section row.
+ * @param expandMonthlyReceipt True when opened from the `monthly_receipt` push (`?tab=receipt`): last month opens
+ *     in full.
  */
 @Composable
 fun YouScreen(
     viewModel: YouViewModel = hiltViewModel(),
-    /** True when opened from the `monthly_receipt` push (`?tab=receipt`) —
-     *  the Monthly Receipt card renders expanded. */
     expandMonthlyReceipt: Boolean = false,
+    onClose: () -> Unit = {},
     onOpenPublicProfile: (String) -> Unit = {},
     onOpenPulsePost: (String) -> Unit = {},
+    onOpenGig: (String) -> Unit = {},
     onInviteOwner: (String, String) -> Unit = { _, _ -> },
     onDisambiguateMail: (String) -> Unit = {},
     onOpenPrivacyHandshake: (String) -> Unit = {},
     onOpenInviteToken: (String) -> Unit = {},
     onOpenCeremonialMail: () -> Unit = {},
     onOpenCeremonialMailOpen: (String) -> Unit = {},
-    onOpenPlaceholder: (String) -> Unit = {},
-    onOpenMailbox: () -> Unit = {},
     onOpenEditProfile: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onOpenHelp: () -> Unit = {},
-    onOpenLegal: () -> Unit = {},
-    onOpenPrivacySettings: () -> Unit = {},
-    onOpenOffers: () -> Unit = {},
-    onOpenMyBids: () -> Unit = {},
-    onOpenMyTasks: () -> Unit = {},
     onOpenMyPosts: () -> Unit = {},
     onOpenConnections: () -> Unit = {},
     onOpenSupportTrains: () -> Unit = {},
-    onOpenIdentityCenter: () -> Unit = {},
-    onOpenAudienceProfile: () -> Unit = {},
-    onOpenCreatorInbox: () -> Unit = {},
     onOpenSavedPlaces: () -> Unit = {},
-    onOpenHomeBills: (String) -> Unit = {},
-    onOpenHomePets: (String) -> Unit = {},
-    onOpenHomeCalendar: (String) -> Unit = {},
-    onOpenHomePackages: (String) -> Unit = {},
-    onOpenHomePolls: (String) -> Unit = {},
-    onOpenAccessCodes: (homeId: String, homeName: String?) -> Unit = { _, _ -> },
-    onOpenHomeTasks: (String) -> Unit = {},
-    onOpenHomeMaintenance: (String) -> Unit = {},
-    onOpenHomeOwners: (String) -> Unit = {},
-    onOpenHomeMembers: (String) -> Unit = {},
-    onOpenHomeDocs: (String) -> Unit = {},
-    onOpenHomeEmergency: (String) -> Unit = {},
-    onOpenMyHomes: () -> Unit = {},
-    onOpenMyListings: () -> Unit = {},
-    onOpenMyBusinesses: () -> Unit = {},
-    onOpenScheduling: (SchedulingOwner) -> Unit = {},
 ) {
-    val state by viewModel.authState.collectAsStateWithLifecycle()
-    val signedIn = state as? AuthRepository.State.SignedIn
-    var confirmVisible by remember { mutableStateOf(false) }
+    // The debug "Invite owner" dialog fills in the signed-in email.
+    val signedIn = viewModel.authState.collectAsStateWithLifecycle().value as? AuthRepository.State.SignedIn
     var debugProfileDialog by remember { mutableStateOf(false) }
     var debugPostDialog by remember { mutableStateOf(false) }
     var debugInviteDialog by remember { mutableStateOf(false) }
@@ -135,167 +100,38 @@ fun YouScreen(
     var debugHandshakeHandle by remember { mutableStateOf("") }
     var debugInviteToken by remember { mutableStateOf("") }
 
-    MeView(
+    PublicProfileScreen(
+        onBack = onClose,
+        onOpenGig = onOpenGig,
+        onOpenProfile = onOpenPublicProfile,
+        onOpenPost = onOpenPulsePost,
+        onEditProfile = onOpenEditProfile,
+        ownerCover = true,
         expandMonthlyReceipt = expandMonthlyReceipt,
-        onAction = { tile ->
-            when (tile.routeKey) {
-                "me.mail" -> onOpenMailbox()
-                "me.bids" -> onOpenMyBids()
-                "me.gigs" -> onOpenMyTasks()
-                "me.posts" -> onOpenMyPosts()
-                "me.offers" -> onOpenOffers()
-                "me.connections" -> onOpenConnections()
-                "me.supportTrains" -> onOpenSupportTrains()
-                "me.listings" -> onOpenMyListings()
-                "me.businesses" -> onOpenMyBusinesses()
-                "me.homes" -> onOpenMyHomes()
-                "me.bills" -> {
-                    val homeId = tile.routeArgs["homeId"].orEmpty()
-                    if (homeId.isNotEmpty()) onOpenHomeBills(homeId) else onOpenMyHomes()
-                }
-                "me.pets" -> {
-                    val homeId = tile.routeArgs["homeId"].orEmpty()
-                    if (homeId.isNotEmpty()) onOpenHomePets(homeId) else onOpenMyHomes()
-                }
-                "me.calendar" -> {
-                    val homeId = tile.routeArgs["homeId"].orEmpty()
-                    if (homeId.isNotEmpty()) {
-                        onOpenHomeCalendar(homeId)
-                    } else {
-                        onOpenMyHomes()
+        ownerNavigation =
+            OwnerNavigation(
+                onSeeAllPosts = onOpenMyPosts,
+                onOpenConnections = onOpenConnections,
+                onOpenSupportTrains = onOpenSupportTrains,
+                onOpenSavedPlaces = onOpenSavedPlaces,
+                onOpenSettings = onOpenSettings,
+                onOpenHelp = onOpenHelp,
+                onLogOut = { viewModel.signOut() },
+                debugRows = if (BuildConfig.DEBUG) debugRows() else emptyList(),
+                onDebugRow = { key ->
+                    when (key) {
+                        "me.debug.openProfile" -> debugProfileDialog = true
+                        "me.debug.openPost" -> debugPostDialog = true
+                        "me.debug.inviteOwner" -> debugInviteDialog = true
+                        "me.debug.disambiguate" -> debugDisambiguateDialog = true
+                        "me.debug.openHandshake" -> debugHandshakeDialog = true
+                        "me.debug.openInviteToken" -> debugInviteTokenDialog = true
+                        "me.debug.openCeremonialMail" -> onOpenCeremonialMail()
+                        "me.debug.openCeremonialMailOpen" -> debugCeremonialMailOpenDialog = true
                     }
-                }
-                "me.packages" -> {
-                    val homeId = tile.routeArgs["homeId"].orEmpty()
-                    if (homeId.isNotEmpty()) onOpenHomePackages(homeId) else onOpenMyHomes()
-                }
-                "me.polls" -> {
-                    val homeId = tile.routeArgs["homeId"].orEmpty()
-                    if (homeId.isNotEmpty()) onOpenHomePolls(homeId) else onOpenMyHomes()
-                }
-                "me.tasks" -> {
-                    val homeId = tile.routeArgs["homeId"].orEmpty()
-                    if (homeId.isNotEmpty()) onOpenHomeTasks(homeId) else onOpenMyHomes()
-                }
-                "me.maintenance" -> {
-                    val homeId = tile.routeArgs["homeId"].orEmpty()
-                    if (homeId.isNotEmpty()) onOpenHomeMaintenance(homeId) else onOpenMyHomes()
-                }
-                "me.members" -> {
-                    val homeId = tile.routeArgs["homeId"].orEmpty()
-                    if (homeId.isNotEmpty()) onOpenHomeMembers(homeId) else onOpenMyHomes()
-                }
-                "me.docs" -> {
-                    val homeId = tile.routeArgs["homeId"].orEmpty()
-                    if (homeId.isNotEmpty()) onOpenHomeDocs(homeId) else onOpenMyHomes()
-                }
-                // The Business identity is always unbound here; My businesses
-                // lists, creates and claims businesses.
-                "me.business.orders", "me.business.products", "me.business.payouts",
-                "me.business.team", "me.business.hours", "me.business.promo",
-                -> onOpenMyBusinesses()
-                else -> onOpenPlaceholder(tile.label)
-            }
-        },
-        onSection = { row ->
-            when (row.routeKey) {
-                "me.posts" -> onOpenMyPosts()
-                "me.bids" -> onOpenMyBids()
-                "me.gigs" -> onOpenMyTasks()
-                "me.offers" -> onOpenOffers()
-                "me.connections" -> onOpenConnections()
-                "me.supportTrains" -> onOpenSupportTrains()
-                "me.homes" -> onOpenMyHomes()
-                "me.listings" -> onOpenMyListings()
-                "me.businesses" -> onOpenMyBusinesses()
-                "me.identityCenter" -> onOpenIdentityCenter()
-                "me.audience" -> onOpenAudienceProfile()
-                "me.creatorInbox" -> onOpenCreatorInbox()
-                "me.savedPlaces" -> onOpenSavedPlaces()
-                "me.bills" -> {
-                    val homeId = row.routeArgs["homeId"].orEmpty()
-                    if (homeId.isNotEmpty()) onOpenHomeBills(homeId) else onOpenMyHomes()
-                }
-                "me.packages" -> {
-                    val homeId = row.routeArgs["homeId"].orEmpty()
-                    if (homeId.isNotEmpty()) onOpenHomePackages(homeId) else onOpenMyHomes()
-                }
-                "me.polls" -> {
-                    val homeId = row.routeArgs["homeId"].orEmpty()
-                    if (homeId.isNotEmpty()) onOpenHomePolls(homeId) else onOpenMyHomes()
-                }
-                "me.access" -> {
-                    val homeId = row.routeArgs["homeId"].orEmpty()
-                    val homeName = row.routeArgs["homeName"]
-                    if (homeId.isNotEmpty()) {
-                        onOpenAccessCodes(homeId, homeName)
-                    } else {
-                        onOpenMyHomes()
-                    }
-                }
-                "me.tasks" -> {
-                    val homeId = row.routeArgs["homeId"].orEmpty()
-                    if (homeId.isNotEmpty()) onOpenHomeTasks(homeId) else onOpenMyHomes()
-                }
-                "me.maintenance" -> {
-                    val homeId = row.routeArgs["homeId"].orEmpty()
-                    if (homeId.isNotEmpty()) onOpenHomeMaintenance(homeId) else onOpenMyHomes()
-                }
-                "me.owners" -> {
-                    val homeId = row.routeArgs["homeId"].orEmpty()
-                    if (homeId.isNotEmpty()) onOpenHomeOwners(homeId) else onOpenMyHomes()
-                }
-                "me.members" -> {
-                    val homeId = row.routeArgs["homeId"].orEmpty()
-                    if (homeId.isNotEmpty()) onOpenHomeMembers(homeId) else onOpenMyHomes()
-                }
-                "me.emergency" -> {
-                    val homeId = row.routeArgs["homeId"].orEmpty()
-                    if (homeId.isNotEmpty()) onOpenHomeEmergency(homeId) else onOpenMyHomes()
-                }
-                "me.business.editProfile" -> onOpenMyBusinesses()
-                "me.editProfile" -> onOpenEditProfile()
-                "me.settings" -> onOpenSettings()
-                "me.help" -> onOpenHelp()
-                "me.legal" -> onOpenLegal()
-                "me.privacy", "me.home.privacy" -> onOpenPrivacySettings()
-                "me.scheduling.hub" -> onOpenScheduling(SchedulingOwner.Personal)
-                "me.business.scheduling" -> row.routeArgs["businessId"]?.let { onOpenScheduling(SchedulingOwner.Business(it)) }
-                "me.home.scheduling" -> row.routeArgs["homeId"]?.let { onOpenScheduling(SchedulingOwner.Home(it)) }
-                "me.debug.openProfile" -> if (BuildConfig.DEBUG) debugProfileDialog = true
-                "me.debug.openPost" -> if (BuildConfig.DEBUG) debugPostDialog = true
-                "me.debug.inviteOwner" -> if (BuildConfig.DEBUG) debugInviteDialog = true
-                "me.debug.disambiguate" -> if (BuildConfig.DEBUG) debugDisambiguateDialog = true
-                "me.debug.openHandshake" -> if (BuildConfig.DEBUG) debugHandshakeDialog = true
-                "me.debug.openInviteToken" -> if (BuildConfig.DEBUG) debugInviteTokenDialog = true
-                "me.debug.openCeremonialMail" -> if (BuildConfig.DEBUG) onOpenCeremonialMail()
-                "me.debug.openCeremonialMailOpen" -> if (BuildConfig.DEBUG) debugCeremonialMailOpenDialog = true
-                else -> onOpenPlaceholder(row.label)
-            }
-        },
-        onLogOut = { confirmVisible = true },
+                },
+            ),
     )
-
-    if (confirmVisible) {
-        AlertDialog(
-            onDismissRequest = { confirmVisible = false },
-            title = { Text("Sign out of Pantopus?") },
-            // Instant Screens contract §7: the sign-out confirmation says the phone's saved copy goes too.
-            text = { Text("You'll need to sign in again to use your account. Signing out removes what Pantopus saved on this phone.") },
-            modifier = Modifier.testTag(YouScreenTags.CONFIRM_DIALOG),
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmVisible = false
-                    viewModel.signOut()
-                }) {
-                    Text("Sign out", color = PantopusColors.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmVisible = false }) { Text("Cancel") }
-            },
-        )
-    }
 
     if (BuildConfig.DEBUG && debugProfileDialog) {
         AlertDialog(
@@ -501,3 +337,17 @@ fun YouScreen(
         )
     }
 }
+
+/** The developer rows the Me screen had (debug builds only), filtered by the same launch cuts. */
+private fun debugRows(): List<Pair<String, String>> =
+    listOfNotNull(
+        "me.debug.openProfile" to "Open public profile by ID",
+        "me.debug.openPost" to "Open Pulse post by ID",
+        ("me.debug.openHandshake" to "Open Privacy Handshake by persona handle")
+            .takeIf { LaunchFeatures.beacon && LaunchFeatures.personas },
+        "me.debug.openInviteToken" to "Open invite by token",
+        ("me.debug.openCeremonialMail" to "Open Ceremonial Mail Compose").takeIf { LaunchFeatures.mailExtras && LaunchFeatures.mailbox },
+        ("me.debug.openCeremonialMailOpen" to "Open Ceremonial Mail by ID").takeIf { LaunchFeatures.mailExtras && LaunchFeatures.mailbox },
+        "me.debug.inviteOwner" to "Invite owner to home by ID",
+        ("me.debug.disambiguate" to "Disambiguate mail by ID").takeIf { LaunchFeatures.mailbox },
+    )
