@@ -42,8 +42,7 @@ class UserSocialRepository
         fun publicProfileCopy(username: String): Stored<PublicProfileDto> =
             store.peek(StoreKeys.publicProfile(normalizeHandle(username), byUsername = true))
 
-        fun forgetPublicProfile(username: String) =
-            store.remove(StoreKeys.publicProfile(normalizeHandle(username), byUsername = true))
+        fun forgetPublicProfile(username: String) = store.remove(StoreKeys.publicProfile(normalizeHandle(username), byUsername = true))
 
         /** `POST /api/users/:id/follow` — `backend/routes/users.js:3520`. */
         suspend fun follow(userId: String): NetworkResult<FollowActionResponse> = safeApiCall { api.follow(userId) }.changed()
