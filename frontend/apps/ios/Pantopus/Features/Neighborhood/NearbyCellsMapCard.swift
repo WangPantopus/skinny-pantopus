@@ -100,7 +100,7 @@ struct NearbyCellsKey: View {
     let cells: NeighborhoodCellsDTO
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.s3) {
             VStack(alignment: .leading, spacing: 9) {
                 ForEach(neighborhoodCellLegendOrder, id: \.self) { bucket in
                     HStack(spacing: 10) {
@@ -117,7 +117,7 @@ struct NearbyCellsKey: View {
                 .foregroundStyle(Theme.Color.appTextMuted)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(16)
+        .padding(Spacing.s4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .placeCard()
         .accessibilityElement(children: .combine)
