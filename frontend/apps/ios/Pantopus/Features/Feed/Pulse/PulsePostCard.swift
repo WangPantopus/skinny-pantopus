@@ -225,6 +225,8 @@ public struct PulseAttendeeStrip: Sendable, Hashable {
 
 /// Pulse post card — entirely render-only; tap dispatch is parent-controlled.
 public struct PulsePostCard: View {
+    /// The post open beside the feed on a wide screen: its card is tinted and marked selected.
+    @Environment(\.selectedPulsePostId) private var selectedPostId
     private let content: PulsePostCardContent
     private let onTap: @MainActor () -> Void
     private let onPrimaryReaction: @MainActor () -> Void
@@ -272,7 +274,7 @@ public struct PulsePostCard: View {
                 // (combining would leave that to how SwiftUI merges nested buttons).
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(a11yLabel)
-                .accessibilityAddTraits(.isButton)
+                .accessibilityAddTraits(isOpenBeside ? [.isButton, .isSelected] : .isButton)
                 .accessibilityAction { onTap() }
                 .accessibilityActions { cardActions }
                 .accessibilityIdentifier("pulsePostCard_\(content.id)")
@@ -747,9 +749,13 @@ private extension PulsePostCard {
             }
         }
         .padding(.vertical, Spacing.s4)
-        .background(Theme.Color.appSurface)
+        .background(isOpenBeside ? Theme.Color.primary100 : Theme.Color.appSurface)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
         }
+    }
+
+    var isOpenBeside: Bool {
+        selectedPostId == content.id
     }
 }

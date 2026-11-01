@@ -15,6 +15,13 @@
 //  the side menu. The Pulse segment stays mounted while Neighborhood shows,
 //  so the feed keeps its place, filters and List / Map mode.
 //
+//  On a wide screen (the iPhone Duo open) both segments are two columns of
+//  the same width, so the switch and the menu stay put: Pulse is the feed
+//  beside the open post (`PulseSplitView`), and Neighborhood the map's key,
+//  the meter and the invite beside the map, which fills the other column.
+//  Until there is a map to show (loading, an error, no home yet) Neighborhood
+//  stays one column.
+//
 //  Tasks / Marketplace (launch cuts #3/#4) still present as sheets, from the
 //  meter's rows or a link. Cross-tab deep links arrive via
 //  `NeighborhoodDoorStore`: a feed or post link asks for the Pulse segment
@@ -30,9 +37,13 @@ import SwiftUI
 
 public struct NeighborhoodTabRoot: View {
     @Environment(RootTabModel.self) private var rootTabs
+    /// Regular width (the iPhone Duo open) puts Neighborhood's map beside its key and invite.
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var door = NeighborhoodDoorStore.shared
     @State private var presentedSurface: NeighborhoodDoorStore.Surface?
     @State private var segment: NearbySegment = .pulse
+    /// Neighborhood's meter and map on a wide screen, read once for both columns.
+    @State private var neighborhood = NeighborhoodViewModel()
 
     /// Starts adding a home in the Place tab (Neighborhood's "Set up a home").
     private let onAddHome: @MainActor () -> Void
@@ -49,19 +60,7 @@ public struct NeighborhoodTabRoot: View {
                 .allowsHitTesting(segment == .pulse)
                 .accessibilityHidden(segment != .pulse)
             if segment == .neighborhood {
-                VStack(spacing: Spacing.s0) {
-                    NearbySegmentHeader(segment: $segment)
-                    NeighborhoodView(
-                        onOpenSurface: { surface in
-                            presentedSurface = surface
-                        },
-                        onClaimPlace: onAddHome
-                    )
-                }
-                .readableColumn()
-                .background(Theme.Color.appBg)
-                // Above the header, where the Pulse segment's feed shows it.
-                .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+                neighborhoodSegment
             }
         }
         .sheet(item: $presentedSurface) { surface in
@@ -89,6 +88,51 @@ public struct NeighborhoodTabRoot: View {
             showPendingSegmentIfNeeded()
             presentPendingSurfaceIfNeeded(door.pendingSurface)
         }
+    }
+
+    @ViewBuilder private var neighborhoodSegment: some View {
+        if isSideBySide, let cells = cellsBeside {
+            SideBySideSplit(leadingWidth: .nearby) {
+                VStack(spacing: Spacing.s0) {
+                    NearbySegmentHeader(segment: $segment)
+                    NeighborhoodView(viewModel: neighborhood, mapBeside: true, onOpenSurface: openSurface, onClaimPlace: onAddHome)
+                }
+                .background(Theme.Color.appBg)
+                .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+            } detail: {
+                NearbyCellsMap(cells: cells)
+                    .toolbar(.hidden, for: .navigationBar)
+                    .accessibilityIdentifier("nearby.cellsMap")
+            }
+        } else {
+            VStack(spacing: Spacing.s0) {
+                NearbySegmentHeader(segment: $segment)
+                if isSideBySide {
+                    // Wide, with no map yet: one column, filling the model the two columns share.
+                    NeighborhoodView(viewModel: neighborhood, onOpenSurface: openSurface, onClaimPlace: onAddHome)
+                } else {
+                    NeighborhoodView(onOpenSurface: openSurface, onClaimPlace: onAddHome)
+                }
+            }
+            .readableColumn()
+            .background(Theme.Color.appBg)
+            // Above the header, where the Pulse segment's feed shows it.
+            .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        }
+    }
+
+    private func openSurface(_ surface: NeighborhoodDoorStore.Surface) {
+        presentedSurface = surface
+    }
+
+    private var isSideBySide: Bool {
+        horizontalSizeClass == .regular
+    }
+
+    /// The map beside Neighborhood's column: once the meter is in and there is a home to map around.
+    private var cellsBeside: NeighborhoodCellsDTO? {
+        guard case let .loaded(meter) = neighborhood.state, meter.state != .noPlace else { return nil }
+        return neighborhood.cells
     }
 
     private func showPendingSegmentIfNeeded() {
