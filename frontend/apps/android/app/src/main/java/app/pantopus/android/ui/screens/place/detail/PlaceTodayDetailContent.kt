@@ -1,23 +1,26 @@
+@file:Suppress("TooManyFunctions")
+
 package app.pantopus.android.ui.screens.place.detail
 
 import android.net.Uri
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,8 +50,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -66,24 +69,33 @@ import app.pantopus.android.data.ai.RadonReportReading
 import app.pantopus.android.data.analytics.PilotEvents
 import app.pantopus.android.data.api.models.homes.CreateHomeTaskRequest
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
+import app.pantopus.android.data.api.models.place.AirQualityCategory
+import app.pantopus.android.data.api.models.place.BallotGovernments
+import app.pantopus.android.data.api.models.place.GoodDayVerdict
 import app.pantopus.android.data.api.models.place.PlaceAddressCalendarData
 import app.pantopus.android.data.api.models.place.PlaceAirQualityData
 import app.pantopus.android.data.api.models.place.PlaceCalendarEvent
 import app.pantopus.android.data.api.models.place.PlaceGoodDayTile
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceLeadRadonData
+import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionId
+import app.pantopus.android.data.api.models.place.PlaceSectionStatus
 import app.pantopus.android.data.api.models.place.PlaceWeatherAlert
+import app.pantopus.android.data.api.models.place.PlaceWeatherDay
 import app.pantopus.android.data.api.models.place.WeatherAlertSeverity
+import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.homes.HomeTaskEditPatch
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.screens.ballot.BallotGovernmentsSheet
 import app.pantopus.android.ui.screens.ballot.BallotPlacement
 import app.pantopus.android.ui.screens.ballot.BallotTodayCard
 import app.pantopus.android.ui.screens.homes.tasks.HomeTaskCreationFactory
 import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.components.placeCard
+import app.pantopus.android.ui.screens.place.components.placeSurface
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -104,19 +116,8 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 
-/** The row shows at most five tiles; the rest stay in the group page. */
-private const val GOOD_DAY_TILE_CAP = 5
-
-/** Up to this many tiles share the row; more scroll sideways. */
-private const val GOOD_DAY_SHARED_ROW = 3
-
-/** From this font scale the tiles always scroll, widening up to [GOOD_DAY_MAX_WIDEN] times. */
-private const val GOOD_DAY_LARGE_FONT = 1.3f
-private const val GOOD_DAY_MAX_WIDEN = 1.6f
-
-/** A scrolling tile's width in dp at the default font size. */
-private const val GOOD_DAY_TILE_WIDTH = 128f
 private const val RADON_MORNING_HOUR = 9
 private const val RADON_REMINDER_DAYS = 14L
 private const val RADON_DISMISS_DAYS = 30L
@@ -168,14 +169,28 @@ enum class TodayAlertsCheck {
     UNAVAILABLE,
 }
 
+/** What only the Today tab adds to the shared content: the agenda's household and plan rows, Plans, Ask. */
+data class TodayTabParts(
+    val tasks: List<HomeTaskDto> = emptyList(),
+    val plans: List<Pair<PlanDto, Boolean>> = emptyList(),
+    val actions: AgendaActions = AgendaActions(),
+    /** Today's plan cards (A1, A2, A5), shown inside "Coming up at home". */
+    val plansBlock: (@Composable () -> Unit)? = null,
+    /** A saved place's "Get reminders for this address" step: Add your home. */
+    val onAddHome: (() -> Unit)? = null,
+    val onAsk: (() -> Unit)? = null,
+)
+
 /**
  * [onOpenBallot] takes the Ballot P0 card's "Open your ballot" to the
  * Place card; without it the button is left out. [alertsCheck] replaces the
  * alerts with an honest line once the check on screen is out of date.
+ * The order is the TPR brief's (section 5): what matters now, what is coming
+ * up, then optional setup and every full card and source, folded.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "LongMethod")
 fun PlaceTodayDetailContent(
     intel: PlaceIntelligence,
     viewModel: AddressCalendarActions? = null,
@@ -185,6 +200,7 @@ fun PlaceTodayDetailContent(
     onOpenBallot: (() -> Unit)? = null,
     alertsCheck: TodayAlertsCheck = TodayAlertsCheck.CURRENT,
     radonMemory: RadonTodayMemory? = null,
+    tab: TodayTabParts = TodayTabParts(),
 ) {
     val homeState =
         if (radonFactory != null && pilotEvents != null && radonContext != null) {
@@ -192,110 +208,116 @@ fun PlaceTodayDetailContent(
         } else {
             null
         }
-    val calendarFocus = remember { BringIntoViewRequester() }
-    val radonFocus = remember { BringIntoViewRequester() }
-    var pickupOpenTrigger by remember(viewModel?.calendarHomeId) { mutableStateOf(0) }
-    var calendarFallback by remember(intel, viewModel?.calendarHomeId) { mutableStateOf<PlaceAddressCalendarData?>(null) }
-    val calendar = intel.section(PlaceSectionId.ADDRESS_CALENDAR)
-    val shownCalendar = calendar?.addressCalendar?.takeIf { calendar.isLive() } ?: calendarFallback
-    val needsPickup = shownCalendar?.needsPickupDay == true
-    if (homeState != null) {
-        HomeFirstUseCard(homeState, needsPickup, onPickup = {
-            pickupOpenTrigger++
-            homeState.lifetime.launch { calendarFocus.bringIntoView() }
-        }, onRadon = {
-            homeState.lifetime.launch {
-                homeState.clearRadonDismissal()
-                withFrameNanos { }
-                radonFocus.bringIntoView()
-            }
-        })
-    }
+    val zone = placeSkyZone(intel)
+    val now = rememberMinuteClock(zone)
     val scope = rememberCoroutineScope()
-    TodayWeatherSection(intel, shownCalendar?.upcoming.orEmpty()) { scope.launch { calendarFocus.bringIntoView() } }
-    // Ballot P0 (ballot_p0): ballot week and "Moved this year?", only when
-    // the server says either applies.
+    val targets = remember { TodayTargets() }
+    var pickupOpenTrigger by remember(viewModel?.calendarHomeId) { mutableStateOf(0) }
+    var calendarOpen by rememberSaveable(viewModel?.calendarHomeId) { mutableStateOf(false) }
+    var conditionsOpen by rememberSaveable { mutableStateOf(false) }
+    val calendarEnv = intel.section(PlaceSectionId.ADDRESS_CALENDAR)
+    val shownCalendar = rememberShownCalendar(intel, calendarEnv, viewModel)
+    val needsPickup = shownCalendar?.needsPickupDay == true && viewModel != null
+    val alertsEnv = intel.section(PlaceSectionId.ALERTS)
+    val active = alertsEnv?.alerts?.active?.takeIf { alertsCheck == TodayAlertsCheck.CURRENT && alertsEnv.isLive() }.orEmpty()
+    val openPickup = {
+        calendarOpen = true
+        pickupOpenTrigger++
+        scope.launch {
+            withFrameNanos { }
+            targets.calendar.bringIntoView()
+        }
+        Unit
+    }
+
+    fun openConditions(target: BringIntoViewRequester) {
+        conditionsOpen = true
+        scope.launch {
+            withFrameNanos { }
+            target.bringIntoView()
+        }
+    }
+
+    // 3. What's in effect now, before anything else.
+    TodayAdvisorySummary(active, alertsEnv?.source, now, Modifier.padding(bottom = 12.dp))
+    // 4. The sky, the hours ahead, the source and Share.
+    TodayWeatherSection(
+        intel,
+        shownCalendar?.upcoming.orEmpty(),
+        active,
+        now,
+        onBins = {
+            calendarOpen = true
+            scope.launch {
+                withFrameNanos { }
+                targets.calendar.bringIntoView()
+            }
+        },
+        onDetails = { openConditions(targets.conditions) },
+    )
+    // 5. Coming up at home, with the full calendar one tap away.
+    val ballot = BallotPlacement.ballot(intel)
+    val election = intel.section(PlaceSectionId.CIVIC_ELECTION)?.civicElection?.takeIf { ballot != null }?.let { it.name to it.date }
+    val items =
+        remember(shownCalendar, ballot, election, tab.tasks, tab.plans, now.toLocalDate()) {
+            TodayAgenda.items(
+                now.toLocalDate(),
+                zone,
+                shownCalendar,
+                ballot?.card,
+                election,
+                tab.tasks,
+                tab.plans,
+                guest = intel.viewer?.role == "nonresident",
+            )
+        }
+    var governments by remember { mutableStateOf<BallotGovernments?>(null) }
+    // A place with no address calendar (a saved place) and nothing else coming shows no agenda; its plan cards stay.
+    if (calendarEnv == null && items.isEmpty()) {
+        tab.plansBlock?.invoke()
+    } else {
+        ComingUpAtHome(
+            items = items,
+            now = now,
+            actions =
+                tab.actions.copy(
+                    onEditPickup = viewModel?.let { { openPickup() } },
+                    onOpenBallot = onOpenBallot,
+                    onOpenGovernments = { governments = it },
+                ),
+            calendarOpen = calendarOpen,
+            onToggleCalendar = calendarEnv?.let { { calendarOpen = !calendarOpen } },
+            unavailable = calendarEnv?.takeIf { shownCalendar == null }?.let { env -> { PlaceDetailFallbackCard(env) } },
+            calendar = {
+                Column(modifier = Modifier.bringIntoViewRequester(targets.calendar)) {
+                    AddressCalendarSection(calendarEnv, shownCalendar, viewModel, pickupOpenTrigger)
+                }
+            },
+            plans = tab.plansBlock,
+        )
+    }
+    // 6. Air and daylight side by side; each opens its full card below.
+    TodayAirDaylightPair(
+        air = intel.section(PlaceSectionId.AIR_QUALITY),
+        sun = intel.section(PlaceSectionId.SUNRISE_SUNSET),
+        zone = intel.homeZone,
+        onAir = { openConditions(targets.air) },
+        onSun = { openConditions(targets.sun) },
+    )
+    // 7. Good day for…, with what the screen itself says could limit it.
+    TodayGoodDaySection(intel, active, now)
+    // 8. The ballot week card while the server says it applies (its next date is also an agenda row).
     BallotPlacement.today(intel)?.let { card ->
         BallotTodayCard(card = card, onOpenBallot = onOpenBallot, modifier = Modifier.padding(top = Spacing.s4))
     }
-    intel.section(PlaceSectionId.GOOD_DAY_TO)?.let { env ->
-        val data = env.goodDayTo
-        if (data != null && env.isLive() && data.tiles.isNotEmpty()) {
-            PlaceDetailSectionLabel("Good day to\u2026")
-            GoodDayRow(data.tiles)
-            PlaceSourceNote("Derived from today's conditions", PlacePresentation.fmtTime(env.asOf, intel.homeZone))
-        }
-        // Deliberately silent when there is nothing to answer: an empty
-        // verdict row is worse than no row.
-    }
-    // The calendar is the reason the Today tab exists; it sits above the
-    // fold, after what it is like now and what to do with it.
-    Column(modifier = Modifier.bringIntoViewRequester(calendarFocus)) {
-        AddressCalendarSection(intel, viewModel, pickupOpenTrigger) { calendarFallback = it }
-    }
-    if (homeState != null && homeState.hasRadon && !homeState.hidden) {
-        Column(modifier = Modifier.bringIntoViewRequester(radonFocus)) {
-            PlaceDetailSectionLabel("Radon")
-            intel.section(PlaceSectionId.LEAD_RADON)?.leadRadon?.let { RadonCardContent(homeState, it) }
-        }
-        if (homeState.sheet != null) RadonTaskSheet(homeState)
-    }
-    TodayAirAlertsSunSections(intel, alertsCheck)
-}
-
-/**
- * "Good day to…" — verdicts, not readings. Tapping a tile reveals the
- * numbers behind it: an opinionated tile that won't show its inputs is
- * worse than no tile, because one visibly wrong verdict discredits every
- * other card here.
- */
-@Composable
-private fun GoodDayRow(tiles: List<PlaceGoodDayTile>) {
-    var openId by rememberSaveable { mutableStateOf<String?>(null) }
-    val shown = tiles.take(GOOD_DAY_TILE_CAP)
-    val open = shown.firstOrNull { it.id == openId }
-    val reduced = rememberMotionReduced()
-    var appeared by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(Unit) { appeared = true }
-
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // Up to three tiles share the row; more scroll, with the next one peeking in.
-        // At large font sizes the tiles scroll and widen with the text, so answers wrap by word.
-        val fontScale = LocalDensity.current.fontScale
-        val shared = shown.size <= GOOD_DAY_SHARED_ROW && fontScale < GOOD_DAY_LARGE_FONT
-        val tileWidth = (GOOD_DAY_TILE_WIDTH * fontScale.coerceIn(1f, GOOD_DAY_MAX_WIDEN)).dp
-        val row = if (shared) Modifier.fillMaxWidth() else Modifier.horizontalScroll(rememberScrollState())
-        Row(modifier = row.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            shown.forEachIndexed { index, tile ->
-                val pop = rememberPopIn(tile.id, index, animate = !reduced && !appeared)
-                val size = if (shared) Modifier.weight(1f) else Modifier.width(tileWidth)
-                TodayGoodDayTile(
-                    tile = tile,
-                    open = openId == tile.id,
-                    modifier =
-                        size
-                            .popIn(pop)
-                            .clip(RoundedCornerShape(16.dp))
-                            .clickable(onClickLabel = tile.because) { openId = if (openId == tile.id) null else tile.id }
-                            .clearAndSetSemantics {
-                                contentDescription = "${tile.label}: ${tile.answer}"
-                                selected = openId == tile.id
-                            },
-                )
-            }
-        }
-        if (open != null) {
-            PlaceDetailCard {
-                Text(
-                    open.label,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = PantopusColors.appTextSecondary,
-                )
-                Text(open.because, fontSize = 13.5.sp, color = PantopusColors.appTextStrong)
-            }
-        }
-    }
+    // 10. Optional setup, folded: pickup days, radon, a saved place's reminders.
+    TodayHomeSetup(homeState, intel, needsPickup, openPickup, tab.onAddHome)
+    // 11. Every full card and source, folded.
+    TodayFullConditions(intel, alertsCheck, shownCalendar, conditionsOpen, { conditionsOpen = !conditionsOpen }, targets, now)
+    // 12. Ask, at the end.
+    tab.onAsk?.let { TodayAskEntry("Ask Pantopus about today", it) }
+    if (homeState?.sheet != null) RadonTaskSheet(homeState)
+    governments?.let { BallotGovernmentsSheet(governments = it, address = intel.place.line1, onDismiss = { governments = null }) }
 }
 
 /** The server sends pollutant tokens ("pm25", "ozone"); show their usual names. */
@@ -323,21 +345,27 @@ private fun AqiCard(data: PlaceAirQualityData) {
     }
 }
 
+/** Every active alert in full, or "No active weather alerts" with when it was checked ([checkedAt], the place's clock). */
 @Composable
-private fun AlertsCard(active: List<PlaceWeatherAlert>) {
+private fun AlertsCard(
+    active: List<PlaceWeatherAlert>,
+    checkedAt: String?,
+    source: String?,
+    now: ZonedDateTime,
+) {
     if (active.isEmpty()) {
-        PlaceDetailCard {
+        PlaceDetailCard(modifier = Modifier.testTag("todayAlertsNone")) {
             Row(horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.CenterVertically) {
                 TodayAllClearBadge()
                 Column {
-                    Text("No active alerts", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-                    Text("Nothing to watch for on your block right now.", fontSize = 13.sp, color = PantopusColors.appTextMuted)
+                    Text("No active weather alerts", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+                    checkedAt?.let { Text("Checked $it", fontSize = 13.sp, color = PantopusColors.appTextMuted) }
                 }
             }
         }
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            active.forEach { AlertRow(it) }
+            AlertWindow.ordered(active).forEach { AlertRow(it, source, now) }
         }
     }
 }
@@ -379,7 +407,11 @@ private fun AlertsOutOfDateCard(checking: Boolean) {
 }
 
 @Composable
-private fun AlertRow(alert: PlaceWeatherAlert) {
+private fun AlertRow(
+    alert: PlaceWeatherAlert,
+    source: String?,
+    now: ZonedDateTime,
+) {
     val warn = alert.severity == WeatherAlertSeverity.WARNING
     val bg = if (warn) PantopusColors.errorBg else PantopusColors.warningBg
     val fg = if (warn) PantopusColors.error else PantopusColors.warning
@@ -390,10 +422,26 @@ private fun AlertRow(alert: PlaceWeatherAlert) {
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(alert.event, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-                if (alert.headline.isNotEmpty()) Text(alert.headline, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = fg)
-                if (alert.description.isNotEmpty()) {
+                val issuer = alert.senderName?.takeIf { it.isNotBlank() } ?: source?.takeIf { it.isNotBlank() }
+                Text(
+                    listOfNotNull(AlertWindow.text(alert, now), issuer).joinToString(" · "),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = fg,
+                )
+                if (alert.headline.isNotEmpty()) {
+                    Text(alert.headline, fontSize = 13.sp, lineHeight = 18.sp, color = PantopusColors.appTextStrong)
+                }
+                alert.area?.takeIf { it.isNotBlank() }?.let {
+                    Text("Area: $it", fontSize = 12.5.sp, lineHeight = 17.sp, color = PantopusColors.appTextSecondary)
+                }
+                listOfNotNull(AlertWindow.issued(alert, now.zone), AlertWindow.span(alert, now)).forEach {
+                    Text(it, fontSize = 12.5.sp, lineHeight = 17.sp, color = PantopusColors.appTextSecondary)
+                }
+                val text = alert.originalText.ifBlank { alert.description }
+                if (text.isNotEmpty()) {
                     Text(
-                        alert.description,
+                        text,
                         fontSize = 13.sp,
                         lineHeight = 18.sp,
                         color = PantopusColors.appTextSecondary,
@@ -417,6 +465,198 @@ private fun aqiColor(data: PlaceAirQualityData): Color =
         app.pantopus.android.data.api.models.place.AirQualityCategory.UNKNOWN -> PantopusColors.appTextSecondary
     }
 
+/** Where "Weather details", the air and daylight sides and "Set pickup days" scroll to. */
+@OptIn(ExperimentalFoundationApi::class)
+private class TodayTargets {
+    val calendar = BringIntoViewRequester()
+    val conditions = BringIntoViewRequester()
+    val air = BringIntoViewRequester()
+    val sun = BringIntoViewRequester()
+}
+
+/**
+ * The calendar Today shows: the section's when it is live, else the existing authorized calendar route's (the
+ * section was unavailable), read once per Today copy and home.
+ */
+@Composable
+private fun rememberShownCalendar(
+    intel: PlaceIntelligence,
+    env: PlaceSectionEnvelope?,
+    viewModel: AddressCalendarActions?,
+): PlaceAddressCalendarData? {
+    var fallback by remember(intel.generatedAt, viewModel?.calendarHomeId) { mutableStateOf<PlaceAddressCalendarData?>(null) }
+    LaunchedEffect(intel.generatedAt, env?.status, viewModel?.calendarHomeId) {
+        if (env?.status == PlaceSectionStatus.UNAVAILABLE && viewModel != null) {
+            fallback = viewModel.loadAddressCalendar()
+        }
+    }
+    return env?.addressCalendar?.takeIf { env.isLive() } ?: fallback
+}
+
+/** The full two-week calendar (the agenda's second view): the strip, every date, the pickup schedule and its source. */
+@Composable
+private fun AddressCalendarSection(
+    env: PlaceSectionEnvelope?,
+    data: PlaceAddressCalendarData?,
+    viewModel: AddressCalendarActions?,
+    openTrigger: Int,
+) {
+    env ?: return
+    Column(modifier = Modifier.padding(top = 4.dp)) {
+        if (data != null) {
+            AddressCalendarCard(data, viewModel, openTrigger)
+            PlaceSourceNote(data.source ?: "Pantopus registry", "next ${data.windowDays} days")
+        } else {
+            PlaceDetailFallbackCard(env)
+        }
+    }
+}
+
+@Composable
+private fun TodayWeatherSection(
+    intel: PlaceIntelligence,
+    pickups: List<PlaceCalendarEvent>,
+    active: List<PlaceWeatherAlert>,
+    now: ZonedDateTime,
+    onBins: () -> Unit,
+    onDetails: () -> Unit,
+) {
+    val env = intel.section(PlaceSectionId.WEATHER) ?: return
+    val data = env.weather
+    if (data == null || !env.isLive()) {
+        PlaceDetailFallbackCard(env)
+        return
+    }
+    val sun = intel.section(PlaceSectionId.SUNRISE_SUNSET)?.sunriseSunset
+    TodaySkyHero(
+        data,
+        sun,
+        pickups,
+        skyAir(intel),
+        place =
+            SkyPlace(
+                home = intel.section(PlaceSectionId.YOUR_HOME)?.yourHome.let { SkyHome.of(it?.house, it?.homeType) },
+                streetLights = SkyStreet.lights(intel.section(PlaceSectionId.BLOCK_DENSITY)?.blockDensity?.bucket?.name?.lowercase()),
+                timeZone = now.zone,
+            ),
+        onBins = onBins,
+    )
+    TodayHourlyStrip(remember(data, active, sun, now) { hourlyCells(data, active, sun, now) }, Modifier.padding(top = 10.dp))
+    Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.weight(1f)) {
+            val updated = PlacePresentation.fmtTime(env.asOf, intel.homeZone)?.let { "updated $it" }
+            PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, updated)
+        }
+        TodayTextAction("Weather details", onClick = onDetails, modifier = Modifier.testTag("today.weatherDetails"))
+        if (intel.place.city.isNotEmpty()) {
+            SkyShareLink(SkyShareCard(data, sun, skyAir(intel), intel.place.city, ZonedDateTime.now(now.zone)))
+        }
+    }
+}
+
+/** "Good day for…" as a list, each verdict beside what the screen itself shows could limit it. */
+@Composable
+private fun TodayGoodDaySection(
+    intel: PlaceIntelligence,
+    active: List<PlaceWeatherAlert>,
+    now: ZonedDateTime,
+) {
+    val env = intel.section(PlaceSectionId.GOOD_DAY_TO) ?: return
+    val data = env.goodDayTo
+    // Deliberately silent when there is nothing to answer: an empty verdict list is worse than none.
+    if (data == null || !env.isLive() || data.tiles.isEmpty()) return
+    val advisories =
+        active.filter { AlertWindow.coversToday(it, now) }
+            .map { "${it.event} ${AlertWindow.text(it, now).replaceFirstChar { c -> c.lowercase() }}" }
+    val air =
+        intel.section(PlaceSectionId.AIR_QUALITY)?.takeIf { it.isLive() }?.airQuality
+            ?.takeIf { it.category != AirQualityCategory.GOOD && it.category != AirQualityCategory.UNKNOWN }
+            ?.let { "${it.categoryLabel.lowercase()} air (${it.index})" }
+    TodaySectionHead("Good day for…")
+    TodayGoodDayList(data.tiles, limits = { tile -> goodDayLimits(tile, advisories, air) })
+    PlaceSourceNote("Derived from today's conditions", PlacePresentation.fmtTime(env.asOf, intel.homeZone))
+}
+
+/**
+ * What could limit a "yes" or "careful", from what Today itself shows (TPR brief 5.7): an advisory covering part of the
+ * rest of the day, and moderate or worse air. A "no" needs no warning.
+ */
+private fun goodDayLimits(
+    tile: PlaceGoodDayTile,
+    advisories: List<String>,
+    air: String?,
+): List<String> =
+    if (tile.verdict == GoodDayVerdict.NO || tile.verdict == GoodDayVerdict.UNKNOWN) emptyList() else advisories + listOfNotNull(air)
+
+@Composable
+private fun TodayGoodDayList(
+    tiles: List<PlaceGoodDayTile>,
+    limits: (PlaceGoodDayTile) -> List<String>,
+) {
+    var openId by rememberSaveable { mutableStateOf<String?>(null) }
+    Column(modifier = Modifier.fillMaxWidth().placeSurface().padding(horizontal = 14.dp).testTag("today.goodDay")) {
+        tiles.forEachIndexed { index, tile ->
+            if (index > 0) TodayHairline()
+            GoodDayListRow(tile, limits(tile), open = openId == tile.id) { openId = if (openId == tile.id) null else tile.id }
+        }
+    }
+}
+
+@Composable
+private fun GoodDayListRow(
+    tile: PlaceGoodDayTile,
+    limits: List<String>,
+    open: Boolean,
+    onToggle: () -> Unit,
+) {
+    val tone = goodDayVerdictColors(tile.verdict)
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(role = Role.Button, onClickLabel = if (open) "Hide why" else "Why") { onToggle() }
+                .semantics(mergeDescendants = true) {
+                    contentDescription = "${tile.label}: ${tile.answer}" + limits.joinToString("") { ". $it" }
+                    stateDescription = if (open) "Expanded" else "Collapsed"
+                }.heightIn(min = 56.dp)
+                .animateContentSize()
+                .padding(vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(tone.second), contentAlignment = Alignment.Center) {
+                Text(tile.glyph, fontSize = (18 / LocalDensity.current.fontScale).sp)
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(tile.label, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+                Text(tile.answer, fontSize = 13.5.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium, color = tone.first)
+            }
+            PantopusIconImage(
+                if (open) PantopusIcon.ChevronUp else PantopusIcon.ChevronDown,
+                null,
+                size = 16.dp,
+                tint = PantopusColors.appTextMuted,
+            )
+        }
+        // One line, as on iPhone: "Dense Fog Advisory until 10 AM · moderate air (76)".
+        if (limits.isNotEmpty()) {
+            Row(modifier = Modifier.padding(start = 48.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                PantopusIconImage(PantopusIcon.TriangleAlert, null, size = 13.dp, tint = PantopusColors.warning)
+                Text(limits.joinToString(" · "), fontSize = 12.5.sp, lineHeight = 17.sp, color = PantopusColors.appTextSecondary)
+            }
+        }
+        if (open) {
+            Text(
+                tile.because,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                color = PantopusColors.appTextStrong,
+                modifier = Modifier.padding(start = 48.dp),
+            )
+        }
+    }
+}
+
 // ─── The address calendar (Wedge v2 D6) ──────────────────────
 // Pickup days, tax dates, council meetings — the reason Today earns a
 // tab. The one thing the resident must tell us is the pickup day;
@@ -424,38 +664,15 @@ private fun aqiColor(data: PlaceAirQualityData): Color =
 // `AddressCalendarCard`.
 
 @Composable
-private fun AddressCalendarSection(
-    intel: PlaceIntelligence,
-    viewModel: AddressCalendarActions?,
-    openTrigger: Int = 0,
-    onCalendar: (PlaceAddressCalendarData?) -> Unit = {},
-) {
-    val env = intel.section(PlaceSectionId.ADDRESS_CALENDAR) ?: return
-    PlaceDetailSectionLabel("At this address")
-    var fallback by remember(intel.generatedAt, viewModel?.calendarHomeId) { mutableStateOf<PlaceAddressCalendarData?>(null) }
-    LaunchedEffect(intel.generatedAt, env.status, viewModel?.calendarHomeId) {
-        if (env.status == app.pantopus.android.data.api.models.place.PlaceSectionStatus.UNAVAILABLE && viewModel != null) {
-            fallback = viewModel.loadAddressCalendar()
-        }
-    }
-    val data = env.addressCalendar?.takeIf { env.isLive() } ?: fallback
-    LaunchedEffect(data) { onCalendar(data) }
-    if (data != null) {
-        AddressCalendarCard(data, viewModel, openTrigger)
-        PlaceSourceNote(data.source ?: "Pantopus registry", "next ${data.windowDays} days")
-    } else {
-        PlaceDetailFallbackCard(env)
-    }
-}
-
-@Composable
+@Suppress("CyclomaticComplexMethod")
 private fun AddressCalendarCard(
     data: PlaceAddressCalendarData,
     viewModel: AddressCalendarActions?,
     openTrigger: Int = 0,
 ) {
-    var picking by rememberSaveable { mutableStateOf(data.needsPickupDay) }
-    LaunchedEffect(data.pickupVersion, data.needsPickupDay) { picking = data.needsPickupDay }
+    // The editor opens on demand ("Set pickup days", the schedule toggle), never by itself; a save closes it.
+    var picking by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(data.pickupVersion) { picking = false }
     LaunchedEffect(openTrigger) { if (openTrigger > 0) picking = true }
     val busy = viewModel?.calendarBusy?.collectAsStateWithLifecycle()?.value ?: false
     val errorText = viewModel?.calendarError?.collectAsStateWithLifecycle()?.value
@@ -464,13 +681,30 @@ private fun AddressCalendarCard(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         CalendarHeader(windowDays = data.windowDays, picking = picking, canPick = viewModel != null) { if (!busy) picking = !picking }
-        if (!picking && data.upcoming.isNotEmpty()) TodayCalendarStrip(data.today, data.windowDays, data.upcoming)
+        // A tapped day shows only its dates; "Show every date" (or the day again) brings them all back.
+        var selectedDay by rememberSaveable(data.today) { mutableStateOf<String?>(null) }
+        if (!picking && data.upcoming.isNotEmpty()) {
+            TodayCalendarStrip(
+                data.today,
+                data.windowDays,
+                data.upcoming,
+                selected = selectedDay?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
+                onSelect = { selectedDay = it?.toString() },
+            )
+        }
         when {
             picking && viewModel != null -> PickupScheduleEditor(data, viewModel, busy)
             data.needsPickupDay && viewModel != null -> PickupPrompt { picking = true }
         }
         errorText?.let { Text(it, fontSize = 12.5.sp, color = PantopusColors.error) }
-        UpcomingEvents(data, canSetPickupDay = viewModel != null)
+        val day = selectedDay.takeUnless { picking }
+        val shown = data.upcoming.filter { day == null || it.date.startsWith(day) }
+        if (day != null && shown.isEmpty()) {
+            Text("Nothing on this day.", fontSize = 13.5.sp, lineHeight = 19.sp, color = PantopusColors.appTextSecondary)
+        } else {
+            UpcomingEvents(data.copy(upcoming = shown), canSetPickupDay = viewModel != null)
+        }
+        if (day != null) TodayTextAction("Show every date", onClick = { selectedDay = null })
         data.taxNote?.let {
             Text(
                 it,
@@ -927,14 +1161,6 @@ private class RadonTodayState(
         reportFailed = false
     }
 
-    suspend fun hideFirstUse() =
-        whileCurrent {
-            preferences.edit { it[booleanPreferencesKey("firstUse.dismissed.$homeId")] = true }
-            requireCurrent()
-            firstUseDismissed = true
-            keepSnapshot()
-        }
-
     suspend fun clearRadonDismissal() =
         whileCurrent {
             preferences.edit { it.remove(longPreferencesKey("radonCard.dismissedUntil.$homeId")) }
@@ -1212,115 +1438,239 @@ private fun skyAir(intel: PlaceIntelligence): SkyAir? =
 /** The sky and the sun card draw the place's hour; the phone's zone only when the place's is unknown. */
 private fun placeSkyZone(intel: PlaceIntelligence): ZoneId = intel.homeZone ?: ZoneId.systemDefault()
 
+/**
+ * "Complete your home setup", folded (TPR brief 5.10): one row per real open item — pickup days (the existing editor,
+ * on demand), the radon question (the existing card and sheet, every answer), and a saved place's reminders (Add your
+ * home). A radon question put off with "Not now" stays here as an uncounted row, and a radon record (or a failed check)
+ * keeps its card here; with nothing open the fold reads "Home setup". Gone when there is nothing at all.
+ */
 @Composable
-private fun TodayWeatherSection(
+@Suppress("LongMethod", "CyclomaticComplexMethod")
+private fun TodayHomeSetup(
+    state: RadonTodayState?,
     intel: PlaceIntelligence,
-    pickups: List<PlaceCalendarEvent>,
-    onBins: () -> Unit,
+    needsPickup: Boolean,
+    onPickup: () -> Unit,
+    onAddHome: (() -> Unit)?,
 ) {
-    intel.section(PlaceSectionId.WEATHER)?.let { env ->
-        val data = env.weather
-        Row(verticalAlignment = Alignment.Bottom) {
-            Box(modifier = Modifier.weight(1f)) { PlaceDetailSectionLabel("Weather") }
-            if (data != null && env.isLive() && intel.place.city.isNotEmpty()) {
-                SkyShareLink(
-                    SkyShareCard(
-                        data,
-                        intel.section(PlaceSectionId.SUNRISE_SUNSET)?.sunriseSunset,
-                        skyAir(intel),
-                        intel.place.city,
-                        ZonedDateTime.now(placeSkyZone(intel)),
-                    ),
+    val radonData = intel.section(PlaceSectionId.LEAD_RADON)?.leadRadon
+    val radon = state?.takeIf { it.hasRadon && !it.noTaskAccess && radonData != null }
+    val unanswered = radon != null && radon.loaded && radon.task == null
+    val putOff = unanswered && radon?.hidden == true
+    val radonOpen = unanswered && !putOff
+    val record = radon?.task?.takeIf { radon.loaded }
+    val failed = radon != null && !radon.loaded && radon.error != null
+    val count = listOf(needsPickup, radonOpen, onAddHome != null).count { it }
+    if (listOf(count > 0, putOff, record != null, failed).none { it }) return
+    var open by rememberSaveable(state?.homeId) { mutableStateOf(false) }
+    var radonShown by rememberSaveable(state?.homeId) { mutableStateOf(false) }
+    val until = radon?.dismissedUntil?.takeIf { putOff }?.let { RadonToday.label(java.time.Instant.ofEpochMilli(it).toString()) }
+    val summary =
+        when {
+            count > 0 -> if (count == 1) "1 optional item" else "$count optional items"
+            record != null -> RadonToday.message(record)
+            putOff -> "Radon question put off" + (until?.let { " until $it" } ?: "")
+            else -> "Couldn't check your home's radon tasks"
+        }
+    TodayFold(
+        title = if (count > 0) "Complete your home setup" else "Home setup",
+        summary = summary,
+        open = open,
+        onToggle = { open = !open },
+        modifier = Modifier.testTag("todayHomeSetup"),
+    ) {
+        onAddHome?.let {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp).testTag("todaySavedPlaceReminders"),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("Get reminders for this address", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
+                Text(
+                    "Pickup and radon reminders need your home on Pantopus.",
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    color = PantopusColors.appTextSecondary,
+                )
+                GhostButton("Add your home", onClick = it, modifier = Modifier.fillMaxWidth())
+            }
+        }
+        if (needsPickup) {
+            TodayFoldRow(
+                "Set pickup days",
+                "Enter a schedule or import a flyer.",
+                onClick = onPickup,
+                modifier = Modifier.testTag("todaySetup.pickup"),
+            )
+        }
+        if (radon != null && radonData != null) {
+            if (unanswered) {
+                TodayFoldRow(
+                    "Add radon test information",
+                    (until?.let { "Put off until $it. " } ?: "") + "Add a report, record that you are unsure, or come back later.",
+                    onClick = {
+                        radonShown = !radonShown
+                        if (radonShown && putOff) radon.lifetime.launch { radon.clearRadonDismissal() }
+                    },
+                    modifier = Modifier.testTag("todaySetup.radon"),
+                )
+            }
+            val showsRadonCard = record != null || failed || (unanswered && radonShown)
+            if (showsRadonCard) {
+                Column(modifier = Modifier.padding(bottom = 12.dp)) { RadonCardContent(radon, radonData) }
+            }
+        }
+    }
+}
+
+/**
+ * "Sources and full conditions", folded (TPR brief 5.11): the daily forecast, the AQI gauge with its full guidance and
+ * source, every alert's official text (or the scoped all-clear with its check time), the sun arc, and the radon card
+ * once answered. "Weather details" and the air and daylight sides open it at their card.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+@Suppress("LongParameterList")
+private fun TodayFullConditions(
+    intel: PlaceIntelligence,
+    alertsCheck: TodayAlertsCheck,
+    calendar: PlaceAddressCalendarData?,
+    open: Boolean,
+    onToggle: () -> Unit,
+    targets: TodayTargets,
+    now: ZonedDateTime,
+) {
+    TodayFold(
+        title = "Sources and full conditions",
+        summary = conditionsSummary(intel, alertsCheck),
+        open = open,
+        onToggle = onToggle,
+        modifier = Modifier.bringIntoViewRequester(targets.conditions).testTag("today.fullConditions"),
+    ) {
+        intel.section(PlaceSectionId.WEATHER)?.weather?.daily?.takeIf { it.isNotEmpty() }?.let { DailyForecast(it, now) }
+        Column(modifier = Modifier.bringIntoViewRequester(targets.air)) { TodayAirSection(intel) }
+        TodayAlertsSection(intel, alertsCheck, now)
+        Column(modifier = Modifier.bringIntoViewRequester(targets.sun)) { TodaySunSection(intel) }
+        // The calendar's own source, also under the calendar view.
+        calendar?.let {
+            PlaceDetailSectionLabel("Calendar")
+            PlaceSourceNote(it.source ?: "Pantopus registry", "next ${it.windowDays} days")
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+    }
+}
+
+/** The next days' sky, high and low and chance of rain, from the forecast Today already has (contract §2). */
+@Composable
+private fun DailyForecast(
+    days: List<PlaceWeatherDay>,
+    now: ZonedDateTime,
+) {
+    PlaceDetailSectionLabel("Forecast")
+    Column(modifier = Modifier.fillMaxWidth().placeSurface().padding(horizontal = 14.dp).testTag("today.daily")) {
+        days.forEachIndexed { index, day ->
+            if (index > 0) TodayHairline()
+            val date = runCatching { LocalDate.parse(day.date.substringBefore('T')) }.getOrNull()
+            val name =
+                when {
+                    date == null -> day.date
+                    date == now.toLocalDate() -> "Today"
+                    else -> date.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.US)
+                }
+            val rain = day.precipChance.takeIf { it >= PRECIP_SHOWN_FROM }?.let { "${it.roundToInt()}%" }
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 44.dp)
+                        .clearAndSetSemantics {
+                            val range = "high ${day.highF.roundToInt()}°, low ${day.lowF.roundToInt()}°"
+                            contentDescription =
+                                "$name: ${SkyScrub.label(day.conditionCode)}, $range" + (rain?.let { ", $it chance of rain" } ?: "")
+                        }.padding(vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    name,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = PantopusColors.appText,
+                    modifier = Modifier.width(56.dp),
+                )
+                PantopusIconImage(conditionIcon(day.conditionCode, night = false), null, size = 18.dp, tint = PantopusColors.appTextStrong)
+                Text(rain.orEmpty(), fontSize = 12.5.sp, color = PantopusColors.primary600, modifier = Modifier.weight(1f))
+                Text(
+                    "${day.highF.roundToInt()}° / ${day.lowF.roundToInt()}°",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.appText,
                 )
             }
         }
-        if (data != null && env.isLive()) {
-            val air = skyAir(intel)
-            TodaySkyHero(
-                data,
-                intel.section(PlaceSectionId.SUNRISE_SUNSET)?.sunriseSunset,
-                pickups,
-                air,
-                place =
-                    SkyPlace(
-                        home = intel.section(PlaceSectionId.YOUR_HOME)?.yourHome.let { SkyHome.of(it?.house, it?.homeType) },
-                        streetLights =
-                            SkyStreet.lights(intel.section(PlaceSectionId.BLOCK_DENSITY)?.blockDensity?.bucket?.name?.lowercase()),
-                        timeZone = placeSkyZone(intel),
-                    ),
-                onBins = onBins,
-            )
-            PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, PlacePresentation.fmtTime(env.asOf, intel.homeZone))
-        } else {
-            PlaceDetailFallbackCard(env)
-        }
     }
 }
 
 @Composable
-private fun HomeFirstUseCard(
-    state: RadonTodayState,
-    needsPickup: Boolean,
-    onPickup: () -> Unit,
-    onRadon: () -> Unit,
-) {
-    val needsRadon = state.hasRadon && state.loaded && state.task == null
-    if (!state.preferencesLoaded || state.firstUseDismissed) return
-    if (!needsPickup && !needsRadon) return
-    Column(
-        modifier = Modifier.padding(bottom = 12.dp).fillMaxWidth().placeCard().padding(16.dp).testTag("todayHomeFirstUse"),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        // Rows drop out as they're handled; the heading counts what's left.
-        Text(
-            if (needsPickup && needsRadon) "Two things for your home" else "One thing for your home",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = PantopusColors.appText,
-        )
-        if (needsPickup) GhostButton("Set your pickup day", onClick = onPickup)
-        if (needsRadon) GhostButton("Was radon tested?", onClick = onRadon)
-        GhostButton("Later", onClick = { state.lifetime.launch { state.hideFirstUse() } })
+private fun TodayAirSection(intel: PlaceIntelligence) {
+    val env = intel.section(PlaceSectionId.AIR_QUALITY) ?: return
+    PlaceDetailSectionLabel("Air quality")
+    val data = env.airQuality
+    if (data != null && env.isLive()) {
+        AqiCard(data)
+        // The server names the monitor, or says the reading is a model estimate.
+        PlaceSourceNote(env.source.orEmpty().ifBlank { "AirNow · EPA" }, PlacePresentation.fmtTime(env.asOf, intel.homeZone))
+    } else {
+        PlaceDetailFallbackCard(env)
     }
 }
 
 @Composable
-private fun TodayAirAlertsSunSections(
+private fun TodayAlertsSection(
     intel: PlaceIntelligence,
     alertsCheck: TodayAlertsCheck,
+    now: ZonedDateTime,
 ) {
-    intel.section(PlaceSectionId.AIR_QUALITY)?.let { env ->
-        PlaceDetailSectionLabel("Air quality")
-        val data = env.airQuality
-        if (data != null && env.isLive()) {
-            AqiCard(data)
-            // The server names the monitor, or says the reading is a model estimate.
-            PlaceSourceNote(env.source.orEmpty().ifBlank { "AirNow · EPA" }, PlacePresentation.fmtTime(env.asOf, intel.homeZone))
-        } else {
-            PlaceDetailFallbackCard(env)
-        }
+    val env = intel.section(PlaceSectionId.ALERTS) ?: return
+    PlaceDetailSectionLabel("Weather alerts")
+    // "No active weather alerts" only for a list that was checked; an unavailable section is not an all-clear.
+    val data = env.alerts
+    if (alertsCheck != TodayAlertsCheck.CURRENT) {
+        AlertsOutOfDateCard(checking = alertsCheck == TodayAlertsCheck.CHECKING)
+    } else if (data != null && env.isLive()) {
+        AlertsCard(data.active, checkedAt = PlacePresentation.fmtTime(env.asOf, intel.homeZone), source = env.source, now = now)
+        PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, "live")
+    } else {
+        PlaceDetailFallbackCard(env)
     }
-    intel.section(PlaceSectionId.ALERTS)?.let { env ->
-        PlaceDetailSectionLabel("Alerts")
-        // "No active alerts" only for a list that was checked; an unavailable section is not an all-clear.
-        val data = env.alerts
-        if (alertsCheck != TodayAlertsCheck.CURRENT) {
-            AlertsOutOfDateCard(checking = alertsCheck == TodayAlertsCheck.CHECKING)
-        } else if (data != null && env.isLive()) {
-            AlertsCard(data.active)
-            PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, "live")
-        } else {
-            PlaceDetailFallbackCard(env)
-        }
+}
+
+@Composable
+private fun TodaySunSection(intel: PlaceIntelligence) {
+    val env = intel.section(PlaceSectionId.SUNRISE_SUNSET) ?: return
+    PlaceDetailSectionLabel("Sun")
+    val data = env.sunriseSunset
+    if (data != null) {
+        TodaySunArcCard(data, timeZone = placeSkyZone(intel))
+        PlaceSourceNote("Your location", PlacePresentation.fmtSunDay(data, intel.homeZone))
+    } else {
+        PlaceDetailFallbackCard(env)
     }
-    intel.section(PlaceSectionId.SUNRISE_SUNSET)?.let { env ->
-        PlaceDetailSectionLabel("Sun")
-        val data = env.sunriseSunset
-        if (data != null) {
-            TodaySunArcCard(data, timeZone = placeSkyZone(intel))
-            PlaceSourceNote("Your location", PlacePresentation.fmtSunDay(data, intel.homeZone))
-        } else {
-            PlaceDetailFallbackCard(env)
+}
+
+/** "Forecast · air quality · no active weather alerts · sun and sources", the alerts part as checked now. */
+private fun conditionsSummary(
+    intel: PlaceIntelligence,
+    alertsCheck: TodayAlertsCheck,
+): String {
+    val env = intel.section(PlaceSectionId.ALERTS)
+    val active = env?.alerts?.active?.takeIf { alertsCheck == TodayAlertsCheck.CURRENT && env.isLive() }
+    val alerts =
+        when {
+            env == null -> null
+            active == null -> "weather alerts unavailable"
+            active.isEmpty() -> "no active weather alerts"
+            active.size == 1 -> "1 weather alert"
+            else -> "${active.size} weather alerts"
         }
-    }
+    return listOfNotNull("Forecast", "air quality", alerts, "sun and sources").joinToString(" · ")
 }

@@ -53,6 +53,16 @@ fun Modifier.placeCard(): Modifier =
         .background(PantopusColors.appSurface)
         .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(16.dp))
 
+/**
+ * One light surface for a group of rows (TPR brief section 8): white, radius 16, a hairline border and no shadow, so
+ * a page reads as a few groups with dividers rather than a stack of raised cards.
+ */
+fun Modifier.placeSurface(): Modifier =
+    this
+        .clip(RoundedCornerShape(16.dp))
+        .background(PantopusColors.appSurface)
+        .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(16.dp))
+
 // ─── Icon tile (`IconTile`) ──────────────────────────────────
 
 enum class PlaceTileTone { HOME, MUTED, SKY }

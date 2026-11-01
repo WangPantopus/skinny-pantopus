@@ -42,6 +42,8 @@ data class PlansTodayUi(
      * memory only: `mine` never carries them.
      */
     val details: Map<String, PlanDto> = emptyMap(),
+    /** Every plan the person hosts (true) or is going to (false) that hasn't ended: Today's agenda keeps its week. */
+    val upcoming: List<Pair<PlanDto, Boolean>> = emptyList(),
 )
 
 /**
@@ -99,6 +101,9 @@ class PlansTodayViewModel
                                 p.id !in dismissed
                         },
                     hostAgain = mine.recent.filter { p -> p.standing == PlanViewerStanding.HOSTING && p.id !in dismissed },
+                    upcoming =
+                        (mine.hosting.map { p -> p to true } + mine.going.map { p -> p to false })
+                            .filter { (p, _) -> p.planState != PlanState.ENDED && p.planState != PlanState.CANCELLED },
                 )
             }
             loadDetails((_ui.value.going + _ui.value.hosting).map { it.id })

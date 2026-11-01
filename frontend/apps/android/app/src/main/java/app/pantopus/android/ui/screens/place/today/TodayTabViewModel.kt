@@ -11,6 +11,7 @@ import app.pantopus.android.data.ai.PickupFlyerReading
 import app.pantopus.android.data.ai.RadonReportReader
 import app.pantopus.android.data.ai.RadonReportReading
 import app.pantopus.android.data.analytics.PilotEvents
+import app.pantopus.android.data.api.models.homes.HomeTaskDto
 import app.pantopus.android.data.api.models.homes.MyHomesResponse
 import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
 import app.pantopus.android.data.api.models.homes.showsCopyBeforeRecheck
@@ -30,11 +31,14 @@ import app.pantopus.android.data.saved_places.SavedPlacesRepository
 import app.pantopus.android.data.store.Stored
 import app.pantopus.android.data.widget.TodayWidgetStore
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
+import app.pantopus.android.ui.screens.homes.tasks.HomeTaskAccess
+import app.pantopus.android.ui.screens.homes.tasks.HomeTaskAccessFactory
 import app.pantopus.android.ui.screens.homes.tasks.HomeTaskCreationFactory
 import app.pantopus.android.ui.screens.place.detail.AddressCalendarActions
 import app.pantopus.android.ui.screens.place.detail.RadonTodayMemory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -49,6 +53,9 @@ import javax.inject.Inject
 import kotlin.math.abs
 
 private const val SAVED_ANCHOR_TOLERANCE = 0.000001
+
+/** The agenda reads its tasks once more through a new access when a token refresh retired the first. */
+private const val TASK_READ_ATTEMPTS = 2
 
 /** Contract §4, Today: a copy older than this gets the quiet "Couldn't refresh" line when a refresh fails. */
 internal const val TODAY_MAX_SHOWN_AGE_MS = 2 * 60 * 60 * 1000L
@@ -145,6 +152,56 @@ class TodayTabViewModel
             return reading.takeIf { pickupCurrent(id, version) }
         }
 
+        /** The household's tasks for "Coming up at home" (unit tests build this without Hilt). */
+        @Inject lateinit var taskAccess: HomeTaskAccessFactory
+
+        private val _agendaTasks = MutableStateFlow<List<HomeTaskDto>>(emptyList())
+
+        /** The tasks this viewer may read at the home Today shows (TPR contract §6); none for guests, claims and saved places. */
+        val agendaTasks: StateFlow<List<HomeTaskDto>> = _agendaTasks.asStateFlow()
+        private var agendaAccess: Pair<String, HomeTaskAccess>? = null
+        private var tasksJob: Job? = null
+
+        /**
+         * Reads the tasks through the screens' store, so a visit inside their fresh window costs no request. A refusal
+         * (a guest, 403) shows no rows and no error; a failed read keeps what shows.
+         */
+        private fun readAgendaTasks(
+            id: String,
+            force: Boolean,
+        ) {
+            if (!::taskAccess.isInitialized) return
+            // A read for this home is on its way: let it finish rather than start a second one.
+            if (!force && tasksJob?.isActive == true && agendaAccess?.first == id) return
+            tasksJob?.cancel()
+            tasksJob =
+                viewModelScope.launch {
+                    // A task access belongs to the sign-in it was made under: a token refresh (a cold start) retires
+                    // it, and every read through it then fails. Read once more through a new one.
+                    repeat(TASK_READ_ATTEMPTS) {
+                        val access =
+                            agendaAccess?.takeIf { it.first == id && it.second.isCurrent }?.second
+                                ?: taskAccess.create(id, viewModelScope).also { agendaAccess = id to it }
+                        val stored =
+                            try {
+                                access.listStored(force)
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (_: IllegalStateException) {
+                                agendaAccess = null
+                                return@repeat
+                            }
+                        if (homeId != id) return@launch
+                        val tasks = stored.data?.tasks
+                        when {
+                            tasks != null -> _agendaTasks.value = tasks
+                            stored.failure.refusesStoredCopy -> _agendaTasks.value = emptyList()
+                        }
+                        return@launch
+                    }
+                }
+        }
+
         /** "Read a lab report" in the radon sheet (unit tests build this without Hilt). */
         @Inject lateinit var radonReader: RadonReportReader
 
@@ -217,7 +274,9 @@ class TodayTabViewModel
                         shown.savedPlace != null -> refresh(force = !shown.isSameDay())
                         // Midnight in the home's time zone (contract §4) ends the copy even inside its window.
                         !shown.isSameDay() -> refresh(force = true)
-                        shown.calendarHomeId?.let(repo::todayIsCurrent) == true -> Unit
+                        // Today's copy is current; the agenda's tasks keep their own (shorter) window.
+                        shown.calendarHomeId?.let(repo::todayIsCurrent) == true ->
+                            shown.calendarHomeId?.let { readAgendaTasks(it, force = false) }
                         else -> refresh(force = false)
                     }
                 TodayTabUiState.Loading -> {
@@ -245,6 +304,7 @@ class TodayTabViewModel
 
         private fun clearHomeCopy(id: String) {
             repo.forgetToday(id)
+            _agendaTasks.value = emptyList()
             _state.value = TodayTabUiState.Loading
             _pickupPrimerHomeId.value = null
             if (::todayWidget.isInitialized) todayWidget.clear()
@@ -361,6 +421,7 @@ class TodayTabViewModel
                             refreshFailed = failure != null,
                         )
                     if (keep && failure == null && ::todayWidget.isInitialized) todayWidget.write(data.todayWidgetSnapshot())
+                    readAgendaTasks(id, force)
                 }
                 // Access ended (contract §3): the store dropped the copy, and the server's answer shows.
                 failure.refusesStoredCopy ->
