@@ -1,4 +1,4 @@
-@file:Suppress("MagicNumber", "PackageNaming", "LongMethod", "TooManyFunctions")
+@file:Suppress("MagicNumber", "PackageNaming", "LongMethod", "TooManyFunctions", "LargeClass")
 
 package app.pantopus.android.ui.screens.profile
 
