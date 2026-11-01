@@ -150,7 +150,8 @@ the broader October 28 results above are historical evidence.
 | iOS sending | Completed recipient selection, confirmation, writing, review and send. An account with household access but no address proof received the verification-required error. After giving the synthetic fixture address proof, retry succeeded; success stayed visible until Done. The web recipient opened the saved letter. |
 | Android sending | Completed all four steps, changed stationery/ink/seal, sent a letter and returned through Done. The web recipient opened its exact saved text. |
 | Cross-platform reading | The household letter composed on web was read through its final sentence on iOS and Android. Android's Counter action appeared in the same Home's iOS Counter. Recipient access succeeded; an unrelated account could not read the letter. |
-| Christmas cards | Web picture selection, writing, flip/preview, recipient selection, arrival choices and send worked. Take-back cancellation preserved the card; confirmed take-back removed it and allowed a replacement. The replacement was received, opened and flipped on both native apps. The delivered web Sent view showed the delivery trail and no take-back action. Only the next-morning delivery choice was sent. |
+| Christmas cards | Web picture selection, writing, flip/preview, recipient selection, arrival choices and send worked. Take-back cancellation preserved the card; confirmed take-back removed it and allowed a replacement. The replacement was received, opened and flipped on both native apps. The delivered web Sent view showed the delivery trail and no take-back action. |
+| Sealed Christmas card | Completed all five iOS card-composer steps and sent with `sealed_christmas`. It was inaccessible to the recipient before delivery. Advancing only local delivery exposed the sealed envelope in the web recipient's Inbox, with no opening control or note in the detail response. iOS Sent showed the saved card and the future Christmas opening date. Actual Christmas release was not simulated. |
 | Persistence | A card filed into Taxes on iOS remained there after app relaunch and appeared in Android's Vault after its relaunch. Web folder, Vault and hold state survived reloads. |
 | Holds | Web required dates, saved an active hold, preserved it after reload and cancellation of the end-early confirmation, and ended it after confirmation. Held bundle generation and release jobs were not replayed in this pass. |
 | Connection failure | With only the isolated API stopped, web, iOS and Android showed mailbox errors with retry controls. Restoring the API and using those controls loaded the inboxes. Web detail also showed a recoverable error. |
@@ -184,7 +185,7 @@ this local setup artifact was not treated as a mailbox authorization defect.
   was collected. This is not a claim that every button or device size passed.
 - This pass did not reverify external email/SMS claims, push delivery, hosted
   storage, physical phones, background jobs, every Christmas arrival variant,
-  native Christmas-card composing, enclosures/storage corruption, all business
+  Android Christmas-card composing, enclosures/storage corruption, all business
   permissions, paid/reward flows, certified signing, AI, physical Mail Day,
   carrier integrations, or the remaining `mail_extras` subpages. Provider-backed
   address suggestions were unavailable in the isolated setup.
