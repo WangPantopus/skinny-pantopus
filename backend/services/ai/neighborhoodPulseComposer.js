@@ -89,19 +89,40 @@ function buildWeatherSignals(alertsResult) {
 }
 
 /**
+ * A seasonal tip as a title and the rest, so a card doesn't say its title
+ * twice. The title is the first sentence, or a one-sentence tip's words
+ * before its colon ("Peak summer: water early…"); a one-sentence tip without
+ * one has no title of its own and is all rest.
+ * @param {string|null} tip
+ * @returns {{ title: string, rest: string }}
+ */
+function splitSeasonalTip(tip) {
+  const text = String(tip || '').trim();
+  const sentence = text.match(/^(.+?)\.(?:\s+|$)/);
+  const first = sentence ? sentence[1] : text;
+  const rest = sentence ? text.slice(sentence[0].length).trim() : '';
+  if (rest) return { title: first, rest };
+  const colon = first.indexOf(': ');
+  if (colon > 0) {
+    const after = first.slice(colon + 2).trim();
+    return { title: first.slice(0, colon), rest: `${after.charAt(0).toUpperCase()}${after.slice(1)}.` };
+  }
+  return { title: '', rest: text };
+}
+
+/**
  * Build a seasonal suggestion signal.
  * @param {object} seasonalCtx  From seasonalEngine.getSeasonalContext()
  * @returns {object}
  */
 function buildSeasonalSignal(seasonalCtx) {
   const hasHomeTip = !!seasonalCtx.home_specific_tip;
+  const tip = splitSeasonalTip(seasonalCtx.seasonal_tip);
   return {
     signal_type: 'seasonal_suggestion',
     priority: hasHomeTip ? 7 : 6,
-    title: seasonalCtx.seasonal_tip
-      ? seasonalCtx.seasonal_tip.split('.')[0]
-      : (SEASONS[seasonalCtx.primary_season]?.label || 'This season'),
-    detail: seasonalCtx.home_specific_tip || seasonalCtx.seasonal_tip || '',
+    title: tip.title || SEASONS[seasonalCtx.primary_season]?.label || 'This season',
+    detail: seasonalCtx.home_specific_tip || tip.rest,
     icon: 'leaf',
     color: 'amber',
     // Its one action posts a gig: hidden while open gigs is a launch cut.
