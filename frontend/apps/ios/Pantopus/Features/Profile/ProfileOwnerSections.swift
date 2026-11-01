@@ -42,16 +42,20 @@ struct ProfileOwnerTipCard: View {
     let onOpen: @MainActor () -> Void
     let onDismiss: @MainActor () -> Void
 
+    @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .subheadline) private var disc: CGFloat = 40
 
     var body: some View {
         HStack(spacing: Spacing.s0) {
             Button(action: onOpen) {
                 HStack(spacing: Spacing.s3) {
-                    Icon(tip.icon, size: disc * 0.5, color: Theme.Color.primaryInk)
-                        .frame(width: disc, height: disc)
-                        .background(Theme.Color.primary100)
-                        .clipShape(Circle())
+                    // At accessibility sizes the words need the room more than the picture.
+                    if !typeSize.isAccessibilitySize {
+                        Icon(tip.icon, size: disc * 0.5, color: Theme.Color.primaryInk)
+                            .frame(width: disc, height: disc)
+                            .background(Theme.Color.primary100)
+                            .clipShape(Circle())
+                    }
                     VStack(alignment: .leading, spacing: 1) {
                         Text(tip.title)
                             .scaledFont(15, weight: .semibold)
