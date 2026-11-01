@@ -95,27 +95,35 @@ private struct EditProfilePromptRow: View {
     }
 }
 
-/// A pinned post: its kind's tint and icon, its first line, Unpin.
+/// A pinned post: its kind's tint and icon, its first line, Unpin. At
+/// accessibility sizes Unpin moves under the title, which then wraps whole.
 @MainActor
 private struct EditProfilePinnedRow: View {
     let post: FeedPostDTO
     let onUnpin: @MainActor () -> Void
 
+    @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .subheadline) private var tile: CGFloat = 36
 
     var body: some View {
         let intent = PulseIntent.from(postType: post.postType)
-        HStack(spacing: Spacing.s3) {
-            Icon(intent.icon, size: min(tile, 48) * 0.5, color: intent.tint)
-                .frame(width: min(tile, 48), height: min(tile, 48))
-                .background(intent.tintBackground)
-                .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
-                .accessibilityHidden(true)
-            Text(ProfilePinnedPost.title(post))
-                .scaledFont(15)
-                .foregroundStyle(Theme.Color.appText)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.s2))
+            : AnyLayout(HStackLayout(spacing: Spacing.s3))
+        layout {
+            HStack(spacing: Spacing.s3) {
+                Icon(intent.icon, size: min(tile, 48) * 0.5, color: intent.tint)
+                    .frame(width: min(tile, 48), height: min(tile, 48))
+                    .background(intent.tintBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+                    .accessibilityHidden(true)
+                Text(ProfilePinnedPost.title(post))
+                    .scaledFont(15)
+                    .foregroundStyle(Theme.Color.appText)
+                    .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
+                    .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             Button(action: onUnpin) {
                 Text("Unpin")
                     .scaledFont(15)
