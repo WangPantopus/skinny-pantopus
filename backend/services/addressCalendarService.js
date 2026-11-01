@@ -262,6 +262,8 @@ async function composeForHome(home, { now = new Date(), windowDays = WINDOW_DAYS
         all_day: rule.all_day !== false,
         lead_days: rule.lead_days ?? 1,
         scope: rule.scope_type,
+        // The household's own schedule, or a general date for the address (state, county or city).
+        audience: rule.scope_type === 'home' ? 'household' : 'address',
         source: rule.source || null,
         source_url: rule.source_url || null,
         confidence: rule.confidence === 'official' ? 'official' : 'unverified',

@@ -1465,11 +1465,14 @@ async function generatePlaceBrief({ placeId, userId }) {
   const alertsResult = await noaa.fetchAlerts(place.latitude, place.longitude);
   const cacheHit = alertsResult.source === 'cache';
 
-  // If no data at all, return an all-clear brief without calling LLM
+  // No alerts: a brief without calling the LLM that says only what was checked. A failed fetch also answers
+  // no alerts, and that is not a quiet day.
   if (alertsResult.alerts.length === 0) {
     const brief = {
       place: { label: place.label, city: place.city, state: place.state },
-      summary: `All clear near ${place.label}. No active weather alerts.`,
+      summary: alertsResult.source === 'error'
+        ? `Weather alerts for ${place.label} couldn't be checked right now.`
+        : `No active weather alerts near ${place.label}.`,
       headlines: [],
       overall_status: 'all_clear',
       sources: [{ provider: 'NOAA', updated_at: alertsResult.fetchedAt }],

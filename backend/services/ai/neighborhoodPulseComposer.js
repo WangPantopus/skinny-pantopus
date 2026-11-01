@@ -213,7 +213,8 @@ function buildSummary(propertyProfile, aqiSignal, weatherSignals, seasonalCtx, a
   if (weatherSignals.length > 0) {
     parts.push(weatherSignals[0].title);
   } else if (alertsChecked) {
-    parts.push('Your home area is quiet');
+    // Say only what was checked: weather alerts, not everything about the area.
+    parts.push('No active weather alerts');
   } else {
     // No answer from the weather service is not a quiet day.
     parts.push("We couldn't check for weather alerts on your block right now");

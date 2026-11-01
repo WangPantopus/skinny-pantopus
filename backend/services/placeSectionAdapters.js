@@ -30,6 +30,7 @@ const logger = require('../utils/logger');
 const { encodeGeohash } = require('../utils/geohash');
 const { serializePlaceSection } = require('../serializers/placeIntelligenceSerializer');
 const { readThrough, writeRow } = require('./placeSectionCache');
+const { resolveHomeTimezone } = require('../utils/timezone');
 const { geocodeToTract } = require('./ai/neighborhoodProfileService');
 const { fetchHeatRisk } = require('./external/heatRisk');
 const { fetchHeatIndexDays } = require('./external/nwsHeatIndex');
@@ -206,6 +207,43 @@ async function hudFmrRow(countyFips) {
 // ════════════════════════════════════════════════════════════
 // sunrise_sunset — Open-Meteo daily, keyless
 // ════════════════════════════════════════════════════════════
+// Open-Meteo writes every time in ONE fixed offset for the whole reply (the
+// zone's offset when asked), so across a DST change its "local" times are an
+// hour off on the other side of it: asked at 01:52 PDT on November 1, it gave
+// that day's 6:50 AM PST sunrise as "07:50". The section therefore keeps the
+// instants, rebuilt with the reply's own offset, and writes the wall clock
+// from them in the place's zone. The cache is per local date: keyed by the
+// cell alone, it served October 31's times as today's for hours into
+// November 1.
+const SUN_TTL_MS = 6 * 60 * 60 * 1000;
+
+function localDate(timeZone, at = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(at);
+}
+
+// "YYYY-MM-DDTHH:MM" for an instant on the place's wall clock.
+function wallClock(iso, timeZone) {
+  const at = Date.parse(iso || '');
+  if (!Number.isFinite(at)) return null;
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(at)).map((p) => [p.type, p.value]));
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+// The cached payload as the section ships it: the wall clock is rebuilt from
+// the instants at read time, so it's right whenever the row was fetched.
+function sunData(payload, timeZone) {
+  const sunrise = payload.sunrise_utc ? wallClock(payload.sunrise_utc, timeZone) : null;
+  const sunset = payload.sunset_utc ? wallClock(payload.sunset_utc, timeZone) : null;
+  return {
+    ...payload,
+    sunrise: sunrise || payload.sunrise,
+    sunset: sunset || payload.sunset,
+    time_zone: timeZone,
+  };
+}
+
 async function composeSunriseSunset(home) {
   const ll = homeLatLng(home);
   if (!ll) return [serializePlaceSection('sunrise_sunset', { status: 'unavailable' })];
@@ -214,29 +252,47 @@ async function composeSunriseSunset(home) {
     // geohash-5 (~5 km): sun times don't move within a cell; 6 h budget
     // keeps the day fresh without a per-minute fetch.
     const gh5 = encodeGeohash(ll.lat, ll.lng, 5);
-    const { payload, fetchedAt, stale } = await readThrough({
-      cacheKey: `geo:${gh5}`,
-      sectionId: 'sunrise_sunset',
-      ttlMs: 6 * 60 * 60 * 1000,
-      fetch: async () => {
+    const timeZone = resolveHomeTimezone(home);
+    const today = localDate(timeZone);
+    const read = (date, fetch) => readThrough({ cacheKey: `geo:${gh5}:${date}`, sectionId: 'sunrise_sunset', ttlMs: SUN_TTL_MS, fetch });
+    let result;
+    try {
+      result = await read(today, async () => {
         const data = await fetchJson(
           `https://api.open-meteo.com/v1/forecast?latitude=${ll.lat}&longitude=${ll.lng}` +
-          '&daily=sunrise,sunset,daylight_duration&timezone=auto&forecast_days=1',
+          `&daily=sunrise,sunset,daylight_duration&timezone=auto&start_date=${today}&end_date=${today}`,
         );
         const d = data && data.daily;
         if (!d || !d.sunrise || !d.sunrise[0]) return null;
+        // Instants only when the reply states its offset; without it the
+        // provider's wall clock is all there is. Required here, as the Today
+        // providers are elsewhere: the context cache chain loads on first use.
+        const { localToUtcIso } = require('./context/providers/openMeteo');
+        const offset = Number(data.utc_offset_seconds);
+        const instant = (local) => (data.utc_offset_seconds != null && Number.isFinite(offset)
+          ? localToUtcIso(local, offset) || null : null);
         return {
+          date: (d.time && d.time[0]) || today,
           sunrise: d.sunrise[0],
           sunset: d.sunset[0],
+          sunrise_utc: instant(d.sunrise[0]),
+          sunset_utc: instant(d.sunset[0]),
           daylight_minutes: Math.round((Number(d.daylight_duration && d.daylight_duration[0]) || 0) / 60),
         };
-      },
-    });
+      });
+    } catch (err) {
+      // Today's times couldn't be read: yesterday's, if cached, labeled stale
+      // with their own date, never as today's.
+      const yesterday = localDate(timeZone, new Date(Date.now() - DAY_MS));
+      result = await read(yesterday, () => { throw err; });
+      result = { ...result, stale: true };
+    }
+    const { payload, fetchedAt, stale } = result;
     if (!payload) return [serializePlaceSection('sunrise_sunset', { status: 'unavailable' })];
     return [serializePlaceSection('sunrise_sunset', {
       asOf: fetchedAt,
       status: stale ? 'stale' : 'ready',
-      data: payload,
+      data: sunData(payload, timeZone),
     })];
   } catch (err) {
     logger.warn('placeSections: sunrise failed', { homeId: home.id, error: err.message });

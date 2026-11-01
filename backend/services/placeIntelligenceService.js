@@ -244,11 +244,33 @@ const AQI_HEALTH_MESSAGES = {
   hazardous: 'Stay indoors and keep windows closed where possible.',
 };
 
-function mapAlertSeverity(sev) {
+// NWS names every product by its level ("Dense Fog Advisory", "Flood Watch", "Winter Storm Warning"), and
+// that is the level people read; the CAP severity is about the hazard ("Severe" for a thunderstorm watch).
+// The event name decides when it carries a level; the severity only when it doesn't.
+function mapAlertSeverity(sev, event = '') {
+  const name = String(event || '').trim().toLowerCase();
+  if (/\bwarning$/.test(name)) return 'warning';
+  if (/\bwatch$/.test(name)) return 'watch';
+  if (/\b(advisory|statement)$/.test(name)) return 'advisory';
   const s = String(sev || '').toLowerCase();
   if (s.includes('warn') || s.includes('severe') || s.includes('extreme')) return 'warning';
   if (s.includes('watch')) return 'watch';
   return 'advisory';
+}
+
+// The original bulletin's own fields for an alert's full detail (null when the provider doesn't say).
+function alertDetail(a) {
+  const text = (value) => (typeof value === 'string' && value.trim() ? value : null);
+  return {
+    sent: text(a.sent),
+    effective: text(a.effective),
+    expires: text(a.bulletin_expires),
+    sender_name: text(a.sender_name) || text(a.source),
+    area: text(a.area),
+    original_description: text(a.full_description),
+    original_instruction: text(a.full_instruction),
+    details_url: text(a.details_url),
+  };
 }
 
 // FEMA zone → qualitative risk.
@@ -494,11 +516,12 @@ function buildTodayEnvelopes({
     const active = alerts.map((a) => ({
       id: String(a.id),
       event: a.title,
-      severity: mapAlertSeverity(a.severity),
+      severity: mapAlertSeverity(a.severity, a.title),
       headline: a.headline || a.title,
       description: alertBody(a),
       onset: a.starts_at || null,
       ends: a.ends_at || null,
+      ...alertDetail(a),
     }));
     out.push(serializePlaceSection('alerts', {
       access: 'available', asOf, source: todayProviderLabel(alertsProvider), status: 'ready', data: { active },
@@ -635,8 +658,18 @@ async function composeTodayForPoint(lat, lng, { budgetMs = null } = {}) {
         severity: x.severity,
         headline: x.headline,
         description: x.description,
+        instruction: x.instruction,
         starts_at: x.onset,
         ends_at: x.expires,
+        sent: x.sent,
+        effective: x.effective,
+        bulletin_expires: x.bulletin_expires,
+        sender_name: x.sender_name,
+        area: x.area,
+        full_description: x.full_description,
+        full_instruction: x.full_instruction,
+        details_url: x.details_url,
+        source: x.source,
       }))
     : null;
 
@@ -1031,10 +1064,35 @@ async function composeBillBenchmark(home, access, userId) {
 }
 
 // ── home_systems (Band C — the household's own record) ───────
+// A system's last service, from the Home's maintenance log (Home tools → Maintenance): the newest completed
+// entry whose category is that system's. Only these three categories name one system; "plumbing" could be the
+// water heater or the sewer line, so those systems (and windows) have no service record here.
+const SERVICE_CATEGORY_SYSTEMS = { hvac: 'hvac', roof: 'roof', electrical: 'electrical_panel' };
+
+async function lastServiceBySystem(homeId) {
+  const { data, error } = await supabaseAdmin
+    .from('HomeMaintenanceLog')
+    .select('category, task, performed_at')
+    .eq('home_id', homeId)
+    .eq('status', 'completed')
+    .in('category', Object.keys(SERVICE_CATEGORY_SYSTEMS))
+    .order('performed_at', { ascending: false })
+    .limit(50);
+  if (error) throw new Error(error.message);
+  const out = {};
+  for (const row of data || []) {
+    const key = SERVICE_CATEGORY_SYSTEMS[row.category];
+    const date = String(row.performed_at || '').slice(0, 10);
+    if (!key || out[key] || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    out[key] = { date, source_label: 'Your maintenance log', title: row.task || null };
+  }
+  return out;
+}
+
 // The first section in Band C, so it is also the first thing on this
 // endpoint that the trust ladder actually gates: `bandAccess` returns
 // 'locked' below T3, and the client renders the locked card.
-async function composeHomeSystems(home, tier) {
+async function composeHomeSystems(home, tier, viewerAccess = null) {
   const access = bandAccess('C', tier);
   if (access !== 'available') {
     return [serializePlaceSection('home_systems', {
@@ -1048,6 +1106,17 @@ async function composeHomeSystems(home, tier) {
     const ledger = await getSystemsLedger(home);
     if (!ledger) {
       return [serializePlaceSection('home_systems', { access, status: 'unavailable' })];
+    }
+    // Service dates only for someone who may read the maintenance log; for anyone else the field is left out.
+    const seesLog = Boolean(viewerAccess && viewerAccess.hasAccess
+      && (viewerAccess.permissions || []).includes('maintenance.view'));
+    if (seesLog) {
+      try {
+        const service = await lastServiceBySystem(home.id);
+        ledger.systems = ledger.systems.map((system) => ({ ...system, last_service: service[system.key] || null }));
+      } catch (err) {
+        logger.warn('placeIntelligence: maintenance log read failed', { homeId: home.id, error: err.message });
+      }
     }
     return [serializePlaceSection('home_systems', { access, data: ledger })];
   } catch (err) {
@@ -1225,7 +1294,7 @@ const COMPOSER_SECTIONS = [
   { ids: ['environmental_hazards'], run: ({ home }) => placeSectionAdapters.composeEnvironmentalHazards(home) },
   { ids: ['block_density'], run: ({ home }) => composeDensity(home) },
   { ids: ['your_home'], run: ({ home, tier }) => composeYourHome(home, tier) },
-  { ids: ['home_systems'], run: ({ home, tier }) => composeHomeSystems(home, tier) },
+  { ids: ['home_systems'], run: ({ home, tier, access }) => composeHomeSystems(home, tier, access) },
   { ids: ['bill_benchmark'], run: ({ home, access, userId }) => composeBillBenchmark(home, access, userId) },
   { ids: ['exemption_check'], run: ({ home, tier }) => composeExemptionCheck(home, tier) },
   { ids: ['rent_band'], run: ({ home }) => placeSectionAdapters.composeRentBand(home) },

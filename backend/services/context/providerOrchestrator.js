@@ -435,6 +435,13 @@ async function getHubToday(userId, options = {}) {
       headline: a.headline || '',
       description: a.description || '',
       instruction: a.instruction || '',
+      sent: a.sent || '',
+      effective: a.effective || '',
+      bulletin_expires: a.bulletin_expires || '',
+      sender_name: a.sender_name || '',
+      area: a.area || '',
+      full_description: a.full_description || '',
+      full_instruction: a.full_instruction || '',
     } : {}),
   }));
 
