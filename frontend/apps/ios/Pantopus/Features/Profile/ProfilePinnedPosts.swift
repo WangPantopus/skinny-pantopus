@@ -28,9 +28,12 @@ final class ProfilePins {
     private(set) var revision = 0
 
     /// Whether your post is pinned; nil when the server didn't say (other
-    /// people's posts, an older server), which hides the menu item.
+    /// people's posts, an older server), which hides the menu item. A change
+    /// made this session applies only to posts the server marks as yours, so
+    /// it never reaches someone else's post after a switch of account.
     func isPinned(_ postId: String, server: Bool?) -> Bool? {
-        changed[postId] ?? server
+        guard let server else { return nil }
+        return changed[postId] ?? server
     }
 
     /// "Pin to profile" or "Unpin from profile"; nil hides the item.
