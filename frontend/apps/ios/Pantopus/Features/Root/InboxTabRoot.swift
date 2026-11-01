@@ -116,10 +116,12 @@ public struct InboxTabRoot: View {
                 onCompose: { path.append(.compose) },
                 onOpenSearch: { path.append(.search) }
             )
+            .readableColumn()
             .toolbar(.hidden, for: .navigationBar)
             .swipesBackFromEdge()
             .navigationDestination(for: InboxRoute.self) { route in
                 destination(for: route)
+                    .readableColumn()
                     .toolbar(.hidden, for: .navigationBar)
             }
         }
