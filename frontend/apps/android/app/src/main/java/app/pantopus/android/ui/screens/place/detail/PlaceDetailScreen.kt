@@ -91,7 +91,7 @@ fun PlaceDetailScreen(
             onBack = onBack,
             onAsk = onAsk?.let { ask -> askAboutSection(viewModel, ask) },
         )
-        refreshNotice?.let { RefreshFailedLine(it) }
+        refreshNotice?.let { RefreshFailedLine(it, Modifier.padding(horizontal = 16.dp)) }
         PullToRefreshBox(isRefreshing = refreshing, onRefresh = viewModel::refresh, modifier = Modifier.weight(1f)) {
             when (val current = state) {
                 PlaceDetailUiState.Loading -> PlaceDetailSkeleton()

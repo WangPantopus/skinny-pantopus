@@ -545,6 +545,47 @@ async function recentHealthViolations(pwsid) {
   }).length;
 }
 
+// EPA writes system names in capitals, many inverted for sorting ("VANCOUVER
+// CITY OF", "RIDGEFIELD, CITY OF"). They read in title case with the city or
+// town first; acronyms (PUD, MHP, WD) keep their capitals, and a name that
+// already has lower case stays as EPA wrote it.
+const NAME_SMALL_WORDS = new Set(['of', 'and', 'the', 'at', 'in', 'on', 'for', 'to']);
+const NAME_ACRONYMS = new Set(['pud', 'mud', 'sud', 'ud', 'mua', 'hoa', 'usa', 'us', 'afb', 'koa', 'ymca', 'wcid',
+  'ii', 'iii', 'iv', 'vi', 'vii', 'viii', 'ix']);
+// Vowel-less abbreviations that are words, not acronyms.
+const NAME_ABBREVIATIONS = new Set(['st', 'mt', 'ft', 'pt', 'nd', 'rd', 'th', 'dr', 'ln', 'ct', 'hwy', 'blvd', 'pkwy',
+  'ltd', 'twp', 'bd', 'wtr', 'svc', 'svcs', 'mgmt', 'cnty']);
+
+function titleCaseNameWord(word, first) {
+  const lower = word.toLowerCase();
+  const letters = lower.replace(/[^a-z]/g, '');
+  if (!letters) return word;
+  if (NAME_ACRONYMS.has(letters)) return word;
+  if (letters.length > 1 && !/[aeiouy]/.test(letters) && !NAME_ABBREVIATIONS.has(letters)) return word;
+  if (!first && NAME_SMALL_WORDS.has(lower)) return lower;
+  return lower
+    .replace(/(^|[-/(])([a-z])/g, (_, before, letter) => before + letter.toUpperCase())
+    .replace(/^([od])'([a-z])/i, (_, before, letter) => `${before.toUpperCase()}'${letter.toUpperCase()}`)
+    .replace(/^Mc([a-z])/, (_, letter) => `Mc${letter.toUpperCase()}`);
+}
+
+function waterSystemName(raw) {
+  const name = String(raw || '').trim();
+  if (!name || /[a-z]/.test(name)) return name;
+  const inverted = name.match(/^(.+?),?\s+(CITY|TOWN|VILLAGE|BOROUGH|TOWNSHIP|COUNTY)\s+OF\.?$/);
+  const ordered = inverted ? `${inverted[2]} OF ${inverted[1]}` : name;
+  return ordered.split(' ').map((word, i) => titleCaseNameWord(word, i === 0)).join(' ');
+}
+
+// Renamed on read, not on fetch, so answers cached before the rename read the
+// same way.
+function withWaterSystemName(payload) {
+  const raw = payload.utility_name;
+  const name = waterSystemName(raw);
+  if (!raw || name === raw) return payload;
+  return { ...payload, utility_name: name, summary: String(payload.summary || '').split(raw).join(name) };
+}
+
 // The section's data. The summary names the system and how sure the match
 // is, because the apps show only the summary on most surfaces.
 function waterData({ name, pwsId, count, match, estimated = false, county = null }) {
@@ -684,7 +725,7 @@ async function composeDrinkingWater(home) {
       // a county guess is partial.
       coverage: payload.match === 'service_area' && !payload.estimated_area ? 'full' : 'partial',
       source: payload.match === 'service_area' ? 'EPA water service areas · EPA SDWIS' : 'EPA SDWIS county records',
-      data: payload,
+      data: withWaterSystemName(payload),
     })];
   } catch (err) {
     logger.warn('placeSections: drinking_water failed', { homeId: home.id, error: err.message });
