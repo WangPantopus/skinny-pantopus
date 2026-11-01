@@ -14,6 +14,8 @@ interface PostsTabProps {
   /** Applies a change made here (a like, a save, a reply in the post panel) to the profile's list. */
   onPostsChange: (update: (posts: Post[]) => Post[]) => void;
   loading: boolean;
+  failed?: boolean;
+  onRetry?: () => void;
   /** The viewer blocked this person: a block hides both people's posts from each other. */
   blocked?: boolean;
   firstName?: string | null;
@@ -25,7 +27,7 @@ interface PostsTabProps {
  * Helpful, comments, save, share and report); a click opens the post panel, as in the feed and
  * My Pulse.
  */
-export default function PostsTab({ posts, onPostsChange, loading, blocked = false, firstName = null, currentUserId }: PostsTabProps) {
+export default function PostsTab({ posts, onPostsChange, loading, failed = false, onRetry, blocked = false, firstName = null, currentUserId }: PostsTabProps) {
   const queryClient = useQueryClient();
   const [detailPostId, setDetailPostId] = useState<string | null>(null);
   const [reportPostId, setReportPostId] = useState<string | null>(null);
@@ -98,8 +100,9 @@ export default function PostsTab({ posts, onPostsChange, loading, blocked = fals
     return (
       <div className="text-center py-12 bg-surface rounded-xl border border-app">
         <div className="text-6xl mb-4" aria-hidden="true">🏡</div>
-        <h3 className="text-lg font-semibold text-app mb-2">No posts yet</h3>
-        <p className="text-app-secondary">{firstName ? `${firstName}'s posts will appear here.` : 'Their posts will appear here.'}</p>
+        <h3 className="text-lg font-semibold text-app mb-2">{failed ? "Couldn't load posts" : 'No posts yet'}</h3>
+        <p className="text-app-secondary">{failed ? 'Check your connection and try again.' : firstName ? `${firstName}'s posts will appear here.` : 'Their posts will appear here.'}</p>
+        {failed && onRetry && <button onClick={onRetry} className="mt-4 text-primary-600">Try again</button>}
       </div>
     );
   }

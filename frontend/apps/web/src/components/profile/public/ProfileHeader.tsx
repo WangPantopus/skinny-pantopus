@@ -20,6 +20,8 @@ interface ProfileHeaderProps {
   handle?: string | null;
   residency?: ResidencyPayload | null;
   showOwnerOnly: boolean;
+  /** Owner previews show the visitor controls without acting on the owner. */
+  previewOnly?: boolean;
   ownerPreviewContext: ViewerContext;
   onOwnerPreviewChange: (ctx: ViewerContext) => void;
   // Trust data
@@ -78,6 +80,7 @@ export default function ProfileHeader({
   handle = null,
   residency,
   showOwnerOnly,
+  previewOnly = false,
   ownerPreviewContext,
   onOwnerPreviewChange,
   trustBadges,
@@ -192,14 +195,14 @@ export default function ProfileHeader({
                 <>
                   {/* Someone you blocked can't be messaged (the block says so); Settings unblocks. */}
                   {connectionState !== 'blocked' && (
-                    <button onClick={onMessage} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium">Message</button>
+                    <button onClick={onMessage} disabled={previewOnly} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium disabled:opacity-60">Message</button>
                   )}
                   {/* Launch cut #4 (Open Gigs): "Request / Hire" opens the open-post composer. */}
-                  {launchFeatures.openGigs && <button onClick={onRequestHire} className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium">Request / Hire</button>}
+                  {launchFeatures.openGigs && <button onClick={onRequestHire} disabled={previewOnly} className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium disabled:opacity-60">Request / Hire</button>}
                   {canConnect && onConnect && (
                     <button
                       onClick={onConnect}
-                      disabled={actionLoading || connectionState === 'pending_sent'}
+                      disabled={previewOnly || actionLoading || connectionState === 'pending_sent'}
                       aria-label={connectionState === 'connected' ? 'Connected. Remove this connection' : undefined}
                       className={`px-4 py-2 border rounded-lg font-medium transition disabled:opacity-60 ${
                         connectionState === 'connected'
@@ -219,7 +222,7 @@ export default function ProfileHeader({
                   {canFollow && (
                     <button
                       onClick={onFollow}
-                      disabled={actionLoading}
+                      disabled={previewOnly || actionLoading}
                       className={`px-4 py-2 border rounded-lg font-medium transition disabled:opacity-60 ${
                         followState
                           ? 'bg-primary-50 text-primary-700 border-primary-300 hover:bg-primary-100'
@@ -235,10 +238,10 @@ export default function ProfileHeader({
                   <details className="relative">
                     <summary aria-label="More actions" className="list-none px-3 py-2 bg-surface text-app-strong border border-app-strong rounded-lg hover:bg-surface-raised cursor-pointer">⋯</summary>
                     <div className="absolute right-0 mt-2 w-40 bg-surface border border-app rounded-lg shadow-sm p-1 z-20">
-                      <button onClick={onReport} className="w-full text-left px-3 py-2 text-sm text-app-secondary hover:bg-surface-raised rounded">Report profile</button>
+                      <button onClick={onReport} disabled={previewOnly} className="w-full text-left px-3 py-2 text-sm text-app-secondary hover:bg-surface-raised rounded disabled:opacity-60">Report profile</button>
                       <button
                         onClick={onUnblock ?? onBlock}
-                        disabled={actionLoading}
+                        disabled={previewOnly || actionLoading}
                         className="w-full text-left px-3 py-2 text-sm text-app-secondary hover:bg-surface-raised rounded disabled:opacity-60"
                       >
                         {onUnblock ? 'Unblock user' : 'Block user'}
