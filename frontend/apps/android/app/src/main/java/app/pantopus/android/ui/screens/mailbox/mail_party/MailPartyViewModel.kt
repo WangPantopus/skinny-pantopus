@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.OccupantDto
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerMail
 import app.pantopus.android.data.api.models.mailbox.v2.MailPartySessionDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomeMembersRepository
@@ -96,6 +97,7 @@ data class MailPartyLiveSession(
     val status: MailPartyStatus,
     /** Assign roster. Empty in the [MailPartyLiveUiState.Empty] state. */
     val members: List<MailPartyMember>,
+    val rosterRestricted: Boolean = false,
 )
 
 /** The reaction just sent, held for [ttlSeconds] so the view can echo it. */
@@ -386,11 +388,19 @@ class MailPartyViewModel
                         }
                 }
 
-                is NetworkResult.Failure ->
+                is NetworkResult.Failure -> {
+                    // Party membership does not grant access to the household directory.
                     _live.value =
-                        MailPartyLiveUiState.Error(
-                            result.error.displayMessage("Couldn't open the party."),
-                        )
+                        if (result.error is NetworkError.Forbidden) {
+                            MailPartyLiveUiState.Empty(
+                                projectSession(card, emptyList()).copy(rosterRestricted = true),
+                            )
+                        } else {
+                            MailPartyLiveUiState.Error(
+                                result.error.displayMessage("Couldn't open the party."),
+                            )
+                        }
+                }
             }
         }
 

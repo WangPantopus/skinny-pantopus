@@ -3,12 +3,13 @@
 import { useState, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import * as api from '@pantopus/api';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
+import ModalShell from '@/components/ui/ModalShell';
 import type {
   ComposeMode, QuickComposeForm, StructuredComposeForm,
   MailType, QuickDestinationType, MailDeliveryVisibility, ObjectFormat, AvailableHome,
 } from './mailbox-types';
 import {
-  MAIL_TYPES, QUICK_COMPOSE_DEFAULTS, QUICK_COMPOSE_TYPE_OPTIONS,
+  MAIL_TYPES, QUICK_COMPOSE_DEFAULTS,
   COMPOSE_FIELD_CLASS, COMPOSE_SELECT_CLASS, COMPOSE_TEXTAREA_CLASS,
   STRUCTURED_COMPOSE_DEFAULTS,
 } from './mailbox-constants';
@@ -59,6 +60,10 @@ export default function ComposeMailModal({
   const [composeLoading, setComposeLoading] = useState(false);
   // The page banner that also gets this sits behind the modal's overlay.
   const [sendError, setSendError] = useState('');
+  const sendErrorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (sendError) sendErrorRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [sendError]);
 
   // Quick compose state
   const [quickComposeData, setQuickComposeData] = useState<QuickComposeForm>(() => ({
@@ -223,7 +228,7 @@ export default function ComposeMailModal({
     if (event.key === 'ArrowDown') { event.preventDefault(); setQuickRecipientActiveIndex((prev) => (prev + 1) % quickRecipientResults.length); return; }
     if (event.key === 'ArrowUp') { event.preventDefault(); setQuickRecipientActiveIndex((prev) => (prev <= 0 ? quickRecipientResults.length - 1 : prev - 1)); return; }
     if (event.key === 'Enter') { event.preventDefault(); const selected = quickRecipientResults[Math.max(0, quickRecipientActiveIndex)]; if (selected) selectQuickRecipient(selected); return; }
-    if (event.key === 'Escape') { event.preventDefault(); setQuickRecipientDropdownOpen(false); setQuickRecipientActiveIndex(-1); }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setQuickRecipientDropdownOpen(false); setQuickRecipientActiveIndex(-1); }
   };
 
   const handleStructuredRecipientInputChange = (value: string) => {
@@ -244,7 +249,7 @@ export default function ComposeMailModal({
     if (event.key === 'ArrowDown') { event.preventDefault(); setStructuredRecipientActiveIndex((prev) => (prev + 1) % structuredRecipientResults.length); return; }
     if (event.key === 'ArrowUp') { event.preventDefault(); setStructuredRecipientActiveIndex((prev) => (prev <= 0 ? structuredRecipientResults.length - 1 : prev - 1)); return; }
     if (event.key === 'Enter') { event.preventDefault(); const selected = structuredRecipientResults[Math.max(0, structuredRecipientActiveIndex)]; if (selected) selectStructuredRecipient(selected); return; }
-    if (event.key === 'Escape') { event.preventDefault(); setStructuredRecipientDropdownOpen(false); setStructuredRecipientActiveIndex(-1); }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setStructuredRecipientDropdownOpen(false); setStructuredRecipientActiveIndex(-1); }
   };
 
   // Payload builders
@@ -255,7 +260,7 @@ export default function ComposeMailModal({
     const isSelfDestination = quickComposeData.destinationType === 'self';
     const isPersonDestination = quickComposeData.destinationType === 'person' || isSelfDestination;
     const effectiveRecipientUserId = isSelfDestination ? currentUserId : explicitRecipientUserId;
-    if (!destinationHomeId) throw new Error('Address (home) is required.');
+    if (!destinationHomeId) throw new Error('Choose a home address before sending.');
     if (isSelfDestination && !currentUserId) throw new Error('Current user profile is not loaded yet. Try again.');
     if (isPersonDestination && !effectiveRecipientUserId) throw new Error('Recipient person is required.');
     if (!content) throw new Error('Content is required.');
@@ -281,7 +286,7 @@ export default function ComposeMailModal({
     const content = structuredComposeData.content.trim();
     const effectiveUserId = recipientMode === 'self' ? currentUserId : recipientUserId;
     if (!content) throw new Error('Content is required.');
-    if (!recipientHomeId) throw new Error('Address home ID is required.');
+    if (!recipientHomeId) throw new Error('Choose a home address before sending.');
     if (recipientMode === 'user' && !effectiveUserId) throw new Error('Recipient user ID is required.');
     if (recipientMode === 'self' && !effectiveUserId) throw new Error('Current user profile is not loaded yet. Try again.');
     const tags = structuredComposeData.tags.split(',').map((part) => part.trim()).filter(Boolean);
@@ -307,8 +312,9 @@ export default function ComposeMailModal({
     };
   };
 
-  const handleSendMail = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendMail = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (composeLoading) return;
     setActionError('');
     setActionSuccess('');
     setSendError('');
@@ -376,13 +382,18 @@ export default function ComposeMailModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="w-full max-w-lg bg-app-surface rounded-xl border border-app-border shadow-xl [color-scheme:light]">
-        <div className="px-5 py-4 border-b border-app-border-subtle flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-app-text">Compose Mail</h3>
-          <button onClick={handleClose} className="text-app-text-secondary hover:text-app-text-strong text-sm">Close</button>
-        </div>
-        <form onSubmit={handleSendMail} className="px-5 py-4 space-y-3">
+    <ModalShell
+      open
+      title="Compose Mail"
+      onClose={handleClose}
+      onCancel={handleClose}
+      cancelLabel="Cancel"
+      submitLabel="Send"
+      submitting={composeLoading}
+      onSubmit={() => { void handleSendMail(); }}
+    >
+      <form onSubmit={handleSendMail} className="space-y-3">
+        <fieldset disabled={composeLoading} className="space-y-3">
           <div className="flex items-center gap-2 rounded-lg bg-app-surface-sunken p-1">
             <button type="button" onClick={() => setComposeMode('quick')}
               className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition ${composeMode === 'quick' ? 'bg-app-surface text-app-text shadow-sm' : 'text-app-text-secondary hover:text-app-text'}`}>
@@ -423,7 +434,7 @@ export default function ComposeMailModal({
               <div className="space-y-2">
                 <label className="text-xs font-medium text-app-text-secondary">Step 2 — Address Route</label>
                 <AddressAutocomplete value={quickAddressInput}
-                  onChange={(value) => setQuickAddressInput(value)}
+                  onChange={(value) => { setQuickAddressInput(value); setQuickComposeData(prev => ({ ...prev, destinationHomeId: '' })); }}
                   onSelectNormalized={(normalized) => {
                     const matchedHome = matchHomeRouteFromAddress(normalized?.address || '');
                     if (matchedHome) { setQuickComposeData(prev => ({ ...prev, destinationHomeId: matchedHome.id })); setQuickAddressInput(matchedHome.label); }
@@ -492,7 +503,7 @@ export default function ComposeMailModal({
               <div className="space-y-2">
                 <label className="text-xs font-medium text-app-text-secondary">Step 4 — Deliverable Type</label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {QUICK_COMPOSE_TYPE_OPTIONS.map((typeKey) => {
+                  {(['letter'] as const).map((typeKey) => {
                     const typeInfo = MAIL_TYPES[typeKey] || MAIL_TYPES.other;
                     const selected = quickComposeData.type === typeKey;
                     return (
@@ -537,7 +548,7 @@ export default function ComposeMailModal({
               <div className="space-y-2">
                 <label className="text-xs font-medium text-app-text-secondary">Address (Home)</label>
                 <AddressAutocomplete value={structuredAddressInput}
-                  onChange={(value) => setStructuredAddressInput(value)}
+                  onChange={(value) => { setStructuredAddressInput(value); setStructuredComposeData(prev => ({ ...prev, recipientHomeId: '' })); }}
                   onSelectNormalized={(normalized) => {
                     const matchedHome = matchHomeRouteFromAddress(normalized?.address || '');
                     if (matchedHome) { setStructuredComposeData(prev => ({ ...prev, recipientHomeId: matchedHome.id })); setStructuredAddressInput(matchedHome.label); }
@@ -573,7 +584,7 @@ export default function ComposeMailModal({
                 <select value={structuredComposeData.type}
                   onChange={(e) => setStructuredComposeData(prev => ({ ...prev, type: e.target.value as MailType }))}
                   className={COMPOSE_SELECT_CLASS}>
-                  {Object.entries(MAIL_TYPES).map(([key, info]) => <option key={key} value={key}>{info.label}</option>)}
+                  {Object.entries(MAIL_TYPES).filter(([key]) => structuredComposeData.senderBusinessName || key === 'letter').map(([key, info]) => <option key={key} value={key}>{info.label}</option>)}
                 </select>
                 <select value={structuredComposeData.objectFormat}
                   onChange={(e) => setStructuredComposeData(prev => ({ ...prev, objectFormat: e.target.value as ObjectFormat }))}
@@ -613,16 +624,16 @@ export default function ComposeMailModal({
                   onChange={(e) => setStructuredComposeData(prev => ({ ...prev, tags: e.target.value }))}
                   className={COMPOSE_FIELD_CLASS}
                 />
-                <input type="number" min="0" max="10" step="0.01" placeholder="Payout amount (optional)" value={structuredComposeData.payoutAmount}
+                {structuredComposeData.senderBusinessName && <input type="number" min="0" max="10" step="0.01" placeholder="Payout amount (optional)" value={structuredComposeData.payoutAmount}
                   onChange={(e) => setStructuredComposeData(prev => ({ ...prev, payoutAmount: e.target.value }))}
                   className={COMPOSE_FIELD_CLASS}
-                />
+                />}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {senderBusinesses.length > 0 && (
                   <select aria-label="Send as" value={structuredComposeData.senderBusinessName}
-                    onChange={(e) => setStructuredComposeData(prev => ({ ...prev, senderBusinessName: e.target.value }))}
+                    onChange={(e) => setStructuredComposeData(prev => ({ ...prev, senderBusinessName: e.target.value, ...(!e.target.value ? { type: 'letter', payoutAmount: '', senderAddress: '' } : {}) }))}
                     className={COMPOSE_SELECT_CLASS}>
                     <option value="">Send as yourself</option>
                     {senderBusinesses.map((business) => (
@@ -630,32 +641,23 @@ export default function ComposeMailModal({
                     ))}
                   </select>
                 )}
-                <input type="text" placeholder="Sender address (optional)" value={structuredComposeData.senderAddress}
+                {structuredComposeData.senderBusinessName && <input type="text" placeholder="Sender address (optional)" value={structuredComposeData.senderAddress}
                   onChange={(e) => setStructuredComposeData(prev => ({ ...prev, senderAddress: e.target.value }))}
                   className={COMPOSE_FIELD_CLASS}
-                />
+                />}
               </div>
             </div>
           )}
 
           {sendError && (
-            <div role="alert" className="mt-3 text-sm px-3 py-2 rounded-lg border bg-red-50 text-red-700 border-red-200">
+            <div ref={sendErrorRef} role="alert" className="mt-3 text-sm px-3 py-2 rounded-lg border bg-red-50 text-red-700 border-red-200">
               {sendError}
             </div>
           )}
 
-          <div className="pt-1 flex items-center justify-end gap-2">
-            <button type="button" onClick={handleClose}
-              className="px-3 py-2 text-sm rounded-lg border border-app-border text-app-text-secondary hover:bg-app-hover">
-              Cancel
-            </button>
-            <button type="submit" disabled={composeLoading}
-              className="px-3 py-2 text-sm rounded-lg bg-gray-900 text-white hover:bg-black disabled:opacity-50">
-              {composeLoading ? 'Sending…' : 'Send'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </fieldset>
+        <button type="submit" className="hidden" tabIndex={-1} aria-hidden="true" />
+      </form>
+    </ModalShell>
   );
 }
