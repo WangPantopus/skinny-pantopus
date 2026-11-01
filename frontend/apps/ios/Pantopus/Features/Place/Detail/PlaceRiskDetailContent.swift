@@ -2,9 +2,11 @@
 //  PlaceRiskDetailContent.swift
 //  Pantopus
 //
-//  C5 — Risk & readiness. Flood / seismic / wildfire, the folded
-//  health & environment group (lead·radon, water, EPA facilities), and
-//  the local-state emergency-plan checklist (Ready.gov / Red Cross).
+//  C5 — Risk & readiness. The evidence list on top (each topic's result,
+//  the area it covers, the kind of evidence, its source and date), then
+//  flood / seismic / wildfire, the folded health & environment group
+//  (lead·radon, water, EPA facilities), and the local-state emergency-plan
+//  checklist (Ready.gov / Red Cross).
 //
 
 import SwiftUI
@@ -20,8 +22,31 @@ struct PlaceRiskDetailContent: View {
         _fridge = State(initialValue: vm.savedPlaceId == nil ? PlaceFridgeCardViewModel(homeId: vm.homeId) : nil)
     }
 
+    /// Every risk and environment topic this page covers, in the server's order.
+    private var topics: [PlaceSectionEnvelope] {
+        intel.groups
+            .filter { $0.group == .riskReadiness || $0.group == .healthEnvironment }
+            .flatMap(\.sections)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // What each result is and how far it reaches, before the details: a
+            // county radon zone isn't a home test, and nearby sites aren't contamination.
+            if !topics.isEmpty {
+                PlaceDetailSectionLabel(text: "At a glance")
+                PlaceGroupSurface {
+                    ForEach(Array(topics.enumerated()), id: \.element.id) { index, env in
+                        if index > 0 { PlaceRowDivider() }
+                        PlaceEvidenceRow(env: env, verifiesFirst: vm.verifiesFirst, onUnlock: vm.verifyAction)
+                    }
+                }
+                Text("No overall score: each topic stands on its own evidence. The details below keep every source and limit.")
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.Color.appTextMuted)
+                    .padding(.top, 8)
+            }
+
             // Heat & cold leads: it is the only thing here with a forecast
             // horizon short enough to act on today. The rest are standing facts.
             if let heat = vm.section(.heatCold, in: intel) {

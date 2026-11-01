@@ -1,9 +1,10 @@
 // @ts-nocheck
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useId, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Camera, ChevronDown, ChevronLeft, Ellipsis, Eye, HandHeart, Lock, MessageSquareQuote, Pencil, PenLine, Pin, Share, UserPlus } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { buildUserProfileShareUrl, chosenUsername } from '@pantopus/utils';
 import type { UserProfile, User, GigListItem, Review, Post } from '@pantopus/types';
@@ -13,33 +14,25 @@ import { toast } from '@/components/ui/toast-store';
 import ReportModal from '@/components/ui/ReportModal';
 import ErrorState from '@/components/ui/ErrorState';
 import { confirmStore } from '@/components/ui/confirm-store';
-import { ProfileHeader, TabButton } from '@/components/profile/public';
-import { ReliabilityPanel, AboutCard, SkillsCard } from '@/components/profile/public/cards';
-import {
-  OverviewTab,
-  MissionsTab,
-  PortfolioTab,
-  PostsTab,
-  ReviewsTab,
-  OwnerInsightsTab,
-  OwnerSettingsTab,
-} from '@/components/profile/public/tabs';
+import { ConnectSheet, ProfileHeader, ProfileMenu, RelationshipActions, TabButton } from '@/components/profile/public';
+import { firstWord, joinedRecently } from '@/components/profile/public/ProfileHeader';
+import { AccountSection, MonthLine, OwnerTips } from '@/components/profile/public/OwnerSections';
+import PreviewAsSheet, { PREVIEW_AUDIENCES, type PreviewAudience } from '@/components/profile/public/PreviewAsSheet';
+import { buttonRow, primaryButton, secondaryButton } from '@/components/profile/public/profileButtons';
+import { ReliabilityPanel } from '@/components/profile/public/cards';
+import { AboutTab, AroundTheNeighborhood, MissionsTab, PostsTab, WorkTab, hasContributions } from '@/components/profile/public/tabs';
+import YouAndSection from '@/components/profile/public/YouAndSection';
+import GetToKnowSection from '@/components/profile/public/GetToKnowSection';
+import PinnedPostsRow from '@/components/profile/public/PinnedPostsRow';
 import type { PortfolioEntry } from '@/components/profile/public/tabs/PortfolioTab';
 import { launchFeatures } from '@/lib/featureFlags';
+import { authPageHref } from '@/lib/auth-utils';
 import UsernamePrompt, { markAskedForUsername, shouldAskForUsername } from '@/components/profile/UsernamePrompt';
-import { fetchMe } from '@/lib/me';
+import { fetchMe, useOwnLocalProfile } from '@/lib/me';
 import { queryKeys } from '@/lib/query-keys';
 
 type RelationshipState = 'none' | 'pending_sent' | 'pending_received' | 'connected' | 'blocked';
-type ViewerContext = 'public' | 'neighborhood' | 'follower' | 'owner';
-
-// As the owner's Preview selector names them (components/profile/public/ProfileHeader.tsx).
-const OWNER_PREVIEW_LABELS: Record<Exclude<ViewerContext, 'owner'>, string> = {
-  public: 'Public',
-  neighborhood: 'Neighborhood',
-  follower: 'Followers',
-};
-type ProfileTab = 'overview' | 'portfolio' | 'missions' | 'reviews' | 'posts' | 'insights' | 'settings';
+type ProfileTab = 'posts' | 'about' | 'work' | 'missions';
 
 /** Extended profile shape returned by the public profile API. */
 type PublicProfileData = UserProfile & {
@@ -79,6 +72,7 @@ function toPortfolioEntries(files: Array<Record<string, any>> | undefined): Port
 // once and asks again only after that, or after your own follow, connection, block or review. Your relationship
 // and block list are read on every visit, as in the apps: they decide which actions show.
 const PEOPLE_FRESH_MS = 5 * 60 * 1000;
+const POSTS_PAGE = 20;
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -99,17 +93,27 @@ interface PendingReviewStub {
 interface PublicProfileClientProps {
   username: string;
   initialProfile: PublicProfileData | null;
+  /** /app/profile: your own profile as a place of its own in the app (no Back). */
+  ownerHome?: boolean;
 }
 
-export default function PublicProfileClient({ username, initialProfile }: PublicProfileClientProps) {
+export default function PublicProfileClient({ username, initialProfile, ownerHome = false }: PublicProfileClientProps) {
   // Next reuses this route's component. A different person must get fresh tab,
   // review, portfolio and dialog state, including while their requests are pending.
-  return <ProfileContent key={normalizeProfileIdentifier(username)} username={username} initialProfile={initialProfile} />;
+  return <ProfileContent key={normalizeProfileIdentifier(username)} username={username} initialProfile={initialProfile} ownerHome={ownerHome} />;
 }
 
-function ProfileContent({ username, initialProfile }: PublicProfileClientProps) {
+/** The name a profile read gives, as the header shows it. */
+function readName(person: PublicProfileData | null | undefined): string | null {
+  if (!person) return null;
+  const handle = person.usernameIsGenerated ? null : chosenUsername(person.username);
+  return person.firstName && person.lastName ? `${person.firstName} ${person.lastName}` : person.name || handle || null;
+}
+
+function ProfileContent({ username, initialProfile, ownerHome = false }: PublicProfileClientProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const tabsId = useId();
   const profileIdentifier = normalizeProfileIdentifier(username);
   // What you saw of this person last time, for the first frame.
   const [kept] = useState(() => {
@@ -132,38 +136,79 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
   // A failed read that is not a 404 must not claim the profile doesn't exist.
   const [loadFailed, setLoadFailed] = useState(false);
   const [profileRestricted, setProfileRestricted] = useState(false);
-  const [activeTab, setActiveTab] = useState<ProfileTab>('overview');
+  const [activeTab, setActiveTab] = useState<ProfileTab>('posts');
   const [userGigs, setUserGigs] = useState<GigListItem[]>([]);
   const [gigsLoading, setGigsLoading] = useState(false);
   // null until the portfolio has loaded.
   const [portfolio, setPortfolio] = useState<PortfolioEntry[] | null>(() => kept.portfolio ? toPortfolioEntries(kept.portfolio.files) : null);
-  const [portfolioFailed, setPortfolioFailed] = useState(false);
   const portfolioRequested = useRef<string | null>(null);
   const [userPosts, setUserPosts] = useState<Post[]>(() => kept.posts?.posts || []);
+  // More posts than the first page: the tab offers the rest and leaves the count off.
+  const [postsHasMore, setPostsHasMore] = useState<boolean>(() => Boolean(kept.posts?.pagination?.hasMore));
+  const [postsMoreLoading, setPostsMoreLoading] = useState(false);
   // Posts are requested once per profile, reviews once per profile and viewer (the pending-review
-  // check needs the viewer); the tab effect re-runs on every profile or portfolio update.
+  // check needs the viewer); the load effect re-runs on every profile or portfolio update.
   const postsRequested = useRef<string | null>(null);
   const postsReadGeneration = useRef(0);
   const reviewsRequested = useRef<string | null>(null);
   const [postsLoading, setPostsLoading] = useState(false);
   const [postsFailed, setPostsFailed] = useState(false);
-  const [ownerPreviewContext, setOwnerPreviewContext] = useState<ViewerContext>('owner');
-  // Settings → How neighbors see you links here with ?preview=public: your own profile opens as others see it.
+  // Your own profile previewed as one audience (Preview as). The server answers exactly as that audience (`?as=`).
+  const [previewAudience, setPreviewAudience] = useState<PreviewAudience | null>(null);
+  const [preview, setPreview] = useState<{
+    audience: PreviewAudience;
+    profile: PublicProfileData | null;
+    posts: Post[];
+    postsFailed: boolean;
+    /** That audience can't open your profile at all (private, or "Who can find you"). */
+    refused: boolean;
+  } | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const [previewAttempt, setPreviewAttempt] = useState(0);
+  const [previewSheetOpen, setPreviewSheetOpen] = useState(false);
+  // ?preview=anyone|neighbors|connections reopens a preview after a reload (?preview=public is the older name for
+  // anyone, which Settings → How neighbors see you used).
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('preview') === 'public') setOwnerPreviewContext('public');
+    const value = new URLSearchParams(window.location.search).get('preview');
+    const audience = value === 'public' ? 'anyone' : value;
+    if (audience === 'anyone' || audience === 'neighbors' || audience === 'connections') setPreviewAudience(audience);
   }, []);
-  // Back to your own view, and off the link's ?preview=public so a reload stays there.
-  const leaveOwnerPreview = () => {
-    setOwnerPreviewContext('owner');
+  const setPreviewParam = (audience: PreviewAudience | null) => {
     const params = new URLSearchParams(window.location.search);
-    if (!params.has('preview')) return;
-    params.delete('preview');
+    if (audience) params.set('preview', audience);
+    else params.delete('preview');
     const query = params.toString();
     window.history.replaceState(window.history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+  };
+  const startPreview = (audience: PreviewAudience) => {
+    setPreviewSheetOpen(false);
+    setPreview(null);
+    setPreviewAudience(audience);
+    setActiveTab('posts');
+    setPreviewParam(audience);
+  };
+  // Back to your own view, and off the preview link so a reload stays there.
+  const leaveOwnerPreview = () => {
+    setPreviewAudience(null);
+    setPreview(null);
+    setPreviewFailed(false);
+    setPreviewParam(null);
   };
   const [shareCopied, setShareCopied] = useState(false);
   // Sharing your own profile while its link still has the made-up username asks once for a real one.
   const [usernamePromptOpen, setUsernamePromptOpen] = useState(false);
+  // The session is readable only in the browser, so the server and the first frame draw the header alone; the
+  // actions and posts follow once it is known (signed out never flashes for someone signed in, or the reverse).
+  const [mounted, setMounted] = useState(false);
+  // A signed-in viewer is read before any action shows: until then nobody knows whether this is their own profile
+  // (yours never offers Message or Connect).
+  const [viewerChecked, setViewerChecked] = useState(false);
+  // Back appears only when there is somewhere in this tab to go back to (not on a shared link opened fresh).
+  const [canGoBack, setCanGoBack] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    setCanGoBack(window.history.length > 1);
+  }, []);
 
   // Reviews state
   const [reviews, setReviews] = useState<Review[]>(() => kept.reviews?.reviews || []);
@@ -180,10 +225,12 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
   const [blockedByMe, setBlockedByMe] = useState(false);
   // Connect shows only once the relationship is read, as in the apps: a failed read never offers it.
   const [connectionKnown, setConnectionKnown] = useState(false);
+  const [connectionFailed, setConnectionFailed] = useState(false);
   // True when the viewer's personal block list could not be read: Follow
   // fails closed rather than offering an affordance the server may refuse.
   const [followUnavailable, setFollowUnavailable] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
 
   const [reportTarget, setReportTarget] = useState<{ id: string; current: () => boolean } | null>(null);
   const actionGeneration = useRef(0);
@@ -212,6 +259,8 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
       }
     } catch (err) {
       console.error('Failed to load current user:', err);
+    } finally {
+      if (current()) setViewerChecked(true);
     }
     return null;
   }, [captureAction]);
@@ -221,6 +270,7 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
     pendingBlock.current = false;
     setActionLoading(false);
     setReportTarget(null);
+    setConnectOpen(false);
     setCurrentUser(null);
     setConnectionState('none');
     setFollowState(false);
@@ -228,7 +278,7 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
     const invalidate = () => { actionGeneration.current++; };
     const retire = () => {
       invalidate(); pendingBlock.current = false;
-      setReportTarget(null); setActionLoading(false); setCurrentUser(null);
+      setReportTarget(null); setConnectOpen(false); setActionLoading(false); setCurrentUser(null); setViewerChecked(false);
       postsRequested.current = null; // the new session sees the posts it may see
       void loadCurrentUser();
     };
@@ -297,6 +347,7 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
     // never offers Follow for someone this account blocked; a failed read
     // fails closed.
     setConnectionKnown(false);
+    setConnectionFailed(false);
     try {
       const { blocked } = await api.blocks.getBlockedUsers();
       if (!current()) return;
@@ -312,6 +363,7 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
       if (!current()) return;
       console.error('Failed to load blocked users:', err);
       setFollowUnavailable(true);
+      setConnectionFailed(true);
       toast.error('Couldn\'t verify block status. Actions are unavailable.');
       return;
     }
@@ -323,6 +375,7 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
       setConnectionKnown(true);
     } catch (err) {
       console.error('Failed to load relationship status:', err);
+      if (current()) setConnectionFailed(true);
     }
   }, [profile?.id, captureAction]);
 
@@ -344,15 +397,14 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
     if (!profile?.id || portfolioRequested.current === profile.id) return;
     const id = profile.id;
     portfolioRequested.current = id;
-    setPortfolioFailed(false);
     try {
       const res = await read(queryKeys.personPortfolio(id), () => api.files.getPortfolio(id));
       setPortfolio(toPortfolioEntries(res.files as unknown as Array<Record<string, any>>));
     } catch (err) {
       console.error('Failed to load portfolio:', err);
-      // A failed refresh keeps what's shown; with nothing kept (or a refusal, which drops the copy) it says so.
-      if (queryClient.getQueryData(queryKeys.personPortfolio(id)) === undefined) { setPortfolio(null); setPortfolioFailed(true); }
-      portfolioRequested.current = null; // the next visit to the tab tries again
+      // A failed read keeps what's shown; with nothing kept the Work tab simply leaves the portfolio out.
+      if (queryClient.getQueryData(queryKeys.personPortfolio(id)) === undefined) setPortfolio(null);
+      portfolioRequested.current = null; // the next visit tries again
     }
   }, [profile?.id, read, queryClient]);
 
@@ -363,6 +415,7 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
     const current = () => actionCurrent() && generation === postsReadGeneration.current;
     if (!getAuthToken()) {
       setUserPosts([]);
+      setPostsHasMore(false);
       return;
     }
     const id = profile.id;
@@ -370,18 +423,39 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
     setPostsFailed(false);
     if (queryClient.getQueryData(key) === undefined) setPostsLoading(true);
     try {
-      const res = await read(key, () => api.posts.getUserPosts(id, { limit: 20 }));
+      const res = await read(key, () => api.posts.getUserPosts(id, { limit: POSTS_PAGE }));
       if (!current()) return;
       setUserPosts(res.posts || []);
+      setPostsHasMore(Boolean(res.pagination?.hasMore));
     } catch (err) {
       if (!current()) return;
       console.error('Failed to load user posts:', err);
-      if (queryClient.getQueryData(key) === undefined) { setUserPosts([]); setPostsFailed(true); }
+      if (queryClient.getQueryData(key) === undefined) { setUserPosts([]); setPostsHasMore(false); setPostsFailed(true); }
       postsRequested.current = null; // the next visit to the tab tries again
     } finally {
       if (current()) setPostsLoading(false);
     }
   }, [profile?.id, read, queryClient, captureAction]);
+
+  /** The next page of posts, after the last one shown. */
+  const loadMorePosts = async () => {
+    const last = userPosts[userPosts.length - 1];
+    if (!profile?.id || !last || postsMoreLoading) return;
+    const actionCurrent = captureAction();
+    const generation = postsReadGeneration.current;
+    const current = () => actionCurrent() && generation === postsReadGeneration.current;
+    setPostsMoreLoading(true);
+    try {
+      const res = await api.posts.getUserPosts(profile.id, { limit: POSTS_PAGE, cursorCreatedAt: last.created_at, cursorId: last.id });
+      if (!current()) return;
+      setUserPosts((prev) => [...prev, ...(res.posts || []).filter((post) => !prev.some((p) => p.id === post.id))]);
+      setPostsHasMore(Boolean(res.pagination?.hasMore));
+    } catch {
+      if (current()) toast.error('Couldn’t load more posts. Try again.');
+    } finally {
+      if (current()) setPostsMoreLoading(false);
+    }
+  };
 
   const loadReviews = useCallback(async () => {
     if (!profile?.id) return;
@@ -396,7 +470,7 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
       });
     } catch (err) {
       console.error('Failed to load reviews:', err);
-      reviewsRequested.current = null; // the next visit to the tab tries again
+      reviewsRequested.current = null; // the next visit tries again
     } finally {
       setReviewsLoading(false);
     }
@@ -422,32 +496,34 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
     const current = captureAction();
     void loadCurrentUser().then((viewer) => {
       if (!current()) return;
-      // Keep the anonymous projection for the owner's "How neighbors see
-      // you" preview; their account fields come from currentUser separately.
       if (!initialProfile || (getAuthToken() && viewer?.id !== initialProfile.id)) {
         setProfile(null);
         setLoading(true);
+        void loadProfile();
+      } else if (viewer?.id === initialProfile.id) {
+        // Your own read (your home's check, your city) replaces the signed-out copy; the header stays meanwhile.
         void loadProfile();
       }
     });
   }, [profileIdentifier, loadProfile, loadCurrentUser, initialProfile, captureAction]);
 
   useEffect(() => {
-    // Launch cut #4 (Open Gigs): a person's open tasks are not shown, so not loaded.
-    if (launchFeatures.openGigs && profile && ['overview', 'missions'].includes(activeTab) && userGigs.length === 0) {
-      loadUserGigs();
-    }
-    if (profile && ['overview', 'portfolio', 'insights'].includes(activeTab) && portfolioRequested.current !== profile.id) {
-      loadPortfolio();
-    }
-    if (profile && ['overview', 'posts'].includes(activeTab) && postsRequested.current !== profile.id) {
+    // Posts open first; the portfolio and reviews decide whether there is a Work tab, so they load with the page.
+    if (profile && postsRequested.current !== profile.id) {
       postsRequested.current = profile.id;
       loadUserPosts();
     }
+    if (profile && portfolioRequested.current !== profile.id) {
+      loadPortfolio();
+    }
     const reviewsKey = profile ? `${profile.id}:${currentUser?.id ?? ''}` : null;
-    if (profile && (activeTab === 'overview' || activeTab === 'reviews') && reviewsRequested.current !== reviewsKey) {
+    if (profile && reviewsRequested.current !== reviewsKey) {
       reviewsRequested.current = reviewsKey;
       loadReviews();
+    }
+    // Launch cut #4 (Open Gigs): a person's open tasks are not shown, so not loaded.
+    if (launchFeatures.openGigs && profile && activeTab === 'missions' && userGigs.length === 0) {
+      loadUserGigs();
     }
   }, [activeTab, profile, currentUser?.id, userGigs.length, portfolio, loadUserGigs, loadPortfolio, loadUserPosts, loadReviews]);
 
@@ -457,13 +533,54 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
     }
   }, [currentUser, profile, loadRelationshipStatus]);
 
+  // Your own profile: the name and photo neighbors see (your Local Profile) and, in Preview as, the audience's read.
+  const ownerCandidate = Boolean(currentUser?.id && profile?.id && currentUser.id === profile.id);
+  const ownLocalProfile = useOwnLocalProfile({ enabled: ownerCandidate });
+  // Your own pinned posts (the same read as your Pinned row): with none, a tip suggests pinning one.
+  const ownPinned = useQuery({
+    queryKey: queryKeys.personPinned(String(profile?.id ?? '')),
+    queryFn: () => api.posts.getUserPinnedPosts(String(profile?.id)),
+    enabled: ownerCandidate,
+    staleTime: 60 * 1000,
+  });
+  const previewGeneration = useRef(0);
+  const ownerId = ownerCandidate ? profile?.id : null;
+  useEffect(() => {
+    if (!previewAudience || !ownerId) return;
+    const audience = previewAudience;
+    const generation = ++previewGeneration.current;
+    const current = captureAction();
+    setPreview(null);
+    setPreviewFailed(false);
+    void (async () => {
+      const [read, posts] = await Promise.allSettled([
+        api.users.getProfileById(ownerId, { as: audience }),
+        api.posts.getUserPosts(ownerId, { limit: POSTS_PAGE, as: audience }),
+      ]);
+      if (!current() || generation !== previewGeneration.current) return;
+      if (read.status === 'rejected') {
+        const status = (read.reason as { statusCode?: number } | null)?.statusCode;
+        if (status === 403) setPreview({ audience, profile: null, posts: [], postsFailed: false, refused: true });
+        else setPreviewFailed(true);
+        return;
+      }
+      setPreview({
+        audience,
+        profile: read.value as PublicProfileData,
+        posts: posts.status === 'fulfilled' && !posts.value.sign_in_required ? posts.value.posts || [] : [],
+        postsFailed: posts.status === 'rejected',
+        refused: false,
+      });
+    })();
+  }, [previewAudience, ownerId, previewAttempt, captureAction]);
+
   // ── Action handlers ──
 
   const handleFollow = async () => {
     if (!currentUser) { router.push('/login'); return; }
     const current = captureAction();
     const targetId = profile!.id;
-    // A stray click on Following never unfollows: it asks first, as Connected does.
+    // A stray click on Unfollow never unfollows: it asks first, as Disconnect does.
     if (followState) {
       const yes = await confirmStore.open({
         title: `Unfollow ${fullName}?`,
@@ -479,12 +596,11 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
         await api.users.unfollowUser(targetId);
         if (!current()) return;
         setFollowState(false);
-        setProfile((p) => p ? { ...p, followers_count: Math.max(0, (p.followers_count || 1) - 1) } : p);
       } else {
         await api.users.followUser(targetId);
         if (!current()) return;
         setFollowState(true);
-        setProfile((p) => p ? { ...p, followers_count: (p.followers_count || 0) + 1 } : p);
+        toast.success(`You follow ${firstName}’s public posts.`);
       }
       forgetPerson(targetId);
       loadUserPosts();
@@ -500,52 +616,143 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
     }
   };
 
-  // Connect / Requested / Accept / Connected, as the apps' profile button: send a request, accept theirs, or remove
-  // the connection after Connections' own confirmation.
-  const handleConnect = async () => {
-    if (!currentUser) { router.push('/login'); return; }
-    const targetId = profile?.id;
-    const state = connectionState;
+  /** "Just follow" in the Connect sheet: true once following. */
+  const followFromSheet = async (): Promise<boolean> => {
+    if (!currentUser || !profile?.id) return false;
     const current = captureAction();
-    if (!targetId || state === 'pending_sent' || state === 'blocked') return;
-    if (state === 'connected') {
-      const yes = await confirmStore.open({ title: 'Remove this connection?', description: 'You can reconnect by sending a new request.', confirmLabel: 'Remove', variant: 'destructive' });
-      if (!yes || !current()) return;
+    const targetId = profile.id;
+    try {
+      await api.users.followUser(targetId);
+      if (!current()) return false;
+      setFollowState(true);
+      forgetPerson(targetId);
+      toast.success(`You follow ${firstName}’s public posts.`);
+      return true;
+    } catch (err: unknown) {
+      if (!current()) return false;
+      const status = (err as { statusCode?: number } | null)?.statusCode;
+      toast.error(status === 403 ? 'You can\'t follow this profile.' : 'Couldn\'t follow. Try again.');
+      return false;
     }
+  };
+
+  /** Send request from the Connect sheet, with the note when there is one: true once sent. */
+  const sendConnectRequest = async (note: string): Promise<boolean> => {
+    if (!currentUser || !profile?.id) return false;
+    const current = captureAction();
+    const targetId = profile.id;
     setActionLoading(true);
     try {
-      if (state === 'none') {
-        await api.relationships.sendRequest(targetId);
-        if (current()) setConnectionState('pending_sent');
-      } else if (state === 'pending_received') {
-        const pending = await api.relationships.getPendingRequests();
-        if (!current()) return;
-        const request = (pending.requests || []).find((r) => r.requester?.id === targetId);
-        if (!request?.id) throw new Error('This request is no longer pending.');
-        await api.relationships.acceptRequest(request.id);
-        if (current()) setConnectionState('connected');
-      } else {
-        const connected = await api.relationships.getConnections();
-        if (!current()) return;
-        const relationship = (connected.relationships || []).find((r) => r.other_user?.id === targetId);
-        if (!relationship?.id) throw new Error('You\u2019re no longer connected.');
-        await api.relationships.disconnect(relationship.id);
-        if (current()) setConnectionState('none');
-      }
+      await api.relationships.sendRequest(targetId, note || undefined);
+      if (!current()) return false;
+      setConnectionState('pending_sent');
       forgetPerson(targetId);
-      if (current() && state !== 'none') {
-        // Connection membership changes which posts the server permits. Drop
-        // the previous audience's copy before asking again, including offline.
-        postsReadGeneration.current++;
-        setUserPosts([]);
-        setProfile(null);
-        setLoading(true);
+      toast.success(`Request sent. ${firstName} approves it first.`);
+      return true;
+    } catch (err: unknown) {
+      if (!current()) return false;
+      toast.error(err instanceof Error && err.message ? err.message : 'Couldn’t send your request. Try again.');
+      return false;
+    } finally {
+      if (current()) setActionLoading(false);
+    }
+  };
+
+  // Connection membership changes which posts and fields the server permits. Drop the previous audience's copy
+  // before asking again, including offline.
+  const reloadAsNewAudience = async (targetId: string, current: () => boolean) => {
+    postsReadGeneration.current++;
+    setUserPosts([]);
+    setProfile(null);
+    setLoading(true);
+    await queryClient.cancelQueries({ queryKey: queryKeys.personPosts(targetId) });
+    queryClient.removeQueries({ queryKey: queryKeys.personPosts(targetId) });
+    if (current()) await Promise.all([loadProfile(), loadUserPosts()]);
+  };
+
+  /** Requested → withdraw your request, after a confirm. */
+  const handleWithdraw = async () => {
+    if (!currentUser || !profile?.id) return;
+    const targetId = profile.id;
+    const current = captureAction();
+    const yes = await confirmStore.open({
+      title: 'Withdraw your request?',
+      description: `${firstName} won’t be told. You can send a new one later.`,
+      confirmLabel: 'Withdraw',
+      variant: 'destructive',
+    });
+    if (!yes || !current()) return;
+    setActionLoading(true);
+    try {
+      const sent = await api.relationships.getSentRequests();
+      if (!current()) return;
+      const request = (sent.requests || []).find((r) => r.addressee?.id === targetId);
+      if (request?.id) await api.relationships.disconnect(request.id);
+      if (!current()) return;
+      setConnectionState('none');
+      forgetPerson(targetId);
+    } catch (err: unknown) {
+      if (current()) toast.error(err instanceof Error && err.message ? err.message : 'Couldn’t withdraw your request. Try again.');
+    } finally {
+      if (current()) setActionLoading(false);
+    }
+  };
+
+  /** The request they sent you: Accept, or Not now (it is declined; they can ask again). */
+  const answerRequest = async (accept: boolean) => {
+    if (!currentUser || !profile?.id) return;
+    const targetId = profile.id;
+    const current = captureAction();
+    setActionLoading(true);
+    try {
+      const pending = await api.relationships.getPendingRequests();
+      if (!current()) return;
+      const request = (pending.requests || []).find((r) => r.requester?.id === targetId);
+      if (!request?.id) throw new Error('This request is no longer pending.');
+      if (accept) await api.relationships.acceptRequest(request.id);
+      else await api.relationships.rejectRequest(request.id);
+      if (!current()) return;
+      setConnectionState(accept ? 'connected' : 'none');
+      forgetPerson(targetId);
+      if (accept) {
+        // A connection sees more: read the profile and posts again as one (the new profile also rereads the
+        // relationship, follow included).
         await queryClient.cancelQueries({ queryKey: queryKeys.personPosts(targetId) });
         queryClient.removeQueries({ queryKey: queryKeys.personPosts(targetId) });
         if (current()) await Promise.all([loadProfile(), loadUserPosts()]);
       }
     } catch (err: unknown) {
-      if (current()) toast.error(err instanceof Error && err.message ? err.message : 'Couldn\u2019t update this connection. Try again.');
+      if (current()) toast.error(err instanceof Error && err.message ? err.message : 'Couldn’t answer this request. Try again.');
+    } finally {
+      if (current()) setActionLoading(false);
+    }
+  };
+
+  /** Connected ▾ → Disconnect, after a confirm; whatever only connections see leaves the page at once. */
+  const handleDisconnect = async () => {
+    if (!currentUser || !profile?.id) return;
+    const targetId = profile.id;
+    const current = captureAction();
+    const yes = await confirmStore.open({
+      title: `Disconnect from ${firstName}?`,
+      description: 'You’ll stop seeing each other’s connections-only posts. They aren’t notified. You can reconnect by sending a new request.',
+      confirmLabel: 'Disconnect',
+      variant: 'destructive',
+    });
+    if (!yes || !current()) return;
+    setActionLoading(true);
+    try {
+      const connected = await api.relationships.getConnections();
+      if (!current()) return;
+      const relationship = (connected.relationships || []).find((r) => r.other_user?.id === targetId);
+      if (!relationship?.id) throw new Error('You’re no longer connected.');
+      await api.relationships.disconnect(relationship.id);
+      if (!current()) return;
+      setConnectionState('none');
+      forgetPerson(targetId);
+      await reloadAsNewAudience(targetId, current);
+    } catch (err: unknown) {
+      if (current()) toast.error(err instanceof Error && err.message ? err.message : 'Couldn’t update this connection. Try again.');
     } finally {
       if (current()) setActionLoading(false);
     }
@@ -554,7 +761,7 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
   const handleMessage = async () => {
     // The public profile can render before the viewer's profile read finishes.
     // The session marker already covers cookie auth; the chat endpoint verifies it.
-    if (!getAuthToken()) { router.push('/login'); return; }
+    if (!getAuthToken()) { router.push(signInHref); return; }
     const recipientId = profile?.id;
     if (!recipientId || pendingMessage.current) return;
     const current = captureAction();
@@ -613,10 +820,15 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
       forgetPerson(targetId);
       if (!current()) return;
       // Mirrors the native clients: the connection edge drops to `blocked`
-      // on the same success, which hides the Connect / Follow row.
+      // on the same success, which hides Connect, Message and Follow.
       setConnectionState('blocked');
       setFollowState(false);
       setBlockedByMe(true);
+      setConnectOpen(false);
+      // Nothing of theirs stays on the page: the posts list empties at once.
+      postsReadGeneration.current++;
+      setUserPosts([]);
+      queryClient.removeQueries({ queryKey: queryKeys.personPosts(targetId) });
       toast.success(`${fullName} blocked`);
     } catch (err: unknown) {
       if (!current()) return;
@@ -708,12 +920,14 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(shareUrl);
         setShareCopied(true);
+        toast.success('Link copied');
         setTimeout(() => setShareCopied(false), 2000);
         return true;
       }
     } catch (err) {
       console.error('Share failed:', err);
     }
+    toast.error('Couldn’t share the link. Try again.');
     return false;
   };
 
@@ -727,14 +941,18 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
     await shareProfileLink(username);
   };
 
+  // Where Sign in and Join bring someone back to: this profile.
+  const profilePath = typeof window === 'undefined' ? `/${profileIdentifier}` : window.location.pathname;
+  const signInHref = authPageHref('/login', profilePath);
+
   // ── Loading / Error states ──
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div className="flex items-center justify-center py-20" role="status">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-          <p className="mt-4 text-app-secondary">Loading profile...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto" aria-hidden="true"></div>
+          <p className="mt-4 text-app-secondary">Loading profile…</p>
         </div>
       </div>
     );
@@ -755,9 +973,9 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
 
   if (!profile) {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div className="flex items-center justify-center py-20 px-5">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-app mb-2">{profileRestricted ? 'Profile unavailable' : 'Profile not found'}</h2>
+          <h1 className="text-2xl font-bold text-app mb-2">{profileRestricted ? 'Profile unavailable' : 'Profile not found'}</h1>
           <p className="text-app-secondary mb-4">
             {profileRestricted ? "This profile isn't visible to your account." : "This user doesn't exist or has been removed."}
           </p>
@@ -781,51 +999,59 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
   // ── Derived state ──
 
   const isOwnProfile = currentUser?.id === profile.id || currentUser?.username === profile.username;
-  const effectiveViewer: ViewerContext = isOwnProfile
-    ? ownerPreviewContext
-    : (connectionState === 'connected' ? 'follower' : 'public');
-
-  const showOwnerOnly = effectiveViewer === 'owner';
-  // The page is read signed out, which names the person as other people see them: by their Local Profile's name,
-  // handle and photo. The owner's own view keeps their account's, as in the apps; Preview shows the others' view.
-  const shownProfile: PublicProfileData = showOwnerOnly && currentUser?.id === profile.id
+  const signedIn = mounted && (Boolean(currentUser) || Boolean(getAuthToken()));
+  // Who is looking is known: signed out, or the signed-in account has been read.
+  const viewerReady = mounted && (!signedIn || viewerChecked);
+  const previewing = isOwnProfile && previewAudience !== null;
+  const showOwnerOnly = isOwnProfile && !previewing;
+  // Anyone with the link: what someone who isn't signed in sees (and your preview of it).
+  const anyoneView = mounted && (!signedIn || (previewing && previewAudience === 'anyone'));
+  // A preview draws that audience's own read (`?as=`) once it arrives.
+  const previewReady = Boolean(previewing && preview && preview.audience === previewAudience && !preview.refused && preview.profile);
+  const viewProfile: PublicProfileData = previewReady ? preview.profile : profile;
+  // Other people get the name, handle and photo neighbors see from the server. Your own profile shows you the same
+  // name and photo (your Local Profile's); your account name appears only in the "stays private" line.
+  const lpView = showOwnerOnly ? ownLocalProfile.data : undefined;
+  const signedOutCopy = initialProfile && initialProfile.id === profile.id ? initialProfile : null;
+  const ownerPhoto = lpView
+    ? lpView.profile?.avatarUrl ?? null
+    : signedOutCopy?.profile_picture_url || signedOutCopy?.avatar_url || null;
+  const shownProfile: PublicProfileData = showOwnerOnly
     ? {
       ...profile,
-      username: currentUser.username,
-      usernameIsGenerated: currentUser.usernameIsGenerated,
-      name: currentUser.name,
-      firstName: currentUser.firstName,
-      lastName: currentUser.lastName,
-      profile_picture_url: currentUser.profile_picture_url,
-      profilePicture: currentUser.profilePicture,
-      avatar_url: currentUser.avatar_url,
+      name: lpView?.profile?.displayName || readName(signedOutCopy) || readName(profile),
+      firstName: null,
+      lastName: null,
+      profile_picture_url: ownerPhoto,
+      avatar_url: ownerPhoto,
+      profilePicture: ownerPhoto,
     }
-    : profile;
+    : viewProfile;
+  // Until your Local Profile is read there is no right name to show (and no signed-out copy to borrow it from).
+  const ownerNamePending = showOwnerOnly && !lpView && ownLocalProfile.isPending && !signedOutCopy;
   // The server says when the username was made up (user_…, or the pre-October-7 kind built from the email).
   const chosenHandle = shownProfile.usernameIsGenerated ? null : chosenUsername(shownProfile.username);
-  const realName = shownProfile.firstName && shownProfile.lastName
-    ? `${shownProfile.firstName} ${shownProfile.lastName}`
-    : shownProfile.name || chosenHandle;
+  const realName = readName(shownProfile);
   const fullName = realName || 'Pantopus member';
-  // Other people get no first name, so "You blocked …" uses the name's first word, as the apps do.
-  const shownFirstName = realName?.split(' ')[0] || null;
+  // Other people get no first name, so "Connect with …" uses the name's first word, as the apps do.
+  const shownFirstName = realName ? firstWord(realName) : null;
+  const firstName = shownFirstName || 'this neighbor';
+  const photoUrl = shownProfile.profile_picture_url || shownProfile.avatar_url || shownProfile.profilePicture || null;
+  // "Your account name, Rowan Park-Lee, stays private.": only when it differs from the name neighbors see.
+  const accountName = lpView?.account?.displayName?.trim() || '';
+  const privateAccountName = accountName && accountName !== lpView?.profile?.displayName?.trim() ? accountName : null;
 
-  const displayRating = reviewStats.average || profile.average_rating || 0;
+  const residency = viewProfile.residency;
+  const verifiedNeighbor = Boolean(residency?.hasHome && residency?.verified);
+  // Only a city the read returns (the person's "Who sees your city" setting decides).
+  const city = residency?.city || viewProfile.city || null;
+
   const displayReviewCount = reviewStats.total || profile.review_count || 0;
+  const featuredSkills = Array.isArray(viewProfile.skills) ? viewProfile.skills : [];
+  const blocked = connectionState === 'blocked';
   // Someone you blocked can't be messaged (the block says so); the menu or Settings unblocks.
-  const canMessage = connectionState !== 'blocked';
-
-  const trustBadges = [
-    profile.address_verified ? { icon: '🏠', text: 'Address on file', color: 'green' } : null,
-    profile.stripe_account_id ? { icon: '💳', text: 'Payment Verified', color: 'purple' } : null,
-  ].filter(Boolean) as Array<{ icon: string; text: string; color: string }>;
-
-  const featuredSkills = Array.isArray(profile.skills) ? profile.skills : [];
-  // Only what the profile actually carries: no response time is recorded yet, so none is claimed.
-  const responseTimeLabel =
-    profile.typical_response_time ||
-    profile.response_time_label ||
-    (profile.response_time_minutes ? `${profile.response_time_minutes} min` : null);
+  const canMessage = !blocked;
+  const canFollow = !blocked && !followUnavailable;
 
   // Worker history: tasks done, no-shows and late cancels. The score (100 less 15 per no-show and 5 per late
   // cancel) starts at 100, so it only means something once there is history.
@@ -837,28 +1063,355 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
     : reliabilityScore != null
       ? (reliabilityScore >= 90 ? 'Highly Reliable' : reliabilityScore >= 75 ? 'Reliable' : 'Needs Consistency')
       : 'No score yet';
-  const reliabilityDetail = hasReliabilityHistory
-    ? `From ${workerHistory} task${workerHistory === 1 ? '' : 's'} as worker`
-    : 'No tasks as worker yet';
 
-  const tabOptions: Array<{ key: ProfileTab; label: string; ownerOnly?: boolean }> = [
-    // No Services tab: no account has services to list (the API sends none), as on iOS and Android.
-    { key: 'overview', label: 'Overview' },
-    { key: 'portfolio', label: 'Portfolio' },
+  // Work only when there is work to show (or a review for you to write).
+  const reviewProps = {
+    reviews,
+    loading: reviewsLoading && reviews.length === 0,
+    stats: reviewStats,
+    pendingReview,
+    isOwnProfile,
+    onReviewSubmitted: () => {
+      setPendingReview(null);
+      forgetPerson(profile.id);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.myPendingReviews() });
+      reviewsRequested.current = null;
+      loadReviews();
+      loadProfile();
+    },
+  };
+  const showWork = (portfolio?.length ?? 0) > 0 || reviews.length > 0 || Boolean(pendingReview && !isOwnProfile)
+    || (launchFeatures.openGigs && hasReliabilityHistory);
+  // A preview shows that audience's posts; everyone else sees the posts the server gave them.
+  const shownPosts = previewing ? preview?.posts ?? [] : userPosts;
+  const postsCount = previewing
+    ? (shownPosts.length > 0 && shownPosts.length < POSTS_PAGE ? shownPosts.length : null)
+    : (!postsHasMore && !postsLoading && !postsFailed && userPosts.length > 0 ? userPosts.length : null);
+  const tabOptions: Array<{ key: ProfileTab; label: string; count?: number | null }> = [
+    { key: 'posts', label: 'Posts', count: postsCount },
+    { key: 'about', label: 'About' },
+    ...(showWork ? [{ key: 'work' as const, label: 'Work', count: displayReviewCount > 0 ? displayReviewCount : null }] : []),
     // Launch cut #4 (Open Gigs): the Missions (Gigs) tab is hidden.
     ...(launchFeatures.openGigs ? [{ key: 'missions' as const, label: 'Missions' }] : []),
-    { key: 'reviews', label: `Reviews${displayReviewCount > 0 ? ` (${displayReviewCount})` : ''}` },
-    { key: 'posts', label: 'Posts' },
-    { key: 'insights', label: 'Insights', ownerOnly: true },
-    { key: 'settings', label: 'Settings', ownerOnly: true },
+  ];
+  const shownTab: ProfileTab = tabOptions.some((tab) => tab.key === activeTab) ? activeTab : 'posts';
+  const moveTab = (event) => {
+    const index = tabOptions.findIndex((tab) => tab.key === shownTab);
+    let next = -1;
+    if (event.key === 'ArrowRight') next = (index + 1) % tabOptions.length;
+    else if (event.key === 'ArrowLeft') next = (index - 1 + tabOptions.length) % tabOptions.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = tabOptions.length - 1;
+    if (next < 0) return;
+    event.preventDefault();
+    setActiveTab(tabOptions[next].key);
+    document.getElementById(`${tabsId}-${tabOptions[next].key}-tab`)?.focus();
+  };
+
+  if (ownerNamePending) {
+    return (
+      <div className="flex items-center justify-center py-20" role="status">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto" aria-hidden="true"></div>
+          <p className="mt-4 text-app-secondary">Loading your profile…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Pieces ──
+
+  const iconButton = 'w-11 h-11 rounded-full flex items-center justify-center text-app hover-bg-app transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-[color:var(--color-link)]';
+
+  const moreMenuItems = [
+    { key: 'share', label: shareCopied ? 'Link copied' : 'Share profile', onSelect: handleShare },
+    ...(signedIn && canFollow && !previewing
+      ? [{ key: 'follow', label: followState ? `Unfollow ${firstName}` : `Follow ${firstName}’s public posts`, onSelect: handleFollow, disabled: actionLoading }]
+      : []),
+    ...(signedIn && !previewing
+      ? [{ key: 'block', label: blockedByMe ? 'Unblock user' : 'Block user', onSelect: blockedByMe ? handleUnblock : handleBlock, disabled: actionLoading }]
+      : []),
+    ...(signedIn && !previewing ? [{ key: 'report', label: 'Report profile', onSelect: handleReport }] : []),
+    // Launch cut #4 (Open Gigs): "Request / Hire" opens the open-post composer.
+    ...(launchFeatures.openGigs && signedIn && !previewing && !blocked
+      ? [{ key: 'hire', label: 'Request / Hire', onSelect: handleRequestHire }]
+      : []),
   ];
 
-  const residency = profile.residency;
+  // Phones: Back and ⋯ (yours: "Your profile" and Share), as the drawings' top bar. /app/profile has no Back.
+  const topRow = previewing ? null : (
+    <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] lg:grid-cols-[auto_minmax(0,1fr)_2.75rem] items-center h-12 -mx-2 mb-1">
+      {canGoBack && !ownerHome ? (
+        <button type="button" onClick={() => router.back()} aria-label="Back" className={iconButton}>
+          <ChevronLeft aria-hidden="true" className="w-[1.625rem] h-[1.625rem]" strokeWidth={2.25} />
+        </button>
+      ) : <span className="lg:w-0" />}
+      {showOwnerOnly ? (
+        // Centered over the page on phones, as the drawings' top bar; at the left of the two columns on desktop.
+        <p className="text-center lg:text-left lg:px-2 text-[1.0625rem] leading-[1.375rem] font-semibold text-app">Your profile</p>
+      ) : <span />}
+      {!viewerReady ? <span /> : showOwnerOnly || !signedIn ? (
+        <button type="button" onClick={handleShare} aria-label={showOwnerOnly ? 'Share your profile' : 'Share this profile'} className={iconButton}>
+          <Share aria-hidden="true" className="w-[1.375rem] h-[1.375rem]" strokeWidth={2} />
+        </button>
+      ) : (
+        <ProfileMenu
+          ariaLabel="More: share, follow, block or report"
+          menuLabel={`${fullName}: more`}
+          trigger={<Ellipsis aria-hidden="true" className="w-6 h-6" strokeWidth={2.5} />}
+          triggerClassName={iconButton}
+          items={moreMenuItems}
+        />
+      )}
+    </div>
+  );
+
+  const audienceInfo = previewing ? PREVIEW_AUDIENCES.find((a) => a.key === previewAudience) : null;
+  const previewBanner = audienceInfo ? (
+    <div className="mb-3 -mx-1 rounded-2xl border border-sky-200 bg-sky-50 py-2 pl-3.5 pr-1 flex items-center gap-2.5" role="status">
+      <Eye aria-hidden="true" className="w-5 h-5 shrink-0 text-app-link" strokeWidth={2} />
+      <div className="min-w-0 flex-1">
+        <p className="text-[0.9375rem] leading-5 font-semibold text-app">Previewing as {audienceInfo.label.toLowerCase()}</p>
+        <p className="text-[0.8125rem] leading-[1.125rem] text-app-muted">{audienceInfo.detail}</p>
+      </div>
+      <button type="button" onClick={leaveOwnerPreview} className="min-h-[44px] px-3 text-[1.0625rem] font-semibold text-app-link hover:underline">
+        Done
+      </button>
+    </div>
+  ) : null;
+
+  // While a preview loads, or when that audience can't open your profile at all.
+  let previewBody = null;
+  if (previewing && !previewReady) {
+    if (previewFailed) {
+      previewBody = (
+        <div className="mt-6 rounded-2xl border border-app bg-surface px-5 py-6 text-center" role="alert">
+          <h2 className="text-[1.0625rem] leading-[1.375rem] font-semibold text-app">Couldn&apos;t load the preview</h2>
+          <p className="mt-1.5 text-[0.9375rem] leading-5 text-app-muted">Check your connection and try again.</p>
+          <button type="button" onClick={() => setPreviewAttempt((n) => n + 1)} className={`mt-4 ${secondaryButton}`}>Try again</button>
+        </div>
+      );
+    } else if (preview?.refused && preview.audience === previewAudience) {
+      previewBody = (
+        <div className="mt-6 rounded-2xl border border-app bg-surface px-5 py-6 text-center">
+          <span aria-hidden="true" className="mx-auto w-12 h-12 rounded-full bg-app-surface-sunken text-app-secondary flex items-center justify-center">
+            <Lock className="w-[1.375rem] h-[1.375rem]" />
+          </span>
+          <h2 className="mt-3 text-[1.0625rem] leading-[1.375rem] font-semibold text-app">They can&apos;t open your profile</h2>
+          <p className="mt-1.5 mx-auto max-w-[22rem] text-[0.9375rem] leading-5 text-app-muted">
+            {audienceInfo?.label} see a page saying your profile is private, because of who can find you in your privacy settings.
+          </p>
+          <button type="button" onClick={() => router.push('/app/profile/settings/privacy')} className={`mt-4 ${secondaryButton}`}>
+            Privacy settings
+          </button>
+        </div>
+      );
+    } else {
+      previewBody = (
+        <div className="py-16 text-center" role="status">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" aria-hidden="true" />
+          <p className="mt-4 text-app-secondary">Loading the preview…</p>
+        </div>
+      );
+    }
+  }
+
+  let actions = null;
+  if (!viewerReady) {
+    // Holds the buttons' place until the viewer is known.
+    actions = <div aria-hidden="true" className="mt-[1.125rem] min-h-[3rem]" />;
+  } else if (showOwnerOnly) {
+    // Your own profile never offers Message or Connect; Edit profile and Preview as are first.
+    actions = (
+      <div className={`mt-[1.125rem] ${buttonRow}`}>
+        <button type="button" onClick={() => router.push('/app/profile/edit')} className={primaryButton}>
+          <Pencil aria-hidden="true" className="w-[1.125rem] h-[1.125rem] shrink-0" strokeWidth={2.25} />
+          Edit profile
+        </button>
+        <button type="button" onClick={() => setPreviewSheetOpen(true)} aria-haspopup="dialog" className={secondaryButton}>
+          <Eye aria-hidden="true" className="w-[1.1875rem] h-[1.1875rem] shrink-0" strokeWidth={2.25} />
+          Preview as
+          <ChevronDown aria-hidden="true" className="w-[0.9375rem] h-[0.9375rem] shrink-0" strokeWidth={2.5} />
+        </button>
+      </div>
+    );
+  } else if (anyoneView) {
+    actions = (
+      <div className="mt-[1.125rem] flex">
+        <button
+          type="button"
+          onClick={() => router.push(authPageHref('/register', profilePath))}
+          disabled={previewing}
+          className={`flex-1 ${primaryButton}`}
+        >
+          <UserPlus aria-hidden="true" className="w-[1.1875rem] h-[1.1875rem] shrink-0" strokeWidth={2.25} />
+          Join Pantopus to connect with {firstName}
+        </button>
+      </div>
+    );
+  } else {
+    actions = (
+      <RelationshipActions
+        name={fullName}
+        // A preview shows the buttons that audience sees: your connections see Message and Connected.
+        relationship={previewing ? (previewAudience === 'connections' ? 'connected' : 'none') : connectionState}
+        relationshipKnown={previewing || connectionKnown}
+        relationshipFailed={!previewing && connectionFailed}
+        busy={actionLoading}
+        inert={previewing}
+        onConnect={() => setConnectOpen(true)}
+        onWithdraw={handleWithdraw}
+        onAccept={() => void answerRequest(true)}
+        onDecline={() => void answerRequest(false)}
+        onDisconnect={handleDisconnect}
+        onMessage={handleMessage}
+      />
+    );
+  }
+
+  // Tips only you see, at most two at a time (a photo, a tagline, what you help with).
+  const ownerTips = showOwnerOnly ? [
+    !photoUrl && {
+      key: 'photo', icon: <Camera className="w-5 h-5" />, title: 'Add a photo',
+      detail: 'Your initials show until you do. Only you see this tip.',
+      onOpen: () => router.push('/app/profile/edit#photo'),
+    },
+    !shownProfile.tagline && {
+      key: 'tagline', icon: <PenLine className="w-5 h-5" />, title: 'Write a tagline',
+      detail: 'One line about you, in bold under your name. Only you see this tip.',
+      onOpen: () => router.push('/app/profile/edit#tagline'),
+    },
+    featuredSkills.length === 0 && {
+      key: 'skills', icon: <HandHeart className="w-5 h-5" />, title: 'Add what you help with',
+      detail: 'Neighbors who need a hand can find you. Only you see this tip.',
+      onOpen: () => router.push('/app/profile/edit#helps-with'),
+    },
+    !(Array.isArray(shownProfile.prompts) && shownProfile.prompts.length > 0) && {
+      key: 'prompt', icon: <MessageSquareQuote className="w-5 h-5" />, title: 'Answer a prompt',
+      detail: 'Give neighbors an easy way to start a conversation. Only you see this tip.',
+      onOpen: () => router.push('/app/profile/edit#prompts'),
+    },
+    ownPinned.status === 'success' && (ownPinned.data?.posts ?? []).length === 0 && userPosts.length > 0 && {
+      key: 'pin', icon: <Pin className="w-5 h-5" />, title: 'Pin a post',
+      detail: 'Keep up to 3 posts at the top of your profile, from a post’s ⋯ menu. Only you see this tip.',
+      onOpen: () => router.push('/app/my-pulse'),
+    },
+  ].filter(Boolean) : [];
+
+  const ownerPostsLink = showOwnerOnly && userPosts.length > 0 ? (
+    <button type="button" onClick={() => router.push('/app/my-pulse')} className={`mt-3 w-full ${secondaryButton} !text-app-link`}>
+      {postsHasMore ? 'See all your posts' : userPosts.length > 2 ? `See all ${userPosts.length} posts` : 'Manage your posts'}
+    </button>
+  ) : null;
+
+  const tabs = (
+    <section aria-label={`${fullName}’s posts and details`} className="min-w-0">
+      <div role="tablist" aria-label="Profile" className="flex gap-7 border-b border-app overflow-x-auto">
+        {tabOptions.map((tab) => (
+          <TabButton
+            key={tab.key}
+            id={`${tabsId}-${tab.key}-tab`}
+            controls={`${tabsId}-${tab.key}-panel`}
+            label={tab.label}
+            count={tab.count}
+            active={shownTab === tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            onKeyDown={moveTab}
+          />
+        ))}
+      </div>
+      <div
+        role="tabpanel"
+        id={`${tabsId}-${shownTab}-panel`}
+        aria-labelledby={`${tabsId}-${shownTab}-tab`}
+        className="pt-3 pb-10"
+      >
+        {shownTab === 'posts' && (
+          // A preview's posts are the audience's view to look at, not to act on.
+          <div inert={previewing || undefined}>
+            <PostsTab
+              posts={showOwnerOnly ? userPosts.slice(0, 2) : shownPosts}
+              onPostsChange={(update) => {
+                if (previewing) return;
+                setUserPosts(update);
+                // The next opening reads the list again rather than showing the old counts.
+                void queryClient.invalidateQueries({ queryKey: queryKeys.personPosts(profile.id) });
+              }}
+              loading={!previewing && postsLoading}
+              failed={previewing ? Boolean(preview?.postsFailed) : postsFailed}
+              onRetry={previewing ? () => setPreviewAttempt((n) => n + 1) : () => void loadUserPosts()}
+              blocked={!previewing && blocked}
+              firstName={shownFirstName}
+              currentUserId={previewing ? undefined : currentUser?.id}
+              justJoined={joinedRecently(profile.created_at || profile.createdAt)}
+              onSayHi={viewerReady && !isOwnProfile && canMessage ? handleMessage : undefined}
+              isOwner={showOwnerOnly}
+              authorColorSeed={profile.id}
+            />
+            {ownerPostsLink}
+            {!isOwnProfile && postsHasMore && userPosts.length > 0 && !blocked && (
+              <button
+                type="button"
+                onClick={() => void loadMorePosts()}
+                disabled={postsMoreLoading}
+                className={`mt-3 w-full ${secondaryButton}`}
+              >
+                {postsMoreLoading ? 'Loading…' : 'Show more posts'}
+              </button>
+            )}
+          </div>
+        )}
+        {shownTab === 'about' && (
+          <div className="pt-3">
+            <AboutTab
+              firstName={firstName.charAt(0).toUpperCase() + firstName.slice(1)}
+              skills={featuredSkills}
+              verifiedNeighbor={verifiedNeighbor}
+              city={city}
+              emailConfirmed={Boolean(viewProfile.verified)}
+              socialLinks={viewProfile.socialLinks || viewProfile.social_links || null}
+              // Only what the person chose to show: your own read carries your email and phone either way.
+              contact={{
+                email: (viewProfile.showEmail ?? viewProfile.show_email) ? viewProfile.email : null,
+                phone: (viewProfile.showPhone ?? viewProfile.show_phone) ? (viewProfile.phoneNumber || viewProfile.phone_number) : null,
+              }}
+              onSkill={launchFeatures.openGigs && !isOwnProfile ? handleRequestHire : undefined}
+            >
+              {hasContributions(viewProfile.contributions) ? (
+                <AroundTheNeighborhood firstName={firstName} contributions={viewProfile.contributions} />
+              ) : null}
+            </AboutTab>
+          </div>
+        )}
+        {shownTab === 'work' && (
+          <div className="pt-3" inert={previewing || undefined}>
+            <WorkTab
+              portfolio={portfolio || []}
+              reviews={reviewProps}
+              before={launchFeatures.openGigs && hasReliabilityHistory ? (
+                <ReliabilityPanel profile={profile} reliabilityLabel={reliabilityLabel} reliabilityScore={reliabilityScore} />
+              ) : null}
+            />
+          </div>
+        )}
+        {shownTab === 'missions' && (
+          <div className="pt-3">
+            <MissionsTab
+              gigs={userGigs}
+              loading={gigsLoading}
+              completedCount={profile.gigs_completed || 0}
+              postedCount={profile.gigs_posted || 0}
+            />
+          </div>
+        )}
+      </div>
+    </section>
+  );
 
   // ── Render ──
 
   return (
-    <div className="bg-app min-h-screen pb-24 md:pb-8">
+    <div className="bg-app min-h-screen">
       <ReportModal
         key={`${profileIdentifier}:${actionGeneration.current}`}
         open={!!reportTarget && reportTarget.current()}
@@ -866,158 +1419,95 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
         onSubmit={submitReport}
         entityType="user"
       />
-      {isOwnProfile && ownerPreviewContext !== 'owner' ? (
-        // Your own profile as someone else sees it has no Preview selector (that is in your view): say which view this
-        // is and give yours back.
-        <div className="w-full px-4 sm:px-6 lg:px-10 xl:px-12 py-3 bg-surface border-b border-app flex items-center justify-between gap-3 text-sm">
-          <span className="text-app">
-            Viewing as: <span className="font-semibold">{OWNER_PREVIEW_LABELS[ownerPreviewContext]}</span>
-          </span>
-          <button
-            type="button"
-            onClick={leaveOwnerPreview}
-            className="font-medium text-primary-600 hover:underline"
-          >
-            Back to your view
-          </button>
-        </div>
-      ) : null}
-      <ProfileHeader
-        profile={shownProfile}
-        fullName={fullName}
-        hasName={Boolean(realName)}
-        handle={chosenHandle}
-        residency={residency}
-        showOwnerOnly={showOwnerOnly}
-        previewOnly={isOwnProfile && !showOwnerOnly}
-        ownerPreviewContext={ownerPreviewContext}
-        onOwnerPreviewChange={(context) => {
-          setOwnerPreviewContext(context);
-          if (context !== 'owner' && (activeTab === 'insights' || activeTab === 'settings')) setActiveTab('overview');
-        }}
-        trustBadges={trustBadges}
-        displayRating={displayRating}
-        displayReviewCount={displayReviewCount}
-        responseTimeLabel={responseTimeLabel}
-        reliabilityLabel={reliabilityLabel}
-        reliabilityDetail={reliabilityDetail}
-        followState={followState}
-        canFollow={connectionState !== 'blocked' && !followUnavailable}
-        connectionState={connectionState}
-        canConnect={connectionKnown && connectionState !== 'blocked'}
-        onConnect={handleConnect}
-        actionLoading={actionLoading}
-        shareCopied={shareCopied}
-        onFollow={handleFollow}
-        onMessage={handleMessage}
-        onRequestHire={handleRequestHire}
-        onShare={handleShare}
-        onBlock={handleBlock}
-        onUnblock={blockedByMe ? handleUnblock : undefined}
-        onReport={handleReport}
-      />
-
-      <div className="bg-surface border-b border-app mt-6">
-        <div className="w-full px-4 sm:px-6 lg:px-10 xl:px-12 overflow-x-auto">
-          <div role="tablist" aria-label="Profile" className="flex gap-6 min-w-max">
-            {tabOptions
-              .filter((tab) => !tab.ownerOnly || showOwnerOnly)
-              .map((tab) => (
-                <TabButton
-                  key={tab.key}
-                  label={tab.label}
-                  active={activeTab === tab.key}
-                  onClick={() => setActiveTab(tab.key)}
+      <div className="mx-auto w-full max-w-2xl lg:max-w-6xl px-5 lg:px-8 pt-2 pb-8">
+        {topRow}
+        {previewBanner}
+        {previewBody ?? (
+          // Phones: one column in the drawings' order. Desktop: who they are and how to say hi on the left, what
+          // they share on the right.
+          <div className="lg:grid lg:grid-cols-[minmax(0,23rem)_minmax(0,1fr)] lg:gap-x-12 xl:gap-x-16 lg:items-start">
+            <div className="min-w-0 lg:pt-2">
+              <ProfileHeader
+                name={fullName}
+                hasName={Boolean(realName)}
+                handle={chosenHandle}
+                photoUrl={photoUrl}
+                colorSeed={profile.id}
+                verifiedNeighbor={verifiedNeighbor}
+                city={city}
+                joinedAt={profile.created_at || profile.createdAt}
+                tagline={shownProfile.tagline}
+                bio={shownProfile.bio}
+                ownerNote={privateAccountName ? (
+                  <p className="mt-2 flex items-start gap-1.5 text-[0.8125rem] leading-[1.125rem] text-app-muted">
+                    <Lock aria-hidden="true" className="mt-0.5 w-3.5 h-3.5 shrink-0" strokeWidth={2} />
+                    <span>Your account name, {privateAccountName}, stays private.</span>
+                  </p>
+                ) : null}
+              >
+                {actions}
+                {showOwnerOnly && <OwnerTips accountId={profile.id} tips={ownerTips} />}
+              </ProfileHeader>
+              <YouAndSection
+                personId={String(profile.id)}
+                viewerId={String(currentUser?.id ?? '')}
+                firstName={firstName}
+                // A signed-in visitor once who's looking is known: never your own profile, a preview or a block.
+                enabled={Boolean(viewerReady && signedIn && currentUser?.id && profile.id && !isOwnProfile && !blocked)}
+              />
+              <GetToKnowSection
+                firstName={firstName}
+                prompts={viewProfile.prompts}
+                editHref={showOwnerOnly ? '/app/profile/edit#prompts' : null}
+              />
+            </div>
+            <div className="min-w-0 mt-7 lg:mt-0">
+              <PinnedPostsRow
+                personId={String(profile.id)}
+                // Signed in and allowed to see their posts; a preview reads as its audience (the "anyone" one has none).
+                enabled={Boolean(mounted && viewerReady && signedIn && profile.id && !anyoneView && !blocked
+                  && (!previewing || previewReady))}
+                audience={previewing && previewAudience !== 'anyone' ? previewAudience : null}
+                editHref={showOwnerOnly ? '/app/profile/edit#pinned' : null}
+                inert={previewing}
+              />
+              {!mounted ? (
+                <div aria-hidden="true" className="h-11 border-b border-app" />
+              ) : anyoneView ? (
+                <PostsTab
+                  posts={[]}
+                  onPostsChange={() => {}}
+                  loading={false}
+                  firstName={shownFirstName}
+                  signedOut
+                  onSignIn={previewing ? undefined : () => router.push(signInHref)}
                 />
-              ))}
+              ) : tabs}
+              {showOwnerOnly && (
+                <div className="flex flex-col gap-7 pb-4">
+                  <MonthLine />
+                  <AccountSection />
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
-      <main className="w-full px-4 sm:px-6 lg:px-10 xl:px-12 py-6">
-        {activeTab === 'overview' && (
-          <OverviewTab
-            profile={profile}
-            portfolio={portfolio}
-            portfolioFailed={portfolioFailed}
-            skills={featuredSkills}
-            reviews={reviews}
-            userGigs={userGigs}
-            gigsLoading={gigsLoading}
-            onSkillRequest={launchFeatures.openGigs ? handleRequestHire : undefined}
-            onViewPortfolio={() => setActiveTab('portfolio')}
-          />
-        )}
-        {activeTab === 'portfolio' && (
-          <PortfolioTab items={portfolio} failed={portfolioFailed} isOwner={showOwnerOnly} />
-        )}
-        {activeTab === 'missions' && (
-          <MissionsTab
-            gigs={userGigs}
-            loading={gigsLoading}
-            completedCount={profile.gigs_completed || 0}
-            postedCount={profile.gigs_posted || 0}
-          />
-        )}
-        {activeTab === 'reviews' && (
-          <ReviewsTab
-            reviews={reviews}
-            loading={reviewsLoading}
-            stats={reviewStats}
-            pendingReview={pendingReview}
-            isOwnProfile={isOwnProfile}
-            onReviewSubmitted={() => {
-              setPendingReview(null);
-              forgetPerson(profile.id);
-              void queryClient.invalidateQueries({ queryKey: queryKeys.myPendingReviews() });
-              loadReviews();
-              loadProfile();
-            }}
-          />
-        )}
-        {activeTab === 'posts' && (
-          <PostsTab
-            posts={userPosts}
-            onPostsChange={(update) => {
-              setUserPosts(update);
-              // The next opening reads the list again rather than showing the old counts.
-              void queryClient.invalidateQueries({ queryKey: queryKeys.personPosts(profile.id) });
-            }}
-            loading={postsLoading}
-            failed={postsFailed}
-            onRetry={() => void loadUserPosts()}
-            blocked={connectionState === 'blocked'}
-            firstName={shownFirstName}
-            currentUserId={currentUser?.id}
-          />
-        )}
-        {activeTab === 'insights' && showOwnerOnly && (
-          <OwnerInsightsTab
-            profile={profile}
-            portfolio={portfolio}
-            displayReviewCount={displayReviewCount}
-            displayRating={displayRating}
-          />
-        )}
-        {activeTab === 'settings' && showOwnerOnly && (
-          <OwnerSettingsTab onOpenSettings={() => router.push('/app/profile/settings')} />
-        )}
+      <PreviewAsSheet open={previewSheetOpen && showOwnerOnly} onClose={() => setPreviewSheetOpen(false)} onPick={startPreview} />
 
-        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4 mt-6">
-          {/* Launch cut #4 (Open Gigs): no task reliability, and a skill hires no one, as in the apps. */}
-          {launchFeatures.openGigs && (
-            <div className="space-y-4">
-              <ReliabilityPanel profile={profile} reliabilityLabel={reliabilityLabel} reliabilityScore={hasReliabilityHistory ? reliabilityScore : null} />
-            </div>
-          )}
-          <AboutCard profile={profile} residency={residency} />
-          <SkillsCard
-            skills={featuredSkills}
-            onAction={showOwnerOnly ? () => router.push('/app/profile/edit') : launchFeatures.openGigs ? handleRequestHire : undefined}
-            ownerView={showOwnerOnly}
-          />
-        </div>
-      </main>
+      <ConnectSheet
+        open={connectOpen && !previewing && connectionState === 'none'}
+        onClose={() => setConnectOpen(false)}
+        name={fullName}
+        firstName={firstName}
+        photoUrl={photoUrl}
+        colorSeed={profile.id}
+        following={followState}
+        canFollow={canFollow}
+        onSend={sendConnectRequest}
+        onFollow={followFromSheet}
+      />
 
       {usernamePromptOpen && currentUser && (
         <UsernamePrompt
@@ -1039,16 +1529,6 @@ function ProfileContent({ username, initialProfile }: PublicProfileClientProps) 
             });
           }}
         />
-      )}
-
-      {!showOwnerOnly && (canMessage || launchFeatures.openGigs) && (
-        <div className="fixed bottom-[var(--fab-lift,0px)] left-0 right-0 md:hidden bg-surface border-t border-app p-3 z-30">
-          {/* Launch cut #4 (Open Gigs): no "Request / Hire"; Message spans the bar. */}
-          <div className={`max-w-lg mx-auto grid ${canMessage && launchFeatures.openGigs ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
-            {canMessage && <button onClick={handleMessage} disabled={isOwnProfile} className="px-4 py-2.5 bg-primary-600 text-white rounded-lg font-medium disabled:opacity-60">Message</button>}
-            {launchFeatures.openGigs && <button onClick={handleRequestHire} disabled={isOwnProfile} className="px-4 py-2.5 bg-slate-900 text-white rounded-lg font-medium disabled:opacity-60">Request / Hire</button>}
-          </div>
-        </div>
       )}
     </div>
   );

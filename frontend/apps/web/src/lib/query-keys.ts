@@ -86,6 +86,10 @@ export const queryKeys = {
   personPortfolio: (id: string) => ['people', id, 'portfolio'] as const,
   personPosts: (id: string) => ['people', id, 'posts'] as const,
   personReviews: (id: string) => ['people', id, 'reviews'] as const,
+  /** What you and they share (GET /api/users/:id/in-common); components/profile/public/YouAndSection.tsx. */
+  personInCommon: (id: string) => ['people', id, 'in-common'] as const,
+  /** Their pinned posts (GET /api/posts/user/:id/pinned), as you see them or, on your own, as a preview audience. */
+  personPinned: (id: string, as?: string) => ['people', id, 'pinned', as ?? 'viewer'] as const,
 
   // ── Homes ─────────────────────────────────────────────────
   homeDetail: (id: string) => ['homes', 'detail', id] as const,

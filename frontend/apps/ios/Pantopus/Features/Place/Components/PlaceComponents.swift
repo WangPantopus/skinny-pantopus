@@ -36,13 +36,20 @@ extension View {
     func placeCard() -> some View {
         modifier(PlaceCardStyle())
     }
+
+    /// The card surface, or none for a row inside a group's own surface.
+    @ViewBuilder
+    func placeCard(_ on: Bool) -> some View {
+        if on { placeCard() } else { self }
+    }
 }
 
 // MARK: - Icon tile (`IconTile`)
 
 /// Rounded-square section icon. Tones: home (green), muted, sky.
 struct PlaceIconTile: View {
-    enum Tone { case home, muted, sky }
+    /// `neutral`: a navigation row inside a group (the color stays for status, with its label).
+    enum Tone { case home, muted, sky, neutral }
 
     let icon: PantopusIcon
     var tone: Tone = .home
@@ -60,7 +67,7 @@ struct PlaceIconTile: View {
     private var background: Color {
         switch tone {
         case .home: Theme.Color.homeBg
-        case .muted: Theme.Color.appSurfaceSunken
+        case .muted, .neutral: Theme.Color.appSurfaceSunken
         case .sky: Theme.Color.primary100
         }
     }
@@ -70,6 +77,7 @@ struct PlaceIconTile: View {
         case .home: Theme.Color.home
         case .muted: Theme.Color.appTextMuted
         case .sky: Theme.Color.primary600
+        case .neutral: Theme.Color.appTextSecondary
         }
     }
 }
@@ -191,6 +199,8 @@ struct PlaceVerifiedAvatar: View {
 struct PlaceTextButton: View {
     let title: String
     var arrow: Bool = true
+    /// A taller tap target around the line (44 pt where it stands on its own).
+    var minHeight: CGFloat = 0
     var action: () -> Void = {}
 
     var body: some View {
@@ -203,6 +213,8 @@ struct PlaceTextButton: View {
                 }
             }
             .foregroundStyle(Theme.Color.primaryInk)
+            .frame(minHeight: minHeight)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

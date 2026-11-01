@@ -17,18 +17,52 @@ export async function getProfile(userId: string): Promise<UserProfile> {
   return get<UserProfile>(`/api/users/${cleanPathParam(userId)}`);
 }
 
+/** Who your own profile is previewed as (`?as=`): only you can ask, and the answer is exactly that audience's. */
+export type ProfileAudience = 'anyone' | 'neighbors' | 'connections';
+
 /**
  * Get full public profile by user UUID
  */
-export async function getProfileById(userId: string): Promise<UserProfile> {
-  return get<UserProfile>(`/api/users/id/${cleanPathParam(userId)}`);
+export async function getProfileById(userId: string, params?: { as?: ProfileAudience }): Promise<UserProfile> {
+  return get<UserProfile>(`/api/users/id/${cleanPathParam(userId)}`, params);
 }
 
 /**
  * Get user profile by username
  */
-export async function getProfileByUsername(username: string): Promise<UserProfile> {
-  return get<UserProfile>(`/api/users/username/${cleanPathParam(username)}`);
+export async function getProfileByUsername(username: string, params?: { as?: ProfileAudience }): Promise<UserProfile> {
+  return get<UserProfile>(`/api/users/username/${cleanPathParam(username)}`, params);
+}
+
+/** What a person has done around the neighborhood, as their profile read gives it (`contributions`; null when unknown). */
+export interface ProfileContributions {
+  support_trains_helped: number;
+  plans_hosted: number;
+  helpful_marks: number;
+}
+
+/**
+ * What you and another person share, limited to what you may already see. Every part can be empty (your own profile,
+ * a block either way, a profile you can't open); other people appear by the name and photo neighbors see.
+ */
+export interface UserInCommon {
+  connections: {
+    count: number;
+    people: Array<{ id: string; name: string; username: string | null; avatar_url: string | null }>;
+  };
+  /** Upcoming plans you're both in, soonest first (at most 2). */
+  plans: Array<{ id: string; title: string; kind: string; starts_at: string | null; ends_at: string | null; host_id: string }>;
+  /** Support Trains you both signed up to help (at most 2). */
+  support_trains: Array<{ id: string; title: string }>;
+  /** Skills on both profiles, in their profile's order and spelling (at most 3). */
+  skills: string[];
+}
+
+/**
+ * What the signed-in viewer and this person share (GET /api/users/:id/in-common).
+ */
+export async function getInCommon(userId: string): Promise<UserInCommon> {
+  return get<UserInCommon>(`/api/users/${cleanPathParam(userId)}/in-common`);
 }
 
 /**

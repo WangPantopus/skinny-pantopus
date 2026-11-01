@@ -11,6 +11,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import * as api from '@pantopus/api';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
+import { personColor, personInitials } from '@/lib/personColor';
 import { PostMediaPreview, resolvePostMediaSlots } from './PostMediaGrid';
 import { PostLinkContent } from './LinkPreviewCard';
 import LinkPreviewCard from './LinkPreviewCard';
@@ -21,6 +22,7 @@ import PostMetadata from './PostMetadata';
 import { canSharePost, sharePostLink } from './sharePostLink';
 import type { AudienceProfile, Post } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
+import { canOfferProfilePin } from '@/hooks/useProfilePin';
 
 // ─── Lucide icon lookup (platform-specific JSX — data from shared config) ──
 const LUCIDE_MAP: Record<string, LucideIcon> = {
@@ -34,9 +36,14 @@ const POST_TYPE_THEMED_TEXT = 'text-[color:var(--post-type-text)] dark:text-[col
 const postTypeTextVars = (config: PostTypeConfig) =>
   ({ '--post-type-text': config.textColor, '--post-type-text-dark': config.darkTextColor }) as CSSProperties;
 
-function getTypeIcon(type: string): ReactNode {
+/** The post kind's icon (a pencil for kinds this build doesn't know); a profile's Pinned cards use it too. */
+export function postTypeIcon(type: string): LucideIcon {
   const name = POST_TYPE_ICONS_LUCIDE[type] || 'Pencil';
-  const Icon = LUCIDE_MAP[name] || PenLine;
+  return LUCIDE_MAP[name] || PenLine;
+}
+
+function getTypeIcon(type: string): ReactNode {
+  const Icon = postTypeIcon(type);
   return <Icon className="w-4 h-4" />;
 }
 
@@ -75,6 +82,11 @@ interface PostCardProps {
   onDelete?: (postId: string) => void;
   /** Opens the edit form for one of the viewer's own posts. */
   onEdit?: (post: Post) => void;
+  /**
+   * Pin to profile / Unpin from profile for one of the viewer's own posts. Offered only when the post says whether it
+   * is pinned (`profile_pinned`) and can show on the profile; hooks/useProfilePin.ts.
+   */
+  onProfilePin?: (post: Post, pin: boolean) => void;
   onHide?: (postId: string) => void;
   onMute?: (target: Parameters<typeof api.posts.muteEntity>[0]) => void;
   onNotHelpful?: (postId: string) => void;
@@ -87,6 +99,11 @@ interface PostCardProps {
   isSaving?: boolean;
   surface?: string;
   showToast?: (msg: string) => void;
+  /**
+   * On a person's own profile, their account id: the author's initials then sit on the person's own color, as in the
+   * profile header (and on iOS and Android). The feed colors initials by post kind.
+   */
+  authorColorSeed?: string;
 }
 
 function PostCard({
@@ -98,6 +115,7 @@ function PostCard({
   onSave,
   onDelete,
   onEdit,
+  onProfilePin,
   onHide,
   onMute,
   onNotHelpful,
@@ -108,6 +126,7 @@ function PostCard({
   isSaving,
   surface,
   showToast,
+  authorColorSeed,
 }: PostCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [solving, setSolving] = useState(false);
@@ -216,9 +235,9 @@ function PostCard({
         ) : (
           <div
             className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold ring-2"
-            style={{ background: config.color }}
+            style={{ background: authorColorSeed ? personColor(authorColorSeed) : config.color }}
           >
-            {creatorInitial}
+            {authorColorSeed ? personInitials(creatorName) || creatorInitial : creatorInitial}
           </div>
         )}
         <div className="flex-1 min-w-0">
@@ -287,6 +306,14 @@ function PostCard({
                   className="w-full text-left px-3 py-2 text-xs text-app-muted hover-bg-app"
                 >
                   Edit Post
+                </button>
+              )}
+              {isOwn && onProfilePin && canOfferProfilePin(post) && (
+                <button
+                  onClick={() => { onProfilePin(post, !post.profile_pinned); setMenuOpen(false); }}
+                  className="w-full text-left px-3 py-2 text-xs text-app-muted hover-bg-app"
+                >
+                  {post.profile_pinned ? 'Unpin from profile' : 'Pin to profile'}
                 </button>
               )}
               {isOwn && onDelete && (
@@ -575,6 +602,7 @@ export default React.memo(PostCard, (prev, next) => {
     && prev.post.like_count === next.post.like_count
     && prev.post.comment_count === next.post.comment_count
     && prev.post.userHasSaved === next.post.userHasSaved
+    && prev.post.profile_pinned === next.post.profile_pinned
     && repostedByText(prev.post.reposted_by) === repostedByText(next.post.reposted_by)
     && prev.isLiking === next.isLiking
     && prev.isSaving === next.isSaving
@@ -587,6 +615,7 @@ export default React.memo(PostCard, (prev, next) => {
     && prev.onSave === next.onSave
     && prev.onDelete === next.onDelete
     && prev.onEdit === next.onEdit
+    && prev.onProfilePin === next.onProfilePin
     && prev.onHide === next.onHide
     && prev.onMute === next.onMute
     && prev.onDismissSeeded === next.onDismissSeeded;

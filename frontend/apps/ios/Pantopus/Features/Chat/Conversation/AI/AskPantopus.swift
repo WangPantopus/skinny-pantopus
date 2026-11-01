@@ -233,8 +233,13 @@ struct AskPantopusGlyph: View {
     }
 }
 
-/// Today's box at the top: "Ask Pantopus" about the day.
+/// The Ask entry at the end of Today ("Ask Pantopus" about the day) and of
+/// Your Place (about the home).
 struct AskPantopusBox: View {
+    var title = "Ask Pantopus"
+    var subtitle: String? = "About today at your place"
+    var spokenLabel = "Ask Pantopus about your day"
+    var identifier = "todayAskPantopus"
     let action: @MainActor () -> Void
 
     var body: some View {
@@ -244,13 +249,15 @@ struct AskPantopusBox: View {
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(Theme.Color.magicBg))
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Ask Pantopus")
+                    Text(title)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.Color.appText)
-                    Text("About today at your place")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                        .lineLimit(1)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                            .lineLimit(1)
+                    }
                 }
                 Spacer(minLength: Spacing.s0)
                 Icon(.chevronRight, size: 16, color: Theme.Color.appTextMuted)
@@ -266,9 +273,9 @@ struct AskPantopusBox: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Ask Pantopus about your day")
+        .accessibilityLabel(spokenLabel)
         .accessibilityAddTraits(.isButton)
-        .accessibilityIdentifier("todayAskPantopus")
+        .accessibilityIdentifier(identifier)
     }
 }
 

@@ -331,6 +331,10 @@ const PROFILE_UNAVAILABLE_REPLY = {
   code: 'PROFILE_UNAVAILABLE',
 };
 
+// Profile prompts (PRF SRV-2). Required here rather than at the top: scripts/ci/check-legacy-identity-aliases.js
+// allowlists line 312 by number.
+const { normalizeProfilePrompts, serializeProfilePrompts } = require('../utils/profilePrompts');
+
 async function canAccessPublicUserProfile(viewerId, targetUserId, visibility = 'public') {
   if (viewerId && viewerId === targetUserId) return true;
   if (!canViewProfile(viewerId, targetUserId, visibility)) return false;
@@ -436,6 +440,7 @@ const PUBLIC_USER_PROFILE_SELECT = [
   'phone_number',
   'bio',
   'tagline',
+  'profile_prompts',
   'profile_picture_url',
   'city',
   'state',
@@ -1144,6 +1149,9 @@ const updateProfileSchema = Joi.object({
   bio: Joi.string().max(2000).allow('', null),
   tagline: Joi.string().max(255).allow('', null),
   dateOfBirth: Joi.date().iso().allow(null, ''),
+
+  // "Get to know <name>" prompts, checked in the handler (utils/profilePrompts.js) so the answer can say why.
+  profile_prompts: Joi.any(),
 
   // NEW: store these into social_links jsonb
   website: urlOrEmpty,
@@ -2821,6 +2829,7 @@ router.get('/profile', verifyToken, async (req, res) => {
         profilePicture: userData.profile_picture_url || null,
         bio: userData.bio || null,
         tagline: userData.tagline || null,
+        prompts: serializeProfilePrompts(userData.profile_prompts),
         socialLinks: userData.social_links || {},
         skills: (userSkills || []).map(s => s.skill_name),
         average_rating: userData.average_rating || 0,
@@ -2924,6 +2933,13 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
     // NEW: bio/tagline
     if (req.body.bio !== undefined) updates.bio = req.body.bio || null;
     if (req.body.tagline !== undefined) updates.tagline = req.body.tagline || null;
+
+    // Profile prompts: the list replaces the saved one, in the order sent.
+    if (req.body.profile_prompts !== undefined) {
+      const checked = normalizeProfilePrompts(req.body.profile_prompts);
+      if (checked.error) return res.status(400).json({ error: checked.error, code: checked.code });
+      updates.profile_prompts = checked.prompts;
+    }
 
     // Profile visibility and contact visibility.
     const profileVisibility = req.body.profileVisibility ?? req.body.profile_visibility;
@@ -3135,6 +3151,7 @@ router.patch('/profile', verifyToken, validate(updateProfileSchema), async (req,
         dateOfBirth: userData.date_of_birth,
         bio: userData.bio,
         tagline: userData.tagline,
+        prompts: serializeProfilePrompts(userData.profile_prompts),
         socialLinks: userData.social_links || {},
         accountType: userData.account_type,
         role: userData.role,
@@ -3715,6 +3732,8 @@ async function sendPublicProfile(req, res, userData, localProfileRouteMatch) {
     name: publicUserData.name,
     bio: publicUserData.bio,
     tagline: publicUserData.tagline,
+    // Shown to everyone who sees the bio (utils/profilePrompts.js).
+    prompts: serializeProfilePrompts(publicUserData.profile_prompts),
     avatar_url: publicUserData.profile_picture_url,
     profile_picture_url: publicUserData.profile_picture_url,
     profilePicture: publicUserData.profile_picture_url,
@@ -4135,7 +4154,7 @@ router.get('/:username', optionalAuth, async (req, res) => {
 
     const { data: userData, error } = await supabaseAdmin
       .from('User')
-      .select('id, username, name, first_name, middle_name, last_name, bio, city, state, profile_picture_url, created_at, profile_visibility, account_type')
+      .select('id, username, name, first_name, middle_name, last_name, bio, profile_prompts, city, state, profile_picture_url, created_at, profile_visibility, account_type')
       .eq('username', username)
       .maybeSingle();
     if (error) throw error;
@@ -4172,6 +4191,7 @@ router.get('/:username', optionalAuth, async (req, res) => {
         middleName: shownUser.middle_name,
         lastName: shownUser.last_name,
         bio: shownUser.bio,
+        prompts: serializeProfilePrompts(shownUser.profile_prompts),
         city: showArea ? shownUser.city : null,
         state: showArea ? shownUser.state : null,
         profile_picture_url: shownUser.profile_picture_url,

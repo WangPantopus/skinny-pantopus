@@ -577,11 +577,14 @@ extension PlacePresentation {
             )
         }
 
-        // 3) All clear — assert only what we actually know. Moderate air (AQI 51–100) is said as moderate, never as good.
-        let airClause: String? = switch aqiData?.category {
-        case .good: "air is good"
-        case .moderate: "air quality is moderate"
-        default: nil
+        // 3) Nothing urgent — say only what was checked: weather alerts, and the
+        //    air reading with its number. Moderate air (AQI 51–100) is moderate, never good.
+        let airSentence: String? = aqiData.flatMap { data in
+            switch data.category {
+            case .good: "Air quality is good (\(data.index))."
+            case .moderate: "Air quality is moderate (\(data.index))."
+            default: nil
+            }
         }
         let alertsKnownClear = alerts?.status == .ready && (alerts?.alerts?.active.isEmpty ?? true)
 
@@ -593,11 +596,10 @@ extension PlacePresentation {
 
         // Alerts that weren't checked are never an all-clear: say what's unknown, in a neutral chip.
         guard alertsKnownClear else {
-            let air = airClause.map { $0.prefix(1).uppercased() + $0.dropFirst() + " on your block today. " }
             return PlaceDerivedPulse(
                 variant: .allClear,
-                title: air.map { $0 + "Weather alerts aren't available right now." }
-                    ?? "Air quality and weather alerts aren't available for your block right now.",
+                title: airSentence.map { "\($0) Weather alerts aren't available right now." }
+                    ?? "Air quality and weather alerts aren't available right now.",
                 chip: PlaceChipModel(tone: .neutral, text: "Alerts unavailable"),
                 heroIcon: .cloudOff,
                 nudgeIcon: .lightbulb,
@@ -605,16 +607,10 @@ extension PlacePresentation {
             )
         }
 
-        var clauses: [String] = []
-        if let airClause { clauses.append(airClause) }
-        clauses.append("there are no active alerts")
-        let joined = clauses.joined(separator: " and ")
-        let title = "All clear on your block today. " + joined.prefix(1).uppercased() + joined.dropFirst() + "."
-
         return PlaceDerivedPulse(
             variant: .allClear,
-            title: title,
-            chip: PlaceChipModel(tone: .success, text: "All clear", icon: .check),
+            title: (["No active weather alerts right now."] + [airSentence].compactMap { $0 }).joined(separator: " "),
+            chip: PlaceChipModel(tone: .neutral, text: "No active alerts", icon: .check),
             heroIcon: .shieldCheck,
             nudgeIcon: .lightbulb,
             nudgeText: nudge

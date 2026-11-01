@@ -124,6 +124,8 @@ public final class RootTabModel {
     /// Changes each time the Place tab is tapped again while already on its
     /// root, so the root scrolls back to the top.
     public var placeReselectedAtRoot: UUID?
+    /// Changes each time the Today tab is tapped again: its page scrolls back to the top.
+    public var todayReselected: UUID?
     /// "Open your ballot" (Today, or Place's Today page): this Home's Your
     /// Place scrolls to its ballot card once, then clears it (as on Android).
     public var placeBallotHomeId: String?
@@ -503,6 +505,7 @@ public struct RootTabView: View {
                 if tab == .place, model.selected == .place, model.placeAtRoot {
                     model.placeReselectedAtRoot = UUID()
                 }
+                if tab == .today, model.selected == .today { model.todayReselected = UUID() }
                 model.selected = tab
             }
         )
@@ -646,6 +649,7 @@ extension RootTabView {
             return
         }
         if tab == .place, model.placeAtRoot { model.placeReselectedAtRoot = UUID() }
+        if tab == .today { model.todayReselected = UUID() }
         model.reselection = RootTabReselection(tab: tab)
     }
 

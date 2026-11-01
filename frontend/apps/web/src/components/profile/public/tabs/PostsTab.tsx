@@ -2,10 +2,12 @@
 
 import { useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Hand, Lock, MessageSquare } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { Post } from '@pantopus/types';
 import { PostCard, PostDetailPanel } from '@/components/feed';
 import { patchPostInFeedCaches } from '@/hooks/useFeedData';
+import { useProfilePin } from '@/hooks/useProfilePin';
 import ReportModal from '@/components/ui/ReportModal';
 import { toast } from '@/components/ui/toast-store';
 
@@ -20,14 +22,47 @@ interface PostsTabProps {
   blocked?: boolean;
   firstName?: string | null;
   currentUserId?: string;
+  /**
+   * Signed out (or your profile previewed as anyone with the link): posts are for signed-in neighbors
+   * (GET /api/posts/user/:userId needs a session), so the tab says so instead of showing an empty list.
+   */
+  signedOut?: boolean;
+  onSignIn?: () => void;
+  /** Joined in the last 14 days: an empty list reads "<name> just joined". */
+  justJoined?: boolean;
+  /** Message the person from an empty list; left out where messaging isn't open. */
+  onSayHi?: () => void;
+  /** Your own profile: an empty list speaks to you, and your posts' ⋯ menus offer Pin to profile. */
+  isOwner?: boolean;
+  /** The person's account id: their initials on the cards use their own color, as in the header. */
+  authorColorSeed?: string;
 }
+
+const emptyCard = 'rounded-2xl border border-app bg-surface px-5 py-6 flex flex-col items-center text-center';
+const emptyIcon = 'w-12 h-12 rounded-full bg-app-surface-sunken text-app-secondary flex items-center justify-center';
+const pillButton = 'mt-4 min-h-[2.75rem] px-5 rounded-full border border-app-strong bg-surface text-base font-semibold text-app inline-flex items-center gap-2 hover-bg-app';
 
 /**
  * A person's posts on their profile, drawn with the feed's card (photos and video, link previews,
  * Helpful, comments, save, share and report); a click opens the post panel, as in the feed and
  * My Pulse.
  */
-export default function PostsTab({ posts, onPostsChange, loading, failed = false, onRetry, blocked = false, firstName = null, currentUserId }: PostsTabProps) {
+export default function PostsTab({
+  posts,
+  onPostsChange,
+  loading,
+  failed = false,
+  onRetry,
+  blocked = false,
+  firstName = null,
+  currentUserId,
+  signedOut = false,
+  onSignIn,
+  justJoined = false,
+  onSayHi,
+  isOwner = false,
+  authorColorSeed,
+}: PostsTabProps) {
   const queryClient = useQueryClient();
   const [detailPostId, setDetailPostId] = useState<string | null>(null);
   const [reportPostId, setReportPostId] = useState<string | null>(null);
@@ -38,6 +73,11 @@ export default function PostsTab({ posts, onPostsChange, loading, failed = false
   const patch = (postId: string, changes: Partial<Post>) => {
     onPostsChange((prev) => prev.map((p) => (p.id === postId ? { ...p, ...changes } : p)));
     patchPostInFeedCaches(queryClient, postId, changes);
+  };
+
+  const profilePin = useProfilePin();
+  const handleProfilePin = async (post: Post, pin: boolean) => {
+    if (await profilePin(post, pin)) onPostsChange((prev) => prev.map((p) => (p.id === post.id ? { ...p, profile_pinned: pin } : p)));
   };
 
   // The state the person chose goes with each request, so a re-send can't flip it back.
@@ -75,41 +115,86 @@ export default function PostsTab({ posts, onPostsChange, loading, failed = false
     });
   };
 
+  if (signedOut) {
+    return (
+      <div className={emptyCard}>
+        <span aria-hidden="true" className={emptyIcon}><Lock className="w-[1.375rem] h-[1.375rem]" /></span>
+        <h3 className="mt-3 text-[1.0625rem] leading-[1.375rem] font-semibold text-app">Posts are for neighbors</h3>
+        <p className="mt-1.5 max-w-[18rem] text-[0.9375rem] leading-5 text-app-muted">
+          Sign in or join Pantopus to see {firstName ? `${firstName}'s` : 'their'} posts and pinned posts.
+        </p>
+        {onSignIn && <button type="button" onClick={onSignIn} className={pillButton}>Sign in</button>}
+      </div>
+    );
+  }
+
   if (loading) {
     return (
-      <div className="text-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
-        <p className="mt-4 text-app-secondary">Loading posts...</p>
+      <div className="text-center py-12" role="status">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" aria-hidden="true" />
+        <p className="mt-4 text-app-secondary">Loading posts…</p>
       </div>
     );
   }
 
   if (blocked) {
     return (
-      <div className="text-center py-12 bg-surface rounded-xl border border-app">
-        <div className="text-6xl mb-4" aria-hidden="true">🔒</div>
-        <h3 className="text-lg font-semibold text-app mb-2">Posts hidden</h3>
-        <p className="text-app-secondary">
+      <div className={emptyCard}>
+        <span aria-hidden="true" className={emptyIcon}><Lock className="w-[1.375rem] h-[1.375rem]" /></span>
+        <h3 className="mt-3 text-[1.0625rem] leading-[1.375rem] font-semibold text-app">Posts hidden</h3>
+        <p className="mt-1.5 max-w-[20rem] text-[0.9375rem] leading-5 text-app-muted">
           You blocked {firstName || 'this person'}. Neither of you sees the other&apos;s posts while the block is on.
         </p>
       </div>
     );
   }
 
-  if (posts.length === 0) {
+  if (posts.length === 0 && failed) {
     return (
-      <div className="text-center py-12 bg-surface rounded-xl border border-app">
-        <div className="text-6xl mb-4" aria-hidden="true">🏡</div>
-        <h3 className="text-lg font-semibold text-app mb-2">{failed ? "Couldn't load posts" : 'No posts yet'}</h3>
-        <p className="text-app-secondary">{failed ? 'Check your connection and try again.' : firstName ? `${firstName}'s posts will appear here.` : 'Their posts will appear here.'}</p>
-        {failed && onRetry && <button onClick={onRetry} className="mt-4 text-primary-600">Try again</button>}
+      <div className={emptyCard} role="alert">
+        <h3 className="text-[1.0625rem] leading-[1.375rem] font-semibold text-app">Couldn&apos;t load posts</h3>
+        <p className="mt-1.5 text-[0.9375rem] leading-5 text-app-muted">Check your connection and try again.</p>
+        {onRetry && <button type="button" onClick={onRetry} className={pillButton}>Try again</button>}
+      </div>
+    );
+  }
+
+  if (posts.length === 0 && isOwner) {
+    return (
+      <div className={emptyCard}>
+        <span aria-hidden="true" className={emptyIcon}><Hand className="w-[1.375rem] h-[1.375rem]" /></span>
+        <h3 className="mt-3 text-[1.0625rem] leading-[1.375rem] font-semibold text-app">No posts yet</h3>
+        <p className="mt-1.5 max-w-[17rem] text-[0.9375rem] leading-5 text-app-muted">
+          When you post, neighbors see it here too.
+        </p>
+      </div>
+    );
+  }
+
+  if (posts.length === 0) {
+    // A quiet profile still reads as intentional, with a way to say hi.
+    return (
+      <div className={emptyCard}>
+        <span aria-hidden="true" className={emptyIcon}><Hand className="w-[1.375rem] h-[1.375rem]" /></span>
+        <h3 className="mt-3 text-[1.0625rem] leading-[1.375rem] font-semibold text-app">
+          {justJoined ? `${firstName || 'This neighbor'} just joined` : 'No posts yet'}
+        </h3>
+        <p className="mt-1.5 max-w-[17rem] text-[0.9375rem] leading-5 text-app-muted">
+          {justJoined ? 'No posts yet. A quick hello goes a long way.' : `When ${firstName || 'they'} post${firstName ? 's' : ''}, it shows up here.`}
+        </p>
+        {onSayHi && (
+          <button type="button" onClick={onSayHi} className={pillButton}>
+            <MessageSquare aria-hidden="true" className="w-4 h-4" strokeWidth={2.25} />
+            Say hi
+          </button>
+        )}
       </div>
     );
   }
 
   return (
     <>
-      <div className="max-w-2xl space-y-4" data-testid="profile-posts">
+      <div className="space-y-3" data-testid="profile-posts">
         {posts.map((post) => (
           <PostCard
             key={post.id}
@@ -119,9 +204,11 @@ export default function PostsTab({ posts, onPostsChange, loading, failed = false
             onOpenDetail={(id) => setDetailPostId(id)}
             onSave={handleSave}
             onReport={(id) => setReportPostId(id)}
+            onProfilePin={isOwner ? handleProfilePin : undefined}
             currentUserId={currentUserId}
             isLiking={likingIds.has(post.id)}
             showToast={(message) => toast.info(message)}
+            authorColorSeed={authorColorSeed}
           />
         ))}
       </div>

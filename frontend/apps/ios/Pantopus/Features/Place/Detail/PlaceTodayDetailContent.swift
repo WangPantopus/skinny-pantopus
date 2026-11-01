@@ -2,14 +2,16 @@
 //  PlaceTodayDetailContent.swift
 //  Pantopus
 //
-//  C3 — Today / Environment detail. The living-sky Now card
-//  (`TodaySky.swift`), the "Good day to…" verdict tiles, the address
-//  calendar with its two-week strip, the AQI gauge, active alerts and the
-//  sun's arc (`TodayVisuals.swift`, `TodaySunArc.swift`).
-//
-//  The hourly/daily forecast arrays used to arrive empty (the backend
-//  hardcoded them), which is why the strips were omitted here. They are
-//  populated now; adding those strips is outstanding parity work.
+//  C3 — Today: the Today tab's content and Place's Today page (the November
+//  2026 redesign). Top to bottom: any active advisory (`TodayAdvisories`),
+//  the living sky (`TodaySky`) with the hours ahead (`TodayHourlyStrip`),
+//  "Coming up at home" (`TodayAgenda`) with the two-week address calendar
+//  one tap away, air quality and daylight, "Good day for…"
+//  (`TodayConditions`), the ballot, then two folded rows: home setup (the
+//  pickup editor and the radon card on demand) and "Sources and full
+//  conditions" (the daily forecast, the AQI gauge, every alert and the sun's
+//  arc). The tab adds its Plans cards, the saved-place reminders row and Ask
+//  Pantopus. Parity twin of Android's `PlaceTodayDetailContent`.
 //
 
 import Observation
@@ -20,6 +22,15 @@ import UserNotifications
 
 // swiftlint:disable multiline_arguments file_length
 
+/// What only the Today tab adds: its Plans cards, the saved-place reminders
+/// row and the Ask Pantopus entry (Place's Today page has Ask in its header).
+struct TodayTabExtras {
+    /// A saved place without a home: reminders need the home on Pantopus.
+    var savedPlace = false
+    let onAddHome: () -> Void
+    let onAsk: () -> Void
+}
+
 struct PlaceTodayDetailContent: View {
     let intel: PlaceIntelligence
     let vm: PlaceDetailViewModel
@@ -27,17 +38,28 @@ struct PlaceTodayDetailContent: View {
     /// without it the button is left out.
     var onOpenBallot: (() -> Void)?
     var showHomeRadon = false
+    var tab: TodayTabExtras?
     @Environment(RootTabModel.self) private var rootTabs
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var radonState: RadonTodayState?
     @State private var pickupOpenTrigger = 0
-    @State private var radonFocus = 0
+    /// The calendar opens with its pickup editor (home setup's "Set pickup days").
+    @State private var startsPicking = false
+    /// "Coming up at home" shows the two-week calendar instead of the list.
+    @State private var showsCalendar = false
+    @State private var setupOpen = false
+    @State private var radonItemOpen = false
+    @State private var conditionsOpen = false
+    @State private var agenda = TodayAgendaModel()
+    @State private var governments: BallotGovernmentsSheet?
 
-    private var radonAvailable: Bool {
+    var radonAvailable: Bool {
         vm.section(.leadRadon, in: intel)?.leadRadon?.radonZone.map { (1...3).contains($0) } ?? false
     }
 
-    private var needsPickup: Bool {
+    var needsPickup: Bool {
         guard let section = vm.section(.addressCalendar, in: intel) else { return false }
         if [.ready, .stale, .partial].contains(section.status) { return section.addressCalendar?.needsPickupDay ?? false }
         return section.status == .unavailable && vm.fallbackCalendar?.needsPickupDay == true
@@ -47,246 +69,96 @@ struct PlaceTodayDetailContent: View {
         intel: PlaceIntelligence,
         vm: PlaceDetailViewModel,
         showHomeRadon: Bool = false,
-        onOpenBallot: (() -> Void)? = nil
+        onOpenBallot: (() -> Void)? = nil,
+        tab: TodayTabExtras? = nil
     ) {
         self.intel = intel
         self.vm = vm
         self.showHomeRadon = showHomeRadon
         self.onOpenBallot = onOpenBallot
+        self.tab = tab
     }
 
-    /// Order (matches Android): what it is like now, what to do with it,
-    /// what recurs at this address, then air, alerts and sun. The calendar
-    /// is the reason the Today tab exists and sits above the fold.
+    /// One order on both apps: what matters now, what's coming up, then the
+    /// optional setup and the full detail.
     var body: some View {
         ScrollViewReader { proxy in
-            todayContent(proxy: proxy)
+            todaySections(proxy: proxy)
+                .task(id: vm.calendarHomeId) { await loadRadonState() }
+                .task(id: agendaKey) { await agenda.load(homeId: taskHomeId, plans: tab != nil) }
+                .onDisappear { radonState?.suspend() }
+                .onChange(of: showsCalendar) { _, shows in if !shows { startsPicking = false } }
+                .onChange(of: rootTabs.selected) { (_: RootTab, tab: RootTab) in resumeRadon(tab == .today) }
+                .onChange(of: scenePhase) { (_: ScenePhase, phase: ScenePhase) in
+                    // A picker opened from the radon sheet (the camera's permission alert) leaves the scene
+                    // inactive for a moment, and the sheet stays. Going to the background still ends it.
+                    if radonState?.choosingReport == true, phase != .background { return }
+                    resumeRadon(phase == .active && rootTabs.selected == .today)
+                }
+                .onChange(of: AppLockManager.shared.isLocked) { (_: Bool, locked: Bool) in
+                    resumeRadon(!locked && rootTabs.selected == .today)
+                }
+                .sheet(item: $governments) { sheet in
+                    BallotGovernmentsView(governments: sheet.governments, address: intel.place.line1) { governments = nil }
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.hidden)
+                }
         }
-    }
-
-    private func todayContent(proxy: ScrollViewProxy) -> some View {
-        loadedContent(proxy: proxy)
-            .onChange(of: rootTabs.selected) { (_: RootTab, tab: RootTab) in resumeRadon(tab == .today) }
-            .onChange(of: scenePhase) { (_: ScenePhase, phase: ScenePhase) in
-                // A picker opened from the radon sheet (the camera's permission alert) leaves the scene
-                // inactive for a moment, and the sheet stays. Going to the background still ends it.
-                if radonState?.choosingReport == true, phase != .background { return }
-                resumeRadon(phase == .active && rootTabs.selected == .today)
-            }
-            .onChange(of: AppLockManager.shared.isLocked) { (_: Bool, locked: Bool) in resumeRadon(!locked && rootTabs.selected == .today) }
-    }
-
-    private func loadedContent(proxy: ScrollViewProxy) -> some View {
-        todaySections(proxy: proxy)
-            .onChange(of: radonFocus) { _, _ in proxy.scrollTo("todayRadonCard", anchor: .top) }
-            .task(id: vm.calendarHomeId) { await loadRadonState() }
-            .onDisappear { radonState?.suspend() }
     }
 
     private func todaySections(proxy: ScrollViewProxy) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            firstUseCard(proxy: proxy)
-            weatherAndGoodDay(proxy: proxy)
-
-            addressCalendar
-            homeRadon
-
-            airAlertsSun
-        }
-    }
-
-    @ViewBuilder
-    private func firstUseCard(proxy: ScrollViewProxy) -> some View {
-        if showHomeRadon, let state = radonState, state.homeId == vm.calendarHomeId {
-            HomeFirstUseCard(
-                state: state,
-                needsPickup: needsPickup,
-                radonAvailable: radonAvailable,
-                onPickup: {
-                    guard (try? state.context.requireCurrent()) != nil else { return }
-                    pickupOpenTrigger += 1
-                    proxy.scrollTo("todayAddressCalendar", anchor: .top)
-                },
-                onRadon: {
-                    guard (try? state.context.requireCurrent()) != nil else { return }
-                    state.dismissedUntil = nil
-                    UserDefaults.standard.removeObject(forKey: "radonCard.dismissedUntil.\(state.homeId)")
-                    radonFocus += 1
-                }
-            )
-        }
-    }
-
-    @ViewBuilder
-    private var addressCalendar: some View {
-        // The address calendar (Wedge Phase 2, D6): what recurs at THIS address.
-        if let calendar = vm.section(.addressCalendar, in: intel) {
-            PlaceDetailSectionLabel(text: "At this address")
-            if let data = calendar.addressCalendar,
-               calendar.status == .ready || calendar.status == .stale || calendar.status == .partial {
-                AddressCalendarCard(homeId: vm.calendarHomeId, data: data, openTrigger: pickupOpenTrigger) { await vm.refresh() }
-                    .id("todayAddressCalendar")
-                PlaceSourceNote(name: calendar.source ?? "Pantopus registry", asOf: "next two weeks")
-            } else if calendar.status == .unavailable, let data = vm.fallbackCalendar {
-                AddressCalendarCard(homeId: vm.calendarHomeId, data: data, openTrigger: pickupOpenTrigger) { await vm.refresh() }
-                    .id("todayAddressCalendar")
-                PlaceSourceNote(name: "Pantopus registry", asOf: "next two weeks")
-            } else {
-                vm.fallbackCard(calendar)
-                    .task(id: calendar.status) {
-                        if calendar.status == .unavailable { await vm.loadFallbackCalendar() }
-                    }
+            advisories
+            sky(proxy: proxy)
+            agendaSection(proxy: proxy)
+            // The person's plans today (Directions, On my way, Message guests) right under the agenda.
+            if tab != nil, PlansFlags.shared.plans {
+                PlansTodayCards(gapAbove: true)
+            }
+            conditionsPair(proxy: proxy)
+            goodDay
+            ballotWeek
+            setup(proxy: proxy)
+            fullConditions
+            if let tab {
+                AskPantopusBox(action: tab.onAsk)
+                    .padding(.top, 24)
             }
         }
     }
 
-    @ViewBuilder
-    private var homeRadon: some View {
-        if showHomeRadon, let homeId = vm.calendarHomeId, let state = radonState, state.homeId == homeId,
-           let data = vm.section(.leadRadon, in: intel)?.leadRadon, let zone = data.radonZone, (1...3).contains(zone) {
-            RadonTodayCard(state: state, data: data).id("todayRadonCard")
-        }
+    /// The agenda reloads its tasks and plans whenever the place's copy does.
+    private var agendaKey: String {
+        "\(taskHomeId ?? "")|\(tab != nil)|\(vm.loadedAt?.timeIntervalSince1970 ?? 0)"
     }
 
-    private var skyCalendar: Calendar {
+    /// The Home whose tasks this viewer may read: household roles only (older
+    /// servers name no role; a refusal then shows no rows).
+    var taskHomeId: String? {
+        guard ["owner", "renter", "member"].contains(intel.viewer?.role ?? "owner") else { return nil }
+        return vm.calendarHomeId
+    }
+
+    var skyCalendar: Calendar {
         var calendar = Calendar.autoupdatingCurrent
         if let placeTimeZone { calendar.timeZone = placeTimeZone }
         return calendar
     }
 
     /// The place's zone; while it is unknown no clock time is shown for it.
-    private var placeTimeZone: TimeZone? {
+    var placeTimeZone: TimeZone? {
         intel.timeZone.flatMap(TimeZone.init(identifier:))
     }
 
-    private func placeTime(_ iso: String?) -> String? {
+    func placeTime(_ iso: String?) -> String? {
         placeTimeZone.flatMap { PlacePresentation.fmtTime(iso, timeZone: $0) }
     }
 
-    /// The air reading for the sky: smoke veils it, and bad air leads the card.
-    private var skyAir: SkyAir? {
-        guard let section = vm.section(.airQuality, in: intel), section.status == .ready || section.status == .stale,
-              let air = section.airQuality else { return nil }
-        return SkyAir(aqi: air.index, label: air.categoryLabel, smoky: air.dominantPollutant == "pm25")
-    }
-
-    /// The address calendar's upcoming dates, live or from the fallback load.
-    private var calendarEvents: [PlaceCalendarEvent] {
-        if let calendar = vm.section(.addressCalendar, in: intel), let data = calendar.addressCalendar,
-           [.ready, .stale, .partial].contains(calendar.status) {
-            return data.upcoming
-        }
-        return vm.fallbackCalendar?.upcoming ?? []
-    }
-
-    /// The household's home in the sky, drawn from its county record when the
-    /// Your Home section carries one.
-    private var skyHome: SkyHome {
-        let yourHome = vm.section(.yourHome, in: intel)?.yourHome
-        return SkyHome(shape: yourHome?.house, homeType: yourHome?.homeType)
-    }
-
-    @ViewBuilder
-    private func weatherAndGoodDay(proxy: ScrollViewProxy) -> some View {
-        if let weather = vm.section(.weather, in: intel) {
-            HStack(alignment: .bottom, spacing: 8) {
-                PlaceDetailSectionLabel(text: "Weather")
-                if let data = weather.weather, weather.status == .ready || weather.status == .stale, !intel.place.city.isEmpty {
-                    SkyShareLink(card: SkyShareCard(
-                        weather: data,
-                        sun: vm.section(.sunriseSunset, in: intel)?.sunriseSunset,
-                        air: skyAir,
-                        city: intel.place.city,
-                        date: .now, calendar: skyCalendar
-                    ))
-                    .padding(.trailing, 4)
-                }
-            }
-            if let data = weather.weather, weather.status == .ready || weather.status == .stale {
-                TodaySkyHero(
-                    data: data,
-                    sun: vm.section(.sunriseSunset, in: intel)?.sunriseSunset,
-                    pickups: calendarEvents,
-                    air: skyAir,
-                    home: skyHome,
-                    streetLights: SkyStreet.lights(vm.section(.blockDensity, in: intel)?.blockDensity?.bucket.rawValue),
-                    calendar: skyCalendar
-                ) { withAnimation { proxy.scrollTo("todayAddressCalendar", anchor: .top) } }
-                PlaceSourceNote(
-                    name: weather.source ?? "Source unavailable",
-                    asOf: placeTime(weather.asOf)
-                )
-            } else {
-                vm.fallbackCard(weather)
-            }
-        }
-
-        ballotWeek
-
-        // Verdicts, not readings. Silent when there is nothing to
-        // answer — an empty verdict row is worse than no row.
-        if let goodDay = vm.section(.goodDayTo, in: intel),
-           let data = goodDay.goodDayTo,
-           !data.tiles.isEmpty,
-           goodDay.status == .ready || goodDay.status == .stale {
-            PlaceDetailSectionLabel(text: "Good day to…")
-            GoodDayRow(tiles: data.tiles)
-            PlaceSourceNote(
-                name: "Derived from today's conditions",
-                asOf: placeTime(goodDay.asOf)
-            )
-        }
-    }
-
-    /// Ballot P0 (ballot_p0): ballot week and "Moved this year?", only when
-    /// the server says either applies. Sits between Weather and the verdict
-    /// row, as it did before master split this view into sections.
-    @ViewBuilder
-    private var ballotWeek: some View {
-        if let election = vm.section(.civicElection, in: intel),
-           election.status == .ready,
-           let card = election.civicElection?.ballotCard,
-           BallotTodayCard.applies(card) {
-            BallotTodayCard(card: card, onOpenBallot: onOpenBallot)
-                .padding(.top, Spacing.s4)
-        }
-    }
-
-    @ViewBuilder
-    private var airAlertsSun: some View {
-        if let aqi = vm.section(.airQuality, in: intel) {
-            PlaceDetailSectionLabel(text: "Air quality")
-            if let data = aqi.airQuality, aqi.status == .ready || aqi.status == .stale {
-                AqiCard(data: data)
-                // The server names the monitor, or says the reading is a model estimate.
-                PlaceSourceNote(
-                    name: aqi.source ?? "AirNow · EPA",
-                    asOf: placeTime(aqi.asOf)
-                )
-            } else {
-                vm.fallbackCard(aqi)
-            }
-        }
-
-        if let alerts = vm.section(.alerts, in: intel) {
-            PlaceDetailSectionLabel(text: "Alerts")
-            // "No active alerts" only for a list that was checked; an unavailable section is not an all-clear.
-            if let data = alerts.alerts, alerts.status == .ready || alerts.status == .stale {
-                AlertsCard(active: data.active)
-                PlaceSourceNote(name: alerts.source ?? "Source unavailable", asOf: "live")
-            } else {
-                vm.fallbackCard(alerts)
-            }
-        }
-
-        if let sun = vm.section(.sunriseSunset, in: intel) {
-            PlaceDetailSectionLabel(text: "Sun")
-            if let data = sun.sunriseSunset {
-                TodaySunArcCard(data: data, calendar: skyCalendar)
-                PlaceSourceNote(name: "Your location", asOf: PlacePresentation.fmtSunDay(data, timeZone: placeTimeZone))
-            } else {
-                vm.fallbackCard(sun)
-            }
+    /// Scrolls once the layout has caught up (a section may have just opened).
+    func scrollTo(_ id: String, proxy: ScrollViewProxy) {
+        Task { @MainActor in
+            await Task.yield()
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) { proxy.scrollTo(id, anchor: .top) }
         }
     }
 
@@ -310,6 +182,558 @@ struct PlaceTodayDetailContent: View {
     }
 }
 
+// MARK: - What it is like now
+
+extension PlaceTodayDetailContent {
+    var activeAlerts: [PlaceWeatherAlert] {
+        guard let alerts = vm.section(.alerts, in: intel), alerts.status == .ready || alerts.status == .stale else { return [] }
+        return alerts.alerts?.active ?? []
+    }
+
+    /// The air reading for the sky: smoke veils it, and bad air leads the card.
+    var skyAir: SkyAir? {
+        guard let air = liveAir else { return nil }
+        return SkyAir(aqi: air.index, label: air.categoryLabel, smoky: air.dominantPollutant == "pm25")
+    }
+
+    var liveAir: PlaceAirQualityData? {
+        guard let section = vm.section(.airQuality, in: intel), section.status == .ready || section.status == .stale else { return nil }
+        return section.airQuality
+    }
+
+    var sunData: PlaceSunriseSunsetData? {
+        vm.section(.sunriseSunset, in: intel)?.sunriseSunset
+    }
+
+    /// The address calendar's upcoming dates, live or from the fallback load.
+    var calendarEvents: [PlaceCalendarEvent] {
+        if let calendar = vm.section(.addressCalendar, in: intel), let data = calendar.addressCalendar,
+           [.ready, .stale, .partial].contains(calendar.status) {
+            return data.upcoming
+        }
+        return vm.fallbackCalendar?.upcoming ?? []
+    }
+
+    /// The household's home in the sky, drawn from its county record when the
+    /// Your Home section carries one.
+    var skyHome: SkyHome {
+        let yourHome = vm.section(.yourHome, in: intel)?.yourHome
+        return SkyHome(shape: yourHome?.house, homeType: yourHome?.homeType)
+    }
+
+    /// Active advisories at the top; nothing there when there are none (and an
+    /// alerts check that couldn't run says so under Sources and full conditions).
+    @ViewBuilder
+    var advisories: some View {
+        if let alerts = vm.section(.alerts, in: intel), !activeAlerts.isEmpty {
+            TodayAdvisorySummary(alerts: TodayAlerts.ranked(activeAlerts), source: alerts.source, calendar: skyCalendar)
+        }
+    }
+
+    @ViewBuilder
+    func sky(proxy: ScrollViewProxy) -> some View {
+        if let weather = vm.section(.weather, in: intel) {
+            if let data = weather.weather, weather.status == .ready || weather.status == .stale {
+                TodaySkyHero(
+                    data: data,
+                    sun: sunData,
+                    pickups: calendarEvents,
+                    air: skyAir,
+                    home: skyHome,
+                    streetLights: SkyStreet.lights(vm.section(.blockDensity, in: intel)?.blockDensity?.bucket.rawValue),
+                    calendar: skyCalendar
+                ) { scrollTo("todayAddressCalendar", proxy: proxy) }
+                    .padding(.top, 12)
+                TodayHourlyStrip(weather: data, sun: sunData, alerts: activeAlerts, calendar: skyCalendar)
+                    .padding(.top, 8)
+                skyFooter(weather, data: data, proxy: proxy)
+            } else {
+                PlaceDetailSectionLabel(text: "Weather")
+                vm.fallbackCard(weather)
+            }
+        }
+    }
+
+    /// "Open-Meteo · 1:21 AM", "Weather details" and Share, on one line when they fit.
+    private func skyFooter(_ weather: PlaceSectionEnvelope, data: PlaceWeatherData, proxy: ScrollViewProxy) -> some View {
+        let source = [weather.source ?? "Source unavailable", placeTime(weather.asOf)].compactMap { $0 }.joined(separator: " · ")
+        let note = Text(source)
+            .font(Theme.Font.caption)
+            .foregroundStyle(Theme.Color.appTextMuted)
+            .accessibilityLabel(source)
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 14) {
+                note.lineLimit(1)
+                Spacer(minLength: 0)
+                skyActions(data, proxy: proxy)
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                note.fixedSize(horizontal: false, vertical: true).padding(.top, 8)
+                HStack(spacing: 18) { skyActions(data, proxy: proxy) }
+            }
+        }
+        .padding(.top, 2)
+    }
+
+    @ViewBuilder
+    private func skyActions(_ data: PlaceWeatherData, proxy: ScrollViewProxy) -> some View {
+        PlaceInlineAction(title: "Weather details", identifier: "today.weatherDetails") {
+            openConditions("todayFullForecast", proxy: proxy)
+        }
+        if !intel.place.city.isEmpty {
+            SkyShareLink(card: SkyShareCard(
+                weather: data,
+                sun: sunData,
+                air: skyAir,
+                city: intel.place.city,
+                date: .now, calendar: skyCalendar
+            ))
+        }
+    }
+
+    /// Opens "Sources and full conditions" and goes to one of its parts.
+    func openConditions(_ id: String, proxy: ScrollViewProxy) {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { conditionsOpen = true }
+        scrollTo(id, proxy: proxy)
+    }
+
+    @ViewBuilder
+    func conditionsPair(proxy: ScrollViewProxy) -> some View {
+        let air = vm.section(.airQuality, in: intel)
+        let sun = vm.section(.sunriseSunset, in: intel)
+        if air != nil || sun != nil {
+            TodayConditionsPair(
+                air: air,
+                sun: sun,
+                calendar: skyCalendar,
+                timeZone: placeTimeZone,
+                onOpenAir: { openConditions("todayFullAir", proxy: proxy) },
+                onOpenSun: { openConditions("todayFullSun", proxy: proxy) }
+            )
+        }
+    }
+
+    /// Verdicts, not readings. Silent when there is nothing to answer — an
+    /// empty verdict list is worse than none.
+    @ViewBuilder
+    var goodDay: some View {
+        if let goodDay = vm.section(.goodDayTo, in: intel), let data = goodDay.goodDayTo, !data.tiles.isEmpty,
+           goodDay.status == .ready || goodDay.status == .stale {
+            PlaceSectionHeading(title: "Good day for…")
+            TodayGoodDayList(tiles: data.tiles, limits: limitingConditions)
+            PlaceSourceNote(name: "Derived from today's conditions", asOf: placeTime(goodDay.asOf))
+        }
+    }
+
+    /// What on this screen limits an outdoor yes: an advisory in effect before
+    /// the day ends, and air at moderate or worse.
+    var limitingConditions: [String] {
+        let now = Date()
+        let tomorrow = skyCalendar.date(byAdding: .day, value: 1, to: skyCalendar.startOfDay(for: now)) ?? now.addingTimeInterval(86400)
+        var limits = TodayAlerts.ranked(activeAlerts)
+            .filter { TodayAlerts.overlaps($0, from: now, to: tomorrow, now: now) }
+            .map { alert -> String in
+                let window = TodayAlerts.window(alert, now: now, calendar: skyCalendar)
+                return "\(alert.event) \(window.prefix(1).lowercased())\(window.dropFirst())"
+            }
+        if let air = liveAir, air.category != .good, air.category != .unknown {
+            limits.append("\(air.categoryLabel.lowercased()) air (\(air.index))")
+        }
+        return limits
+    }
+
+    /// Ballot P0 (ballot_p0): ballot week and "Moved this year?", only when
+    /// the server says either applies; its dates are also agenda rows.
+    @ViewBuilder
+    var ballotWeek: some View {
+        if let card = ballotCard, BallotTodayCard.applies(card) {
+            BallotTodayCard(card: card, onOpenBallot: onOpenBallot)
+                .padding(.top, 24)
+        }
+    }
+
+    var ballotCard: BallotSummary? {
+        guard let election = vm.section(.civicElection, in: intel), election.status == .ready else { return nil }
+        return election.civicElection?.ballotCard
+    }
+}
+
+// MARK: - Coming up at home
+
+extension PlaceTodayDetailContent {
+    /// The calendar the agenda and its second view read: the section's, or the
+    /// fallback load when the section is unavailable.
+    struct CalendarCardData {
+        let data: PlaceAddressCalendarData
+        let source: String
+    }
+
+    func calendarCardData(_ section: PlaceSectionEnvelope?) -> CalendarCardData? {
+        guard let section else { return nil }
+        if let data = section.addressCalendar, [.ready, .stale, .partial].contains(section.status) {
+            return CalendarCardData(data: data, source: section.source ?? "Pantopus registry")
+        }
+        if section.status == .unavailable, let data = vm.fallbackCalendar {
+            return CalendarCardData(data: data, source: "Pantopus registry")
+        }
+        return nil
+    }
+
+    func agendaInputs(_ card: CalendarCardData?) -> TodayAgenda.Inputs {
+        let election = vm.section(.civicElection, in: intel)
+        let electionData = election?.status == .ready ? election?.civicElection : nil
+        return TodayAgenda.Inputs(
+            today: card?.data.today ?? SkyNote.dayKey(Date(), calendar: skyCalendar),
+            events: card?.data.upcoming ?? [],
+            household: vm.calendarHomeId != nil,
+            guest: intel.viewer?.role == "nonresident",
+            ballot: electionData?.ballotCard,
+            election: electionData?.ballotCard == nil ? nil : electionData,
+            canOpenBallot: onOpenBallot != nil,
+            tasks: taskHomeId == nil ? [] : agenda.tasks,
+            homeId: taskHomeId,
+            hosting: tab == nil ? [] : agenda.hosting,
+            going: tab == nil ? [] : agenda.going,
+            calendar: skyCalendar
+        )
+    }
+
+    /// The next seven days as one list, the two-week calendar one tap away.
+    /// A calendar that couldn't be read says so, never "nothing this week".
+    @ViewBuilder
+    func agendaSection(proxy: ScrollViewProxy) -> some View {
+        let section = vm.section(.addressCalendar, in: intel)
+        let card = calendarCardData(section)
+        let inputs = agendaInputs(card)
+        let items = TodayAgenda.items(inputs)
+        if section != nil || !items.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                PlaceSectionHeading(title: "Coming up at home", detail: showsCalendar ? "Next two weeks" : "Next 7 days") {
+                    if card != nil {
+                        PlaceInlineAction(title: showsCalendar ? "Agenda" : "Calendar", identifier: "today.agenda.toggle") {
+                            withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { showsCalendar.toggle() }
+                        }
+                    }
+                }
+                if showsCalendar, let card {
+                    AddressCalendarCard(
+                        homeId: vm.calendarHomeId,
+                        data: card.data,
+                        openTrigger: pickupOpenTrigger,
+                        startsPicking: startsPicking
+                    ) { await vm.refresh() }
+                    PlaceSourceNote(name: card.source, asOf: "next two weeks")
+                } else if card != nil || !items.isEmpty {
+                    TodayAgendaList(
+                        items: items,
+                        next: TodayAgenda.next(inputs),
+                        onAction: { handle($0, proxy: proxy) },
+                        onShowCalendar: { showsCalendar = true }
+                    )
+                }
+                if let section, card == nil {
+                    vm.fallbackCard(section)
+                        .padding(.top, items.isEmpty ? 0 : 8)
+                        .task(id: section.status) {
+                            if section.status == .unavailable { await vm.loadFallbackCalendar() }
+                        }
+                }
+            }
+            .id("todayAddressCalendar")
+        }
+    }
+
+    func handle(_ action: TodayAgendaItem.Action, proxy: ScrollViewProxy) {
+        switch action {
+        case .editPickup:
+            openPickupEditor(proxy: proxy)
+        case let .link(_, url):
+            openURL(url)
+        case .governments:
+            if let found = ballotCard?.governments { governments = BallotGovernmentsSheet(governments: found) }
+        case .openBallot:
+            onOpenBallot?()
+        case let .openTask(homeId, taskId):
+            DeepLinkRouter.shared.handle(path: "/homes/\(homeId)/tasks/\(taskId)")
+        case let .openPlan(id):
+            if let card = (agenda.hosting + agenda.going).first(where: { $0.id == id }) { PlansStoreReads.seed(card) }
+            PlansNavigator.shared.pending = .plan(id: id, intent: .view)
+            rootTabs.selected = .plans
+        }
+    }
+
+    /// The calendar's second view with the pickup editor open, scrolled into view.
+    func openPickupEditor(proxy: ScrollViewProxy) {
+        guard vm.calendarHomeId != nil else { return }
+        startsPicking = true
+        showsCalendar = true
+        pickupOpenTrigger += 1
+        scrollTo("todayAddressCalendar", proxy: proxy)
+    }
+}
+
+// MARK: - Home setup (folded)
+
+extension PlaceTodayDetailContent {
+    /// Home setup shows: pickup days or the radon question apply, or a saved place's reminders.
+    var setupVisible: Bool {
+        (needsPickup && vm.calendarHomeId != nil) || radonRelevant || tab?.savedPlace == true
+    }
+
+    /// The radon question applies here and this viewer may answer it.
+    var radonRelevant: Bool {
+        guard showHomeRadon, radonAvailable, let state = radonState, state.homeId == vm.calendarHomeId else { return false }
+        return !state.noTaskAccess
+    }
+
+    /// The radon question is still open: not answered, not put off with "Not now".
+    var radonIsOpen: Bool {
+        guard radonRelevant, let state = radonState, state.loaded, state.task == nil else { return false }
+        return !(state.dismissedUntil.map { $0 > Date() } ?? false)
+    }
+
+    /// Pickup days and the radon question on demand, folded by default: they
+    /// never sit above the day's information. The row says how many are open;
+    /// once both are done it keeps the radon record one tap away.
+    @ViewBuilder
+    func setup(proxy: ScrollViewProxy) -> some View {
+        let pickup = needsPickup && vm.calendarHomeId != nil
+        let saved = tab?.savedPlace == true
+        if pickup || radonRelevant || saved {
+            let open = (pickup ? 1 : 0) + (radonIsOpen ? 1 : 0)
+            PlaceGroupSurface {
+                PlaceFoldRow(
+                    title: open > 0 || saved ? "Complete your home setup" : "Home setup",
+                    summary: setupSummary(open: open, saved: saved),
+                    isOpen: $setupOpen,
+                    identifier: "today.setup"
+                ) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if pickup {
+                            setupAction(
+                                title: "Set pickup days",
+                                detail: "Choose your collection days, or read your hauler's flyer.",
+                                identifier: "today.setup.pickup"
+                            ) { openPickupEditor(proxy: proxy) }
+                        }
+                        if radonRelevant {
+                            if pickup { PlaceRowDivider() }
+                            radonItem
+                        }
+                        if saved { savedReminders }
+                    }
+                }
+            }
+            .padding(.top, 24)
+            .id("todaySetup")
+        }
+    }
+
+    private func setupSummary(open: Int, saved: Bool) -> String? {
+        if open > 0 { return open == 1 ? "1 optional item" : "\(open) optional items" }
+        if saved { return "Reminders need your home on Pantopus" }
+        if let task = radonState?.task { return RadonToday.message(task) }
+        // A question put off with "Not now" stays one tap away, uncounted.
+        guard let until = radonState?.dismissedUntil, until > Date() else { return nil }
+        return "Radon question put off until \(until.formatted(.dateTime.month(.abbreviated).day().locale(.autoupdatingCurrent)))"
+    }
+
+    /// A row that opens something: `expanded` set means it opens here (a
+    /// chevron that turns), else it goes somewhere (a chevron to the side).
+    private func setupAction(
+        title: String,
+        detail: String,
+        identifier: String,
+        expanded: Bool? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 14.5, weight: .semibold))
+                        .foregroundStyle(Theme.Color.primaryInk)
+                    Text(detail)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Icon(expanded == nil ? .chevronRight : .chevronDown, size: 16, strokeWidth: 2.25, color: Theme.Color.appTextMuted)
+                    .rotationEffect(.degrees(expanded == true ? 180 : 0))
+                    .accessibilityHidden(true)
+            }
+            .padding(.vertical, 10)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityValue(expanded.map { $0 ? "Expanded" : "Collapsed" } ?? "")
+        .accessibilityIdentifier(identifier)
+    }
+
+    /// "Add radon test information" (or the test on record): opens the radon
+    /// card here, with every answer, the report reader and "Not now".
+    @ViewBuilder
+    private var radonItem: some View {
+        if let state = radonState, let data = vm.section(.leadRadon, in: intel)?.leadRadon {
+            setupAction(
+                title: state.task == nil ? "Add radon test information" : "Radon test",
+                detail: state.task.map(RadonToday.message) ?? "Add a report, record that you're unsure, or come back later.",
+                identifier: "today.setup.radon",
+                expanded: radonItemOpen && !state.hidden
+            ) {
+                // Coming back to a question put off with "Not now" asks it again, open.
+                if state.task == nil, state.dismissedUntil != nil {
+                    state.dismissedUntil = nil
+                    UserDefaults.standard.removeObject(forKey: "radonCard.dismissedUntil.\(state.homeId)")
+                    withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { radonItemOpen = true }
+                    return
+                }
+                withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { radonItemOpen.toggle() }
+            }
+            if radonItemOpen, !state.hidden {
+                RadonTodayCard(state: state, data: data, embedded: true)
+                    .id("todayRadonCard")
+                    .padding(.bottom, 6)
+            }
+        }
+    }
+
+    /// A saved place: reminders need the home on Pantopus.
+    private var savedReminders: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Get reminders for this address")
+                .font(.system(size: 14.5, weight: .semibold))
+                .foregroundStyle(Theme.Color.appText)
+            Text("Pickup and radon reminders need your home on Pantopus.")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+            GhostButton(title: "Add your home") { tab?.onAddHome() }
+        }
+        .padding(.vertical, 6)
+        .accessibilityIdentifier("todaySavedPlaceReminders")
+    }
+}
+
+// MARK: - Sources and full conditions (folded)
+
+extension PlaceTodayDetailContent {
+    /// The full readings and every source: the daily forecast, the AQI gauge,
+    /// every alert with its official text, the sun's arc and the calendar's source.
+    @ViewBuilder
+    var fullConditions: some View {
+        PlaceGroupSurface {
+            PlaceFoldRow(
+                title: "Sources and full conditions",
+                summary: conditionsSummary,
+                isOpen: $conditionsOpen,
+                identifier: "today.fullConditions"
+            ) { EmptyView() }
+        }
+        .padding(.top, setupVisible ? 12 : 24)
+        .id("todayFullConditions")
+        if conditionsOpen {
+            VStack(alignment: .leading, spacing: 0) {
+                forecastBlock.id("todayFullForecast")
+                airBlock.id("todayFullAir")
+                alertsBlock.id("todayFullAlerts")
+                sunBlock.id("todayFullSun")
+                calendarSource
+            }
+            .transition(.opacity)
+        }
+    }
+
+    /// "Forecast · air quality · no active weather alerts · sun and sources".
+    private var conditionsSummary: String {
+        var parts = ["Forecast", "air quality"]
+        if let alerts = vm.section(.alerts, in: intel) {
+            if alerts.status == .ready || alerts.status == .stale {
+                let count = alerts.alerts?.active.count ?? 0
+                parts.append(count == 0 ? "no active weather alerts" : (count == 1 ? "1 weather alert" : "\(count) weather alerts"))
+            } else {
+                parts.append("weather alerts unavailable")
+            }
+        }
+        parts.append("sun and sources")
+        return parts.joined(separator: " · ")
+    }
+
+    @ViewBuilder
+    private var forecastBlock: some View {
+        if let weather = vm.section(.weather, in: intel) {
+            PlaceDetailSectionLabel(text: "Forecast")
+            if let data = weather.weather, weather.status == .ready || weather.status == .stale, !data.daily.isEmpty {
+                TodayDailyForecast(days: data.daily, today: SkyNote.dayKey(Date(), calendar: skyCalendar))
+                PlaceSourceNote(name: weather.source ?? "Source unavailable", asOf: placeTime(weather.asOf))
+            } else {
+                vm.fallbackCard(weather)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var airBlock: some View {
+        if let aqi = vm.section(.airQuality, in: intel) {
+            PlaceDetailSectionLabel(text: "Air quality")
+            if let data = aqi.airQuality, aqi.status == .ready || aqi.status == .stale {
+                AqiCard(data: data)
+                // The server names the monitor, or says the reading is a model estimate.
+                PlaceSourceNote(name: aqi.source ?? "AirNow · EPA", asOf: placeTime(aqi.asOf))
+            } else {
+                vm.fallbackCard(aqi)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var alertsBlock: some View {
+        if let alerts = vm.section(.alerts, in: intel) {
+            PlaceDetailSectionLabel(text: "Weather alerts")
+            // "No active weather alerts" only for a list that was checked; an unavailable section is not an all-clear.
+            if let data = alerts.alerts, alerts.status == .ready || alerts.status == .stale {
+                AlertsCard(active: TodayAlerts.ranked(data.active), checkedAt: placeTime(alerts.asOf))
+                PlaceSourceNote(name: alerts.source ?? "Source unavailable", asOf: "live")
+            } else {
+                vm.fallbackCard(alerts)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var sunBlock: some View {
+        if let sun = vm.section(.sunriseSunset, in: intel) {
+            PlaceDetailSectionLabel(text: "Sun")
+            if let data = sun.sunriseSunset {
+                TodaySunArcCard(data: data, calendar: skyCalendar)
+                PlaceSourceNote(name: "Your location", asOf: PlacePresentation.fmtSunDay(data, timeZone: placeTimeZone))
+            } else {
+                vm.fallbackCard(sun)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var calendarSource: some View {
+        if let card = calendarCardData(vm.section(.addressCalendar, in: intel)) {
+            PlaceDetailSectionLabel(text: "Calendar")
+            Text("\(card.source) · next two weeks")
+                .font(Theme.Font.caption)
+                .foregroundStyle(Theme.Color.appTextMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            if let note = card.data.taxNote {
+                Text(note)
+                    .font(Theme.Font.caption)
+                    .foregroundStyle(Theme.Color.appTextMuted)
+                    .padding(.top, 4)
+            }
+        }
+    }
+}
+
 // MARK: - AQI card
 
 private struct AqiCard: View {
@@ -317,9 +741,7 @@ private struct AqiCard: View {
 
     /// The server sends pollutant tokens ("pm25", "ozone"); show their usual names.
     private var pollutant: String? {
-        guard let token = data.dominantPollutant?.lowercased(), !token.isEmpty else { return nil }
-        let names = ["pm25": "PM2.5", "pm10": "PM10", "ozone": "Ozone", "no2": "NO2", "so2": "SO2", "co": "CO"]
-        return names[token] ?? token.uppercased()
+        TodayAir.pollutant(data.dominantPollutant)
     }
 
     var body: some View {
@@ -367,23 +789,28 @@ private struct AqiCard: View {
 
 private struct AlertsCard: View {
     let active: [PlaceWeatherAlert]
+    /// When the server last checked, on the home's clock.
+    var checkedAt: String?
 
     var body: some View {
         if active.isEmpty {
+            // Scoped to what was checked: weather alerts for this address, and when.
             PlaceDetailCard {
                 HStack(spacing: 11) {
                     TodayAllClearBadge()
                     VStack(alignment: .leading, spacing: 1) {
-                        Text("No active alerts")
+                        Text("No active weather alerts")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Theme.Color.appText)
-                        Text("Nothing to watch for on your block right now.")
+                        Text(checkedAt.map { "Checked \($0)" } ?? "Checked for this address")
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.Color.appTextMuted)
                     }
                     Spacer(minLength: 0)
                 }
+                .accessibilityElement(children: .combine)
             }
+            .accessibilityIdentifier("todayAlertsNone")
         } else {
             VStack(spacing: 8) {
                 ForEach(active) { alert in AlertRow(alert: alert) }
@@ -432,82 +859,6 @@ private struct AlertRow: View {
     }
 }
 
-// MARK: - Good day to…
-
-/// "Good day to…" — a row of verdicts. Tapping one reveals the numbers
-/// behind it: an opinionated tile that won't show its inputs is worse than
-/// no tile, because one visibly wrong verdict discredits every other card.
-private struct GoodDayRow: View {
-    let tiles: [PlaceGoodDayTile]
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var openID: String?
-    @State private var appeared = false
-
-    private var shown: [PlaceGoodDayTile] {
-        Array(tiles.prefix(5))
-    }
-
-    private var open: PlaceGoodDayTile? {
-        shown.first { $0.id == openID }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Up to three tiles share the row; more scroll, with the next one peeking in.
-            if shown.count <= 3 {
-                HStack(spacing: 8) {
-                    ForEach(Array(shown.enumerated()), id: \.element.id) { index, tile in tileButton(tile, index: index) }
-                }
-                .fixedSize(horizontal: false, vertical: true)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(Array(shown.enumerated()), id: \.element.id) { index, tile in
-                            tileButton(tile, index: index).frame(width: 128)
-                        }
-                    }
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            if let open {
-                PlaceDetailCard {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(open.label)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Theme.Color.appTextSecondary)
-                        Text(open.because)
-                            .font(.system(size: 13.5))
-                            .foregroundStyle(Theme.Color.appTextStrong)
-                    }
-                }
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-        .onAppear {
-            guard !appeared else { return }
-            if reduceMotion { appeared = true } else { withAnimation { appeared = true } }
-        }
-    }
-
-    private func tileButton(_ tile: PlaceGoodDayTile, index: Int) -> some View {
-        Button {
-            withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) {
-                openID = openID == tile.id ? nil : tile.id
-            }
-        } label: {
-            TodayGoodDayTile(tile: tile, open: openID == tile.id)
-        }
-        .buttonStyle(.plain)
-        .scaleEffect(appeared ? 1 : 0.88)
-        .opacity(appeared ? 1 : 0)
-        .animation(reduceMotion ? nil : .spring(duration: 0.5, bounce: 0.35).delay(Double(index) * 0.07), value: appeared)
-        .accessibilityLabel("\(tile.label): \(tile.answer)")
-        .accessibilityHint(tile.because)
-        .accessibilityAddTraits(openID == tile.id ? .isSelected : [])
-    }
-}
-
 // MARK: - Address calendar card (Wedge Phase 2, D6)
 
 /// The next two weeks at this address, plus the one control that makes it
@@ -517,6 +868,9 @@ struct AddressCalendarCard: View {
     let homeId: String?
     let data: PlaceAddressCalendarData
     var openTrigger = 0
+    /// Opens with the pickup editor showing (Today's "Set pickup days"); it
+    /// never opens by itself any more.
+    var startsPicking = false
     let onChanged: () async -> Void
 
     @State private var picking = false
@@ -541,6 +895,8 @@ struct AddressCalendarCard: View {
     @State private var capturedFlyer: Data?
     @State private var readingFlyer = false
     @State private var flyerMessage: FlyerMessage?
+    /// A day picked in the two-week grid: the list shows only its dates.
+    @State private var selectedDay: String?
     private let api = APIClient.shared
     private var calendar: PlaceAddressCalendarData {
         confirmed ?? data
@@ -562,12 +918,19 @@ struct AddressCalendarCard: View {
         ("FR", "Friday"), ("SA", "Saturday"), ("SU", "Sunday")
     ]
 
-    init(homeId: String?, data: PlaceAddressCalendarData, openTrigger: Int = 0, onChanged: @escaping () async -> Void) {
+    init(
+        homeId: String?,
+        data: PlaceAddressCalendarData,
+        openTrigger: Int = 0,
+        startsPicking: Bool = false,
+        onChanged: @escaping () async -> Void
+    ) {
         self.openTrigger = openTrigger
+        self.startsPicking = startsPicking
         self.homeId = homeId
         self.data = data
         self.onChanged = onChanged
-        _picking = State(initialValue: homeId != nil && data.needsPickupDay)
+        _picking = State(initialValue: homeId != nil && startsPicking)
         _weekday = State(initialValue: data.pickupSchedule?.weekday ?? "")
         _frequency = State(initialValue: data.pickupSchedule?.recyclingFrequency ?? "not_set")
         _nextDate = State(initialValue: data.pickupSchedule?.recyclingNextDate ?? "")
@@ -584,7 +947,7 @@ struct AddressCalendarCard: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 Spacer(minLength: 0)
                 if homeId != nil {
-                    Button(picking ? "Cancel" : "Pickup schedule") {
+                    Button {
                         weekday = calendar.pickupSchedule?.weekday ?? ""
                         frequency = calendar.pickupSchedule?.recyclingFrequency ?? "not_set"
                         nextDate = calendar.pickupSchedule?.recyclingNextDate ?? ""
@@ -593,9 +956,14 @@ struct AddressCalendarCard: View {
                         errorText = nil
                         flyerMessage = nil
                         picking.toggle()
+                    } label: {
+                        // A 44-pt target around the short label.
+                        Text(picking ? "Cancel" : "Pickup schedule")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.Color.primaryInk)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
                     }
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.Color.primaryInk)
                     .accessibilityIdentifier("addressCalendarPickupToggle")
                     .disabled(saving != nil)
                 }
@@ -606,8 +974,13 @@ struct AddressCalendarCard: View {
             }
 
             if !picking, !calendar.upcoming.isEmpty {
-                TodayCalendarStrip(today: calendar.today, windowDays: calendar.windowDays, events: calendar.upcoming)
-                    .padding(.bottom, 2)
+                TodayCalendarStrip(
+                    today: calendar.today,
+                    windowDays: calendar.windowDays,
+                    events: calendar.upcoming,
+                    selected: $selectedDay
+                )
+                .padding(.bottom, 2)
             }
 
             if calendar.upcoming.isEmpty {
@@ -621,12 +994,28 @@ struct AddressCalendarCard: View {
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 VStack(spacing: 0) {
-                    ForEach(calendar.upcoming) { event in
+                    ForEach(shownEvents) { event in
                         eventRow(event)
-                        if event.id != calendar.upcoming.last?.id {
+                        if event.id != shownEvents.last?.id {
                             Divider().overlay(Theme.Color.appBorder)
                         }
                     }
+                }
+                if let selectedDay {
+                    if shownEvents.isEmpty {
+                        Text("Nothing on the calendar that day.")
+                            .font(.system(size: 13.5))
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                    }
+                    Button { self.selectedDay = nil } label: {
+                        Text("Show every date")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.Color.primaryInk)
+                            .frame(minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityHint("Shows the whole two weeks again.")
+                    .accessibilityIdentifier("addressCalendarShowAll")
                 }
             }
 
@@ -723,45 +1112,6 @@ struct AddressCalendarCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    private func eventRow(_ event: PlaceCalendarEvent) -> some View {
-        let soon = event.daysUntil <= event.leadDays
-        return HStack(alignment: .top, spacing: 12) {
-            Icon(iconFor(event.kind), size: 18, strokeWidth: 2, color: soon ? Theme.Color.home : Theme.Color.appTextSecondary)
-                .frame(width: 32, height: 32)
-                .background(soon ? Theme.Color.homeBg : Theme.Color.appSurfaceSunken)
-                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(event.title)
-                        .font(.system(size: 14.5, weight: .semibold))
-                        .foregroundStyle(Theme.Color.appText)
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    Text(whenLabel(event))
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(soon ? Theme.Color.home : Theme.Color.appTextSecondary)
-                }
-                if let detail = event.detail, !detail.isEmpty {
-                    Text(detail)
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                }
-                if let moved = event.holidayMoveLine {
-                    Text(moved)
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                }
-                Text(
-                    (event.source ?? "Pantopus registry")
-                        + (event.confidence == "unverified" ? " · unconfirmed, please double-check" : "")
-                )
-                .font(.system(size: 11.5))
-                .foregroundStyle(Theme.Color.appTextSecondary)
-            }
-        }
-        .padding(.vertical, 10)
-    }
-
     @MainActor
     private func choose(reset: Bool = false) async {
         guard let homeId, saving == nil else { return }
@@ -829,6 +1179,51 @@ struct AddressCalendarCard: View {
 }
 
 extension AddressCalendarCard {
+    /// Every upcoming date, or the picked day's.
+    private var shownEvents: [PlaceCalendarEvent] {
+        guard let selectedDay else { return calendar.upcoming }
+        return calendar.upcoming.filter { $0.date.hasPrefix(selectedDay) }
+    }
+
+    private func eventRow(_ event: PlaceCalendarEvent) -> some View {
+        let soon = event.daysUntil <= event.leadDays
+        return HStack(alignment: .top, spacing: 12) {
+            Icon(iconFor(event.kind), size: 18, strokeWidth: 2, color: soon ? Theme.Color.home : Theme.Color.appTextSecondary)
+                .frame(width: 32, height: 32)
+                .background(soon ? Theme.Color.homeBg : Theme.Color.appSurfaceSunken)
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(event.title)
+                        .font(.system(size: 14.5, weight: .semibold))
+                        .foregroundStyle(Theme.Color.appText)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(whenLabel(event))
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(soon ? Theme.Color.home : Theme.Color.appTextSecondary)
+                }
+                if let detail = event.detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                }
+                if let moved = event.holidayMoveLine {
+                    Text(moved)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                }
+                Text(
+                    (event.source ?? "Pantopus registry")
+                        + (event.confidence == "unverified" ? " · unconfirmed, please double-check" : "")
+                )
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+            }
+        }
+        .padding(.vertical, 10)
+    }
+
     private static let collectionKinds = [
         ("garbage", "Garbage"),
         ("recycling", "Recycling"),
@@ -1689,11 +2084,13 @@ private final class RadonTodayState {
 private struct RadonTodayCard: View {
     @Bindable var state: RadonTodayState
     let data: PlaceLeadRadonData
+    /// Inside home setup: no label or card of its own.
+    var embedded = false
 
     var body: some View {
         if !state.hidden {
-            PlaceDetailSectionLabel(text: "Radon")
-            PlaceDetailCard {
+            if !embedded { PlaceDetailSectionLabel(text: "Radon") }
+            frame {
                 VStack(alignment: .leading, spacing: 12) {
                     if !state.loaded {
                         Text("Checking your home's radon tasks…").font(.system(size: 14)).foregroundStyle(Theme.Color.appTextSecondary)
@@ -1730,6 +2127,15 @@ private struct RadonTodayCard: View {
             .sheet(isPresented: Binding(get: { state.sheet != nil }, set: { if !$0 { state.sheet = nil } })) {
                 RadonTodaySheet(state: state)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func frame(@ViewBuilder _ content: () -> some View) -> some View {
+        if embedded {
+            content().padding(.vertical, 8)
+        } else {
+            PlaceDetailCard { content() }
         }
     }
 
@@ -1948,35 +2354,5 @@ private struct PlaceDateRow: View {
     private var picker: some View {
         DatePicker(title, selection: $date, in: range, displayedComponents: .date)
             .accessibilityLabel(accessibilityLabel ?? title)
-    }
-}
-
-private struct HomeFirstUseCard: View {
-    @Bindable var state: RadonTodayState
-    let needsPickup: Bool
-    let radonAvailable: Bool
-    let onPickup: () -> Void
-    let onRadon: () -> Void
-
-    var body: some View {
-        let needsRadon = radonAvailable && state.loaded && state.task == nil
-        if !state.firstUseDismissed, needsPickup || needsRadon {
-            PlaceDetailCard {
-                VStack(alignment: .leading, spacing: 12) {
-                    // Rows drop out as they're handled; the heading counts what's left.
-                    Text(needsPickup && needsRadon ? "Two things for your home" : "One thing for your home")
-                        .font(.system(size: 16, weight: .semibold))
-                    if needsPickup { GhostButton(title: "Set your pickup day") { onPickup() } }
-                    if needsRadon { GhostButton(title: "Was radon tested?") { onRadon() } }
-                    GhostButton(title: "Later") {
-                        guard (try? state.context.requireCurrent()) != nil else { return }
-                        UserDefaults.standard.set(true, forKey: "firstUse.dismissed.\(state.homeId)")
-                        state.firstUseDismissed = true
-                    }
-                }
-            }
-            .padding(.bottom, 12)
-            .accessibilityIdentifier("todayHomeFirstUse")
-        }
     }
 }
