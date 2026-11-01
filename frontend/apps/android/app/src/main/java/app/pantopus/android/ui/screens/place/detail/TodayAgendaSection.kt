@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -224,9 +224,10 @@ private fun AgendaRow(
 /** "NOV" over "2", the date on the place's calendar; TalkBack says "November 2". */
 @Composable
 private fun DateBlock(date: LocalDate) {
+    // At least 46 dp, wider at large text sizes so "NOV" never clips.
     Column(
         modifier =
-            Modifier.width(46.dp).clearAndSetSemantics {
+            Modifier.widthIn(min = 46.dp).clearAndSetSemantics {
                 contentDescription = date.format(DateTimeFormatter.ofPattern("MMMM d", Locale.US))
             },
         horizontalAlignment = Alignment.CenterHorizontally,

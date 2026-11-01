@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -46,6 +47,9 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import java.time.ZoneId
 
 private const val MINUTES_PER_HOUR = 60
+
+/** Above this font scale the air and daylight pair stacks. */
+private const val PAIR_STACK_SCALE = 1.3f
 
 /** A Today section's title (the largest type after the sky and an advisory) and its quiet trailing note. */
 @Composable
@@ -109,6 +113,15 @@ fun TodayAirDaylightPair(
     modifier: Modifier = Modifier,
 ) {
     if (air == null && sun == null) return
+    // At large text sizes the two sides stack, so a reading never breaks mid-word in a half-width column.
+    if (LocalDensity.current.fontScale > PAIR_STACK_SCALE) {
+        Column(modifier = modifier.fillMaxWidth().padding(top = 16.dp).placeSurface().testTag("today.airDaylight")) {
+            PairHalf(airLines(air, zone), onAir, Modifier.fillMaxWidth().testTag("today.air"))
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 14.dp).background(PantopusColors.appBorderSubtle))
+            PairHalf(daylightLines(sun, zone), onSun, Modifier.fillMaxWidth().testTag("today.daylight"))
+        }
+        return
+    }
     Row(
         modifier = modifier.fillMaxWidth().padding(top = 16.dp).height(IntrinsicSize.Min).placeSurface().testTag("today.airDaylight"),
     ) {

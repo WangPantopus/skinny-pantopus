@@ -118,6 +118,9 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
+/** Above this font scale, rows that share a line with actions stack instead. */
+private const val LARGE_TEXT_SCALE = 1.3f
+
 private const val RADON_MORNING_HOUR = 9
 private const val RADON_REMINDER_DAYS = 14L
 private const val RADON_DISMISS_DAYS = 30L
@@ -542,14 +545,24 @@ private fun TodayWeatherSection(
         onBins = onBins,
     )
     TodayHourlyStrip(remember(data, active, sun, now) { hourlyCells(data, active, sun, now) }, Modifier.padding(top = 10.dp))
-    Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(modifier = Modifier.weight(1f)) {
-            val updated = PlacePresentation.fmtTime(env.asOf, intel.homeZone)?.let { "updated $it" }
-            PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, updated)
-        }
+    val updated = PlacePresentation.fmtTime(env.asOf, intel.homeZone)?.let { "updated $it" }
+    val source: @Composable () -> Unit = { PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, updated) }
+    val actions: @Composable () -> Unit = {
         TodayTextAction("Weather details", onClick = onDetails, modifier = Modifier.testTag("today.weatherDetails"))
         if (intel.place.city.isNotEmpty()) {
             SkyShareLink(SkyShareCard(data, sun, skyAir(intel), intel.place.city, ZonedDateTime.now(now.zone)))
+        }
+    }
+    // At large text sizes the source takes its own line and the actions follow, so neither squeezes to a letter a line.
+    if (LocalDensity.current.fontScale > LARGE_TEXT_SCALE) {
+        Column(modifier = Modifier.fillMaxWidth().padding(top = 2.dp)) {
+            source()
+            Row(verticalAlignment = Alignment.CenterVertically) { actions() }
+        }
+    } else {
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.weight(1f)) { source() }
+            actions()
         }
     }
 }
