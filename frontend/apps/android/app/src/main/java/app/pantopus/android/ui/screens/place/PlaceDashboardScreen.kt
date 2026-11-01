@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -300,144 +301,147 @@ internal fun PlaceDashboardContent(
         }
     }
 
-    LazyColumn(state = listState, modifier = modifier.fillMaxSize()) {
-        item {
-            PlaceDashboardHeader(
-                label = intel.place.label,
-                status = if (claim != null) CLAIM_STATUS else placeStatus(intel),
-                onOpenSwitcher = onOpenSwitcher,
-                onOpenMenu = onOpenMenu,
-                onOpenNotifications = onOpenNotifications,
-                unreadCount = unreadCount,
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
-                onAsk = onAsk,
-            )
-        }
-        // Instant Screens contract §3: a read failed on a copy more than a day old.
-        if (refreshNotice != null) {
-            item { RefreshFailedLine(refreshNotice, Modifier.padding(horizontal = 16.dp)) }
-        }
-        if (claim != null) {
+    // Every clock time on the dashboard is the home's (TPR contract), whatever the phone's zone.
+    CompositionLocalProvider(LocalPlaceZone provides intel.homeZone) {
+        LazyColumn(state = listState, modifier = modifier.fillMaxSize()) {
             item {
-                // My homes' words for what the claim waits on; its Waiting Room has the steps.
-                PlaceVerifyBanner(
-                    onTap = onOpenClaimStatus,
-                    modifier = Modifier.padding(horizontal = 16.dp).padding(top = 8.dp).testTag("place.claimBanner"),
-                    icon = PantopusIcon.Clock,
-                    message = "Your claim is in review. ${claim.waitingLabel}.",
-                    action = "Check claim status",
+                PlaceDashboardHeader(
+                    label = intel.place.label,
+                    status = if (claim != null) CLAIM_STATUS else placeStatus(intel),
+                    onOpenSwitcher = onOpenSwitcher,
+                    onOpenMenu = onOpenMenu,
+                    onOpenNotifications = onOpenNotifications,
+                    unreadCount = unreadCount,
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
+                    onAsk = onAsk,
                 )
             }
-        } else if (showsVerify) {
+            // Instant Screens contract §3: a read failed on a copy more than a day old.
+            if (refreshNotice != null) {
+                item { RefreshFailedLine(refreshNotice, Modifier.padding(horizontal = 16.dp)) }
+            }
+            if (claim != null) {
+                item {
+                    // My homes' words for what the claim waits on; its Waiting Room has the steps.
+                    PlaceVerifyBanner(
+                        onTap = onOpenClaimStatus,
+                        modifier = Modifier.padding(horizontal = 16.dp).padding(top = 8.dp).testTag("place.claimBanner"),
+                        icon = PantopusIcon.Clock,
+                        message = "Your claim is in review. ${claim.waitingLabel}.",
+                        action = "Check claim status",
+                    )
+                }
+            } else if (showsVerify) {
+                item {
+                    PlaceVerifyBanner(
+                        onTap = onVerify,
+                        modifier = Modifier.padding(horizontal = 16.dp).padding(top = 8.dp),
+                    )
+                }
+            }
             item {
-                PlaceVerifyBanner(
-                    onTap = onVerify,
-                    modifier = Modifier.padding(horizontal = 16.dp).padding(top = 8.dp),
+                if (claim == null) {
+                    PlaceHomeToolsCard(
+                        shortcuts = homeShortcuts,
+                        onOpen = onOpenHomeTools,
+                        onShortcut = onOpenHomeShortcut,
+                        modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp),
+                    )
+                }
+            }
+            // Movers first (Wedge v2 D5): the first-week checklist for a recent move-in.
+            item {
+                // Per-home ticks and dismissal are keyed by id; never let the
+                // empty default (previews, snapshots) collapse households together.
+                if (homeId.isNotBlank()) {
+                    JustMovedCard(
+                        homeId = homeId,
+                        moveInDate = moveInDate,
+                        onOpenDetail = onOpenDetail,
+                        onOpenMailDay = onOpenMailDay,
+                        modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp),
+                        // Ticks "Set your pickup day" itself once the calendar runs on the household's own day.
+                        needsPickupDay =
+                            intel.groups.flatMap { it.sections }.firstNotNullOfOrNull { it.addressCalendar }?.needsPickupDay,
+                    )
+                }
+            }
+            item {
+                PlaceHeroCard(
+                    variant = pulse.variant,
+                    chip = pulse.chip,
+                    heroIcon = pulse.heroIcon,
+                    headline = pulse.title,
+                    nudgeIcon = pulse.nudgeIcon,
+                    nudgeText = pulse.nudgeText.orEmpty(),
+                    // Pulse is the household's: a claim's card opens the address's Today.
+                    onTap = if (claim == null) onOpenPulse else ({ onOpenDetail(PlaceDetailGroup.TODAY) }),
+                    modifier =
+                        Modifier
+                            .padding(horizontal = 16.dp)
+                            .padding(top = if (showsVerify || claim != null) 12.dp else 14.dp),
                 )
             }
-        }
-        item {
-            if (claim == null) {
-                PlaceHomeToolsCard(
-                    shortcuts = homeShortcuts,
-                    onOpen = onOpenHomeTools,
-                    onShortcut = onOpenHomeShortcut,
-                    modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp),
-                )
+            item { Spacer(modifier = Modifier.height(20.dp)) }
+            // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does. It follows
+            // Today's Pulse, as on iOS: verify, Home tools, movers, the Pulse, then this line.
+            item {
+                if (claim == null) {
+                    PrivacyMirrorRow(
+                        onOpen = onOpenPrivacyMirror,
+                        modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
+                    )
+                }
             }
-        }
-        // Movers first (Wedge v2 D5): the first-week checklist for a recent move-in.
-        item {
-            // Per-home ticks and dismissal are keyed by id; never let the
-            // empty default (previews, snapshots) collapse households together.
-            if (homeId.isNotBlank()) {
-                JustMovedCard(
-                    homeId = homeId,
-                    moveInDate = moveInDate,
+            if (isVerified) {
+                item {
+                    PlaceMessagesEntry(
+                        address = intel.place.label,
+                        onComposeMessage = onComposeMessage,
+                        onOpenInbox = onOpenInbox,
+                        modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
+                    )
+                }
+            }
+            // Ballot P0 (ballot_p0): the "Your ballot" card leads under
+            // "This season" and leaves the civic group.
+            if (ballot != null) {
+                item(key = "ballot") {
+                    BallotSeasonBlock(
+                        placed = ballot,
+                        onOpenGovernments = ballot.card.governments?.let { governments -> { ballotGovernments = governments } },
+                        modifier = Modifier.padding(horizontal = Spacing.s4).padding(bottom = Spacing.s6),
+                    )
+                }
+            }
+            items(items = BallotPlacement.groups(intel), key = { it.group }) { group ->
+                PlaceGroupBlockView(
+                    group = group,
                     onOpenDetail = onOpenDetail,
-                    onOpenMailDay = onOpenMailDay,
-                    modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp),
-                    // Ticks "Set your pickup day" itself once the calendar runs on the household's own day.
-                    needsPickupDay =
-                        intel.groups.flatMap { it.sections }.firstNotNullOfOrNull { it.addressCalendar }?.needsPickupDay,
+                    onVerify = onVerify.takeUnless { claim != null || (intel.tier == PlaceTier.T3 && intel.verifyAvailable == false) },
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
+                    onRetry = onRetry,
+                    verifiesFirst = intel.verifiesFirst,
                 )
             }
-        }
-        item {
-            PlaceHeroCard(
-                variant = pulse.variant,
-                chip = pulse.chip,
-                heroIcon = pulse.heroIcon,
-                headline = pulse.title,
-                nudgeIcon = pulse.nudgeIcon,
-                nudgeText = pulse.nudgeText.orEmpty(),
-                // Pulse is the household's: a claim's card opens the address's Today.
-                onTap = if (claim == null) onOpenPulse else ({ onOpenDetail(PlaceDetailGroup.TODAY) }),
-                modifier =
-                    Modifier
-                        .padding(horizontal = 16.dp)
-                        .padding(top = if (showsVerify || claim != null) 12.dp else 14.dp),
-            )
-        }
-        item { Spacer(modifier = Modifier.height(20.dp)) }
-        // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does. It follows
-        // Today's Pulse, as on iOS: verify, Home tools, movers, the Pulse, then this line.
-        item {
             if (claim == null) {
-                PrivacyMirrorRow(
-                    onOpen = onOpenPrivacyMirror,
-                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
-                )
+                item {
+                    PlaceIdentityEntry(
+                        onOpen = { onOpenDetail(PlaceDetailGroup.IDENTITY) },
+                        modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
+                    )
+                }
             }
-        }
-        if (isVerified) {
-            item {
-                PlaceMessagesEntry(
-                    address = intel.place.label,
-                    onComposeMessage = onComposeMessage,
-                    onOpenInbox = onOpenInbox,
-                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
-                )
+            if (showsVerify) {
+                item {
+                    PlaceVerifyLockedGroup(
+                        onVerify = onVerify,
+                        modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
+                    )
+                }
             }
+            item { Spacer(modifier = Modifier.height(40.dp)) }
         }
-        // Ballot P0 (ballot_p0): the "Your ballot" card leads under
-        // "This season" and leaves the civic group.
-        if (ballot != null) {
-            item(key = "ballot") {
-                BallotSeasonBlock(
-                    placed = ballot,
-                    onOpenGovernments = ballot.card.governments?.let { governments -> { ballotGovernments = governments } },
-                    modifier = Modifier.padding(horizontal = Spacing.s4).padding(bottom = Spacing.s6),
-                )
-            }
-        }
-        items(items = BallotPlacement.groups(intel), key = { it.group }) { group ->
-            PlaceGroupBlockView(
-                group = group,
-                onOpenDetail = onOpenDetail,
-                onVerify = onVerify.takeUnless { claim != null || (intel.tier == PlaceTier.T3 && intel.verifyAvailable == false) },
-                modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
-                onRetry = onRetry,
-                verifiesFirst = intel.verifiesFirst,
-            )
-        }
-        if (claim == null) {
-            item {
-                PlaceIdentityEntry(
-                    onOpen = { onOpenDetail(PlaceDetailGroup.IDENTITY) },
-                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
-                )
-            }
-        }
-        if (showsVerify) {
-            item {
-                PlaceVerifyLockedGroup(
-                    onVerify = onVerify,
-                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp),
-                )
-            }
-        }
-        item { Spacer(modifier = Modifier.height(40.dp)) }
     }
 
     ballotGovernments?.let { governments ->

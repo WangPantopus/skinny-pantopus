@@ -232,7 +232,7 @@ private data class SkyView(
         ): SkyView {
             val time = hour?.time ?: now
             val weather = hour?.let { SkyScrub.weather(data, it) } ?: data
-            val moment = SkyMoment.at(time, sun?.sunrise, sun?.sunset)
+            val moment = SkyMoment.at(time, sun?.localSunrise(time.zone), sun?.localSunset(time.zone))
             val note = SkyNote.pick(time, moment, weather, pickups, air)
             return SkyView(time, weather, moment, note, air, SkyScrub.rain(data.hourly, time))
         }

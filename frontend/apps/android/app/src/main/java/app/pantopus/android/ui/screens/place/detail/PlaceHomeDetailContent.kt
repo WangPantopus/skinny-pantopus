@@ -61,7 +61,7 @@ fun PlaceHomeDetailContent(intel: PlaceIntelligence) {
     // on a missing property record.
     if (env != null) {
         if (data != null && env.isLive()) {
-            val asOf = PlacePresentation.fmtMonthYear(env.asOf)
+            val asOf = PlacePresentation.fmtMonthYear(env.asOf, intel.homeZone)
 
             PlaceDetailSectionLabel("Property")
             FactsCard(data)

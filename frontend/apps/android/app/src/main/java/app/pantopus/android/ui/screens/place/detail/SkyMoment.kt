@@ -12,8 +12,10 @@ import app.pantopus.android.data.api.models.place.WeatherConditionCode
 import app.pantopus.android.ui.theme.SkyPalette
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -35,8 +37,9 @@ data class SkyMoment(
 ) {
     companion object {
         /**
-         * Sunrise and sunset arrive as local wall-clock times ("2026-10-07T07:15") and can be a day
-         * old just after midnight; only their clock times are used, which drift a couple of minutes a day.
+         * Sunrise and sunset arrive as the place's wall-clock times ("2026-10-07T07:15", see
+         * `PlaceSunriseSunsetData.localSunrise`) and can be a day old just after midnight; only their clock times
+         * are used, which drift a couple of minutes a day. [now] is on the place's clock.
          */
         fun at(
             now: ZonedDateTime,
@@ -44,8 +47,8 @@ data class SkyMoment(
             sunset: String?,
         ): SkyMoment {
             val minutes = now.hour * 60.0 + now.minute + now.second / 60.0
-            var rise = clockMinutes(sunrise) ?: 390.0
-            var set = clockMinutes(sunset) ?: 1110.0
+            var rise = clockMinutes(sunrise, now.zone) ?: 390.0
+            var set = clockMinutes(sunset, now.zone) ?: 1110.0
             if (set <= rise) {
                 rise = 390.0
                 set = 1110.0
@@ -68,16 +71,33 @@ data class SkyMoment(
             )
         }
 
-        /** Minutes past midnight of a sunrise/sunset string; a zoned instant is read in the local zone. */
-        fun clockMinutes(raw: String?): Double? {
+        /** Minutes past midnight of a sunrise/sunset string; a zoned instant is read in [zone], the place's. */
+        fun clockMinutes(
+            raw: String?,
+            zone: ZoneId = ZoneId.systemDefault(),
+        ): Double? {
             if (raw.isNullOrBlank()) return null
             val local =
                 runCatching { LocalDateTime.parse(raw.take(16)) }.getOrNull()
                     ?.takeUnless { raw.length > 16 && raw.drop(16).any { it == 'Z' || it == '+' || it == '-' } }
-                    ?: runCatching { OffsetDateTime.parse(raw).atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime() }
+                    ?: runCatching { OffsetDateTime.parse(raw).atZoneSameInstant(zone).toLocalDateTime() }
                         .getOrNull()
                     ?: return null
             return local.hour * 60.0 + local.minute
+        }
+
+        /**
+         * Real minutes from [now] until the wall-clock [clockMinutes] on [now]'s date, or the next day's with
+         * [nextDay]: on the day the clocks change, wall-clock subtraction is an hour off around the change.
+         */
+        fun minutesUntil(
+            now: ZonedDateTime,
+            clockMinutes: Double,
+            nextDay: Boolean = false,
+        ): Double {
+            val date = now.toLocalDate().let { if (nextDay) it.plusDays(1) else it }
+            val target = date.atTime(LocalTime.ofSecondOfDay((clockMinutes * 60).toLong().coerceIn(0L, 86_399L))).atZone(now.zone)
+            return Duration.between(now, target).seconds / 60.0
         }
 
         /** The moon's age as a fraction of the 29.53-day synodic month, from the new moon of 6 January 2000. */

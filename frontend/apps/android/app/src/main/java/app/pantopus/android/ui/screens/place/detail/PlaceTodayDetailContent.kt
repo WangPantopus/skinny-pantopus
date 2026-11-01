@@ -223,7 +223,7 @@ fun PlaceTodayDetailContent(
         if (data != null && env.isLive() && data.tiles.isNotEmpty()) {
             PlaceDetailSectionLabel("Good day to\u2026")
             GoodDayRow(data.tiles)
-            PlaceSourceNote("Derived from today's conditions", PlacePresentation.fmtTime(env.asOf))
+            PlaceSourceNote("Derived from today's conditions", PlacePresentation.fmtTime(env.asOf, intel.homeZone))
         }
         // Deliberately silent when there is nothing to answer: an empty
         // verdict row is worse than no row.
@@ -1209,8 +1209,8 @@ private fun skyAir(intel: PlaceIntelligence): SkyAir? =
         SkyAir(it.index, it.categoryLabel, smoky = it.dominantPollutant == "pm25")
     }
 
-private fun placeSkyZone(intel: PlaceIntelligence): ZoneId =
-    runCatching { ZoneId.of(intel.timeZone.orEmpty()) }.getOrDefault(ZoneId.systemDefault())
+/** The sky and the sun card draw the place's hour; the phone's zone only when the place's is unknown. */
+private fun placeSkyZone(intel: PlaceIntelligence): ZoneId = intel.homeZone ?: ZoneId.systemDefault()
 
 @Composable
 private fun TodayWeatherSection(
@@ -1250,7 +1250,7 @@ private fun TodayWeatherSection(
                     ),
                 onBins = onBins,
             )
-            PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, PlacePresentation.fmtTime(env.asOf))
+            PlaceSourceNote(env.source.orEmpty().ifBlank { "Source unavailable" }, PlacePresentation.fmtTime(env.asOf, intel.homeZone))
         } else {
             PlaceDetailFallbackCard(env)
         }
@@ -1295,7 +1295,7 @@ private fun TodayAirAlertsSunSections(
         if (data != null && env.isLive()) {
             AqiCard(data)
             // The server names the monitor, or says the reading is a model estimate.
-            PlaceSourceNote(env.source.orEmpty().ifBlank { "AirNow · EPA" }, PlacePresentation.fmtTime(env.asOf))
+            PlaceSourceNote(env.source.orEmpty().ifBlank { "AirNow · EPA" }, PlacePresentation.fmtTime(env.asOf, intel.homeZone))
         } else {
             PlaceDetailFallbackCard(env)
         }
@@ -1318,7 +1318,7 @@ private fun TodayAirAlertsSunSections(
         val data = env.sunriseSunset
         if (data != null) {
             TodaySunArcCard(data, timeZone = placeSkyZone(intel))
-            PlaceSourceNote("Your location", PlacePresentation.fmtSunDay(data.sunrise))
+            PlaceSourceNote("Your location", PlacePresentation.fmtSunDay(data, intel.homeZone))
         } else {
             PlaceDetailFallbackCard(env)
         }
