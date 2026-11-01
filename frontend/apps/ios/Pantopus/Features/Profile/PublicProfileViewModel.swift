@@ -911,7 +911,6 @@ public final class PublicProfileViewModel {
             // empty list on purpose: that endpoint returns plain posts, not
             // tier-gated broadcasts, and feeding them into the broadcast
             // card would invent a visibility chip the API never sent.
-            var rows: [FeedPostDTO] = []
             if kind == .local {
                 // Nothing on screen yet: the header and buttons show now, so a
                 // slow posts read holds only the Posts tab.
@@ -919,12 +918,18 @@ public final class PublicProfileViewModel {
                     postsLoading = true
                     state = .loaded(build(from: profile, kind: kind, posts: []))
                 }
-                rows = await loadUserPosts(id: profile.id, force: force || postsChangedElsewhere)
+                // The buttons' relationship read runs beside the posts read,
+                // so a slow posts read doesn't hold Connect either.
+                async let relationship: Void = loadRelationship(id: profile.id)
+                let rows = await loadUserPosts(id: profile.id, force: force || postsChangedElsewhere)
                 postsLoading = false
+                state = .loaded(build(from: profile, kind: kind, posts: rows.map { project(post: $0) }))
+                await relationship
+                await loadPortfolioCount(id: profile.id)
+            } else {
+                state = .loaded(build(from: profile, kind: kind, posts: []))
+                await loadRelationship(id: profile.id)
             }
-            state = .loaded(build(from: profile, kind: kind, posts: rows.map { project(post: $0) }))
-            await loadRelationship(id: profile.id)
-            if kind == .local { await loadPortfolioCount(id: profile.id) }
         } catch is CancellationError {
             return
         } catch let error as APIError {
