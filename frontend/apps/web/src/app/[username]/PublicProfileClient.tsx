@@ -102,6 +102,12 @@ interface PublicProfileClientProps {
 }
 
 export default function PublicProfileClient({ username, initialProfile }: PublicProfileClientProps) {
+  // Next reuses this route's component. A different person must get fresh tab,
+  // review, portfolio and dialog state, including while their requests are pending.
+  return <ProfileContent key={normalizeProfileIdentifier(username)} username={username} initialProfile={initialProfile} />;
+}
+
+function ProfileContent({ username, initialProfile }: PublicProfileClientProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const profileIdentifier = normalizeProfileIdentifier(username);
@@ -137,8 +143,10 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   // Posts are requested once per profile, reviews once per profile and viewer (the pending-review
   // check needs the viewer); the tab effect re-runs on every profile or portfolio update.
   const postsRequested = useRef<string | null>(null);
+  const postsReadGeneration = useRef(0);
   const reviewsRequested = useRef<string | null>(null);
   const [postsLoading, setPostsLoading] = useState(false);
+  const [postsFailed, setPostsFailed] = useState(false);
   const [ownerPreviewContext, setOwnerPreviewContext] = useState<ViewerContext>('owner');
   // Settings → How neighbors see you links here with ?preview=public: your own profile opens as others see it.
   useEffect(() => {
@@ -282,6 +290,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
 
   const loadRelationshipStatus = useCallback(async () => {
     if (!profile?.id) return;
+    const current = captureAction();
     // N04 — personal UserBlock rows are separate from the Relationship graph
     // (GET /:id/relationship reports only the latter). Read the viewer's own
     // block list first, like the native clients, so a fresh profile load
@@ -290,6 +299,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     setConnectionKnown(false);
     try {
       const { blocked } = await api.blocks.getBlockedUsers();
+      if (!current()) return;
+      setFollowUnavailable(false);
       const blockedHere = (blocked || []).some((entry) => entry.user_id === profile.id);
       setBlockedByMe(blockedHere);
       if (blockedHere) {
@@ -298,6 +309,7 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         return;
       }
     } catch (err) {
+      if (!current()) return;
       console.error('Failed to load blocked users:', err);
       setFollowUnavailable(true);
       toast.error('Couldn\'t verify block status. Actions are unavailable.');
@@ -305,13 +317,14 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     }
     try {
       const status = await api.users.getRelationshipStatus(profile.id);
+      if (!current()) return;
       setFollowState(status.following);
       setConnectionState(status.relationship);
       setConnectionKnown(true);
     } catch (err) {
       console.error('Failed to load relationship status:', err);
     }
-  }, [profile?.id]);
+  }, [profile?.id, captureAction]);
 
   const loadUserGigs = useCallback(async () => {
     if (!profile?.id) return;
@@ -345,24 +358,30 @@ export default function PublicProfileClient({ username, initialProfile }: Public
 
   const loadUserPosts = useCallback(async () => {
     if (!profile?.id) return;
+    const actionCurrent = captureAction();
+    const generation = ++postsReadGeneration.current;
+    const current = () => actionCurrent() && generation === postsReadGeneration.current;
     if (!getAuthToken()) {
       setUserPosts([]);
       return;
     }
     const id = profile.id;
     const key = queryKeys.personPosts(id);
+    setPostsFailed(false);
     if (queryClient.getQueryData(key) === undefined) setPostsLoading(true);
     try {
       const res = await read(key, () => api.posts.getUserPosts(id, { limit: 20 }));
+      if (!current()) return;
       setUserPosts(res.posts || []);
     } catch (err) {
+      if (!current()) return;
       console.error('Failed to load user posts:', err);
-      if (queryClient.getQueryData(key) === undefined) setUserPosts([]);
+      if (queryClient.getQueryData(key) === undefined) { setUserPosts([]); setPostsFailed(true); }
       postsRequested.current = null; // the next visit to the tab tries again
     } finally {
-      setPostsLoading(false);
+      if (current()) setPostsLoading(false);
     }
-  }, [profile?.id, read, queryClient]);
+  }, [profile?.id, read, queryClient, captureAction]);
 
   const loadReviews = useCallback(async () => {
     if (!profile?.id) return;
@@ -396,15 +415,22 @@ export default function PublicProfileClient({ username, initialProfile }: Public
   }, [profile?.id, currentUser, read, queryClient]);
 
   useEffect(() => {
-    // Server-rendered initialProfile is already in state; only refetch
-    // if we don't have one, or when username changes in-flight.
+    // The server preview is anonymous. A signed-in viewer needs their own
+    // access check (including blocks), even when that preview succeeded.
     setProfile(initialProfile);
     setLoading(!initialProfile);
-    if (!initialProfile) {
-      loadProfile();
-    }
-    loadCurrentUser();
-  }, [profileIdentifier, loadProfile, loadCurrentUser, initialProfile]);
+    const current = captureAction();
+    void loadCurrentUser().then((viewer) => {
+      if (!current()) return;
+      // Keep the anonymous projection for the owner's "How neighbors see
+      // you" preview; their account fields come from currentUser separately.
+      if (!initialProfile || (getAuthToken() && viewer?.id !== initialProfile.id)) {
+        setProfile(null);
+        setLoading(true);
+        void loadProfile();
+      }
+    });
+  }, [profileIdentifier, loadProfile, loadCurrentUser, initialProfile, captureAction]);
 
   useEffect(() => {
     // Launch cut #4 (Open Gigs): a person's open tasks are not shown, so not loaded.
@@ -435,6 +461,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
 
   const handleFollow = async () => {
     if (!currentUser) { router.push('/login'); return; }
+    const current = captureAction();
+    const targetId = profile!.id;
     // A stray click on Following never unfollows: it asks first, as Connected does.
     if (followState) {
       const yes = await confirmStore.open({
@@ -443,29 +471,32 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         confirmLabel: 'Unfollow',
         variant: 'destructive',
       });
-      if (!yes) return;
+      if (!yes || !current()) return;
     }
     setActionLoading(true);
     try {
       if (followState) {
-        await api.users.unfollowUser(profile!.id);
+        await api.users.unfollowUser(targetId);
+        if (!current()) return;
         setFollowState(false);
         setProfile((p) => p ? { ...p, followers_count: Math.max(0, (p.followers_count || 1) - 1) } : p);
       } else {
-        await api.users.followUser(profile!.id);
+        await api.users.followUser(targetId);
+        if (!current()) return;
         setFollowState(true);
         setProfile((p) => p ? { ...p, followers_count: (p.followers_count || 0) + 1 } : p);
       }
-      forgetPerson(profile!.id);
+      forgetPerson(targetId);
       loadUserPosts();
     } catch (err: unknown) {
+      if (!current()) return;
       console.error('Follow error:', err);
       const status = (err as { statusCode?: number } | null)?.statusCode;
       toast.error(status === 403
         ? 'You can\'t follow this profile.'
         : (followState ? 'Couldn\'t unfollow.' : 'Couldn\'t follow.'));
     } finally {
-      setActionLoading(false);
+      if (current()) setActionLoading(false);
     }
   };
 
@@ -475,12 +506,12 @@ export default function PublicProfileClient({ username, initialProfile }: Public
     if (!currentUser) { router.push('/login'); return; }
     const targetId = profile?.id;
     const state = connectionState;
+    const current = captureAction();
     if (!targetId || state === 'pending_sent' || state === 'blocked') return;
     if (state === 'connected') {
       const yes = await confirmStore.open({ title: 'Remove this connection?', description: 'You can reconnect by sending a new request.', confirmLabel: 'Remove', variant: 'destructive' });
-      if (!yes) return;
+      if (!yes || !current()) return;
     }
-    const current = captureAction();
     setActionLoading(true);
     try {
       if (state === 'none') {
@@ -488,18 +519,31 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         if (current()) setConnectionState('pending_sent');
       } else if (state === 'pending_received') {
         const pending = await api.relationships.getPendingRequests();
+        if (!current()) return;
         const request = (pending.requests || []).find((r) => r.requester?.id === targetId);
         if (!request?.id) throw new Error('This request is no longer pending.');
         await api.relationships.acceptRequest(request.id);
         if (current()) setConnectionState('connected');
       } else {
         const connected = await api.relationships.getConnections();
+        if (!current()) return;
         const relationship = (connected.relationships || []).find((r) => r.other_user?.id === targetId);
         if (!relationship?.id) throw new Error('You\u2019re no longer connected.');
         await api.relationships.disconnect(relationship.id);
         if (current()) setConnectionState('none');
       }
       forgetPerson(targetId);
+      if (current() && state !== 'none') {
+        // Connection membership changes which posts the server permits. Drop
+        // the previous audience's copy before asking again, including offline.
+        postsReadGeneration.current++;
+        setUserPosts([]);
+        setProfile(null);
+        setLoading(true);
+        await queryClient.cancelQueries({ queryKey: queryKeys.personPosts(targetId) });
+        queryClient.removeQueries({ queryKey: queryKeys.personPosts(targetId) });
+        if (current()) await Promise.all([loadProfile(), loadUserPosts()]);
+      }
     } catch (err: unknown) {
       if (current()) toast.error(err instanceof Error && err.message ? err.message : 'Couldn\u2019t update this connection. Try again.');
     } finally {
@@ -845,8 +889,12 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         handle={chosenHandle}
         residency={residency}
         showOwnerOnly={showOwnerOnly}
+        previewOnly={isOwnProfile && !showOwnerOnly}
         ownerPreviewContext={ownerPreviewContext}
-        onOwnerPreviewChange={setOwnerPreviewContext}
+        onOwnerPreviewChange={(context) => {
+          setOwnerPreviewContext(context);
+          if (context !== 'owner' && (activeTab === 'insights' || activeTab === 'settings')) setActiveTab('overview');
+        }}
         trustBadges={trustBadges}
         displayRating={displayRating}
         displayReviewCount={displayReviewCount}
@@ -936,6 +984,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
               void queryClient.invalidateQueries({ queryKey: queryKeys.personPosts(profile.id) });
             }}
             loading={postsLoading}
+            failed={postsFailed}
+            onRetry={() => void loadUserPosts()}
             blocked={connectionState === 'blocked'}
             firstName={shownFirstName}
             currentUserId={currentUser?.id}
@@ -995,8 +1045,8 @@ export default function PublicProfileClient({ username, initialProfile }: Public
         <div className="fixed bottom-[var(--fab-lift,0px)] left-0 right-0 md:hidden bg-surface border-t border-app p-3 z-30">
           {/* Launch cut #4 (Open Gigs): no "Request / Hire"; Message spans the bar. */}
           <div className={`max-w-lg mx-auto grid ${canMessage && launchFeatures.openGigs ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
-            {canMessage && <button onClick={handleMessage} className="px-4 py-2.5 bg-primary-600 text-white rounded-lg font-medium">Message</button>}
-            {launchFeatures.openGigs && <button onClick={handleRequestHire} className="px-4 py-2.5 bg-slate-900 text-white rounded-lg font-medium">Request / Hire</button>}
+            {canMessage && <button onClick={handleMessage} disabled={isOwnProfile} className="px-4 py-2.5 bg-primary-600 text-white rounded-lg font-medium disabled:opacity-60">Message</button>}
+            {launchFeatures.openGigs && <button onClick={handleRequestHire} disabled={isOwnProfile} className="px-4 py-2.5 bg-slate-900 text-white rounded-lg font-medium disabled:opacity-60">Request / Hire</button>}
           </div>
         </div>
       )}

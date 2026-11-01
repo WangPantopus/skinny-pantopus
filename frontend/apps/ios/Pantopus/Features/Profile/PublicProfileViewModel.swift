@@ -435,6 +435,9 @@ public final class PublicProfileViewModel {
     /// the next opening reads it again, and so do your connection lists.
     private func profileChanged() {
         store.remove(profileEndpoint)
+        if !UserSocialEndpoints.isUUID(routeIdentifier) {
+            store.remove(UserSocialEndpoints.profileByUsername(UserSocialEndpoints.normalizeHandle(routeIdentifier)))
+        }
         store.markStale(topics: [ScreenTopic.connections])
     }
 
@@ -522,7 +525,8 @@ public final class PublicProfileViewModel {
                 connectState = .idle
                 // The row moved (withdrawn / already handled) — re-read the
                 // edge rather than leaving the button lying.
-                await loadRelationship(id: resolvedUserId)
+                profileChanged()
+                await reloadAfterConnectionChange()
                 toastMessage = "That request is no longer pending."
                 return
             }
@@ -534,6 +538,7 @@ public final class PublicProfileViewModel {
             connection = .connected
             profileChanged()
             toastMessage = "Connected"
+            await reloadAfterConnectionChange()
         } catch let error as APIError {
             let message = friendlyMessage(for: error)
             connectState = .failed(message: message)
@@ -560,7 +565,8 @@ public final class PublicProfileViewModel {
             )
             guard let match = list.relationships.first(where: { $0.otherUser?.id == resolvedUserId }) else {
                 connectState = .idle
-                await loadRelationship(id: resolvedUserId)
+                profileChanged()
+                await reloadAfterConnectionChange()
                 toastMessage = "You're not connected to this neighbor."
                 return
             }
@@ -572,6 +578,7 @@ public final class PublicProfileViewModel {
             connection = .none
             profileChanged()
             toastMessage = "Connection removed"
+            await reloadAfterConnectionChange()
         } catch let error as APIError {
             let message = friendlyMessage(for: error)
             connectState = .failed(message: message)
@@ -587,6 +594,17 @@ public final class PublicProfileViewModel {
     /// Dismiss the confirm without disconnecting.
     public func cancelDisconnect() {
         showDisconnectConfirm = false
+    }
+
+    /// Connection-only posts and profile fields have a different audience now.
+    /// Retire the previous copy before the read, so a failure cannot retain it.
+    private func reloadAfterConnectionChange() async {
+        store.remove(PostsEndpoints.userPosts(userId: resolvedUserId))
+        postCards.show([], readRevision: postCards.actionRevision)
+        postsReadAt = nil
+        relationshipLoaded = false
+        state = .loading
+        await fetch(force: true)
     }
 
     /// Follow entry point behind every Follow affordance.
