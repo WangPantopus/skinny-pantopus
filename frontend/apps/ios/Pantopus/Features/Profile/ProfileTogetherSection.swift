@@ -161,9 +161,18 @@ struct ProfileTogetherSection: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .subheadline) private var scaledDisc: CGFloat = 30
 
+    /// The picture column fits two faces and "+N" only when a people line
+    /// needs it; otherwise each sentence starts right after its icon.
+    private var pictureWidth: CGFloat {
+        let hasPeople = lines.contains { line in
+            if case .people = line.leading { true } else { false }
+        }
+        return min(scaledDisc, 44) * (hasPeople ? 7.0 / 3.0 : 1)
+    }
+
     /// The hairline starts where the sentences do.
     private var separatorInset: CGFloat {
-        typeSize.isAccessibilitySize ? Spacing.s4 : Spacing.s4 + min(scaledDisc, 44) * 7 / 3 + Spacing.s3
+        typeSize.isAccessibilitySize ? Spacing.s4 : Spacing.s4 + pictureWidth + Spacing.s3
     }
 
     var body: some View {
@@ -201,13 +210,13 @@ struct ProfileTogetherSection: View {
         switch line.target {
         case let .some(target):
             Button { onOpen(target) } label: {
-                ProfileTogetherRow(line: line)
+                ProfileTogetherRow(line: line, pictureWidth: pictureWidth)
             }
             .buttonStyle(.plain)
             .accessibilityHint(target.hint)
             .accessibilityIdentifier("publicProfileTogether_\(line.id)")
         case .none:
-            ProfileTogetherRow(line: line)
+            ProfileTogetherRow(line: line, pictureWidth: pictureWidth)
                 .accessibilityIdentifier("publicProfileTogether_\(line.id)")
         }
     }
@@ -227,6 +236,7 @@ private extension ProfileTogetherLine.Target {
 @MainActor
 private struct ProfileTogetherRow: View {
     let line: ProfileTogetherLine
+    let pictureWidth: CGFloat
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .subheadline) private var scaledDisc: CGFloat = 30
@@ -241,7 +251,7 @@ private struct ProfileTogetherRow: View {
             : AnyLayout(HStackLayout(alignment: .center, spacing: Spacing.s3))
         layout {
             leading
-                .frame(width: typeSize.isAccessibilitySize ? nil : disc * 7 / 3, alignment: .leading)
+                .frame(width: typeSize.isAccessibilitySize ? nil : pictureWidth, alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {
                 sentence
                     .scaledFont(15)
