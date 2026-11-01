@@ -56,6 +56,9 @@ import app.pantopus.android.ui.theme.Spacing
  */
 enum class FeedAvatarTint {
     Sky,
+
+    /** Sky 600: the profile palette's sky (PRF's one initials rule, `profileAvatarTint`). */
+    SkyDeep,
     Green,
     Violet,
     Rose,
@@ -68,6 +71,7 @@ enum class FeedAvatarTint {
         get() =
             when (this) {
                 Sky -> PantopusColors.primary500
+                SkyDeep -> PantopusColors.primary600
                 Green -> PantopusColors.success
                 Violet -> PantopusColors.magic
                 Rose -> PantopusColors.rose
