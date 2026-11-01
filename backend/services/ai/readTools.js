@@ -580,7 +580,7 @@ const BRIEFS = {
   // The strongest first, by their short names.
   alerts: (data) => {
     const active = Array.isArray(data.active) ? [...data.active] : [];
-    if (!active.length) return 'No active alerts';
+    if (!active.length) return 'No active weather alerts';
     return active.sort((a, b) => (ALERT_RANK[a.severity] ?? 3) - (ALERT_RANK[b.severity] ?? 3))
       .map((alert) => alert.event || alert.headline).join('; ');
   },

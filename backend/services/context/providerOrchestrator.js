@@ -435,6 +435,13 @@ async function getHubToday(userId, options = {}) {
       headline: a.headline || '',
       description: a.description || '',
       instruction: a.instruction || '',
+      sent: a.sent || '',
+      effective: a.effective || '',
+      bulletin_expires: a.bulletin_expires || '',
+      sender_name: a.sender_name || '',
+      area: a.area || '',
+      full_description: a.full_description || '',
+      full_instruction: a.full_instruction || '',
     } : {}),
   }));
 
@@ -497,6 +504,8 @@ async function getHubToday(userId, options = {}) {
         alerts: Array.isArray(alerts?.alerts) && alerts.source !== 'error' ? alerts.provider || null : null,
       },
       partial_failures: partialFailures,
+      // When the alert list was read from its provider (cached up to 10 minutes), for "checked at".
+      alerts_checked_at: Array.isArray(alerts?.alerts) && alerts.source !== 'error' ? alerts.fetchedAt || null : null,
       cache_hits: cacheHits,
       total_latency_ms: totalMs,
     },
