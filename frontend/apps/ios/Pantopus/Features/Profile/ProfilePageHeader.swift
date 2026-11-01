@@ -43,6 +43,8 @@ struct ProfilePageHeader<Actions: View>: View {
     let trust: ProfileTrustFacts
     let tagline: String?
     let bio: String?
+    /// Your own profile: "Your account name, Rowan Park-Lee, stays private."
+    var privateNameNote: String?
     /// Opens the "what verified means" explainer; nil leaves the line as text.
     var onTrustTap: (@MainActor () -> Void)?
     @ViewBuilder let actions: () -> Actions
@@ -55,6 +57,10 @@ struct ProfilePageHeader<Actions: View>: View {
             if !trust.isEmpty {
                 ProfileTrustLine(facts: trust, stacked: typeSize.isAccessibilitySize, onTap: onTrustTap)
                     .padding(.top, 14)
+            }
+            if let privateNameNote {
+                ProfilePrivateNameLine(text: privateNameNote)
+                    .padding(.top, Spacing.s2)
             }
             if let tagline = Self.trimmed(tagline) {
                 Text(tagline)
@@ -402,10 +408,19 @@ struct ProfileActionRow<Content: View>: View {
 
 // MARK: - Top bar
 
-/// Back and ⋯ on the page's own background (no banner, no bar color), 44 pt
-/// targets that grow a little at the larger text sizes.
+/// Back (or ✕) and ⋯ (or Share) on the page's own background (no banner, no
+/// bar color), 44 pt targets that grow a little at the larger text sizes.
+/// Your own profile adds its title, "Your profile".
 @MainActor
 struct ProfileTopBar: View {
+    enum Leading {
+        case back
+        case close
+    }
+
+    var leading: Leading = .back
+    var title: String?
+    var trailingIcon: PantopusIcon = .moreHorizontal
     let onBack: @MainActor () -> Void
     let moreLabel: String
     let onMore: (@MainActor () -> Void)?
@@ -416,23 +431,35 @@ struct ProfileTopBar: View {
     var body: some View {
         HStack(spacing: Spacing.s0) {
             Button(action: onBack) {
-                Icon(.chevronLeft, size: min(chevron, 30), strokeWidth: 2.25, color: Theme.Color.appText)
+                Icon(leading == .back ? .chevronLeft : .x, size: min(chevron, 30), strokeWidth: 2.25, color: Theme.Color.appText)
                     .frame(width: min(side, 52), height: min(side, 52))
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Back")
+            .accessibilityLabel(leading == .back ? "Back" : "Close")
             .accessibilityIdentifier("publicProfileBack")
             Spacer(minLength: Spacing.s0)
+            if let title {
+                Text(title)
+                    .scaledFont(17, weight: .semibold)
+                    .foregroundStyle(Theme.Color.appText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: Spacing.s0)
+            }
             if let onMore {
                 Button(action: onMore) {
-                    Icon(.moreHorizontal, size: min(chevron, 30), color: Theme.Color.appText)
+                    Icon(trailingIcon, size: min(chevron, 30), color: Theme.Color.appText)
                         .frame(width: min(side, 52), height: min(side, 52))
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(moreLabel)
                 .accessibilityIdentifier("publicProfileMore")
+            } else if title != nil {
+                // Keeps the title centered.
+                Color.clear.frame(width: min(side, 52), height: min(side, 52))
             }
         }
         .padding(.horizontal, 6)

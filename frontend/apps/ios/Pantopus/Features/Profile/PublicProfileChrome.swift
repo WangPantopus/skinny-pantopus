@@ -445,6 +445,8 @@ struct PublicProfilePostsFeed: View {
     var joinedRecently = false
     /// The first read of the posts is still out: skeleton cards, not "No posts yet".
     var isLoading = false
+    /// Your own profile shows only your latest few, then "See all".
+    var maxCards: Int?
     /// The Local profile's posts as Pulse cards (photos, video, links,
     /// Helpful, Save, Repost, the post menu). Nil keeps the plain cards.
     var pulseCards: ProfilePostCardsModel?
@@ -504,7 +506,7 @@ struct PublicProfilePostsFeed: View {
         // The Posts tab above names the list, so no "Recent posts" label.
         VStack(alignment: .leading, spacing: Spacing.s0) {
             LazyVStack(spacing: Spacing.s0) {
-                ForEach(model.cards) { card in
+                ForEach(Array(model.cards.prefix(maxCards ?? model.cards.count))) { card in
                     pulseCard(card, model: model)
                 }
             }

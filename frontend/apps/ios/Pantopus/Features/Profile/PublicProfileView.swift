@@ -26,28 +26,47 @@ import SwiftUI
 /// Public profile entry point.
 @MainActor
 public struct PublicProfileView: View {
-    @State private var viewModel: PublicProfileViewModel
+    @State var viewModel: PublicProfileViewModel
     @State private var showReportSheet = false
     @State private var showBlockConfirm = false
     @State private var showUnblockConfirm = false
-    @State private var shareURL: URL?
+    @State var shareURL: URL?
     /// The "Pick a username for your link" sheet, asked before the first share.
-    @State private var usernameShare: UsernameShareSheetModel?
+    @State var usernameShare: UsernameShareSheetModel?
     /// The Connect sheet: the note, Send request, or just follow.
     @State private var showConnectSheet = false
     /// "What does Verified neighbor mean?" after a tap on the trust line.
-    @State private var showTrustExplainer = false
+    @State var showTrustExplainer = false
     /// The editor, opened from your own profile's Edit profile.
-    @State private var showEditProfile = false
+    @State var showEditProfile = false
+    /// Your own profile's extras (`PublicProfileView+Owner.swift`); nil signed out.
+    @State var owner: OwnerPageModel?
+    /// "Preview your profile as", then the preview it opens.
+    @State var showPreviewMenu = false
+    @State var pickedPreview: ProfileAudience?
+    @State var shownPreview: ProfileAudience?
+    /// Your whole month, opened from "Your <month>".
+    @State var showMonth = false
+    @State var showSignOutConfirm = false
+    /// Text for the system share sheet (your month, your invite link).
+    @State var shareText: String?
     @Environment(\.dynamicTypeSize) private var typeSize
-    private let onBack: @MainActor () -> Void
-    private let onOpenMessages: @MainActor (PublicProfile) -> Void
+    @Environment(RootTabModel.self) var rootTabs: RootTabModel?
+    let onBack: @MainActor () -> Void
+    let onOpenMessages: @MainActor (PublicProfile) -> Void
     private let onEditPersona: @MainActor () -> Void
     private let onOpenInsights: @MainActor () -> Void
     private let onComposeBroadcast: @MainActor () -> Void
-    private let onOpenGig: @MainActor (String) -> Void
-    private let onOpenProfile: @MainActor (String) -> Void
-    private let onOpenPost: @MainActor (String) -> Void
+    let onOpenGig: @MainActor (String) -> Void
+    let onOpenProfile: @MainActor (String) -> Void
+    let onOpenPost: @MainActor (String) -> Void
+    /// The profile cover's ✕ (☰ → Your profile); nil when pushed (Back).
+    let onClose: (@MainActor () -> Void)?
+    /// Where your own profile's "Your account" rows go; nil asks the root to
+    /// open the profile cover on that screen.
+    let onOwnerDestination: (@MainActor (ProfileOwnerDestination) -> Void)?
+    /// Opened from the `monthly_receipt` push: your whole month opens at once.
+    let expandMonthlyReceipt: Bool
 
     public init(
         userId: String,
@@ -59,17 +78,23 @@ public struct PublicProfileView: View {
         onComposeBroadcast: @escaping @MainActor () -> Void = {},
         onOpenGig: @escaping @MainActor (String) -> Void = { _ in },
         onOpenProfile: @escaping @MainActor (String) -> Void = { _ in },
-        onOpenPost: @escaping @MainActor (String) -> Void = { _ in }
+        onOpenPost: @escaping @MainActor (String) -> Void = { _ in },
+        previewAudience: ProfileAudience? = nil,
+        onClose: (@MainActor () -> Void)? = nil,
+        onOwnerDestination: (@MainActor (ProfileOwnerDestination) -> Void)? = nil,
+        expandMonthlyReceipt: Bool = false
     ) {
         // No call site threads the signed-in id through, so fall back to the
         // session when the caller doesn't supply one — otherwise `isOwner`
         // (and the whole persona-owner chrome) is permanently false.
+        let viewer = currentUserId ?? PublicProfileViewModel.signedInUserId()
         _viewModel = State(
-            initialValue: PublicProfileViewModel(
-                userId: userId,
-                currentUserId: currentUserId ?? PublicProfileViewModel.signedInUserId()
-            )
+            initialValue: PublicProfileViewModel(userId: userId, currentUserId: viewer, previewAudience: previewAudience)
         )
+        _owner = State(initialValue: previewAudience == nil ? viewer.map { OwnerPageModel(userId: $0) } : nil)
+        self.onClose = onClose
+        self.onOwnerDestination = onOwnerDestination
+        self.expandMonthlyReceipt = expandMonthlyReceipt
         self.onBack = onBack
         self.onOpenMessages = onOpenMessages
         self.onEditPersona = onEditPersona
@@ -286,6 +311,37 @@ public struct PublicProfileView: View {
                 )
             }
         )
+        // Your own profile: Preview as, your month, sharing, Log out (`PublicProfileView+Owner.swift`).
+        .sheet(isPresented: $showPreviewMenu, onDismiss: openPickedPreview) {
+            ProfilePreviewMenu { audience in
+                pickedPreview = audience
+                showPreviewMenu = false
+            }
+            .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.fraction(0.62), .large])
+        }
+        .fullScreenCover(item: $shownPreview) { audience in
+            previewCover(audience)
+        }
+        .sheet(isPresented: $showMonth) { monthSheet }
+        .sheet(
+            isPresented: Binding(get: { shareText != nil }, set: { if !$0 { shareText = nil } })
+        ) {
+            if let shareText { SystemShareSheet(items: [shareText]) }
+        }
+        .alert("Sign out of Pantopus?", isPresented: $showSignOutConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Sign out", role: .destructive) {
+                Task { await AuthManager.shared.signOut() }
+            }
+            .accessibilityIdentifier("profileSignOutConfirm")
+        } message: {
+            Text("You'll need to sign in again to use your account. Signing out removes what Pantopus saved on this phone.")
+        }
+        // A saved edit (name, username, tagline…) changes the page.
+        .onReceive(NotificationCenter.default.publisher(for: .pantopusProfileDidChange)) { _ in
+            Task { await refreshOwnPage() }
+        }
+        .task(id: viewModel.isOwnProfileLoaded) { await ownerPageAppeared() }
         .accessibilityIdentifier("publicProfile")
         .task { await viewModel.load() }
     }
@@ -372,7 +428,13 @@ public struct PublicProfileView: View {
     @ViewBuilder
     private func loadedLayout(_ payload: PublicProfileContent) -> some View {
         if payload.kind == .local, let neighbor = payload.neighbor {
-            localLayout(payload, neighbor: neighbor)
+            if let audience = viewModel.previewAudience {
+                previewLayout(payload, neighbor: neighbor, audience: audience)
+            } else if payload.isOwner, let owner {
+                ownerLayout(payload, neighbor: neighbor, owner: owner)
+            } else {
+                localLayout(payload, neighbor: neighbor)
+            }
         } else {
             personaLayout(payload)
         }
@@ -448,7 +510,7 @@ public struct PublicProfileView: View {
     }
 
     @ViewBuilder
-    private func localTabContent(
+    func localTabContent(
         _ payload: PublicProfileContent,
         neighbor: NeighborProfileContent,
         tab: LocalProfileTab
@@ -734,7 +796,7 @@ public struct PublicProfileView: View {
 
     /// Try again on a feed that couldn't load: reloads the profile, its posts
     /// and the relationship.
-    private func retryLoad() {
+    func retryLoad() {
         Task { await viewModel.refresh() }
     }
 

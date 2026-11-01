@@ -118,18 +118,22 @@ public enum PostsEndpoints {
     /// `GET /api/posts/user/:userId` — paged list of posts authored by a
     /// user. Active posts only, unless the signed-in user asks for their own
     /// list with `includeArchived` ("My posts"); the backend ignores the
-    /// flag for anyone else's list.
+    /// flag for anyone else's list. `previewAs` (`anyone`, `neighbors`,
+    /// `connections`) is the owner's Preview as: the list that audience
+    /// sees (route `backend/routes/posts.js:3733`).
     public static func userPosts(
         userId: String,
         limit: Int = 50,
         cursorCreatedAt: String? = nil,
         cursorId: String? = nil,
-        includeArchived: Bool = false
+        includeArchived: Bool = false,
+        previewAs: String? = nil
     ) -> Endpoint {
         var query: [String: String] = ["limit": String(limit)]
         if let cursorCreatedAt { query["cursorCreatedAt"] = cursorCreatedAt }
         if let cursorId { query["cursorId"] = cursorId }
         if includeArchived { query["include_archived"] = "true" }
+        if let previewAs { query["as"] = previewAs }
         return Endpoint(method: .get, path: "/api/posts/user/\(userId)", query: query)
     }
 
@@ -205,5 +209,11 @@ public enum PublicProfileEndpoints {
     /// `GET /api/users/id/:id` — route `backend/routes/users.js:2041`.
     public static func profile(id: String) -> Endpoint {
         Endpoint(method: .get, path: "/api/users/id/\(id)")
+    }
+
+    /// Your own profile as `audience` (`anyone`, `neighbors`, `connections`)
+    /// sees it: the owner-only Preview as. Route `backend/routes/users.js:3755`.
+    public static func profile(id: String, previewAs audience: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/users/id/\(id)", query: ["as": audience])
     }
 }

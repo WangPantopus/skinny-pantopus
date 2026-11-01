@@ -446,6 +446,7 @@ public struct YouTabRoot: View {
     /// P6.6 — "Find people" → contacts picker → invite share.
     @State private var showFindPeople = false
     #if DEBUG
+    @State private var debugToolsMenu = false
     @State private var debugProfileSheet = false
     @State private var debugPostSheet = false
     @State private var debugInviteHomeSheet = false
@@ -478,64 +479,65 @@ public struct YouTabRoot: View {
     private let initialRoute: YouRoute?
     @State private var didOpenInitialRoute = false
 
-    /// The host's model for the You screen, kept across openings so the
-    /// cover shows its last content at once (nil: a fresh one).
-    private let meViewModel: MeViewModel?
-
     public init(
         expandMonthlyReceipt: Bool = false,
         initialRoute: YouRoute? = nil,
-        meViewModel: MeViewModel? = nil,
         onClose: (@MainActor () -> Void)? = nil
     ) {
         self.expandMonthlyReceipt = expandMonthlyReceipt
         self.initialRoute = initialRoute
-        self.meViewModel = meViewModel
         self.onClose = onClose
     }
 
     public var body: some View {
         NavigationStack(path: navigationPathBinding) {
-            MeView(
-                viewModel: meViewModel,
-                expandMonthlyReceipt: expandMonthlyReceipt,
-                onAction: { tile in handleAction(tile) },
-                onSection: { row in handleSection(row) },
-                onLogOut: { showsSignOutConfirm = true },
-                onClose: onClose
-            )
-            .readableColumn()
-            .toolbar(.hidden, for: .navigationBar)
-            .swipesBackFromEdge()
-            .task {
-                guard !didOpenInitialRoute, let initialRoute else { return }
-                didOpenInitialRoute = true
-                path.append(initialRoute)
-            }
-            .navigationDestination(for: YouRoute.self) { route in
-                launchScopedDestination(for: route)
-                    .readableColumn()
-                    .modifier(OwnHeaderBar(drawsOwnHeader: route.isAvailableAtLaunch && Self.drawsOwnHeader(route)))
-            }
-            .confirmationDialog(
-                "Sign out of Pantopus?",
-                isPresented: $showsSignOutConfirm,
-                titleVisibility: .visible
-            ) {
-                Button("Sign out", role: .destructive) {
-                    Task { await auth.signOut() }
+            ownProfile
+                .readableColumn()
+                .toolbar(.hidden, for: .navigationBar)
+                .swipesBackFromEdge()
+                .task {
+                    guard !didOpenInitialRoute, let initialRoute else { return }
+                    didOpenInitialRoute = true
+                    path.append(initialRoute)
                 }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("You'll need to sign in again to use your account. Signing out removes what Pantopus saved on this phone.")
-            }
-            .sheet(isPresented: $showsEditProfile) {
-                EditProfileView()
-            }
-            .sheet(item: $systemSheet) { request in request.makeView() }
-            .findPeopleSheet(isPresented: $showFindPeople)
-            .overlay(alignment: .topLeading) { debugTapTarget }
+                .navigationDestination(for: YouRoute.self) { route in
+                    launchScopedDestination(for: route)
+                        .readableColumn()
+                        .modifier(OwnHeaderBar(drawsOwnHeader: route.isAvailableAtLaunch && Self.drawsOwnHeader(route)))
+                }
+                .confirmationDialog(
+                    "Sign out of Pantopus?",
+                    isPresented: $showsSignOutConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("Sign out", role: .destructive) {
+                        Task { await auth.signOut() }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("You'll need to sign in again to use your account. Signing out removes what Pantopus saved on this phone.")
+                }
+                .sheet(isPresented: $showsEditProfile) {
+                    EditProfileView()
+                }
+                .sheet(item: $systemSheet) { request in request.makeView() }
+                .findPeopleSheet(isPresented: $showFindPeople)
+                .overlay(alignment: .topLeading) { debugTapTarget }
             #if DEBUG
+                // Debug builds: the developer rows the Me screen used to list,
+                // now behind "Developer tools" in your profile's account list.
+                .confirmationDialog("Developer tools", isPresented: $debugToolsMenu, titleVisibility: .visible) {
+                    Button("Open profile by ID") { debugProfileSheet = true }
+                    Button("Open post by ID") { debugPostSheet = true }
+                    Button("Invite an owner") { debugInviteHomeSheet = true }
+                    Button("Disambiguate mail") { debugDisambiguateSheet = true }
+                    Button("Open privacy handshake") { debugHandshakeSheet = true }
+                    Button("Open invite token") { debugInviteTokenSheet = true }
+                    Button("Open status: waiting") { path.append(.statusWaiting) }
+                    Button("Open ceremonial mail") { path.append(.ceremonialMail) }
+                    Button("Open ceremonial mail (opened)") { debugCeremonialMailOpenSheet = true }
+                    Button("Cancel", role: .cancel) {}
+                }
                 .alert("Open profile", isPresented: $debugProfileSheet) {
                     TextField("User ID", text: $debugProfileId)
                     Button("Open") {
@@ -729,295 +731,44 @@ public struct YouTabRoot: View {
         )
     }
 
-    /// Dispatch a tap on an action-grid tile to the matching route.
-    /// Tiles whose dedicated screen doesn't exist yet land on the
-    /// generic placeholder, labelled per the destination they will
-    /// resolve to once their T6 sub-PR lands (see PR description for
-    /// the full table — `me.members` → P9, `me.tasks` → P11, etc.).
-    private func handleAction(_ tile: MeActionTile) {
-        switch tile.routeKey {
-        case "me.mail":
-            // The Mail tab, on its top, under this cover (every way into Mail opens the Mail tab).
-            if LaunchFeatures.mailbox, let rootTabs {
-                rootTabs.pendingMailRequest = .top
-                rootTabs.selected = .mail
-                onClose?()
-            } else {
-                path.append(.mailboxRoot)
-            }
-        case "me.bids":
-            path.append(.myBids)
-        case "me.gigs":
-            path.append(.myTasks)
-        case "me.posts":
-            path.append(.myPosts)
-        case "me.offers":
-            path.append(.offers)
-        case "me.connections":
-            path.append(.connections)
-        case "me.supportTrains":
-            path.append(.supportTrains)
-        case "me.listings":
-            path.append(.myListings)
-        case "me.businesses":
-            path.append(.myBusinesses)
-        case "me.homes":
-            path.append(.myHomes)
-        case "me.bills":
-            if let homeId = tile.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homeBills(homeId: homeId))
-            } else {
-                path.append(.placeholder(label: tile.label))
-            }
-        case "me.pets":
-            if let homeId = tile.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homePets(homeId: homeId))
-            } else {
-                path.append(.placeholder(label: tile.label))
-            }
-        case "me.calendar":
-            if let homeId = tile.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homeCalendar(homeId: homeId))
-            } else {
-                path.append(.placeholder(label: tile.label))
-            }
-        case "me.docs":
-            if let homeId = tile.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homeDocs(homeId: homeId))
-            } else {
-                path.append(.placeholder(label: tile.label))
-            }
-        case "me.emergency":
-            if let homeId = tile.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homeEmergency(homeId: homeId))
-            } else {
-                path.append(.placeholder(label: tile.label))
-            }
-        case "me.packages":
-            if let homeId = tile.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homePackages(homeId: homeId))
-            } else {
-                path.append(.placeholder(label: tile.label))
-            }
-        case "me.polls":
-            if let homeId = tile.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homePolls(homeId: homeId))
-            } else {
-                path.append(.placeholder(label: tile.label))
-            }
-        case "me.tasks":
-            if let homeId = tile.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homeTasks(homeId: homeId))
-            } else {
-                path.append(.placeholder(label: tile.label))
-            }
-        case "me.maintenance":
-            if let homeId = tile.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homeMaintenance(homeId: homeId))
-            } else {
-                path.append(.placeholder(label: tile.label))
-            }
-        case "me.members":
-            if let homeId = tile.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homeMembers(homeId: homeId))
-            } else {
-                path.append(.placeholder(label: tile.label))
-            }
-        case "me.scheduling":
-            path.append(.scheduling(.hub(owner: .personal)))
-        case "me.home.scheduling":
-            if let homeId = tile.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.scheduling(.hub(owner: .home(homeId: homeId))))
-            } else {
-                path.append(.placeholder(label: tile.label))
-            }
-        case "me.business.scheduling":
-            if let businessId = tile.routeArgs["businessId"], !businessId.isEmpty {
-                path.append(.scheduling(.hub(owner: .business(id: businessId))))
-            } else {
-                path.append(.placeholder(label: tile.label))
-            }
-        default:
-            path.append(.placeholder(label: tile.label))
+    /// Your own profile (the 11-01 redesign): the page neighbors see, with
+    /// Edit profile, Preview as and "Your account". Its rows push this cover's
+    /// screens.
+    @ViewBuilder private var ownProfile: some View {
+        if let currentUserId {
+            PublicProfileView(
+                userId: currentUserId,
+                onBack: { onClose?() },
+                onOpenGig: { gigId in path.append(.gigDetail(gigId: gigId)) },
+                onOpenProfile: { userId in path.append(.publicProfile(userId: userId)) },
+                onOpenPost: { postId in path.append(.pulsePost(postId: postId)) },
+                onClose: onClose,
+                onOwnerDestination: { destination in
+                    #if DEBUG
+                    if destination == .developerTools {
+                        debugToolsMenu = true
+                        return
+                    }
+                    #endif
+                    path.append(Self.route(for: destination))
+                },
+                expandMonthlyReceipt: expandMonthlyReceipt
+            )
         }
     }
 
-    private func handleSection(_ row: MeSectionRow) {
-        switch row.routeKey {
-        case "me.posts":
-            path.append(.myPosts)
-            return
-        case "me.bids":
-            path.append(.myBids)
-            return
-        case "me.gigs":
-            path.append(.myTasks)
-            return
-        case "me.offers":
-            path.append(.offers)
-            return
-        case "me.connections":
-            path.append(.connections)
-        case "me.supportTrains":
-            path.append(.supportTrains)
-            return
-        case "me.homes":
-            path.append(.myHomes)
-            return
-        case "me.listings":
-            path.append(.myListings)
-            return
-        case "me.businesses":
-            path.append(.myBusinesses)
-            return
-        case "me.identityCenter":
-            path.append(.identityCenter)
-            return
-        case "me.audience":
-            path.append(.audienceProfile)
-            return
-        case "me.savedPlaces":
-            path.append(.savedPlaces)
-            return
-        case "me.creatorInbox":
-            path.append(.creatorInbox)
-            return
-        case "me.help":
-            path.append(.helpCenter)
-            return
-        case "me.legal":
-            path.append(.legal)
-            return
-        case "me.privacy", "me.home.privacy":
-            path.append(.privacySettings)
-            return
-        case "me.bills":
-            if let homeId = row.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homeBills(homeId: homeId))
-                return
-            }
-        case "me.docs":
-            if let homeId = row.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homeDocs(homeId: homeId))
-                return
-            }
-        case "me.emergency":
-            if let homeId = row.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homeEmergency(homeId: homeId))
-                return
-            }
-        case "me.packages":
-            if let homeId = row.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homePackages(homeId: homeId))
-                return
-            }
-        case "me.polls":
-            if let homeId = row.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homePolls(homeId: homeId))
-                return
-            }
-        case "me.access":
-            if let homeId = row.routeArgs["homeId"], !homeId.isEmpty {
-                let homeName = row.routeArgs["homeName"]
-                path.append(.accessCodes(homeId: homeId, homeName: homeName))
-                return
-            }
-        case "me.tasks":
-            if let homeId = row.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homeTasks(homeId: homeId))
-                return
-            }
-        case "me.maintenance":
-            if let homeId = row.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homeMaintenance(homeId: homeId))
-                return
-            }
-        case "me.owners":
-            if let homeId = row.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homeOwners(homeId: homeId))
-                return
-            }
-        case "me.members":
-            if let homeId = row.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.homeMembers(homeId: homeId))
-                return
-            }
-        case "me.editProfile":
-            showsEditProfile = true
-            return
-        case "me.settings":
-            path.append(.settings)
-            return
-        case "me.scheduling":
-            path.append(.scheduling(.hub(owner: .personal)))
-            return
-        case "me.home.scheduling":
-            if let homeId = row.routeArgs["homeId"], !homeId.isEmpty {
-                path.append(.scheduling(.hub(owner: .home(homeId: homeId))))
-                return
-            }
-        case "me.business.scheduling":
-            if let businessId = row.routeArgs["businessId"], !businessId.isEmpty {
-                path.append(.scheduling(.hub(owner: .business(id: businessId))))
-                return
-            }
-        default:
-            break
+    /// The screen behind each "Your account" row (also used when the profile
+    /// was pushed in another tab and asks the root to open this cover).
+    static func route(for destination: ProfileOwnerDestination) -> YouRoute {
+        switch destination {
+        case .myPosts: .myPosts
+        case .connections: .connections
+        case .supportTrains: .supportTrains
+        case .savedPlaces: .savedPlaces
+        case .settings: .settings
+        case .help, .developerTools: .helpCenter
         }
-        #if DEBUG
-        switch row.routeKey {
-        case "me.debug.openProfile":
-            debugProfileSheet = true
-            return
-        case "me.debug.openPost":
-            debugPostSheet = true
-            return
-        case "me.debug.inviteOwner":
-            debugInviteHomeSheet = true
-            return
-        case "me.debug.disambiguate":
-            debugDisambiguateSheet = true
-            return
-        case "me.debug.openHandshake":
-            debugHandshakeSheet = true
-            return
-        case "me.debug.openInviteToken":
-            debugInviteTokenSheet = true
-            return
-        case "me.debug.openStatusWaiting":
-            path.append(.statusWaiting)
-            return
-        case "me.debug.openCeremonialMail":
-            path.append(.ceremonialMail)
-            return
-        case "me.debug.openCeremonialMailOpen":
-            debugCeremonialMailOpenSheet = true
-            return
-        default:
-            break
-        }
-        #endif
-        // A Home row with no shared Home behind it (none yet, or still in
-        // verification) opens My homes: Add a home, Find and the
-        // verification steps live there. The Business identity is always
-        // unbound here; My businesses manages, creates and claims them.
-        if Self.homeScopedRouteKeys.contains(row.routeKey) {
-            path.append(.myHomes)
-            return
-        }
-        if row.routeKey.hasPrefix("me.business.") {
-            path.append(.myBusinesses)
-            return
-        }
-        path.append(.placeholder(label: row.label))
     }
-
-    /// Home identity rows that need a bound Home id.
-    private static let homeScopedRouteKeys: Set<String> = [
-        "me.members", "me.owners", "me.access", "me.bills", "me.maintenance",
-        "me.tasks", "me.packages", "me.emergency", "me.docs", "me.polls",
-        "me.home.scheduling"
-    ]
 
     private func popAfterListingUpdate(_: String) {
         Task { @MainActor in
@@ -1132,8 +883,8 @@ public struct YouTabRoot: View {
     }
 
     /// No-op overlay slot — we previously routed debug affordances via
-    /// a 5-tap gesture, but the designed DEBUG section in `MeView` now
-    /// surfaces them directly.
+    /// a 5-tap gesture; debug builds now list them under "Developer tools"
+    /// in your profile's account list.
     private var debugTapTarget: some View {
         EmptyView()
     }

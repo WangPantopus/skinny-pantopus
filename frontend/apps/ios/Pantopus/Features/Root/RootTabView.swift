@@ -142,6 +142,9 @@ public final class RootTabModel {
     var barScrolledAway = false
     /// The selected tab tapped again, for the drawn bar's container.
     var reselection: RootTabReselection?
+    /// A screen from your own profile's "Your account" list, asked for where
+    /// the profile was pushed in another tab: the profile cover opens on it.
+    var profileCoverDestination: ProfileOwnerDestination?
     public init() {}
 }
 
@@ -165,11 +168,6 @@ public struct RootTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     /// Nearby Plans' two server flags, read at launch and on foreground.
     @State private var plansFlags = PlansFlags.shared
-    /// The You cover's model, kept across openings (Instant Screens): the
-    /// cover shows its last content at once and refreshes it quietly once
-    /// stale. Replaced for another account.
-    @State private var youModel = MeViewModel()
-    @State private var youModelUserID: String?
     /// The side menu's model, made once (a view model made in `body` can
     /// write observed state while the bar draws: the Xcode 16.4 render loop).
     @State private var drawerModel = NavigationDrawerViewModel(context: .personal(name: ""))
@@ -199,11 +197,6 @@ public struct RootTabView: View {
                 await TabWarmer.warm()
             }
             .task(id: signedInUserID) {
-                // Another account never sees the previous account's You screen.
-                if youModelUserID != signedInUserID {
-                    if youModelUserID != nil { youModel = MeViewModel() }
-                    youModelUserID = signedInUserID
-                }
                 await plansFlags.refresh(account: signedInUserID)
                 // Every invite shares the person's own link; read it before anyone taps one.
                 await PersonalInviteLink.shared.load(account: signedInUserID)
@@ -238,6 +231,11 @@ public struct RootTabView: View {
             .onChange(of: router.pending) { _, pending in
                 consumeInviteDeepLinkIfNeeded(pending: pending)
             }
+            .onChange(of: model.profileCoverDestination) { _, destination in
+                guard let destination else { return }
+                model.profileCoverDestination = nil
+                presentProfile(at: YouTabRoot.route(for: destination))
+            }
             .task {
                 consumeInviteDeepLinkIfNeeded(pending: router.pending)
             }
@@ -245,14 +243,14 @@ public struct RootTabView: View {
                 isPresented: $showProfile,
                 onDismiss: {
                     expandMonthlyReceipt = false
-                    youModel.expandMonthlyReceipt = false
                     profileInitialRoute = nil
                 },
                 content: {
+                    // Your own profile (the 11-01 redesign); it reads through the
+                    // screen store, so it shows its last content at once.
                     YouTabRoot(
                         expandMonthlyReceipt: expandMonthlyReceipt,
-                        initialRoute: profileInitialRoute,
-                        meViewModel: youModel
+                        initialRoute: profileInitialRoute
                     ) {
                         showProfile = false
                     }
@@ -356,7 +354,6 @@ public struct RootTabView: View {
             // `monthly_receipt` push — open the profile cover with the
             // receipt card expanded.
             expandMonthlyReceipt = true
-            youModel.expandMonthlyReceipt = true
             showProfile = true
             _ = router.consume()
         case .creatorInbox:

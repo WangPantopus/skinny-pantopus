@@ -394,6 +394,10 @@ public final class PublicProfileViewModel {
     /// Follow / Connect affordances in `loadRelationship(id:)`.
     private var profileKind: PublicProfileKind = .persona
     private let currentUserId: String?
+    /// Your own profile shown as this audience would see it (Preview as): every
+    /// read carries `?as=`, nothing is read about a relationship, and the page
+    /// renders as a visitor's. Nil for the real profile.
+    public let previewAudience: ProfileAudience?
     private let client: APIClient
     /// The screen store (Instant Screens, "Other people": fresh 5 minutes,
     /// not saved on the phone). The profile and its posts come from it; the
@@ -405,16 +409,19 @@ public final class PublicProfileViewModel {
     init(
         userId: String,
         currentUserId: String? = PublicProfileViewModel.signedInUserId(),
-        client: APIClient = .shared
+        client: APIClient = .shared,
+        previewAudience: ProfileAudience? = nil
     ) {
         routeIdentifier = userId
         resolvedUserId = userId
         self.currentUserId = currentUserId
+        self.previewAudience = previewAudience
         self.client = client
         store = ScreenStore.store(for: client)
         postCards = ProfilePostCardsModel(viewerId: currentUserId, client: client, store: store)
         postCards.onToast = { [weak self] message in self?.toastMessage = message }
-        showStoredCopy()
+        // A preview always reads fresh: what the audience sees, not a saved copy.
+        if previewAudience == nil { showStoredCopy() }
     }
 
     /// The signed-in user, so `isOwner` (and the owner chrome behind it)
@@ -888,7 +895,12 @@ public final class PublicProfileViewModel {
 
     private func fetch(force: Bool) async {
         do {
-            let profile = try await store.load(profileEndpoint, as: PublicProfile.self, kind: .otherPeople, force: force).value
+            let profile: PublicProfile = if let previewAudience {
+                // Not through the store: a preview's answers never stand in for the real profile.
+                try await client.request(PublicProfileEndpoints.profile(id: resolvedUserId, previewAs: previewAudience.rawValue))
+            } else {
+                try await store.load(profileEndpoint, as: PublicProfile.self, kind: .otherPeople, force: force).value
+            }
             resolvedUserId = profile.id
             postCards.profileUserId = profile.id
             let kind = derivedKind(from: profile)
@@ -949,7 +961,7 @@ public final class PublicProfileViewModel {
     /// poses. Requires auth, so a signed-out viewer just gets the resting
     /// state (and no Follow affordance).
     private func loadRelationship(id: String) async {
-        guard currentUserId != nil, currentUserId != id else {
+        guard previewAudience == nil, currentUserId != nil, currentUserId != id else {
             canFollow = false
             isFollowing = false
             return
@@ -1075,6 +1087,9 @@ public final class PublicProfileViewModel {
     /// Pulse cards.
     private func loadUserPosts(id: String, force: Bool) async -> [FeedPostDTO] {
         let readRevision = postCards.actionRevision
+        if let previewAudience {
+            return await loadPreviewPosts(id: id, audience: previewAudience, readRevision: readRevision)
+        }
         do {
             let snapshot = try await store.load(
                 PostsEndpoints.userPosts(userId: id),
@@ -1100,8 +1115,32 @@ public final class PublicProfileViewModel {
     /// work to show. Your own read includes private documents
     /// (`GET /api/files/portfolio`); someone else's is the public list. A
     /// failed read leaves it nil and Work stays hidden (yours stays shown).
+    /// The posts the audience sees (`?as=`); signed-out visitors see none
+    /// (`sign_in_required`), so "anyone" reads nothing.
+    private func loadPreviewPosts(id: String, audience: ProfileAudience, readRevision: Int) async -> [FeedPostDTO] {
+        guard audience != .anyone else {
+            postCards.show([], readRevision: readRevision)
+            return []
+        }
+        do {
+            let response = try await client.request(
+                PostsEndpoints.userPosts(userId: id, previewAs: audience.rawValue),
+                as: FeedResponse.self
+            )
+            postsLoadFailed = false
+            postCards.show(response.posts, readRevision: readRevision)
+            return response.posts
+        } catch {
+            logger.debug("Preview posts load failed: \(error)")
+            postsLoadFailed = true
+            postCards.show([], readRevision: readRevision)
+            return []
+        }
+    }
+
     private func loadPortfolioCount(id: String) async {
-        let isOwn = currentUserId == id
+        // A preview counts what everyone can see: the public list.
+        let isOwn = currentUserId == id && previewAudience == nil
         do {
             let response = try await client.request(
                 isOwn ? ProfileTabsEndpoints.myPortfolio() : ProfileTabsEndpoints.portfolio(userId: id),
@@ -1247,7 +1286,8 @@ public final class PublicProfileViewModel {
         let neighbor = kind == .local
             ? buildNeighbor(from: profile, reviews: reviewCards, posts: posts)
             : nil
-        let isOwner = currentUserId.map { $0 == profile.id } ?? false
+        // A preview is rendered the way the audience sees it, not as yours.
+        let isOwner = previewAudience == nil && (currentUserId.map { $0 == profile.id } ?? false)
         // A Beacon (`PublicPersona.handle`) lives in a different namespace
         // from `User.username` — persona handles are generated independently
         // (`identityProfiles.generateUniqueAudienceHandle`) and the persona
