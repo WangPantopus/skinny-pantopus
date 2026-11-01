@@ -17,6 +17,7 @@ import {
   useInfiniteQuery,
   useMutation,
   useQueryClient,
+  type QueryClient,
   type UseQueryOptions,
   type UseMutationOptions,
 } from '@tanstack/react-query';
@@ -398,6 +399,18 @@ export function useDrawerItems(
   });
 }
 
+async function loadOpenedItem(qc: QueryClient, itemId: string) {
+  const detail = await api.getItemDetail(itemId);
+  // The detail read marks the letter opened on the server. Refresh after
+  // every successful read, including direct links and recovery via Retry.
+  // A failed read leaves the unopened counts and list alone.
+  qc.invalidateQueries({ queryKey: mailboxKeys.drawers() });
+  qc.invalidateQueries({ queryKey: mailboxKeys.counter() });
+  qc.invalidateQueries({ queryKey: mailboxKeys.mailDaySummary() });
+  qc.invalidateQueries({ queryKey: [...mailboxKeys.all, 'drawer'] });
+  return detail;
+}
+
 export function useItemDetail(
   itemId: string,
   options?: Omit<
@@ -405,9 +418,10 @@ export function useItemDetail(
     'queryKey' | 'queryFn'
   >,
 ) {
+  const qc = useQueryClient();
   return useQuery<MailItemDetailResponse, MailboxApiError>({
     queryKey: mailboxKeys.itemDetail(itemId),
-    queryFn: () => api.getItemDetail(itemId),
+    queryFn: () => loadOpenedItem(qc, itemId),
     staleTime: STALE_1M,
     enabled: !!itemId,
     ...options,
@@ -424,16 +438,9 @@ export function useMarkItemOpened(
     mutationFn: async (itemId) => {
       await qc.fetchQuery({
         queryKey: mailboxKeys.itemDetail(itemId),
-        queryFn: () => api.getItemDetail(itemId),
+        queryFn: () => loadOpenedItem(qc, itemId),
         staleTime: STALE_1M,
       });
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: mailboxKeys.drawers() });
-      qc.invalidateQueries({ queryKey: mailboxKeys.counter() });
-      qc.invalidateQueries({ queryKey: mailboxKeys.mailDaySummary() });
-      // Invalidate all drawer item lists
-      qc.invalidateQueries({ queryKey: [...mailboxKeys.all, 'drawer'] });
     },
     ...options,
   });
