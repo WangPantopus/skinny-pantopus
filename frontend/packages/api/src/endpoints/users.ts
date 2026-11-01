@@ -17,18 +17,21 @@ export async function getProfile(userId: string): Promise<UserProfile> {
   return get<UserProfile>(`/api/users/${cleanPathParam(userId)}`);
 }
 
+/** Who your own profile is previewed as (`?as=`): only you can ask, and the answer is exactly that audience's. */
+export type ProfileAudience = 'anyone' | 'neighbors' | 'connections';
+
 /**
  * Get full public profile by user UUID
  */
-export async function getProfileById(userId: string): Promise<UserProfile> {
-  return get<UserProfile>(`/api/users/id/${cleanPathParam(userId)}`);
+export async function getProfileById(userId: string, params?: { as?: ProfileAudience }): Promise<UserProfile> {
+  return get<UserProfile>(`/api/users/id/${cleanPathParam(userId)}`, params);
 }
 
 /**
  * Get user profile by username
  */
-export async function getProfileByUsername(username: string): Promise<UserProfile> {
-  return get<UserProfile>(`/api/users/username/${cleanPathParam(username)}`);
+export async function getProfileByUsername(username: string, params?: { as?: ProfileAudience }): Promise<UserProfile> {
+  return get<UserProfile>(`/api/users/username/${cleanPathParam(username)}`, params);
 }
 
 /**

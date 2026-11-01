@@ -437,7 +437,9 @@ export async function getUserPosts(userId: string, params?: {
   offset?: number;
   cursorCreatedAt?: string;
   cursorId?: string;
-}): Promise<{ posts: Post[]; pagination: CursorPagination }> {
+  /** Your own posts as that audience sees them (owner only); `anyone` answers `sign_in_required`. */
+  as?: 'anyone' | 'neighbors' | 'connections';
+}): Promise<{ posts: Post[]; pagination: CursorPagination; sign_in_required?: boolean; preview_as?: string }> {
   return get(`/api/posts/user/${userId}`, params);
 }
 
