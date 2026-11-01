@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.BuildConfig
 import app.pantopus.android.core.LaunchFeatures
@@ -82,6 +83,8 @@ fun YouScreen(
     onOpenSupportTrains: () -> Unit = {},
     onOpenSavedPlaces: () -> Unit = {},
 ) {
+    // The debug "Invite owner" dialog fills in the signed-in email.
+    val signedIn = viewModel.authState.collectAsStateWithLifecycle().value as? AuthRepository.State.SignedIn
     var debugProfileDialog by remember { mutableStateOf(false) }
     var debugPostDialog by remember { mutableStateOf(false) }
     var debugInviteDialog by remember { mutableStateOf(false) }
@@ -189,7 +192,7 @@ fun YouScreen(
     }
 
     if (BuildConfig.DEBUG && debugInviteDialog) {
-        val currentEmail = (viewModel.authState.value as? AuthRepository.State.SignedIn)?.user?.email.orEmpty()
+        val currentEmail = signedIn?.user?.email.orEmpty()
         AlertDialog(
             modifier = Modifier.closesKeyboardOnTapOrScroll(),
             onDismissRequest = { debugInviteDialog = false },
