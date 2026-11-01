@@ -116,12 +116,15 @@ private struct EditProfilePinnedRow: View {
                 .foregroundStyle(Theme.Color.appText)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Button("Unpin", action: onUnpin)
-                .scaledFont(15)
-                .foregroundStyle(Theme.Color.primaryInk)
-                .frame(minWidth: 44, minHeight: 44)
-                .accessibilityLabel("Unpin \(ProfilePinnedPost.title(post))")
-                .accessibilityIdentifier("editProfileUnpin_\(post.id)")
+            Button(action: onUnpin) {
+                Text("Unpin")
+                    .scaledFont(15)
+                    .foregroundStyle(Theme.Color.primaryInk)
+                    .hitArea(horizontal: 8, vertical: 12)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Unpin \(ProfilePinnedPost.title(post))")
+            .accessibilityIdentifier("editProfileUnpin_\(post.id)")
         }
         .frame(minHeight: 56)
     }

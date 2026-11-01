@@ -125,7 +125,8 @@ struct ProfileSectionTitle: View {
                     Text("Edit")
                         .scaledFont(17)
                         .foregroundStyle(Theme.Color.primaryInk)
-                        .frame(minWidth: 44, minHeight: 44)
+                        // A 44 pt target without a taller row (the drawing's negative margins).
+                        .hitArea(horizontal: 8, vertical: 12)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(editLabel)
