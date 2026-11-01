@@ -99,6 +99,9 @@ fun PublicProfileScreen(
     onOpenPost: (String) -> Unit = {},
     /** Your own profile's Edit profile. */
     onEditProfile: () -> Unit = {},
+    /** "You and …": a plan you're both in, a Support Train you both help on. */
+    onOpenPlan: (String) -> Unit = {},
+    onOpenSupportTrain: (String) -> Unit = {},
     /** ☰ → Your profile: your page as a cover with ✕ (pushed from your own name, it keeps Back). */
     ownerCover: Boolean = false,
     /** Where your own page's rows and buttons go (PRF step 2). */
@@ -110,6 +113,7 @@ fun PublicProfileScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
+    val inCommon by viewModel.inCommon.state.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val usernameShareForm by usernameShare.form.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
@@ -266,6 +270,14 @@ fun PublicProfileScreen(
                                 onRetryPosts = { viewModel.refresh() },
                                 postCards = postCards,
                                 postCardActions = postCardActions,
+                                // Nothing shared shows on your own page or across a block.
+                                inCommon = inCommon.takeIf { !content.isOwner && connection != ProfileConnection.Blocked },
+                                onOpenInCommon = { target ->
+                                    when (target) {
+                                        is InCommonTarget.Plan -> onOpenPlan(target.id)
+                                        is InCommonTarget.SupportTrain -> onOpenSupportTrain(target.id)
+                                    }
+                                },
                                 mode =
                                     if (content.isOwner) {
                                         ProfileFrameMode.Owner(
@@ -893,6 +905,8 @@ internal fun LocalProfileLoadedFrame(
     postCards: List<PulsePostCardContent> = emptyList(),
     postCardActions: ProfilePostCardActions = ProfilePostCardActions(),
     mode: ProfileFrameMode = ProfileFrameMode.Visitor,
+    inCommon: ProfileInCommon? = null,
+    onOpenInCommon: (InCommonTarget) -> Unit = {},
 ) {
     val owner = mode as? ProfileFrameMode.Owner
     val preview = mode as? ProfileFrameMode.Preview
@@ -919,6 +933,7 @@ internal fun LocalProfileLoadedFrame(
             ) {
                 ProfileFrameHeaderActions(mode = mode, content = content, header = header, actions = actions, callbacks = callbacks)
             }
+            YouAndCard(firstName = firstName, inCommon = inCommon, onOpen = onOpenInCommon)
             Spacer(Modifier.height(28.dp))
             if (preview?.audience == PreviewAudience.Anyone) {
                 // Signed-out visitors can't read posts: no tabs, no posts, as the drawing's "anyone" frame.
@@ -958,6 +973,7 @@ internal fun LocalProfileLoadedFrame(
                             emailConfirmed = content.profile.verified == true,
                             links = content.links,
                             onOpenLink = onOpenLink,
+                            aroundTheNeighborhood = { AroundTheNeighborhood(firstName, content.profile.contributions) },
                         )
                     LocalProfileTab.Work ->
                         LocalProfileWorkSection(

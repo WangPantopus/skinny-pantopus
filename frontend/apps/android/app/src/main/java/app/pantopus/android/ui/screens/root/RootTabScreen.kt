@@ -4994,6 +4994,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         // Gigs tab rows open gig detail; review cards open the
                         // reviewer's own public profile.
                         onOpenGig = { gigId -> navController.navigate(ChildRoutes.gigDetail(gigId)) },
+                        onOpenPlan = { planId -> navController.navigate(PlansRoutes.plan(planId)) },
+                        onOpenSupportTrain = { trainId -> navController.navigate(ChildRoutes.supportTrainDetail(trainId)) },
                         onOpenProfile = { reviewerId ->
                             navController.navigate(ChildRoutes.publicProfile(reviewerId))
                         },

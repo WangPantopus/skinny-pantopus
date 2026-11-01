@@ -881,6 +881,8 @@ class PublicProfileViewModel
                         // (`src/app/user/[id].tsx:322`).
                         _connection.value = ProfileConnection.Blocked
                         _isBlockedByViewer.value = true
+                        // A block shares nothing: "You and …" leaves at once.
+                        inCommon.clear()
                         _toastMessage.value = "User blocked"
                     }
                     is NetworkResult.Failure -> {
@@ -1029,6 +1031,8 @@ class PublicProfileViewModel
                             emptyList()
                         }
                     _state.value = PublicProfileUiState.Loaded(build(profile, kind, firstFrame))
+                    val viewer = signedInId()
+                    if (kind == PublicProfileKind.Local && viewer != null && viewer != profile.id) inCommon.load(profile.id, viewer)
                     coroutineScope {
                         // The relationship decides the header's buttons: read it beside the posts, not after them.
                         val relationship = async { loadRelationship(profile.id) }
@@ -1063,6 +1067,9 @@ class PublicProfileViewModel
 
         /** Preview as (owner only): the page exactly as [audience] gets it, until Done. */
         fun startPreview(audience: PreviewAudience) = preview.start(userId, audience)
+
+        /** "You and …" on someone else's profile (PRF step 4). */
+        internal val inCommon = ProfileInCommonLoader(viewModelScope, repo)
 
         fun endPreview() = preview.end()
 

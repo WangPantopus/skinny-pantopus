@@ -89,6 +89,8 @@ class PublicProfileViewModelTest {
         coEvery { posts.profilePosts(any(), any()) } returns NetworkResult.Success(FeedResponse(emptyList()))
         // The portfolio read decides whether the Work tab shows; no portfolio by default.
         coEvery { profileTabs.portfolio(any(), any()) } returns NetworkResult.Success(PortfolioListResponse())
+        // "You and …" reads nothing here: the section stays hidden.
+        coEvery { repo.inCommon(any()) } returns NetworkResult.Failure(NetworkError.NotFound)
         // Your own page's extras: none of them read here.
         coEvery { localProfiles.me() } returns NetworkResult.Failure(NetworkError.NotFound)
         coEvery { insights.monthlyReceipt(any(), any()) } returns NetworkResult.Failure(NetworkError.NotFound)
