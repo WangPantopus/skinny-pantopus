@@ -877,24 +877,7 @@ extension AddressCalendarCard {
                     }
                 }
             }
-            Text(row.frequency == "once" ? "Collection date" : "First collection date")
-            TextField("YYYY-MM-DD", text: $collections[index].anchorDate)
-                .textFieldStyle(.roundedBorder)
-                .autocorrectionDisabled()
-                .accessibilityLabel("\(label) collection date, YYYY-MM-DD")
-            if row.frequency != "once" {
-                Text("End date (optional)")
-                TextField(
-                    "YYYY-MM-DD",
-                    text: Binding(
-                        get: { collections[index].untilDate ?? "" },
-                        set: { collections[index].untilDate = $0.isEmpty ? nil : $0 }
-                    )
-                )
-                .textFieldStyle(.roundedBorder)
-                .autocorrectionDisabled()
-                .accessibilityLabel("\(label) end date, YYYY-MM-DD")
-            }
+            collectionDates(index: index, label: label)
             if row.frequency == "weekly" && row.interval > 1 {
                 Text("The start date anchors the collection week. Weeks begin Monday.")
                     .font(.system(size: 12)).foregroundStyle(Theme.Color.appTextSecondary)
@@ -906,6 +889,81 @@ extension AddressCalendarCard {
             Divider()
         }
         .font(.system(size: 13))
+    }
+
+    /// The collection's dates, in the system date picker like the radon card's.
+    @ViewBuilder
+    private func collectionDates(index: Int, label: String) -> some View {
+        let row = collections[index]
+        if let anchor = Self.pickerDate(row.anchorDate) {
+            PlaceDateRow(
+                title: row.frequency == "once" ? "Collection date" : "First collection date",
+                date: Binding(get: { anchor }, set: { date in
+                    let day = Self.pickupDay(date)
+                    collections[index].anchorDate = day
+                    // The end date can't precede the start.
+                    if let until = collections[index].untilDate, until < day { collections[index].untilDate = day }
+                }),
+                accessibilityLabel: "\(label) collection date"
+            )
+        } else {
+            Button {
+                collections[index].anchorDate = suggestedDay(row)
+            } label: {
+                Text(row.frequency == "once" ? "Choose the collection date" : "Choose the first collection date")
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("\(label): choose the collection date")
+        }
+        if row.frequency != "once" {
+            Toggle("End date (optional)", isOn: Binding(get: { row.untilDate != nil }, set: { on in
+                collections[index].untilDate = on ? (row.anchorDate.isEmpty ? calendar.today : row.anchorDate) : nil
+            }))
+            .accessibilityLabel("\(label) end date (optional)")
+            if let until = row.untilDate.flatMap(Self.pickerDate) {
+                PlaceDateRow(
+                    title: "End date",
+                    date: Binding(get: { until }, set: { collections[index].untilDate = Self.pickupDay($0) }),
+                    range: (Self.pickerDate(row.anchorDate) ?? .distantPast)...,
+                    accessibilityLabel: "\(label) end date"
+                )
+            }
+        }
+    }
+
+    /// A pickup day ("2026-11-04") as the date picker's date: noon that day on the
+    /// device's calendar, so the picker shows the day the string names.
+    private static func pickerDate(_ day: String) -> Date? {
+        let parts = day.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        return pickerCalendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2], hour: 12))
+    }
+
+    private static func pickupDay(_ date: Date) -> String {
+        let day = pickerCalendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", day.year ?? 0, day.month ?? 0, day.day ?? 0)
+    }
+
+    private static var pickerCalendar: Calendar {
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = .current
+        return gregorian
+    }
+
+    /// Where choosing a date starts: the home's today, or for a weekly
+    /// collection the first of its days from today.
+    private func suggestedDay(_ row: PickupCollection) -> String {
+        guard row.frequency == "weekly", let today = Self.pickerDate(calendar.today) else { return calendar.today }
+        let gregorian = Self.pickerCalendar
+        for offset in 0..<7 {
+            guard let date = gregorian.date(byAdding: .day, value: offset, to: today) else { continue }
+            // Calendar weekdays run 1 (Sunday) to 7; the codes run Monday to Sunday.
+            if row.weekdays.contains(Self.weekdays[(gregorian.component(.weekday, from: date) + 5) % 7].id) {
+                return Self.pickupDay(date)
+            }
+        }
+        return calendar.today
     }
 
     private func whenLabel(_ event: PlaceCalendarEvent) -> String {
@@ -1708,7 +1766,7 @@ private struct RadonTodaySheet: View {
                     if tested {
                         RadonReportControl(state: state)
                         Toggle("Test date (optional)", isOn: $state.hasDate)
-                        if state.hasDate { RadonDateRow(title: "Test date", date: $state.selectedDate) }
+                        if state.hasDate { PlaceDateRow(title: "Test date", date: $state.selectedDate) }
                         TextField("Result (pCi/L)", text: $state.result)
                             .keyboardType(.decimalPad)
                             .textFieldStyle(.roundedBorder)
@@ -1723,7 +1781,7 @@ private struct RadonTodaySheet: View {
                                 .foregroundStyle(Theme.Color.primaryInk)
                         }
                     } else {
-                        RadonDateRow(
+                        PlaceDateRow(
                             title: "Reminder date",
                             date: $state.selectedDate,
                             range: Calendar.autoupdatingCurrent.startOfDay(for: Date())...
@@ -1852,22 +1910,29 @@ private struct RadonReportControl: View {
 /// A date row that stays readable at accessibility text sizes: the compact
 /// picker's date chip grows until its inline label is squeezed to a column one
 /// letter wide, so the label moves above the picker there.
-private struct RadonDateRow: View {
+private struct PlaceDateRow: View {
     let title: String
     @Binding var date: Date
     var range: PartialRangeFrom<Date> = Date.distantPast...
+    /// What VoiceOver reads when the title alone doesn't say whose date it is.
+    var accessibilityLabel: String?
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         if typeSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
-                DatePicker(title, selection: $date, in: range, displayedComponents: .date)
+                picker
                     .labelsHidden()
             }
         } else {
-            DatePicker(title, selection: $date, in: range, displayedComponents: .date)
+            picker
         }
+    }
+
+    private var picker: some View {
+        DatePicker(title, selection: $date, in: range, displayedComponents: .date)
+            .accessibilityLabel(accessibilityLabel ?? title)
     }
 }
 
