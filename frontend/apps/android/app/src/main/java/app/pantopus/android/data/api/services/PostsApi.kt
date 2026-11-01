@@ -173,6 +173,14 @@ interface PostsApi {
         @Header("If-None-Match") etag: String?,
     ): Response<FeedResponse>
 
+    /** Preview as: your posts as `anyone` (none, `sign_in_required`), `neighbors` or `connections` see them. */
+    @GET("api/posts/user/{userId}")
+    suspend fun profilePostsAs(
+        @Path("userId") userId: String,
+        @Query("limit") limit: Int,
+        @Query("as") audience: String,
+    ): FeedResponse
+
     /** `GET /api/posts/saved` — the viewer's saved posts they can still open (offset paging over saves). */
     @GET("api/posts/saved")
     suspend fun savedPosts(

@@ -281,15 +281,7 @@ class ProfilePostCards internal constructor(
                             likePending = post.id in liking,
                             savePending = post.id in saving,
                         ),
-                ).let { card ->
-                    // On a profile the author's avatar matches the header's: one color per person (PRF).
-                    val authorId = post.userId ?: post.creator?.id
-                    if (authorId == null || card.avatarTint == FeedAvatarTint.Violet) {
-                        card
-                    } else {
-                        card.copy(avatarTint = profileAvatarTint(authorId), authorInitials = profileInitials(card.authorName))
-                    }
-                }
+                ).let { card -> profileCardColors(post, card) }
             }
     }
 }
@@ -380,3 +372,17 @@ private fun OptionRow(
         )
     }
 }
+
+/** On a profile the author's avatar matches the header's: one color per person (PRF), a business keeps violet. */
+internal fun profileCardColors(
+    post: FeedPost,
+    card: PulsePostCardContent,
+): PulsePostCardContent {
+    val authorId = post.userId ?: post.creator?.id
+    if (authorId == null || card.avatarTint == FeedAvatarTint.Violet) return card
+    return card.copy(avatarTint = profileAvatarTint(authorId), authorInitials = profileInitials(card.authorName))
+}
+
+/** A post as a visitor's card in Preview as: no viewer (no owner menus), the counts as the server sent them. */
+internal fun profilePreviewCard(post: FeedPost): PulsePostCardContent =
+    profileCardColors(post, pulseCardContent(post = post, viewerId = null, surface = null, live = PulseCardLiveValues.of(post)))

@@ -57,6 +57,8 @@ data class PublicProfileDto(
     val skills: List<String> = emptyList(),
     /** True when the server made the username up (user_…, or the pre-October-7 kind built from the email address). */
     val usernameIsGenerated: Boolean? = null,
+    /** Set on a Preview as answer (`?as=`): the audience the server answered as. */
+    @Json(name = "preview_as") val previewAs: String? = null,
 ) {
     /** The username when the person chose it; null for a made-up one. */
     val chosenUsername: String?

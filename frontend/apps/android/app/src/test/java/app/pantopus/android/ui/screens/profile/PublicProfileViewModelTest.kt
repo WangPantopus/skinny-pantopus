@@ -23,9 +23,12 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.blocks.BlocksRepository
 import app.pantopus.android.data.connections.ConnectionsRepository
+import app.pantopus.android.data.identity.LocalProfileRepository
 import app.pantopus.android.data.posts.PostsRepository
+import app.pantopus.android.data.profile.ProfileInsightsRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.data.profile.ProfileTabsRepository
+import app.pantopus.android.data.profile.ProfileTipsStore
 import app.pantopus.android.data.relationships.RelationshipsRepository
 import app.pantopus.android.data.social.UserSocialRepository
 import app.pantopus.android.data.store.Stored
@@ -61,6 +64,9 @@ class PublicProfileViewModelTest {
     private val authRepository: AuthRepository = mockk(relaxed = true)
     private val posts: PostsRepository = mockk()
     private val profileTabs: ProfileTabsRepository = mockk()
+    private val localProfiles: LocalProfileRepository = mockk()
+    private val insights: ProfileInsightsRepository = mockk()
+    private val tips: ProfileTipsStore = mockk()
 
     /**
      * Nav arg handed to the VM. A UUID by default so resolution takes the
@@ -83,6 +89,13 @@ class PublicProfileViewModelTest {
         coEvery { posts.profilePosts(any(), any()) } returns NetworkResult.Success(FeedResponse(emptyList()))
         // The portfolio read decides whether the Work tab shows; no portfolio by default.
         coEvery { profileTabs.portfolio(any(), any()) } returns NetworkResult.Success(PortfolioListResponse())
+        // Your own page's extras: none of them read here.
+        coEvery { localProfiles.me() } returns NetworkResult.Failure(NetworkError.NotFound)
+        coEvery { insights.monthlyReceipt(any(), any()) } returns NetworkResult.Failure(NetworkError.NotFound)
+        coEvery { insights.inviteProgressStored(any()) } returns Stored()
+        coEvery { insights.inviteCodeStored(any()) } returns Stored()
+        coEvery { relationships.list(any(), any(), any(), any()) } returns NetworkResult.Failure(NetworkError.NotFound)
+        every { tips.dismissed(any()) } returns emptySet()
     }
 
     @After fun tearDown() {
@@ -100,6 +113,9 @@ class PublicProfileViewModelTest {
             authRepository = authRepository,
             posts = posts,
             profileTabs = profileTabs,
+            localProfiles = localProfiles,
+            insights = insights,
+            tips = tips,
             savedStateHandle = SavedStateHandle(mapOf(PUBLIC_PROFILE_USER_ID_KEY to routeIdentifier)),
         )
 

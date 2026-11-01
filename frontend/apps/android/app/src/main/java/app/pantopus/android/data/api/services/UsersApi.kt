@@ -65,6 +65,16 @@ interface UsersApi {
         @Path("id") id: String,
     ): PublicProfileDto
 
+    /**
+     * Preview as (PRF CONTRACT SRV-1): your own profile exactly as `anyone`, `neighbors` or `connections` get it.
+     * Owner only (403 otherwise). Route `backend/routes/users.js`, `/id/:id`.
+     */
+    @GET("api/users/id/{id}")
+    suspend fun publicProfileAs(
+        @Path("id") id: String,
+        @Query("as") audience: String,
+    ): PublicProfileDto
+
     @GET("api/users/id/{id}")
     suspend fun publicProfileConditional(
         @Path("id") id: String,

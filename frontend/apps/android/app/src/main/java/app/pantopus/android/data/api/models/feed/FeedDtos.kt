@@ -144,6 +144,8 @@ data class FeedResponse(
     val requiresViewingLocation: Boolean? = null,
     /** Place feed only: no area was given, so the server looked around the person's own place. */
     val fallbackArea: FeedFallbackArea? = null,
+    /** A person's posts previewed as `anyone`: signed-out visitors can't read posts (PRF CONTRACT SRV-1). */
+    @Json(name = "sign_in_required") val signInRequired: Boolean? = null,
 )
 
 /** Where the place feed looked when no area was given, such as "Near Camas, WA". */

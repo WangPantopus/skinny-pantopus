@@ -44,6 +44,12 @@ class ProfileRepository
 
         fun publicProfileCopy(id: String): Stored<PublicProfileDto> = store.peek(StoreKeys.publicProfile(id))
 
+        /** Your own profile as one audience sees it (`?as=`); never stored. */
+        suspend fun previewProfile(
+            id: String,
+            audience: String,
+        ): NetworkResult<PublicProfileDto> = safeApiCall { api.publicProfileAs(id, audience) }
+
         fun forgetPublicProfile(id: String) = store.remove(StoreKeys.publicProfile(id))
 
         /** `GET /api/users/profile` — route `backend/routes/users.js:1962`. */
