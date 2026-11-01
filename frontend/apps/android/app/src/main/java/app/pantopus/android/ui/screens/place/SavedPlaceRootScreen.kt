@@ -98,7 +98,6 @@ fun SavedPlaceRootScreen(
         modifier = modifier.fillMaxSize().background(PantopusColors.appBg).testTag(SAVED_PLACE_ROOT_TAG),
     ) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-            item { refreshNotice?.let { RefreshFailedLine(it) } }
             item {
                 PlaceDashboardHeader(
                     label = place.label,
@@ -108,6 +107,8 @@ fun SavedPlaceRootScreen(
                     modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
                 )
             }
+            // Under the header with the cards' side margin, as on Your Place.
+            item { refreshNotice?.let { RefreshFailedLine(it, Modifier.padding(horizontal = 16.dp)) } }
             item {
                 SavedPlaceNextStep(
                     onSetUpHome = onSetUpHome,
