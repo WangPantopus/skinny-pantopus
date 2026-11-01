@@ -69,7 +69,8 @@ async function weatherAlerts(home, since) {
     .map(({ alert, issued }) => ({
       id: `weather_alert:${alert.id}`,
       kind: 'weather_alert',
-      title: `${alert.event || 'Weather alert'} issued`,
+      // NWS re-issues a bulletin as an update (extended, changed area); that's a change too, said as such.
+      title: `${alert.event || 'Weather alert'} ${alert.message_type === 'Update' ? 'updated' : 'issued'}`,
       detail: null,
       occurred_at: issued,
       origin: alert.sender_name || alert.source || (result.provider === 'NOAA' ? 'National Weather Service' : 'Weather alerts'),

@@ -76,6 +76,8 @@ function normaliseFeature(feature) {
     area: p.areaDesc || '',
     full_description: p.description || '',
     full_instruction: p.instruction || '',
+    // "Alert" for a new bulletin, "Update" when NWS re-issues or extends one (CAP msgType).
+    message_type: p.messageType || '',
   };
 }
 

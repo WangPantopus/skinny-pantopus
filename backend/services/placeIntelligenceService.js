@@ -451,7 +451,7 @@ const AQI_STALE_MS = 3 * 60 * 60 * 1000;
 // preview simply does not list it).
 function buildTodayEnvelopes({
   weather, aqi, aqiMissing = null, weatherMissing = null, alerts, alertsMissing = null,
-  weatherProvider, alertsProvider, asOf = null, hub = null, home = null,
+  weatherProvider, alertsProvider, asOf = null, alertsCheckedAt = null, hub = null, home = null,
 }) {
   const out = [];
 
@@ -523,8 +523,9 @@ function buildTodayEnvelopes({
       ends: a.ends_at || null,
       ...alertDetail(a),
     }));
+    // As of when the alert list was read from its provider, so "checked 9:41 AM" is that read.
     out.push(serializePlaceSection('alerts', {
-      access: 'available', asOf, source: todayProviderLabel(alertsProvider), status: 'ready', data: { active },
+      access: 'available', asOf: alertsCheckedAt || asOf, source: todayProviderLabel(alertsProvider), status: 'ready', data: { active },
     }));
   } else {
     out.push(serializePlaceSection('alerts', {
@@ -584,6 +585,7 @@ async function composeToday(userId, home, hub) {
     weatherProvider: hub?.meta?.section_providers?.weather,
     alertsProvider: hub?.meta?.section_providers?.alerts,
     asOf: (hub && hub.fetched_at) || null,
+    alertsCheckedAt: hub?.meta?.alerts_checked_at || null,
     hub,
     home,
   });
@@ -683,6 +685,7 @@ async function composeTodayForPoint(lat, lng, { budgetMs = null } = {}) {
     weatherProvider: w?.provider,
     alertsProvider: al?.provider,
     asOf: (w && w.fetchedAt) || (a && a.fetchedAt) || new Date().toISOString(),
+    alertsCheckedAt: (alerts && al.fetchedAt) || null,
   });
 
 }
