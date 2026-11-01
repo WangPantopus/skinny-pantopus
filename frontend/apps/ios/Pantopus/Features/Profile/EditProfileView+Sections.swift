@@ -291,37 +291,56 @@ extension EditProfileView {
         Button {
             action?()
         } label: {
-            HStack(spacing: Spacing.s3) {
-                Icon(row.icon, size: 20, color: Theme.Color.appTextStrong)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(row.title)
-                        .scaledFont(15, weight: .semibold)
-                        .foregroundStyle(Theme.Color.appText)
-                    if let detail = row.detail {
-                        Text(detail)
-                            .scaledFont(13)
-                            .foregroundStyle(Theme.Color.appTextMuted)
-                    }
-                }
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                if let value = row.value {
-                    Text(value)
-                        .scaledFont(15)
-                        .foregroundStyle(Theme.Color.appTextMuted)
-                        .multilineTextAlignment(.trailing)
-                }
-                if action != nil {
-                    Icon(.chevronRight, size: 16, color: Theme.Color.appTextMuted)
-                }
-            }
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
+            EditProfilePlaceRowLabel(row: row, opens: action != nil)
         }
         .buttonStyle(.plain)
         .disabled(action == nil)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier(row.identifier)
+    }
+}
+
+/// A "Where you live" row's label. At accessibility sizes the value moves
+/// under the title, so a squeezed column never breaks it inside a word.
+@MainActor
+private struct EditProfilePlaceRowLabel: View {
+    let row: PlaceRow
+    let opens: Bool
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        HStack(spacing: Spacing.s3) {
+            Icon(row.icon, size: 20, color: Theme.Color.appTextStrong)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.title)
+                    .scaledFont(15, weight: .semibold)
+                    .foregroundStyle(Theme.Color.appText)
+                if let detail = row.detail {
+                    Text(detail)
+                        .scaledFont(13)
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                }
+                if typeSize.isAccessibilitySize, let value = row.value {
+                    Text(value)
+                        .scaledFont(15)
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if !typeSize.isAccessibilitySize, let value = row.value {
+                Text(value)
+                    .scaledFont(15)
+                    .foregroundStyle(Theme.Color.appTextMuted)
+                    .multilineTextAlignment(.trailing)
+            }
+            if opens {
+                Icon(.chevronRight, size: 16, color: Theme.Color.appTextMuted)
+            }
+        }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 }
 
