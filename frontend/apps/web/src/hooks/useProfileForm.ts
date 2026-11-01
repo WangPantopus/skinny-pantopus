@@ -7,7 +7,7 @@ import { getAuthToken } from '@pantopus/api';
 import type { ProfileFormData, User } from '@pantopus/types';
 import { extractApiError, extractFieldErrors } from '@pantopus/ui-utils';
 import { toast } from '@/components/ui/toast-store';
-import { fetchMe, peekMe, setMe, type Me } from '@/lib/me';
+import { fetchMe, peekMe, setMe, setOwnLocalProfile, type Me } from '@/lib/me';
 
 /** Server messages for rejected fields, keyed like the form. */
 export type FieldErrors = Partial<Record<keyof ProfileFormData, string>>;
@@ -96,8 +96,21 @@ export interface UseProfileFormReturn {
   setAddressVerified: React.Dispatch<React.SetStateAction<boolean>>;
   profilePictureUrl: string | null;
   setProfilePictureUrl: React.Dispatch<React.SetStateAction<string | null>>;
+  /** "Show on my profile" for your email and phone (saved with the rest). */
+  showContact: { showEmail: boolean; showPhone: boolean };
+  setShowContact: React.Dispatch<React.SetStateAction<{ showEmail: boolean; showPhone: boolean }>>;
+  /** True when anything on the form differs from what was saved (fields, skills, the two switches). */
+  hasChanges: boolean;
   loadProfile: () => Promise<void>;
-  saveProfile: (e?: React.FormEvent) => Promise<void>;
+  /** Saves the form; `neighborName`, when given, becomes the name neighbors see (your Local Profile) in the same save. */
+  saveProfile: (e?: React.FormEvent, extras?: { neighborName?: string }) => Promise<void>;
+}
+
+function contactOf(userData: Me | null | undefined) {
+  return {
+    showEmail: Boolean(userData?.showEmail ?? userData?.show_email),
+    showPhone: Boolean(userData?.showPhone ?? userData?.show_phone),
+  };
 }
 
 /** The form's fields for a profile as the server returns it. */
@@ -142,6 +155,8 @@ export function useProfileForm(): UseProfileFormReturn {
   const [newSkill, setNewSkill] = useState('');
   const [addressVerified, setAddressVerified] = useState(!!kept?.address_verified);
   const [profilePictureUrl, setProfilePictureUrl] = useState<string | null>(kept ? (kept.profilePicture || kept.profile_picture_url || null) : null);
+  const [showContact, setShowContact] = useState(() => contactOf(kept));
+  const shownContact = useRef(contactOf(kept));
 
   // Track initial form snapshot for isDirty
   const initialSnapshot = useRef<ProfileFormData>(kept ? profileFormData(kept) : INITIAL_FORM);
@@ -152,6 +167,11 @@ export function useProfileForm(): UseProfileFormReturn {
   const skillsRef = useRef(skills);
   skillsRef.current = skills;
   const shownSkills = useRef(skills);
+  const showContactRef = useRef(showContact);
+  showContactRef.current = showContact;
+  const hasChanges = isDirty
+    || JSON.stringify(skills) !== JSON.stringify(shownSkills.current)
+    || JSON.stringify(showContact) !== JSON.stringify(shownContact.current);
 
   const setField = useCallback((field: keyof ProfileFormData, value: string) => {
     dispatch({ type: 'SET_FIELD', field, value });
@@ -189,7 +209,8 @@ export function useProfileForm(): UseProfileFormReturn {
       setUser(userData);
       // Your typing wins over a newer copy: it replaces only an unchanged form.
       const untouched = JSON.stringify(formRef.current) === JSON.stringify(initialSnapshot.current)
-        && JSON.stringify(skillsRef.current) === JSON.stringify(shownSkills.current);
+        && JSON.stringify(skillsRef.current) === JSON.stringify(shownSkills.current)
+        && JSON.stringify(showContactRef.current) === JSON.stringify(shownContact.current);
       shown.current = true;
       if (!untouched) return;
 
@@ -199,6 +220,8 @@ export function useProfileForm(): UseProfileFormReturn {
 
       setSkills(userData.skills || []);
       shownSkills.current = userData.skills || [];
+      setShowContact(contactOf(userData));
+      shownContact.current = contactOf(userData);
       setAddressVerified(!!userData.address_verified);
       setProfilePictureUrl(userData.profilePicture || userData.profile_picture_url || null);
     } catch (err) {
@@ -219,7 +242,7 @@ export function useProfileForm(): UseProfileFormReturn {
     loadProfile();
   }, [loadProfile]);
 
-  const saveProfile = useCallback(async (e?: React.FormEvent) => {
+  const saveProfile = useCallback(async (e?: React.FormEvent, extras?: { neighborName?: string }) => {
     e?.preventDefault();
     setSaving(true);
     setFieldErrors({});
@@ -250,6 +273,9 @@ export function useProfileForm(): UseProfileFormReturn {
       if (form.state.trim()) updates.state = form.state.trim();
       if (form.zipcode.trim()) updates.zipcode = form.zipcode.trim();
 
+      updates.showEmail = showContact.showEmail;
+      updates.showPhone = showContact.showPhone;
+
       updates.website = form.website.trim();
       updates.linkedin = form.linkedin.trim();
       updates.twitter = form.twitter.trim();
@@ -278,6 +304,19 @@ export function useProfileForm(): UseProfileFormReturn {
       initialSnapshot.current = { ...form };
       const savedSkills = await api.users.updateSkills(skills);
       setMe({ skills: savedSkills?.skills ?? skills });
+      shownSkills.current = skills;
+      shownContact.current = showContact;
+      if (extras?.neighborName) {
+        try {
+          setOwnLocalProfile(await api.localProfiles.updateMyLocalProfile({ display_name: extras.neighborName }));
+        } catch (nameErr: unknown) {
+          const nameFields = extractFieldErrors(nameErr) as Record<string, string | undefined>;
+          const reason = nameFields.display_name || extractApiError(nameErr, "Couldn't save the name neighbors see.");
+          setFieldErrors({ neighborName: reason } as FieldErrors);
+          toast.error(`Your profile was saved, but the name neighbors see wasn't: ${reason}`);
+          return;
+        }
+      }
       toast.success('Profile updated successfully');
       router.push('/app/profile');
     } catch (err: unknown) {
@@ -303,7 +342,7 @@ export function useProfileForm(): UseProfileFormReturn {
     } finally {
       setSaving(false);
     }
-  }, [form, skills, router]);
+  }, [form, skills, showContact, router]);
 
   const addSkill = useCallback(() => {
     if (newSkill.trim() && !skills.includes(newSkill.trim())) {
@@ -337,6 +376,9 @@ export function useProfileForm(): UseProfileFormReturn {
     setAddressVerified,
     profilePictureUrl,
     setProfilePictureUrl,
+    showContact,
+    setShowContact,
+    hasChanges,
     loadProfile,
     saveProfile,
   };
