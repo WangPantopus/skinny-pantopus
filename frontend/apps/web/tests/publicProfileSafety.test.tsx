@@ -11,6 +11,7 @@ jest.mock('@pantopus/api', () => ({
   blocks: { blockUser: jest.fn(), getBlockedUsers: jest.fn() },
   users: { getProfileByUsername: jest.fn(), getMyProfile: jest.fn(), getRelationshipStatus: jest.fn(), reportUser: jest.fn() },
   gigs: { getGigs: jest.fn() }, posts: { getUserPosts: jest.fn() },
+  files: { getPortfolio: jest.fn() },
   reviews: { getUserReviews: jest.fn(), getPendingReviews: jest.fn() },
 }));
 jest.mock('@pantopus/utils', () => ({ ...jest.requireActual('@pantopus/utils'), buildUserProfileShareUrl: jest.fn() }));
@@ -32,6 +33,11 @@ beforeEach(() => {
   jest.clearAllMocks();
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   (api.users.getMyProfile as jest.Mock).mockResolvedValue({ id: 'viewer', username: 'viewer' });
+  // The anonymous server preview is rechecked for the signed-in viewer.
+  (api.users.getProfileByUsername as jest.Mock).mockImplementation((username) => Promise.resolve({
+    id: username, username, name: username === 'bob' ? 'Bob' : 'Carol',
+  }));
+  (api.files.getPortfolio as jest.Mock).mockResolvedValue({ files: [] });
   (api.users.getRelationshipStatus as jest.Mock).mockResolvedValue({ following: false, relationship: 'none' });
   (api.blocks.getBlockedUsers as jest.Mock).mockResolvedValue({ blocked: [] });
   (api.gigs.getGigs as jest.Mock).mockResolvedValue({ gigs: [{ id: 'gig' }] });

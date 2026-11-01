@@ -246,6 +246,9 @@ class PostsRepository
 
         fun profilePostsCopy(userId: String): Stored<FeedResponse> = store.peek(StoreKeys.profilePosts(userId))
 
+        /** A changed connection changes the audience; an offline read must not reuse that copy. */
+        fun forgetProfilePosts(userId: String) = store.remove(StoreKeys.profilePosts(userId))
+
         /** `GET /api/posts/saved` — My posts' Saved tab. */
         suspend fun savedPosts(
             limit: Int = 50,
