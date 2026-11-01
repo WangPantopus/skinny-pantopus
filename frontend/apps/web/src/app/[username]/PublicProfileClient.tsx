@@ -20,7 +20,8 @@ import { AccountSection, MonthLine, OwnerTips } from '@/components/profile/publi
 import PreviewAsSheet, { PREVIEW_AUDIENCES, type PreviewAudience } from '@/components/profile/public/PreviewAsSheet';
 import { buttonRow, primaryButton, secondaryButton } from '@/components/profile/public/profileButtons';
 import { ReliabilityPanel } from '@/components/profile/public/cards';
-import { AboutTab, MissionsTab, PostsTab, WorkTab } from '@/components/profile/public/tabs';
+import { AboutTab, AroundTheNeighborhood, MissionsTab, PostsTab, WorkTab, hasContributions } from '@/components/profile/public/tabs';
+import YouAndSection from '@/components/profile/public/YouAndSection';
 import type { PortfolioEntry } from '@/components/profile/public/tabs/PortfolioTab';
 import { launchFeatures } from '@/lib/featureFlags';
 import { authPageHref } from '@/lib/auth-utils';
@@ -1351,7 +1352,11 @@ function ProfileContent({ username, initialProfile, ownerHome = false }: PublicP
               emailConfirmed={Boolean(viewProfile.verified)}
               socialLinks={viewProfile.socialLinks || viewProfile.social_links || null}
               onSkill={launchFeatures.openGigs && !isOwnProfile ? handleRequestHire : undefined}
-            />
+            >
+              {hasContributions(viewProfile.contributions) ? (
+                <AroundTheNeighborhood firstName={firstName} contributions={viewProfile.contributions} />
+              ) : null}
+            </AboutTab>
           </div>
         )}
         {shownTab === 'work' && (
@@ -1419,6 +1424,13 @@ function ProfileContent({ username, initialProfile, ownerHome = false }: PublicP
                 {actions}
                 {showOwnerOnly && <OwnerTips accountId={profile.id} tips={ownerTips} />}
               </ProfileHeader>
+              <YouAndSection
+                personId={String(profile.id)}
+                viewerId={String(currentUser?.id ?? '')}
+                firstName={firstName}
+                // A signed-in visitor once who's looking is known: never your own profile, a preview or a block.
+                enabled={Boolean(viewerReady && signedIn && currentUser?.id && profile.id && !isOwnProfile && !blocked)}
+              />
             </div>
             <div className="min-w-0 mt-7 lg:mt-0">
               {!mounted ? (
