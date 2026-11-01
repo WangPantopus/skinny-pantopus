@@ -73,7 +73,7 @@ struct ProfileOwnerTipCard: View {
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
-            .accessibilityHint("Opens Edit profile")
+            .accessibilityHint(tip == .pinPost ? "Opens My posts" : "Opens Edit profile")
             .accessibilityIdentifier("profileOwnerTip_\(tip.rawValue)")
             Button(action: onDismiss) {
                 Icon(.x, size: 18, strokeWidth: 2.25, color: Theme.Color.appTextMuted)
