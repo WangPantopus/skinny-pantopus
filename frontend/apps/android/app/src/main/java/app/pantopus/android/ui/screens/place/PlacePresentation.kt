@@ -532,6 +532,22 @@ object PlacePresentation {
             else -> "In $days days"
         }
 
+    /** The all-clear line's air words: good air is good; moderate air (AQI 51–100) is said as moderate, never as good. */
+    private fun allClearAir(category: AirQualityCategory?): String? =
+        when (category) {
+            AirQualityCategory.GOOD -> "air is good"
+            AirQualityCategory.MODERATE -> "air quality is moderate"
+            else -> null
+        }
+
+    /** The line when weather alerts couldn't be checked: never an all-clear. */
+    private fun alertsUnavailableTitle(airClause: String?): String =
+        if (airClause == null) {
+            "Air quality and weather alerts aren't available for your block right now."
+        } else {
+            airClause.replaceFirstChar { it.uppercase() } + " on your block today. Weather alerts aren't available right now."
+        }
+
     fun derivePulse(intel: PlaceIntelligence): PlaceDerivedPulse {
         val aqi = findSection(intel, PlaceSectionId.AIR_QUALITY)
         val alerts = findSection(intel, PlaceSectionId.ALERTS)
@@ -564,9 +580,7 @@ object PlacePresentation {
         }
 
         // 3) All clear — assert only what we actually know.
-        val airGood =
-            aqiData != null &&
-                (aqiData.category == AirQualityCategory.GOOD || aqiData.category == AirQualityCategory.MODERATE)
+        val airClause = allClearAir(aqiData?.category)
         val alertsKnownClear = alerts?.status == PlaceSectionStatus.READY && (alerts.alerts?.active?.isEmpty() ?: true)
 
         val billData = if (bill?.status == PlaceSectionStatus.READY) bill.billBenchmark else null
@@ -581,12 +595,7 @@ object PlacePresentation {
         if (!alertsKnownClear) {
             return PlaceDerivedPulse(
                 variant = PlaceHeroVariant.ALL_CLEAR,
-                title =
-                    if (airGood) {
-                        "Air is good on your block today. Weather alerts aren't available right now."
-                    } else {
-                        "Air quality and weather alerts aren't available for your block right now."
-                    },
+                title = alertsUnavailableTitle(airClause),
                 chip = PlaceChipModel(PlaceChipTone.NEUTRAL, "Alerts unavailable"),
                 heroIcon = PantopusIcon.CloudOff,
                 nudgeIcon = PantopusIcon.Lightbulb,
@@ -596,7 +605,7 @@ object PlacePresentation {
 
         val clauses =
             buildList {
-                if (airGood) add("air is good")
+                airClause?.let(::add)
                 add("there are no active alerts")
             }
         val title = "All clear on your block today. " + clauses.joinToString(" and ").replaceFirstChar { it.uppercase() } + "."
