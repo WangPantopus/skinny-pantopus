@@ -80,44 +80,41 @@ enum PlaceGlanceGroup: String, CaseIterable, Identifiable {
 
 // MARK: - Summaries from real values
 
+/// One line per group, the same rules and words as Android's `glanceSummary`.
+/// Nil when the group has nothing to read; the dashboard then says why.
 enum PlaceGlanceSummary {
+    /// "37° fog · air 60 moderate · no active weather alerts".
     static func today(_ sections: [PlaceSectionEnvelope]) -> String? {
         var parts: [String] = []
-        for env in sections where env.status == .ready || env.status == .stale {
-            switch env.id {
-            case .weather:
-                // "37° fog", as Android says it.
-                if let weather = env.weather {
-                    parts.append("\(Int(weather.currentTempF.rounded()))° \(weather.conditionLabel.lowercased())")
-                }
-            case .airQuality:
-                if let air = env.airQuality { parts.append("air \(air.index) \(air.categoryLabel.lowercased())") }
-            case .alerts:
-                if let active = env.alerts?.active {
-                    parts
-                        .append(active
-                            .isEmpty ? "no active weather alerts" :
-                            (active.count == 1 ? "1 weather alert" : "\(active.count) weather alerts"))
-                }
-            default: break
-            }
+        if let weather = live(.weather, in: sections)?.weather {
+            parts.append("\(Int(weather.currentTempF.rounded()))° \(weather.conditionLabel.lowercased())")
         }
-        if let alerts = sections.first(where: { $0.id == .alerts }), alerts.status == .error || alerts.status == .unavailable {
-            parts.append("weather alerts unavailable")
+        if let air = live(.airQuality, in: sections)?.airQuality, air.category != .unknown {
+            parts.append("air \(air.index) \(air.categoryLabel.lowercased())")
+        }
+        if let alerts = sections.first(where: { $0.id == .alerts }), alerts.access != .locked {
+            if let active = live(.alerts, in: sections)?.alerts?.active {
+                parts.append(active.isEmpty ? "no active weather alerts"
+                    : (active.count == 1 ? "1 weather alert" : "\(active.count) weather alerts"))
+            } else {
+                parts.append("weather alerts unavailable")
+            }
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
+    /// "Built 2011 · 2,858 sq ft · 2 beyond typical range" (or nearing it,
+    /// install years unknown, or all within typical ranges).
     static func home(_ sections: [PlaceSectionEnvelope]) -> String? {
         var parts: [String] = []
-        if let home = sections.first(where: { $0.id == .yourHome })?.yourHome {
+        if let home = live(.yourHome, in: sections)?.yourHome {
             if let year = home.yearBuilt { parts.append("Built \(year)") }
             if let sqft = home.sqft { parts.append("\(PlacePresentation.grouped(sqft)) sq ft") }
         }
-        if let systems = sections.first(where: { $0.id == .homeSystems })?.homeSystems {
-            let past = systems.summary.pastExpectedCount
-            let aging = systems.systems.filter { $0.status == "aging" }.count
-            let unknown = systems.systems.filter { $0.installedYear == nil }.count
+        if let systems = live(.homeSystems, in: sections)?.homeSystems?.systems, !systems.isEmpty {
+            let past = systems.filter { $0.status == "past_expected" }.count
+            let aging = systems.filter { $0.status == "aging" }.count
+            let unknown = systems.filter { $0.installedYear == nil }.count
             if past > 0 {
                 parts.append("\(past) beyond typical range")
             } else if aging > 0 {
@@ -131,42 +128,29 @@ enum PlaceGlanceSummary {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// The first two results and how many more topics: "Flood: minimal risk ·
-    /// Earthquake: design category D · 5 more topics".
-    static func risk(_ sections: [PlaceSectionEnvelope]) -> String? {
-        // Topics with a short classification (a chip) lead, then the rest, each in the server's order.
+    /// The first two topics with a reading and how many more there are:
+    /// "Flood: Minimal risk · Earthquake: Design category D · 5 more topics".
+    /// With `chipsFirst` (Risk and environment) a short classification leads;
+    /// otherwise the rows' order.
+    static func topics(_ sections: [PlaceSectionEnvelope], chipsFirst: Bool = false) -> String? {
         let read = sections.compactMap { env -> (chip: Bool, text: String)? in
-            guard env.access != .locked, env.status == .ready || env.status == .stale else { return nil }
-            let title = PlacePresentation.config(for: env.id).title
-            let reading = PlacePresentation.reading(for: env)
-            guard let short = reading.chip?.text ?? reading.value.map(firstClause) else { return nil }
-            return (reading.chip != nil, "\(title): \(short.prefix(1).lowercased())\(short.dropFirst())")
+            guard let short = shortResult(env) else { return nil }
+            return (short.chip, "\(PlacePresentation.config(for: env.id).title): \(short.text)")
         }
-        let parts = read.filter(\.chip).map(\.text) + read.filter { !$0.chip }.map(\.text)
-        guard !parts.isEmpty else { return nil }
-        let more = sections.count - min(parts.count, 2)
+        let ordered = chipsFirst ? read.filter(\.chip) + read.filter { !$0.chip } : read
+        let named = ordered.prefix(2).map(\.text)
+        guard !named.isEmpty else { return nil }
+        let more = sections.count - named.count
         let tail = more > 0 ? ["\(more) more topic\(more == 1 ? "" : "s")"] : []
-        return (Array(parts.prefix(2)) + tail).joined(separator: " · ")
+        return (named + tail).joined(separator: " · ")
     }
 
-    /// Each section's value, or "<title> unavailable": "No activity shown yet · homes here unavailable".
-    static func block(_ sections: [PlaceSectionEnvelope]) -> String? {
-        let parts = sections.map { env -> String in
-            let title = PlacePresentation.config(for: env.id).title.lowercased()
-            guard env.access != .locked, env.status == .ready || env.status == .stale || env.status == .partial else {
-                return env.access == .locked ? "\(title) locked" : "\(title) unavailable"
-            }
-            if let density = env.blockDensity { return density.label }
-            return PlacePresentation.reading(for: env).value.map(firstClause) ?? title
-        }
-        return parts.isEmpty ? nil : parts.prefix(2).joined(separator: " · ")
-    }
-
-    /// "6 voting districts · election Nov 3".
+    /// "6 voting districts · election Nov 3", from every section (the
+    /// election row leaves Civic's list while the ballot card shows).
     static func civic(_ sections: [PlaceSectionEnvelope]) -> String? {
         var parts: [String] = []
-        if let districts = sections.first(where: { $0.id == .civicDistricts })?.civicDistricts, !districts.districts.isEmpty {
-            parts.append("\(districts.districts.count) voting districts")
+        if let districts = live(.civicDistricts, in: sections)?.civicDistricts?.districts, !districts.isEmpty {
+            parts.append(districts.count == 1 ? "1 voting district" : "\(districts.count) voting districts")
         }
         if let election = sections.first(where: { $0.id == .civicElection && $0.status == .ready })?.civicElection,
            election.daysUntil >= 0, let day = PlacePresentation.parseCalendarDay(election.date) {
@@ -176,15 +160,34 @@ enum PlaceGlanceSummary {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// The first value of each section, as the dashboard read it.
-    static func plain(_ sections: [PlaceSectionEnvelope]) -> String? {
-        let parts = sections.compactMap { env -> String? in
-            guard env.access != .locked, env.status == .ready || env.status == .stale || env.status == .partial else { return nil }
-            if let density = env.blockDensity { return density.label }
-            let reading = PlacePresentation.reading(for: env)
-            return reading.value.map(firstClause) ?? reading.chip?.text
-        }
-        return parts.isEmpty ? nil : parts.prefix(2).joined(separator: " · ")
+    /// The identity topics, then what the group holds for this viewer.
+    static func identity(_ sections: [PlaceSectionEnvelope], letters: Bool, verify: Bool, mirror: Bool) -> String? {
+        var parts: [String] = []
+        if let read = topics(sections) { parts.append(read) }
+        if letters { parts.append("Residency letters & passes") }
+        if verify { parts.append("locked until you verify") }
+        if mirror { parts.append("what neighbors see") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// The section when this viewer can read it now.
+    private static func live(_ id: PlaceSectionID, in sections: [PlaceSectionEnvelope]) -> PlaceSectionEnvelope? {
+        sections.first { $0.id == id && isLive($0) }
+    }
+
+    static func isLive(_ env: PlaceSectionEnvelope) -> Bool {
+        env.access != .locked && (env.status == .ready || env.status == .stale || env.status == .partial)
+    }
+
+    /// A topic's own result, short: the block's activity, the chip, else the
+    /// value's first clause.
+    static func shortResult(_ env: PlaceSectionEnvelope) -> (text: String, chip: Bool)? {
+        guard isLive(env) else { return nil }
+        if let density = env.blockDensity { return (density.label, false) }
+        let reading = PlacePresentation.reading(for: env)
+        if let chip = reading.chip?.text, !chip.isEmpty { return (chip, true) }
+        guard let text = reading.value.map(firstClause), !text.isEmpty else { return nil }
+        return (text.hasSuffix(".") ? String(text.dropLast()) : text, false)
     }
 
     /// A long server sentence cut at its first full stop or dash.
@@ -192,6 +195,11 @@ enum PlaceGlanceSummary {
         let stops = [". ", " — ", "; "]
         let cut = stops.compactMap { text.range(of: $0)?.lowerBound }.min()
         return cut.map { String(text[..<$0]) } ?? text
+    }
+
+    /// The line as shown: its first letter capitalized.
+    static func sentence(_ line: String) -> String {
+        line.prefix(1).uppercased() + line.dropFirst()
     }
 }
 
@@ -217,12 +225,27 @@ struct PlaceGlanceRow<Content: View>: View {
 
 // MARK: - Risk and environment as evidence
 
+/// A topic's next step where the app already has one (TPR contract §4): the
+/// forecast's own guidance, or an existing action such as Today's radon
+/// question. Topics without one show none.
+struct PlaceNextStep {
+    let text: String
+    var action: (@MainActor () -> Void)?
+
+    /// Heat and cold: the forecast's guidance, when there is something to act on.
+    static func guidance(_ env: PlaceSectionEnvelope) -> PlaceNextStep? {
+        guard PlaceGlanceSummary.isLive(env), let guidance = env.heatCold?.guidance, !guidance.isEmpty else { return nil }
+        return PlaceNextStep(text: guidance)
+    }
+}
+
 /// One topic: its result, the area it covers, the kind of evidence, its
-/// source and date, and the way to its full detail. Every caveat stays on the
-/// Risk page; nothing here adds a score.
+/// source and date, its next step where there is one, and the way to its
+/// full detail. Every caveat stays on the Risk page; nothing here adds a score.
 struct PlaceEvidenceRow: View {
     let env: PlaceSectionEnvelope
     var verifiesFirst = false
+    var nextStep: PlaceNextStep?
     var onOpen: (() -> Void)?
     var onUnlock: (() -> Void)?
 
@@ -242,6 +265,10 @@ struct PlaceEvidenceRow: View {
         .accessibilityIdentifier("place.evidence.\(cfg.title)")
         if env.access == .locked, let onUnlock {
             PlaceTextButton(title: PlacePresentation.lockCta(env.band, verifiesFirst: verifiesFirst), minHeight: 44) { onUnlock() }
+        }
+        if let nextStep, let action = nextStep.action {
+            PlaceTextButton(title: "Next step: \(nextStep.text)", minHeight: 44) { action() }
+                .accessibilityIdentifier("place.evidence.\(cfg.title).next")
         }
     }
 
@@ -271,6 +298,14 @@ struct PlaceEvidenceRow: View {
                     .font(Theme.Font.caption)
                     .foregroundStyle(Theme.Color.appTextMuted)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+            // A next step that is advice reads with the row; one that acts is its own button below.
+            if let nextStep, nextStep.action == nil {
+                Text("Next step: \(nextStep.text)")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
             }
         }
         .padding(.vertical, 10)

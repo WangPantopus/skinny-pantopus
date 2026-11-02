@@ -46,10 +46,17 @@ final class PlaceDashboardViewModel {
     /// The household's tasks this viewer may read, for "Worth a look"'s overdue
     /// ones. Household roles only; a refusal leaves none and shows no error.
     private(set) var tasks: [HomeTaskDTO] = []
+    /// The tasks list answered and this viewer may add a task (Today's radon
+    /// question needs both); a refusal or a guest leaves it false.
+    private(set) var canAddTasks = false
+    /// This Home is the person's default Home, the one the Today tab shows.
+    private(set) var isTodayHome = false
     private var taskAccess: HomeTaskAccess?
     /// What changed since the last visit, newest first, and how many in all.
     private(set) var changes: [PlaceChange] = []
     private(set) var changesTotal = 0
+    /// A source couldn't be read for this answer, so the list may be missing changes.
+    private(set) var changesIncomplete = false
     /// This visit's `since` and when it began: changes are read once a visit
     /// (a pull to refresh reads them again from the same time).
     private var visitSince: String?
@@ -179,6 +186,7 @@ final class PlaceDashboardViewModel {
         guard let since = visitSince else {
             changes = []
             changesTotal = 0
+            changesIncomplete = false
             if !fresh { PlaceLastVisit.write(intel.generatedAt, homeId: homeId) }
             return
         }
@@ -187,11 +195,13 @@ final class PlaceDashboardViewModel {
             guard !Task.isCancelled else { return }
             changes = response.items
             changesTotal = max(response.total ?? 0, response.items.count)
+            changesIncomplete = response.incomplete
             PlaceLastVisit.write(response.until ?? intel.generatedAt, homeId: homeId)
         } catch {
             if !again {
                 changes = []
                 changesTotal = 0
+                changesIncomplete = false
             }
         }
     }
@@ -201,16 +211,22 @@ final class PlaceDashboardViewModel {
         guard case let .loaded(intel) = state, claim == nil,
               ["owner", "renter", "member"].contains(intel.viewer?.role ?? "owner") else {
             tasks = []
+            canAddTasks = false
             return
         }
         if taskAccess?.isCurrent != true { taskAccess = HomeTaskAccess(homeId: homeId, api: api) }
         guard let taskAccess else { return }
         do {
-            tasks = try await taskAccess.list().tasks
+            let response = try await taskAccess.list()
+            tasks = response.tasks
+            canAddTasks = response.collectionCapabilities?.canCreate == true
         } catch is CancellationError {
             return
         } catch {
-            if case .forbidden = error as? APIError { tasks = [] }
+            if case .forbidden = error as? APIError {
+                tasks = []
+                canAddTasks = false
+            }
         }
     }
 
@@ -238,6 +254,7 @@ final class PlaceDashboardViewModel {
     /// failed read keeps what shows.
     private func refreshClaim(force: Bool = false) async {
         guard let homes = try? await HomesStoreReads.myHomes(force: force).value, !Task.isCancelled else { return }
+        isTodayHome = homes.defaultHomeId == homeId
         guard !PlaceRootResolver.isOpenable(homeId, in: homes) else {
             claim = nil
             return

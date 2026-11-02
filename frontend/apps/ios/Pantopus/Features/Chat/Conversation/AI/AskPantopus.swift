@@ -233,12 +233,12 @@ struct AskPantopusGlyph: View {
     }
 }
 
-/// The Ask entry at the end of Today ("Ask Pantopus" about the day) and of
-/// Your Place (about the home).
+/// The Ask entry at the end of Today ("Ask Pantopus about today", as on
+/// Android) and of Your Place (about the home).
 struct AskPantopusBox: View {
-    var title = "Ask Pantopus"
-    var subtitle: String? = "About today at your place"
-    var spokenLabel = "Ask Pantopus about your day"
+    var title = "Ask Pantopus about today"
+    var subtitle: String?
+    var spokenLabel = "Ask Pantopus about today"
     var identifier = "todayAskPantopus"
     let action: @MainActor () -> Void
 
