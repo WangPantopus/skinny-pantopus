@@ -86,6 +86,7 @@ internal fun pulseCardContent(
                 startsAt = post.eventDate,
                 endsAt = post.eventEndDate,
                 venue = post.eventVenue,
+                isPlanPost = post.isPlanPost,
             ),
         reactions =
             intent.reactionTemplate(
