@@ -75,6 +75,78 @@ Provider policy references checked for this work: [ATTOM response documentation]
 [Smarty enrichment terms](https://www.smarty.com/legal/product-terms).
 This change does not alter subscriptions or claim rights beyond those contracts.
 
+## Bounded ATTOM prefill
+
+`backend/scripts/prefill-provider-cache.js` is an operator command, not a public
+route or scheduled job. It reads a privately stored JSONL address manifest and
+uses the same `/property/detail` request identity and response validator as the
+application. It writes complete responses to the existing `ExternalFeedCache`;
+it does not create Homes, canonical addresses, memberships, or ownership claims.
+Smarty prefill is deferred.
+
+The command defaults to a dry run. Execution requires an explicit database
+hostname, the fingerprint of the account's existing key, recently checked
+included usage, and a per-run budget. The plan distinguishes request-count
+(`hits`) quotas from returned-property (`reports`) quotas: report budgets reserve
+ten credits per request, with the API's default page size explicitly fixed at
+ten. Reservations happen before the network request and are not refunded after
+errors or empty results. At least half the observed remaining allowance stays
+reserved for normal application traffic. The batch selects at most 200 distinct
+addresses, spaces requests at no more than 30 per minute and half the account's
+own rate limit, and stops when its quota observation is 15 minutes old.
+
+A private durable ledger prevents concurrent runs and repeat purchases after a
+restart. A received response is saved privately before its database upsert, so a
+failed write can be recovered without another provider request. Ambiguous
+requests, HTTP errors (including 401/402/429), unexpected responses and database
+read/write failures stop execution. Empty ATTOM results are recorded only in the
+operator ledger, not as successful database cache entries. Raw responses,
+addresses, credentials, account details and operator logs must remain outside
+the public repository.
+
+Manifest rows contain `line1`, optional `line2`, `city`, `state`, `zip`, and a
+`source` reference. The current command is scoped to Camas, Washougal and
+Vancouver, Washington postal-city areas, including unincorporated surroundings;
+it does not filter property types. A county address-point inventory is not a
+complete parcel inventory, and Clark County alone does not cover the entire
+Washougal postal area in Skamania County.
+
+```sh
+node backend/scripts/prefill-provider-cache.js \
+  --manifest /private/operator/addresses.jsonl \
+  --plan /private/operator/plan.json \
+  --state-dir /private/operator/run
+```
+
+After reviewing the dry run, `--execute` runs the bounded batch. The private
+plan has `databaseHost`, ISO `quotaCheckedAt` / `quotaExpiresAt`, and
+`providers.ATTOM` containing `quotaUnit`, `remainingCredits`, `reserveCredits`,
+`maxCredits`, `rateLimitPerMinute`, `requestsPerMinute`, and
+`credentialFingerprint` (SHA-256 of the existing API key). Use a fresh dashboard
+reading before resuming; do not reset the ledger to bypass its previous spend.
+A stale lock or an ambiguous request requires inspection, not an automatic retry.
+After reconciling usage, an operator can mark an unresolved ledger entry
+`abandoned`; it is skipped while its credit reservation remains consumed.
+
+The [published ATTOM trial terms](https://api.developer.attomdata.com/legal)
+restrict evaluation use, database building and retention beyond 24 hours.
+A quota allowance by itself does not establish production or retention rights.
+The relevant agreement must be considered separately from these technical
+spending controls. Prefilling a database also does not deploy the reader code:
+verify the running backend includes database-first reads before claiming live
+web or native requests will reuse the imported rows.
+
+The operator command was exercised against an isolated real database with
+synthetic provider responses in both quota modes. Checks covered credit ceilings,
+request spacing, restart/resume, separate apartment keys, unknown/zero/false JSON
+fields, application lookup reuse, failed-write recovery without repurchasing,
+database-read failures before any provider call, and stopping on HTTP 429 without
+retrying. A native smoke check after restarting the local backend kept the saved
+home facts visible in both iOS and Android with the provider offline and no new
+provider calls. No new unit tests were added; privacy gates passed. One unrelated
+HTTP parser failure occurred in the full backend run; that paid-gig route suite
+passed all 240 tests on its focused rerun.
+
 ## Verification
 
 The final full backend run passed 6,632 tests (16 skipped), and all privacy gates
