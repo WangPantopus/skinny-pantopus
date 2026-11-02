@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the Pantopus icon: five actions, in this order (AI assistant phase 3 contract §8.4). Each opens a
+     pantopus:// link the deep-link router handles, inside the app, which asks for App Lock as usual. The assistant's
+     links carry fixed keys only, never anyone's words; every write still ends at a card the person taps. There is no
+     <capability>: App Actions left phones with Google Assistant. The launcher reads an intent's package literally (it
+     never resolves an @string there), so this is a template: app/build.gradle.kts writes res/xml/shortcuts.xml for each
+     variant with APPLICATION_ID replaced by its final application id (`.debug` included). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_pickup"
+        android:shortcutId="next_pickup"
+        android:shortcutLongLabel="@string/shortcut_next_pickup_long"
+        android:shortcutShortLabel="@string/shortcut_next_pickup_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="pantopus://today"
+            android:targetClass="app.pantopus.android.MainActivity"
+            android:targetPackage="APPLICATION_ID" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_today"
+        android:shortcutId="whats_on_today"
+        android:shortcutLongLabel="@string/shortcut_whats_on_today_long"
+        android:shortcutShortLabel="@string/shortcut_whats_on_today_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="pantopus://today"
+            android:targetClass="app.pantopus.android.MainActivity"
+            android:targetPackage="APPLICATION_ID" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_catch_up"
+        android:shortcutId="catch_up_nearby"
+        android:shortcutLongLabel="@string/shortcut_catch_up_nearby_long"
+        android:shortcutShortLabel="@string/shortcut_catch_up_nearby_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="pantopus://assistant?starter=catch_up_nearby"
+            android:targetClass="app.pantopus.android.MainActivity"
+            android:targetPackage="APPLICATION_ID" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_plan"
+        android:shortcutId="start_plan"
+        android:shortcutLongLabel="@string/shortcut_start_plan_long"
+        android:shortcutShortLabel="@string/shortcut_start_plan_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="pantopus://assistant?surface=plans&amp;compose=start_plan"
+            android:targetClass="app.pantopus.android.MainActivity"
+            android:targetPackage="APPLICATION_ID" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_remind"
+        android:shortcutId="remind_household"
+        android:shortcutLongLabel="@string/shortcut_remind_household_long"
+        android:shortcutShortLabel="@string/shortcut_remind_household_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="pantopus://assistant?surface=today&amp;compose=remind_household"
+            android:targetClass="app.pantopus.android.MainActivity"
+            android:targetPackage="APPLICATION_ID" />
+    </shortcut>
+</shortcuts>

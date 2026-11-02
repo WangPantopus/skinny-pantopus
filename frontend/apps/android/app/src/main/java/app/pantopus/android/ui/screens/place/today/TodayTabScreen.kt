@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
 import app.pantopus.android.data.api.models.place.PlaceAddressRef
@@ -102,10 +103,14 @@ fun TodayTabScreen(
     radonHomeId: String? = null,
     /** The radon question was opened, or this Today can't open it (another place): the request ends. */
     onRadonShown: () -> Unit = {},
+    /** A Needs you row's link (AI assistant phase 3), opened with the deep-link router. */
+    onOpenLink: (String) -> Unit = DeepLinkRouter::handle,
     viewModel: TodayTabViewModel = hiltViewModel(),
+    needsYou: NeedsYouViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val agendaTasks by viewModel.agendaTasks.collectAsStateWithLifecycle()
+    val needsYouItems by needsYou.items.collectAsStateWithLifecycle()
     // One Plans read serves the agenda's plan rows and today's plan cards.
     val plansViewModel: PlansTodayViewModel? = plans?.let { hiltViewModel() }
     val plansUi = plansViewModel?.ui?.collectAsStateWithLifecycle()?.value
@@ -122,9 +127,22 @@ fun TodayTabScreen(
     ReportContentShown("today", state.showsContent)
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val pullFailed by viewModel.pullFailed.collectAsStateWithLifecycle()
-    // Coming back keeps what's on screen; the view model reads again only once it is out of date.
-    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
-    RefreshOnStoreChange(viewModel::load)
+    // Coming back keeps what's on screen; the view model reads again only once it is out of date. Needs you too.
+    HomeCopyLifecycle(
+        load = {
+            viewModel.load()
+            needsYou.load()
+        },
+        pause = viewModel::suspendContent,
+    )
+    RefreshOnStoreChange {
+        viewModel.load()
+        needsYou.load()
+    }
+    val pullAll = {
+        viewModel.pull()
+        needsYou.pull()
+    }
     // Pull to refresh, like iOS's Today tab (`.refreshable`): it always reads now, with the pull indicator
     // over the content instead of placeholders. The indicator shows only for a pull, not the first load.
     var pulled by remember { mutableStateOf(false) }
@@ -154,15 +172,36 @@ fun TodayTabScreen(
             isRefreshing = pulled && refreshing,
             onRefresh = {
                 pulled = true
-                viewModel.pull()
+                pullAll()
             },
             modifier = Modifier.fillMaxSize(),
         ) {
+            // With no sky to sit under (no place, a claim in review, Today couldn't load), Needs you comes first.
+            val needsYouFirst: @Composable () -> Unit = {
+                NeedsYouCard(
+                    needsYouItems,
+                    onOpen = onOpenLink,
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp),
+                    topGap = 0.dp,
+                )
+            }
             when (val current = state) {
                 TodayTabUiState.Loading -> TodayPlaceholders()
-                TodayTabUiState.NoPlace -> NoPlaceCard(onClaim)
-                is TodayTabUiState.ClaimInReview -> ClaimInReviewCard(current.claim) { onCheckClaim(current.claim.homeId) }
-                is TodayTabUiState.Error -> ErrorState(message = current.message, onRetry = viewModel::pull)
+                TodayTabUiState.NoPlace ->
+                    Column(modifier = Modifier.fillMaxSize().verticalScroll(scroll)) {
+                        needsYouFirst()
+                        NoPlaceCard(onClaim)
+                    }
+                is TodayTabUiState.ClaimInReview ->
+                    Column(modifier = Modifier.fillMaxSize().verticalScroll(scroll)) {
+                        needsYouFirst()
+                        ClaimInReviewCard(current.claim) { onCheckClaim(current.claim.homeId) }
+                    }
+                is TodayTabUiState.Error ->
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        needsYouFirst()
+                        ErrorState(message = current.message, onRetry = pullAll, modifier = Modifier.weight(1f))
+                    }
                 is TodayTabUiState.Loaded ->
                     Column(
                         modifier = Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 16.dp),
@@ -203,6 +242,7 @@ fun TodayTabScreen(
                                 onAsk = onAsk?.let { ask -> { ask(AIScreenContext.today(viewModel.shownHomeId)) } },
                                 radonRequested = homeId != null && radonHomeId == homeId,
                                 onRadonShown = onRadonShown,
+                                needsYou = { agendaTaskIds -> NeedsYouCard(needsYouItems, onOpenLink, agendaTaskIds = agendaTaskIds) },
                             )
                         CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::pull) {
                             PlaceTodayDetailContent(

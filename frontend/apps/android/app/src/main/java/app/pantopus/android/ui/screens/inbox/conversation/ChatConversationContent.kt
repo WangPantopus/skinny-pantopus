@@ -159,6 +159,11 @@ data class ChatConversationRouteArgs(
     val aiNudgeId: String? = null,
     /** The conversation that brief or nudge was added to: the assistant thread opens and continues it. */
     val aiConversationId: String? = null,
+    /**
+     * A launcher shortcut's fixed key (AI assistant phase 3 contract §8.4): `starter:catch_up_nearby` sends its
+     * question, `compose:start_plan` or `compose:remind_household` puts its words in the composer. Done once.
+     */
+    val aiOpening: String? = null,
 )
 
 /**

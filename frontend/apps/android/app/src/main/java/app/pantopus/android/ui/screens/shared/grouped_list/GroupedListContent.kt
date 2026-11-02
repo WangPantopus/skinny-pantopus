@@ -20,6 +20,9 @@ sealed interface RowControl {
     /** Plain navigation row — just a chevron on the right. */
     data object Chevron : RowControl
 
+    /** A line to read, with nothing on the right and no tap (a rule's run that has no screen to open). */
+    data object None : RowControl
+
     /** Binary preference toggle. */
     @Immutable
     data class Toggle(val isOn: Boolean) : RowControl
@@ -71,6 +74,15 @@ sealed interface RowControl {
         val selected: String,
     ) : RowControl
 
+    /**
+     * A row's own actions (Edit, Delete) behind a "More" button at its end; a tap on the row opens them too.
+     * [GroupedListCallbacks.onRowMenu] gets the row's id and the chosen action's id.
+     */
+    @Immutable
+    data class Menu(
+        val actions: List<RowMenuAction>,
+    ) : RowControl
+
     enum class ChipTone { Success, Info, Neutral, Warning }
 
     /**
@@ -80,6 +92,18 @@ sealed interface RowControl {
     val ownsInnerTaps: Boolean
         get() = this is ChannelTriad || this is Chips
 }
+
+/** One action in a row's [RowControl.Menu]. */
+@Immutable
+data class RowMenuAction(
+    val id: String,
+    val label: String,
+    val icon: PantopusIcon,
+    /** Red text and icon (Delete). */
+    val destructive: Boolean = false,
+    /** Compose testTag; `groupedListMenuAction_<id>` when null. */
+    val testTag: String? = null,
+)
 
 /** One row in a group. */
 @Immutable
@@ -105,6 +129,8 @@ data class GroupedListRow(
     val testTag: String? = null,
     /** Keep the existing toggle visible while its save is pending. */
     val toggleEnabled: Boolean = true,
+    /** The switch's Compose testTag; `groupedListToggle_<id>` when null. */
+    val toggleTestTag: String? = null,
 )
 
 /** One group — a card of rows with optional overline + helper. */
@@ -141,6 +167,8 @@ data class GroupedListBanner(
     /** Trailing neutral pill label (e.g. "Resume"). Empty for [Style.Stealth]. */
     val actionLabel: String = "",
     val style: Style = Style.Pause,
+    /** Compose testTag of the action pill; `pauseBannerAction` when null. */
+    val actionTestTag: String? = null,
 ) {
     enum class Style { Pause, Stealth }
 }

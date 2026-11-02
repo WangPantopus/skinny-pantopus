@@ -56,10 +56,46 @@ data class AIConversationMessageDto(
     @Json(name = "nudge_id") val nudgeId: String? = null,
     /** When it was said (ISO 8601). Older servers leave it out. */
     val at: String? = null,
+    /**
+     * An action card's state on the server, next to its [draft] (AI assistant phase 3 contract §4.3), for apps that
+     * list `state` in `cards`. Null for a card the server has no record of: this phone's own record covers it.
+     */
+    val state: AICardStateDto? = null,
 ) {
     /** The notification id of the brief or nudge this item starts, if any. */
     val nudgeNotificationId: String? get() = nudge?.id ?: nudgeId
 }
+
+/** Where an action card stands on every phone of the person's (AI assistant phase 3 contract §4.3). */
+@JsonClass(generateAdapter = true)
+data class AICardStateDto(
+    /** `open`, `done`, `dismissed` or `expired` (past its time with nothing done). */
+    val status: String? = null,
+    /** The buttons that went through, first report first. */
+    val done: List<AICardDoneDto>? = null,
+)
+
+/** One button that went through on a card: [itemId] names its row, null for the card's own buttons. */
+@JsonClass(generateAdapter = true)
+data class AICardDoneDto(
+    @Json(name = "item_id") val itemId: String? = null,
+    @Json(name = "action_id") val actionId: String? = null,
+    val at: String? = null,
+    /** The done link the phone showed, filled in; null when it had none. */
+    val link: String? = null,
+)
+
+/**
+ * `POST /api/ai/cards/:cardId/state` (AI assistant phase 3 contract §4.2): `done` with the button that went through and
+ * the link it showed, or `dismissed` for "Not now".
+ */
+@JsonClass(generateAdapter = true)
+data class AICardStateReportBody(
+    val status: String,
+    @Json(name = "action_id") val actionId: String? = null,
+    @Json(name = "item_id") val itemId: String? = null,
+    val link: String? = null,
+)
 
 /** A brief or nudge Pantopus sent first: its notification's id and its kind (`brief`, `plan_weather`, …). */
 @JsonClass(generateAdapter = true)
