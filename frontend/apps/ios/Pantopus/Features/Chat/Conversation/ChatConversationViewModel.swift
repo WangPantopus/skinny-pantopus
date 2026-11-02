@@ -47,7 +47,9 @@ public struct AIChatStreamRequest: Encodable, Sendable {
     /// one-tap requests through endpoints the app already uses, and `link`
     /// buttons open screens in the app (contract
     /// `docs/product/ai-assistant-phase1-contract-2026-10-20.md`, section 3).
-    public static let supportedCards = ["pickup_schedule", "action", "link"]
+    /// `state` asks history for each card's done state, which this app reports
+    /// (`docs/product/ai-assistant-phase3-contract-2026-10-22.md` §4).
+    public static let supportedCards = ["pickup_schedule", "action", "link", "state"]
 
     public let message: String
     public let conversationId: String?
@@ -1023,6 +1025,11 @@ public final class ChatConversationViewModel {
     /// stay in the welcome card at the top of the thread.
     private func restoreAIConversationIfNeeded() async {
         guard case .ai = mode else { return }
+        // Card states that didn't reach the server last time go now, in the background.
+        let api = api
+        let store = actionDoneStore
+        let userId = currentUserId
+        Task { await AICardStateReporter.retryUnreported(userId: userId, api: api, store: store) }
         if let aiNudge {
             await openAINudge(aiNudge)
             return
@@ -1145,7 +1152,7 @@ public final class ChatConversationViewModel {
                         "valid": true,
                         "draft": draft.draft.mapValues { AIChatStreamClient.foundationValue($0) }
                     ]
-                    if let card = AIChatStreamClient.parseDraft(object).flatMap({ withSavedState($0) }) {
+                    if let card = AIChatStreamClient.parseDraft(object).flatMap({ withSavedState($0, server: item.state) }) {
                         drafts[replyId, default: []].append(card)
                     }
                 } else if let text = item.text, !text.isEmpty {
@@ -2328,14 +2335,30 @@ public final class ChatConversationViewModel {
 
     // MARK: - Action cards
 
-    /// A card as this device remembers it: taps that went through show as
-    /// done, and a card put away with "Not now" stays away (nil).
-    private func withSavedState(_ card: ChatAIDraftCard) -> ChatAIDraftCard? {
+    /// A card as this device and the server remember it (phase 3 contract §4.4): taps that
+    /// went through here or on another phone show as done, and a card put away with "Not now"
+    /// on either stays away (nil) until something on it is done. This phone's record keeps
+    /// its note ("The repeat wasn't set."); the server's covers a reinstall.
+    private func withSavedState(_ card: ChatAIDraftCard, server: AICardStateDTO? = nil) -> ChatAIDraftCard? {
         guard var action = card.action else { return card }
-        if actionDoneStore.isDismissed(cardId: action.envelope.id) { return nil }
+        let keys = Set(action.actionKeys)
+        for entry in server?.done ?? [] {
+            let key = AIActionDoneStore.key(cardId: action.envelope.id, itemId: entry.itemId, actionId: entry.actionId)
+            guard keys.contains(key), let ran = action.actions(itemId: entry.itemId).first(where: { $0.id == entry.actionId }) else {
+                continue
+            }
+            action.done[key] = ChatAIActionDone(
+                label: ran.done?.label.flatMap { $0.isEmpty ? nil : $0 } ?? "Done",
+                link: entry.link ?? ran.done?.link.flatMap { $0.contains("{{") ? nil : $0 },
+                note: nil
+            )
+        }
         for key in action.actionKeys {
             if let done = actionDoneStore.done(forKey: key) { action.done[key] = done }
         }
+        let dismissed = actionDoneStore.isDismissed(cardId: action.envelope.id) || server?.status == "dismissed"
+        if dismissed, action.done.isEmpty { return nil }
+        action.expiredOnServer = server?.status == "expired"
         var updated = card
         updated.action = action
         return updated
@@ -2365,18 +2388,31 @@ public final class ChatConversationViewModel {
         }
         if case let .done(done) = outcome {
             actionDoneStore.record(done, forKey: key)
+            // A follow-up that failed leaves its note, but the card's own request went through.
+            reportCardState(state.envelope.id, .done(actionId: actionId, itemId: itemId, link: done.link))
         }
     }
 
-    /// "Not now": nothing is sent; the card goes away here and after a relaunch.
+    /// "Not now": nothing is sent; the card goes away here, after a relaunch and on the
+    /// person's other phones.
     public func dismissAIAction(cardId: String) {
         guard let state = aiDraftsByMessageId.values.joined().first(where: { $0.id == cardId })?.action,
               state.running == nil else { return }
         actionDoneStore.dismiss(cardId: state.envelope.id)
+        reportCardState(state.envelope.id, .dismissed)
         for (messageId, cards) in aiDraftsByMessageId {
             aiDraftsByMessageId[messageId] = cards.filter { $0.id != cardId }
         }
         rebuild()
+    }
+
+    /// Tells the server in the background (phase 3 contract §4.4); a report that doesn't get
+    /// there waits on the device until the thread opens again.
+    private func reportCardState(_ cardId: String, _ report: AICardStateReport) {
+        let api = api
+        let store = actionDoneStore
+        let userId = currentUserId
+        Task { await AICardStateReporter.report(report, cardId: cardId, userId: userId, api: api, store: store) }
     }
 
     private func updateAction(_ cardId: String, _ change: (inout ChatAIActionCard) -> Void) {

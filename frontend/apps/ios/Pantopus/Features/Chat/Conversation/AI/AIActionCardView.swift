@@ -98,6 +98,7 @@ extension ChatAIActionCard {
 
     /// Past `expires_at`, the card's actions are off.
     var isExpired: Bool {
+        if expiredOnServer { return true }
         guard let raw = envelope.expiresAt else { return false }
         let fractional = ISO8601DateFormatter()
         fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

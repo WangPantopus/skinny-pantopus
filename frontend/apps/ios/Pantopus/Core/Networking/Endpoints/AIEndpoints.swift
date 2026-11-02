@@ -40,6 +40,16 @@ public enum AIEndpoints {
         Endpoint(method: .delete, path: "/api/ai/conversations/\(id)")
     }
 
+    /// `POST /api/ai/cards/:cardId/state` — what ran on one of the person's
+    /// action cards, or "Not now", so the card shows the same on their other
+    /// phones and after a reinstall
+    /// (`docs/product/ai-assistant-phase3-contract-2026-10-22.md` §4.2). A card
+    /// from before phase 3 answers `404 CARD_UNKNOWN`.
+    /// Route `backend/routes/ai.js:577`.
+    public static func cardState(cardId: String, report: AICardStateReport) -> Endpoint {
+        Endpoint(method: .post, path: "/api/ai/cards/\(cardId)/state", body: report)
+    }
+
     /// `GET /api/ai/pulse?homeId=` — the Neighborhood Pulse for a home
     /// (the priority-ranked signal stream behind the Place "Today's
     /// Pulse" surface). NOTE: the query param is camelCase `homeId`

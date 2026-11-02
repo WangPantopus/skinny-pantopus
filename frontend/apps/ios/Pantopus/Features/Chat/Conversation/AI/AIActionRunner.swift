@@ -260,12 +260,70 @@ enum AIActionRunner {
     }
 }
 
+/// Tells the server what ran on an action card, or that it was put away with
+/// "Not now" (`docs/product/ai-assistant-phase3-contract-2026-10-22.md` §4.2,
+/// §4.4), so the card shows the same on the person's other phones and after a
+/// reinstall. A report waits in `AIActionDoneStore` until the server has it:
+/// one that doesn't get through goes again the next time the assistant thread
+/// opens. A card the server has no record of (from before phase 3) is let go.
+@MainActor
+enum AICardStateReporter {
+    private static var retrying = false
+
+    /// Records the report as not yet sent, then sends it.
+    static func report(
+        _ report: AICardStateReport,
+        cardId: String,
+        userId: String,
+        api: APIClient = .shared,
+        store: AIActionDoneStore = .shared
+    ) async {
+        // The server keys cards by their uuid; anything else is no card of its.
+        guard UUID(uuidString: cardId) != nil else { return }
+        let key = store.markUnreported(report, cardId: cardId, userId: userId)
+        if await send(report, cardId: cardId, api: api) {
+            store.markReported(key)
+        }
+    }
+
+    /// Sends this person's reports that haven't reached the server yet.
+    static func retryUnreported(userId: String, api: APIClient = .shared, store: AIActionDoneStore = .shared) async {
+        guard !retrying else { return }
+        retrying = true
+        defer { retrying = false }
+        for pending in store.unreported(userId: userId) {
+            let sent = await send(pending.report, cardId: pending.cardId, api: api)
+            if sent { store.markReported(pending.key) }
+        }
+    }
+
+    /// True once the server has the report, or will never take it: a card it doesn't know
+    /// (`404 CARD_UNKNOWN`) or an action the card doesn't have (`400`).
+    private static func send(_ report: AICardStateReport, cardId: String, api: APIClient) async -> Bool {
+        do {
+            _ = try await api.request(AIEndpoints.cardState(cardId: cardId, report: report), as: EmptyResponse.self)
+            return true
+        } catch APIError.notFound {
+            return true
+        } catch APIError.forbidden {
+            return true
+        } catch let APIError.clientError(status, _) where status == 400 {
+            return true
+        } catch {
+            // Offline, signed out, a server error or `409 CARD_BUSY`: the next thread open tries again.
+            return false
+        }
+    }
+}
+
 /// Which action cards' taps went through, kept on the device so a card
 /// restored from history still shows as done after a relaunch (contract
 /// section 4.3, step 5), and which cards were put away with "Not now". Card
 /// ids are uuids, so one account's records never match another's cards. They
 /// stay through a sign-out: signing back in must not offer a finished card
-/// again, since a plan or a message sent from one would go out twice.
+/// again, since a plan or a message sent from one would go out twice. The
+/// server keeps the same record since phase 3; reports it doesn't have yet
+/// wait here (`unreported`) for the next time the thread opens.
 @MainActor
 final class AIActionDoneStore {
     static let shared = AIActionDoneStore()
@@ -273,10 +331,22 @@ final class AIActionDoneStore {
     private struct Saved: Codable {
         var done: [String: Entry] = [:]
         var dismissed: [String: Date] = [:]
+        /// State reports the server doesn't have yet, by `reportKey`. Optional, so a record saved
+        /// before phase 3 still reads.
+        var unreported: [String: Pending]?
     }
 
     private struct Entry: Codable {
         let done: ChatAIActionDone
+        let at: Date
+    }
+
+    /// One state report waiting to go, for the account that made it.
+    struct Pending: Codable {
+        let key: String
+        let userId: String
+        let cardId: String
+        let report: AICardStateReport
         let at: Date
     }
 
@@ -321,7 +391,32 @@ final class AIActionDoneStore {
             !cardIds.contains(String(key.prefix { $0 != "|" }))
         }
         saved.dismissed = saved.dismissed.filter { !cardIds.contains($0.key) }
+        saved.unreported = saved.unreported?.filter { !cardIds.contains($0.value.cardId) }
         persist()
+    }
+
+    // MARK: - Reports the server doesn't have yet
+
+    /// Keeps a report until `markReported`; the same report made again replaces it.
+    @discardableResult
+    func markUnreported(_ report: AICardStateReport, cardId: String, userId: String) -> String {
+        let key = [userId, cardId, report.itemId ?? "", report.actionId ?? "", report.status].joined(separator: "|")
+        var pending = saved.unreported ?? [:]
+        pending[key] = Pending(key: key, userId: userId, cardId: cardId, report: report, at: Date())
+        saved.unreported = pending
+        persist()
+        return key
+    }
+
+    func markReported(_ key: String) {
+        guard saved.unreported?[key] != nil else { return }
+        saved.unreported?[key] = nil
+        persist()
+    }
+
+    /// One account's waiting reports, oldest first.
+    func unreported(userId: String) -> [Pending] {
+        (saved.unreported ?? [:]).values.filter { $0.userId == userId }.sorted { $0.at < $1.at }
     }
 
     private func persist() {
@@ -335,6 +430,11 @@ final class AIActionDoneStore {
             let oldest = saved.dismissed.sorted { $0.value < $1.value }.prefix(saved.dismissed.count - Self.limit)
             for (key, _) in oldest {
                 saved.dismissed[key] = nil
+            }
+        }
+        if let pending = saved.unreported, pending.count > Self.limit {
+            for (key, _) in pending.sorted(by: { $0.value.at < $1.value.at }).prefix(pending.count - Self.limit) {
+                saved.unreported?[key] = nil
             }
         }
         if let data = try? JSONEncoder().encode(saved) {
