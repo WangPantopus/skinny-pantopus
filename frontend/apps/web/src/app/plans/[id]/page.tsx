@@ -17,12 +17,15 @@ import {
   fetchPublicPlan,
   getStoreDownloadCta,
   planInviteToken,
+  playStoreUrlCarrying,
+  storePlatform,
   summarizeText,
   type PublicPlan,
   type PublicPlanInvite,
 } from '@/lib/publicShare';
 import OpenInAppButton from '@/components/public-share/OpenInAppButton';
 import JustInstalledHint from '@/components/public-share/JustInstalledHint';
+import StoreLink from '@/components/public-share/StoreLink';
 import { Icon, KindGlyph, kindColors } from '@/components/plans/planKind';
 
 // A Nearby Plans share link (design board W1). Signed out, area only: the exact
@@ -234,7 +237,12 @@ function VerifiedBadge() {
   );
 }
 
-function TopBar({ id, fallbackUrl, query = '' }: { id: string; fallbackUrl: string | null; query?: string }) {
+function TopBar({ id, fallbackUrl, copyPath = null, query = '' }: {
+  id: string;
+  fallbackUrl: string | null;
+  copyPath?: string | null;
+  query?: string;
+}) {
   return (
     <div className="flex h-14 items-center justify-between border-b border-app-border bg-app-surface px-4">
       <Link href="/" className="text-[19px] font-bold leading-[22px] tracking-[-0.02em] text-app-text">
@@ -244,6 +252,7 @@ function TopBar({ id, fallbackUrl, query = '' }: { id: string; fallbackUrl: stri
         appUrl={`${buildPlanAppUrl(id)}${query}`}
         linkHref={`${buildPlanShareUrl(id)}${query}`}
         fallbackUrl={fallbackUrl}
+        copyPath={copyPath}
         className="text-sm font-semibold text-app-link"
       >
         Open app
@@ -252,14 +261,27 @@ function TopBar({ id, fallbackUrl, query = '' }: { id: string; fallbackUrl: stri
   );
 }
 
-function StoreButtons() {
+/** Both stores, each carrying this page's link through the install (`getStoreDownloadCta`). */
+function StoreButtons({ path, copyPath }: { path: string; copyPath: string | null }) {
   if (!IOS_APP_STORE_URL && !ANDROID_PLAY_STORE_URL) return null;
   const button =
     'flex h-10 w-full items-center justify-center rounded-[10px] border border-app-border-strong bg-app-surface text-[15px] font-semibold text-app-text';
   return (
     <div className="grid grid-cols-2 gap-[10px]">
-      {IOS_APP_STORE_URL ? <a href={IOS_APP_STORE_URL} className={button}>Get it for iPhone</a> : <span />}
-      {ANDROID_PLAY_STORE_URL ? <a href={ANDROID_PLAY_STORE_URL} className={button}>Get it for Android</a> : <span />}
+      {IOS_APP_STORE_URL ? (
+        <StoreLink href={IOS_APP_STORE_URL} copyPath={copyPath} className={button}>
+          Get it for iPhone
+        </StoreLink>
+      ) : (
+        <span />
+      )}
+      {ANDROID_PLAY_STORE_URL ? (
+        <a href={playStoreUrlCarrying(ANDROID_PLAY_STORE_URL, path)} className={button}>
+          Get it for Android
+        </a>
+      ) : (
+        <span />
+      )}
     </div>
   );
 }
@@ -277,8 +299,10 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   if (!plan) {
     return { ...base, title: 'Plan not available | Pantopus', description: "This plan isn't available." };
   }
-  // A texted invitation's preview says whose it is.
+  // A texted invitation's preview says whose it is. Its page goes to someone who may not have the app yet, so
+  // Safari's banner, which drops the invitation through an install, stays off; the page's buttons carry it.
   const invitedBy = plan.invite?.available ? `${plan.invite.host_first_name} invited you: ` : '';
+  const smartBanner = !plan.invite?.available;
   if (plan.kind === 'playdate') {
     return {
       ...base,
@@ -287,6 +311,7 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
         description: 'Open it in Pantopus with a verified address to see the details and ask to join.',
         path: buildPlanPath(id),
         appArgument: buildPlanAppUrl(id),
+        smartBanner,
       }),
     };
   }
@@ -299,6 +324,7 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
       description: summarizeText(`${description}. ${plan.about || ''}`, 160, description),
       path: buildPlanPath(id),
       appArgument: buildPlanAppUrl(id),
+      smartBanner,
     }),
   };
 }
@@ -309,12 +335,17 @@ export default async function PublicPlanPage({ params, searchParams }: PageProps
   const [result, viewer] = await Promise.all([fetchPublicPlan(id, token), fetchPlanViewer(id)]);
   const plan = result.data;
   const userAgent = (await headers()).get('user-agent') || '';
-  const fallbackUrl = getStoreDownloadCta(userAgent)?.href ?? null;
   const invite = plan?.invite ?? null;
   // The app opens the invitation from the same link; one taken back opens the plan as any share does.
   const query = inviteQuery(token, invite);
   const appUrl = `${buildPlanAppUrl(id)}${query}`;
   const linkHref = `${buildPlanShareUrl(id)}${query}`;
+  // Getting the app from this page carries the same link through the install.
+  const path = `${buildPlanPath(id)}${query}`;
+  const storeCta = getStoreDownloadCta(userAgent, path);
+  const fallbackUrl = storeCta?.href ?? null;
+  const copyPath = storeCta?.copyPath ?? null;
+  const platform = storePlatform(userAgent);
 
   if (!plan && result.status === 404) notFound();
 
@@ -322,7 +353,7 @@ export default async function PublicPlanPage({ params, searchParams }: PageProps
     return (
       <main className="min-h-screen bg-app text-app-text">
         <div className="mx-auto w-full max-w-md">
-          <TopBar id={id} fallbackUrl={fallbackUrl} />
+          <TopBar id={id} fallbackUrl={fallbackUrl} copyPath={copyPath} />
           <div className="flex flex-col gap-4 px-4 pt-10 text-center">
             <h1 className="text-xl font-semibold">Couldn&apos;t load this plan</h1>
             <p className="text-sm text-app-text-secondary">Something went wrong. Please try again.</p>
@@ -342,7 +373,7 @@ export default async function PublicPlanPage({ params, searchParams }: PageProps
     return (
       <main className="min-h-screen bg-app text-app-text">
         <div className="mx-auto w-full max-w-md pb-10">
-          <TopBar id={id} fallbackUrl={fallbackUrl} query={query} />
+          <TopBar id={id} fallbackUrl={fallbackUrl} copyPath={copyPath} query={query} />
           <div className="flex flex-col gap-4 px-4 pt-[18px]">
             {invitedBy ? <p className="text-sm leading-5 text-app-text-secondary">{invitedBy} invited you to their playdate.</p> : null}
             <KindTag kind="playdate" />
@@ -372,12 +403,13 @@ export default async function PublicPlanPage({ params, searchParams }: PageProps
               appUrl={appUrl}
               linkHref={linkHref}
               fallbackUrl={fallbackUrl}
+              copyPath={copyPath}
               className={PRIMARY_BUTTON}
             >
               Open in Pantopus
             </OpenInAppButton>
-            <StoreButtons />
-            <JustInstalledHint what="this playdate" emailHint={invitedBy ? invite?.email_hint : null} />
+            <StoreButtons path={path} copyPath={copyPath} />
+            <JustInstalledHint what="this playdate" emailHint={invitedBy ? invite?.email_hint : null} platform={platform} />
             <p className="text-center text-xs leading-4 text-app-text-secondary">{PLAYDATE_CAPTION}</p>
           </div>
         </div>
@@ -397,7 +429,7 @@ export default async function PublicPlanPage({ params, searchParams }: PageProps
   return (
     <main className="min-h-screen bg-app text-app-text">
       <div className="mx-auto w-full max-w-md pb-10">
-        <TopBar id={id} fallbackUrl={fallbackUrl} query={query} />
+        <TopBar id={id} fallbackUrl={fallbackUrl} copyPath={copyPath} query={query} />
         <div className="flex flex-col gap-4 px-4 pt-[18px]">
           <p className="text-sm leading-5 text-app-text-secondary">{introText(plan, hostName, viewer, over, invite)}</p>
           {invite && !invite.available && !over ? (
@@ -453,6 +485,7 @@ export default async function PublicPlanPage({ params, searchParams }: PageProps
             appUrl={appUrl}
             linkHref={linkHref}
             fallbackUrl={fallbackUrl}
+            copyPath={copyPath}
             className={PRIMARY_BUTTON}
           >
             {joined
@@ -463,8 +496,8 @@ export default async function PublicPlanPage({ params, searchParams }: PageProps
                   ? 'Open in Pantopus to say you’re in'
                   : 'Open in Pantopus to join'}
           </OpenInAppButton>
-          <StoreButtons />
-          <JustInstalledHint what="this plan" emailHint={invited ? invite?.email_hint : null} />
+          <StoreButtons path={path} copyPath={copyPath} />
+          <JustInstalledHint what="this plan" emailHint={invited ? invite?.email_hint : null} platform={platform} />
           <p className="text-center text-xs leading-4 text-app-text-secondary">{PLAYDATE_CAPTION}</p>
         </div>
       </div>
