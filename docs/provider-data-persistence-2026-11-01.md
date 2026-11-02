@@ -93,6 +93,10 @@ synthetic ATTOM responses:
 - Different apartment units used separate request keys.
 - Anonymous and authenticated database clients could neither read nor write raw
   provider responses. An unrelated user received HTTP 403 for another Home's profile.
+- Direct database reads of `Home.niche_data` were denied for owner, member,
+  guest and unrelated-user accounts. The property-details HTTP route returned
+  the raw ATTOM bundle only to the authorized owner; a household member received
+  the owner-only restriction, and guests and unrelated users received HTTP 403.
 - Partial property profiles retried only their missing AVM/trend endpoints;
   complete profiles made no further provider calls. Raw acquisition timestamps
   prevent rebuilding a profile from extending the freshness of old valuations.
@@ -116,13 +120,13 @@ saved in the isolated database; a second lookup made no additional external call
 The real web app displayed the synthetic ATTOM property facts on Your home and
 kept them after reload with the provider offline. An authorized household member
 also received the saved property profile through the real API while the provider
-was offline. Both iOS and Android builds passed. The isolated iOS simulator
-displayed the saved year, floor area, beds/baths and lot size after app and backend
-restarts with the provider offline and no additional ATTOM calls. Android's data
-partition issue is resolved and the app launches in the isolated emulator, but
-interactive acceptance is still blocked by the desktop control tool rejecting
-taps to its window. The PR remains draft pending that check. No physical-device
-checks were performed.
+was offline. Both iOS and Android builds passed. The isolated iOS simulator and
+Android emulator displayed the saved year, floor area, beds/baths and lot size
+after app and backend restarts with the provider offline and no additional ATTOM
+calls. The restarted backend logged database cache hits. Android's data-partition
+and desktop window-input issues were resolved; sign-in and screen verification
+used desktop controls, including the emulator's on-screen keyboard. No
+physical-device checks were performed.
 
 These checks do not validate the hosted database, a live provider subscription,
 provider retention entitlements, or production deployment. Existing records whose
