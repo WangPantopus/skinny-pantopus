@@ -2319,6 +2319,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val placeReselects = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
     val todayReselects = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
     var ballotHomeId by rememberSaveable { mutableStateOf<String?>(null) }
+    // Place's "Next step: Add radon test information": Today opens its home setup on this Home's radon question once,
+    // then clears it (as on iPhone).
+    var radonHomeId by rememberSaveable { mutableStateOf<String?>(null) }
+    val openTodayRadon: (String) -> Unit = { homeId ->
+        radonHomeId = homeId
+        navController.navigateToRootTab(PantopusRoute.Today)
+    }
     // Child screens keep the tab they were opened from lit (they used to fall
     // back to Place, which also swallowed taps on Place from those screens).
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -2902,6 +2909,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         ballotHomeId = ballotHomeId,
                         onBallotOpened = { ballotHomeId = null },
                         onOpenMenu = openMenu,
+                        onOpenTodayRadon = openTodayRadon,
                     )
                 }
                 // ── Pulse build S3: Place · Today · Pulse · Plans · Mail (Place · Today · Nearby · Plans · Mail with the redesign off) ──
@@ -2925,6 +2933,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         // An agenda task row opens the task's own page.
                         onOpenTask = { homeId, taskId -> navController.navigate(ChildRoutes.householdTaskDetail(homeId, taskId)) },
                         scrollToTop = todayReselects,
+                        radonHomeId = radonHomeId,
+                        onRadonShown = { radonHomeId = null },
                         onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
                         onOpenMenu = openMenu,
                         onOpenPlace = { homeId ->
@@ -3259,6 +3269,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         homeId = homeId,
                         scrollToBallot = ballotHomeId == homeId,
                         onBallotOpened = { ballotHomeId = null },
+                        onOpenTodayRadon = { openTodayRadon(homeId) },
                         onOpenMenu = openMenu,
                         onSwitchHome = { id ->
                             currentPlaceHost?.switchHome(id)
@@ -7424,6 +7435,7 @@ private fun PlaceTabRoot(
     ballotHomeId: String?,
     onBallotOpened: () -> Unit,
     onOpenMenu: () -> Unit,
+    onOpenTodayRadon: (homeId: String) -> Unit = {},
     host: HomeTabHostViewModel = hiltViewModel(),
 ) {
     val root by host.landing.collectAsStateWithLifecycle()
@@ -7481,6 +7493,7 @@ private fun PlaceTabRoot(
                         scrollToTop = scrollToTop,
                         scrollToBallot = ballotHomeId == current.homeId,
                         onBallotOpened = onBallotOpened,
+                        onOpenTodayRadon = { onOpenTodayRadon(current.homeId) },
                         // A new default changes where Place lands next time, not the Home on screen now.
                         onDefaultHomeChange = { host.switchHome(current.homeId) },
                     )
@@ -7556,6 +7569,7 @@ private fun PlaceDashboardDestination(
     onDefaultHomeChange: () -> Unit = {},
     scrollToBallot: Boolean = false,
     onBallotOpened: () -> Unit = {},
+    onOpenTodayRadon: (() -> Unit)? = null,
 ) {
     PlaceDashboardScreen(
         homeId = homeId,
@@ -7594,6 +7608,7 @@ private fun PlaceDashboardDestination(
         scrollToBallot = scrollToBallot,
         onBallotOpened = onBallotOpened,
         onAsk = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
+        onOpenTodayRadon = onOpenTodayRadon,
     )
 }
 

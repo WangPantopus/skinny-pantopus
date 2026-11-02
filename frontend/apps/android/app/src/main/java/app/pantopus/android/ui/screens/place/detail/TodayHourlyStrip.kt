@@ -16,15 +16,21 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.data.api.models.place.PlaceSunriseSunsetData
@@ -48,6 +54,14 @@ import kotlin.math.roundToInt
 internal const val PRECIP_SHOWN_FROM = 10.0
 private const val HOURS_SHOWN = 24
 private val CELL_WIDTH = 58.dp
+
+/** Room around a cell's widest label once a large text size makes it wider than [CELL_WIDTH]. */
+private val CELL_GAP = 10.dp
+
+/** The advisory's name over its band: one line of this height, then the band below it. */
+private val BAND_LABEL_LINE = 13.sp
+private val BAND_GAP = 2.dp
+private val BAND_HEIGHT = 5.dp
 
 /** One hour on the strip, on the place's clock. */
 data class HourlyCell(
@@ -114,34 +128,69 @@ fun TodayHourlyStrip(
         // The band row and the rain line show only when some hour needs them (as on iPhone).
         val band = cells.any { it.alert != null }
         val rain = cells.any { precipLabel(it.hour) != null }
+        val width = cellWidth(cells)
         cells.forEachIndexed { index, cell ->
             val starts = cell.alert != null && cell.alert.id != cells.getOrNull(index - 1)?.alert?.id
             // How many hours in a row this advisory covers from here: its name fits inside its band.
             val run = if (starts) cells.drop(index).takeWhile { it.alert?.id == cell.alert?.id }.size else 0
-            HourCell(cell, bandCells = run, band = band, rain = rain)
+            HourCell(cell, width = width, bandCells = run, band = band, rain = rain)
         }
     }
 }
 
+/**
+ * One cell's width: [CELL_WIDTH], or wider when a large text size makes the widest hour label or temperature need
+ * more, so neighbouring labels never run together ("7 PM8 PM").
+ */
+@Composable
+private fun cellWidth(cells: List<HourlyCell>): Dp {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val labelStyle = LocalTextStyle.current.merge(TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold))
+    val tempStyle = LocalTextStyle.current.merge(TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold))
+    val widest =
+        remember(cells, labelStyle, tempStyle, density) {
+            cells.maxOf { cell ->
+                maxOf(
+                    measurer.measure(cellLabel(cell), labelStyle, maxLines = 1).size.width,
+                    measurer.measure("${cell.temp.roundToInt()}°", tempStyle, maxLines = 1).size.width,
+                )
+            }
+        }
+    return maxOf(CELL_WIDTH, with(density) { widest.toDp() } + CELL_GAP)
+}
+
+/** "Now", the day's name at midnight, else the hour. */
+private fun cellLabel(cell: HourlyCell): String =
+    when {
+        cell.now -> "Now"
+        // The first hour of a new day says which day it is.
+        cell.start.hour == 0 -> cell.start.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, Locale.getDefault())
+        else -> hourLabel(cell.start)
+    }
+
 @Composable
 private fun HourCell(
     cell: HourlyCell,
+    width: Dp,
     /** The hours this advisory's band spans from here; 0 where it doesn't begin. */
     bandCells: Int,
     band: Boolean,
     rain: Boolean,
 ) {
-    Column(modifier = Modifier.width(CELL_WIDTH), horizontalAlignment = Alignment.CenterHorizontally) {
-        // The advisory's band, its name above the band where it begins.
+    Column(modifier = Modifier.width(width), horizontalAlignment = Alignment.CenterHorizontally) {
+        // The advisory's band, its name above the band where it begins. The name's line grows with the text size,
+        // so the band stays under it.
         if (band) {
-            Box(modifier = Modifier.fillMaxWidth().height(20.dp)) {
+            val labelLine = with(LocalDensity.current) { BAND_LABEL_LINE.toDp() }
+            Box(modifier = Modifier.fillMaxWidth().height(labelLine + BAND_GAP + BAND_HEIGHT)) {
                 if (cell.alert != null) {
                     Box(
                         modifier =
                             Modifier
                                 .align(Alignment.BottomStart)
                                 .fillMaxWidth()
-                                .height(5.dp)
+                                .height(BAND_HEIGHT)
                                 .background(PantopusColors.warningLight),
                     )
                 }
@@ -149,7 +198,7 @@ private fun HourCell(
                     Text(
                         cell.alert.event,
                         fontSize = 10.5.sp,
-                        lineHeight = 13.sp,
+                        lineHeight = BAND_LABEL_LINE,
                         fontWeight = FontWeight.SemiBold,
                         color = PantopusColors.warning,
                         maxLines = 1,
@@ -158,7 +207,7 @@ private fun HourCell(
                             Modifier
                                 .align(Alignment.TopStart)
                                 .wrapContentWidth(Alignment.Start, unbounded = true)
-                                .widthIn(max = CELL_WIDTH * bandCells)
+                                .widthIn(max = width * bandCells)
                                 .padding(start = 6.dp),
                     )
                 }
@@ -166,12 +215,7 @@ private fun HourCell(
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            when {
-                cell.now -> "Now"
-                // The first hour of a new day says which day it is.
-                cell.start.hour == 0 -> cell.start.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, Locale.getDefault())
-                else -> hourLabel(cell.start)
-            },
+            cellLabel(cell),
             fontSize = 12.sp,
             fontWeight = if (cell.now) FontWeight.Bold else FontWeight.Medium,
             color = if (cell.now) PantopusColors.appText else PantopusColors.appTextSecondary,

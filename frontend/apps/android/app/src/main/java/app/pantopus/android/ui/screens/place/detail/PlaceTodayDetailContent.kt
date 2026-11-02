@@ -182,6 +182,9 @@ data class TodayTabParts(
     /** A saved place's "Get reminders for this address" step: Add your home. */
     val onAddHome: (() -> Unit)? = null,
     val onAsk: (() -> Unit)? = null,
+    /** Place's "Next step: Add radon test information" for this Home: the setup opens on the radon question once. */
+    val radonRequested: Boolean = false,
+    val onRadonShown: () -> Unit = {},
 )
 
 /**
@@ -313,14 +316,48 @@ fun PlaceTodayDetailContent(
     BallotPlacement.today(intel)?.let { card ->
         BallotTodayCard(card = card, onOpenBallot = onOpenBallot, modifier = Modifier.padding(top = Spacing.s4))
     }
+    var radonOpenRequest by remember { mutableStateOf(false) }
+    RadonRequestEffect(tab.radonRequested, homeState, onOpen = { radonOpenRequest = true }, onDone = tab.onRadonShown)
     // 10. Optional setup, folded: pickup days, radon, a saved place's reminders.
-    TodayHomeSetup(homeState, intel, needsPickup, openPickup, tab.onAddHome)
+    TodayHomeSetup(
+        homeState,
+        intel,
+        needsPickup,
+        openPickup,
+        tab.onAddHome,
+        openRadon = radonOpenRequest,
+        onRadonOpened = { radonOpenRequest = false },
+        target = targets.setup,
+    )
     // 11. Every full card and source, folded.
     TodayFullConditions(intel, alertsCheck, shownCalendar, conditionsOpen, { conditionsOpen = !conditionsOpen }, targets, now)
     // 12. Ask, at the end.
     tab.onAsk?.let { TodayAskEntry("Ask Pantopus about today", it) }
     if (homeState?.sheet != null) RadonTaskSheet(homeState)
     governments?.let { BallotGovernmentsSheet(governments = it, address = intel.place.line1, onDismiss = { governments = null }) }
+}
+
+/**
+ * Place's radon next step ("Add radon test information"): once this Home's radon answer is known, [onOpen] opens the
+ * setup on it; with nothing to open (no radon zone, no access to the household's tasks) the request just ends.
+ */
+@Composable
+private fun RadonRequestEffect(
+    requested: Boolean,
+    state: RadonTodayState?,
+    onOpen: () -> Unit,
+    onDone: () -> Unit,
+) {
+    LaunchedEffect(requested, state, state?.loaded, state?.noTaskAccess, state?.error) {
+        if (!requested) return@LaunchedEffect
+        when {
+            state == null || !state.hasRadon || state.noTaskAccess -> onDone()
+            state.loaded || state.error != null -> {
+                onOpen()
+                onDone()
+            }
+        }
+    }
 }
 
 /** The server sends pollutant tokens ("pm25", "ozone"); show their usual names. */
@@ -471,6 +508,7 @@ private fun aqiColor(data: PlaceAirQualityData): Color =
 /** Where "Weather details", the air and daylight sides and "Set pickup days" scroll to. */
 @OptIn(ExperimentalFoundationApi::class)
 private class TodayTargets {
+    val setup = BringIntoViewRequester()
     val calendar = BringIntoViewRequester()
     val conditions = BringIntoViewRequester()
     val air = BringIntoViewRequester()
@@ -1457,14 +1495,18 @@ private fun placeSkyZone(intel: PlaceIntelligence): ZoneId = intel.homeZone ?: Z
  * home). A radon question put off with "Not now" stays here as an uncounted row, and a radon record (or a failed check)
  * keeps its card here; with nothing open the fold reads "Home setup". Gone when there is nothing at all.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-@Suppress("LongMethod", "CyclomaticComplexMethod")
+@Suppress("LongMethod", "CyclomaticComplexMethod", "LongParameterList")
 private fun TodayHomeSetup(
     state: RadonTodayState?,
     intel: PlaceIntelligence,
     needsPickup: Boolean,
     onPickup: () -> Unit,
     onAddHome: (() -> Unit)?,
+    openRadon: Boolean = false,
+    onRadonOpened: () -> Unit = {},
+    target: BringIntoViewRequester? = null,
 ) {
     val radonData = intel.section(PlaceSectionId.LEAD_RADON)?.leadRadon
     val radon = state?.takeIf { it.hasRadon && !it.noTaskAccess && radonData != null }
@@ -1477,6 +1519,18 @@ private fun TodayHomeSetup(
     if (listOf(count > 0, putOff, record != null, failed).none { it }) return
     var open by rememberSaveable(state?.homeId) { mutableStateOf(false) }
     var radonShown by rememberSaveable(state?.homeId) { mutableStateOf(false) }
+    // Place's radon next step: the fold opens on the radon question (asked again if put off), in view.
+    LaunchedEffect(openRadon) {
+        if (!openRadon) return@LaunchedEffect
+        open = true
+        if (unanswered) {
+            radonShown = true
+            if (putOff) radon?.let { r -> r.lifetime.launch { r.clearRadonDismissal() } }
+        }
+        withFrameNanos { }
+        target?.bringIntoView()
+        onRadonOpened()
+    }
     val until = radon?.dismissedUntil?.takeIf { putOff }?.let { RadonToday.label(java.time.Instant.ofEpochMilli(it).toString()) }
     val summary =
         when {
@@ -1490,7 +1544,7 @@ private fun TodayHomeSetup(
         summary = summary,
         open = open,
         onToggle = { open = !open },
-        modifier = Modifier.testTag("todayHomeSetup"),
+        modifier = (target?.let { Modifier.bringIntoViewRequester(it) } ?: Modifier).testTag("todayHomeSetup"),
     ) {
         onAddHome?.let {
             Column(

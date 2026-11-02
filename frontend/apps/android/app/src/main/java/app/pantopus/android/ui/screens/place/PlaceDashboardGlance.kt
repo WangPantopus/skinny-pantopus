@@ -21,6 +21,7 @@ import app.pantopus.android.data.api.models.place.BenchmarkComparison
 import app.pantopus.android.data.api.models.place.ExemptionFilingStatus
 import app.pantopus.android.data.api.models.place.PlaceGroup
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
+import app.pantopus.android.data.api.models.place.PlaceSectionAccess
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.PlaceSectionStatus
@@ -34,9 +35,10 @@ import app.pantopus.android.ui.screens.place.components.PlaceGlanceOpenLink
 import app.pantopus.android.ui.screens.place.components.PlaceHairline
 import app.pantopus.android.ui.screens.place.components.PlaceHeroCard
 import app.pantopus.android.ui.screens.place.components.PlaceLockedCard
+import app.pantopus.android.ui.screens.place.components.PlaceNextStepLine
 import app.pantopus.android.ui.screens.place.components.PlaceSystemsTimeline
 import app.pantopus.android.ui.screens.place.components.WorthItem
-import app.pantopus.android.ui.screens.place.components.placeEvidenceResult
+import app.pantopus.android.ui.screens.place.components.placeGuidanceStep
 import app.pantopus.android.ui.screens.place.components.placeSurface
 import app.pantopus.android.ui.screens.place.detail.isLive
 import app.pantopus.android.ui.screens.place.detail.section
@@ -57,6 +59,9 @@ private const val SUMMARY_TOPICS = 2
 
 /** Above this many unavailable sections the glance says once that some information isn't available yet. */
 private const val UNAVAILABLE_NOTE_FROM = 3
+
+/** "2026-11-03": the day part of a server date. */
+private const val ISO_DAY_LENGTH = 10
 
 /** The seven groups of "Your home at a glance" (TPR brief 6.6), in order, with the existing page each opens. */
 internal enum class GlanceGroup(
@@ -90,6 +95,7 @@ internal enum class GlanceGroup(
 }
 
 /** What the glance needs beyond the Place itself: who is looking, the dashboard's actions, and the ballot. */
+@Suppress("LongParameterList")
 internal class GlanceActions(
     val claimInReview: Boolean,
     val showsVerify: Boolean,
@@ -100,6 +106,8 @@ internal class GlanceActions(
     val onOpenPrivacyMirror: () -> Unit,
     val onOpenGovernments: (BallotGovernments) -> Unit,
     val ballotRequester: BringIntoViewRequester,
+    /** Today's radon question, when it is this person's next step here (Lead & radon); null shows none. */
+    val onOpenRadon: (() -> Unit)? = null,
 )
 
 /**
@@ -247,10 +255,38 @@ private fun SectionRows(
                 onRetry = actions.onRetry,
                 verifiesFirst = intel.verifiesFirst,
             )
-            if (evidence) PlaceEvidenceLine(env, zone, Modifier.padding(start = 66.dp, end = 16.dp, bottom = 12.dp))
+            if (evidence) {
+                val next = nextStep(env, actions)
+                PlaceEvidenceLine(env, zone, Modifier.padding(start = 66.dp, end = 16.dp, bottom = if (next == null) 12.dp else 4.dp))
+                next?.let { (text, onClick) ->
+                    PlaceNextStepLine(
+                        text = text,
+                        onClick = onClick,
+                        tag = "place.evidence.${env.id}.next",
+                        modifier = Modifier.padding(start = 66.dp, end = 16.dp, bottom = if (onClick == null) 12.dp else 4.dp),
+                    )
+                }
+            }
         }
     }
 }
+
+/**
+ * A risk topic's next step, where the app already has one (as on iPhone): heat and cold's own guidance, and Today's
+ * radon question when [GlanceActions.onOpenRadon] offers it. Every other topic has none.
+ */
+private fun nextStep(
+    env: PlaceSectionEnvelope,
+    actions: GlanceActions,
+): Pair<String, (() -> Unit)?>? =
+    when (env.sectionId) {
+        PlaceSectionId.HEAT_COLD -> placeGuidanceStep(env)?.let { it to null }
+        PlaceSectionId.LEAD_RADON ->
+            actions.onOpenRadon
+                ?.takeIf { env.isGlanceLive() && env.leadRadon?.radonZone in 1..3 }
+                ?.let { "Add radon test information" to it }
+        else -> null
+    }
 
 /** Residency letters and passes, the locked-until-verified items, and what neighbors see (not for a claim). */
 @Composable
@@ -275,7 +311,7 @@ private fun IdentityRows(
     PlaceMessagesActionRow(
         icon = PantopusIcon.Eye,
         title = "What neighbors see",
-        subtitle = "Private by default. See this address as a neighbor does.",
+        subtitle = "Preview this address as a neighbor sees it.",
         onTap = actions.onOpenPrivacyMirror,
         modifier = Modifier.testTag("place.glance.privacyMirror"),
     )
@@ -296,87 +332,142 @@ private fun PlaceVerifyLockedItems(onVerify: () -> Unit) {
     }
 }
 
-/** One line from real values for each group (the TPR wording agreed with iPhone). */
+/**
+ * One line from real values for each group: the same rules and words as iPhone's `PlaceGlanceSummary`. A group with
+ * nothing to read says why: a lock's own reason, else that it isn't available yet.
+ */
 private fun glanceSummary(
     group: GlanceGroup,
     intel: PlaceIntelligence,
     sections: List<PlaceSectionEnvelope>,
     zone: ZoneId?,
     actions: GlanceActions,
-): String =
-    when (group) {
-        GlanceGroup.TODAY -> todaySummary(intel)
-        GlanceGroup.HOME -> homeSummary(intel, sections, zone)
-        GlanceGroup.IDENTITY ->
-            listOfNotNull(
-                topicsSummary(sections, zone).takeIf { sections.isNotEmpty() },
-                "Residency letters & passes".takeUnless { actions.claimInReview },
-                "locked until you verify".takeIf { actions.showsVerify },
-                "what neighbors see".takeUnless { actions.claimInReview },
-            ).joinToString(" · ")
-        GlanceGroup.CIVIC ->
-            listOfNotNull(
-                topicsSummary(sections, zone).takeIf { sections.isNotEmpty() },
-                BallotPlacement.ballot(intel)?.let { "ballot season" },
-            ).joinToString(" · ")
-        else -> topicsSummary(sections, zone)
-    }
-
-/** "39° partly cloudy · air 76 moderate · 1 weather alert" (or "no active weather alerts", "weather alerts unavailable"). */
-private fun todaySummary(intel: PlaceIntelligence): String {
-    val weather =
-        intel.section(PlaceSectionId.WEATHER)?.takeIf { it.isLive() }?.weather?.let {
-            "${it.currentTempF.roundToInt()}° ${it.conditionLabel.lowercase(Locale.US)}"
+): String? {
+    val read =
+        when (group) {
+            GlanceGroup.TODAY -> todaySummary(sections)
+            GlanceGroup.HOME -> homeSummary(sections)
+            GlanceGroup.RISK -> topicsSummary(sections, zone, chipsFirst = true)
+            // From every section: the election row leaves Civic's list while the ballot card shows.
+            GlanceGroup.CIVIC -> civicSummary(intel.groups.flatMap { it.sections })
+            // What the group holds for this viewer (`IdentityRows`).
+            GlanceGroup.IDENTITY ->
+                listOfNotNull(
+                    topicsSummary(sections, zone),
+                    "Residency letters & passes".takeUnless { actions.claimInReview },
+                    "locked until you verify".takeIf { !actions.claimInReview && actions.showsVerify && actions.onVerify != null },
+                    "what neighbors see".takeUnless { actions.claimInReview },
+                ).joinToString(" · ").ifEmpty { null }
+            GlanceGroup.BLOCK, GlanceGroup.COSTS -> topicsSummary(sections, zone)
         }
+    return read?.replaceFirstChar { it.uppercase(Locale.US) }
+        ?: sections.firstOrNull { it.access == PlaceSectionAccess.LOCKED }?.let { PlacePresentation.lockReason(it).removeSuffix(".") }
+        ?: "Not available for this address yet".takeIf { sections.isNotEmpty() }
+}
+
+/** "37° fog · air 60 moderate · no active weather alerts" (or "1 weather alert", "weather alerts unavailable"). */
+private fun todaySummary(sections: List<PlaceSectionEnvelope>): String? {
+    val weather =
+        sections.live(PlaceSectionId.WEATHER)?.weather?.let { "${it.currentTempF.roundToInt()}° ${it.conditionLabel.lowercase(Locale.US)}" }
     val air =
-        intel.section(PlaceSectionId.AIR_QUALITY)?.takeIf { it.isLive() }?.airQuality
+        sections.live(PlaceSectionId.AIR_QUALITY)?.airQuality
             ?.takeIf { it.category != AirQualityCategory.UNKNOWN }
             ?.let { "air ${it.index} ${it.categoryLabel.lowercase(Locale.US)}" }
-    val alertsEnv = intel.section(PlaceSectionId.ALERTS)
     val alerts =
-        when {
-            alertsEnv == null -> null
-            alertsEnv.isLive() ->
-                when (val n = alertsEnv.alerts?.active?.size ?: 0) {
-                    0 -> "no active weather alerts"
-                    1 -> "1 weather alert"
-                    else -> "$n weather alerts"
-                }
-            else -> "weather alerts unavailable"
+        sections.firstOrNull { it.sectionId == PlaceSectionId.ALERTS && it.access != PlaceSectionAccess.LOCKED }?.let {
+            val active = sections.live(PlaceSectionId.ALERTS)?.alerts?.active
+            when (active?.size) {
+                null -> "weather alerts unavailable"
+                0 -> "no active weather alerts"
+                1 -> "1 weather alert"
+                else -> "${active.size} weather alerts"
+            }
         }
-    val line = listOfNotNull(weather, air, alerts).joinToString(" · ")
-    return line.ifEmpty { "weather, air and alerts aren't available here yet" }.replaceFirstChar { it.uppercase(Locale.US) }
+    return listOfNotNull(weather, air, alerts).joinToString(" · ").ifEmpty { null }
 }
 
-/** "Built 2011 · 2,858 sq ft · 2 beyond typical range" (or "N install years unknown"), else the topics. */
-private fun homeSummary(
-    intel: PlaceIntelligence,
-    sections: List<PlaceSectionEnvelope>,
-    zone: ZoneId?,
-): String {
-    val home = intel.section(PlaceSectionId.YOUR_HOME)?.takeIf { it.isLive() }?.yourHome
-    val systems = intel.section(PlaceSectionId.HOME_SYSTEMS)?.takeIf { it.isLive() }?.homeSystems?.systems.orEmpty()
+/** "Built 2011 · 2,858 sq ft · 2 beyond typical range" (or nearing it, install years unknown, or all within). */
+private fun homeSummary(sections: List<PlaceSectionEnvelope>): String? {
+    val home = sections.live(PlaceSectionId.YOUR_HOME)?.yourHome
+    val systems = sections.live(PlaceSectionId.HOME_SYSTEMS)?.homeSystems?.systems.orEmpty()
     val beyond = systems.count { it.status == "past_expected" }
+    val nearing = systems.count { it.status == "aging" }
     val unknown = systems.count { it.installedYear == null }
-    val parts =
-        listOfNotNull(
-            home?.yearBuilt?.let { "Built $it" },
-            home?.sqft?.let { "${PlacePresentation.grouped(it)} sq ft" },
-            beyond.takeIf { it > 0 }?.let { "$it beyond typical range" },
-            unknown.takeIf { it > 0 && beyond == 0 }?.let { if (it == 1) "1 install year unknown" else "$it install years unknown" },
-        )
-    return parts.joinToString(" · ").ifEmpty { topicsSummary(sections, zone) }
+    val systemsLine =
+        when {
+            systems.isEmpty() -> null
+            beyond > 0 -> "$beyond beyond typical range"
+            nearing > 0 -> "$nearing nearing typical range"
+            unknown > 0 -> if (unknown == 1) "1 install year unknown" else "$unknown install years unknown"
+            else -> "systems within typical ranges"
+        }
+    return listOfNotNull(
+        home?.yearBuilt?.let { "Built $it" },
+        home?.sqft?.let { "${PlacePresentation.grouped(it)} sq ft" },
+        systemsLine,
+    ).joinToString(" · ").ifEmpty { null }
 }
 
-/** "Flood: Minimal risk · Earthquake: Design category D · 5 more topics", each topic's own result or state. */
+/**
+ * "Flood: Minimal risk · Earthquake: Design category D · 5 more topics": the first two topics with a reading and how
+ * many more there are. With [chipsFirst] (Risk and environment) a short classification leads; otherwise the rows' order.
+ */
 private fun topicsSummary(
     sections: List<PlaceSectionEnvelope>,
     zone: ZoneId?,
-): String {
-    if (sections.isEmpty()) return "Nothing here for this address yet"
-    val named = sections.take(SUMMARY_TOPICS).map { "${PlacePresentation.config(it.sectionId).title}: ${placeEvidenceResult(it, zone)}" }
-    val more = sections.size - SUMMARY_TOPICS
+    chipsFirst: Boolean = false,
+): String? {
+    val read =
+        sections.mapNotNull { env ->
+            glanceShortResult(env, zone)?.let { (text, chip) -> chip to "${PlacePresentation.config(env.sectionId).title}: $text" }
+        }
+    val ordered = if (chipsFirst) read.filter { it.first } + read.filterNot { it.first } else read
+    val named = ordered.take(SUMMARY_TOPICS).map { it.second }
+    if (named.isEmpty()) return null
+    val more = sections.size - named.size
     return (named + listOfNotNull(more.takeIf { it > 0 }?.let { if (it == 1) "1 more topic" else "$it more topics" })).joinToString(" · ")
+}
+
+/** "6 voting districts · election Nov 3". */
+private fun civicSummary(sections: List<PlaceSectionEnvelope>): String? {
+    val districts = sections.live(PlaceSectionId.CIVIC_DISTRICTS)?.civicDistricts?.districts.orEmpty()
+    val election =
+        sections.firstOrNull { it.sectionId == PlaceSectionId.CIVIC_ELECTION && it.status == PlaceSectionStatus.READY }?.civicElection
+            ?.takeIf { it.daysUntil >= 0 }
+            ?.let { runCatching { LocalDate.parse(it.date.take(ISO_DAY_LENGTH)) }.getOrNull() }
+    return listOfNotNull(
+        districts.takeIf { it.isNotEmpty() }?.let { if (it.size == 1) "1 voting district" else "${it.size} voting districts" },
+        election?.let { "election ${it.format(DateTimeFormatter.ofPattern("MMM d", Locale.US))}" },
+    ).joinToString(" · ").ifEmpty { null }
+}
+
+/** A reading this viewer can see now: not locked, and ready, stale or partial. */
+internal fun PlaceSectionEnvelope.isGlanceLive(): Boolean =
+    access != PlaceSectionAccess.LOCKED &&
+        (status == PlaceSectionStatus.READY || status == PlaceSectionStatus.STALE || status == PlaceSectionStatus.PARTIAL)
+
+private fun List<PlaceSectionEnvelope>.live(id: PlaceSectionId): PlaceSectionEnvelope? =
+    firstOrNull { it.sectionId == id && it.isGlanceLive() }
+
+/** A topic's own result, short: the block's activity, the chip (true), else the value's first clause. */
+private fun glanceShortResult(
+    env: PlaceSectionEnvelope,
+    zone: ZoneId?,
+): Pair<String, Boolean>? {
+    if (!env.isGlanceLive()) return null
+    val reading = PlacePresentation.reading(env, zone)
+    val chip = reading.chip?.text?.takeIf { it.isNotEmpty() }
+    return when {
+        env.blockDensity != null -> env.blockDensity?.label?.let { it to false }
+        chip != null -> chip to true
+        else -> reading.value?.let(::firstClause)?.takeIf { it.isNotEmpty() }?.let { it.removeSuffix(".") to false }
+    }
+}
+
+/** A long server sentence cut at its first full stop or dash. */
+private fun firstClause(text: String): String {
+    val cut = listOf(". ", " — ", "; ").mapNotNull { stop -> text.indexOf(stop).takeIf { it >= 0 } }.minOrNull()
+    return cut?.let { text.substring(0, it) } ?: text
 }
 
 /**
@@ -422,13 +513,14 @@ internal fun placeWorthItems(
     val dated = open.mapNotNull { task -> PlanFormat.instant(task.dueAt)?.atZone(zone)?.let { task to it } }
     val overdue = dated.filter { (_, due) -> due.toLocalDate() < today }.sortedBy { it.second }
     val dueToday = dated.filter { (_, due) -> due.toLocalDate() == today }.sortedBy { it.second }
+    // One task opens itself; several open Tasks, as on iPhone ("Overdue: Smoke alarms", "3 overdue household tasks").
     when {
         overdue.size > 1 ->
             items +=
                 WorthItem(
                     key = "tasks.overdue",
                     title = "${overdue.size} overdue household tasks",
-                    detail = "The oldest was due ${overdue.first().second.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US))}",
+                    detail = taskTitles(overdue.map { it.first }),
                     icon = PantopusIcon.ListChecks,
                     onOpen = onOpenTasks,
                 )
@@ -437,23 +529,35 @@ internal fun placeWorthItems(
             items +=
                 WorthItem(
                     key = "task.${task.id}",
-                    title = "Overdue: ${task.title}",
+                    title = prefixedTitle("Overdue: ", task.title),
                     detail = "Was due ${due.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US))} · household task",
                     icon = PantopusIcon.ListChecks,
                     onOpen = onOpenTask?.let { open -> { open(task.id) } },
                 )
         }
     }
-    dueToday.firstOrNull()?.let { (task, due) ->
-        val clock = due.format(DateTimeFormatter.ofPattern(if (due.minute == 0) "h a" else "h:mm a", Locale.US))
-        items +=
-            WorthItem(
-                key = "task.${task.id}",
-                title = "Due today: ${task.title}",
-                detail = "Due $clock · household task",
-                icon = PantopusIcon.ListChecks,
-                onOpen = onOpenTask?.let { open -> { open(task.id) } },
-            )
+    when {
+        dueToday.size > 1 ->
+            items +=
+                WorthItem(
+                    key = "tasks.today",
+                    title = "${dueToday.size} household tasks due today",
+                    detail = taskTitles(dueToday.map { it.first }),
+                    icon = PantopusIcon.ListChecks,
+                    onOpen = onOpenTasks,
+                )
+        dueToday.size == 1 -> {
+            val (task, due) = dueToday.first()
+            val clock = due.format(DateTimeFormatter.ofPattern(if (due.minute == 0) "h a" else "h:mm a", Locale.US))
+            items +=
+                WorthItem(
+                    key = "task.${task.id}",
+                    title = prefixedTitle("Due today: ", task.title),
+                    detail = "Due $clock · household task",
+                    icon = PantopusIcon.ListChecks,
+                    onOpen = onOpenTask?.let { open -> { open(task.id) } },
+                )
+        }
     }
     intel.section(PlaceSectionId.EXEMPTION_CHECK)?.takeIf { it.isLive() }?.exemptionCheck
         ?.takeIf { it.filingStatus == ExemptionFilingStatus.NONE_ON_FILE }
@@ -481,4 +585,16 @@ internal fun placeWorthItems(
                 )
         }
     return items.distinctBy { it.key }.take(WORTH_MAX)
+}
+
+/** A title that already says it ("Overdue: …") isn't prefixed twice. */
+private fun prefixedTitle(
+    prefix: String,
+    title: String,
+): String = if (title.startsWith(prefix, ignoreCase = true)) title else prefix + title
+
+/** "Smoke alarms, Furnace filter and more": the first two titles. */
+private fun taskTitles(tasks: List<HomeTaskDto>): String {
+    val titles = tasks.take(2).joinToString(", ") { it.title }
+    return if (tasks.size > 2) "$titles and more" else titles
 }
