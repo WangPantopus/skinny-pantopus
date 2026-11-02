@@ -102,7 +102,7 @@ const readToolDefinitions = [
   },
   {
     name: 'find_posts',
-    description: "Recent posts on the person's Nearby feed (questions, recommendations, events, lost and found, heads-ups, deals, local updates), newest first, within about 10 miles, as the feed shows them.",
+    description: "Recent posts on the person's Nearby feed (questions, recommendations, events, lost and found, heads-ups, deals, local updates), newest first, within about 10 miles, as the feed shows them. A post the person wrote has `yours: true`: use it for \"my question\" or \"my post\".",
     input_schema: {
       type: 'object',
       properties: {
@@ -387,7 +387,12 @@ async function findPosts(args, ctx) {
       return words.every((word) => text.includes(word));
     })
     .slice(0, 15);
-  return { note: OTHERS_WORDS, area: location.label || null, posts: posts.map((post) => postForModel(post, ctx.timeZone)) };
+  // Like get_post: the person's own posts say so, since neighbors' first names and wording can match theirs.
+  return {
+    note: OTHERS_WORDS,
+    area: location.label || null,
+    posts: posts.map((post) => ({ ...postForModel(post, ctx.timeZone), yours: String(post.user_id) === String(ctx.userId) })),
+  };
 }
 
 async function getPost(args, ctx) {
