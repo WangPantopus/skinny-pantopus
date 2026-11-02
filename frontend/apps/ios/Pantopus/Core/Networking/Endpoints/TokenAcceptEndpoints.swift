@@ -23,6 +23,14 @@ public enum TokenAcceptEndpoints {
         )
     }
 
+    /// `GET /api/homes/invitations/next` — right after signing in or up:
+    /// the newest household invitation emailed to this address before it had
+    /// an account, with a link token of its own, once.
+    /// Route `backend/routes/home.js:1435`.
+    public static func nextHomeInvite() -> Endpoint {
+        Endpoint(method: .get, path: "/api/homes/invitations/next")
+    }
+
     /// `GET /api/businesses/seats/invite-details?token=X` — business
     /// seat preview. Requires auth (the route is verifyToken'd on the
     /// server side). Route `backend/routes/businessSeats.js:138`.
