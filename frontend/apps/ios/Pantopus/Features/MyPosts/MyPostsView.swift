@@ -59,30 +59,45 @@ public struct MyPostsView: View {
                 titleVisibility: .hidden,
                 presenting: bindable.kebabTarget
             ) { target in
-                if target.isArchived {
-                    // A post a moderator removed can't be restored (the backend refuses).
-                    if !target.isRemovedByModerator {
+                if target.isPlanPost {
+                    // A plan's own post changes or is cancelled from its plan, which
+                    // tells everyone; the server refuses archiving or deleting it.
+                    Button("Open plan") {
+                        viewModel.openPlan(postId: target.postId)
+                    }
+                    .accessibilityIdentifier("kebab-open-plan")
+                    if target.isArchived, !target.isRemovedByModerator {
                         Button("Restore post") {
                             restore(postId: target.postId)
                         }
                         .accessibilityIdentifier("kebab-restore")
                     }
                 } else {
-                    if let pinTitle = viewModel.profilePinTitle(postId: target.postId) {
-                        Button(pinTitle) {
-                            Task { await viewModel.toggleProfilePin(postId: target.postId) }
+                    if target.isArchived {
+                        // A post a moderator removed can't be restored (the backend refuses).
+                        if !target.isRemovedByModerator {
+                            Button("Restore post") {
+                                restore(postId: target.postId)
+                            }
+                            .accessibilityIdentifier("kebab-restore")
                         }
-                        .accessibilityIdentifier("kebab-profile-pin")
+                    } else {
+                        if let pinTitle = viewModel.profilePinTitle(postId: target.postId) {
+                            Button(pinTitle) {
+                                Task { await viewModel.toggleProfilePin(postId: target.postId) }
+                            }
+                            .accessibilityIdentifier("kebab-profile-pin")
+                        }
+                        Button("Archive post") {
+                            archive(postId: target.postId)
+                        }
+                        .accessibilityIdentifier("kebab-archive")
                     }
-                    Button("Archive post") {
-                        archive(postId: target.postId)
+                    Button("Delete post", role: .destructive) {
+                        deleteRequest(postId: target.postId)
                     }
-                    .accessibilityIdentifier("kebab-archive")
+                    .accessibilityIdentifier("kebab-delete")
                 }
-                Button("Delete post", role: .destructive) {
-                    deleteRequest(postId: target.postId)
-                }
-                .accessibilityIdentifier("kebab-delete")
                 Button("Cancel", role: .cancel) {
                     viewModel.cancelKebab()
                 }
