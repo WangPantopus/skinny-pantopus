@@ -87,6 +87,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
@@ -637,6 +638,10 @@ fun FeedScreen(
                 onCloseAsk = { viewModel.beginCloseAsk(row.id) },
                 onReport = { viewModel.beginReport(row.id) },
                 onDelete = { viewModel.beginDelete(row.id) },
+                onOpenPlan = {
+                    viewModel.dismissOverflow()
+                    DeepLinkRouter.handle("/plans/${row.id}")
+                },
             )
         }
     }
@@ -852,6 +857,7 @@ private fun PostOverflowSheet(
     onReport: () -> Unit,
     onDelete: () -> Unit,
     onToggleProfilePin: () -> Unit = {},
+    onOpenPlan: () -> Unit = {},
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val actions = row.actions
@@ -871,6 +877,9 @@ private fun PostOverflowSheet(
                 fontWeight = FontWeight.Bold,
                 color = PantopusColors.appText,
             )
+            if (actions.canOpenPlan) {
+                OverflowAction(label = "Open plan", testTag = "pulseFeedOverflowOpenPlan", onClick = onOpenPlan)
+            }
             OverflowAction(
                 label = if (actions.isSaved) "Remove bookmark" else "Save post",
                 testTag = "pulseFeedOverflowSave",

@@ -346,7 +346,10 @@ fun PulsePostDetailScreen(
                         testTag = "pulsePostDetail-profilePin",
                     ) { viewModel.toggleProfilePin() }
                 }
-                if (viewModel.isOwner) {
+                if (viewModel.isOwner && viewModel.isPlanPost) {
+                    // A plan's own post changes or is cancelled from its plan, which tells everyone.
+                    OverflowAction(label = "Open plan", testTag = "pulsePostDetail-openPlan") { viewModel.openPlan() }
+                } else if (viewModel.isOwner) {
                     OverflowAction(label = "Edit post", testTag = "pulsePostDetail-edit") {
                         viewModel.dismissOverflowMenu()
                         (state as? PulsePostDetailUiState.Loaded)?.let { onEdit(it.content.post.id) }

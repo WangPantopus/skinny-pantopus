@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.identity.ProfileChanges
+import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.api.models.posts.PostCommentDto
 import app.pantopus.android.data.api.models.posts.PostCommentRequest
 import app.pantopus.android.data.api.models.posts.PostDetailDto
@@ -169,9 +170,15 @@ class PulsePostDetailViewModel
          * True when the signed-in user authored the post on screen. The
          * screen uses this to gate the Edit / Delete overflow actions.
          */
-        /** Your own post: whether it's pinned to your profile (PRF step 5); null hides the menu item. */
+        /**
+         * Your own post: whether it's pinned to your profile (PRF step 5); null hides the menu item. A plan's post never
+         * shows on a profile, so the server refuses its pin (iOS hides it too).
+         */
         val profilePinned: Boolean?
-            get() = (_state.value as? PulsePostDetailUiState.Loaded)?.content?.post?.profilePinned?.takeIf { isOwner }
+            get() =
+                (_state.value as? PulsePostDetailUiState.Loaded)?.content?.post?.profilePinned?.takeIf {
+                    isOwner && !isPlanPost
+                }
 
         /** "Pin to profile" / "Unpin from profile"; a 4th pin shows the server's sentence. */
         fun toggleProfilePin() {
@@ -196,6 +203,19 @@ class PulsePostDetailViewModel
                 val signedIn = authRepo.state.value as? AuthRepository.State.SignedIn ?: return false
                 return loaded.content.post.userId == signedIn.user.id
             }
+
+        /**
+         * A plan's own post (Plans marks it `post_metadata.plan`): the author's menu opens the plan, where Change and
+         * Cancel tell everyone, instead of Edit post and Delete post (the server refuses both for a plan's post).
+         */
+        val isPlanPost: Boolean
+            get() = (_state.value as? PulsePostDetailUiState.Loaded)?.content?.post?.isPlanPost == true
+
+        /** Opens this post's plan on the Plans tab (the `/plans/<id>` link path). */
+        fun openPlan() {
+            dismissOverflowMenu()
+            DeepLinkRouter.handle("/plans/$postId")
+        }
 
         private val signedInUserId: String?
             get() = (authRepo.state.value as? AuthRepository.State.SignedIn)?.user?.id
