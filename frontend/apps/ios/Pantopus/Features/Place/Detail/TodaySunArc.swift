@@ -398,8 +398,9 @@ private struct SunDomeStars: View {
                 let x = middle + across * radii.x
                 let y = horizon - radii.y * (1 - across * across).squareRoot() * rise
                 // Keep the moon's line and the countdown clear.
-                if abs(x - middle) < 76, y < 66, y > 28 { continue }
-                if abs(x - middle) < 62, y > horizon - 66 { continue }
+                let nearMoon = abs(x - middle) < 76 && y < 66 && y > 28
+                let nearCountdown = abs(x - middle) < 62 && y > horizon - 66
+                if nearMoon || nearCountdown { continue }
                 let star = Path(ellipseIn: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2))
                 context.fill(star, with: .color(SkyPalette.white.color(opacity: alpha)))
                 // A few brighter ones sparkle.
