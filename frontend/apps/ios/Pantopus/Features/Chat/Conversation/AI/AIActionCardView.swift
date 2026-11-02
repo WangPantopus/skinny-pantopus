@@ -305,6 +305,8 @@ struct AIActionCardView: View {
         case "notification_settings": ("Notifications", .bell)
         // Phase 3: something the person asked Pantopus to remember.
         case "memory_save": ("Memory", .bookmark)
+        // Phase 3: "Check back Thursday", and cancelling one.
+        case "follow_up", "follow_up_cancel": ("Check back", .calendarClock)
         // A nudge with nothing to do but "Fewer like this" (phase 2 §3.6).
         case "suggestion": ("Suggestion", .sparkles)
         default: ("Action", .sparkles)

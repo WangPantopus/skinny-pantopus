@@ -4,7 +4,8 @@
 //
 //  DTOs for what the assistant keeps for one person
 //  (`docs/product/ai-assistant-phase3-contract-2026-10-22.md`): the items
-//  they asked it to remember (`/api/ai/memory`, §5.4).
+//  they asked it to remember (`/api/ai/memory`, §5.4) and what waits on them
+//  (`/api/ai/needs-you`, §6.2).
 //
 
 import Foundation
@@ -104,5 +105,59 @@ public struct AIMemoryReviewedResponse: Decodable, Sendable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case reviewDueAt = "review_due_at"
+    }
+}
+
+// MARK: - Needs you (§6.2)
+
+/// `GET /api/ai/needs-you`: what waits on the person, most urgent first.
+public struct AINeedsYouResponse: Decodable, Sendable, Hashable {
+    /// At most 20.
+    public let items: [AINeedsYouItemDTO]
+    /// Every item found, past the 20 shown.
+    public let total: Int?
+    /// A source failed or ran late and was left out.
+    public let partial: Bool?
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        items = try container.decodeIfPresent([AINeedsYouItemDTO].self, forKey: .items) ?? []
+        total = try container.decodeIfPresent(Int.self, forKey: .total)
+        partial = try container.decodeIfPresent(Bool.self, forKey: .partial)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case items, total, partial
+    }
+}
+
+/// One thing waiting: "Still coming?", "2 people want to join", "Overdue: Clean the gutters"….
+public struct AINeedsYouItemDTO: Decodable, Sendable, Hashable, Identifiable {
+    /// What it's about: a plan, a task (with its home), a home, a person or a post.
+    public struct Subject: Decodable, Sendable, Hashable {
+        public let type: String?
+        public let id: String?
+        public let homeId: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case type, id
+            case homeId = "home_id"
+        }
+    }
+
+    public let id: String
+    /// `still_coming`, `plan_requests`, `task_overdue`, `task_assigned`, `home_invite`,
+    /// `household_request`, `connection_request`, `nudge_card` or `question_answered`.
+    public let type: String
+    public let title: String
+    public let subtitle: String?
+    public let dueAt: String?
+    /// The screen it opens (`pantopus://plans/<id>`, `pantopus://homes/<id>/tasks/<id>`…).
+    public let link: String?
+    public let subject: Subject?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, type, title, subtitle, link, subject
+        case dueAt = "due_at"
     }
 }

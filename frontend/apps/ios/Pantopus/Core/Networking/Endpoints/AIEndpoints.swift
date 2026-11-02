@@ -86,6 +86,14 @@ public enum AIEndpoints {
         Endpoint(method: .post, path: "/api/ai/memory/reviewed")
     }
 
+    /// `GET /api/ai/needs-you` — what waits on the person, most urgent first
+    /// (at most 20), read as them from the screens' own services; Today's
+    /// Needs you card (phase 3 contract §6.2, §6.4).
+    /// Route `backend/routes/ai.js:628`.
+    public static func needsYou() -> Endpoint {
+        Endpoint(method: .get, path: "/api/ai/needs-you")
+    }
+
     /// `GET /api/ai/pulse?homeId=` — the Neighborhood Pulse for a home
     /// (the priority-ranked signal stream behind the Place "Today's
     /// Pulse" surface). NOTE: the query param is camelCase `homeId`

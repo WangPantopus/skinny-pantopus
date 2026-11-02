@@ -44,8 +44,10 @@ enum AIActionAllowlist {
         (.put, "/api/posts/feed-preferences"),
         // Phase 2: a nudge's "Fewer like this".
         (.post, "/api/ai/nudges/:id/fewer"),
-        // Phase 3: Remember (the server saves from its own copy of the card).
-        (.post, "/api/ai/memory")
+        // Phase 3: Remember and check-backs (the server saves from its own copy of the card).
+        (.post, "/api/ai/memory"),
+        (.post, "/api/ai/follow-ups"),
+        (.delete, "/api/ai/follow-ups/:id")
     ]
 
     /// The request as an endpoint, or nil when the app never sends it: a
