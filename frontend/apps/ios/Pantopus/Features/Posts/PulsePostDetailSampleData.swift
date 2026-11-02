@@ -20,7 +20,7 @@ public enum PulsePostDetailSampleData {
         comments: [PostCommentRow],
         reactions: PostReactionCounts
     ) -> PulsePostDetailContent {
-        let post = postDTO(intent: intent, commentCount: comments.count, likeCount: reactions.helpful)
+        let post = postDTO(intent: intent, commentCount: comments.count, likeCount: reactions.likeCount)
         return PulsePostDetailContent(
             post: post,
             authorDisplayName: "Nadia Velez",
