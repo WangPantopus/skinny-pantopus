@@ -3,7 +3,7 @@
 
 import SwiftUI
 
-// swiftlint:disable file_length type_body_length
+// swiftlint:disable file_length
 
 /// Pulse post detail entry point.
 @MainActor
@@ -302,15 +302,13 @@ public struct PulsePostDetailView: View {
             ),
             isSendingComment: viewModel.isSendingComment,
             replyingToName: viewModel.replyTarget?.authorName,
-            selectedReactionEmoji: viewModel.selectedReactionEmoji,
             topBarAction: overflowAction,
             topBarSecondaryAction: viewModel.canSharePost ? shareAction : nil,
             nearbyProviders: viewModel.nearbyProviders,
             onOpenBusiness: onOpenBusiness,
             onBack: onBack,
             onOpenProfile: onOpenProfile,
-            onReactionTap: { kind in Task { await viewModel.tapReaction(kind) } },
-            onEmojiSelected: { emoji in Task { await viewModel.pickReactionEmoji(emoji) } },
+            onReactionTap: { Task { await viewModel.tapReaction() } },
             onSendTap: { Task { await viewModel.sendComment() } },
             onShowMoreReplies: { viewModel.showMoreReplies() },
             onCancelReply: { viewModel.cancelReply() },

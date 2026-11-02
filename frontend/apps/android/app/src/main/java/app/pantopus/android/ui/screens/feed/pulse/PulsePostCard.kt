@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.feed.FeedMuteEntityType
+import app.pantopus.android.data.api.models.posts.PostReactionKind
 import app.pantopus.android.ui.screens.shared.feed.FeedAvatar
 import app.pantopus.android.ui.screens.shared.feed.FeedAvatarTint
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridStyle
@@ -122,7 +124,9 @@ data class PulsePostCardContent(
     val intent: PulseIntent,
     val title: String?,
     val body: String,
-    val reactions: List<PulseReaction>,
+    /** The post's one reaction (Helpful, Going, Celebrate) and its count. An Event shows it as its attendee strip's
+     *  "N going" and Going button. */
+    val reaction: PulseReaction,
     val attendees: PulseAttendeeStrip?,
     val userHasReacted: Boolean,
     /** When and where an Event happens; null on other posts. */
@@ -151,7 +155,7 @@ data class PulsePostCardContent(
         get() = media.map { it.thumbnailUrl ?: it.url }
 }
 
-/** Event card attendee strip — stacked avatars + going count + RSVP CTA. */
+/** Event card attendee strip — stacked avatars, "N going" and the Going button. */
 @Immutable
 data class PulseAttendeeStrip(
     val avatars: List<String>,
@@ -249,6 +253,8 @@ fun PulsePostCard(
             if (!content.actions.isSeeded) {
                 ReactionStrip(
                     content = content,
+                    // An Event's Going button sits in its attendee strip.
+                    showsReaction = content.attendees == null || onRSVP == null,
                     onPrimary = onPrimaryReaction,
                     onToggleSave = onToggleSave,
                     onToggleRepost = onToggleRepost,
@@ -472,12 +478,14 @@ private fun AttendeeStrip(
                     }
                 }
             }
-            Text(
-                text = "+ ${attendees.goingCount} going",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                color = PantopusColors.appTextSecondary,
-            )
+            if (attendees.goingCount > 0) {
+                Text(
+                    text = PostReactionKind.Going.countText(attendees.goingCount),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = PantopusColors.appTextSecondary,
+                )
+            }
             Spacer(modifier = Modifier.weight(1f))
             if (onRSVP != null) {
                 Row(
@@ -488,7 +496,15 @@ private fun AttendeeStrip(
                             .background(PantopusColors.magicBg)
                             .clickable(onClick = onRSVP)
                             .padding(horizontal = Spacing.s3)
-                            .testTag("pulseRSVP_$postId"),
+                            .semantics {
+                                contentDescription =
+                                    if (attendees.goingCount > 0) {
+                                        "${PostReactionKind.Going.label}, ${attendees.goingCount}"
+                                    } else {
+                                        PostReactionKind.Going.label
+                                    }
+                                selected = attendees.userIsGoing
+                            }.testTag("pulseRSVP_$postId"),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
                 ) {
@@ -499,7 +515,7 @@ private fun AttendeeStrip(
                         tint = PantopusColors.magic,
                     )
                     Text(
-                        text = if (attendees.userIsGoing) "Going" else "RSVP",
+                        text = PostReactionKind.Going.label,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = PantopusColors.magic,
@@ -513,6 +529,7 @@ private fun AttendeeStrip(
 @Composable
 private fun ReactionStrip(
     content: PulsePostCardContent,
+    showsReaction: Boolean,
     onPrimary: () -> Unit,
     onToggleSave: (() -> Unit)? = null,
     onToggleRepost: (() -> Unit)? = null,
@@ -522,11 +539,11 @@ private fun ReactionStrip(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        content.reactions.forEach { reaction ->
+        if (showsReaction) {
             ReactionPill(
-                reaction = reaction,
-                active = content.userHasReacted && reaction.kind == content.reactions.firstOrNull()?.kind,
-                onClick = if (reaction.isInteractive) onPrimary else null,
+                reaction = content.reaction,
+                active = content.userHasReacted,
+                onClick = onPrimary,
                 enabled = !content.likePending,
                 postId = content.id,
             )
@@ -644,51 +661,47 @@ private fun SolvedBadge(postId: String) {
     }
 }
 
+/** The post's reaction: its kind's icon and word, and the count once someone tapped it ("Helpful 3", like "Reply 3"). */
 @Composable
 private fun ReactionPill(
     reaction: PulseReaction,
     active: Boolean,
-    onClick: (() -> Unit)?,
+    onClick: () -> Unit,
     enabled: Boolean,
     postId: String,
 ) {
     val tint = if (active) PantopusColors.primary600 else PantopusColors.appTextSecondary
-    val base =
-        Modifier
-            .semantics {
-                if (onClick != null && !enabled) disabled()
-                contentDescription = "${reaction.label.ifEmpty { "Heart reaction" }}, ${reaction.count}"
-            }
-    val withClick =
-        if (onClick != null) {
-            base.clickable { if (enabled) onClick() }.testTag("pulseReaction_${postId}_${reaction.kind.key}")
-        } else {
-            base
-        }
     Row(
-        modifier = withClick,
+        modifier =
+            Modifier
+                .semantics {
+                    if (!enabled) disabled()
+                    contentDescription = reaction.accessibilityLabel
+                    selected = active
+                }.clickable { if (enabled) onClick() }
+                .testTag("pulseReaction_${postId}_${reaction.kind.key}"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
         PantopusIconImage(
-            icon = reaction.icon,
+            icon = reaction.kind.icon,
             contentDescription = null,
             size = Radii.lg,
             tint = tint,
         )
-        if (reaction.label.isNotEmpty()) {
+        Text(
+            text = reaction.kind.label,
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.Medium,
+            color = tint,
+        )
+        if (reaction.likeCount != 0) {
             Text(
-                text = reaction.label,
+                text = "${reaction.likeCount}",
                 fontSize = 11.5.sp,
-                fontWeight = FontWeight.Medium,
                 color = tint,
             )
         }
-        Text(
-            text = "${reaction.count}",
-            fontSize = 11.5.sp,
-            color = tint,
-        )
     }
 }
 

@@ -77,12 +77,7 @@ object PulsePostDetailSampleData {
                     ),
                 ),
             reactions =
-                PostReactionCounts(
-                    helpful = 18,
-                    heart = 7,
-                    going = 2,
-                    userReaction = PostReactionKind.Helpful,
-                ),
+                PostReactionCounts(kind = PostReactionKind.Helpful, likeCount = 18, isOn = true),
         )
 
     fun empty(intent: PostIntent = PostIntent.Ask): PulsePostDetailContent =
@@ -97,7 +92,7 @@ object PulsePostDetailSampleData {
         comments: List<PostCommentRow>,
         reactions: PostReactionCounts,
     ): PulsePostDetailContent {
-        val post = post(intent = intent, commentCount = comments.size, likeCount = reactions.helpful)
+        val post = post(intent = intent, commentCount = comments.size, likeCount = reactions.likeCount)
         return PulsePostDetailContent(
             post = post,
             authorDisplayName = "Nadia Velez",
