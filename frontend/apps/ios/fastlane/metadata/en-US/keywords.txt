@@ -1,1 +1,1 @@
-home,household,neighbors,community,plans,tasks,reminders,recycling,radon,weather,chat
+neighbors,homeowner,household,chores,reminders,trash,recycling,flood,radon,wildfire,air quality

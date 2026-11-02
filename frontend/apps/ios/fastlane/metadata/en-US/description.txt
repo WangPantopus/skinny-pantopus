@@ -1,23 +1,26 @@
 Know what matters for your home, and stay on top of it.
 
-Pantopus brings your place, household tasks, and nearby community together.
+Pantopus starts with your address. See what’s true about it, keep your household’s everyday on track, and make small plans with people nearby.
 
-Today, for your address
-See weather, air quality, and local information with sources, plus useful reminders for your household.
+There’s more to your address than a pin
+Type any U.S. address to see air and weather right now; flood, wildfire, earthquake and radon; who supplies your water, and its record; and the governments you live inside. Every fact names its source and its scale. Free to look, no account needed.
 
-A home you can manage together
-Keep household tasks and home information in one place. Invite the people you live with, assign tasks, and keep track of what needs doing.
+A little less to keep in your head
+Today puts the weather outside next to what’s due inside. Confirm your pickup day once and get a reminder the evening before. Turn a radon zone into a test-kit task. Briefings come only when there’s something useful.
 
-Pickup days and home reminders
-Save your trash and recycling schedule, manage notification preferences, and make a plan for recurring home tasks such as radon testing.
+You don’t have to be the household’s memory
+Invite the people you live with. Give a task an owner and a due date, keep documents where the right people can find them, and see when something’s done. For the place you own, rent or share.
 
-Nearby plans and conversations
-See nearby posts and local updates, organize a small plan, request to join, and message people directly. Exact meeting details are shared according to the plan’s privacy and approval settings.
+Good company can start with a small plan
+Walk and coffee. A pickup game. A watch party. A study group. Find one nearby, ask to join, and get the exact spot once the host says yes. Invited by a friend? Say you’re in, get directions, add it to your calendar and talk in the plan’s group chat. Playdates have extra rules: verified addresses, a public place and the host’s approval.
+
+Get to know the life around you
+Pulse is the local conversation: questions, useful updates and nearby news, with no crime or suspicious-person alerts. Neighborhood shows how many verified homes are around you, and fills in as neighbors join.
 
 Support Trains
 Organize meals or practical help for someone you care about, share a schedule, and coordinate volunteers.
 
-Privacy and control
-Choose what you share, manage notification settings, and control access to your household information.
+Clear boundaries
+Neighbors see a first name and a street, never your house number or unit. Looking up an address shows public information; it never opens a household’s tasks or documents. Verification unlocks the features that need it, like messaging verified neighbors. Your address is never sold and never used for ads.
 
-Pantopus is available across the United States. Local information and service availability vary by address.
+Home features are U.S.-only for now, and what’s available varies by location.
