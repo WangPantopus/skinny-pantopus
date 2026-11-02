@@ -5,7 +5,7 @@ import React, { useState, type CSSProperties, type ReactNode } from 'react';
 import {
   MessageCircle, Star, CalendarDays, Search, Megaphone,
   AlertTriangle, PenLine, Pencil, Siren, Tag, Wrench, Newspaper, X,
-  Trophy, Compass, User, Heart, Bookmark, Hand, ThumbsUp,
+  Trophy, Compass, User, Bookmark, Lightbulb, CalendarCheck, PartyPopper,
   MapPin, Store, CheckCircle, Hammer, Plane, Bookmark as BookmarkIcon, Share, Repeat2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -15,7 +15,10 @@ import { personColor, personInitials } from '@/lib/personColor';
 import { PostMediaPreview, resolvePostMediaSlots } from './PostMediaGrid';
 import { PostLinkContent } from './LinkPreviewCard';
 import LinkPreviewCard from './LinkPreviewCard';
-import { formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, type PostTypeConfig } from '@pantopus/ui-utils';
+import {
+  formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, POST_REACTION_LABEL, postReaction,
+  type PostTypeConfig,
+} from '@pantopus/ui-utils';
 import { chosenUsername } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
 import PostMetadata from './PostMetadata';
@@ -47,16 +50,29 @@ function getTypeIcon(type: string): ReactNode {
   return <Icon className="w-4 h-4" />;
 }
 
+/** The icon of the post's one reaction, named by its kind (Going, Celebrate, Helpful); the post page uses it too. */
+export function postReactionIcon(type: string | null | undefined): LucideIcon {
+  switch (postReaction(type)) {
+    case 'going': return CalendarCheck;
+    case 'celebrate': return PartyPopper;
+    default: return Lightbulb;
+  }
+}
+
 function getTypeCtaIcon(type: string): ReactNode | null {
+  const reply = <MessageCircle className="w-3.5 h-3.5" />;
   const map: Record<string, ReactNode> = {
-    ask_local: <MessageCircle className="w-3.5 h-3.5" />,
+    ask_local: reply,
     recommendation: <Bookmark className="w-3.5 h-3.5" />,
-    event: <Hand className="w-3.5 h-3.5" />,
+    event: reply,
     lost_found: <MapPin className="w-3.5 h-3.5" />,
-    announcement: <ThumbsUp className="w-3.5 h-3.5" />,
+    local_update: reply,
+    announcement: reply,
+    neighborhood_win: reply,
+    progress_wins: reply,
     alert: <AlertTriangle className="w-3.5 h-3.5" />,
     deal: <Tag className="w-3.5 h-3.5" />,
-    service_offer: <MessageCircle className="w-3.5 h-3.5" />,
+    service_offer: reply,
   };
   return map[type] || null;
 }
@@ -133,6 +149,8 @@ function PostCard({
   const config = getPostTypeConfig(post.post_type || 'general');
   const typeIconNode = getTypeIcon(post.post_type || 'general');
   const ctaIconNode = getTypeCtaIcon(post.post_type || 'general');
+  const reactionLabel = POST_REACTION_LABEL[postReaction(post.post_type)];
+  const ReactionIcon = postReactionIcon(post.post_type);
   // A "Save" call to action saves the post, like the bookmark; the others open the replies.
   const ctaSaves = config.ctaIcon === 'bookmark' && Boolean(onSave);
   const authorUserId = post.author_user_id || post.user_id;
@@ -455,19 +473,21 @@ function PostCard({
       {/* ─── Action bar (none on a tip) ──────────────── */}
       {!seeded && (
       <div className="flex items-center gap-1 px-3 py-2 border-t border-app">
-        {/* Like */}
+        {/* The post's one reaction, named by its kind: Going (event), Celebrate (win), Helpful (the rest) */}
         <button
           onClick={() => onLike(post.id)}
           disabled={isLiking}
           aria-busy={isLiking || undefined}
-          aria-label={post.userHasLiked ? 'Unlike post' : 'Like post'}
+          aria-pressed={Boolean(post.userHasLiked)}
+          aria-label={post.like_count > 0 ? `${reactionLabel}, ${post.like_count}` : reactionLabel}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${isLiking ? 'opacity-60 ' : ''}${
             post.userHasLiked
-              ? 'text-red-500 bg-red-50 hover:bg-red-100'
-                : 'text-app-muted hover-bg-app'
+              ? 'text-sky-600 bg-sky-50 hover:bg-sky-100 dark:bg-sky-900/30 dark:text-sky-300'
+              : 'text-app-muted hover-bg-app'
           }`}
         >
-          <Heart className={`w-4 h-4 ${post.userHasLiked ? 'fill-current' : ''}`} />
+          <ReactionIcon className="w-4 h-4" aria-hidden="true" />
+          <span>{reactionLabel}</span>
           {post.like_count > 0 && <span>{post.like_count}</span>}
         </button>
 
