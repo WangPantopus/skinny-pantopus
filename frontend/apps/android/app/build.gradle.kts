@@ -351,6 +351,10 @@ dependencies {
     // on GMS-less devices.
     implementation(libs.play.services.auth.blockstore)
 
+    // Google Play install referrer — a link tapped on the web before the
+    // install, opened on the first launch (core/routing/InstallReferrerLink.kt).
+    implementation(libs.android.installreferrer)
+
     // Firebase Cloud Messaging — declared via BoM so the messaging
     // artifact picks up a compatible version automatically. Adding more
     // firebase-* deps in the future should NOT carry a version.

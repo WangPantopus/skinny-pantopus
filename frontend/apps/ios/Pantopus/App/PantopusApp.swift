@@ -221,6 +221,8 @@ struct RootView: View {
             if becameSignedIn(from: previous, to: new) {
                 showsSessionLogin = false
                 DeepLinkRouter.shared.acknowledgeLoginPresentation()
+                // The first screen's "paste the link you opened before installing" is over once someone is in.
+                InstallLinkPaste.retire()
                 // Signing in or up (not a session restored at launch) may also open a plan invitation.
                 let freshSignIn = if case .signedOut = previous { true } else { false }
                 Task { @MainActor in

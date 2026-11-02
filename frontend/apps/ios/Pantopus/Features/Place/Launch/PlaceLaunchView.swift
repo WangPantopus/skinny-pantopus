@@ -48,6 +48,8 @@ struct PlaceLaunchHost: View {
         .onChange(of: deepLink.prefersLoginPresentation) { _, _ in
             presentLoginIfRequested()
         }
+        // A link opened on the web before the install, copied there, is offered back here.
+        .refreshesInstallLinkPaste(true)
     }
 
     private func presentLoginIfRequested() {
@@ -185,6 +187,7 @@ struct PlaceLaunchView: View {
 
     private var heroBody: some View {
         VStack(alignment: .leading, spacing: 16) {
+            installLinkCard
             if let message = viewModel.errorMessage {
                 Text(message).foregroundStyle(Theme.Color.appTextSecondary)
                     .accessibilityIdentifier("place.launch.error")
@@ -407,6 +410,16 @@ struct PlaceLaunchView: View {
             isEnabled: !viewModel.query.trimmingCharacters(in: .whitespaces).isEmpty
         ) {
             viewModel.loadPreview(address: viewModel.query)
+        }
+    }
+}
+
+private extension PlaceLaunchView {
+    /// On the signed-out front door only: a link copied on the web before
+    /// the install, offered back with a Paste button (`InstallLinkPasteCard`).
+    @ViewBuilder var installLinkCard: some View {
+        if embedded == nil, !signedInEntry, InstallLinkPaste.shared.isOffered {
+            InstallLinkPasteCard()
         }
     }
 }

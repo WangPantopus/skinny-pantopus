@@ -246,6 +246,17 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] Your own profile is the page neighbors see, with Edit profile and Preview as. Your account name stays private, only you see the tips, and one editor holds the name and photo neighbors see.
 - [x] Two additive database changes, `User.profile_prompts` and `Post.profile_pinned_at`, and no new tables. There is no on/off key: each app switched as its PRs merged. Codex's draft [#3092](https://github.com/WangPantopus/skinny-pantopus/pull/3092) (no Message on your own profile) was folded into the phone builds and closed.
 
+**Made by the founder on November 2 (links through an app install).** You asked whether an invite is lost when someone installs the app before opening it. It was: a link tapped before Pantopus is installed opens its web page, and the App Store or Google Play then opened the new app with nothing from it. You said "Yes, build it".
+
+- [x] A link tapped before the install now survives it, for friends' invites, plan invitation links, Support Trains and posts.
+  - The web page's store buttons carry the link ([PR 3149](https://github.com/WangPantopus/skinny-pantopus/pull/3149)).
+  - Android, no tap: Google Play hands the link to the app on its first launch, through its install referrer ([PR 3173](https://github.com/WangPantopus/skinny-pantopus/pull/3173)).
+  - iPhone, one tap: Apple passes nothing through the App Store. The page copies the link, and the app's first screen offers it back with Apple's Paste button, which shows no paste alert ([PR 3162](https://github.com/WangPantopus/skinny-pantopus/pull/3162)).
+  - The link opens as if it had been tapped: a friend's invite opens Create account with "<name> invited you" and credits them, and a plan opens once they sign up or sign in.
+  - Safari's install banner is off the friend-invite page and off plan invitation links, because installing from it drops the link.
+  - No server change, no new tables.
+- [ ] Yours, with the next store builds: on a phone without Pantopus, open a friend's invite link, get the app from the page's button and open it. Android should open Create account with "<name> invited you". The iPhone should offer Paste, then do the same. Try a plan's "Text an invite" link the same way: the plan should open once you sign up or sign in. A store install can't be done on a simulator or an emulator, so this is the one step not checked yet.
+
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
