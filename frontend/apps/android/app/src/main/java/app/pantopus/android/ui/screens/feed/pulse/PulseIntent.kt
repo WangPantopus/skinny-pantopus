@@ -3,12 +3,14 @@
 package app.pantopus.android.ui.screens.feed.pulse
 
 import androidx.compose.runtime.Immutable
+import app.pantopus.android.data.api.models.posts.PostReactionKind
 import app.pantopus.android.ui.theme.PantopusIcon
 
 /**
  * Classification for Pulse posts, including a read-only generic fallback. Drives the chip-row filter,
- * the per-card colored chip, the reaction-verb set, and the compose
- * FAB's pre-fill. `All` is a chip-row-only sentinel; `Generic` renders types this client cannot classify.
+ * the per-card colored chip and the compose FAB's pre-fill (a post's reaction follows its type:
+ * `PostReactionKind.fromPostType`). `All` is a chip-row-only sentinel; `Generic` renders types this client cannot
+ * classify.
  *
  * The chip set mirrors RN's `PLACE_POST_TYPES`
  * (`src/constants/feed.ts:18-28`) 1:1 — `Alert` / `Deal` /
@@ -95,73 +97,31 @@ enum class PulseIntent(
 }
 
 /**
- * One reaction kind shown in the bottom strip of a post card. The
- * backend only persists `like` (helpful); the other counts are
- * display-only and intent-shaped to match the design.
+ * The post's one reaction on its card: its kind's button (Helpful, Going, Celebrate) and how many people tapped it
+ * (`POST /api/posts/:id/like`).
  */
 @Immutable
 data class PulseReaction(
-    val kind: Kind,
-    val icon: PantopusIcon,
-    val label: String,
-    val count: Int,
-    val isInteractive: Boolean,
+    val kind: PostReactionKind,
+    val likeCount: Int,
 ) {
-    enum class Kind(val key: String) {
-        Helpful("helpful"),
-        Heart("heart"),
-        Going("going"),
-        Seen("seen"),
-        Shared("shared"),
+    /** What TalkBack reads: "Helpful, 3", or "Helpful" before anyone tapped it. */
+    val accessibilityLabel: String
+        get() = if (likeCount == 0) kind.label else "${kind.label}, $likeCount"
+
+    companion object {
+        fun forPost(
+            postType: String?,
+            likeCount: Int,
+        ): PulseReaction = PulseReaction(PostReactionKind.fromPostType(postType), likeCount)
     }
 }
 
-/**
- * Returns the reaction strip the design specifies for this intent.
- * The first kind is wired to `POST /:id/like`; the rest are
- * display-only counts.
- */
-fun PulseIntent.reactionTemplate(
-    helpfulCount: Int,
-    secondaryCount: Int = 0,
-): List<PulseReaction> =
-    when (this) {
-        PulseIntent.Ask ->
-            listOf(
-                PulseReaction(PulseReaction.Kind.Helpful, PantopusIcon.Lightbulb, "helpful", helpfulCount, true),
-                PulseReaction(PulseReaction.Kind.Heart, PantopusIcon.Heart, "", secondaryCount, false),
-            )
-        PulseIntent.Recommend ->
-            listOf(
-                PulseReaction(PulseReaction.Kind.Helpful, PantopusIcon.Heart, "", helpfulCount, true),
-                PulseReaction(PulseReaction.Kind.Heart, PantopusIcon.Lightbulb, "helpful", secondaryCount, false),
-            )
-        PulseIntent.Event ->
-            listOf(
-                PulseReaction(PulseReaction.Kind.Going, PantopusIcon.CalendarCheck, "going", helpfulCount, true),
-                PulseReaction(PulseReaction.Kind.Heart, PantopusIcon.Heart, "", secondaryCount, false),
-            )
-        PulseIntent.Lost ->
-            listOf(
-                PulseReaction(PulseReaction.Kind.Seen, PantopusIcon.Eye, "seen", helpfulCount, true),
-                PulseReaction(PulseReaction.Kind.Shared, PantopusIcon.Share, "shared", secondaryCount, false),
-            )
-        PulseIntent.NeighborhoodWin ->
-            listOf(
-                PulseReaction(PulseReaction.Kind.Helpful, PantopusIcon.Heart, "", helpfulCount, true),
-                PulseReaction(PulseReaction.Kind.Seen, PantopusIcon.Eye, "seen", secondaryCount, false),
-            )
-        PulseIntent.Deal, PulseIntent.VisitorGuide ->
-            listOf(
-                PulseReaction(PulseReaction.Kind.Helpful, PantopusIcon.Lightbulb, "helpful", helpfulCount, true),
-                PulseReaction(PulseReaction.Kind.Shared, PantopusIcon.Share, "shared", secondaryCount, false),
-            )
-        PulseIntent.Generic ->
-            listOf(PulseReaction(PulseReaction.Kind.Helpful, PantopusIcon.ThumbsUp, "", helpfulCount, true))
-        PulseIntent.Announce, PulseIntent.Alert, PulseIntent.All ->
-            // A03: announce cards lead with the "seen" eye verb.
-            listOf(
-                PulseReaction(PulseReaction.Kind.Seen, PantopusIcon.Eye, "seen", helpfulCount, true),
-                PulseReaction(PulseReaction.Kind.Heart, PantopusIcon.Heart, "", secondaryCount, false),
-            )
-    }
+/** The reaction button's icon: a light bulb, a calendar check, a party popper. */
+val PostReactionKind.icon: PantopusIcon
+    get() =
+        when (this) {
+            PostReactionKind.Helpful -> PantopusIcon.Lightbulb
+            PostReactionKind.Going -> PantopusIcon.CalendarCheck
+            PostReactionKind.Celebrate -> PantopusIcon.PartyPopper
+        }
