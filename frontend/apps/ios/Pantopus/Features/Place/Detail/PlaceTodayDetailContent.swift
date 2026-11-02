@@ -29,6 +29,9 @@ struct TodayTabExtras {
     var savedPlace = false
     let onAddHome: () -> Void
     let onAsk: () -> Void
+    /// Opens an agenda task over Today, so Back comes back here (as on
+    /// Android). Without it the task opens in the Place tab.
+    var onOpenTask: ((_ homeId: String, _ taskId: String) -> Void)?
 }
 
 struct PlaceTodayDetailContent: View {
@@ -454,7 +457,11 @@ extension PlaceTodayDetailContent {
         case .openBallot:
             onOpenBallot?()
         case let .openTask(homeId, taskId):
-            DeepLinkRouter.shared.handle(path: "/homes/\(homeId)/tasks/\(taskId)")
+            if let open = tab?.onOpenTask {
+                open(homeId, taskId)
+            } else {
+                DeepLinkRouter.shared.handle(path: "/homes/\(homeId)/tasks/\(taskId)")
+            }
         case let .openPlan(id):
             if let card = (agenda.hosting + agenda.going).first(where: { $0.id == id }) { PlansStoreReads.seed(card) }
             PlansNavigator.shared.pending = .plan(id: id, intent: .view)
