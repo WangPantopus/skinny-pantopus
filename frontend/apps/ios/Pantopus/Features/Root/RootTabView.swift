@@ -343,7 +343,7 @@ public struct RootTabView: View {
              .verifyLandlord, .postcardVerification,
              .notifications, .createBusiness, .businessProfile, .businessPage,
              .editBusinessPage,
-             .wallet, .paymentsSettings, .securityDevices, .notificationSettings,
+             .wallet, .paymentsSettings, .securityDevices, .notificationSettings, .assistantMemory,
              .businessOwner, .businessConversation, .viewAs, .waitingRoom, .neighborMessage,
              .bookingDetail, .myBookings,
              .invoiceDetail:

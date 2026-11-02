@@ -50,6 +50,42 @@ public enum AIEndpoints {
         Endpoint(method: .post, path: "/api/ai/cards/\(cardId)/state", body: report)
     }
 
+    // MARK: - What Pantopus remembers (phase 3 contract §5.4)
+
+    /// `GET /api/ai/memory` — the person's own items, newest first, with when
+    /// the yearly review is due. An item is added only from a `memory_save`
+    /// card they tapped (the card's own `POST /api/ai/memory`).
+    /// Route `backend/routes/ai.js:598`.
+    public static func memory() -> Endpoint {
+        Endpoint(method: .get, path: "/api/ai/memory")
+    }
+
+    /// `PATCH /api/ai/memory/:id` — new words for a `fact` item, checked as a
+    /// new one (`400 MEMORY_FACT_INVALID` with the reason). Counts as reviewing it.
+    /// Route `backend/routes/ai.js:611`.
+    public static func editMemory(id: String, fact: String) -> Endpoint {
+        Endpoint(method: .patch, path: "/api/ai/memory/\(id)", body: AIMemoryEditRequest(fact: fact))
+    }
+
+    /// `DELETE /api/ai/memory/:id` — forget one item (`204`).
+    /// Route `backend/routes/ai.js:615`.
+    public static func forgetMemory(id: String) -> Endpoint {
+        Endpoint(method: .delete, path: "/api/ai/memory/\(id)")
+    }
+
+    /// `DELETE /api/ai/memory` — Forget everything: `{ deleted: n }`.
+    /// Route `backend/routes/ai.js:620`.
+    public static func forgetAllMemory() -> Endpoint {
+        Endpoint(method: .delete, path: "/api/ai/memory")
+    }
+
+    /// `POST /api/ai/memory/reviewed` — "Looks right" on the yearly review:
+    /// every item counts as confirmed today.
+    /// Route `backend/routes/ai.js:607`.
+    public static func memoryReviewed() -> Endpoint {
+        Endpoint(method: .post, path: "/api/ai/memory/reviewed")
+    }
+
     /// `GET /api/ai/pulse?homeId=` — the Neighborhood Pulse for a home
     /// (the priority-ranked signal stream behind the Place "Today's
     /// Pulse" surface). NOTE: the query param is camelCase `homeId`

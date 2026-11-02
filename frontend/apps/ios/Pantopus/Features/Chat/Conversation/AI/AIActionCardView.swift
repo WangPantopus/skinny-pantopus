@@ -303,6 +303,8 @@ struct AIActionCardView: View {
         // An appliance, the year's plan and any later home card.
         case let other where other.hasPrefix("home_"): ("Home", .home)
         case "notification_settings": ("Notifications", .bell)
+        // Phase 3: something the person asked Pantopus to remember.
+        case "memory_save": ("Memory", .bookmark)
         // A nudge with nothing to do but "Fewer like this" (phase 2 §3.6).
         case "suggestion": ("Suggestion", .sparkles)
         default: ("Action", .sparkles)

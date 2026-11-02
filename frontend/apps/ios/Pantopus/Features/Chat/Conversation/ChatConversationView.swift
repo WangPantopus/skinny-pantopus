@@ -787,7 +787,10 @@ public struct ChatConversationView: View {
                 Task { await viewModel.deleteAIConversations() }
             }
         } message: {
-            Text("Pantopus AI won\u{2019}t remember it. Any earlier chats with Pantopus AI are deleted too.")
+            Text(
+                "Pantopus AI won\u{2019}t remember it. Any earlier chats with Pantopus AI are deleted too.\n\n"
+                    + "What Pantopus remembers stays until you delete it in Settings."
+            )
         }
         .fullScreenCover(item: $viewerPhotos) { photos in
             MediaViewerView(
