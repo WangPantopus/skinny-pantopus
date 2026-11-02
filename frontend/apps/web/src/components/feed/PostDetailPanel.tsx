@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   MessageCircle, Star, CalendarDays, Search, Megaphone,
-  AlertTriangle, PenLine, Pencil, Heart, Siren, Tag, Wrench, Newspaper,
+  AlertTriangle, PenLine, Pencil, Siren, Tag, Wrench, Newspaper,
   Trophy, Compass, User as UserIcon,   Bookmark, Repeat2, Share2, X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -19,7 +19,8 @@ import { PostLinkContent } from './LinkPreviewCard';
 import LinkPreviewCard from './LinkPreviewCard';
 import PostMetadata from './PostMetadata';
 import { canSharePost, sharePostLink } from './sharePostLink';
-import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
+import { formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, POST_REACTION_LABEL, postReaction } from '@pantopus/ui-utils';
+import { postReactionIcon } from './PostCard';
 import { chosenUsername } from '@pantopus/utils';
 import { patchPostInFeedCaches, removePostFromFeedCaches } from '@/hooks/useFeedData';
 import { usePostDetail } from '@/hooks/usePostDetail';
@@ -207,7 +208,7 @@ export default function PostDetailPanel({
     },
     onError: (err, _vars, context) => {
       console.warn('Failed to toggle like', err);
-      if (context?.target === targetVersion.current) showToast('Failed to update like');
+      if (context?.target === targetVersion.current) showToast("Couldn't update your reaction. Please try again.");
     },
   });
 
@@ -305,6 +306,8 @@ export default function PostDetailPanel({
   };
 
   const config = getPostTypeConfig(post?.post_type || 'general');
+  const reactionLabel = POST_REACTION_LABEL[postReaction(post?.post_type)];
+  const ReactionIcon = postReactionIcon(post?.post_type);
   // P0.4 audit follow-up: prefer post.author (typed identity) over the
   // legacy post.creator slot. Both are populated today; new code reads
   // the new shape so the legacy slot can retire.
@@ -504,17 +507,18 @@ export default function PostDetailPanel({
               )}
 
               <div className={`grid grid-cols-2 gap-2 border-y border-app px-5 py-3 ${canSharePost(post) ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
+                {/* The post's one reaction, named by its kind (Going, Celebrate, Helpful), as on its card */}
                 <button
                   type="button"
-                  aria-label={post.userHasLiked ? 'Unlike post' : 'Like post'}
                   aria-pressed={!!post.userHasLiked}
                   onClick={handleLike}
                   className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium transition ${
-                    post.userHasLiked ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'text-app-muted hover-bg-app'
+                    post.userHasLiked ? 'bg-sky-50 text-sky-600 hover:bg-sky-100 dark:bg-sky-900/30 dark:text-sky-300' : 'text-app-muted hover-bg-app'
                   }`}
                 >
-                  <Heart className={`h-4 w-4 ${post.userHasLiked ? 'fill-current' : ''}`} />
-                  <span>{post.like_count || 0}</span>
+                  <ReactionIcon className="h-4 w-4" aria-hidden="true" />
+                  <span>{reactionLabel}</span>
+                  {post.like_count > 0 && <span>{post.like_count}</span>}
                 </button>
                 <div className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-app-muted">
                   <MessageCircle className="h-4 w-4" />
