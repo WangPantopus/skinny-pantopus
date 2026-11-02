@@ -232,6 +232,11 @@ public final class MailPartyViewModel {
 
     public var toast: ToastMessage?
 
+    /// The session the live frame was opened for. Kept apart from `live`,
+    /// which holds no session once the roster read fails, so Try again can
+    /// read it again.
+    private var enteredCard: MailPartySessionCard?
+
     private let api: APIClient
     private let onOpenMail: (String) -> Void
 
@@ -383,6 +388,7 @@ public final class MailPartyViewModel {
     /// Fetch the assign roster for the session's home and show the live
     /// frame. A session without a `home_id` has no roster to read.
     private func enterSession(_ card: MailPartySessionCard) async {
+        enteredCard = card
         reactionEcho = nil
         live = .loading
         guard let homeId = card.homeId else {
@@ -410,13 +416,14 @@ public final class MailPartyViewModel {
 
     /// Retry the roster read after a `.error` live frame.
     public func retryLiveSession() async {
-        guard let card = liveCard else { return }
+        guard let card = enteredCard else { return }
         await enterSession(card)
     }
 
     /// Leave the live frame and re-read the discover list.
     public func closeSession() async {
         live = nil
+        enteredCard = nil
         reactionEcho = nil
         await fetchDiscover()
     }
@@ -489,19 +496,6 @@ public final class MailPartyViewModel {
         case let .empty(session), let .loaded(session): return session
         case .loading, .error: return nil
         }
-    }
-
-    /// Card form of the live session, for a roster retry.
-    private var liveCard: MailPartySessionCard? {
-        guard let session = liveSession else { return nil }
-        return MailPartySessionCard(
-            id: session.sessionId,
-            mailId: session.mailId,
-            homeId: session.homeId,
-            title: session.title,
-            senderDisplay: session.senderDisplay,
-            status: session.status
-        )
     }
 
     // MARK: - List maintenance
