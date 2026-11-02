@@ -2,8 +2,9 @@
 //  PulseSplitView.swift
 //  Pantopus
 //
-//  Pulse side by side on a wide screen (founder, 2026-11-01). Open, the
-//  iPhone Duo's inner screen is regular width: the Nearby tab's Pulse feed
+//  Pulse side by side on a wide screen (founder, 2026-11-01). Open and held
+//  sideways, the iPhone Duo's inner screen has room for two columns
+//  (`NeighborhoodTabRoot` decides): the Nearby tab's Pulse feed
 //  (List or Map) sits on the leading side under the segment switch and the
 //  open post beside it, as Messages does there (`SideBySideSplit`). The post
 //  column shows the route stack the narrow layout pushes, so a profile, a

@@ -15,12 +15,13 @@
 //  the side menu. The Pulse segment stays mounted while Neighborhood shows,
 //  so the feed keeps its place, filters and List / Map mode.
 //
-//  On a wide screen (the iPhone Duo open) both segments are two columns of
-//  the same width, so the switch and the menu stay put: Pulse is the feed
-//  beside the open post (`PulseSplitView`), and Neighborhood the map's key,
-//  the meter and the invite beside the map, which fills the other column.
-//  Until there is a map to show (loading, an error, no home yet) Neighborhood
-//  stays one column.
+//  On a wide screen (the iPhone Duo open, held sideways) both segments are
+//  two columns of the same width, so the switch and the menu stay put: Pulse
+//  is the feed beside the open post (`PulseSplitView`), and Neighborhood the
+//  map's key, the meter and the invite beside the map, which fills the other
+//  column. Until there is a map to show (loading, an error, no home yet)
+//  Neighborhood stays one column. Upright, the open Duo is too narrow for a
+//  phone-width column beside the Nearby one, so the tab is one column there.
 //
 //  Tasks / Marketplace (launch cuts #3/#4) still present as sheets, from the
 //  meter's rows or a link. Cross-tab deep links arrive via
@@ -37,7 +38,7 @@ import SwiftUI
 
 public struct NeighborhoodTabRoot: View {
     @Environment(RootTabModel.self) private var rootTabs
-    /// Regular width (the iPhone Duo open) puts Neighborhood's map beside its key and invite.
+    /// Regular width (the iPhone Duo open) puts the segments in two columns, where the screen is wide enough.
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var door = NeighborhoodDoorStore.shared
     @State private var presentedSurface: NeighborhoodDoorStore.Surface?
@@ -53,14 +54,22 @@ public struct NeighborhoodTabRoot: View {
     }
 
     public var body: some View {
-        ZStack {
-            // The feed's root carries the header, so a pushed post covers it.
-            PulseTabRoot(onAddHome: onAddHome, header: AnyView(NearbySegmentHeader(segment: $segment)))
+        // Read in layout, so the first pass already picks one column or two; always here, so a fold keeps the feed.
+        GeometryReader { proxy in
+            let sideBySide = isSideBySide(width: proxy.size.width)
+            ZStack {
+                // The feed's root carries the header, so a pushed post covers it.
+                PulseTabRoot(
+                    onAddHome: onAddHome,
+                    header: AnyView(NearbySegmentHeader(segment: $segment)),
+                    sideBySide: sideBySide
+                )
                 .opacity(segment == .pulse ? 1 : 0)
                 .allowsHitTesting(segment == .pulse)
                 .accessibilityHidden(segment != .pulse)
-            if segment == .neighborhood {
-                neighborhoodSegment
+                if segment == .neighborhood {
+                    neighborhoodSegment(sideBySide: sideBySide)
+                }
             }
         }
         .sheet(item: $presentedSurface) { surface in
@@ -90,8 +99,9 @@ public struct NeighborhoodTabRoot: View {
         }
     }
 
-    @ViewBuilder private var neighborhoodSegment: some View {
-        if isSideBySide, let cells = cellsBeside {
+    @ViewBuilder
+    private func neighborhoodSegment(sideBySide: Bool) -> some View {
+        if sideBySide, let cells = cellsBeside {
             SideBySideSplit(leadingWidth: .nearby) {
                 VStack(spacing: Spacing.s0) {
                     NearbySegmentHeader(segment: $segment)
@@ -107,7 +117,7 @@ public struct NeighborhoodTabRoot: View {
         } else {
             VStack(spacing: Spacing.s0) {
                 NearbySegmentHeader(segment: $segment)
-                if isSideBySide {
+                if sideBySide {
                     // Wide, with no map yet: one column, filling the model the two columns share.
                     NeighborhoodView(viewModel: neighborhood, onOpenSurface: openSurface, onClaimPlace: onAddHome)
                 } else {
@@ -125,8 +135,9 @@ public struct NeighborhoodTabRoot: View {
         presentedSurface = surface
     }
 
-    private var isSideBySide: Bool {
-        horizontalSizeClass == .regular
+    /// Two columns for both segments: regular width, with room for the Nearby column beside a phone-width one.
+    private func isSideBySide(width: CGFloat) -> Bool {
+        horizontalSizeClass == .regular && SideBySideColumnWidth.nearby.fitsBeside(in: width)
     }
 
     /// The map beside Neighborhood's column: once the meter is in and there is a home to map around.
