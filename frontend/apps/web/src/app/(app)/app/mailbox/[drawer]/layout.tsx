@@ -132,7 +132,16 @@ function DrawerList({ drawerParam, children }: { drawerParam: string; children: 
     data, isPending, isError, isFetching, error, refetch,
     hasNextPage, fetchNextPage, isFetchingNextPage, isFetchNextPageError,
   } = useDrawerTab(drawer, 'incoming', { limit: 20, homeId }, { enabled: !isLetterLink && !isUnknown });
-  const allItems = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data]);
+  // Pages are read by offset, so mail that arrives between two page reads pushes
+  // the last letter of one page onto the next as well: list each letter once.
+  const allItems = useMemo(() => {
+    const seen = new Set<string>();
+    return (data?.pages ?? []).flatMap((page) => page.items).filter((item) => {
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
+  }, [data]);
   const markOpened = useMarkItemOpened();
   const queryClient = useQueryClient();
   const { addressee, timeZone, homes } = useMailAddressee();
