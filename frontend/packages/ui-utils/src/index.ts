@@ -8,6 +8,9 @@ export { getInitials } from './text';
 export {
   POST_TYPE_CONFIG,
   getPostTypeConfig,
+  postReaction,
+  POST_REACTION_LABEL,
+  postReactionCount,
   POST_TYPE_ICONS_LUCIDE,
   POST_TYPE_ICONS_IONICON,
   PURPOSE_TO_POST_TYPE,
@@ -16,7 +19,7 @@ export {
   mapComposerPurposeToApiPurpose,
   sportsComposerPurposeToStarterKey,
 } from './post-types';
-export type { PostTypeConfig } from './post-types';
+export type { PostTypeConfig, PostReaction } from './post-types';
 export { formatPrice, toPriceLabel, getGigPrice } from './price';
 export type { FormatPriceOptions } from './price';
 export { formatDistance, radiusMilesToLatDelta } from './distance';

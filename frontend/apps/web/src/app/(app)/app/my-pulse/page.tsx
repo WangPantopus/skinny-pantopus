@@ -226,7 +226,7 @@ export default function MyPulsePage() {
       patchPostInFeedCaches(queryClient, postId, { userHasLiked: res.liked, like_count: res.likeCount });
     },
     onError: () => {
-      toast.error('Failed to like post');
+      toast.error("Couldn't update your reaction. Please try again.");
     },
     onSettled: (_data, _err, { postId }) => {
       setLikingIds((prev) => {
