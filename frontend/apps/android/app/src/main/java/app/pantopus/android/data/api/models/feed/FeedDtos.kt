@@ -75,6 +75,9 @@ data class FeedPost(
     val canShareExternally: Boolean
         get() =
             !isSeeded && permitsExternalPostShare(readScope, visibility, audience, allowExternalShare, moderationState)
+
+    /** A plan's own post (Plans marks it `post_metadata.plan`): its event times are real moments. */
+    val isPlanPost: Boolean get() = lifecycleMetadata?.plan == true
 }
 
 /** The viewer's connections who reposted a Connections post (`feedService.js` repostedByLines). */
