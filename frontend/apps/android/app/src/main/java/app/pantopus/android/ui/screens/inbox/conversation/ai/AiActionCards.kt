@@ -70,7 +70,7 @@ internal fun AiActionCard(
     onOpenLink: (String) -> Unit,
     canOpen: (String) -> Boolean,
 ) {
-    // "Not now" puts the card away on this phone, after a relaunch too.
+    // "Not now" puts the card away, after a relaunch and on the person's other phones too.
     if (card.dismissed) return
     val expired = card.isExpired()
     Column(

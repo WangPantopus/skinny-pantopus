@@ -35,9 +35,10 @@ private const val HTTP_TOO_MANY_REQUESTS = 429
 
 /**
  * Draft cards this app shows beyond the original ones (`cards` in the chat request): pickup days, action
- * cards and link buttons (AI assistant phase 1 contract, sections 3 to 5).
+ * cards and link buttons (AI assistant phase 1 contract, sections 3 to 5), and each card's done state in
+ * history (phase 3 contract §4.3).
  */
-private val AI_CARDS = listOf("pickup_schedule", "action", "link")
+private val AI_CARDS = listOf("pickup_schedule", "action", "link", "state")
 
 /** A turn may take 45 seconds and eight tool rounds (contract section 8); a quiet stretch must not end it. */
 private const val STREAM_READ_TIMEOUT_SECONDS = 60L

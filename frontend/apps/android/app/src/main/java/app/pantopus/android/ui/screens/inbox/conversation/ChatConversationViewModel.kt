@@ -8,11 +8,13 @@ import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.ai.AIActionCardStore
 import app.pantopus.android.data.ai.AIActionRunner
+import app.pantopus.android.data.ai.AICardStateReporter
 import app.pantopus.android.data.ai.AIChatRepository
 import app.pantopus.android.data.ai.AIChatStreamEvent
 import app.pantopus.android.data.ai.AIConversationSession
 import app.pantopus.android.data.ai.AIPdfCheck
 import app.pantopus.android.data.ai.AIScreenContext
+import app.pantopus.android.data.api.models.ai.AICardStateDto
 import app.pantopus.android.data.api.models.chats.ChatChangesResponse
 import app.pantopus.android.data.api.models.chats.ChatMessageDto
 import app.pantopus.android.data.api.models.chats.ChatMessageReadReceipt
@@ -104,6 +106,7 @@ class ChatConversationViewModel
         private val placeRepository: PlaceRepository,
         private val aiActions: AIActionRunner,
         private val aiCards: AIActionCardStore,
+        private val aiCardStates: AICardStateReporter,
         private val outbox: ChatOutbox? = null,
     ) : ViewModel() {
         private val _state = MutableStateFlow<ChatConversationUiState>(ChatConversationUiState.Loading)
@@ -548,6 +551,8 @@ class ChatConversationViewModel
             val reopened = _state.value is ChatConversationUiState.Loaded
             observeOutbox()
             restoreComposerDraft()
+            // Card reports that didn't reach the server go again each time the thread opens (AI assistant phase 3 §4.4).
+            if (mode is ChatThreadMode.Ai) aiCardStates.retryUnreported(currentUserId)
             if (reopened) {
                 // Back on screen after teardown() (a pushed screen, a tab
                 // switch): listen again. Re-joining the rooms backfills what
@@ -715,7 +720,7 @@ class ChatConversationViewModel
                 }
                 // A brief's or nudge's cards join its line.
                 openReplyId = if (nudge != null) replyId else replyId.takeIf { text.isEmpty() }
-                draft?.let { drafts[replyId] = drafts[replyId].orEmpty() + withSavedRuns(it) }
+                draft?.let { drafts[replyId] = drafts[replyId].orEmpty() + withSavedRuns(it, item.state) }
                 if (itemLinks.isNotEmpty()) links[replyId] = links[replyId].orEmpty() + itemLinks
                 nudge?.let { nudgeReplies.putIfAbsent(it, replyId) }
             }
@@ -733,11 +738,30 @@ class ChatConversationViewModel
             rebuild()
         }
 
-        /** An action card as this phone left it: the buttons that succeeded, or "Not now". */
-        private fun withSavedRuns(draft: ChatAIDraftCard): ChatAIDraftCard {
+        /**
+         * An action card as it was left: the buttons that succeeded, or "Not now", on this phone or, by the server's
+         * [state], on any of the person's phones (AI assistant phase 3 contract §4.4). Either one is enough; for a
+         * button both know, this phone's record wins, since it keeps the note. A card with a button that went through
+         * shows it done, never put away, and one the server calls expired shows as expired.
+         */
+        private fun withSavedRuns(
+            draft: ChatAIDraftCard,
+            state: AICardStateDto? = null,
+        ): ChatAIDraftCard {
             val card = draft.action ?: return draft
             val fewerId = card.fewerLikeThis?.id
-            val runs =
+            val reported =
+                state?.done.orEmpty().mapNotNull { done ->
+                    val actionId = done.actionId ?: return@mapNotNull null
+                    val scope =
+                        when {
+                            done.itemId != null -> done.itemId
+                            actionId == fewerId -> ChatAIActionCard.FEWER_SCOPE
+                            else -> ChatAIActionCard.CARD_SCOPE
+                        }
+                    scope to ChatAICardRun.Done(actionId, done.link)
+                }.distinctBy { it.first }.toMap()
+            val saved =
                 aiCards.done(card.id).associate { saved ->
                     // "Fewer like this" stands apart from the card's other buttons; an earlier version saved it with them.
                     val scope =
@@ -748,7 +772,16 @@ class ChatConversationViewModel
                         }
                     scope to ChatAICardRun.Done(saved.actionId, saved.link, saved.note)
                 }
-            return draft.copy(action = card.copy(runs = card.runs + runs, dismissed = aiCards.isDismissed(card.id)))
+            val runs = card.runs + reported + saved
+            val putAway = aiCards.isDismissed(card.id) || state?.status == STATE_DISMISSED
+            return draft.copy(
+                action =
+                    card.copy(
+                        runs = runs,
+                        dismissed = putAway && runs.values.none { it is ChatAICardRun.Done },
+                        expiredOnServer = state?.status == STATE_EXPIRED,
+                    ),
+            )
         }
 
         /**
@@ -771,6 +804,9 @@ class ChatConversationViewModel
                     when (val outcome = aiActions.run(action)) {
                         is AIActionRunner.Outcome.Done -> {
                             aiCards.markDone(card.id, AIActionCardStore.Done(runScope, action.id, outcome.link, outcome.note))
+                            // The person's other phones show it too. A row's button names its row; the card's own don't.
+                            val itemId = runScope.takeUnless { it == ChatAIActionCard.CARD_SCOPE || it == ChatAIActionCard.FEWER_SCOPE }
+                            aiCardStates.reportDone(currentUserId, card.id, itemId, action.id, outcome.link)
                             ChatAICardRun.Done(action.id, outcome.link, outcome.note)
                         }
                         is AIActionRunner.Outcome.Failed -> ChatAICardRun.Failed(action.id, outcome.message)
@@ -783,11 +819,12 @@ class ChatConversationViewModel
             }
         }
 
-        /** "Not now": the card stays in the thread without its buttons, on this phone only. */
+        /** "Not now": the card is put away, on the person's other phones too. */
         fun dismissAIAction(draft: ChatAIDraftCard) {
             val card = draft.action ?: return
             if (card.isRunning) return
             aiCards.dismiss(card.id)
+            aiCardStates.reportDismissed(currentUserId, card.id)
             updateActionCard(draft.id) { it.copy(dismissed = true) }
         }
 
@@ -4737,6 +4774,10 @@ private const val AI_DELETE_TOO_MANY = "Couldn't delete it all yet. Try again in
 private const val HTTP_TOO_MANY_REQUESTS = 429
 
 private const val HTTP_REQUEST_TIMEOUT = 408
+
+/** A card's server state (AI assistant phase 3 contract §4.3) after "Not now", and past its time with nothing done. */
+private const val STATE_DISMISSED = "dismissed"
+private const val STATE_EXPIRED = "expired"
 
 /**
  * `ai-media` turning the upload down for what was sent (a locked PDF, a file that isn't what it says), not a lost

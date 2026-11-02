@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.services
 
+import app.pantopus.android.data.api.models.ai.AICardStateReportBody
 import app.pantopus.android.data.api.models.ai.AIConversationMessagesResponse
 import app.pantopus.android.data.api.models.ai.AIConversationsResponse
 import app.pantopus.android.data.api.models.ai.AIDraftListingVisionRequest
@@ -91,5 +92,15 @@ interface AIApi {
     @DELETE("api/ai/conversations/{id}")
     suspend fun deleteConversation(
         @Path("id") id: String,
+    ): Unit
+
+    /**
+     * What ran on one of the assistant's action cards, so the person's other phones show it too (AI assistant phase 3
+     * contract §4.2). `404 CARD_UNKNOWN` for a card the server has no record of. Route `backend/routes/ai.js:577`.
+     */
+    @POST("api/ai/cards/{cardId}/state")
+    suspend fun reportCardState(
+        @Path("cardId") cardId: String,
+        @Body body: AICardStateReportBody,
     ): Unit
 }
