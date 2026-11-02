@@ -10,7 +10,6 @@ public struct PulsePostDetailLoadedContent: View {
     @Binding private var composerText: String
     private let isSendingComment: Bool
     private let replyingToName: String?
-    private let selectedReactionEmoji: String?
     private let topBarAction: ContentDetailTopBarAction?
     private let topBarSecondaryAction: ContentDetailTopBarAction?
     /// Organically matched local businesses — empty hides the card.
@@ -18,8 +17,7 @@ public struct PulsePostDetailLoadedContent: View {
     private let onOpenBusiness: @MainActor (String) -> Void
     private let onBack: @MainActor () -> Void
     private let onOpenProfile: @MainActor (String) -> Void
-    private let onReactionTap: @MainActor (PostReactionKind) -> Void
-    private let onEmojiSelected: (@MainActor (String) -> Void)?
+    private let onReactionTap: @MainActor () -> Void
     private let onSendTap: @MainActor () -> Void
     private let onShowMoreReplies: @MainActor () -> Void
     private let onCancelReply: (@MainActor () -> Void)?
@@ -36,15 +34,13 @@ public struct PulsePostDetailLoadedContent: View {
         composerText: Binding<String>,
         isSendingComment: Bool,
         replyingToName: String? = nil,
-        selectedReactionEmoji: String? = nil,
         topBarAction: ContentDetailTopBarAction? = nil,
         topBarSecondaryAction: ContentDetailTopBarAction? = nil,
         nearbyProviders: [NearbyProviderRow] = [],
         onOpenBusiness: @escaping @MainActor (String) -> Void = { _ in },
         onBack: @escaping @MainActor () -> Void = {},
         onOpenProfile: @escaping @MainActor (String) -> Void = { _ in },
-        onReactionTap: @escaping @MainActor (PostReactionKind) -> Void = { _ in },
-        onEmojiSelected: (@MainActor (String) -> Void)? = nil,
+        onReactionTap: @escaping @MainActor () -> Void = {},
         onSendTap: @escaping @MainActor () -> Void = {},
         onShowMoreReplies: @escaping @MainActor () -> Void = {},
         onCancelReply: (@MainActor () -> Void)? = nil,
@@ -59,7 +55,6 @@ public struct PulsePostDetailLoadedContent: View {
         _composerText = composerText
         self.isSendingComment = isSendingComment
         self.replyingToName = replyingToName
-        self.selectedReactionEmoji = selectedReactionEmoji
         self.topBarAction = topBarAction
         self.topBarSecondaryAction = topBarSecondaryAction
         self.nearbyProviders = nearbyProviders
@@ -67,7 +62,6 @@ public struct PulsePostDetailLoadedContent: View {
         self.onBack = onBack
         self.onOpenProfile = onOpenProfile
         self.onReactionTap = onReactionTap
-        self.onEmojiSelected = onEmojiSelected
         self.onSendTap = onSendTap
         self.onShowMoreReplies = onShowMoreReplies
         self.onCancelReply = onCancelReply
@@ -154,8 +148,6 @@ public struct PulsePostDetailLoadedContent: View {
                     mediaLocationBadge: detail.post.locationName,
                     detailLine: detail.post.dealDetailLine ?? detail.post.lostFoundDetailLine ?? detail.post.alertDetailLine,
                     eventDetails: detail.post.eventDetails,
-                    selectedReactionEmoji: selectedReactionEmoji,
-                    onEmojiSelected: onEmojiSelected,
                     composerAvatarURL: nil,
                     composerAvatarName: "You",
                     composerText: $composerText,

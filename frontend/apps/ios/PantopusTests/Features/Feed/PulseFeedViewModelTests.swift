@@ -199,7 +199,7 @@ final class PulseFeedViewModelTests: XCTestCase {
             XCTFail("Expected .loaded")
             return
         }
-        XCTAssertEqual(rows.first?.reactions.first?.count, 13)
+        XCTAssertEqual(rows.first?.reaction.likeCount, 13)
         XCTAssertTrue(rows.first?.userHasReacted ?? false)
     }
 
@@ -267,7 +267,7 @@ final class PulseFeedViewModelTests: XCTestCase {
             XCTFail("Expected .loaded")
             return
         }
-        XCTAssertEqual(rows.first?.reactions.first?.count, 12, "count rolls back to the seed")
+        XCTAssertEqual(rows.first?.reaction.likeCount, 12, "count rolls back to the seed")
         XCTAssertFalse(rows.first?.userHasReacted ?? true, "userHasReacted rolls back to false")
     }
 }

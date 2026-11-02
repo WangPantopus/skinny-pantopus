@@ -20,7 +20,7 @@ public enum PulsePostDetailSampleData {
         comments: [PostCommentRow],
         reactions: PostReactionCounts
     ) -> PulsePostDetailContent {
-        let post = postDTO(intent: intent, commentCount: comments.count, likeCount: reactions.helpful)
+        let post = postDTO(intent: intent, commentCount: comments.count, likeCount: reactions.likeCount)
         return PulsePostDetailContent(
             post: post,
             authorDisplayName: "Nadia Velez",
@@ -37,12 +37,7 @@ public enum PulsePostDetailSampleData {
         )
     }
 
-    private static let resolvedReactions = PostReactionCounts(
-        helpful: 18,
-        heart: 7,
-        going: 2,
-        userReaction: .helpful
-    )
+    private static let resolvedReactions = PostReactionCounts(kind: .helpful, likeCount: 18, isOn: true)
 
     private static let resolvedThread: [PostCommentRow] = [
         PostCommentRow(

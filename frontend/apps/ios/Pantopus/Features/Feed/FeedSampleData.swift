@@ -26,10 +26,7 @@ public enum FeedSampleData {
             title: nil,
             body: "Anyone know a good dog-walker in Burnside? Our 1-year-old shepherd mix needs "
                 + "midday walks Tue/Thu and our regular just moved. References appreciated.",
-            reactions: [
-                PulseReaction(kind: .helpful, icon: .lightbulb, label: "helpful", count: 12, isInteractive: true),
-                PulseReaction(kind: .heart, icon: .heart, label: "", count: 4, isInteractive: false)
-            ],
+            reaction: PulseReaction(kind: .helpful, likeCount: 12),
             attendees: nil,
             userHasReacted: false
         ),
@@ -44,10 +41,7 @@ public enum FeedSampleData {
             title: nil,
             body: "Sourdough at 4th & Market is legit — family-run, opens at 7. "
                 + "The country loaf is gone by 10. Cash only.",
-            reactions: [
-                PulseReaction(kind: .helpful, icon: .heart, label: "", count: 30, isInteractive: true),
-                PulseReaction(kind: .heart, icon: .lightbulb, label: "helpful", count: 8, isInteractive: false)
-            ],
+            reaction: PulseReaction(kind: .helpful, likeCount: 30),
             attendees: nil,
             userHasReacted: false
         ),
@@ -62,10 +56,7 @@ public enum FeedSampleData {
             title: "Playground cleanup Saturday",
             body: "9–11am at Burnside Park. Bring gloves; we'll have bags + coffee. "
                 + "Kids welcome — there's a craft table by the slide.",
-            reactions: [
-                PulseReaction(kind: .going, icon: .calendarCheck, label: "going", count: 18, isInteractive: true),
-                PulseReaction(kind: .heart, icon: .heart, label: "", count: 9, isInteractive: false)
-            ],
+            reaction: PulseReaction(kind: .going, likeCount: 14),
             attendees: PulseAttendeeStrip(avatars: ["K", "P", "S", "T"], goingCount: 14, userIsGoing: false),
             userHasReacted: false
         ),
@@ -79,10 +70,7 @@ public enum FeedSampleData {
             intent: .lost,
             title: nil,
             body: "Tortoiseshell cat missing near Maple & 8th. Tag says \"Pippin\". Reward — please DM.",
-            reactions: [
-                PulseReaction(kind: .seen, icon: .eye, label: "seen", count: 42, isInteractive: true),
-                PulseReaction(kind: .shared, icon: .share, label: "shared", count: 6, isInteractive: false)
-            ],
+            reaction: PulseReaction(kind: .helpful, likeCount: 42),
             attendees: nil,
             userHasReacted: false
         ),
@@ -97,10 +85,7 @@ public enum FeedSampleData {
             title: nil,
             body: "Street sweeping shifts to Thursdays starting next week. "
                 + "Move vehicles by 7am or get ticketed. Posted signs go up Wednesday.",
-            reactions: [
-                PulseReaction(kind: .seen, icon: .eye, label: "seen", count: 127, isInteractive: true),
-                PulseReaction(kind: .heart, icon: .heart, label: "", count: 3, isInteractive: false)
-            ],
+            reaction: PulseReaction(kind: .helpful, likeCount: 127),
             attendees: nil,
             userHasReacted: false
         )
@@ -119,10 +104,7 @@ public enum FeedSampleData {
             title: nil,
             body: "Croissants are back tomorrow at 7am — we finally have the oven part. "
                 + "First 30 are half-off for followers; just show this post at the counter.",
-            reactions: [
-                PulseReaction(kind: .heart, icon: .heart, label: "", count: 64, isInteractive: true),
-                PulseReaction(kind: .seen, icon: .eye, label: "seen", count: 212, isInteractive: false)
-            ],
+            reaction: PulseReaction(kind: .helpful, likeCount: 64),
             attendees: nil,
             userHasReacted: false
         ),
@@ -137,10 +119,7 @@ public enum FeedSampleData {
             title: "Toddler story time — Saturday",
             body: "10am sharp in the kids' room. Bring a snack. New title this week: "
                 + "\"How to Be a Lion.\" Free, no RSVP needed.",
-            reactions: [
-                PulseReaction(kind: .going, icon: .calendarCheck, label: "going", count: 25, isInteractive: true),
-                PulseReaction(kind: .heart, icon: .heart, label: "", count: 11, isInteractive: false)
-            ],
+            reaction: PulseReaction(kind: .going, likeCount: 22),
             attendees: PulseAttendeeStrip(avatars: ["R", "M", "L"], goingCount: 22, userIsGoing: false),
             userHasReacted: false
         ),
@@ -155,10 +134,7 @@ public enum FeedSampleData {
             title: nil,
             body: "Quick tip — if your shower's dripping right after you turn it off, it's almost always "
                 + "a 4-dollar cartridge. Don't pay anyone 300 to swap one. Reply if you want the part number.",
-            reactions: [
-                PulseReaction(kind: .heart, icon: .heart, label: "", count: 48, isInteractive: true),
-                PulseReaction(kind: .helpful, icon: .lightbulb, label: "helpful", count: 31, isInteractive: false)
-            ],
+            reaction: PulseReaction(kind: .helpful, likeCount: 48),
             attendees: nil,
             userHasReacted: false
         ),
@@ -173,10 +149,7 @@ public enum FeedSampleData {
             title: nil,
             body: "Street sweeping shifts to Thursdays starting next week. "
                 + "Move vehicles by 7am or get ticketed. Signs go up Wednesday.",
-            reactions: [
-                PulseReaction(kind: .seen, icon: .eye, label: "seen", count: 340, isInteractive: true),
-                PulseReaction(kind: .heart, icon: .heart, label: "", count: 7, isInteractive: false)
-            ],
+            reaction: PulseReaction(kind: .helpful, likeCount: 340),
             attendees: nil,
             userHasReacted: false
         ),
@@ -191,10 +164,7 @@ public enum FeedSampleData {
             title: nil,
             body: "The new ramen place on 8th is worth the hype. Tonkotsu is the move; skip the spicy miso. "
                 + "Tip: order at the counter, not the QR — it's faster.",
-            reactions: [
-                PulseReaction(kind: .heart, icon: .heart, label: "", count: 92, isInteractive: true),
-                PulseReaction(kind: .helpful, icon: .lightbulb, label: "helpful", count: 14, isInteractive: false)
-            ],
+            reaction: PulseReaction(kind: .helpful, likeCount: 92),
             attendees: nil,
             userHasReacted: false
         )
