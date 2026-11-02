@@ -796,6 +796,12 @@ public final class PulseFeedViewModel {
         }
     }
 
+    /// The host's own plan post opens its plan on the Plans tab, where Change
+    /// and Cancel tell everyone (the `/plans/<id>` link path).
+    public func openPlan(postId: String) {
+        DeepLinkRouter.shared.handle(path: "/plans/\(postId)")
+    }
+
     /// `DELETE /api/posts/:id` — author-only, optimistic removal with
     /// rollback (RN `useFeedData.ts:209`).
     public func deletePost(postId: String) async {
@@ -1251,7 +1257,8 @@ public final class PulseFeedViewModel {
                 topicLabel: intent.cardChipLabel,
                 pending: live.pending,
                 canCloseAsk: askIsOpen,
-                canKeepAskOpen: askIsOpen && !keptOpen
+                canKeepAskOpen: askIsOpen && !keptOpen,
+                isPlanPost: post.isPlanPost
             ),
             chipLabel: intent.chipLabel(lostFoundType: post.lostFoundType),
             isVisitor: post.isVisitorPost,

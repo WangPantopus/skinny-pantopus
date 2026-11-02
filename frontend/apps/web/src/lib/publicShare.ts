@@ -263,12 +263,17 @@ export function buildShareMetadata(opts: {
   /** Multiple OG images (e.g. gallery); first is primary for Twitter. */
   images?: string[] | null;
   appArgument?: string | null;
+  /**
+   * False leaves out Safari's app banner. Installing from it drops the link, so a page that exists for people
+   * new to Pantopus (an invitation) sends them through its own app buttons, which carry the link.
+   */
+  smartBanner?: boolean;
 }): Metadata {
   const url = `${APP_WEB_URL}${opts.path}`;
   const imageList =
     opts.images && opts.images.length > 0 ? opts.images : opts.image ? [opts.image] : [];
   const primaryImage = imageList[0];
-  const smartBannerContent = IOS_APP_STORE_APP_ID
+  const smartBannerContent = IOS_APP_STORE_APP_ID && opts.smartBanner !== false
     ? [
         `app-id=${IOS_APP_STORE_APP_ID}`,
         opts.appArgument ? `app-argument=${opts.appArgument}` : null,
@@ -337,20 +342,58 @@ export function formatLocationLine(...parts: unknown[]): string | null {
 export type StoreDownloadCta = {
   href: string;
   label: string;
+  /**
+   * On an iPhone, the page's link to copy on the way to the App Store. The App Store passes nothing to the new
+   * app, so its first screen offers the copied link back with a Paste button.
+   */
+  copyPath?: string | null;
 };
 
-export function getStoreDownloadCta(userAgent: string): StoreDownloadCta | null {
+/** The phone a store button is for, read from the user agent; null for anything else. */
+export function storePlatform(userAgent: string): 'ios' | 'android' | null {
   const ua = userAgent.toLowerCase();
-  const isAndroid = /android/.test(ua);
-  const isIos = /iphone|ipad|ipod/.test(ua);
+  if (/iphone|ipad|ipod/.test(ua)) return 'ios';
+  if (/android/.test(ua)) return 'android';
+  return null;
+}
 
-  if (isIos) {
-    return IOS_APP_STORE_URL ? { href: IOS_APP_STORE_URL, label: 'Download on App Store' } : null;
+/** A page's own path (`/join/abc`, `/plans/x?invite=…`): the only links a store button carries. */
+function carriedPath(path: string | null | undefined): string | null {
+  return path && path.startsWith('/') && !path.startsWith('//') ? path : null;
+}
+
+/**
+ * The Google Play address with the page's link in its install referrer. Google Play hands the referrer to the
+ * app on its first launch, which opens the link as if it had been tapped (Android `InstallReferrerLink`).
+ */
+export function playStoreUrlCarrying(storeUrl: string, path: string | null | undefined): string {
+  const carried = carriedPath(path);
+  if (!carried) return storeUrl;
+  try {
+    const url = new URL(storeUrl);
+    url.searchParams.set('referrer', `pantopus_link=${encodeURIComponent(carried)}`);
+    return url.toString();
+  } catch {
+    return storeUrl;
+  }
+}
+
+/**
+ * The store button for this phone. With `path` (the page's own link), the button carries the link through the
+ * install: in Google Play's install referrer on Android, copied on the way to the App Store on an iPhone.
+ */
+export function getStoreDownloadCta(userAgent: string, path?: string | null): StoreDownloadCta | null {
+  const platform = storePlatform(userAgent);
+
+  if (platform === 'ios') {
+    return IOS_APP_STORE_URL
+      ? { href: IOS_APP_STORE_URL, label: 'Download on App Store', copyPath: carriedPath(path) }
+      : null;
   }
 
-  if (isAndroid) {
+  if (platform === 'android') {
     return ANDROID_PLAY_STORE_URL
-      ? { href: ANDROID_PLAY_STORE_URL, label: 'Get it on Google Play' }
+      ? { href: playStoreUrlCarrying(ANDROID_PLAY_STORE_URL, path), label: 'Get it on Google Play' }
       : null;
   }
 

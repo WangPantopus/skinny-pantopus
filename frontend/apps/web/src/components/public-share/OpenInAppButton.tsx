@@ -2,6 +2,7 @@
 
 import { useCallback } from 'react';
 import type { MouseEvent, ReactNode } from 'react';
+import { copyPageLink } from './StoreLink';
 
 /** Strip leading `www.` so apex and www count as the same site (shared links often differ from the bar). */
 function canonicalSiteHost(hostname: string): string {
@@ -68,6 +69,11 @@ type OpenInAppButtonProps = {
   linkHref?: string | null;
   /** App Store / Play Store URL when the app is not installed (unchanged behavior). */
   fallbackUrl?: string | null;
+  /**
+   * On an iPhone, this page's link, copied with the tap: when the App Store fallback installs the app, its first
+   * screen offers the link back with a Paste button (`StoreDownloadCta.copyPath`).
+   */
+  copyPath?: string | null;
   className?: string;
   children: ReactNode;
 };
@@ -76,12 +82,15 @@ export default function OpenInAppButton({
   appUrl,
   linkHref,
   fallbackUrl,
+  copyPath,
   className,
   children,
 }: OpenInAppButtonProps) {
   const handleClick = useCallback(
     (event: MouseEvent<HTMLAnchorElement>) => {
       event.preventDefault();
+      // Started inside the tap, as Safari requires; opening the app doesn't wait for it.
+      if (copyPath) void copyPageLink(copyPath);
 
       let didLeavePage = false;
 
@@ -120,7 +129,7 @@ export default function OpenInAppButton({
       const targetUrl = pickOpenTargetUrl(linkHref ?? null, appUrl);
       window.location.assign(targetUrl);
     },
-    [appUrl, linkHref, fallbackUrl]
+    [appUrl, linkHref, fallbackUrl, copyPath]
   );
 
   return (

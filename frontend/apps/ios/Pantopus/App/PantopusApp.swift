@@ -221,6 +221,8 @@ struct RootView: View {
             if becameSignedIn(from: previous, to: new) {
                 showsSessionLogin = false
                 DeepLinkRouter.shared.acknowledgeLoginPresentation()
+                // The first screen's "paste the link you opened before installing" is over once someone is in.
+                InstallLinkPaste.retire()
                 // Signing in or up (not a session restored at launch) may also open a plan invitation.
                 let freshSignIn = if case .signedOut = previous { true } else { false }
                 Task { @MainActor in
@@ -291,10 +293,23 @@ struct RootView: View {
         guard case let .signedIn(user) = auth.state,
               DeepLinkRouter.shared.activeContentArrival == nil else { return }
         guard let path = PendingDeepLinkStore.take(userID: user.id) else {
-            if freshSignIn { Task { await openUnopenedPlanInvite() } }
+            if freshSignIn { Task { await openUnopenedInvitation() } }
             return
         }
         DeepLinkRouter.shared.handle(path: path)
+    }
+
+    /// Someone invited to a household by email before they had an account, who just signed up (or signed in) with
+    /// that address instead of tapping the email's button: the invitation opens, once (home.js
+    /// `GET /api/homes/invitations/next`). Otherwise a plan invitation may.
+    private func openUnopenedInvitation() async {
+        if let next: HomeNextInviteResponse = try? await APIClient.shared.request(TokenAcceptEndpoints.nextHomeInvite()),
+           let token = next.token, token.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil,
+           DeepLinkRouter.shared.activeContentArrival == nil {
+            DeepLinkRouter.shared.handle(path: "/invite/\(token)")
+            return
+        }
+        await openUnopenedPlanInvite()
     }
 
     /// Someone invited to a plan by email who just signed up (or signed in) with that address, without the

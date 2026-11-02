@@ -343,6 +343,10 @@ public enum HubRoute: Hashable {
     /// A14.5 — Notification & briefing preferences. Pushed from the Today
     /// detail's "Manage" (Android opens the same settings screen).
     case notificationSettings
+    /// Settings → What Pantopus remembers (`pantopus://settings/memory`).
+    case assistantMemory
+    /// Settings → What Pantopus does for you (`pantopus://settings/rules`).
+    case assistantRules
     /// Privacy → "Download your data": the existing Data export screen.
     case dataExport
     /// Settings → Blocked users, opened from the Connections Blocked tab.
@@ -969,7 +973,8 @@ public struct HubTabRoot: View {
         case .savePlace, .maintenanceDetail, .billDetail, .pollDetail, .calendarEventDetail, .emergencyItem,
              .documentDetail, .packageDetail, .homePhotos, .trustedNeighbors, .propertyDetails,
              .helpCenter, .publicProfile, .homeSettings, .homeSecurity, .homeOwnershipSecurity,
-             .homeNotifications, .privacySettings, .notificationSettings, .dataExport, .blockedUsers, .editProfile, .menu,
+             .homeNotifications, .privacySettings, .notificationSettings, .assistantMemory, .assistantRules, .dataExport, .blockedUsers,
+             .editProfile, .menu,
              .paymentsSettings, .securityDevices, .mailItemDetail,
              .gigDetail, .listingDetail, .invoiceDetail, .businessProfile, .businessProfilePage,
              .editBusinessPage, .pulseFeed, .gigsFeed, .marketplace, .beaconInsights,
@@ -1282,6 +1287,12 @@ public struct HubTabRoot: View {
             _ = router.consume()
         case .notificationSettings:
             path.append(.notificationSettings)
+            _ = router.consume()
+        case .assistantMemory:
+            path.append(.assistantMemory)
+            _ = router.consume()
+        case .assistantRules:
+            path.append(.assistantRules)
             _ = router.consume()
         case .createBusiness:
             path.append(.createBusiness)
@@ -3627,6 +3638,10 @@ public struct HubTabRoot: View {
             }) { Task { @MainActor in pop() } }
         case .notificationSettings:
             NotificationSettingsView { Task { @MainActor in pop() } }
+        case .assistantMemory:
+            AssistantMemoryView { Task { @MainActor in pop() } }
+        case .assistantRules:
+            AssistantRulesView { Task { @MainActor in pop() } }
         case .dataExport:
             DataExportView { Task { @MainActor in pop() } }
         case .blockedUsers:

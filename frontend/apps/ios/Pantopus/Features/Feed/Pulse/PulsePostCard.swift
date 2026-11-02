@@ -54,6 +54,9 @@ public struct PulsePostActions: Sendable, Hashable {
     public let canCloseAsk: Bool
     /// …and "Keep open 7 more days", until it has been used once.
     public let canKeepAskOpen: Bool
+    /// A plan's own post (Plans marks it `post_metadata.plan`): its plan
+    /// changes or cancels it, so it offers no Delete.
+    public let isPlanPost: Bool
 
     public init(
         isSeeded: Bool = false,
@@ -71,7 +74,8 @@ public struct PulsePostActions: Sendable, Hashable {
         topicLabel: String? = nil,
         pending: Set<PulsePendingAction> = [],
         canCloseAsk: Bool = false,
-        canKeepAskOpen: Bool = false
+        canKeepAskOpen: Bool = false,
+        isPlanPost: Bool = false
     ) {
         self.isSeeded = isSeeded
         self.isSaved = isSaved
@@ -89,6 +93,7 @@ public struct PulsePostActions: Sendable, Hashable {
         self.pending = pending
         self.canCloseAsk = canCloseAsk
         self.canKeepAskOpen = canKeepAskOpen
+        self.isPlanPost = isPlanPost
     }
 
     /// Report is offered to everyone except the author (RN
@@ -97,9 +102,15 @@ public struct PulsePostActions: Sendable, Hashable {
         !isOwner && !isSeeded
     }
 
-    /// Delete is author-only (RN `PostCard.tsx:516`).
+    /// Delete is author-only (RN `PostCard.tsx:516`), and never a plan's post:
+    /// deleting it would take the plan and everyone's asks with it.
     public var canDelete: Bool {
-        isOwner && !isSeeded
+        isOwner && !isSeeded && !isPlanPost
+    }
+
+    /// The host's own plan post opens its plan, where Change and Cancel live.
+    public var canOpenPlan: Bool {
+        isOwner && isPlanPost
     }
 
     /// Muting needs a resolvable entity and never applies to your own post.

@@ -59,6 +59,67 @@ public struct AIConversationMessageDTO: Decodable, Sendable, Hashable {
     public let nudge: AIConversationNudgeDTO?
     /// When it was said (ISO 8601). Older servers leave it out.
     public let at: String?
+    /// An action card's done state as the server keeps it, for apps that list
+    /// `state` (`docs/product/ai-assistant-phase3-contract-2026-10-22.md` §4.3).
+    /// A card the server has no record of carries none.
+    public let state: AICardStateDTO?
+}
+
+/// What ran on one action card, kept by the server so every phone and a
+/// reinstall show it (phase 3 contract §4.3).
+public struct AICardStateDTO: Decodable, Sendable, Hashable {
+    /// One action that went through: the card's own (`itemId` nil) or a row's.
+    public struct Done: Decodable, Sendable, Hashable {
+        public let itemId: String?
+        public let actionId: String
+        public let at: String?
+        /// The done link a phone showed, kept only when it is the action's own.
+        public let link: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case at, link
+            case itemId = "item_id"
+            case actionId = "action_id"
+        }
+    }
+
+    /// `open`, `done`, `dismissed` ("Not now") or `expired` (past `expires_at`
+    /// with nothing done).
+    public let status: String
+    public let done: [Done]
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        status = try container.decode(String.self, forKey: .status)
+        done = try container.decodeIfPresent([Done].self, forKey: .done) ?? []
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case status, done
+    }
+}
+
+/// `POST /api/ai/cards/:cardId/state` (phase 3 contract §4.2): an action that
+/// went through, with the row it sat on and the link the card showed, or "Not
+/// now". Kept on the device until the server has it.
+public struct AICardStateReport: Codable, Sendable, Hashable {
+    /// `done` or `dismissed`.
+    public let status: String
+    public let actionId: String?
+    public let itemId: String?
+    public let link: String?
+
+    public static func done(actionId: String, itemId: String?, link: String?) -> AICardStateReport {
+        AICardStateReport(status: "done", actionId: actionId, itemId: itemId, link: link)
+    }
+
+    public static let dismissed = AICardStateReport(status: "dismissed", actionId: nil, itemId: nil, link: nil)
+
+    private enum CodingKeys: String, CodingKey {
+        case status, link
+        case actionId = "action_id"
+        case itemId = "item_id"
+    }
 }
 
 /// A brief or nudge in the assistant's history: its Notification row's id,

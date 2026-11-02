@@ -17,6 +17,7 @@ import {
   summarizeText,
 } from '@/lib/publicShare';
 import OpenInAppButton from '@/components/public-share/OpenInAppButton';
+import StoreLink from '@/components/public-share/StoreLink';
 import { authPageHref } from '@/lib/auth-utils';
 import SlotSignupButton from '@/components/public-share/SlotSignupButton';
 import { formatSlotWindow } from '@/components/support-trains/scheduleUtils';
@@ -187,8 +188,10 @@ export default async function PublicSupportTrainPage({
   const result = await fetchPublicSupportTrain(id);
   const train = result.data;
   const userAgent = (await headers()).get('user-agent') || '';
-  const storeCta = getStoreDownloadCta(userAgent);
+  // Getting the app from this page carries the train's link through the install.
+  const storeCta = getStoreDownloadCta(userAgent, buildSupportTrainPath(id));
   const fallbackUrl = storeCta?.href ?? null;
+  const copyPath = storeCta?.copyPath ?? null;
 
   if (!train && result.status === 404) {
     notFound();
@@ -237,12 +240,13 @@ export default async function PublicSupportTrainPage({
               Back To Pantopus
             </Link>
             {storeCta ? (
-              <a
+              <StoreLink
                 href={storeCta.href}
+                copyPath={copyPath}
                 className="rounded-full border border-app px-5 py-2.5 text-sm font-semibold text-app hover:bg-surface-muted"
               >
                 {storeCta.label}
-              </a>
+              </StoreLink>
             ) : null}
           </div>
         </div>
@@ -292,6 +296,7 @@ export default async function PublicSupportTrainPage({
               appUrl={buildSupportTrainAppUrl(id)}
               linkHref={buildSupportTrainShareUrl(id)}
               fallbackUrl={fallbackUrl}
+              copyPath={copyPath}
               className="rounded-full bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
             >
               Open In App
@@ -386,17 +391,19 @@ export default async function PublicSupportTrainPage({
                   appUrl={buildSupportTrainAppUrl(id)}
                   linkHref={buildSupportTrainShareUrl(id)}
                   fallbackUrl={fallbackUrl}
+                  copyPath={copyPath}
                   className="rounded-full bg-primary-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-primary-700"
                 >
                   Open Support Train
                 </OpenInAppButton>
                 {storeCta ? (
-                  <a
+                  <StoreLink
                     href={storeCta.href}
+                    copyPath={copyPath}
                     className="rounded-full border border-app px-4 py-2 text-center text-sm font-semibold text-app hover:bg-surface-muted"
                   >
                     {storeCta.label}
-                  </a>
+                  </StoreLink>
                 ) : null}
               </div>
             </div>

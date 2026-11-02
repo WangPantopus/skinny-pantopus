@@ -79,32 +79,7 @@ public struct PulsePostDetailView: View {
                     }
                 }
                 if viewModel.isOwner {
-                    if viewModel.canNarrowAudience {
-                        Button("Who can read") { showsReadScopeConfirm = true }
-                            .accessibilityIdentifier("pulseConversationReadScope")
-                    }
-                    Button("Edit post") {
-                        if case let .loaded(detail) = viewModel.state {
-                            onEdit(detail.post.id)
-                        } else if let detail = viewModel.conversation {
-                            onEdit(detail.post.id)
-                        }
-                    }
-                    if let pinTitle = viewModel.profilePinTitle {
-                        Button(pinTitle) { Task { await viewModel.toggleProfilePin() } }
-                            .accessibilityIdentifier("pulsePostProfilePin")
-                    }
-                    if viewModel.canKeepAskOpen {
-                        Button("Keep open 7 more days") {
-                            Task { await viewModel.keepAskOpen() }
-                        }
-                        .accessibilityIdentifier("pulseAskKeepOpen")
-                    }
-                    if viewModel.canCloseAsk {
-                        Button("Close") { viewModel.showsCloseAskConfirm = true }
-                            .accessibilityIdentifier("pulseAskClose")
-                    }
-                    Button("Delete post", role: .destructive) { showsDeleteConfirm = true }
+                    authorOptions
                 } else {
                     // Build spec §7's words on a Pulse conversation; the older post page keeps its own.
                     Button(viewModel.conversation != nil ? "Report a problem" : "Report post", role: .destructive) {
@@ -322,6 +297,46 @@ public struct PulsePostDetailView: View {
 }
 
 extension PulsePostDetailView {
+    /// The author's "Post options". A plan's own post opens its plan, where
+    /// Change and Cancel tell everyone, instead of Edit post and Delete post
+    /// (the server refuses both for a plan's post).
+    @ViewBuilder
+    private var authorOptions: some View {
+        if viewModel.canNarrowAudience {
+            Button("Who can read") { showsReadScopeConfirm = true }
+                .accessibilityIdentifier("pulseConversationReadScope")
+        }
+        if viewModel.isPlanPost {
+            Button("Open plan") { viewModel.openPlan() }
+                .accessibilityIdentifier("pulsePostDetail-openPlan")
+        } else {
+            Button("Edit post") {
+                if case let .loaded(detail) = viewModel.state {
+                    onEdit(detail.post.id)
+                } else if let detail = viewModel.conversation {
+                    onEdit(detail.post.id)
+                }
+            }
+        }
+        if let pinTitle = viewModel.profilePinTitle {
+            Button(pinTitle) { Task { await viewModel.toggleProfilePin() } }
+                .accessibilityIdentifier("pulsePostProfilePin")
+        }
+        if viewModel.canKeepAskOpen {
+            Button("Keep open 7 more days") {
+                Task { await viewModel.keepAskOpen() }
+            }
+            .accessibilityIdentifier("pulseAskKeepOpen")
+        }
+        if viewModel.canCloseAsk {
+            Button("Close") { viewModel.showsCloseAskConfirm = true }
+                .accessibilityIdentifier("pulseAskClose")
+        }
+        if !viewModel.isPlanPost {
+            Button("Delete post", role: .destructive) { showsDeleteConfirm = true }
+        }
+    }
+
     @ViewBuilder
     private var shareSheet: some View {
         if let url = viewModel.shareURL {

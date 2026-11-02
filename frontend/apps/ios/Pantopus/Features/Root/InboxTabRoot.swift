@@ -122,9 +122,11 @@ public struct InboxTabRoot: View {
                 let destination = await Self.linkedConversation(roomId: id, viewerId: viewerId)
                 path.open(.conversation(destination), sideBySide: isSideBySide)
             }
-        case let .assistant(nudgeId, conversationId):
+        case let .assistant(nudgeId, conversationId, launch):
             _ = router.consume()
-            openAssistant(nudge: nudgeId.map { AIAssistantNudge(notificationId: $0, conversationId: conversationId) })
+            let nudge = nudgeId.map { AIAssistantNudge(notificationId: $0, conversationId: conversationId) }
+            // A link's fixed keys, or Siri's words handed over in memory.
+            openAssistant(nudge: nudge, launch: launch ?? AIAssistantLaunchInbox.shared.take(userId: currentUserId))
         default:
             break
         }
@@ -194,7 +196,8 @@ public struct InboxTabRoot: View {
                     initialTopic: dest.initialTopic,
                     gigId: dest.gigId,
                     asBusinessUserId: dest.asBusinessUserId,
-                    aiNudge: dest.assistantNudge
+                    aiNudge: dest.assistantNudge,
+                    aiLaunch: dest.assistantLaunch
                 ),
                 mode: dest.kind,
                 onUseAIDraft: { draft in
@@ -371,7 +374,7 @@ private extension InboxTabRoot {
     /// `pantopus://assistant` (a brief's or nudge's push or row): the
     /// assistant thread, at the nudge when there is one. A thread already on
     /// top gives way, so the new one opens with its latest messages.
-    func openAssistant(nudge: AIAssistantNudge?) {
+    func openAssistant(nudge: AIAssistantNudge?, launch: AIAssistantLaunch? = nil) {
         let destination = InboxConversationDestination(
             mode: .ai,
             kind: .aiAssistant,
@@ -379,7 +382,8 @@ private extension InboxTabRoot {
             initials: "AI",
             identityKind: nil,
             verified: false,
-            assistantNudge: nudge
+            assistantNudge: nudge,
+            assistantLaunch: launch
         )
         guard !isSideBySide else {
             path.open(.conversation(destination), sideBySide: true)

@@ -533,6 +533,7 @@ fun PublicProfileScreen(
                     onReport = { viewModel.postCards.beginReport(card.id) },
                     onDismiss = { viewModel.postCards.dismissOptions() },
                     onToggleProfilePin = { viewModel.postCards.toggleProfilePin(card.id) },
+                    onOpenPlan = { viewModel.postCards.openPlan(card.id) },
                 )
             }
         }

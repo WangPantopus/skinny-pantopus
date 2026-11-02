@@ -134,7 +134,8 @@ internal fun pulseCardContent(
                 canKeepOpen = openAsk && !live.keptOpen,
                 canCloseAsk = openAsk,
                 // Seeded posts are never yours.
-                profilePinned = post.profilePinned.takeIf { isOwner },
+                profilePinned = ownProfilePin(post, isOwner),
+                isPlanPost = post.isPlanPost,
             ),
         status = statusFor(post, live),
         repostedBy = repostedByText(post.repostedBy),
@@ -146,6 +147,15 @@ internal fun FeedPost.isOwnedBy(viewerId: String?): Boolean {
     val viewer = viewerId?.takeIf { it.isNotEmpty() } ?: return false
     return userId == viewer || creator?.id == viewer
 }
+
+/**
+ * Your own post's pin state ("Pin to profile" / "Unpin from profile"); null hides both. A plan's post never shows on a
+ * profile, so the server refuses its pin (iOS hides it too).
+ */
+private fun ownProfilePin(
+    post: FeedPost,
+    isOwner: Boolean,
+): Boolean? = post.profilePinned.takeIf { isOwner && !post.isPlanPost }
 
 /** An Ask that hasn't ended: no resolution, not solved or archived, and not past its end. */
 internal fun isOpenAsk(
