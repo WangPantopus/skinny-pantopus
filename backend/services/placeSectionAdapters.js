@@ -30,6 +30,7 @@ const logger = require('../utils/logger');
 const { encodeGeohash } = require('../utils/geohash');
 const { serializePlaceSection } = require('../serializers/placeIntelligenceSerializer');
 const { readThrough, writeRow } = require('./placeSectionCache');
+const { readResponse, hasData } = require('./external/cacheHelper');
 const { resolveHomeTimezone } = require('../utils/timezone');
 const { geocodeToTract } = require('./ai/neighborhoodProfileService');
 const { fetchHeatRisk } = require('./external/heatRisk');
@@ -55,7 +56,30 @@ function homeLatLng(home) {
   return null;
 }
 
-async function fetchJson(url, { headers } = {}) {
+async function fetchJson(url, options = {}) {
+  const host = new URL(url).hostname;
+  let policy;
+  if (host === 'geocoding.geo.census.gov') {
+    policy = { provider: 'CENSUS_GEOGRAPHIES', isUsable: (data) => {
+      const town = data?.result?.geographies?.['County Subdivisions']?.[0];
+      return town?.STATE === '09' && /^\d{5}$/.test(String(town.COUSUB || ''));
+    } };
+  } else if (host === 'earthquake.usgs.gov') {
+    policy = { provider: 'USGS_DESIGN', isUsable: (data) => Boolean(SDC_PHRASES[String(data?.response?.data?.sdc || '').toUpperCase()]) };
+  } else if (host === 'imagery.geoplatform.gov') {
+    policy = { provider: 'USFS_WHP', isUsable: (data) => !data?.error && hasData(data?.value) && data.value !== 'NoData' };
+  } else if (host === 'services.arcgis.com') {
+    policy = { provider: 'EPA_SERVICE_AREA', maxAgeMs: 90 * DAY_MS,
+      isUsable: (data) => !data?.error && hasData(data?.features) };
+  } else if (host === 'data.epa.gov') {
+    policy = { provider: 'EPA_SDWIS', maxAgeMs: 90 * DAY_MS, isUsable: (data) => Array.isArray(data) && hasData(data) };
+  }
+  if (!policy) return fetchJsonLive(url, options);
+  const { response } = await readResponse({ ...policy, url, fetch: () => fetchJsonLive(url, options) });
+  return response;
+}
+
+async function fetchJsonLive(url, { headers } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -121,8 +145,8 @@ async function lookupCountyFips(home, ll, pointKey) {
     const { payload } = await readThrough({
       cacheKey: pointKey,
       sectionId: '_county_fips',
-      // County assignment changes only at the decennial census —
-      // effectively permanent, refreshed yearly as a safety valve.
+      reuseStored: true,
+      // Preserve this stable assignment; reuseStored controls retention.
       ttlMs: 365 * DAY_MS,
       fetch: async () => {
         const tract = await geocodeToTract(ll.lat, ll.lng);
@@ -150,6 +174,7 @@ async function connecticutLegacyCounty(home) {
     const { payload } = await readThrough({
       cacheKey: `geo:${encodeGeohash(ll.lat, ll.lng, 7)}`,
       sectionId: '_ct_legacy_county',
+      reuseStored: true,
       ttlMs: 365 * DAY_MS,
       fetch: async () => {
         const data = await fetchJson(
@@ -882,22 +907,30 @@ function mapEchoFacilities(rows, lat, lng) {
 // no resolvable rows THROWS rather than caching a half-payload — the
 // envelope serves stale/error and a later request completes the pair.
 async function fetchEchoFacilities(lat, lng) {
-  const search = echoResults(await fetchJson(
-    `${ECHO_URL}?output=JSON&p_lat=${lat}&p_long=${lng}&p_radius=1&responseset=20`,
-  ));
-  const count = Number(search.QueryRows) || 0;
-
-  let rows = Array.isArray(search.Facilities) ? search.Facilities : [];
-  if (count > 0 && rows.length === 0 && search.QueryID) {
-    const page = echoResults(await fetchJson(
-      `https://echodata.epa.gov/echo/echo_rest_services.get_qid?output=JSON&qid=${encodeURIComponent(search.QueryID)}&pageno=1`
-        + `&qcolumns=${Object.values(ECHO_COLUMN_IDS).join(',')}`,
-    ));
-    rows = Array.isArray(page.Facilities) ? page.Facilities : [];
-  }
-  if (count > 0 && rows.length === 0) {
-    throw new Error('ECHO returned a count but no facility rows');
-  }
+  const url = `${ECHO_URL}?output=JSON&p_lat=${lat}&p_long=${lng}&p_radius=1&responseset=20`;
+  const { response } = await readResponse({
+    provider: 'EPA_ECHO', url, maxAgeMs: 90 * DAY_MS,
+    isUsable: (data) => hasData(data?.rows),
+    fetch: async () => {
+      const searchResponse = await fetchJson(url);
+      const search = echoResults(searchResponse);
+      const count = Number(search.QueryRows) || 0;
+      let rows = Array.isArray(search.Facilities) ? search.Facilities : [];
+      let pageResponse = null;
+      if (count > 0 && rows.length === 0 && search.QueryID) {
+        pageResponse = await fetchJson(
+          `https://echodata.epa.gov/echo/echo_rest_services.get_qid?output=JSON&qid=${encodeURIComponent(search.QueryID)}&pageno=1`
+            + `&qcolumns=${Object.values(ECHO_COLUMN_IDS).join(',')}`,
+        );
+        const page = echoResults(pageResponse);
+        rows = Array.isArray(page.Facilities) ? page.Facilities : [];
+      }
+      if (count > 0 && rows.length === 0) throw new Error('ECHO returned a count but no facility rows');
+      return { searchResponse, pageResponse, rows, count };
+    },
+  });
+  const rows = response?.rows || [];
+  const count = response?.count || 0;
 
   const all = mapEchoFacilities(rows, lat, lng);
   const snc = all.filter((f) => f.significant_noncompliance).length;
@@ -1420,6 +1453,7 @@ async function composeSeismic(home) {
     const { payload, fetchedAt, stale } = await readThrough({
       cacheKey: `geo:${gh5}`,
       sectionId: 'seismic',
+      reuseStored: true,
       ttlMs: 180 * DAY_MS, // hazard model updates on a multi-year cycle
       fetch: async () => {
         // Call the current endpoint directly: the old ws/designmaps/asce7-22.json
@@ -1498,6 +1532,7 @@ async function composeWildfire(home) {
     const { payload, fetchedAt, stale } = await readThrough({
       cacheKey: `geo:${gh6}`,
       sectionId: 'wildfire',
+      reuseStored: true,
       ttlMs: 180 * DAY_MS, // WHP is a vintage raster (2023)
       fetch: async () => {
         const cls = await whpClassAt(ll.lat, ll.lng);

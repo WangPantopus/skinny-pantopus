@@ -342,12 +342,12 @@ describe('NeighborhoodProfileService', () => {
 
       setupCacheSequence({ data: null, error: null });
 
-      // 1. Geocoder, 2. Census ACS, 3. Walk Score, 4. FEMA
-      global.fetch
-        .mockResolvedValueOnce(mockFetchResponse(MOCK_GEOCODER_RESPONSE))  // geocoder
-        .mockResolvedValueOnce(mockFetchResponse(MOCK_CENSUS_ACS_RESPONSE)) // census
-        .mockResolvedValueOnce(mockFetchResponse(MOCK_WALKSCORE_RESPONSE))  // walkscore
-        .mockResolvedValueOnce(mockFetchResponse(MOCK_FEMA_RESPONSE));      // fema
+      // Database lookups can complete in any order; bind responses to URLs.
+      global.fetch.mockImplementation(async (url) => mockFetchResponse(
+        url.includes('geocoding.geo.census.gov') ? MOCK_GEOCODER_RESPONSE
+          : url.includes('api.census.gov') ? MOCK_CENSUS_ACS_RESPONSE
+            : url.includes('walkscore.com') ? MOCK_WALKSCORE_RESPONSE : MOCK_FEMA_RESPONSE,
+      ));
 
       const result = await getProfile({ latitude: MOCK_LAT, longitude: MOCK_LNG, address: MOCK_ADDRESS });
 

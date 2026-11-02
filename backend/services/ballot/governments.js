@@ -7,7 +7,8 @@
 // The key identifies land, not a home or household; moving a pin gets a new
 // answer. Point keys are redacted from logs by placeSectionCache.
 // A saved home's governments expire after 30 days (at most 7 days stale).
-// An anonymous /start lookup makes a live call without writing here.
+// Anonymous lookups share the hashed provider response, without a Home or
+// account association; they do not create section-cache rows here.
 //
 // P0 counts governments, not election districts: the United States, the
 // state, the county, an incorporated place and the school district(s).
@@ -18,6 +19,7 @@
 const logger = require('../../utils/logger');
 const { createHash } = require('crypto');
 const { readThrough, readRow } = require('../placeSectionCache');
+const { readResponse, hasData } = require('../external/cacheHelper');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8000;
@@ -41,16 +43,23 @@ function pointCacheKey(lat, lng) {
 }
 
 async function fetchGeographies(lat, lng, { timeoutMs = FETCH_TIMEOUT_MS } = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(geocoderUrl(lat, lng), { signal: controller.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    return (data && data.result && data.result.geographies) || null;
-  } finally {
-    clearTimeout(timer);
-  }
+  const url = geocoderUrl(lat, lng);
+  const { response } = await readResponse({
+    provider: 'CENSUS_GEOGRAPHIES', url, maxAgeMs: CACHE_TTL_MS,
+    isUsable: (data) => hasData(data?.result?.geographies),
+    fetch: async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+  });
+  return response?.result?.geographies || null;
 }
 
 // A Place load asks the geocoder about one point from two sections (the
