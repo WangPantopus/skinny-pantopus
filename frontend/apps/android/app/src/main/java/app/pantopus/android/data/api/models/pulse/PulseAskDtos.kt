@@ -3,10 +3,15 @@ package app.pantopus.android.data.api.models.pulse
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
-/** The lifecycle marker in a legacy post's `post_metadata`; all other metadata stays unread. */
+/**
+ * The marks in a legacy post's `post_metadata`: the lifecycle marker, and the mark Plans puts on a plan's own post. All
+ * other metadata stays unread.
+ */
 @JsonClass(generateAdapter = true)
 data class PostLifecycleMetadata(
     @Json(name = "kept_open_at") val keptOpenAt: String? = null,
+    /** True on a plan's own post (Plans sets it): its event times are real moments, not the composer's wall clock. */
+    val plan: Boolean? = null,
 )
 
 /** Where an Ask stands after the asker kept it open or closed it (contract section 2.12). */

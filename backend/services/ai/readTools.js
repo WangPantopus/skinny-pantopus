@@ -349,9 +349,12 @@ function postForModel(post, zone) {
     state: post.state || null,
     event_date: post.event_date || null,
     // An event's time and venue as its page shows them to everyone who reads it: composers post the
-    // poster's wall clock labelled UTC, so it reads in UTC.
+    // poster's wall clock labelled UTC, so it reads in UTC; a plan's own post (post_metadata.plan, set
+    // by Plans) holds the real moment, so it reads in the person's zone, as the apps show it.
     ...(post.post_type === 'event' ? {
-      event_when: post.event_date ? whenLabel(post.event_date, post.event_end_date, 'UTC') : null,
+      event_when: post.event_date
+        ? whenLabel(post.event_date, post.event_end_date, post.post_metadata?.plan === true ? zone : 'UTC')
+        : null,
       event_venue_text: clip(post.event_venue, 120),
     } : {}),
   };

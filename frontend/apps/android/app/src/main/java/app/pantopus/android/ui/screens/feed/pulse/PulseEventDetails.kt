@@ -40,19 +40,20 @@ data class PulseEventDetails(
 )
 
 /**
- * Null unless an Event post names a start time or a place. [long] spells the weekday out ("Sunday, Oct 18 · …"),
- * as the post page does.
+ * Null unless an Event post names a start time or a place. [isPlanPost]: a plan's own post, whose times are real
+ * moments. [long] spells the weekday out ("Sunday, Oct 18 · …"), as the post page does.
  */
 fun pulseEventDetails(
     postType: String?,
     startsAt: String?,
     endsAt: String?,
     venue: String?,
+    isPlanPost: Boolean = false,
     long: Boolean = false,
     now: Instant = Instant.now(),
 ): PulseEventDetails? {
     if (postType != "event") return null
-    val whenText = eventWhen(startsAt, endsAt, long, now)
+    val whenText = eventWhen(startsAt, endsAt, isPlanPost, long, now)
     val place = venue?.trim()?.takeIf { it.isNotEmpty() }
     if (whenText == null && place == null) return null
     return PulseEventDetails(whenText = whenText, place = place)
@@ -61,16 +62,20 @@ fun pulseEventDetails(
 /**
  * Every composer stores the time the poster picked as wall-clock time labelled UTC (the web card reads it in UTC
  * too), so it's read in UTC, and "Today" or "Tomorrow" compares it with the phone's own wall clock read the same
- * way. An end at or before the start is left out.
+ * way. A plan's own post (made by Plans) stores the real moment, so it's read in the phone's time zone. An end at or
+ * before the start is left out.
  */
 private fun eventWhen(
     startsAt: String?,
     endsAt: String?,
+    isPlanPost: Boolean,
     long: Boolean,
     now: Instant,
 ): String? {
-    val start = PlanFormat.instant(startsAt)?.atZone(ZoneOffset.UTC) ?: return null
-    val end = PlanFormat.instant(endsAt)?.atZone(ZoneOffset.UTC)?.takeIf { it.isAfter(start) }
+    val zone = if (isPlanPost) ZoneId.systemDefault() else ZoneOffset.UTC
+    val start = PlanFormat.instant(startsAt)?.atZone(zone) ?: return null
+    val end = PlanFormat.instant(endsAt)?.atZone(zone)?.takeIf { it.isAfter(start) }
+    if (isPlanPost) return PlanFormat.whenLine(start, end, long, now)
     val wallClockNow = now.plusSeconds(ZoneId.systemDefault().rules.getOffset(now).totalSeconds.toLong())
     return PlanFormat.whenLine(start, end, long, wallClockNow)
 }

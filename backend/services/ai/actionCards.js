@@ -718,9 +718,11 @@ function venueNames(venue) {
 /**
  * An event time as the post page shows it: composers post the poster's wall clock labelled UTC
  * (iOS PulseComposeViewModel.isoDateTime, PulseEventDetails), so "10:00Z" is 10:00 where they are.
+ * A plan's own post (post_metadata.plan, set by Plans) holds the real moment: pass the person's
+ * `zone` to read it there.
  */
-function eventWallClock(iso) {
-  const at = DateTime.fromISO(String(iso || ''), { zone: 'utc' });
+function eventWallClock(iso, zone = 'utc') {
+  const at = DateTime.fromISO(String(iso || ''), { zone: 'utc' }).setZone(zone);
   return at.isValid ? at.toFormat("yyyy-LL-dd'T'HH:mm") : null;
 }
 
@@ -747,8 +749,9 @@ async function draftPlanFromEvent(args, ctx) {
 
   // When: the event's own time, as its page shows it, unless they gave another.
   const now = Date.now();
-  const eventStartLocal = eventWallClock(event.event_date);
-  const eventEndLocal = eventWallClock(event.event_end_date);
+  const eventZone = event.post_metadata?.plan === true ? zoneOr(ctx.timeZone) : 'utc';
+  const eventStartLocal = eventWallClock(event.event_date, eventZone);
+  const eventEndLocal = eventWallClock(event.event_end_date, eventZone);
   const eventStart = Date.parse(localToUtc(eventStartLocal, ctx.timeZone) || '');
   const eventEnd = Date.parse(localToUtc(eventEndLocal, ctx.timeZone) || '');
   if (Number.isFinite(eventEnd) && eventEnd <= now) return { error: 'This event is over, so there is nothing to plan around it. Say so.' };

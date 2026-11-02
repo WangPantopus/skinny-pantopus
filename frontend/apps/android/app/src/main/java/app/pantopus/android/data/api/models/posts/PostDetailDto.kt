@@ -156,6 +156,9 @@ data class PostDetailDto(
     /** A moderator removed the post: neighbors can't see it or reply. */
     val isRemovedByModerator: Boolean get() = archiveReason == "moderation"
 
+    /** A plan's own post (Plans marks it `post_metadata.plan`): its event times are real moments. */
+    val isPlanPost: Boolean get() = lifecycleMetadata?.plan == true
+
     val canShareExternally: Boolean
         get() =
             !isRemovedByModerator &&

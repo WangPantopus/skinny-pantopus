@@ -1216,7 +1216,8 @@ public final class PulseFeedViewModel {
                 postType: post.postType,
                 startsAt: post.eventDate,
                 endsAt: post.eventEndDate,
-                venue: post.eventVenue
+                venue: post.eventVenue,
+                isPlanPost: post.isPlanPost
             ),
             // The post's one reaction (the backend's single like counter),
             // named by its type: Going, Celebrate or Helpful.
