@@ -53,6 +53,8 @@ extension PlaceChange {
 struct PlaceChangesSheet: View {
     let changes: [PlaceChange]
     let total: Int
+    /// Some sources couldn't be read (as Android says it).
+    var incomplete = false
     let calendar: Calendar
     let onOpen: (PlaceChange) -> Void
     let onClose: () -> Void
@@ -75,6 +77,13 @@ struct PlaceChangesSheet: View {
             .padding(.top, 14)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    if incomplete {
+                        Text("Some sources couldn't be read, so this list may be missing changes.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.bottom, 8)
+                    }
                     if total > changes.count {
                         Text("The latest \(changes.count) of \(total).")
                             .font(.system(size: 13))

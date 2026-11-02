@@ -18,9 +18,11 @@ public struct PlaceChangesResponse: Decodable, Sendable {
     /// Every match, though at most 20 items come back.
     public let total: Int?
     public let items: [PlaceChange]
+    /// A source couldn't be read, so some changes may be missing.
+    public let incomplete: Bool
 
     private enum CodingKeys: String, CodingKey {
-        case since, until, total, items
+        case since, until, total, items, incomplete
     }
 
     public init(from decoder: Decoder) throws {
@@ -28,6 +30,7 @@ public struct PlaceChangesResponse: Decodable, Sendable {
         since = try c.decodeIfPresent(String.self, forKey: .since)
         until = try c.decodeIfPresent(String.self, forKey: .until)
         total = try c.decodeIfPresent(Int.self, forKey: .total)
+        incomplete = (try? c.decodeIfPresent(Bool.self, forKey: .incomplete)) ?? false
         // An item this build can't read is left out; the rest still show.
         items = (try? c.decode([FailableChange].self, forKey: .items))?.compactMap(\.change) ?? []
     }
