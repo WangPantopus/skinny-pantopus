@@ -116,15 +116,6 @@ final class PulsePostDetailViewModelTests: XCTestCase {
         XCTAssertNotNil(vm.toastMessage)
     }
 
-    func testHeartReactionIsDisplayOnly() async {
-        // The conversation has no public heart score; an old caller cannot add one.
-        SequencedURLProtocol.sequence = [.status(200, body: Self.postJSON)]
-        let vm = PulsePostDetailViewModel(postId: "p1", client: makeAPI())
-        await vm.load()
-        await vm.tapReaction(.heart)
-        XCTAssertNil(vm.toastMessage)
-    }
-
     // MARK: - Comments
 
     func testSendCommentRefetchesAndClearsComposer() async {

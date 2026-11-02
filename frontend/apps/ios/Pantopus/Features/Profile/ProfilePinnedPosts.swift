@@ -204,17 +204,13 @@ enum ProfilePinnedPost {
         return nil
     }
 
-    /// The kind's main count, as its card counts it: "18 going", "31 likes",
-    /// "12 helpful", "9 seen"; nil at zero.
+    /// The count that says most about it, as on web and Android: its
+    /// reaction ("18 going", "4 celebrated", "12 helpful"), else its replies;
+    /// nil when it has neither.
     static func mainCount(_ post: FeedPostDTO) -> String? {
-        let count = post.likeCount
-        guard count > 0 else { return nil }
-        return switch PulseIntent.from(postType: post.postType) {
-        case .event: "\(count) going"
-        case .lost, .announce, .alert: "\(count) seen"
-        case .neighborhoodWin, .generic, .all: "\(count) \(count == 1 ? "like" : "likes")"
-        case .ask, .recommend, .deal, .visitorGuide: "\(count) helpful"
-        }
+        if post.likeCount > 0 { return PostReactionKind(postType: post.postType).countText(post.likeCount) }
+        if post.commentCount > 0 { return "\(post.commentCount) \(post.commentCount == 1 ? "reply" : "replies")" }
+        return nil
     }
 
     static func spoken(_ post: FeedPostDTO) -> String {

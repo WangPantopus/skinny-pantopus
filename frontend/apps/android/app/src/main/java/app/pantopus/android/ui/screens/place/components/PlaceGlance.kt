@@ -88,7 +88,7 @@ fun PlaceGlanceHeading(modifier: Modifier = Modifier) {
 fun PlaceGlanceGroupRow(
     icon: PantopusIcon,
     title: String,
-    summary: String,
+    summary: String?,
     open: Boolean,
     onToggle: () -> Unit,
     testTag: String,
@@ -110,14 +110,16 @@ fun PlaceGlanceGroupRow(
             PantopusIconImage(icon, null, size = 19.dp, strokeWidth = 2f, tint = PantopusColors.appTextSecondary)
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-                Text(
-                    summary,
-                    fontSize = 12.5.sp,
-                    lineHeight = 17.sp,
-                    color = PantopusColors.appTextSecondary,
-                    maxLines = if (open) Int.MAX_VALUE else SUMMARY_LINES,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                summary?.let {
+                    Text(
+                        it,
+                        fontSize = 12.5.sp,
+                        lineHeight = 17.sp,
+                        color = PantopusColors.appTextSecondary,
+                        maxLines = if (open) Int.MAX_VALUE else SUMMARY_LINES,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             PantopusIconImage(if (open) PantopusIcon.Minus else PantopusIcon.Plus, null, size = 18.dp, tint = PantopusColors.appTextMuted)
         }

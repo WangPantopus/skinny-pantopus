@@ -307,7 +307,7 @@ class PulseFeedViewModelTest {
             vm.load()
             vm.tapReaction("p1")
             val loaded = vm.state.value as PulseFeedUiState.Loaded
-            assertEquals(13, loaded.rows.first().reactions.first().count)
+            assertEquals(13, loaded.rows.first().reaction.likeCount)
             assertTrue(loaded.rows.first().userHasReacted)
         }
 
@@ -321,7 +321,7 @@ class PulseFeedViewModelTest {
             vm.load()
             vm.tapReaction("p1")
             val loaded = vm.state.value as PulseFeedUiState.Loaded
-            assertEquals(12, loaded.rows.first().reactions.first().count)
+            assertEquals(12, loaded.rows.first().reaction.likeCount)
             assertFalse(loaded.rows.first().userHasReacted)
         }
 }

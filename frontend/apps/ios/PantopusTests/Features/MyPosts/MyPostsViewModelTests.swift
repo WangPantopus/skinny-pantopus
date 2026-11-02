@@ -23,8 +23,6 @@
 import XCTest
 @testable import Pantopus
 
-// swiftlint:disable type_body_length
-
 @MainActor
 final class MyPostsViewModelTests: XCTestCase {
     override func setUp() {
@@ -160,48 +158,32 @@ final class MyPostsViewModelTests: XCTestCase {
         XCTAssertEqual(PulseIntent.from(postType: "garbage"), .generic)
     }
 
-    func testEngagementItemsAdaptToIntent() {
-        let dto = MyPostDTO(
-            id: "p",
-            userId: "u",
-            content: "x",
-            postType: "event",
-            createdAt: "2026-05-15T10:00:00Z",
-            likeCount: 12,
-            commentCount: 5
-        )
-        let events = MyPostsViewModel.engagementItems(for: dto, intent: .event)
-        XCTAssertEqual(events.first?.label, "12 going")
-        XCTAssertEqual(events.last?.label, "5 replies")
-
-        let recommend = MyPostsViewModel.engagementItems(
-            for: dto,
-            intent: .recommend
-        )
-        XCTAssertEqual(recommend.first?.label, "12 helpful")
-
-        let lost = MyPostsViewModel.engagementItems(for: dto, intent: .lost)
-        XCTAssertEqual(lost.first?.label, "5 replies")
-        XCTAssertEqual(lost.last?.label, "12 seen")
-
-        let ask = MyPostsViewModel.engagementItems(for: dto, intent: .ask)
-        XCTAssertEqual(ask.first?.label, "5 replies")
-        XCTAssertEqual(ask.last?.label, "12 likes")
-
-        let singleReply = MyPostsViewModel.engagementItems(
-            for: MyPostDTO(
+    func testEngagementItemsNameTheReactionByPostType() {
+        func post(_ type: String, likes: Int = 12, replies: Int = 5) -> MyPostDTO {
+            MyPostDTO(
                 id: "p",
                 userId: "u",
                 content: "x",
-                postType: "ask_local",
+                postType: type,
                 createdAt: "2026-05-15T10:00:00Z",
-                likeCount: 1,
-                commentCount: 1
-            ),
-            intent: .ask
-        )
-        XCTAssertEqual(singleReply.first?.label, "1 reply")
-        XCTAssertEqual(singleReply.last?.label, "1 like")
+                likeCount: likes,
+                commentCount: replies
+            )
+        }
+        let events = MyPostsViewModel.engagementItems(for: post("event"), intent: .event)
+        XCTAssertEqual(events.map(\.label), ["12 going", "5 replies"])
+
+        let recommend = MyPostsViewModel.engagementItems(for: post("recommendation"), intent: .recommend)
+        XCTAssertEqual(recommend.map(\.label), ["12 helpful", "5 replies"])
+
+        let win = MyPostsViewModel.engagementItems(for: post("neighborhood_win"), intent: .neighborhoodWin)
+        XCTAssertEqual(win.map(\.label), ["5 replies", "12 celebrated"])
+
+        let lost = MyPostsViewModel.engagementItems(for: post("lost_found"), intent: .lost)
+        XCTAssertEqual(lost.map(\.label), ["5 replies", "12 helpful"])
+
+        let singleReply = MyPostsViewModel.engagementItems(for: post("ask_local", likes: 1, replies: 1), intent: .ask)
+        XCTAssertEqual(singleReply.map(\.label), ["1 reply", "1 helpful"])
     }
 
     func testTimeMetaCombinesRelativeTimeAndLocality() {

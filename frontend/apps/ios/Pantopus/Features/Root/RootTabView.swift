@@ -129,6 +129,9 @@ public final class RootTabModel {
     /// "Open your ballot" (Today, or Place's Today page): this Home's Your
     /// Place scrolls to its ballot card once, then clears it (as on Android).
     public var placeBallotHomeId: String?
+    /// "Add radon test information" (Place's risk list): Today opens its
+    /// home setup on this Home's radon question once, then clears it (as on Android).
+    public var todayRadonHomeId: String?
     /// The side menu is open (each tab's menu button sets it; the drawer,
     /// hosted by `RootTabView`, clears it when it closes).
     public var showsNavigationMenu = false

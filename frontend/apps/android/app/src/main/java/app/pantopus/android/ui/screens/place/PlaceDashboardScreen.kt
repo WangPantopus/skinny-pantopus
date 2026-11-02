@@ -82,6 +82,7 @@ import app.pantopus.android.ui.screens.place.components.PlaceWorthALook
 import app.pantopus.android.ui.screens.place.components.WorthItem
 import app.pantopus.android.ui.screens.place.components.placeSurface
 import app.pantopus.android.ui.screens.place.components.rememberGlanceOpen
+import app.pantopus.android.ui.screens.place.detail.RadonToday
 import app.pantopus.android.ui.screens.place.detail.TodayAskEntry
 import app.pantopus.android.ui.screens.place.messaging.PlaceMessagesActionRow
 import app.pantopus.android.ui.screens.place.verify.PlaceVerifyMethod
@@ -138,6 +139,8 @@ fun PlaceDashboardScreen(
     onAsk: ((AIScreenContext) -> Unit)? = null,
     /** A household task's own page ("Worth a look"). */
     onOpenTask: ((taskId: String) -> Unit)? = null,
+    /** Today's home setup on this Home's radon question (Risk and environment's next step); null leaves it out. */
+    onOpenTodayRadon: (() -> Unit)? = null,
     viewModel: PlaceDashboardViewModel = hiltViewModel(key = "place-$homeId"),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -147,6 +150,8 @@ fun PlaceDashboardScreen(
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
     val homeShortcuts by viewModel.homeShortcuts.collectAsStateWithLifecycle()
     val worthTasks by viewModel.worthTasks.collectAsStateWithLifecycle()
+    val canAddTasks by viewModel.canAddTasks.collectAsStateWithLifecycle()
+    val isTodayHome by viewModel.isTodayHome.collectAsStateWithLifecycle()
     val changes by viewModel.changes.collectAsStateWithLifecycle()
     var showChanges by remember { mutableStateOf(false) }
     val changeRoutes =
@@ -233,6 +238,12 @@ fun PlaceDashboardScreen(
                     onAsk = onAsk?.let { ask -> { ask(AIScreenContext.place(homeId, null, "Your Place")) } },
                     tasks = worthTasks,
                     onOpenTask = onOpenTask,
+                    // Today's radon question, for the Home Today shows, while no radon test is on record and this
+                    // person may answer it (as on iPhone).
+                    onOpenRadon =
+                        onOpenTodayRadon?.takeIf {
+                            current.claim == null && isTodayHome && canAddTasks && RadonToday.selected(worthTasks) == null
+                        },
                     changes = placeChangeItems(changes, current.intelligence.homeZone, changeRoutes),
                     changesFooter =
                         changes?.takeIf { it.total > minOf(it.items.size, CHANGES_SHOWN) }?.let { answer ->
@@ -336,6 +347,8 @@ internal fun PlaceDashboardContent(
     changesFooter: (@Composable () -> Unit)? = null,
     /** A task's existing detail page. */
     onOpenTask: ((taskId: String) -> Unit)? = null,
+    /** Today's radon question, when it is this person's next step here (Risk and environment). */
+    onOpenRadon: (() -> Unit)? = null,
 ) {
     val isVerified = intel.tier == PlaceTier.T4
     // Verifying is the next step for a claimed resident and for a private setup (by mail). Guests and service
@@ -462,6 +475,7 @@ internal fun PlaceDashboardContent(
                             onOpenPrivacyMirror = onOpenPrivacyMirror,
                             onOpenGovernments = { ballotGovernments = it },
                             ballotRequester = ballotRequester,
+                            onOpenRadon = onOpenRadon,
                         ),
                     modifier = Modifier.padding(horizontal = 16.dp).padding(top = 28.dp),
                 )

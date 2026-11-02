@@ -85,8 +85,13 @@ enum TodayAlerts {
         let onset = PlacePresentation.parseISO(alert.onset)
         let ends = PlacePresentation.parseISO(alert.ends)
         if let onset, onset > now {
-            let from = "From \(TodayClock.dayTime(onset, now: now, calendar: calendar))"
-            return ends.map { "\(from) until \(TodayClock.dayTime($0, now: now, calendar: calendar))" } ?? from
+            // The end on the onset's day is a time; a later day says which ("through tomorrow 4 AM"), as on Android.
+            let end = ends.map { ends in
+                calendar.isDate(ends, inSameDayAs: onset)
+                    ? "until \(TodayClock.time(ends, calendar: calendar))"
+                    : "through \(TodayClock.dayTime(ends, now: now, calendar: calendar))"
+            } ?? "until further notice"
+            return "From \(TodayClock.dayTime(onset, now: now, calendar: calendar)) \(end)"
         }
         guard let ends else { return "Until further notice" }
         if calendar.isDate(ends, inSameDayAs: now) { return "Until \(TodayClock.time(ends, calendar: calendar))" }

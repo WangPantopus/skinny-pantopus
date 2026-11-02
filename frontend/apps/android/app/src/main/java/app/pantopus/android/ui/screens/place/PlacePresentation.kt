@@ -322,6 +322,11 @@ object PlacePresentation {
                             value = "${d.summary.agingCount} aging",
                             statusDot = PantopusColors.warning,
                         )
+                    // An unknown year is never "within expected life" (as iPhone says it).
+                    d.systems.any { it.status == "unknown" } ->
+                        d.systems.count { it.status == "unknown" }.let { unknown ->
+                            PlaceSectionReading(value = if (unknown == 1) "1 install year unknown" else "$unknown install years unknown")
+                        }
                     else ->
                         PlaceSectionReading(
                             value = "All within expected life",
@@ -466,7 +471,8 @@ object PlacePresentation {
                     next != null ->
                         PlaceSectionReading(
                             value = "${next.title} · ${daysUntilLabel(next.daysUntil)}",
-                            statusDot = if (next.daysUntil <= 1) PantopusColors.error else PantopusColors.home,
+                            // Soon is worth noticing, not an alarm (as iPhone shows it).
+                            statusDot = if (next.daysUntil <= 1) PantopusColors.warning else PantopusColors.home,
                         )
                     d.needsPickupDay -> PlaceSectionReading(value = "Set your pickup day")
                     else -> PlaceSectionReading(value = "Nothing in the next ${d.windowDays} days")
@@ -556,22 +562,6 @@ object PlacePresentation {
             else -> "In $days days"
         }
 
-    /** The all-clear line's air words: good air is good; moderate air (AQI 51–100) is said as moderate, never as good. */
-    private fun allClearAir(category: AirQualityCategory?): String? =
-        when (category) {
-            AirQualityCategory.GOOD -> "air is good"
-            AirQualityCategory.MODERATE -> "air quality is moderate"
-            else -> null
-        }
-
-    /** The line when weather alerts couldn't be checked: never an all-clear. */
-    private fun alertsUnavailableTitle(airClause: String?): String =
-        if (airClause == null) {
-            "Air quality and weather alerts aren't available for your block right now."
-        } else {
-            airClause.replaceFirstChar { it.uppercase() } + " on your block today. Weather alerts aren't available right now."
-        }
-
     fun derivePulse(intel: PlaceIntelligence): PlaceDerivedPulse {
         val aqi = findSection(intel, PlaceSectionId.AIR_QUALITY)
         val alerts = findSection(intel, PlaceSectionId.ALERTS)
@@ -603,8 +593,11 @@ object PlacePresentation {
             )
         }
 
-        // 3) No active weather alerts — assert only what we actually know.
-        val airClause = allClearAir(aqiData?.category)
+        // 3) Nothing urgent — say only what was checked: weather alerts, and the air reading with its number. Moderate
+        //    air (AQI 51–100) is moderate, never good. The same words as iPhone.
+        val airSentence =
+            aqiData?.takeIf { it.category == AirQualityCategory.GOOD || it.category == AirQualityCategory.MODERATE }
+                ?.let { "Air quality is ${it.categoryLabel.lowercase()} (${it.index})." }
         val alertsKnownClear = alerts?.status == PlaceSectionStatus.READY && (alerts.alerts?.active?.isEmpty() ?: true)
 
         val billData = if (bill?.status == PlaceSectionStatus.READY) bill.billBenchmark else null
@@ -619,7 +612,9 @@ object PlacePresentation {
         if (!alertsKnownClear) {
             return PlaceDerivedPulse(
                 variant = PlaceHeroVariant.ALL_CLEAR,
-                title = alertsUnavailableTitle(airClause),
+                title =
+                    airSentence?.let { "$it Weather alerts aren't available right now." }
+                        ?: "Air quality and weather alerts aren't available right now.",
                 chip = PlaceChipModel(PlaceChipTone.NEUTRAL, "Alerts unavailable"),
                 heroIcon = PantopusIcon.CloudOff,
                 nudgeIcon = PantopusIcon.Lightbulb,
@@ -628,10 +623,7 @@ object PlacePresentation {
         }
 
         // Only what was checked: the weather alerts for this address and, when known, its air.
-        val air =
-            aqiData?.takeIf { it.category == AirQualityCategory.GOOD || it.category == AirQualityCategory.MODERATE }
-                ?.let { " Air quality is ${it.categoryLabel.lowercase()} (${it.index})." }
-        val title = "No active weather alerts right now." + air.orEmpty()
+        val title = listOfNotNull("No active weather alerts right now.", airSentence).joinToString(" ")
 
         return PlaceDerivedPulse(
             variant = PlaceHeroVariant.ALL_CLEAR,
