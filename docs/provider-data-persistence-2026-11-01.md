@@ -77,9 +77,8 @@ This change does not alter subscriptions or claim rights beyond those contracts.
 
 ## Verification
 
-Existing backend checks and all privacy gates passed during development. The
-final full run passed 6,631 tests (16 skipped), with one unrelated account-deletion
-test exceeding its five-second timeout. Its isolated suite rerun passed all 89 tests.
+The final full backend run passed 6,632 tests (16 skipped), and all privacy gates
+passed. Focused reruns also passed after the additional data-integrity audit.
 Existing assertions were updated for persistent Census reuse, empty results,
 and apartment isolation. No new unit tests were added.
 
@@ -92,17 +91,38 @@ synthetic ATTOM responses:
   the provider offline and no new provider call.
 - An empty stored property array caused a new fetch and was replaced.
 - Different apartment units used separate request keys.
-- Anonymous database access could not read the raw response table.
+- Anonymous and authenticated database clients could neither read nor write raw
+  provider responses. An unrelated user received HTTP 403 for another Home's profile.
+- Partial property profiles retried only their missing AVM/trend endpoints;
+  complete profiles made no further provider calls. Raw acquisition timestamps
+  prevent rebuilding a profile from extending the freshness of old valuations.
+- A stale record remained usable for ordinary building facts but could not
+  approve ownership when the provider was unavailable.
+- A deliberately rejected database write returned `persisted: false`; the next
+  lookup fetched again and saved successfully. The temporary local failure
+  trigger was removed after the check.
+- Query ordering and credential rotation reused the same request key; units
+  remained separate. Zero, false and unknown nested fields survived unchanged.
+
+The audit also corrected empty full-response envelopes masking valid legacy
+property records, address-only AVM responses counting as complete valuations,
+and missing Census tract/town or USGS seismic-category fields becoming permanent
+cache hits. Home identity edits remain rejected by the existing address-change
+flow; ordinary settings edits cannot silently move a cached profile to a different
+address.
 
 An actual Census geographies response for a public civic-building location was
 saved in the isolated database; a second lookup made no additional external call.
 The real web app displayed the synthetic ATTOM property facts on Your home and
 kept them after reload with the provider offline. An authorized household member
 also received the saved property profile through the real API while the provider
-was offline. Both iOS and Android builds
-passed. Native UI acceptance remains unverified: Device Hub automation could not
-select the isolated simulator, and the new Android emulator could not allocate
-its data partition. No physical-device checks were performed.
+was offline. Both iOS and Android builds passed. The isolated iOS simulator
+displayed the saved year, floor area, beds/baths and lot size after app and backend
+restarts with the provider offline and no additional ATTOM calls. Android's data
+partition issue is resolved and the app launches in the isolated emulator, but
+interactive acceptance is still blocked by the desktop control tool rejecting
+taps to its window. The PR remains draft pending that check. No physical-device
+checks were performed.
 
 These checks do not validate the hosted database, a live provider subscription,
 provider retention entitlements, or production deployment. Existing records whose

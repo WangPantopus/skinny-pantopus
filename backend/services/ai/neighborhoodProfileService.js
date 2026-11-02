@@ -119,7 +119,13 @@ async function geocodeToTract(lat, lng) {
   try {
     const { response: data } = await readResponse({
       provider: 'CENSUS_GEOGRAPHIES', url, maxAgeMs: Infinity,
-      isUsable: (data) => hasData(data?.result?.geographies),
+      isUsable: (data) => {
+        const geo = data?.result?.geographies;
+        const tract = (geo?.['Census Tracts'] || geo?.['2020 Census Tracts'])?.[0];
+        return /^\d{2}$/.test(String(tract?.STATE || tract?.STATEFP || ''))
+          && /^\d{3}$/.test(String(tract?.COUNTY || tract?.COUNTYFP || ''))
+          && /^\d{6}$/.test(String(tract?.TRACT || tract?.TRACTCE || ''));
+      },
       fetch: async () => {
         const res = await timedFetch(url);
         if (!res || !res.ok) {

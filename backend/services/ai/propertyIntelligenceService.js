@@ -51,7 +51,8 @@ function buildAttomAddressLine1(home) {
 // Validate the record array, not the non-empty status envelope.
 function hasAttomData(endpoint, response) {
   const records = endpoint === ATTOM_ENDPOINTS.salestrend_snapshot ? response?.salesTrend : response?.property;
-  return Array.isArray(records) && records.some((record) => record && typeof record === 'object' && hasData(record));
+  return Array.isArray(records) && records.some((record) => record && typeof record === 'object'
+    && hasData(endpoint === ATTOM_ENDPOINTS.attomavm_detail ? record.avm : record));
 }
 
 async function attomRequest(endpoint, params, options = {}) {
@@ -186,6 +187,14 @@ function getRawPayloadFetchedAt(rawPayload, key) {
   return getRawPayloadEntry(rawPayload, key)?.fetched_at || null;
 }
 
+function hasUsableEndpoint(rawPayload, key) {
+  const entry = getRawPayloadEntry(rawPayload, key);
+  if (!hasAttomData(ATTOM_ENDPOINTS[key], entry?.response)) return false;
+  if (key === 'property_detail') return true;
+  const age = Date.now() - Date.parse(entry.fetched_at);
+  return age >= 0 && age < CACHE_TTL_DAYS * 86400000;
+}
+
 function buildRawPayload(home, existingRawPayload, endpointResponses, fetchedAtIso, fetchedAts = {}) {
   const payload = normalizeRawPayload(existingRawPayload);
   const endpoints = { ...payload.endpoints };
@@ -291,7 +300,7 @@ function getStoredAttomPropertyDetail(home) {
 
 function buildDetailResponseFromStoredPayload(attomPayload) {
   if (!attomPayload || typeof attomPayload !== 'object') return null;
-  if (attomPayload.full_response && typeof attomPayload.full_response === 'object') {
+  if (hasAttomData(ATTOM_ENDPOINTS.property_detail, attomPayload.full_response)) {
     return attomPayload.full_response;
   }
   if (attomPayload.property && typeof attomPayload.property === 'object') {
@@ -569,9 +578,7 @@ async function getOrFetchAttomResponsesForHome(home, requestedKeys) {
     const sameRequest = entry?.request_params
       ? JSON.stringify(entry.request_params) === JSON.stringify(attomEndpointParams(home, key))
       : JSON.stringify(rawPayload?.address_snapshot) === JSON.stringify(buildHomeAddressSnapshot(home));
-    const freshEnough = key === 'property_detail'
-      || Date.now() - Date.parse(entry?.fetched_at) < CACHE_TTL_DAYS * 86400000;
-    if (sameRequest && freshEnough && hasAttomData(ATTOM_ENDPOINTS[key], cached)) {
+    if (sameRequest && hasUsableEndpoint(rawPayload, key)) {
       responses[key] = cached;
       sources[key] = 'cache';
     }
@@ -783,7 +790,13 @@ async function withHouseShape(homeId, profile) {
 
 async function getProfile(homeId) {
   const cached = await getCachedProfile(homeId);
-  if (cached && cached.source === 'attom' && cached.profile?.county_record !== false) {
+  // An aggregate containing building facts can still be missing its AVM or
+  // ZIP trend. It must not hide an empty endpoint for another 30 days, or
+  // renew the freshness of an older provider response on every rebuild.
+  const raw = cached?.source === 'attom' ? await getCachedRawAttom(homeId, { allowExpired: true }) : null;
+  const complete = ['property_detail', 'attomavm_detail', 'salestrend_snapshot']
+    .every((key) => hasUsableEndpoint(raw?.rawPayload, key));
+  if (cached && cached.source === 'attom' && cached.profile?.county_record !== false && complete) {
     logger.info('PropertyIntelligence cache hit', { homeId });
     return { profile: await withHouseShape(homeId, cached.profile), source: 'cache' };
   }

@@ -60,9 +60,12 @@ async function fetchJson(url, options = {}) {
   const host = new URL(url).hostname;
   let policy;
   if (host === 'geocoding.geo.census.gov') {
-    policy = { provider: 'CENSUS_GEOGRAPHIES', isUsable: (data) => hasData(data?.result?.geographies) };
+    policy = { provider: 'CENSUS_GEOGRAPHIES', isUsable: (data) => {
+      const town = data?.result?.geographies?.['County Subdivisions']?.[0];
+      return town?.STATE === '09' && /^\d{5}$/.test(String(town.COUSUB || ''));
+    } };
   } else if (host === 'earthquake.usgs.gov') {
-    policy = { provider: 'USGS_DESIGN', isUsable: (data) => hasData(data?.response?.data) };
+    policy = { provider: 'USGS_DESIGN', isUsable: (data) => Boolean(SDC_PHRASES[String(data?.response?.data?.sdc || '').toUpperCase()]) };
   } else if (host === 'imagery.geoplatform.gov') {
     policy = { provider: 'USFS_WHP', isUsable: (data) => !data?.error && hasData(data?.value) && data.value !== 'NoData' };
   } else if (host === 'services.arcgis.com') {
