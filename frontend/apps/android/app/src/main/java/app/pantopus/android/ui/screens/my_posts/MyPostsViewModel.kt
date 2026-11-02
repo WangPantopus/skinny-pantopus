@@ -15,6 +15,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.identity.ProfileChanges
+import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.api.models.feed.FeedCursor
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.posts.MyPostsResponse
@@ -80,6 +81,8 @@ data class MyPostsKebabTarget(
     val isArchived: Boolean,
     /** PRF step 5: whether it's pinned to your profile; null (unknown, or archived) hides the item. */
     val profilePinned: Boolean? = null,
+    /** A plan's own post: the sheet offers Open plan instead of Archive and Delete (the server refuses both). */
+    val isPlanPost: Boolean = false,
 )
 
 /** Presentation contract for the destructive delete confirmation alert. */
@@ -566,11 +569,22 @@ class MyPostsViewModel
         fun requestKebab(dto: MyPostDto) {
             val archived = isArchived(dto)
             _kebabTarget.value =
-                MyPostsKebabTarget(postId = dto.id, isArchived = archived, profilePinned = dto.profilePinned.takeUnless { archived })
+                MyPostsKebabTarget(
+                    postId = dto.id,
+                    isArchived = archived,
+                    profilePinned = dto.profilePinned.takeUnless { archived },
+                    isPlanPost = dto.isPlanPost,
+                )
         }
 
         fun cancelKebab() {
             _kebabTarget.value = null
+        }
+
+        /** A plan's own post opens its plan on the Plans tab, where Change and Cancel tell everyone. */
+        fun openPlan(postId: String) {
+            _kebabTarget.value = null
+            DeepLinkRouter.handle("/plans/$postId")
         }
 
         fun requestDelete(postId: String) {
@@ -699,6 +713,14 @@ class MyPostsViewModel
                         icon = PantopusIcon.ArrowsRepeat,
                         accessibilityLabel = "Restore post",
                         onClick = { unarchive(dto.id) },
+                    )
+                } else if (dto.isPlanPost) {
+                    // A plan's post changes from its plan, which tells everyone.
+                    RowEngagementCta(
+                        label = "Open plan",
+                        icon = PantopusIcon.Calendar,
+                        accessibilityLabel = "Open plan",
+                        onClick = { openPlan(dto.id) },
                     )
                 } else {
                     RowEngagementCta(

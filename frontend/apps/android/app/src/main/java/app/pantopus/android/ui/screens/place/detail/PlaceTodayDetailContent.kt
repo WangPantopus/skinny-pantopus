@@ -185,6 +185,11 @@ data class TodayTabParts(
     /** Place's "Next step: Add radon test information" for this Home: the setup opens on the radon question once. */
     val radonRequested: Boolean = false,
     val onRadonShown: () -> Unit = {},
+    /**
+     * Needs you (AI assistant phase 3), under the sky and its hourly strip: it gets the tasks "Coming up at home" lists,
+     * so a task shows in one place only.
+     */
+    val needsYou: (@Composable (agendaTaskIds: Set<String>) -> Unit)? = null,
 )
 
 /**
@@ -279,6 +284,9 @@ fun PlaceTodayDetailContent(
                 guest = intel.viewer?.role == "nonresident",
             )
         }
+    // What waits on the person, before what is coming up at home (phase 3 brief section 3).
+    val agendaTasks = remember(items, now.toLocalDate()) { agendaTaskIds(items, now.toLocalDate()) }
+    tab.needsYou?.invoke(agendaTasks)
     var governments by remember { mutableStateOf<BallotGovernments?>(null) }
     // A place with no address calendar (a saved place) and nothing else coming shows no agenda; its plan cards stay.
     if (calendarEnv == null && items.isEmpty()) {
@@ -1740,3 +1748,14 @@ private fun conditionsSummary(
         }
     return listOfNotNull("Forecast", "air quality", alerts, "sources").joinToString(" · ")
 }
+
+/** The tasks "Coming up at home" lists: its week's rows, or the next row it names after an empty week. */
+private fun agendaTaskIds(
+    items: List<AgendaItem>,
+    today: LocalDate,
+): Set<String> =
+    TodayAgenda
+        .window(items, today)
+        .ifEmpty { listOfNotNull(items.firstOrNull()) }
+        .mapNotNull { (it.source as? AgendaSource.Task)?.task?.id }
+        .toSet()

@@ -20,7 +20,7 @@ data class ChatAICardLine(
  */
 @Immutable
 data class ChatAICardRequest(
-    /** Upper case: `POST`, `PATCH` or `PUT`. */
+    /** Upper case: `POST`, `PATCH`, `PUT` or `DELETE`. */
     val method: String,
     val path: String,
     /** The JSON object body as text, sent as is; null sends `{}`. */
@@ -93,8 +93,10 @@ data class ChatAIActionCard(
     val actions: List<ChatAICardAction> = emptyList(),
     val items: List<ChatAICardItem> = emptyList(),
     val runs: Map<String, ChatAICardRun> = emptyMap(),
-    /** "Not now" on this device. */
+    /** "Not now", on this phone or another of the person's (AI assistant phase 3 contract §4.4). */
     val dismissed: Boolean = false,
+    /** The server's state says it expired with nothing done, whatever this phone's clock says (phase 3 §4.3). */
+    val expiredOnServer: Boolean = false,
 ) {
     /** A request is in flight: every button on the card waits for it. */
     val isRunning: Boolean
@@ -122,7 +124,7 @@ data class ChatAIActionCard(
             runs[CARD_SCOPE] is ChatAICardRun.Done ||
                 (otherActions.isEmpty() && items.isNotEmpty() && items.all { runs[it.id] is ChatAICardRun.Done })
 
-    fun isExpired(now: Instant = Instant.now()): Boolean = expiresAt?.isBefore(now) == true
+    fun isExpired(now: Instant = Instant.now()): Boolean = expiredOnServer || expiresAt?.isBefore(now) == true
 
     /** Where [action], one of [scope]'s buttons, runs: "Fewer like this" in [FEWER_SCOPE], any other in [scope]. */
     fun runScope(

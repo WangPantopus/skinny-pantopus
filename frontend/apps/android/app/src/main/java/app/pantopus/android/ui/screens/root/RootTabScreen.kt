@@ -269,6 +269,7 @@ import app.pantopus.android.ui.screens.inbox.InboxScreen
 import app.pantopus.android.ui.screens.inbox.chat.ConversationIdentityChip
 import app.pantopus.android.ui.screens.inbox.chat.ConversationRowContent
 import app.pantopus.android.ui.screens.inbox.chat.ConversationRowVariant
+import app.pantopus.android.ui.screens.inbox.conversation.AssistantLinkViewModel
 import app.pantopus.android.ui.screens.inbox.conversation.ChatAIDraftCard
 import app.pantopus.android.ui.screens.inbox.conversation.ChatConversationChrome
 import app.pantopus.android.ui.screens.inbox.conversation.ChatConversationHost
@@ -467,8 +468,10 @@ import app.pantopus.android.ui.screens.settings.legal.LegalContentScreen
 import app.pantopus.android.ui.screens.settings.legal.LegalDocument
 import app.pantopus.android.ui.screens.settings.legal.LegalEmptyState
 import app.pantopus.android.ui.screens.settings.legal.LegalIndexScreen
+import app.pantopus.android.ui.screens.settings.memory.MemorySettingsScreen
 import app.pantopus.android.ui.screens.settings.password.PasswordChangeScreen
 import app.pantopus.android.ui.screens.settings.payments.PaymentsScreen
+import app.pantopus.android.ui.screens.settings.rules.RulesSettingsScreen
 import app.pantopus.android.ui.screens.settings.security.DevicesScreen
 import app.pantopus.android.ui.screens.settings.storage.StorageDataScreen
 import app.pantopus.android.ui.screens.settings.verification.VerificationCenterScreen
@@ -1444,6 +1447,9 @@ private object ChildRoutes {
 
     /** The conversation that brief or nudge was added to: the assistant thread opens and continues it (empty otherwise). */
     const val CHAT_AI_CONVERSATION_KEY = "aiConversation"
+
+    /** A launcher shortcut's fixed key: `starter:<key>` or `compose:<key>` (AI assistant phase 3 §8.4; empty otherwise). */
+    const val CHAT_AI_OPENING_KEY = "aiOpening"
     const val CHAT_CONVERSATION =
         "chat/{$CHAT_KIND_KEY}/{$CHAT_ID_KEY}?" +
             "$CHAT_NAME_KEY={$CHAT_NAME_KEY}" +
@@ -1464,7 +1470,8 @@ private object ChildRoutes {
             "&$CHAT_BUSINESS_ID_KEY={$CHAT_BUSINESS_ID_KEY}" +
             "&$CHAT_AI_CONTEXT_KEY={$CHAT_AI_CONTEXT_KEY}" +
             "&$CHAT_AI_NUDGE_KEY={$CHAT_AI_NUDGE_KEY}" +
-            "&$CHAT_AI_CONVERSATION_KEY={$CHAT_AI_CONVERSATION_KEY}"
+            "&$CHAT_AI_CONVERSATION_KEY={$CHAT_AI_CONVERSATION_KEY}" +
+            "&$CHAT_AI_OPENING_KEY={$CHAT_AI_OPENING_KEY}"
 
     /** New message contact picker (T6.6b P25). Reached from Chat list
      *  compose button + empty-state CTA. */
@@ -1669,15 +1676,19 @@ private object ChildRoutes {
 
     /**
      * `pantopus://assistant` (AI assistant phase 2 contract §8.2): the assistant thread, in [conversationId] when the
-     * link names one, at the brief or nudge [nudgeId] names when there is one.
+     * link names one, at the brief or nudge [nudgeId] names when there is one. A launcher shortcut (phase 3 §8.4) adds
+     * the screen the thread is about ([context]) and its fixed key ([opening]).
      */
     fun assistantThread(
         nudgeId: String?,
         conversationId: String?,
+        context: AIScreenContext? = null,
+        opening: String? = null,
     ): String {
         fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         return "chat/ai/ai_assistant?$CHAT_NAME_KEY=${enc("Pantopus AI")}&$CHAT_INITIALS_KEY=AI" +
-            "&$CHAT_AI_NUDGE_KEY=${enc(nudgeId.orEmpty())}&$CHAT_AI_CONVERSATION_KEY=${enc(conversationId.orEmpty())}"
+            "&$CHAT_AI_NUDGE_KEY=${enc(nudgeId.orEmpty())}&$CHAT_AI_CONVERSATION_KEY=${enc(conversationId.orEmpty())}" +
+            "&$CHAT_AI_CONTEXT_KEY=${enc(context?.encode().orEmpty())}&$CHAT_AI_OPENING_KEY=${enc(opening.orEmpty())}"
     }
 
     // A Creator Inbox row no longer builds a generic-chat path. Persona DMs
@@ -1827,6 +1838,12 @@ private object ChildRoutes {
 
     /** WS5.3 — GDPR data-export request (mailto until backend job ships). */
     const val SETTINGS_DATA_EXPORT = "settings/data-export"
+
+    /** Settings → Privacy → What Pantopus remembers (AI assistant phase 3 contract §5.7). */
+    const val SETTINGS_MEMORY = "settings/memory"
+
+    /** Settings → Privacy → What Pantopus does for you (AI assistant phase 3 contract §18.5). */
+    const val SETTINGS_RULES = "settings/rules"
 
     /** Settings → This phone → Storage & data (Instant Screens contract §7). */
     const val SETTINGS_STORAGE = "settings/storage"
@@ -2378,6 +2395,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val pendingDeepLink by DeepLinkRouter.pending.collectAsStateWithLifecycle()
     // Fetches nothing until a chat link needs its direct room's other person.
     val deepLinkChatResolver: DeepLinkChatResolverViewModel = hiltViewModel()
+    val assistantLinks: AssistantLinkViewModel = hiltViewModel()
     LaunchedEffect(pendingDeepLink) {
         // Launch cut (2026-09-27): a link into a feature hidden for the first
         // launch opens the existing not-yet-available placeholder instead.
@@ -2462,11 +2480,31 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 navController.navigate(ChildRoutes.SETTINGS_NOTIFICATIONS)
                 DeepLinkRouter.consume()
             }
+            // A Remember card's Open, the assistant's link and the yearly review notification (phase 3 §5.7).
+            DeepLinkRouter.Destination.MemorySettings -> {
+                navController.navigate(ChildRoutes.MENU)
+                navController.navigate(ChildRoutes.SETTINGS_MEMORY)
+                DeepLinkRouter.consume()
+            }
+            // A rule card's Open, the assistant's link and a rule's pause or end notification (phase 3 §18.5).
+            DeepLinkRouter.Destination.RulesSettings -> {
+                navController.navigate(ChildRoutes.MENU)
+                navController.navigate(ChildRoutes.SETTINGS_RULES)
+                DeepLinkRouter.consume()
+            }
             // A brief or a nudge (push or notification row): the assistant thread over Messages, where its row is, so
             // Back lands on the conversation list. Messages opens fresh, so an earlier assistant thread isn't kept under it.
             is DeepLinkRouter.Destination.Assistant -> {
                 navController.navigateToRootTab(PantopusRoute.messagesTab, restoreState = false)
-                navController.navigate(ChildRoutes.assistantThread(pending.nudgeId, pending.conversationId))
+                navController.navigate(
+                    ChildRoutes.assistantThread(
+                        pending.nudgeId,
+                        pending.conversationId,
+                        // A launcher shortcut's fixed keys (AI assistant phase 3 §8.4).
+                        context = assistantLinks.context(pending.surface),
+                        opening = pending.starter?.let { "starter:$it" } ?: pending.compose?.let { "compose:$it" },
+                    ),
+                )
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.CreateBusiness -> {
@@ -5294,6 +5332,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                                 defaultValue = ""
                             },
+                            navArgument(ChildRoutes.CHAT_AI_OPENING_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
                         ),
                 ) { entry ->
                     val args = entry.arguments ?: return@composable
@@ -5393,6 +5435,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         aiContext = if (kind == "ai") AIScreenContext.decode(args.getString(ChildRoutes.CHAT_AI_CONTEXT_KEY)) else null,
                         aiNudgeId = args.getString(ChildRoutes.CHAT_AI_NUDGE_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
                         aiConversationId = args.getString(ChildRoutes.CHAT_AI_CONVERSATION_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
+                        aiOpening = args.getString(ChildRoutes.CHAT_AI_OPENING_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
                     )
                 }
                 composable(ChildRoutes.CHAT_SEARCH) {
@@ -6004,6 +6047,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 SettingsRoute.Blocks -> navController.navigate(ChildRoutes.SETTINGS_BLOCKED_USERS)
                                 // Parked until P8.5 — see docs/t6-open-questions-decisions.md Q7.
                                 SettingsRoute.DataExport -> navController.navigate(ChildRoutes.SETTINGS_DATA_EXPORT)
+                                SettingsRoute.Memory -> navController.navigate(ChildRoutes.SETTINGS_MEMORY)
+                                SettingsRoute.Rules -> navController.navigate(ChildRoutes.SETTINGS_RULES)
                                 // P5.2 / A14.6 — Settings → Payments (payments-out · Stripe
                                 // setup · payout routing). Distinct from A10.10 Wallet
                                 // (earnings-in) which lives at `ChildRoutes.WALLET` and
@@ -6048,6 +6093,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 }
                 composable(ChildRoutes.SETTINGS_BLOCKED_USERS) {
                     BlockedUsersScreen(onBack = { navController.popBackStack() })
+                }
+                composable(ChildRoutes.SETTINGS_MEMORY) {
+                    MemorySettingsScreen(onBack = { navController.popBackStack() })
+                }
+                composable(ChildRoutes.SETTINGS_RULES) {
+                    RulesSettingsScreen(onBack = { navController.popBackStack() })
                 }
                 composable(ChildRoutes.SETTINGS_PASSWORD) {
                     PasswordChangeScreen(onBack = { navController.popBackStack() })

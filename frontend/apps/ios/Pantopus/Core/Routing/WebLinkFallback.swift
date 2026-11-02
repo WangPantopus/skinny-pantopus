@@ -4,7 +4,8 @@ import UIKit
 /// those arrivals to the external browser, where web OAuth keeps its session.
 @MainActor
 enum WebLinkFallback {
-    private static let hosts: Set<String> = ["pantopus.com", "www.pantopus.com", "pantopus.app", "www.pantopus.app"]
+    /// Pantopus's own web hosts (the associated domains).
+    static let hosts: Set<String> = ["pantopus.com", "www.pantopus.com", "pantopus.app", "www.pantopus.app"]
     private static var lastURL: URL?
     private static var lastHandoff: TimeInterval = 0
     private static var consecutiveHandoffs = 0

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { bindPlaceArrival } from '@/components/place/pendingPlace';
 import { OAUTH_NONCE_PARAM, authPageHref, readAuthRedirectQuery, safeRedirectPath } from '@/lib/auth-utils';
+import { landingAfterSignIn } from '@/lib/invitation-after-sign-in';
 import { oauthAttemptInviteCode, takeOAuthAttempt } from '@/lib/oauth-attempt';
 
 const NO_CODE_ERROR_DELAY_MS = 700;
@@ -21,6 +22,8 @@ function AuthCallbackPageContent() {
   const redirectTo = safeRedirectPath(readAuthRedirectQuery(searchParams), '/app/place');
   const [error, setError] = useState('');
   const exchangeRef = useRef<{ key: string; promise: ReturnType<typeof api.auth.oauthCallback> } | null>(null);
+  // Where the finished sign-in goes, asked once per exchange: a household invitation opens only once.
+  const landingRef = useRef<{ key: string; promise: Promise<string> } | null>(null);
   const hashCredentials = useRef<{ access: string; refresh: string | null } | null>(null);
   // Whether this callback is the sign-in this tab started. Decided once, because
   // deciding uses the attempt up and the effect below can run more than once.
@@ -76,7 +79,8 @@ function AuthCallbackPageContent() {
     exchangeRef.current.promise.then((response) => {
       if (cancelled) return;
       bindPlaceArrival(redirectTo, response.user?.id);
-      router.replace(redirectTo);
+      if (landingRef.current?.key !== key) landingRef.current = { key, promise: landingAfterSignIn(redirectTo) };
+      return landingRef.current.promise.then((landing) => { if (!cancelled) router.replace(landing); });
     }).catch((err: unknown) => {
       if (!cancelled) setError(err instanceof Error ? err.message : 'Sign-in failed. Please try again.');
     });

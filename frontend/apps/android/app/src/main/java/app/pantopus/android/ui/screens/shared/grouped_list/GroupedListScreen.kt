@@ -29,6 +29,8 @@ import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -37,7 +39,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -49,6 +53,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -89,6 +94,8 @@ data class GroupedListCallbacks(
     /** A14.7 — release the location-fuzz slider on `stop`. */
     val onSetFuzz: (String, FuzzStop) -> Unit = { _, _ -> },
     val onRetry: () -> Unit = {},
+    /** An action picked from a row's [RowControl.Menu]: the row's id, then the action's. */
+    val onRowMenu: (String, String) -> Unit = { _, _ -> },
 )
 
 /** Top-level shell composable. */
@@ -166,7 +173,8 @@ private fun TopBar(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .height(52.dp)
+                // A long title ("What Pantopus remembers") wraps at the largest text sizes: the bar grows to fit it.
+                .heightIn(min = 52.dp)
                 .background(PantopusColors.appBg)
                 .padding(horizontal = Spacing.s3),
         verticalAlignment = Alignment.CenterVertically,
@@ -280,6 +288,7 @@ internal fun LoadedFrame(
                             actionLabel = banner.actionLabel,
                             modifier = bannerModifier,
                             onAction = callbacks.onTapBanner,
+                            actionTestTag = banner.actionTestTag ?: "pauseBannerAction",
                         )
                     GroupedListBanner.Style.Stealth ->
                         StealthBanner(
@@ -441,9 +450,12 @@ private fun RowItem(
     callbacks: GroupedListCallbacks,
     contentDimmed: Boolean = false,
 ) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val openMenu: () -> Unit = { menuOpen = true }
     val onClickRow = {
         when (control) {
             is RowControl.Chevron, is RowControl.ChipStatus -> callbacks.onTapRow(row.id)
+            is RowControl.Menu -> openMenu()
             is RowControl.Radio -> {
                 optimistic[row.id] = RowControl.Radio(isSelected = true)
                 callbacks.onSelectRadio(row.id)
@@ -454,9 +466,9 @@ private fun RowItem(
                 }
         }
     }
-    // Triad + chip-strip rows own their chip taps; the row itself
+    // Triad + chip-strip rows own their chip taps, and a line to read has none; the row itself
     // isn't tappable.
-    val ownsInnerTaps = control.ownsInnerTaps
+    val ownsInnerTaps = control.ownsInnerTaps || control is RowControl.None
     Row(
         modifier =
             Modifier
@@ -529,6 +541,7 @@ private fun RowItem(
         }
         when (control) {
             is RowControl.Chevron -> ChevronGlyph()
+            is RowControl.None -> Unit
             is RowControl.Toggle ->
                 Switch(
                     checked = control.isOn,
@@ -544,12 +557,21 @@ private fun RowItem(
                         ),
                     modifier =
                         Modifier
-                            .testTag("groupedListToggle_${row.id}")
+                            .testTag(row.toggleTestTag ?: "groupedListToggle_${row.id}")
                             // TalkBack reads a bare "Switch" without this: the label is a separate node beside it.
                             .semantics { contentDescription = row.label },
                 )
             is RowControl.Radio ->
                 RadioGlyph(isSelected = control.isSelected, modifier = Modifier.testTag("groupedListRadio_${row.id}"))
+            is RowControl.Menu ->
+                RowMenu(
+                    row = row,
+                    actions = control.actions,
+                    expanded = menuOpen,
+                    onOpen = openMenu,
+                    onDismiss = { menuOpen = false },
+                    onSelect = { actionId -> callbacks.onRowMenu(row.id, actionId) },
+                )
             is RowControl.ChipStatus -> {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                     ChipView(label = control.label, tone = control.tone, rowId = row.id)
@@ -575,6 +597,54 @@ private fun RowItem(
         }
     }
     if (!isLast) Box(modifier = Modifier.size(0.dp))
+}
+
+/** A row's "More" button and the menu of its actions (Edit, Delete). */
+@Composable
+@Suppress("LongParameterList")
+private fun RowMenu(
+    row: GroupedListRow,
+    actions: List<RowMenuAction>,
+    expanded: Boolean,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit,
+) {
+    Box {
+        Box(
+            modifier =
+                Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onOpen)
+                    .semantics {
+                        role = Role.Button
+                        contentDescription = "More actions for ${row.label}"
+                    }.testTag("groupedListMenu_${row.id}"),
+            contentAlignment = Alignment.Center,
+        ) {
+            PantopusIconImage(
+                icon = PantopusIcon.MoreHorizontal,
+                contentDescription = null,
+                size = 18.dp,
+                tint = PantopusColors.appTextSecondary,
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+            actions.forEach { action ->
+                val tint = if (action.destructive) PantopusColors.error else PantopusColors.appText
+                DropdownMenuItem(
+                    text = { Text(text = action.label, fontSize = 14.sp, color = tint) },
+                    leadingIcon = { PantopusIconImage(icon = action.icon, contentDescription = null, size = 16.dp, tint = tint) },
+                    onClick = {
+                        onDismiss()
+                        onSelect(action.id)
+                    },
+                    modifier = Modifier.testTag(action.testTag ?: "groupedListMenuAction_${action.id}"),
+                )
+            }
+        }
+    }
 }
 
 private fun channelState(

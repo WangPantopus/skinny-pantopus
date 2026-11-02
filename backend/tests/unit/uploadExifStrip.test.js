@@ -7,8 +7,7 @@
  *   2. After stripImageMetadata runs, the buffer is a valid JPEG
  *      with NO exif chunk (firewall holds).
  *   3. PNG and WEBP go through the same path without crashing.
- *   4. Animated GIF skips stripping (matches the production decision
- *      to preserve animation rather than re-encode).
+ *   4. An animated GIF keeps its frames.
  */
 
 const sharp = require('sharp');
@@ -62,15 +61,14 @@ describe('P2.12 — backend EXIF strip', () => {
     expect(file.buffer.toString()).toBe('hello world');
   });
 
-  test('stripImageMetadata skips animated GIF to preserve animation', async () => {
-    // We don't need a real animated GIF — the function bails on the
-    // mimetype string before invoking sharp. Use a tiny static GIF
-    // header so the buffer is "valid enough".
-    const gifHeader = Buffer.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]);
-    const file = { buffer: gifHeader, mimetype: 'image/gif', size: gifHeader.length, originalname: 'anim.gif' };
+  test('stripImageMetadata keeps an animated GIF\'s frames', async () => {
+    const frames = Buffer.concat([0x20, 0x80, 0xe0].map((shade) => Buffer.alloc(8 * 8 * 3, shade)));
+    const gif = await sharp(frames, { raw: { width: 8, height: 24, channels: 3, pageHeight: 8 } }).gif().toBuffer();
+    const file = { buffer: gif, mimetype: 'image/gif', size: gif.length, originalname: 'anim.gif' };
     await stripImageMetadata(file);
-    // No mutation, no throw.
-    expect(file.buffer).toBe(gifHeader);
+    const meta = await sharp(file.buffer, { animated: true }).metadata();
+    expect(meta.format).toBe('gif');
+    expect(meta.pages).toBe(3);
   });
 
   test('stripImageMetadata handles PNG without crashing', async () => {

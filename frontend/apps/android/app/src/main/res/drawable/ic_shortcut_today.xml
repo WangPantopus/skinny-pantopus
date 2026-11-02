@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A launcher shortcut's icon (AI assistant phase 3 contract §8.4): What's on today: a calendar day (Material "today"). -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/pantopus_primary_50" />
+    <foreground android:drawable="@drawable/ic_shortcut_today_glyph" />
+</adaptive-icon>

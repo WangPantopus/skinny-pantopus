@@ -45,6 +45,7 @@ fun PauseBanner(
     actionLabel: String,
     modifier: Modifier = Modifier,
     onAction: () -> Unit = {},
+    actionTestTag: String = "pauseBannerAction",
 ) {
     Row(
         modifier =
@@ -98,7 +99,7 @@ fun PauseBanner(
                     .border(1.dp, PantopusColors.appBorderStrong, RoundedCornerShape(Radii.pill))
                     .clickable(role = Role.Button, onClickLabel = actionLabel, onClick = onAction)
                     .padding(horizontal = 11.dp, vertical = 5.dp)
-                    .testTag("pauseBannerAction"),
+                    .testTag(actionTestTag),
             contentAlignment = Alignment.Center,
         ) {
             Text(

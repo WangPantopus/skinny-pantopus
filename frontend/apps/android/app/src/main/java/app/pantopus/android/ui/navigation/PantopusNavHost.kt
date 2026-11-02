@@ -92,8 +92,14 @@ fun PantopusNavHost(viewModel: RootViewModel = hiltViewModel()) {
             if (parked != null) {
                 DeepLinkRouter.handle(parked)
             } else if (prev is AuthRepository.State.SignedOut || prev is AuthRepository.State.Resumable) {
-                // Signing in or up (not a session restored at launch) may also open a plan invitation.
-                viewModel.unopenedPlanInvite()?.let { planId -> DeepLinkRouter.handle("/plans/$planId") }
+                // Signing in or up (not a session restored at launch) may also open a household invitation emailed
+                // to this address before it had an account, else a plan invitation.
+                val homeInvite = viewModel.unopenedHomeInvite()
+                if (homeInvite != null) {
+                    DeepLinkRouter.handle("/invite/$homeInvite")
+                } else {
+                    viewModel.unopenedPlanInvite()?.let { planId -> DeepLinkRouter.handle("/plans/$planId") }
+                }
             }
         }
     }
