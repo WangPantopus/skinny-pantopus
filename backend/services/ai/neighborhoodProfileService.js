@@ -305,9 +305,13 @@ async function geocodeToTractCached(lat, lng) {
  * Query FEMA NFHL for the flood zone at a point.
  * @param {number} lat
  * @param {number} lng
- * @returns {Promise<object|null>}
+ * @param {object} [options]
+ * @param {boolean} [options.throwOnFailure=false]  Throw when FEMA could not be
+ *   asked (timeout, HTTP error, ArcGIS error), so the caller can tell that from
+ *   null: FEMA answered, and no flood map covers the point.
+ * @returns {Promise<object|null>} The zone and when FEMA gave it (`fetched_at`).
  */
-async function fetchFloodZone(lat, lng) {
+async function fetchFloodZone(lat, lng, { throwOnFailure = false } = {}) {
   const params = new URLSearchParams({
     geometry: `${lng},${lat}`,
     geometryType: 'esriGeometryPoint',
@@ -321,17 +325,18 @@ async function fetchFloodZone(lat, lng) {
   const url = `https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query?${params}`;
 
   try {
-    const { response: data } = await readResponse({
+    const { response: data, fetchedAt } = await readResponse({
       provider: 'FEMA_NFHL', url, maxAgeMs: 90 * 86400000,
       isUsable: (data) => !data?.error && hasData(data?.features),
+      // A failure throws (every caller sharing this request sees it) and
+      // each caller decides below what it means for them.
       fetch: async () => {
         const res = await timedFetch(url);
-        if (!res || !res.ok) {
-          logger.warn('FEMA flood zone fetch failed', { status: res?.status });
-          return null;
-        }
-
-        return res.json();
+        if (!res || !res.ok) throw new Error(res ? `HTTP ${res.status}` : 'no answer');
+        const body = await res.json();
+        // ArcGIS reports its own failures inside a 200.
+        if (body?.error) throw new Error(`ArcGIS error ${body.error.code ?? ''}`.trim());
+        return body;
       },
     });
     const features = data?.features;
@@ -341,9 +346,11 @@ async function fetchFloodZone(lat, lng) {
     return {
       flood_zone: zone,
       flood_zone_description: FLOOD_ZONE_DESC[zone] || 'Unknown flood zone',
+      fetched_at: fetchedAt || null,
     };
   } catch (err) {
-    logger.error('FEMA flood zone parse error', { error: err.message });
+    logger.warn('FEMA flood zone lookup failed', { error: err.message });
+    if (throwOnFailure) throw err;
     return null;
   }
 }

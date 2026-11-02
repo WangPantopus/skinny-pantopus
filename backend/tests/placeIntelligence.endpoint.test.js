@@ -12,6 +12,8 @@ jest.mock('../services/context/providerOrchestrator', () => ({
 }));
 jest.mock('../services/ai/neighborhoodProfileService', () => ({
   getProfile: jest.fn(),
+  fetchFloodZone: jest.fn(),
+  geocodeToTractCached: jest.fn(),
 }));
 jest.mock('../services/ai/propertyIntelligenceService', () => ({
   getProfile: jest.fn(),
@@ -159,6 +161,15 @@ function defaultNeighborhoodProfile() {
   };
 }
 
+// The flood section asks FEMA for the home's own point.
+function defaultFloodZone() {
+  return {
+    flood_zone: 'X',
+    flood_zone_description: 'Zone X — minimal flood risk',
+    fetched_at: '2026-06-01T00:00:00.000Z',
+  };
+}
+
 // Flatten the grouped response into an id → envelope map.
 function sectionsById(body) {
   const map = {};
@@ -192,6 +203,8 @@ describe('GET /api/homes/:id/intelligence', () => {
     delete process.env.ATTOM_API_KEY; // default: no ATTOM
     providerOrchestrator.getHubToday.mockResolvedValue(defaultHubToday());
     neighborhoodProfileService.getProfile.mockResolvedValue(defaultNeighborhoodProfile());
+    neighborhoodProfileService.fetchFloodZone.mockResolvedValue(defaultFloodZone());
+    neighborhoodProfileService.geocodeToTractCached.mockResolvedValue({ tractId: '41051001800', stateCode: '41', countyCode: '051' });
     propertyIntelligenceService.getProfile.mockReset();
     // No network (see the header): a provider call the mocks above don't cover
     // fails at once. A real one can hit its 8 s timeout on a slow CI runner,
