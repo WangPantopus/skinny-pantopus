@@ -131,13 +131,15 @@ function responseIdentity(url) {
  * isUsable validates the DATA portion, not an envelope containing only status.
  * Empty/error responses never replace a good copy. maxAgeMs is omitted for
  * stable facts; current-value/verification callers must supply their budget.
+ * requirePersistence is for bounded operator jobs: a database read failure must
+ * stop before another paid request, and an unsuccessful write must stop the job.
  */
 async function readResponse({ provider, url, fetch: fetchResponse, isUsable = hasData,
-  maxAgeMs = Infinity, allowStale = false }) {
+  maxAgeMs = Infinity, allowStale = false, requirePersistence = false }) {
   const { endpoint, key } = responseIdentity(url);
   const namespace = `RESPONSE_V1:${provider}`;
   // Different freshness requirements must not share an in-flight result.
-  const flightKey = `${namespace}:${key}:${maxAgeMs}:${allowStale}`;
+  const flightKey = `${namespace}:${key}:${maxAgeMs}:${allowStale}:${requirePersistence}`;
   if (responseFlights.has(flightKey)) return responseFlights.get(flightKey);
   const run = (async () => {
     let row;
@@ -148,6 +150,7 @@ async function readResponse({ provider, url, fetch: fetchResponse, isUsable = ha
       row = data;
     } catch (error) {
       logger.warn('Provider response read failed', { provider, endpoint, error: error.message });
+      if (requirePersistence) throw new Error('Provider cache read failed');
     }
     const stored = row?.payload?.response;
     const usable = isUsable(stored);
@@ -180,6 +183,7 @@ async function readResponse({ provider, url, fetch: fetchResponse, isUsable = ha
     } catch (error) {
       // Keep the current request usable, but never claim it was persisted.
       logger.error('Provider response was not saved', { provider, endpoint, error: error.message });
+      if (requirePersistence) throw new Error('Provider cache write failed');
     }
     return { response, fetchedAt, hit: false, persisted };
   })().finally(() => {

@@ -55,15 +55,34 @@ function hasAttomData(endpoint, response) {
     && hasData(endpoint === ATTOM_ENDPOINTS.attomavm_detail ? record.avm : record));
 }
 
-async function attomRequest(endpoint, params, options = {}) {
+function attomCacheRequest(endpoint, params) {
   // Match case/whitespace variants without collapsing apartments or addresses.
   const canonical = Object.fromEntries(Object.entries(params).map(([key, value]) =>
     [key, String(value).trim().replace(/\s+/g, ' ').toUpperCase()]));
-  let noResult = false;
-  const result = await readResponse({
+  return {
     provider: 'ATTOM',
     url: `${ATTOM_BASE}${endpoint}?${new URLSearchParams(canonical)}`,
     maxAgeMs: endpoint === ATTOM_ENDPOINTS.property_detail ? Infinity : CACHE_TTL_DAYS * 86400000,
+    isUsable: (response) => hasAttomData(endpoint, response),
+  };
+}
+
+// The operator prefill uses exactly the same identity and data validation as
+// interactive requests, without creating Home or ownership records.
+function propertyDetailCacheRequest(p) {
+  const params = attomAddressParams({
+    address: p.line1, address2: p.line2, city: p.city, state: p.state, zipcode: p.zip,
+  });
+  return {
+    ...attomCacheRequest(ATTOM_ENDPOINTS.property_detail, params),
+    requestUrl: `${ATTOM_BASE}${ATTOM_ENDPOINTS.property_detail}?${new URLSearchParams(params)}`,
+  };
+}
+
+async function attomRequest(endpoint, params, options = {}) {
+  let noResult = false;
+  const result = await readResponse({
+    ...attomCacheRequest(endpoint, params),
     ...options,
     isUsable: (response) => hasAttomData(endpoint, response),
     fetch: async () => {
@@ -940,4 +959,5 @@ module.exports = {
   fetchAttomPropertyDetailBundle,
   fetchAttomPropertyDetailBundleForAddress,
   getAddressAttomPropertyDetail,
+  propertyDetailCacheRequest,
 };
