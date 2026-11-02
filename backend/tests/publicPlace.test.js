@@ -149,6 +149,7 @@ function buildApp() {
 
 beforeEach(() => {
   resetTables();
+  require('../services/external/cacheHelper')._internals.clearResponseFlights();
   publicRouter.__clearPreviewCaches();
   jest.clearAllMocks();
   // Walk Score / Census keys off → deterministic external calls.

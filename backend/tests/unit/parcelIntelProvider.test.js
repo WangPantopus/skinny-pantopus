@@ -190,10 +190,9 @@ describe('parcelIntelProvider', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  test('selects the freshest cached parcel row when multiple unit-level rows share the same normalized address', async () => {
+  test('uses the requested unit even when another unit has a newer parcel row', async () => {
     jest.useFakeTimers();
-    // Real wall clock made this test flaky: cache uses now−30d, so fixed April dates could fall
-    // outside the window and only one row matched → logger.info (multi-row) never ran.
+    // Keep the historical validation dates deterministic while checking unit isolation.
     jest.setSystemTime(new Date('2026-05-20T12:00:00.000Z'));
     try {
     const { provider, supabaseMock, logger } = loadProvider({
@@ -244,11 +243,13 @@ describe('parcelIntelProvider', () => {
       },
     ]);
 
-    const result = await provider.lookup(makeContext());
+    const context = makeContext();
+    context.normalizedAddress.line2 = 'Unit 1';
+    const result = await provider.lookup(context);
 
     expect(result).toEqual(expect.objectContaining({
-      parcel_id: 'NEW-ROW',
-      usage_class: 'institutional',
+      parcel_id: 'OLD-ROW',
+      usage_class: 'commercial',
       from_cache: true,
     }));
     expect(global.fetch).not.toHaveBeenCalled();
@@ -256,7 +257,7 @@ describe('parcelIntelProvider', () => {
       'parcelIntelProvider: selected best cached parcel row',
       expect.objectContaining({
         row_count: 2,
-        selected_address_id: 'addr-newer',
+        selected_address_id: 'addr-older',
       }),
     );
     } finally {
@@ -265,10 +266,7 @@ describe('parcelIntelProvider', () => {
   });
 
   test('normalizes ATTOM detail payloads into parcel intel', async () => {
-    global.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => attomDetailPayload,
-    });
+    global.fetch.mockImplementation(async () => new Response(JSON.stringify(attomDetailPayload), { status: 200 }));
 
     const { provider } = loadProvider({
       ENABLE_ADDRESS_PARCEL_PROVIDER: 'true',
@@ -314,11 +312,8 @@ describe('parcelIntelProvider', () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
     expect(global.fetch.mock.calls[0][1].signal).toBeDefined();
     expect(logger.warn).toHaveBeenCalledWith(
-      'parcelIntelProvider: request timed out',
-      expect.objectContaining({
-        provider: 'attom',
-        timeout_ms: 900,
-      }),
+      'ATTOM fetch timeout',
+      expect.objectContaining({ endpoint: '/property/detail' }),
     );
   });
 });

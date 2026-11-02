@@ -189,12 +189,18 @@ describe('PropertyIntelligenceService', () => {
         address_summary: 'Vancouver, WA 98661',
         estimated_value: 385000,
         source: 'attom',
+        house: null,
       };
 
       setupFromSequence(
         { data: { profile: cachedProfile, fetched_at: '2026-03-01T00:00:00Z', source: 'attom' }, error: null },
         null // should not be called
       );
+      mockMaybeSingle.mockResolvedValueOnce({ data: { raw_payload: { endpoints: {
+        property_detail: { response: MOCK_ATTOM_DETAIL },
+        attomavm_detail: { response: MOCK_ATTOM_AVM, fetched_at: new Date().toISOString() },
+        salestrend_snapshot: { response: MOCK_ATTOM_TREND, fetched_at: new Date().toISOString() },
+      } } }, error: null });
 
       const result = await getProfile(MOCK_HOME_ID);
 

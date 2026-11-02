@@ -1,4 +1,5 @@
 const logger = require('../../utils/logger');
+const { readResponse } = require('../external/cacheHelper');
 const { getRolloutFlag } = require('../../utils/addressRolloutFlags');
 const addressConfig = require('../../config/addressVerification');
 
@@ -132,7 +133,7 @@ class SecondaryAddressProvider {
   }
 
   shouldRunLookup(context = {}) {
-    if (!this.isAvailable()) return false;
+    if (!this.isFeatureEnabled()) return false;
     if (!hasSearchableAddress(context.normalizedAddress)) return false;
 
     const submittedUnit = String(context.submittedUnit || context.normalizedAddress?.line2 || '').trim();
@@ -183,6 +184,19 @@ class SecondaryAddressProvider {
   }
 
   async _requestJson(url, logContext) {
+    const { response } = await readResponse({
+      provider: 'SMARTY_SECONDARY', url, maxAgeMs: 90 * 86400000,
+      isUsable: (data) => {
+        const entry = extractSecondaryListEntry(data);
+        return extractUnitCount(entry, entry) != null;
+      },
+      fetch: () => this._requestJsonLive(url, logContext),
+    });
+    return response;
+  }
+
+  async _requestJsonLive(url, logContext) {
+    if (!this.authId || !this.authToken) return null;
     const timeout = createTimeoutHandle(this.timeoutMs);
     let response;
 

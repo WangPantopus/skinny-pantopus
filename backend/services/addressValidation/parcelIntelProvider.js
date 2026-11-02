@@ -3,7 +3,7 @@ const { getRolloutFlag } = require('../../utils/addressRolloutFlags');
 const logger = require('../../utils/logger');
 const addressConfig = require('../../config/addressVerification');
 
-const ATTOM_BASE = 'https://api.gateway.attomdata.com/propertyapi/v1.0.0';
+const { fetchAttomPropertyDetailBundle } = require('../ai/propertyIntelligenceService');
 const BUSINESS_LIKE_PLACE_TYPES = new Set([
   'corporate_office',
   'business_center',
@@ -59,46 +59,6 @@ function normalizeTypes(types) {
 function toNullableNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function createTimeoutHandle(timeoutMs) {
-  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
-    return {
-      signal: AbortSignal.timeout(timeoutMs),
-      cleanup() {},
-    };
-  }
-
-  if (typeof AbortController !== 'undefined') {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    if (typeof timer.unref === 'function') timer.unref();
-
-    return {
-      signal: controller.signal,
-      cleanup() {
-        clearTimeout(timer);
-      },
-    };
-  }
-
-  return {
-    signal: undefined,
-    cleanup() {},
-  };
-}
-
-function buildAttomAddressParams(normalizedAddress = {}) {
-  return new URLSearchParams({
-    address1: String(normalizedAddress.line1 || '').trim(),
-    address2: [
-      String(normalizedAddress.city || '').trim(),
-      [normalizedAddress.state, normalizedAddress.zip]
-        .map((value) => String(value || '').trim())
-        .filter(Boolean)
-        .join(' '),
-    ].filter(Boolean).join(', '),
-  });
 }
 
 function hasSearchableAddress(normalizedAddress = {}) {
@@ -159,7 +119,6 @@ class ParcelIntelProvider {
   constructor() {
     this.provider = addressConfig.parcelIntel.provider;
     this.timeoutMs = addressConfig.parcelIntel.timeoutMs;
-    this.cacheDays = addressConfig.parcelIntel.cacheDays;
     this.providerVersion = 'parcel_shadow_v1';
   }
 
@@ -174,7 +133,7 @@ class ParcelIntelProvider {
   }
 
   shouldRunLookup(context = {}) {
-    if (!this.isAvailable()) return false;
+    if (!this.isFeatureEnabled() || this.provider !== 'attom') return false;
     if (!hasSearchableAddress(context.normalizedAddress)) return false;
 
     const placeTypes = normalizeTypes([
@@ -206,9 +165,6 @@ class ParcelIntelProvider {
   }
 
   async _checkCache(normalizedAddress) {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - this.cacheDays);
-
     const { data, error } = await supabaseAdmin
       .from('HomeAddress')
       .select('*')
@@ -216,7 +172,6 @@ class ParcelIntelProvider {
       .eq('city_norm', normalizedAddress.city)
       .eq('state', normalizedAddress.state)
       .eq('postal_code', normalizedAddress.zip)
-      .gte('last_parcel_validated_at', cutoff.toISOString())
       .order('last_parcel_validated_at', { ascending: false });
 
     if (error) {
@@ -231,6 +186,8 @@ class ParcelIntelProvider {
 
     const bestRow = cachedRows
       .filter((row) => {
+        if (String(row.address_line2_norm || '').trim().toUpperCase()
+          !== String(normalizedAddress.line2 || '').trim().toUpperCase()) return false;
         const raw = row?.validation_raw_response?.parcel_provider || null;
         return !!(row?.parcel_id || raw?.parcel_id);
       })
@@ -271,59 +228,16 @@ class ParcelIntelProvider {
   }
 
   async _lookupAttom(normalizedAddress) {
-    const apiKey = process.env.ATTOM_API_KEY;
-    const timeout = createTimeoutHandle(this.timeoutMs);
-    const url = `${ATTOM_BASE}/property/detail?${buildAttomAddressParams(normalizedAddress)}`;
-    let response;
-
-    try {
-      response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          apikey: apiKey,
-          Accept: 'application/json',
-        },
-        signal: timeout.signal,
-      });
-    } catch (error) {
-      if (error?.name === 'AbortError') {
-        logger.warn('parcelIntelProvider: request timed out', {
-          provider: 'attom',
-          timeout_ms: this.timeoutMs,
-        });
-      } else {
-        logger.warn('parcelIntelProvider: request failed', {
-          provider: 'attom',
-          error: error.message,
-        });
-      }
-      return null;
-    } finally {
-      timeout.cleanup();
-    }
-
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      logger.warn('parcelIntelProvider: API error', {
-        provider: 'attom',
-        status: response.status,
-        body: text.slice(0, 500),
-      });
-      return null;
-    }
-
-    let data;
-    try {
-      data = await response.json();
-    } catch (error) {
-      logger.warn('parcelIntelProvider: invalid JSON', {
-        provider: 'attom',
-        error: error.message,
-      });
-      return null;
-    }
-
-    return this._normalizeAttom(data);
+    const { detailData, attomPayload } = await fetchAttomPropertyDetailBundle({
+      address: normalizedAddress.line1,
+      address2: normalizedAddress.line2,
+      city: normalizedAddress.city,
+      state: normalizedAddress.state,
+      zipcode: normalizedAddress.zip,
+    }, { timeoutMs: this.timeoutMs });
+    const result = this._normalizeAttom(detailData);
+    if (result && attomPayload?.fetched_at) result.validated_at = attomPayload.fetched_at;
+    return result;
   }
 
   _normalizeAttom(data) {
