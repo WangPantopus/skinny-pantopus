@@ -4,12 +4,15 @@
  *   support_trains_helped  Support Trains (not drafts) the person signed up to help and didn't cancel, each once
  *   plans_hosted           plans the person hosted that took place (Plan.status 'ended', set by the Plans job)
  *   helpful_marks          Helpful marks (PostLike) other people gave the posts the person made as themselves (not
- *                          for a business or as a Beacon persona) that aren't archived or removed by moderation
+ *                          for a business or as a Beacon persona) that aren't archived or removed by moderation. Only
+ *                          the kinds whose reaction is Helpful count: Going on an event and Celebrate on a win aren't
+ *                          Helpful marks (utils/postReaction.js)
  * Returns null when a count can't be read, so the apps leave the section out rather than show a wrong zero.
  */
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { NOT_HELPFUL_POST_TYPES } = require('../utils/postReaction');
 
 // A sign-up that wasn't canceled, as GET /api/activities/support-trains/:id counts a helper.
 const HELPER_RESERVATION_STATUSES = ['reserved', 'delivered', 'confirmed'];
@@ -38,6 +41,7 @@ async function profileContributions(userId) {
         // writer's own count (it would link the two).
         .or('post_as.is.null,post_as.not.in.(business,persona)', { referencedTable: 'post' })
         .or('identity_context_type.is.null,identity_context_type.neq.persona', { referencedTable: 'post' })
+        .or(`post_type.is.null,post_type.not.in.(${NOT_HELPFUL_POST_TYPES.join(',')})`, { referencedTable: 'post' })
         .neq('user_id', userId),
     ]);
     for (const result of [trains, plans, marks]) if (result.error) throw result.error;
