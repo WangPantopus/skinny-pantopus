@@ -81,6 +81,16 @@ class PlaceDashboardViewModel
 
         /** The tasks this viewer may read here, for overdue and due-today items in "Worth a look" (TPR brief 6.5). */
         val worthTasks: StateFlow<List<HomeTaskDto>> = _worthTasks.asStateFlow()
+
+        private val _canAddTasks = MutableStateFlow(false)
+
+        /** The tasks list answered and this viewer may add a task here (Today's radon question needs both). */
+        val canAddTasks: StateFlow<Boolean> = _canAddTasks.asStateFlow()
+
+        private val _isTodayHome = MutableStateFlow(false)
+
+        /** This Home is the person's default Home, the one the Today tab shows. */
+        val isTodayHome: StateFlow<Boolean> = _isTodayHome.asStateFlow()
         private var worthAccess: Pair<String, HomeTaskAccess>? = null
         private var worthJob: Job? = null
 
@@ -119,6 +129,8 @@ class PlaceDashboardViewModel
             if (this.homeId != homeId) {
                 _homeShortcuts.value = emptyList()
                 _worthTasks.value = emptyList()
+                _canAddTasks.value = false
+                _isTodayHome.value = false
             }
             this.homeId = homeId
             refreshUnread()
@@ -202,6 +214,7 @@ class PlaceDashboardViewModel
             if (!::taskAccess.isInitialized) return
             if (PlaceHomeShortcut.TASKS !in _homeShortcuts.value) {
                 _worthTasks.value = emptyList()
+                _canAddTasks.value = false
                 return
             }
             if (!force && worthJob?.isActive == true && worthAccess?.first == id) return
@@ -227,8 +240,14 @@ class PlaceDashboardViewModel
                         if (stored.data == null && stored.failure == null) return@repeat
                         val tasks = stored.data?.tasks
                         when {
-                            tasks != null -> _worthTasks.value = tasks
-                            stored.failure.refusesStoredCopy -> _worthTasks.value = emptyList()
+                            tasks != null -> {
+                                _worthTasks.value = tasks
+                                _canAddTasks.value = stored.data?.collectionCapabilities?.canCreate == true
+                            }
+                            stored.failure.refusesStoredCopy -> {
+                                _worthTasks.value = emptyList()
+                                _canAddTasks.value = false
+                            }
                         }
                         return@launch
                     }
@@ -288,6 +307,7 @@ class PlaceDashboardViewModel
         ): Stored<PlaceIntelligence> {
             val homes = homesRepo.myHomesStored(force || !householdViewer(id))
             if (!current(id, version)) return Stored()
+            homes.data?.let { _isTodayHome.value = it.defaultHomeId == id }
             val home = homes.data?.homes?.firstOrNull { it.id == id }
             val keep = home?.showsCopyBeforeRecheck == true
             if (!keep) clearPrivateCopy(id)
