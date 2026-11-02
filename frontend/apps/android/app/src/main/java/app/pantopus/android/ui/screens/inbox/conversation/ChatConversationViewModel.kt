@@ -1300,6 +1300,28 @@ class ChatConversationViewModel
         }
 
         /**
+         * A launcher shortcut's fixed key (AI assistant phase 3 contract §8.4), mapped to this app's own words: a
+         * starter's question goes as if its chip were tapped; a compose key's words wait in the composer, not sent
+         * (true: the composer takes the keyboard). Words already typed stay. Any other key does nothing.
+         */
+        fun openWith(opening: String): Boolean {
+            if (mode !is ChatThreadMode.Ai) return false
+            val (kind, key) = opening.split(':', limit = 2).takeIf { it.size == 2 } ?: return false
+            return when (kind) {
+                "starter" -> {
+                    AI_LINK_STARTERS[key]?.let(::sendAiStarter)
+                    false
+                }
+                "compose" -> {
+                    val words = AI_LINK_COMPOSE[key] ?: return false
+                    if (_composerText.value.isBlank()) setComposerText(words)
+                    true
+                }
+                else -> false
+            }
+        }
+
+        /**
          * A starter prompt: a whole question goes at once; one that trails off ("Remind us…") fills the
          * composer for the person to finish.
          */
@@ -4774,6 +4796,12 @@ private const val AI_DELETE_TOO_MANY = "Couldn't delete it all yet. Try again in
 private const val HTTP_TOO_MANY_REQUESTS = 429
 
 private const val HTTP_REQUEST_TIMEOUT = 408
+
+/** `pantopus://assistant?starter=`: each fixed key's question (AI assistant phase 3 contract §8.4). */
+private val AI_LINK_STARTERS = mapOf("catch_up_nearby" to "What did I miss nearby?")
+
+/** `pantopus://assistant?compose=`: each fixed key's words, left in the composer for the person to finish. */
+private val AI_LINK_COMPOSE = mapOf("start_plan" to "Start a plan: ", "remind_household" to "Remind my household to ")
 
 /** A card's server state (AI assistant phase 3 contract §4.3) after "Not now", and past its time with nothing done. */
 private const val STATE_DISMISSED = "dismissed"

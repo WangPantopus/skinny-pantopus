@@ -57,6 +57,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Long-press the app icon: five launcher shortcuts (AI assistant phase 3 contract §8.4). -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+
             <!-- Deep links: https://pantopus.com/... — the product domain. It is
                  what the backend and both clients build share and invite links
                  on, and the only host that serves .well-known/assetlinks.json.

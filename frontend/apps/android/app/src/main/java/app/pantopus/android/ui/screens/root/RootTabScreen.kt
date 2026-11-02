@@ -269,6 +269,7 @@ import app.pantopus.android.ui.screens.inbox.InboxScreen
 import app.pantopus.android.ui.screens.inbox.chat.ConversationIdentityChip
 import app.pantopus.android.ui.screens.inbox.chat.ConversationRowContent
 import app.pantopus.android.ui.screens.inbox.chat.ConversationRowVariant
+import app.pantopus.android.ui.screens.inbox.conversation.AssistantLinkViewModel
 import app.pantopus.android.ui.screens.inbox.conversation.ChatAIDraftCard
 import app.pantopus.android.ui.screens.inbox.conversation.ChatConversationChrome
 import app.pantopus.android.ui.screens.inbox.conversation.ChatConversationHost
@@ -1446,6 +1447,9 @@ private object ChildRoutes {
 
     /** The conversation that brief or nudge was added to: the assistant thread opens and continues it (empty otherwise). */
     const val CHAT_AI_CONVERSATION_KEY = "aiConversation"
+
+    /** A launcher shortcut's fixed key: `starter:<key>` or `compose:<key>` (AI assistant phase 3 §8.4; empty otherwise). */
+    const val CHAT_AI_OPENING_KEY = "aiOpening"
     const val CHAT_CONVERSATION =
         "chat/{$CHAT_KIND_KEY}/{$CHAT_ID_KEY}?" +
             "$CHAT_NAME_KEY={$CHAT_NAME_KEY}" +
@@ -1466,7 +1470,8 @@ private object ChildRoutes {
             "&$CHAT_BUSINESS_ID_KEY={$CHAT_BUSINESS_ID_KEY}" +
             "&$CHAT_AI_CONTEXT_KEY={$CHAT_AI_CONTEXT_KEY}" +
             "&$CHAT_AI_NUDGE_KEY={$CHAT_AI_NUDGE_KEY}" +
-            "&$CHAT_AI_CONVERSATION_KEY={$CHAT_AI_CONVERSATION_KEY}"
+            "&$CHAT_AI_CONVERSATION_KEY={$CHAT_AI_CONVERSATION_KEY}" +
+            "&$CHAT_AI_OPENING_KEY={$CHAT_AI_OPENING_KEY}"
 
     /** New message contact picker (T6.6b P25). Reached from Chat list
      *  compose button + empty-state CTA. */
@@ -1671,15 +1676,19 @@ private object ChildRoutes {
 
     /**
      * `pantopus://assistant` (AI assistant phase 2 contract §8.2): the assistant thread, in [conversationId] when the
-     * link names one, at the brief or nudge [nudgeId] names when there is one.
+     * link names one, at the brief or nudge [nudgeId] names when there is one. A launcher shortcut (phase 3 §8.4) adds
+     * the screen the thread is about ([context]) and its fixed key ([opening]).
      */
     fun assistantThread(
         nudgeId: String?,
         conversationId: String?,
+        context: AIScreenContext? = null,
+        opening: String? = null,
     ): String {
         fun enc(value: String) = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
         return "chat/ai/ai_assistant?$CHAT_NAME_KEY=${enc("Pantopus AI")}&$CHAT_INITIALS_KEY=AI" +
-            "&$CHAT_AI_NUDGE_KEY=${enc(nudgeId.orEmpty())}&$CHAT_AI_CONVERSATION_KEY=${enc(conversationId.orEmpty())}"
+            "&$CHAT_AI_NUDGE_KEY=${enc(nudgeId.orEmpty())}&$CHAT_AI_CONVERSATION_KEY=${enc(conversationId.orEmpty())}" +
+            "&$CHAT_AI_CONTEXT_KEY=${enc(context?.encode().orEmpty())}&$CHAT_AI_OPENING_KEY=${enc(opening.orEmpty())}"
     }
 
     // A Creator Inbox row no longer builds a generic-chat path. Persona DMs
@@ -2386,6 +2395,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val pendingDeepLink by DeepLinkRouter.pending.collectAsStateWithLifecycle()
     // Fetches nothing until a chat link needs its direct room's other person.
     val deepLinkChatResolver: DeepLinkChatResolverViewModel = hiltViewModel()
+    val assistantLinks: AssistantLinkViewModel = hiltViewModel()
     LaunchedEffect(pendingDeepLink) {
         // Launch cut (2026-09-27): a link into a feature hidden for the first
         // launch opens the existing not-yet-available placeholder instead.
@@ -2486,7 +2496,15 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             // Back lands on the conversation list. Messages opens fresh, so an earlier assistant thread isn't kept under it.
             is DeepLinkRouter.Destination.Assistant -> {
                 navController.navigateToRootTab(PantopusRoute.messagesTab, restoreState = false)
-                navController.navigate(ChildRoutes.assistantThread(pending.nudgeId, pending.conversationId))
+                navController.navigate(
+                    ChildRoutes.assistantThread(
+                        pending.nudgeId,
+                        pending.conversationId,
+                        // A launcher shortcut's fixed keys (AI assistant phase 3 §8.4).
+                        context = assistantLinks.context(pending.surface),
+                        opening = pending.starter?.let { "starter:$it" } ?: pending.compose?.let { "compose:$it" },
+                    ),
+                )
                 DeepLinkRouter.consume()
             }
             DeepLinkRouter.Destination.CreateBusiness -> {
@@ -5314,6 +5332,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 type = NavType.StringType
                                 defaultValue = ""
                             },
+                            navArgument(ChildRoutes.CHAT_AI_OPENING_KEY) {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
                         ),
                 ) { entry ->
                     val args = entry.arguments ?: return@composable
@@ -5413,6 +5435,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         aiContext = if (kind == "ai") AIScreenContext.decode(args.getString(ChildRoutes.CHAT_AI_CONTEXT_KEY)) else null,
                         aiNudgeId = args.getString(ChildRoutes.CHAT_AI_NUDGE_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
                         aiConversationId = args.getString(ChildRoutes.CHAT_AI_CONVERSATION_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
+                        aiOpening = args.getString(ChildRoutes.CHAT_AI_OPENING_KEY)?.takeIf { kind == "ai" && it.isNotBlank() },
                     )
                 }
                 composable(ChildRoutes.CHAT_SEARCH) {
