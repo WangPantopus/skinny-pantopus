@@ -1441,10 +1441,11 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       // Sports topic lane (Phase 1)
       topic: topic || null,
       sports_scope: sportsScope || null,
-      // A source link comes only from sourceUrl on an Official or curator notice (below), and a
-      // Pulse post's named place only from Pulse mode.
+      // A source link comes only from sourceUrl on an Official or curator notice (below), a Pulse
+      // post's named place only from Pulse mode, and the plan mark only from Plans (planActions.js),
+      // since the apps read a plan's event times as real moments.
       post_metadata: Object.fromEntries(Object.entries(postMetadata || {})
-        .filter(([key]) => !['source_url', 'pulse_about'].includes(key))),
+        .filter(([key]) => !['source_url', 'pulse_about', 'plan'].includes(key))),
       origin,
     };
     if (postType === 'alert' && sourceUrl && SOURCED_ALERT_ACCOUNT_TYPES.includes(req.user.accountType)) {
