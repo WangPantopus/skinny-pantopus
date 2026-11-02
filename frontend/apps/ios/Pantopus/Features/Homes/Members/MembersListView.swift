@@ -50,13 +50,11 @@ public struct MembersListView: View {
             if !viewModel.memberListRefused, savedAttempts.invitation {
                 Button("Check an unfinished invitation") { invitationTarget = .init(action: .create, invitationId: nil) }
                     .frame(minHeight: 44)
-                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .accessibilityIdentifier("membersListInvitationRecovery")
             }
             if savedAttempts.removal {
                 Button("Check an unfinished removal") { removalPresentation = .init(target: nil) }
                     .frame(minHeight: 44)
-                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .accessibilityIdentifier("membersListRemovalRecovery")
             }
             if let removalResult {
