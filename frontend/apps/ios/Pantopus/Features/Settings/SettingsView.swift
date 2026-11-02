@@ -32,6 +32,10 @@ public enum SettingsStackRoute: Hashable {
     /// (earnings-in) which lives under the Wallet tab.
     case payments
     case dataExport
+    /// Privacy → What Pantopus remembers (AI phase 3 contract §5.7).
+    case assistantMemory
+    /// Privacy → What Pantopus does for you (AI phase 3 contract §18.5).
+    case assistantRules
     /// This iPhone → Storage & data (photos, saved pages, Clear cache).
     case storageData
     /// One route intentionally parked until P8.5: data export wizard.
@@ -151,7 +155,8 @@ public struct SettingsView: View {
                 SettingsTopBar(title: label) { popLast() }
                 NotYetAvailableView(tabName: label, icon: .info) { popLast() }
             }
-        case .blockedUsers, .password, .securityDevices, .verification, .help, .about, .payments, .dataExport, .storageData:
+        case .blockedUsers, .password, .securityDevices, .verification, .help, .about, .payments, .dataExport, .storageData,
+             .assistantMemory, .assistantRules:
             settingsDestination(for: route)
         }
     }
@@ -176,6 +181,10 @@ public struct SettingsView: View {
             DataExportView { popLast() }
         case .storageData:
             StorageDataView { popLast() }
+        case .assistantMemory:
+            AssistantMemoryView { popLast() }
+        case .assistantRules:
+            AssistantRulesView { popLast() }
         default:
             EmptyView()
         }
@@ -240,6 +249,8 @@ public struct SettingsView: View {
             .securityDevices: .securityDevices,
             .verification: .verification,
             .dataExport: .dataExport,
+            .assistantMemory: .assistantMemory,
+            .assistantRules: .assistantRules,
             .storageData: .storageData,
             .paymentsPayouts: .payments,
             .help: .help,

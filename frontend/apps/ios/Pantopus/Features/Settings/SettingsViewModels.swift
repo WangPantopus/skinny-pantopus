@@ -190,7 +190,21 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
                     subtext: Self.visibilitySubtext(profileVisibility),
                     control: .chevron
                 ),
-                GroupedListRow(id: "export", label: "Data export", control: .chevron)
+                GroupedListRow(id: "export", label: "Data export", control: .chevron),
+                // What the assistant keeps for this person alone (AI phase 3 contract §5.7).
+                GroupedListRow(
+                    id: "memory",
+                    label: "What Pantopus remembers",
+                    control: .chevron,
+                    accessibilityIdentifier: "settings.memory"
+                ),
+                // The standing rules the person turned on (AI phase 3 contract §18.5).
+                GroupedListRow(
+                    id: "rules",
+                    label: "What Pantopus does for you",
+                    control: .chevron,
+                    accessibilityIdentifier: "settings.rules"
+                )
             ]
         )
     }
@@ -293,6 +307,8 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
         case "notificationPreferences": onNavigate(.notifications)
         case "storageData": onNavigate(.storageData)
         case "export": onNavigate(.dataExport)
+        case "memory": onNavigate(.assistantMemory)
+        case "rules": onNavigate(.assistantRules)
         case "paymentsPayouts": onNavigate(.paymentsPayouts)
         case "help": onNavigate(.help)
         case "legal": onNavigate(.legal)
@@ -340,6 +356,10 @@ public enum SettingsRoute: Sendable, Hashable {
     case notifications
     case privacy
     case dataExport
+    /// Privacy → What Pantopus remembers (AI phase 3 contract §5.7).
+    case assistantMemory
+    /// Privacy → What Pantopus does for you (AI phase 3 contract §18.5).
+    case assistantRules
     /// This iPhone → Storage & data (Instant Screens contract section 7).
     case storageData
     case paymentsPayouts

@@ -40,6 +40,93 @@ public enum AIEndpoints {
         Endpoint(method: .delete, path: "/api/ai/conversations/\(id)")
     }
 
+    /// `POST /api/ai/cards/:cardId/state` — what ran on one of the person's
+    /// action cards, or "Not now", so the card shows the same on their other
+    /// phones and after a reinstall
+    /// (`docs/product/ai-assistant-phase3-contract-2026-10-22.md` §4.2). A card
+    /// from before phase 3 answers `404 CARD_UNKNOWN`.
+    /// Route `backend/routes/ai.js:577`.
+    public static func cardState(cardId: String, report: AICardStateReport) -> Endpoint {
+        Endpoint(method: .post, path: "/api/ai/cards/\(cardId)/state", body: report)
+    }
+
+    // MARK: - What Pantopus remembers (phase 3 contract §5.4)
+
+    /// `GET /api/ai/memory` — the person's own items, newest first, with when
+    /// the yearly review is due. An item is added only from a `memory_save`
+    /// card they tapped (the card's own `POST /api/ai/memory`).
+    /// Route `backend/routes/ai.js:598`.
+    public static func memory() -> Endpoint {
+        Endpoint(method: .get, path: "/api/ai/memory")
+    }
+
+    /// `PATCH /api/ai/memory/:id` — new words for a `fact` item, checked as a
+    /// new one (`400 MEMORY_FACT_INVALID` with the reason). Counts as reviewing it.
+    /// Route `backend/routes/ai.js:611`.
+    public static func editMemory(id: String, fact: String) -> Endpoint {
+        Endpoint(method: .patch, path: "/api/ai/memory/\(id)", body: AIMemoryEditRequest(fact: fact))
+    }
+
+    /// `DELETE /api/ai/memory/:id` — forget one item (`204`).
+    /// Route `backend/routes/ai.js:615`.
+    public static func forgetMemory(id: String) -> Endpoint {
+        Endpoint(method: .delete, path: "/api/ai/memory/\(id)")
+    }
+
+    /// `DELETE /api/ai/memory` — Forget everything: `{ deleted: n }`.
+    /// Route `backend/routes/ai.js:620`.
+    public static func forgetAllMemory() -> Endpoint {
+        Endpoint(method: .delete, path: "/api/ai/memory")
+    }
+
+    /// `POST /api/ai/memory/reviewed` — "Looks right" on the yearly review:
+    /// every item counts as confirmed today.
+    /// Route `backend/routes/ai.js:607`.
+    public static func memoryReviewed() -> Endpoint {
+        Endpoint(method: .post, path: "/api/ai/memory/reviewed")
+    }
+
+    /// `GET /api/ai/needs-you` — what waits on the person, most urgent first
+    /// (at most 20), read as them from the screens' own services; Today's
+    /// Needs you card (phase 3 contract §6.2, §6.4).
+    /// Route `backend/routes/ai.js:628`.
+    public static func needsYou() -> Endpoint {
+        Endpoint(method: .get, path: "/api/ai/needs-you")
+    }
+
+    // MARK: - What Pantopus does for you (phase 3 contract §18.5)
+
+    /// `GET /api/ai/rules` — the person's standing rules with their last 5
+    /// runs. A rule is turned on only from a `rule_save` card they tapped.
+    /// Route `backend/routes/ai.js:688`.
+    public static func rules() -> Endpoint {
+        Endpoint(method: .get, path: "/api/ai/rules")
+    }
+
+    /// `PATCH /api/ai/rules/:id` — `{ enabled }` switches it off or on
+    /// (`409 RULE_CANNOT_RUN` with the reason when it can't run), `{ extend:
+    /// true }` gives a weekly plan 12 more weeks.
+    /// Route `backend/routes/ai.js:699`.
+    public static func changeRule(id: String, _ body: AIRuleChangeRequest) -> Endpoint {
+        Endpoint(method: .patch, path: "/api/ai/rules/\(id)", body: body)
+    }
+
+    /// `DELETE /api/ai/rules/:id` — the rule and its runs (`204`); the plans
+    /// it posted stay.
+    /// Route `backend/routes/ai.js:703`.
+    public static func deleteRule(id: String) -> Endpoint {
+        Endpoint(method: .delete, path: "/api/ai/rules/\(id)")
+    }
+
+    /// `GET /api/ai/glance/:topic` — `pickup`, `today` or `nearby` in one to
+    /// three sentences for Siri, with up to 5 rows for its card, written by
+    /// the server from facts (phase 3 contract §8.2). `404 { code, speech,
+    /// link }` when there's no home, pickup days or place.
+    /// Route `backend/routes/ai.js:663`.
+    public static func glance(topic: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/ai/glance/\(topic)", timeout: 10)
+    }
+
     /// `GET /api/ai/pulse?homeId=` — the Neighborhood Pulse for a home
     /// (the priority-ranked signal stream behind the Place "Today's
     /// Pulse" surface). NOTE: the query param is camelCase `homeId`

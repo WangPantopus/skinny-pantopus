@@ -32,6 +32,8 @@ struct TodayTabExtras {
     /// Opens an agenda task over Today, so Back comes back here (as on
     /// Android). Without it the task opens in the Place tab.
     var onOpenTask: ((_ homeId: String, _ taskId: String) -> Void)?
+    /// Needs you (AI phase 3): under the sky, above "Coming up at home".
+    var needsYou: TodayNeedsYouModel?
 }
 
 struct PlaceTodayDetailContent: View {
@@ -115,6 +117,9 @@ struct PlaceTodayDetailContent: View {
             advisories
             sky(proxy: proxy)
             sunCard
+            if let needsYou = tab?.needsYou {
+                TodayNeedsYouCard(model: needsYou, hiddenTaskIds: agendaTaskIds, onOpenTask: tab?.onOpenTask)
+            }
             agendaSection(proxy: proxy)
             // The person's plans today (Directions, On my way, Message guests) right under the agenda.
             if tab != nil, PlansFlags.shared.plans {
@@ -130,6 +135,17 @@ struct PlaceTodayDetailContent: View {
                     .padding(.top, 24)
             }
         }
+    }
+
+    /// The household tasks "Coming up at home" shows (its week, or its "Next" row after an
+    /// empty week), which Needs you leaves out.
+    private var agendaTaskIds: Set<String> {
+        let inputs = agendaInputs(calendarCardData(vm.section(.addressCalendar, in: intel)))
+        var rows = TodayAgenda.items(inputs)
+        if rows.isEmpty, let next = TodayAgenda.next(inputs) { rows = [next] }
+        return Set(rows.compactMap { item in
+            item.id.hasPrefix("task:") ? String(item.id.dropFirst(5)).lowercased() : nil
+        })
     }
 
     /// The agenda reloads its tasks and plans whenever the place's copy does.
