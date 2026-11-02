@@ -443,16 +443,19 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       {/* ═══════════════════════════════════════════════════════
        *  HEADER
        * ═══════════════════════════════════════════════════════ */}
+      {/* Below the desktop layout the bar has no room to grow with the text size: at 200% its row
+       *  pushed the bell, messages and avatar off a phone's screen. There its buttons, spacing and
+       *  wordmark keep their normal size (px, and max-lg: on the parts desktop shares). */}
       <header className={`fixed top-0 right-0 h-14 bg-surface border-b border-app z-50 flex items-center px-4${offsetSlides ? ' transition-[left] duration-200 ease-in-out' : ''}`} style={topBarStyle}>
         {/* Mobile: hamburger + brand */}
         {isMobile && (
           <>
-            <button onClick={() => sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: !mobileOpen })} className="p-2 hover-bg-app rounded-lg transition mr-2" aria-label="Toggle menu">
-              {mobileOpen ? <X className="w-5 h-5 text-app-muted" /> : <Menu className="w-5 h-5 text-app-muted" />}
+            <button onClick={() => sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: !mobileOpen })} className="p-[8px] hover-bg-app rounded-lg transition mr-[8px]" aria-label="Toggle menu">
+              {mobileOpen ? <X className="w-[20px] h-[20px] text-app-muted" /> : <Menu className="w-[20px] h-[20px] text-app-muted" />}
             </button>
-            <button onClick={() => router.push('/app/hub')} className="flex items-center gap-2 mr-auto">
+            <button onClick={() => router.push('/app/hub')} className="flex items-center gap-[8px] mr-auto">
               <PantopusMark size={24} />
-              <span className="text-lg font-semibold text-app">Pantopus</span>
+              <span className="text-[18px] leading-[28px] font-semibold text-app">Pantopus</span>
             </button>
           </>
         )}
@@ -473,12 +476,12 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         </form>
 
         {/* Search icon (mobile) */}
-        <button onClick={() => router.push('/app/discover')} className="md:hidden p-2 hover-bg-app rounded-lg" aria-label="Search">
-          <Search className="w-5 h-5 text-app-muted" />
+        <button onClick={() => router.push('/app/discover')} className="md:hidden p-[8px] hover-bg-app rounded-lg" aria-label="Search">
+          <Search className="w-[20px] h-[20px] text-app-muted" />
         </button>
 
         {/* Right actions */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 max-lg:gap-[4px]">
           <div onMouseEnter={prefetchNotifications} onFocus={prefetchNotifications} className="contents">
             {audienceProfileFlag ? (
               // Two streams (unified-IA §6.1): Personal bell scoped to
@@ -492,11 +495,11 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
               <NotificationBell mode="all" />
             )}
           </div>
-          <button onClick={() => router.push('/app/chat')} className="p-2 hover-bg-app rounded-lg relative" aria-label="Messages">
-            <MessageCircle className="w-5 h-5 text-app-muted" />
+          <button onClick={() => router.push('/app/chat')} className="p-2 max-lg:p-[8px] hover-bg-app rounded-lg relative" aria-label="Messages">
+            <MessageCircle className="w-5 h-5 max-lg:w-[20px] max-lg:h-[20px] text-app-muted" />
             {chatUnread > 0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[11px] leading-[18px] text-center font-bold">{chatUnread > 99 ? '99+' : chatUnread}</span>}
           </button>
-          <button onClick={() => router.push('/app/profile')} className="w-8 h-8 rounded-full overflow-hidden bg-primary-600 text-white flex items-center justify-center font-semibold hover:bg-primary-700 text-sm shrink-0" aria-label="Profile">
+          <button onClick={() => router.push('/app/profile')} className="w-8 h-8 max-lg:w-[32px] max-lg:h-[32px] rounded-full overflow-hidden bg-primary-600 text-white flex items-center justify-center font-semibold hover:bg-primary-700 text-sm max-lg:text-[14px] shrink-0" aria-label="Profile">
             {avatarUrl ? <Image src={avatarUrl} alt="" width={32} height={32} sizes="32px" quality={75} className="w-full h-full object-cover" /> : userInitial}
           </button>
         </div>
