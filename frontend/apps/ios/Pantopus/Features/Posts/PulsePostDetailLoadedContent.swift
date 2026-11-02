@@ -16,6 +16,8 @@ public struct PulsePostDetailLoadedContent: View {
     private let nearbyProviders: [NearbyProviderRow]
     private let onOpenBusiness: @MainActor (String) -> Void
     private let onBack: @MainActor () -> Void
+    /// Beside the feed on a wide screen, the feed is the way back.
+    @Environment(\.pulsePostShowsBack) private var showsBack
     private let onOpenProfile: @MainActor (String) -> Void
     private let onReactionTap: @MainActor () -> Void
     private let onSendTap: @MainActor () -> Void
@@ -102,7 +104,7 @@ public struct PulsePostDetailLoadedContent: View {
     public var body: some View {
         ContentDetailShell(
             title: "Post",
-            onBack: onBack,
+            onBack: showsBack ? { onBack() } : nil,
             topBarAction: topBarAction,
             topBarSecondaryAction: topBarSecondaryAction,
             onRefresh: onRefresh,
