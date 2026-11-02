@@ -14,7 +14,10 @@
 //  While the Pulse redesign is off (launch cut #11) this is the October 13
 //  Pulse instead: the Nearby tab's Pulse segment (`NeighborhoodTabRoot`,
 //  founder decision 2026-10-20) showing the feed (`FeedView`) under Nearby's
-//  segment header, and Nearby presents Tasks and Marketplace itself.
+//  segment header, and Nearby presents Tasks and Marketplace itself. On a
+//  wide screen (the iPhone Duo open, held sideways) that feed and the open
+//  post sit side by side (`PulseSplitView`); the feed's models live here, so
+//  a fold or a turn keeps its posts, filters and List / Map.
 //
 
 import SwiftUI
@@ -41,6 +44,14 @@ public struct PulseTabRoot: View {
     /// The quiet-state card's meter, held here so a pull to refresh re-reads
     /// it with the feed (as a pull on the old Nearby door did).
     @State private var neighborhood = NeighborhoodViewModel()
+    /// The October 13 feed's models (posts and filters, map, viewing area) and its List / Map, kept while a fold or
+    /// a turn moves the feed between the stack and the two columns.
+    @State private var feed: PulseFeedViewModel
+    @State private var feedMap: FeedMapViewModel
+    @State private var feedArea: FeedContextBarViewModel
+    @State private var feedViewMode = FeedViewMode.list
+    /// What was open beside the feed, for the stack to show after a fold or a turn upright.
+    @State private var routesBeside: [PulseRoute] = []
 
     /// Starts adding a home (the quiet card's "Set up a home"), in the Place tab.
     private let onAddHome: @MainActor () -> Void
@@ -50,15 +61,29 @@ public struct PulseTabRoot: View {
     /// Nearby's segment header above the October 13 feed (the Pulse
     /// redesign off): the Pulse | Neighborhood switch and the side menu.
     private let header: AnyView?
+    /// Whether the Nearby tab has room for the October 13 feed and the open post side by side (the iPhone Duo
+    /// open, held sideways).
+    private let sideBySide: Bool
 
     public init(
         onAddHome: @escaping @MainActor () -> Void = {},
         onClose: (@MainActor () -> Void)? = nil,
-        header: AnyView? = nil
+        header: AnyView? = nil,
+        sideBySide: Bool = false
     ) {
         self.onAddHome = onAddHome
         self.onClose = onClose
         self.header = header
+        self.sideBySide = sideBySide
+        let feed = PulseFeedViewModel()
+        let feedMap = FeedMapViewModel(surface: feed.surface)
+        _feed = State(initialValue: feed)
+        _feedMap = State(initialValue: feedMap)
+        // The viewing area above the feed, as `FeedView` makes it: a new area refetches the feed and moves the map.
+        _feedArea = State(initialValue: FeedContextBarViewModel {
+            Task { await feed.refresh() }
+            Task { await feedMap.followChosenArea() }
+        })
     }
 
     private var currentUserId: String {
@@ -67,47 +92,29 @@ public struct PulseTabRoot: View {
     }
 
     public var body: some View {
-        NavigationStack(path: navigationPathBinding) {
-            Group {
-                if LaunchFeatures.pulseRedesign {
-                    // The Pulse page (Pulse S6) reads `GET /api/pulse/feed`.
-                    PulsePageView(
-                        onOpenPost: { postId in
-                            path.append(.post(postId: postId))
-                        },
-                        onCompose: {
-                            path.append(.compose(intent: PulseIntent.all.rawValue))
-                        },
-                        onEdit: { postId in
-                            path.append(.editPost(postId: postId))
-                        },
-                        topMenu: topMenu,
-                        quietCard: quietCard,
-                        onRefresh: refreshQuietCard,
-                        isActive: path.isEmpty && rootTabs.selected == .pulse && presentedSurface == nil
-                    )
-                } else {
-                    // Launch cut #11 off: the October 13 feed, `GET /api/posts/feed`.
-                    FeedView(
-                        onOpenPost: { postId in
-                            path.append(.post(postId: postId))
-                        },
-                        onCompose: { intent in
-                            path.append(.compose(intent: intent.rawValue))
-                        },
-                        onBack: onClose,
-                        header: header,
-                        asksPantopus: true
-                    )
+        Group {
+            if isSideBySide {
+                PulseSplitView(path: $path) {
+                    feedPage
+                } destination: { route in
+                    destination(for: route)
                 }
-            }
-            .readableColumn()
-            .toolbar(.hidden, for: .navigationBar)
-            .swipesBackFromEdge()
-            .navigationDestination(for: PulseRoute.self) { route in
-                destination(for: route)
-                    .readableColumn()
-                    .toolbar(.hidden, for: .navigationBar)
+                .onChange(of: path.routes, initial: true) { _, routes in
+                    routesBeside = routes
+                }
+            } else {
+                NavigationStack(path: navigationPathBinding) {
+                    feedPage
+                        .readableColumn()
+                        .toolbar(.hidden, for: .navigationBar)
+                        .swipesBackFromEdge()
+                        .navigationDestination(for: PulseRoute.self) { route in
+                            destination(for: route)
+                                .readableColumn()
+                                .toolbar(.hidden, for: .navigationBar)
+                        }
+                }
+                .onAppear { stackRoutesBeside() }
             }
         }
         .accessibilityIdentifier("pulseTabRoot")
@@ -133,6 +140,66 @@ public struct PulseTabRoot: View {
             navigationReady = true
             consumeDeepLinkIfNeeded(pending: router.pending)
             presentPendingSurfaceIfNeeded(door.pendingSurface)
+        }
+    }
+
+    /// The October 13 feed side by side with the post (the Pulse redesign keeps its own stack).
+    private var isSideBySide: Bool {
+        sideBySide && !LaunchFeatures.pulseRedesign
+    }
+
+    /// Folded or turned upright, the stack starts at the feed: what was open beside it goes back on top once the
+    /// stack is up.
+    private func stackRoutesBeside() {
+        let routes = routesBeside
+        routesBeside = []
+        guard !routes.isEmpty else { return }
+        Task { @MainActor in
+            await Task.yield()
+            guard path.routes.isEmpty || path.routes == routes else { return }
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { path.replace(with: []) }
+            await Task.yield()
+            withTransaction(transaction) { path.replace(with: routes) }
+        }
+    }
+
+    @ViewBuilder private var feedPage: some View {
+        if LaunchFeatures.pulseRedesign {
+            // The Pulse page (Pulse S6) reads `GET /api/pulse/feed`.
+            PulsePageView(
+                onOpenPost: { postId in
+                    path.append(.post(postId: postId))
+                },
+                onCompose: {
+                    path.append(.compose(intent: PulseIntent.all.rawValue))
+                },
+                onEdit: { postId in
+                    path.append(.editPost(postId: postId))
+                },
+                topMenu: topMenu,
+                quietCard: quietCard,
+                onRefresh: refreshQuietCard,
+                isActive: path.isEmpty && rootTabs.selected == .pulse && presentedSurface == nil
+            )
+        } else {
+            // Launch cut #11 off: the October 13 feed, `GET /api/posts/feed`.
+            FeedView(
+                viewModel: feed,
+                mapViewModel: feedMap,
+                contextBarViewModel: feedArea,
+                viewMode: $feedViewMode,
+                onOpenPost: { postId in
+                    path.open(.post(postId: postId), sideBySide: isSideBySide)
+                },
+                onCompose: { intent in
+                    path.append(.compose(intent: intent.rawValue))
+                },
+                onBack: onClose,
+                header: header,
+                asksPantopus: true
+            )
         }
     }
 

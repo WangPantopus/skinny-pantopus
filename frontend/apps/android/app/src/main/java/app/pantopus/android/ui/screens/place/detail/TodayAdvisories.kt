@@ -59,7 +59,7 @@ object AlertWindow {
             WeatherAlertSeverity.UNKNOWN -> 3
         }
 
-    /** "Until 10 AM", "Through Mon 10 AM", "From 4 AM until 10 AM", "Until further notice". */
+    /** "Until 10 AM", "Through tomorrow 10 AM", "From 4 AM until 10 AM", "Until further notice". */
     fun text(
         alert: PlaceWeatherAlert,
         now: ZonedDateTime,
@@ -71,17 +71,22 @@ object AlertWindow {
             when {
                 ends == null -> "until further notice"
                 ends.toLocalDate() == (onset?.takeIf { it.isAfter(now) } ?: now).toLocalDate() -> "until ${clock(ends)}"
-                else -> "through ${day(ends)} ${clock(ends)}"
+                else -> "through ${dayTime(ends, now)}"
             }
-        val window =
-            if (onset != null && onset.isAfter(now)) {
-                val start = if (onset.toLocalDate() == now.toLocalDate()) clock(onset) else "${day(onset)} ${clock(onset)}"
-                "From $start $end"
-            } else {
-                end
-            }
+        val window = if (onset != null && onset.isAfter(now)) "From ${dayTime(onset, now)} $end" else end
         return window.replaceFirstChar { it.uppercase() }
     }
+
+    /** "10 AM" today, "tomorrow 10 AM", else "Mon 10 AM" (as iPhone's `TodayClock.dayTime`). */
+    private fun dayTime(
+        at: ZonedDateTime,
+        now: ZonedDateTime,
+    ): String =
+        when (at.toLocalDate()) {
+            now.toLocalDate() -> clock(at)
+            now.toLocalDate().plusDays(1) -> "tomorrow ${clock(at)}"
+            else -> "${day(at)} ${clock(at)}"
+        }
 
     /** True while the alert covers part of the rest of [now]'s day at the place. */
     fun coversToday(

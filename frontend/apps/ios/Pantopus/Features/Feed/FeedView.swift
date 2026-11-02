@@ -54,7 +54,10 @@ public struct FeedView: View {
     /// `FeedScreen.tsx:151-155`.
     @State private var contextBarViewModel: FeedContextBarViewModel
     /// List / Map segment — mirrors RN `FeedHeader.tsx:35-52`.
-    @State private var viewMode: FeedViewMode = .list
+    @State private var ownViewMode: FeedViewMode = .list
+    /// List / Map held by the caller, when the mode must outlive this screen (the Nearby tab's feed moving between
+    /// one stack and two columns as the iPhone Duo folds); nil keeps it here.
+    private let heldViewMode: Binding<FeedViewMode>?
     @State private var isSearchVisible = false
     @State private var showsIntentPicker = false
     /// Sports starter tapped in the empty state — presents the compose
@@ -99,6 +102,8 @@ public struct FeedView: View {
     init(
         viewModel: PulseFeedViewModel? = nil,
         mapViewModel: FeedMapViewModel? = nil,
+        contextBarViewModel: FeedContextBarViewModel? = nil,
+        viewMode: Binding<FeedViewMode>? = nil,
         onOpenPost: @escaping @MainActor (String) -> Void = { _ in },
         onCompose: @escaping @MainActor (PulseIntent) -> Void = { _ in },
         onEmptyCTA: (@MainActor () -> Void)? = nil,
@@ -117,10 +122,11 @@ public struct FeedView: View {
         _mapViewModel = State(initialValue: map)
         // The feed's area callback references the context bar weakly. A new
         // area moves the map too.
-        _contextBarViewModel = State(initialValue: FeedContextBarViewModel {
+        _contextBarViewModel = State(initialValue: contextBarViewModel ?? FeedContextBarViewModel {
             Task { await resolved.refresh() }
             Task { await map.followChosenArea() }
         })
+        heldViewMode = viewMode
         self.onOpenPost = onOpenPost
         self.onCompose = onCompose
         self.onEmptyCTA = onEmptyCTA
@@ -237,6 +243,13 @@ public struct FeedView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("pulseFeed")
+    }
+
+    private var viewMode: FeedViewMode {
+        get { heldViewMode?.wrappedValue ?? ownViewMode }
+        nonmutating set {
+            if let heldViewMode { heldViewMode.wrappedValue = newValue } else { ownViewMode = newValue }
+        }
     }
 
     /// The Nearby feed (the one with Ask) shows its posts or its empty state.

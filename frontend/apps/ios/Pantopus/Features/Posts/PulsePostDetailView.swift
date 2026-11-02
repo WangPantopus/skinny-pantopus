@@ -3,7 +3,7 @@
 
 import SwiftUI
 
-// swiftlint:disable file_length type_body_length
+// swiftlint:disable file_length
 
 /// Pulse post detail entry point.
 @MainActor
@@ -302,15 +302,13 @@ public struct PulsePostDetailView: View {
             ),
             isSendingComment: viewModel.isSendingComment,
             replyingToName: viewModel.replyTarget?.authorName,
-            selectedReactionEmoji: viewModel.selectedReactionEmoji,
             topBarAction: overflowAction,
             topBarSecondaryAction: viewModel.canSharePost ? shareAction : nil,
             nearbyProviders: viewModel.nearbyProviders,
             onOpenBusiness: onOpenBusiness,
             onBack: onBack,
             onOpenProfile: onOpenProfile,
-            onReactionTap: { kind in Task { await viewModel.tapReaction(kind) } },
-            onEmojiSelected: { emoji in Task { await viewModel.pickReactionEmoji(emoji) } },
+            onReactionTap: { Task { await viewModel.tapReaction() } },
             onSendTap: { Task { await viewModel.sendComment() } },
             onShowMoreReplies: { viewModel.showMoreReplies() },
             onCancelReply: { viewModel.cancelReply() },
@@ -405,10 +403,11 @@ extension PulsePostDetailView {
 
 private struct LoadingLayout: View {
     let onBack: @MainActor () -> Void
+    @Environment(\.pulsePostShowsBack) private var showsBack
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
-            ContentDetailTopBar(title: "Post", onBack: onBack, action: nil)
+            ContentDetailTopBar(title: "Post", onBack: showsBack ? { onBack() } : nil, action: nil)
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 Shimmer(width: 220, height: 22, cornerRadius: Radii.sm)
                 Shimmer(height: 16, cornerRadius: Radii.sm)
@@ -432,10 +431,11 @@ private struct ErrorLayout: View {
     let onBack: @MainActor () -> Void
     /// Nil when Try again can't help (the post is gone or hidden); Back stays.
     let onRetry: (@MainActor () -> Void)?
+    @Environment(\.pulsePostShowsBack) private var showsBack
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
-            ContentDetailTopBar(title: "Post", onBack: onBack, action: nil)
+            ContentDetailTopBar(title: "Post", onBack: showsBack ? { onBack() } : nil, action: nil)
             EmptyState(
                 icon: .alertCircle,
                 headline: "Couldn't load this post",

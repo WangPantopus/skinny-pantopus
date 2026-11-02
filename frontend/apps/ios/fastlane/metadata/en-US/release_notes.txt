@@ -1,3 +1,3 @@
-Pantopus 2.0 brings a new home dashboard, Today for your address, shared household tasks, pickup reminders, nearby plans, and improved messaging.
+Your profile is now the page neighbors see, with prompts, pinned posts and Preview as. Invite someone to a plan by email; it opens for them when they sign up in the app. Place shows what changed since your last visit, and sunrise and sunset follow your home’s clock. Group chats catch you up when you’re added back. Faster loading and many fixes throughout.
 
 This update starts fresh with new homes, tasks, messages, and posts. Your existing account sign-in is retained.

@@ -18,6 +18,8 @@ import SwiftUI
 
 struct PlaceDashboardView: View {
     @Environment(\.dismiss) private var dismiss
+    /// The tab bar's model, for a step that opens on Today (absent outside the tabs).
+    @Environment(RootTabModel.self) private var rootTabs: RootTabModel?
     @State private var viewModel: PlaceDashboardViewModel
     @State private var showSwitcher = false
     @State private var showVerify = false
@@ -165,6 +167,7 @@ struct PlaceDashboardView: View {
                 PlaceChangesSheet(
                     changes: viewModel.changes,
                     total: viewModel.changesTotal,
+                    incomplete: viewModel.changesIncomplete,
                     calendar: PlacePresentation.placeCalendar(intel.timeZone.flatMap(TimeZone.init(identifier:))),
                     onOpen: { change in
                         showsChanges = false
@@ -616,30 +619,62 @@ struct PlaceDashboardView: View {
             ForEach(Array(shown.enumerated()), id: \.element) { index, group in
                 if index > 0 { PlaceRowDivider() }
                 let sections = byGroup[group] ?? []
-                PlaceGlanceRow(group: group, summary: summary(group, sections: sections, intel: intel), isOpen: groupBinding(group)) {
+                PlaceGlanceRow(
+                    group: group,
+                    summary: summary(group, sections: sections, intel: intel, claim: claim),
+                    isOpen: groupBinding(group)
+                ) {
                     groupContent(group, sections: sections, intel: intel, claim: claim)
                 }
             }
         }
     }
 
-    private func summary(_ group: PlaceGlanceGroup, sections: [PlaceSectionEnvelope], intel: PlaceIntelligence) -> String? {
+    private func summary(
+        _ group: PlaceGlanceGroup,
+        sections: [PlaceSectionEnvelope],
+        intel: PlaceIntelligence,
+        claim: OwnershipClaimDTO?
+    ) -> String? {
         let read: String? = switch group {
         case .today: PlaceGlanceSummary.today(sections)
         case .home: PlaceGlanceSummary.home(sections)
-        case .risk: PlaceGlanceSummary.risk(sections)
+        case .risk: PlaceGlanceSummary.topics(sections, chipsFirst: true)
         case .civic: PlaceGlanceSummary.civic(intel.groups.flatMap(\.sections))
-        case .identity: "Residency letters & passes · what neighbors see"
-        case .block: PlaceGlanceSummary.block(sections)
-        case .costs: PlaceGlanceSummary.plain(sections)
+        case .identity:
+            // What the group holds for this viewer (`identityRows`).
+            PlaceGlanceSummary.identity(sections, letters: claim == nil, verify: showsVerify(intel), mirror: claim == nil)
+        case .block, .costs: PlaceGlanceSummary.topics(sections)
         }
         // Nothing to read yet: a lock says why (the rows' own reason), else it isn't available.
-        if let read { return read }
+        if let read { return PlaceGlanceSummary.sentence(read) }
         if let locked = sections.first(where: { $0.access == .locked }) {
             let reason = PlacePresentation.lockReason(locked)
             return reason.hasSuffix(".") ? String(reason.dropLast()) : reason
         }
         return sections.isEmpty ? nil : "Not available for this address yet"
+    }
+
+    /// A risk topic's next step, where the app already has one (as on
+    /// Android): heat and cold's own guidance, and for the Home the Today tab
+    /// shows, Today's radon question while no radon test is on record and this
+    /// person may answer it. Every other topic has none.
+    private func nextStep(for env: PlaceSectionEnvelope, claim: OwnershipClaimDTO?) -> PlaceNextStep? {
+        switch env.id {
+        case .heatCold:
+            return PlaceNextStep.guidance(env)
+        case .leadRadon:
+            guard let rootTabs, claim == nil, viewModel.isTodayHome, viewModel.canAddTasks, PlaceGlanceSummary.isLive(env),
+                  let zone = env.leadRadon?.radonZone, (1...3).contains(zone),
+                  RadonToday.selected(viewModel.tasks) == nil else { return nil }
+            let homeId = viewModel.homeId
+            return PlaceNextStep(text: "Add radon test information") {
+                rootTabs.todayRadonHomeId = homeId
+                rootTabs.selected = .today
+            }
+        default:
+            return nil
+        }
     }
 
     /// Before verification, for a resident who can take the step (as `loaded` decides).
@@ -671,6 +706,7 @@ struct PlaceDashboardView: View {
                 PlaceEvidenceRow(
                     env: env,
                     verifiesFirst: intel.verifiesFirst,
+                    nextStep: nextStep(for: env, claim: claim),
                     onOpen: { viewModel.onOpenDetail(.risk) },
                     onUnlock: unlocks ? { showVerify = true } : nil
                 )

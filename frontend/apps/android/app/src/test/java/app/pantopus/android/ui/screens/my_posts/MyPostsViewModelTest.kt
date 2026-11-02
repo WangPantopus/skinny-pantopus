@@ -186,31 +186,21 @@ class MyPostsViewModelTest {
     }
 
     @Test
-    fun engagementItemsAdaptToIntent() {
-        val dto = dto(id = "p", postType = "event", likeCount = 12, commentCount = 5)
+    fun engagementItemsNameTheReactionByPostType() {
+        fun labels(
+            postType: String,
+            intent: PulseIntent,
+            likes: Int = 12,
+            replies: Int = 5,
+        ) = MyPostsViewModel
+            .engagementItems(dto(id = "p", postType = postType, likeCount = likes, commentCount = replies), intent)
+            .map { it.label }
 
-        val event = MyPostsViewModel.engagementItems(dto, PulseIntent.Event)
-        assertEquals("12 going", event[0].label)
-        assertEquals("5 replies", event[1].label)
-
-        val recommend = MyPostsViewModel.engagementItems(dto, PulseIntent.Recommend)
-        assertEquals("12 helpful", recommend[0].label)
-
-        val lost = MyPostsViewModel.engagementItems(dto, PulseIntent.Lost)
-        assertEquals("5 replies", lost[0].label)
-        assertEquals("12 seen", lost[1].label)
-
-        val ask = MyPostsViewModel.engagementItems(dto, PulseIntent.Ask)
-        assertEquals("5 replies", ask[0].label)
-        assertEquals("12 likes", ask[1].label)
-
-        val single =
-            MyPostsViewModel.engagementItems(
-                dto(id = "s", likeCount = 1, commentCount = 1),
-                PulseIntent.Ask,
-            )
-        assertEquals("1 reply", single[0].label)
-        assertEquals("1 like", single[1].label)
+        assertEquals(listOf("12 going", "5 replies"), labels("event", PulseIntent.Event))
+        assertEquals(listOf("12 helpful", "5 replies"), labels("recommendation", PulseIntent.Recommend))
+        assertEquals(listOf("5 replies", "12 celebrated"), labels("neighborhood_win", PulseIntent.NeighborhoodWin))
+        assertEquals(listOf("5 replies", "12 helpful"), labels("lost_found", PulseIntent.Lost))
+        assertEquals(listOf("1 reply", "1 helpful"), labels("ask_local", PulseIntent.Ask, likes = 1, replies = 1))
     }
 
     @Test

@@ -15,6 +15,8 @@
 
 import SwiftUI
 
+// swiftlint:disable file_length
+
 struct AddressTodayTabView: View {
     let onAddHome: () -> Void
     @Environment(AuthManager.self) private var auth
@@ -365,6 +367,8 @@ private struct AddressTodayLoaded: View {
     @State private var sessionChanged = false
     /// The assistant, opened from the box at the end about this day.
     @State private var askTopic: AIAskTopic?
+    /// An agenda task opened over Today: Back comes back here.
+    @State private var openedTask: TodayOpenedTask?
 
     var body: some View {
         Group {
@@ -395,6 +399,9 @@ private struct AddressTodayLoaded: View {
         }
         .refreshFailureToast($viewModel.refreshFailureMessage)
         .askPantopus($askTopic)
+        .navigationDestination(item: $openedTask) { task in
+            TodayTaskPage(task: task)
+        }
         .task {
             guard scope.isCurrent else { sessionChanged = true
                 return
@@ -436,9 +443,12 @@ private struct AddressTodayLoaded: View {
                     vm: viewModel,
                     showHomeRadon: savedPlace == nil && claim == nil,
                     onOpenBallot: onOpenPlace,
-                    tab: TodayTabExtras(savedPlace: savedPlace != nil, onAddHome: onAddHome) {
-                        askTopic = .today(homeId: viewModel.savedPlaceId == nil ? viewModel.homeId : nil)
-                    }
+                    tab: TodayTabExtras(
+                        savedPlace: savedPlace != nil,
+                        onAddHome: onAddHome,
+                        onAsk: { askTopic = .today(homeId: viewModel.savedPlaceId == nil ? viewModel.homeId : nil) },
+                        onOpenTask: { homeId, taskId in openedTask = TodayOpenedTask(homeId: homeId, taskId: taskId) }
+                    )
                 )
             }
             .padding(.horizontal, 16)
@@ -484,6 +494,29 @@ private struct AddressTodayLoaded: View {
         } catch {
             if !scope.isCurrent { sessionChanged = true }
         }
+    }
+}
+
+/// A household task opened from Today's agenda.
+private struct TodayOpenedTask: Hashable {
+    let homeId: String
+    let taskId: String
+}
+
+/// The task's page over Today, as Place shows it, with its editor over it.
+private struct TodayTaskPage: View {
+    let task: TodayOpenedTask
+    @State private var editing = false
+
+    var body: some View {
+        HouseholdTaskDetailView(homeId: task.homeId, taskId: task.taskId) { editing = true }
+            .readableColumn()
+            .navigationDestination(isPresented: $editing) {
+                // The editor draws its own Close and Save, so the stack's bar stays hidden (as in Place).
+                AddHouseholdTaskFormView(homeId: task.homeId, taskId: task.taskId) { editing = false }
+                    .readableColumn()
+                    .toolbar(.hidden, for: .navigationBar)
+            }
     }
 }
 

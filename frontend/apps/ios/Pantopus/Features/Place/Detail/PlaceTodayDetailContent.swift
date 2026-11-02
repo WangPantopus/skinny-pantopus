@@ -29,6 +29,9 @@ struct TodayTabExtras {
     var savedPlace = false
     let onAddHome: () -> Void
     let onAsk: () -> Void
+    /// Opens an agenda task over Today, so Back comes back here (as on
+    /// Android). Without it the task opens in the Place tab.
+    var onOpenTask: ((_ homeId: String, _ taskId: String) -> Void)?
 }
 
 struct PlaceTodayDetailContent: View {
@@ -85,6 +88,7 @@ struct PlaceTodayDetailContent: View {
         ScrollViewReader { proxy in
             todaySections(proxy: proxy)
                 .task(id: vm.calendarHomeId) { await loadRadonState() }
+                .task(id: radonRequestKey) { openRequestedRadon(proxy: proxy) }
                 .task(id: agendaKey) { await agenda.load(homeId: taskHomeId, plans: tab != nil) }
                 .onDisappear { radonState?.suspend() }
                 .onChange(of: showsCalendar) { _, shows in if !shows { startsPicking = false } }
@@ -454,7 +458,11 @@ extension PlaceTodayDetailContent {
         case .openBallot:
             onOpenBallot?()
         case let .openTask(homeId, taskId):
-            DeepLinkRouter.shared.handle(path: "/homes/\(homeId)/tasks/\(taskId)")
+            if let open = tab?.onOpenTask {
+                open(homeId, taskId)
+            } else {
+                DeepLinkRouter.shared.handle(path: "/homes/\(homeId)/tasks/\(taskId)")
+            }
         case let .openPlan(id):
             if let card = (agenda.hosting + agenda.going).first(where: { $0.id == id }) { PlansStoreReads.seed(card) }
             PlansNavigator.shared.pending = .plan(id: id, intent: .view)
@@ -486,6 +494,31 @@ extension PlaceTodayDetailContent {
         return !state.noTaskAccess
     }
 
+    /// Place's risk list asked for this Home's radon question, and whether its answer is known yet.
+    var radonRequestKey: String {
+        "\(rootTabs.todayRadonHomeId ?? "")|\(radonState?.loaded == true)"
+    }
+
+    /// "Next step: Add radon test information" on Place: the setup opens on
+    /// the radon question (asked again if put off with "Not now"), once.
+    func openRequestedRadon(proxy: ScrollViewProxy) {
+        guard tab != nil, let requested = rootTabs.todayRadonHomeId else { return }
+        guard requested == vm.calendarHomeId, showHomeRadon else {
+            rootTabs.todayRadonHomeId = nil
+            return
+        }
+        guard let state = radonState, state.loaded else { return }
+        rootTabs.todayRadonHomeId = nil
+        guard radonRelevant else { return }
+        if state.task == nil, state.dismissedUntil != nil {
+            state.dismissedUntil = nil
+            UserDefaults.standard.removeObject(forKey: "radonCard.dismissedUntil.\(state.homeId)")
+        }
+        setupOpen = true
+        radonItemOpen = true
+        scrollTo("todaySetup", proxy: proxy)
+    }
+
     /// The radon question is still open: not answered, not put off with "Not now".
     var radonIsOpen: Bool {
         guard radonRelevant, let state = radonState, state.loaded, state.task == nil else { return false }
@@ -512,7 +545,7 @@ extension PlaceTodayDetailContent {
                         if pickup {
                             setupAction(
                                 title: "Set pickup days",
-                                detail: "Choose your collection days, or read your hauler's flyer.",
+                                detail: "Enter a schedule or import a flyer.",
                                 identifier: "today.setup.pickup"
                             ) { openPickupEditor(proxy: proxy) }
                         }
@@ -581,7 +614,7 @@ extension PlaceTodayDetailContent {
         if let state = radonState, let data = vm.section(.leadRadon, in: intel)?.leadRadon {
             setupAction(
                 title: state.task == nil ? "Add radon test information" : "Radon test",
-                detail: state.task.map(RadonToday.message) ?? "Add a report, record that you're unsure, or come back later.",
+                detail: state.task.map(RadonToday.message) ?? "Add a report, record that you are unsure, or come back later.",
                 identifier: "today.setup.radon",
                 expanded: radonItemOpen && !state.hidden
             ) {

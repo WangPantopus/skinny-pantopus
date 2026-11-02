@@ -181,7 +181,7 @@ internal data class PinnedCard(
 internal fun pinnedCard(post: FeedPost): PinnedCard {
     val card = profilePreviewCard(post)
     val firstLine = (card.title?.takeIf { it.isNotBlank() } ?: card.body).trim().lineSequence().firstOrNull().orEmpty()
-    val count = card.attendees?.let { "${it.goingCount} going" } ?: card.reactions.firstOrNull()?.let(::reactionCount)
+    val count = mainCount(card.reaction, card.commentCount)
     val photo = card.media.firstOrNull { it.kind == PostMediaKind.Image }?.let { it.thumbnailUrl ?: it.url }
     return PinnedCard(
         id = post.id,
@@ -192,14 +192,18 @@ internal fun pinnedCard(post: FeedPost): PinnedCard {
     )
 }
 
-/** The main count in words: "6 helpful", "4 likes", "2 going" (the heart has no label of its own). */
-private fun reactionCount(reaction: PulseReaction): String =
-    when (reaction.kind) {
-        PulseReaction.Kind.Heart -> if (reaction.count == 1) "1 like" else "${reaction.count} likes"
-        PulseReaction.Kind.Helpful -> "${reaction.count} helpful"
-        PulseReaction.Kind.Going -> "${reaction.count} going"
-        PulseReaction.Kind.Seen -> "${reaction.count} seen"
-        PulseReaction.Kind.Shared -> "${reaction.count} shared"
+/**
+ * The count that says most about it, as on web and the iPhone: its reaction ("2 going", "4 celebrated", "3 helpful"),
+ * else its replies; null when it has neither.
+ */
+private fun mainCount(
+    reaction: PulseReaction,
+    replies: Int,
+): String? =
+    when {
+        reaction.likeCount > 0 -> reaction.kind.countText(reaction.likeCount)
+        replies > 0 -> if (replies == 1) "1 reply" else "$replies replies"
+        else -> null
     }
 
 /** "Pinned": the person's pinned posts in a row; a tap opens the post (not in a preview); Edit on your own page. */

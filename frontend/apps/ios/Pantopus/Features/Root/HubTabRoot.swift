@@ -982,7 +982,7 @@ public struct HubTabRoot: View {
             true
         // Forms and wizards with their own Close.
         case .logMaintenance, .editMaintenance, .startPoll, .editAccessCode, .addCalendarEvent,
-             .addEmergencyInfo, .uploadDocument, .addHouseholdTask, .editPersona,
+             .addEmergencyInfo, .uploadDocument, .addHouseholdTask, .editHouseholdTask, .editPersona,
              .composeBroadcast, .composePost, .editPost, .editSignup, .addGuest, .addBill,
              .claimOwnership, .verifyResidency, .verifyLandlord, .createBusiness, .composeGig,
              .composeListing, .editListing, .startSupportTrain, .ceremonialMail:

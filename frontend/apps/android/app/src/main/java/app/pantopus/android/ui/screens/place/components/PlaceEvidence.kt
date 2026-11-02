@@ -1,13 +1,16 @@
 package app.pantopus.android.ui.screens.place.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -21,6 +24,7 @@ import app.pantopus.android.data.api.models.place.PlaceSectionAccess
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.ui.screens.place.PlacePresentation
+import app.pantopus.android.ui.screens.place.isGlanceLive
 import app.pantopus.android.ui.theme.PantopusColors
 import java.time.ZoneId
 
@@ -93,6 +97,37 @@ fun PlaceEvidenceLine(
         color = PantopusColors.appTextMuted,
         modifier = modifier.fillMaxWidth().testTag("place.evidence.${env.id}"),
     )
+}
+
+/** Heat and cold's next step: the forecast's own guidance, when there is something to act on. */
+fun placeGuidanceStep(env: PlaceSectionEnvelope): String? =
+    env.takeIf { it.sectionId == PlaceSectionId.HEAT_COLD && it.isGlanceLive() }?.heatCold?.guidance?.takeIf { it.isNotBlank() }
+
+/**
+ * A topic's next step where the app already has one (TPR contract §4), under its evidence line: advice reads as a line
+ * with the row; an action is a link of its own.
+ */
+@Composable
+fun PlaceNextStepLine(
+    text: String,
+    onClick: (() -> Unit)?,
+    tag: String,
+    modifier: Modifier = Modifier,
+) {
+    if (onClick == null) {
+        Text(
+            "Next step: $text",
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
+            color = PantopusColors.appTextSecondary,
+            modifier = modifier.fillMaxWidth().testTag(tag),
+        )
+    } else {
+        PlaceTextButton(
+            "Next step: $text",
+            modifier = modifier.heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onClick).testTag(tag),
+        )
+    }
 }
 
 /**

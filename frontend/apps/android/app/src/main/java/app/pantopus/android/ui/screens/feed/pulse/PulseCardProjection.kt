@@ -88,11 +88,8 @@ internal fun pulseCardContent(
                 venue = post.eventVenue,
                 isPlanPost = post.isPlanPost,
             ),
-        reactions =
-            intent.reactionTemplate(
-                helpfulCount = likeCount,
-                secondaryCount = 0,
-            ),
+        // The post's one reaction (the backend's single like counter), named by its type: Going, Celebrate or Helpful.
+        reaction = PulseReaction.forPost(post.postType, likeCount),
         attendees =
             if (intent == PulseIntent.Event) {
                 PulseAttendeeStrip(
