@@ -88,19 +88,17 @@ public struct PostQuickReplyPrompt: Sendable, Identifiable, Hashable {
     }
 }
 
-/// Counts displayed under each reaction pill, plus which (if any) the
-/// signed-in user has currently selected.
+/// The post's one reaction under it: its kind (Helpful, Going, Celebrate),
+/// how many people tapped it, and whether the signed-in person did.
 public struct PostReactionCounts: Sendable, Hashable {
-    public var helpful: Int
-    public var heart: Int
-    public var going: Int
-    public var userReaction: PostReactionKind?
+    public var kind: PostReactionKind
+    public var likeCount: Int
+    public var isOn: Bool
 
-    public init(helpful: Int = 0, heart: Int = 0, going: Int = 0, userReaction: PostReactionKind? = nil) {
-        self.helpful = helpful
-        self.heart = heart
-        self.going = going
-        self.userReaction = userReaction
+    public init(kind: PostReactionKind = .helpful, likeCount: Int = 0, isOn: Bool = false) {
+        self.kind = kind
+        self.likeCount = likeCount
+        self.isOn = isOn
     }
 }
 
@@ -130,7 +128,7 @@ public struct BodyReactionsBody: View {
     private let media: [PostMediaItem]
     private let intent: PostIntent
     private let reactions: PostReactionCounts
-    private let onReactionTap: @MainActor (PostReactionKind) -> Void
+    private let onReactionTap: @MainActor () -> Void
     private let composerAvatarURL: URL?
     private let composerAvatarName: String
     @Binding private var composerText: String
@@ -159,9 +157,6 @@ public struct BodyReactionsBody: View {
     private let detailLine: String?
     /// An Event's when and where, under the text; nil on other posts.
     private let eventDetails: PulseEventDetails?
-    /// Emoji flair on the active heart reaction (long-press popover pick).
-    private let selectedReactionEmoji: String?
-    private let onEmojiSelected: (@MainActor (String) -> Void)?
     /// Optional card rendered between the reaction bar and the comment
     /// composer. Pulse post detail passes the "Nearby Providers" card here;
     /// every other caller leaves it nil. Type-erased so adding the slot
@@ -176,12 +171,10 @@ public struct BodyReactionsBody: View {
         media: [PostMediaItem],
         intent: PostIntent = .share,
         reactions: PostReactionCounts,
-        onReactionTap: @escaping @MainActor (PostReactionKind) -> Void,
+        onReactionTap: @escaping @MainActor () -> Void,
         mediaLocationBadge: String? = nil,
         detailLine: String? = nil,
         eventDetails: PulseEventDetails? = nil,
-        selectedReactionEmoji: String? = nil,
-        onEmojiSelected: (@MainActor (String) -> Void)? = nil,
         composerAvatarURL: URL?,
         composerAvatarName: String,
         composerText: Binding<String>,
@@ -212,8 +205,6 @@ public struct BodyReactionsBody: View {
         self.mediaLocationBadge = mediaLocationBadge
         self.detailLine = detailLine
         self.eventDetails = eventDetails
-        self.selectedReactionEmoji = selectedReactionEmoji
-        self.onEmojiSelected = onEmojiSelected
         self.composerAvatarURL = composerAvatarURL
         self.composerAvatarName = composerAvatarName
         _composerText = composerText
@@ -283,8 +274,6 @@ public struct BodyReactionsBody: View {
                     commentCount: visibleCommentCount,
                     commentsAreFresh: threadIsEmpty,
                     postedRecently: postedRecently,
-                    selectedEmoji: selectedReactionEmoji,
-                    onEmojiSelected: onEmojiSelected,
                     onTap: onReactionTap
                 )
                 .padding(.horizontal, Spacing.s4)
@@ -462,64 +451,19 @@ private struct ReactionsBar: View {
     let commentsAreFresh: Bool
     /// "just posted" follows "0 comments" only while the post is under an hour old.
     let postedRecently: Bool
-    var selectedEmoji: String?
-    var onEmojiSelected: (@MainActor (String) -> Void)?
-    let onTap: @MainActor (PostReactionKind) -> Void
-
-    @State private var showsEmojiPicker = false
+    let onTap: @MainActor () -> Void
 
     var body: some View {
         HStack(spacing: Spacing.s2) {
+            // The post's one reaction, named by its kind as on its card ("Helpful 3").
             ReactionPill(
-                id: "heart",
-                icon: .heart,
-                emojiGlyph: counts.userReaction == .helpful ? selectedEmoji : nil,
-                count: counts.helpful,
-                accessibilityLabel: "Heart reaction, \(counts.helpful)",
-                isSelected: counts.userReaction == .helpful,
-                selectedForeground: Theme.Color.error,
-                selectedBackground: Theme.Color.errorBg
-            ) { onTap(.helpful) }
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.35).onEnded { _ in
-                        if onEmojiSelected != nil { showsEmojiPicker = true }
-                    }
-                )
-                .popover(isPresented: $showsEmojiPicker) {
-                    HStack(spacing: Spacing.s2) {
-                        ForEach(PulsePostDetailViewModel.reactionEmojis, id: \.self) { emoji in
-                            Button {
-                                showsEmojiPicker = false
-                                onEmojiSelected?(emoji)
-                            } label: {
-                                Text(emoji)
-                                    .font(.system(size: 24))
-                                    .frame(width: 36, height: 36)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("React with \(emoji)")
-                        }
-                    }
-                    .padding(Spacing.s2)
-                    .presentationCompactAdaptation(.popover)
-                    .accessibilityIdentifier("pulsePostDetail-emojiPicker")
-                }
-            ReactionPill(
-                id: "hand",
-                icon: .hand,
-                count: counts.heart,
-                accessibilityLabel: "Raised hand reaction, \(counts.heart)",
-                isSelected: counts.userReaction == .heart,
-                onTap: nil
-            )
-            ReactionPill(
-                id: "eye",
-                icon: .eye,
-                count: counts.going,
-                accessibilityLabel: "Watching reaction, \(counts.going)",
-                isSelected: counts.userReaction == .going,
-                onTap: nil
-            )
+                id: counts.kind.rawValue,
+                icon: counts.kind.icon,
+                label: counts.kind.label,
+                likeCount: counts.likeCount,
+                accessibilityLabel: counts.likeCount == 0 ? counts.kind.label : "\(counts.kind.label), \(counts.likeCount)",
+                isSelected: counts.isOn
+            ) { onTap() }
             Spacer()
             HStack(spacing: Spacing.s1) {
                 Icon(.messageCircle, size: 13, color: commentsAreFresh ? Theme.Color.appTextMuted : Theme.Color.appTextSecondary)
@@ -542,43 +486,36 @@ private struct ReactionsBar: View {
 private struct ReactionPill: View {
     let id: String
     let icon: PantopusIcon
-    /// Emoji rendered instead of the icon (long-press popover pick).
-    var emojiGlyph: String?
-    let count: Int
+    /// The reaction's word ("Helpful", "Going", "Celebrate").
+    let label: String
+    /// Shown after the word once someone tapped it.
+    let likeCount: Int
     let accessibilityLabel: String
     let isSelected: Bool
     var selectedForeground: Color = Theme.Color.primary700
     var selectedBackground: Color = Theme.Color.primary50
-    /// `nil` renders the pill as display-only (no Button wrapper).
-    let onTap: (@MainActor () -> Void)?
+    let onTap: @MainActor () -> Void
 
     var body: some View {
-        if let onTap {
-            Button(action: { onTap() }) { pillBody }
-                .buttonStyle(.plain)
-                .frame(minHeight: 44, alignment: .center)
-                .accessibilityIdentifier("pulsePostDetail-reaction-\(id)")
-                .accessibilityLabel(accessibilityLabel)
-                .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-        } else {
-            pillBody
-                .accessibilityElement()
-                .accessibilityIdentifier("pulsePostDetail-reaction-\(id)")
-                .accessibilityLabel(accessibilityLabel)
-        }
+        Button(action: { onTap() }) { pillBody }
+            .buttonStyle(.plain)
+            .frame(minHeight: 44, alignment: .center)
+            .accessibilityIdentifier("pulsePostDetail-reaction-\(id)")
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
     private var pillBody: some View {
         HStack(spacing: Spacing.s1) {
-            if let emojiGlyph {
-                Text(emojiGlyph)
-                    .pantopusTextStyle(.small)
-            } else {
-                Icon(icon, size: 14, color: foreground)
-            }
-            Text("\(count)")
-                .font(.system(size: PantopusTextStyle.caption.size, weight: .regular))
+            Icon(icon, size: 14, color: foreground)
+            Text(label)
+                .font(.system(size: PantopusTextStyle.caption.size, weight: .medium))
                 .foregroundStyle(foreground)
+            if likeCount != 0 {
+                Text("\(likeCount)")
+                    .font(.system(size: PantopusTextStyle.caption.size, weight: .regular))
+                    .foregroundStyle(foreground)
+            }
         }
         .padding(.horizontal, Spacing.s3)
         .frame(height: 32)
@@ -610,8 +547,8 @@ private struct ReactionPill: View {
     BodyReactionsBody(
         body: "Anyone know a reliable handyman for fixing a leaky faucet in Cambridge? Tried two on Angi already.",
         media: [],
-        reactions: PostReactionCounts(helpful: 7, heart: 2, going: 0, userReaction: .helpful),
-        onReactionTap: { _ in },
+        reactions: PostReactionCounts(kind: .helpful, likeCount: 7, isOn: true),
+        onReactionTap: {},
         composerAvatarURL: nil,
         composerAvatarName: "You",
         composerText: $text,

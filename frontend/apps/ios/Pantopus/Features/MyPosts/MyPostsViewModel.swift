@@ -916,12 +916,9 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         }
     }
 
-    /// Engagement strip items per intent. Maps the available backend
-    /// counters (`comment_count`, `like_count`) to the closest design
-    /// label for each intent so the strip reads naturally:
-    ///   ask / announce / lost: "X replies" + "X likes"
-    ///   event:                  "X going" (likes) + "X comments"
-    ///   recommend:              "X helpful" (likes) + "X replies"
+    /// Engagement strip items: the replies and the post's reaction, named
+    /// by its type as on its card ("X going", "X celebrated", "X helpful").
+    /// Events and recommendations lead with the reaction, the rest with replies.
     public static func engagementItems(
         for dto: MyPostDTO,
         intent: PulseIntent
@@ -931,41 +928,13 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
             icon: .messageCircle,
             label: "\(dto.commentCount) \(dto.commentCount == 1 ? "reply" : "replies")"
         )
-        let likes = RowEngagementItem(
-            id: "likes",
-            icon: .thumbsUp,
-            label: "\(dto.likeCount) \(dto.likeCount == 1 ? "like" : "likes")"
-        )
+        let kind = PostReactionKind(postType: dto.postType)
+        let reaction = RowEngagementItem(id: kind.rawValue, icon: kind.icon, label: kind.countText(dto.likeCount))
         switch intent {
-        case .event:
-            return [
-                RowEngagementItem(
-                    id: "going",
-                    icon: .checkCircle,
-                    label: "\(dto.likeCount) going"
-                ),
-                replies
-            ]
-        case .recommend:
-            return [
-                RowEngagementItem(
-                    id: "helpful",
-                    icon: .thumbsUp,
-                    label: "\(dto.likeCount) helpful"
-                ),
-                replies
-            ]
-        case .lost:
-            return [
-                replies,
-                RowEngagementItem(
-                    id: "seen",
-                    icon: .eye,
-                    label: "\(dto.likeCount) seen"
-                )
-            ]
-        case .ask, .announce, .all, .alert, .deal, .neighborhoodWin, .visitorGuide, .generic:
-            return [replies, likes]
+        case .event, .recommend:
+            return [reaction, replies]
+        case .ask, .announce, .all, .lost, .alert, .deal, .neighborhoodWin, .visitorGuide, .generic:
+            return [replies, reaction]
         }
     }
 
