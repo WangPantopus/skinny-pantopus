@@ -241,6 +241,19 @@ public final class PulsePostDetailViewModel {
         return content.post.userId == currentUserId
     }
 
+    /// A plan's own post (Plans marks it `post_metadata.plan`): the author's
+    /// menu opens the plan, where Change and Cancel tell everyone, instead of
+    /// Edit post and Delete post (the server refuses both for a plan's post).
+    public var isPlanPost: Bool {
+        guard case let .loaded(content) = state else { return false }
+        return content.post.isPlanPost
+    }
+
+    /// Opens this post's plan on the Plans tab (the `/plans/<id>` link path).
+    public func openPlan() {
+        DeepLinkRouter.shared.handle(path: "/plans/\(postId)")
+    }
+
     /// The asker's own open Ask (contract §2.12): "Close" is offered. Never
     /// while the Pulse redesign is off (launch cut #11).
     public var canCloseAsk: Bool {

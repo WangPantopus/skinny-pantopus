@@ -24,6 +24,7 @@ import {
 import { postReactionIcon } from '@/components/feed/PostCard';
 import { getErrorMessage, chosenUsername } from '@pantopus/utils';
 import Image from 'next/image';
+import Link from 'next/link';
 import { confirmStore } from '@/components/ui/confirm-store';
 import ReportModal from '@/components/ui/ReportModal';
 import ErrorState from '@/components/ui/ErrorState';
@@ -343,6 +344,8 @@ export default function PostDetailPage() {
   const reactionLabel = POST_REACTION_LABEL[postReaction(post?.post_type)];
   const ReactionIcon = postReactionIcon(post?.post_type);
   const isOwn = post?.user_id === user?.id;
+  // A plan's own post is changed or cancelled from the plan, which tells everyone (the server refuses it here).
+  const isPlanPost = post?.post_metadata?.plan === true;
   // A moderator removed it: only its author still sees it, so nothing offers to spread it or reply.
   const isRemovedByModerator = post?.archive_reason === 'moderation';
   // P0.4 audit follow-up: prefer post.author (typed identity).
@@ -555,7 +558,15 @@ export default function PostDetailPage() {
                   Mark Resolved
                 </button>
               )}
-              {isOwn && (
+              {isOwn && isPlanPost && (
+                <Link
+                  href={`/plans/${post.id}`}
+                  className="px-3 py-1.5 text-xs font-medium text-app-muted hover-bg-app rounded-lg transition"
+                >
+                  Open plan
+                </Link>
+              )}
+              {isOwn && !isPlanPost && (
                 <button
                   onClick={() => setEditing(true)}
                   className="p-2 text-app-text-muted hover:text-app hover-bg-app rounded-lg transition"
@@ -579,7 +590,7 @@ export default function PostDetailPage() {
                     : <Pin className="w-4 h-4" aria-hidden="true" />}
                 </button>
               )}
-              {isOwn && (
+              {isOwn && !isPlanPost && (
                 <button
                   onClick={handleDelete}
                   className="p-2 text-app-text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition"

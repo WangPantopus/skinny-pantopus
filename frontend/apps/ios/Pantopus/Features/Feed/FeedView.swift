@@ -1270,6 +1270,13 @@ private struct FeedPostActionSurfaces: ViewModifier {
     @ViewBuilder private var overflowMenu: some View {
         if let row = overflowRow {
             let actions = row.actions
+            if actions.canOpenPlan {
+                Button("Open plan") {
+                    dismissOverflow()
+                    viewModel.openPlan(postId: row.id)
+                }
+                .accessibilityIdentifier("pulseFeedOverflowOpenPlan")
+            }
             Button(actions.isSaved ? "Remove bookmark" : "Save post") {
                 dismissOverflow()
                 run { await viewModel.toggleSave(postId: row.id) }

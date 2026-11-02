@@ -94,12 +94,17 @@ data class PulsePostActions(
     val canCloseAsk: Boolean = false,
     /** Your own post: whether it's pinned to your profile ("Pin to profile" / "Unpin from profile"); null hides both. */
     val profilePinned: Boolean? = null,
+    /** A plan's own post (Plans marks it `post_metadata.plan`): its plan changes or cancels it, so it offers no Delete. */
+    val isPlanPost: Boolean = false,
 ) {
     /** Report is offered to everyone except the author. */
     val canReport: Boolean get() = !isOwner && !isSeeded
 
-    /** Delete is author-only. */
-    val canDelete: Boolean get() = isOwner && !isSeeded
+    /** Delete is author-only, and never a plan's post: deleting it would take the plan and everyone's asks with it. */
+    val canDelete: Boolean get() = isOwner && !isSeeded && !isPlanPost
+
+    /** The host's own plan post opens its plan, where Change and Cancel live. */
+    val canOpenPlan: Boolean get() = isOwner && isPlanPost
 
     /** Muting needs a resolvable entity and never applies to your own post. */
     val canMuteAuthor: Boolean
