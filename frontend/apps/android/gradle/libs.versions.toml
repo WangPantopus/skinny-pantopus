@@ -49,6 +49,9 @@ playServicesLocation = "21.3.0"
 # Block Store — persistent-login "account hint + resume grant" that survives
 # delete + reinstall on the same device (design docs/persistent-login §9).
 playServicesBlockstore = "16.4.0"
+# Google Play's install referrer: the link a web page sent into Google Play,
+# opened on the first launch (core/routing/InstallReferrerLink.kt).
+installReferrer = "2.2"
 
 # Firebase (FCM push notifications)
 firebaseBom = "33.7.0"
@@ -159,6 +162,8 @@ play-services-location = { group = "com.google.android.gms", name = "play-servic
 # Block Store: `AccountHintStore` (data/auth) keeps a non-secret account hint
 # + a single-use resume grant across delete/reinstall (never cloud-backed).
 play-services-auth-blockstore = { group = "com.google.android.gms", name = "play-services-auth-blockstore", version.ref = "playServicesBlockstore" }
+# Install referrer: a link carried through a Google Play install (InstallReferrerLink).
+android-installreferrer = { group = "com.android.installreferrer", name = "installreferrer", version.ref = "installReferrer" }
 
 # Firebase (FCM push notifications). The BoM pins compatible versions for
 # every firebase-* artifact — declare each artifact without a version so

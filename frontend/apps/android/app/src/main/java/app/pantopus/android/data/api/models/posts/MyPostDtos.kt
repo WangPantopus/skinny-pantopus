@@ -1,6 +1,7 @@
 package app.pantopus.android.data.api.models.posts
 
 import app.pantopus.android.data.api.models.feed.FeedPagination
+import app.pantopus.android.data.api.models.pulse.PostLifecycleMetadata
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -40,7 +41,12 @@ data class MyPostDto(
     val resolution: String? = null,
     /** When the post ends (S7). */
     @Json(name = "expires_at") val expiresAt: String? = null,
-)
+    /** `post_metadata`, read as on feed rows: Plans marks a plan's own post (`plan`). */
+    @Json(name = "post_metadata") val lifecycleMetadata: PostLifecycleMetadata? = null,
+) {
+    /** A plan's own post: it's changed or cancelled from the plan, never edited, archived or deleted as a post. */
+    val isPlanPost: Boolean get() = lifecycleMetadata?.plan == true
+}
 
 /** The author field a saved-post row shows (`author.displayName` on `GET /api/posts/saved`). */
 @JsonClass(generateAdapter = true)
