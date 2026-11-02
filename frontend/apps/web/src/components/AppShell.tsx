@@ -445,8 +445,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
        * ═══════════════════════════════════════════════════════ */}
       {/* Below the desktop layout the bar has no room to grow with the text size: at 200% its row
        *  pushed the bell, messages and avatar off a phone's screen. There its buttons, spacing and
-       *  wordmark keep their normal size (px, and max-lg: on the parts desktop shares). */}
-      <header className={`fixed top-0 right-0 h-14 bg-surface border-b border-app z-50 flex items-center px-4${offsetSlides ? ' transition-[left] duration-200 ease-in-out' : ''}`} style={topBarStyle}>
+       *  wordmark keep their normal size (px, and max-lg: on the parts desktop shares).
+       *  While a bell's panel is open the bar stacks above the + button (z-50), which covered it. */}
+      <header className={`fixed top-0 right-0 h-14 bg-surface border-b border-app z-50 has-[[data-notification-panel]]:z-[60] flex items-center px-4${offsetSlides ? ' transition-[left] duration-200 ease-in-out' : ''}`} style={topBarStyle}>
         {/* Mobile: hamburger + brand */}
         {isMobile && (
           <>
