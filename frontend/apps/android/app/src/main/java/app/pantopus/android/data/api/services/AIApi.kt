@@ -15,11 +15,14 @@ import app.pantopus.android.data.api.models.ai.AIMemoryForgetAllResponse
 import app.pantopus.android.data.api.models.ai.AIMemoryItemResponse
 import app.pantopus.android.data.api.models.ai.AIMemoryListResponse
 import app.pantopus.android.data.api.models.ai.AIMemoryReviewedResponse
+import app.pantopus.android.data.api.models.ai.AINeedsYouResponse
 import app.pantopus.android.data.api.models.ai.AIPostDraftResponse
 import app.pantopus.android.data.api.models.place.NeighborhoodPulse
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -142,4 +145,14 @@ interface AIApi {
     /** "Looks right": every item counts as reviewed for another year. Route `backend/routes/ai.js:607`. */
     @POST("api/ai/memory/reviewed")
     suspend fun memoryReviewed(): AIMemoryReviewedResponse
+
+    /**
+     * What waits on the person, most urgent first, for Today's Needs you card (AI assistant phase 3 contract §6.2).
+     * Read through the screens' store: sends the stored ETag; a 304 means the copy is current.
+     * Route `backend/routes/ai.js:628`.
+     */
+    @GET("api/ai/needs-you")
+    suspend fun needsYou(
+        @Header("If-None-Match") etag: String?,
+    ): Response<AINeedsYouResponse>
 }

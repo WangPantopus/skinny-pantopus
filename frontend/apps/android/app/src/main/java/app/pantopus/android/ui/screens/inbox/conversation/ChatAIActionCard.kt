@@ -20,7 +20,7 @@ data class ChatAICardLine(
  */
 @Immutable
 data class ChatAICardRequest(
-    /** Upper case: `POST`, `PATCH` or `PUT`. */
+    /** Upper case: `POST`, `PATCH`, `PUT` or `DELETE`. */
     val method: String,
     val path: String,
     /** The JSON object body as text, sent as is; null sends `{}`. */
