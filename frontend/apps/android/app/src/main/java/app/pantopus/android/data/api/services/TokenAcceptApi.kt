@@ -8,6 +8,7 @@ import app.pantopus.android.data.api.models.token_accept.GenericAcknowledgement
 import app.pantopus.android.data.api.models.token_accept.GuestPassResponse
 import app.pantopus.android.data.api.models.token_accept.HomeAcceptResponse
 import app.pantopus.android.data.api.models.token_accept.HomeInviteResponse
+import app.pantopus.android.data.api.models.token_accept.HomeNextInviteResponse
 import app.pantopus.android.data.api.models.token_accept.LeaseInviteAcceptanceResponse
 import app.pantopus.android.data.api.models.token_accept.LeaseInvitePreviewResponse
 import retrofit2.http.Body
@@ -38,6 +39,12 @@ interface TokenAcceptApi {
     suspend fun homeInvite(
         @Path("token") token: String,
     ): HomeInviteResponse
+
+    /** `GET /api/homes/invitations/next`: right after signing in or up, the newest household invitation emailed
+     *  to this address before it had an account, with a link token of its own, once. Route
+     *  `backend/routes/home.js:1435`. */
+    @GET("api/homes/invitations/next")
+    suspend fun nextHomeInvite(): HomeNextInviteResponse
 
     /** `GET /api/businesses/seats/invite-details?token=X`. Route
      *  `backend/routes/businessSeats.js:138`. */
