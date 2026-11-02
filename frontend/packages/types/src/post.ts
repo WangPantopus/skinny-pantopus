@@ -154,6 +154,11 @@ export interface Post {
   event_date?: string | null;
   event_end_date?: string | null;
   event_venue?: string | null;
+  /**
+   * Marks the server keeps on the post. `plan` is set by Plans on a plan's own post, whose event times are real
+   * moments rather than the composer's wall clock labelled UTC.
+   */
+  post_metadata?: { plan?: boolean; [key: string]: unknown } | null;
   // Safety alert fields
   safety_alert_kind?: SafetyAlertKind | null;
   safety_happened_at?: string | null;

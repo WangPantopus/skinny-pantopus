@@ -26,6 +26,7 @@ const {
 const { matchBusinessesForPost } = require('../jobs/organicMatch');
 const { checkHomePermission, getActiveOccupancy, mapLegacyRole } = require('../utils/homePermissions');
 const { computeUtilityScore } = require('../utils/feedRanking');
+const { reactionNotice } = require('../utils/postReaction');
 const s3 = require('../services/s3Service');
 const feedService = require('../services/feedService');
 const { loadChatPeople, chatPersonRow } = require('../services/chatPeople');
@@ -1441,10 +1442,11 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       // Sports topic lane (Phase 1)
       topic: topic || null,
       sports_scope: sportsScope || null,
-      // A source link comes only from sourceUrl on an Official or curator notice (below), and a
-      // Pulse post's named place only from Pulse mode.
+      // A source link comes only from sourceUrl on an Official or curator notice (below), a Pulse
+      // post's named place only from Pulse mode, and the plan mark only from Plans (planActions.js),
+      // since the apps read a plan's event times as real moments.
       post_metadata: Object.fromEntries(Object.entries(postMetadata || {})
-        .filter(([key]) => !['source_url', 'pulse_about'].includes(key))),
+        .filter(([key]) => !['source_url', 'pulse_about', 'plan'].includes(key))),
       origin,
     };
     if (postType === 'alert' && sourceUrl && SOURCED_ALERT_ACCOUNT_TYPES.includes(req.user.accountType)) {
@@ -3239,7 +3241,7 @@ router.post('/:id/like', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
-    const post = await requireVisiblePost({ postId: id, userId, res, select: POST_REFS_SELECT });
+    const post = await requireVisiblePost({ postId: id, userId, res, select: `${POST_REFS_SELECT},post_type` });
     if (!post) return;
 
     // A client that sends the state it wants gets that state, so a request re-sent after its reply
@@ -3251,15 +3253,17 @@ router.post('/:id/like', verifyToken, async (req, res) => {
       : await supabaseAdmin.rpc('set_post_like', { p_post_id: id, p_user_id: userId, p_liked: wantsLiked });
     if (error) { logger.error('Error toggling like', { error: error.message, postId: id }); return res.status(500).json({ error: 'Failed to toggle like' }); }
 
-    // Notify post owner on new like (not on unlike, not on own post, not on a repeated request)
+    // Notify post owner on new like (not on unlike, not on own post, not on a repeated request), in the words the
+    // apps give this kind of post's reaction ("Ben is going to your event", utils/postReaction.js).
     if (data.liked && data.changed !== false && post.user_id !== userId) {
       getUserDisplayName(userId).then(name => {
         const { link, extraMeta } = postEngagementNotificationLink(post, id);
+        const { title, icon } = reactionNotice(post.post_type, name);
         notificationService.createNotification({
           userId: post.user_id,
           type: 'post_liked',
-          title: `${name} liked your post`,
-          icon: '❤️',
+          title,
+          icon,
           link,
           metadata: { post_id: id, user_id: userId, ...extraMeta },
         });

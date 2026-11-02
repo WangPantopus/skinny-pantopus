@@ -3,7 +3,7 @@
 
 import SwiftUI
 
-// swiftlint:disable file_length type_body_length
+// swiftlint:disable file_length
 
 /// Pulse post detail entry point.
 @MainActor
@@ -302,15 +302,13 @@ public struct PulsePostDetailView: View {
             ),
             isSendingComment: viewModel.isSendingComment,
             replyingToName: viewModel.replyTarget?.authorName,
-            selectedReactionEmoji: viewModel.selectedReactionEmoji,
             topBarAction: overflowAction,
             topBarSecondaryAction: viewModel.canSharePost ? shareAction : nil,
             nearbyProviders: viewModel.nearbyProviders,
             onOpenBusiness: onOpenBusiness,
             onBack: onBack,
             onOpenProfile: onOpenProfile,
-            onReactionTap: { kind in Task { await viewModel.tapReaction(kind) } },
-            onEmojiSelected: { emoji in Task { await viewModel.pickReactionEmoji(emoji) } },
+            onReactionTap: { Task { await viewModel.tapReaction() } },
             onSendTap: { Task { await viewModel.sendComment() } },
             onShowMoreReplies: { viewModel.showMoreReplies() },
             onCancelReply: { viewModel.cancelReply() },
@@ -356,10 +354,12 @@ extension PulsePostDetailView {
 
     /// An event that hasn't ended: its end, else its start, is still ahead.
     /// Composers post the poster's wall clock labelled UTC, so it compares
-    /// with the phone's own wall clock read the same way (`PulseEventDetails`).
+    /// with the phone's own wall clock read the same way (`PulseEventDetails`);
+    /// a plan's own post holds real moments, which compare with now.
     private static func isEventAhead(_ post: PostDetailDTO, now: Date = Date()) -> Bool {
         guard post.postType == "event" else { return false }
         guard let last = PlanTime.parse(post.eventEndDate) ?? PlanTime.parse(post.eventDate) else { return true }
+        if post.isPlanPost { return last > now }
         return last > now.addingTimeInterval(TimeInterval(TimeZone.current.secondsFromGMT(for: now)))
     }
 
@@ -476,7 +476,14 @@ extension PostDetailDTO {
 
     /// An Event's when and where, matching the web post page.
     var eventDetails: PulseEventDetails? {
-        PulseEventDetails(postType: postType, startsAt: eventDate, endsAt: eventEndDate, venue: eventVenue, long: true)
+        PulseEventDetails(
+            postType: postType,
+            startsAt: eventDate,
+            endsAt: eventEndDate,
+            venue: eventVenue,
+            isPlanPost: isPlanPost,
+            long: true
+        )
     }
 
     /// Lost & Found contact: `dm`, `comment`, `phone` or `phone|<digits>`.

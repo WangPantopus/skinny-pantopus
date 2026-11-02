@@ -129,7 +129,9 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
     public let body: String
     /// When and where an Event happens; nil on other posts.
     public let event: PulseEventDetails?
-    public let reactions: [PulseReaction]
+    /// The post's one reaction (Helpful, Going, Celebrate) and its count. An
+    /// Event shows it as its attendee strip's "N going" and Going button.
+    public let reaction: PulseReaction
     public let attendees: PulseAttendeeStrip?
     public let userHasReacted: Bool
     public let media: [PostMediaItem]
@@ -172,7 +174,7 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         title: String?,
         body: String,
         event: PulseEventDetails? = nil,
-        reactions: [PulseReaction],
+        reaction: PulseReaction,
         attendees: PulseAttendeeStrip?,
         userHasReacted: Bool,
         media: [PostMediaItem] = [],
@@ -195,7 +197,7 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         self.title = title
         self.body = body
         self.event = event
-        self.reactions = reactions
+        self.reaction = reaction
         self.attendees = attendees
         self.userHasReacted = userHasReacted
         self.media = media
@@ -210,7 +212,7 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
     }
 }
 
-/// Event card attendee strip — stacked avatars + going count + RSVP CTA.
+/// Event card attendee strip — stacked avatars, "N going" and the Going button.
 public struct PulseAttendeeStrip: Sendable, Hashable {
     public let avatars: [String]
     public let goingCount: Int
@@ -348,9 +350,11 @@ public struct PulsePostCard: View {
                         )
                     }
                 }
-                Text("+ \(strip.goingCount) going")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Theme.Color.appTextSecondary)
+                if strip.goingCount > 0 {
+                    Text(PostReactionKind.going.countText(strip.goingCount))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                }
                 Spacer(minLength: Spacing.s1)
                 if let onRSVP {
                     Button(action: onRSVP) {
@@ -361,7 +365,7 @@ public struct PulsePostCard: View {
                                 strokeWidth: 3,
                                 color: Theme.Color.magic
                             )
-                            Text(strip.userIsGoing ? "Going" : "RSVP")
+                            Text(PostReactionKind.going.label)
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundStyle(Theme.Color.magic)
                         }
@@ -372,7 +376,9 @@ public struct PulsePostCard: View {
                         .hitArea(vertical: 9)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(strip.userIsGoing ? "Going" : "RSVP")
+                    .accessibilityLabel(PostReactionKind.going.label)
+                    .accessibilityValue(strip.goingCount > 0 ? PostReactionKind.going.countText(strip.goingCount) : "")
+                    .accessibilityAddTraits(strip.userIsGoing ? .isSelected : [])
                     .accessibilityIdentifier("pulseRSVP_\(content.id)")
                 }
             }
@@ -382,8 +388,9 @@ public struct PulsePostCard: View {
 
     private var reactionStrip: some View {
         HStack(alignment: .center, spacing: 14) {
-            ForEach(content.reactions) { reaction in
-                reactionPill(reaction)
+            // An Event's Going button sits in its attendee strip.
+            if content.attendees == nil || onRSVP == nil {
+                reactionPill(content.reaction)
             }
             // October 13's badge while the Pulse redesign, whose status words
             // replace it, is off (launch cut #11).
@@ -454,34 +461,30 @@ public struct PulsePostCard: View {
     /// the live feed has no per-attendee identity, fixtures echo the design).
     private static let attendeeTints: [FeedAvatarTint] = [.orange, .sky, .violet, .green]
 
-    @ViewBuilder
+    /// The post's reaction: its kind's icon and word, and the count once
+    /// someone tapped it ("Helpful 3", like "Reply 3").
     private func reactionPill(_ reaction: PulseReaction) -> some View {
-        let active = reaction.kind == content.reactions.first?.kind && content.userHasReacted
-        if reaction.isInteractive {
-            Button(action: onPrimaryReaction) { reactionLabel(reaction, active: active).hitArea(horizontal: 6, vertical: 12) }
-                .buttonStyle(.plain)
-                .opacity(content.actions.pending.contains(.reaction) ? 0.5 : 1)
-                .accessibilityLabel("\(reaction.label.isEmpty ? "Heart reaction" : reaction.label), \(reaction.count)")
-                .accessibilityIdentifier("pulseReaction_\(content.id)_\(reaction.id.rawValue)")
-        } else {
-            reactionLabel(reaction, active: false)
-                .accessibilityElement()
-                .accessibilityLabel("\(reaction.label.isEmpty ? "Heart reaction" : reaction.label), \(reaction.count)")
-        }
+        let active = content.userHasReacted
+        return Button(action: onPrimaryReaction) { reactionLabel(reaction, active: active).hitArea(horizontal: 6, vertical: 12) }
+            .buttonStyle(.plain)
+            .opacity(content.actions.pending.contains(.reaction) ? 0.5 : 1)
+            .accessibilityLabel(reaction.accessibilityLabel)
+            .accessibilityAddTraits(active ? .isSelected : [])
+            .accessibilityIdentifier("pulseReaction_\(content.id)_\(reaction.kind.rawValue)")
     }
 
     private func reactionLabel(_ reaction: PulseReaction, active: Bool) -> some View {
         HStack(spacing: Spacing.s1) {
-            Icon(reaction.icon, size: 12, color: active ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
+            Icon(reaction.kind.icon, size: 12, color: active ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
             HStack(spacing: 3) {
-                if !reaction.label.isEmpty {
-                    Text(reaction.label)
-                        .font(.system(size: 11.5, weight: .medium))
+                Text(reaction.kind.label)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(active ? Theme.Color.primaryInk : Theme.Color.appTextSecondary)
+                if reaction.likeCount != 0 {
+                    Text("\(reaction.likeCount)")
+                        .font(.system(size: 11.5))
                         .foregroundStyle(active ? Theme.Color.primaryInk : Theme.Color.appTextSecondary)
                 }
-                Text("\(reaction.count)")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(active ? Theme.Color.primaryInk : Theme.Color.appTextSecondary)
             }
         }
     }
@@ -583,17 +586,16 @@ private extension PulsePostCard {
 
     /// The card's controls as VoiceOver actions, named as their buttons are.
     @ViewBuilder var cardActions: some View {
-        if let reaction = content.reactions.first(where: \.isInteractive) {
-            Button("\(reaction.label.isEmpty ? "Heart reaction" : reaction.label), \(reaction.count)", action: onPrimaryReaction)
+        if let onRSVP, content.attendees != nil {
+            Button(content.reaction.accessibilityLabel, action: onRSVP)
+        } else {
+            Button(content.reaction.accessibilityLabel, action: onPrimaryReaction)
         }
         if let onToggleSave {
             Button(content.actions.isSaved ? "Remove bookmark" : "Save post", action: onToggleSave)
         }
         if let onToggleRepost {
             Button(content.actions.isReposted ? "Undo repost" : "Repost", action: onToggleRepost)
-        }
-        if let onRSVP, let attendees = content.attendees {
-            Button(attendees.userIsGoing ? "Going" : "RSVP", action: onRSVP)
         }
         if let onOverflow {
             Button("Post options", action: onOverflow)

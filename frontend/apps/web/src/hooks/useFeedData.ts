@@ -470,7 +470,7 @@ export function useFeedData({
       if (!context) return;
       // A refused like rolls back and says so (Instant Screens: pending taps never fail silently).
       updatePostsInCache(context.toggleLike);
-      showToast("Couldn't update your like. Try again.");
+      showToast("Couldn't update your reaction. Try again.");
     },
     onSettled: (_data, _err, { postId }) => {
       setLikingIds((prev) => {

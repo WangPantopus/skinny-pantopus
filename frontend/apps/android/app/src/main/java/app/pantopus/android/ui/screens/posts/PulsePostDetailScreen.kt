@@ -99,7 +99,7 @@ private val reportReasons =
  * null for other posts.
  */
 internal fun eventDetails(post: PostDetailDto): PulseEventDetails? =
-    pulseEventDetails(post.postType, post.eventDate, post.eventEndDate, post.eventVenue, long = true)
+    pulseEventDetails(post.postType, post.eventDate, post.eventEndDate, post.eventVenue, post.isPlanPost, long = true)
 
 /** A Deal’s business and expiry, matching the web detail’s calendar date. */
 internal fun dealDetailLine(post: PostDetailDto): String? {
@@ -173,7 +173,6 @@ fun PulsePostDetailScreen(
     val savePending by viewModel.savePending.collectAsStateWithLifecycle()
     val isSaved by viewModel.isSaved.collectAsStateWithLifecycle()
     val isReposted by viewModel.isReposted.collectAsStateWithLifecycle()
-    val selectedEmoji by viewModel.selectedReactionEmoji.collectAsStateWithLifecycle()
     val replyTarget by viewModel.replyTarget.collectAsStateWithLifecycle()
     val nearbyProviders by viewModel.nearbyProviders.collectAsStateWithLifecycle()
     val commentsLoading by viewModel.commentsLoading.collectAsStateWithLifecycle()
@@ -273,11 +272,9 @@ fun PulsePostDetailScreen(
                     onOpenProfile = onOpenProfile,
                     nearbyProviders = nearbyProviders,
                     onOpenBusiness = onOpenBusiness,
-                    onReactionTap = { kind -> viewModel.tapReaction(kind) },
+                    onReactionTap = { viewModel.tapReaction() },
                     onSendTap = { viewModel.sendComment() },
                     onShowMoreReplies = { viewModel.showMoreReplies() },
-                    selectedReactionEmoji = selectedEmoji,
-                    onEmojiSelected = { viewModel.pickReactionEmoji(it) },
                     replyingToName = replyTarget?.authorName,
                     onCancelReply = { viewModel.cancelReply() },
                     onCommentReply = { row -> viewModel.beginReply(row.id, row.authorName) },
@@ -512,11 +509,9 @@ fun PulsePostDetailLoadedContent(
     /** Organically matched local businesses — empty hides the card. */
     nearbyProviders: List<NearbyProviderRow> = emptyList(),
     onOpenBusiness: (String) -> Unit = {},
-    onReactionTap: (app.pantopus.android.data.api.models.posts.PostReactionKind) -> Unit = {},
+    onReactionTap: () -> Unit = {},
     onSendTap: () -> Unit = {},
     onShowMoreReplies: () -> Unit = {},
-    selectedReactionEmoji: String? = null,
-    onEmojiSelected: ((String) -> Unit)? = null,
     replyingToName: String? = null,
     onCancelReply: () -> Unit = {},
     onCommentReply: ((PostCommentRow) -> Unit)? = null,
@@ -606,9 +601,6 @@ fun PulsePostDetailLoadedContent(
                 onShowMoreReplies = onShowMoreReplies,
                 onCommentAvatarTap = onOpenProfile,
                 mediaLocationBadge = content.post.locationName,
-                selectedReactionEmoji = selectedReactionEmoji,
-                onEmojiSelected = onEmojiSelected,
-                reactionEmojis = pulseReactionEmojis,
                 replyingToName = replyingToName,
                 onCancelReply = onCancelReply,
                 onCommentReply = if (content.post.isRemovedByModerator) null else onCommentReply,
@@ -716,7 +708,8 @@ private fun ErrorLayout(
 
 /**
  * An event that hasn't ended: its end, else its start, is still ahead. Composers post the poster's wall clock
- * labelled UTC, so it compares with the phone's own wall clock read the same way (`pulseEventDetails`).
+ * labelled UTC, so it compares with the phone's own wall clock read the same way (`pulseEventDetails`); a plan's own
+ * post holds real moments, which compare with now.
  */
 private fun isEventAhead(
     post: PostDetailDto,
@@ -724,6 +717,7 @@ private fun isEventAhead(
 ): Boolean {
     if (post.postType != "event") return false
     val last = PlanFormat.instant(post.eventEndDate) ?: PlanFormat.instant(post.eventDate) ?: return true
+    if (post.isPlanPost) return last.isAfter(now)
     return last.isAfter(now.plusSeconds(ZoneId.systemDefault().rules.getOffset(now).totalSeconds.toLong()))
 }
 

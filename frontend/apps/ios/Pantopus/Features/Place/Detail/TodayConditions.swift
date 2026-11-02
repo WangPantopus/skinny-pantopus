@@ -121,11 +121,11 @@ struct TodayConditionsPair: View {
     private func unavailable(_ env: PlaceSectionEnvelope) -> some View {
         switch env.status {
         case .error:
-            Text("Couldn't load")
+            Text("Couldn't load just now")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(Theme.Color.appTextSecondary)
         default:
-            Text(env.access == .locked ? "Locked" : "Not available")
+            Text(env.access == .locked ? "Locked" : "Not available here yet")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }

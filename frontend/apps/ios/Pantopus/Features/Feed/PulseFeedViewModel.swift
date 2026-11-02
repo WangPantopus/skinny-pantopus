@@ -1216,15 +1216,12 @@ public final class PulseFeedViewModel {
                 postType: post.postType,
                 startsAt: post.eventDate,
                 endsAt: post.eventEndDate,
-                venue: post.eventVenue
+                venue: post.eventVenue,
+                isPlanPost: post.isPlanPost
             ),
-            // The backend persists a single like counter; the secondary
-            // verb is display-only and has no count source, so it stays 0
-            // (comment count lives on the Reply affordance instead).
-            reactions: intent.reactionTemplate(
-                helpfulCount: likeCount,
-                secondaryCount: 0
-            ),
+            // The post's one reaction (the backend's single like counter),
+            // named by its type: Going, Celebrate or Helpful.
+            reaction: PulseReaction(postType: post.postType, likeCount: likeCount),
             attendees: attendees,
             userHasReacted: hasReacted,
             // Image tiles render the full-size stills (thumbnails are

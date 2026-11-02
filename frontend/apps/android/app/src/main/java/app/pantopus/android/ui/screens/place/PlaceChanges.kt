@@ -187,6 +187,15 @@ internal fun PlaceChangesSheet(
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                 )
             }
+            // The server sends at most 20: say so when there are more (as on iPhone).
+            if (changes.total > changes.items.size) {
+                Text(
+                    "The latest ${changes.items.size} of ${changes.total}.",
+                    fontSize = 13.sp,
+                    color = PantopusColors.appTextSecondary,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+            }
             changes.items.forEachIndexed { index, item ->
                 if (index > 0) PlaceHairline(Modifier.padding(start = 56.dp))
                 val open = changeOpen(item, routes)

@@ -18,6 +18,7 @@ import app.pantopus.android.core.identity.ProfileChanges
 import app.pantopus.android.data.api.models.feed.FeedCursor
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.posts.MyPostsResponse
+import app.pantopus.android.data.api.models.posts.PostReactionKind
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
@@ -28,6 +29,7 @@ import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.feed.pulse.PostStatus
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
+import app.pantopus.android.ui.screens.feed.pulse.icon
 import app.pantopus.android.ui.screens.profile.ProfilePinCopy
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilter
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivitySortOrder
@@ -919,6 +921,10 @@ class MyPostsViewModel
                         )
                 }
 
+            /**
+             * Engagement strip items: the replies and the post's reaction, named by its type as on its card ("X going",
+             * "X celebrated", "X helpful"). Events and recommendations lead with the reaction, the rest with replies.
+             */
             fun engagementItems(
                 dto: MyPostDto,
                 intent: PulseIntent,
@@ -929,41 +935,12 @@ class MyPostsViewModel
                         icon = PantopusIcon.MessageCircle,
                         label = "${dto.commentCount} ${if (dto.commentCount == 1) "reply" else "replies"}",
                     )
-                val likes =
-                    RowEngagementItem(
-                        id = "likes",
-                        icon = PantopusIcon.ThumbsUp,
-                        label = "${dto.likeCount} ${if (dto.likeCount == 1) "like" else "likes"}",
-                    )
+                val kind = PostReactionKind.fromPostType(dto.postType)
+                val reaction = RowEngagementItem(id = kind.key, icon = kind.icon, label = kind.countText(dto.likeCount))
                 return when (intent) {
-                    PulseIntent.Event ->
-                        listOf(
-                            RowEngagementItem(
-                                id = "going",
-                                icon = PantopusIcon.CheckCircle,
-                                label = "${dto.likeCount} going",
-                            ),
-                            replies,
-                        )
-                    PulseIntent.Recommend ->
-                        listOf(
-                            RowEngagementItem(
-                                id = "helpful",
-                                icon = PantopusIcon.ThumbsUp,
-                                label = "${dto.likeCount} helpful",
-                            ),
-                            replies,
-                        )
-                    PulseIntent.Lost ->
-                        listOf(
-                            replies,
-                            RowEngagementItem(
-                                id = "seen",
-                                icon = PantopusIcon.Eye,
-                                label = "${dto.likeCount} seen",
-                            ),
-                        )
+                    PulseIntent.Event, PulseIntent.Recommend -> listOf(reaction, replies)
                     PulseIntent.Ask,
+                    PulseIntent.Lost,
                     PulseIntent.Alert,
                     PulseIntent.Deal,
                     PulseIntent.Announce,
@@ -971,8 +948,7 @@ class MyPostsViewModel
                     PulseIntent.VisitorGuide,
                     PulseIntent.All,
                     PulseIntent.Generic,
-                    ->
-                        listOf(replies, likes)
+                    -> listOf(replies, reaction)
                 }
             }
 

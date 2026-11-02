@@ -3,10 +3,11 @@
 //  Pantopus
 //
 //  Ten-way classification for Pulse posts. Drives the chip-row filter,
-//  the per-card colored chip, the reaction-verb set, and the compose
-//  FAB's pre-fill. The `all` case is a chip-row-only sentinel; real
-//  posts resolve to one of the other nine, or to `generic` when their
-//  type is one this build doesn't know (Pulse S2: a plain card).
+//  the per-card colored chip and the compose FAB's pre-fill (a post's
+//  reaction follows its type: `PostReactionKind(postType:)`). The `all`
+//  case is a chip-row-only sentinel; real posts resolve to one of the
+//  other nine, or to `generic` when their type is one this build doesn't
+//  know (Pulse S2: a plain card).
 //
 //  The chip set mirrors RN's `PLACE_POST_TYPES`
 //  (`src/constants/feed.ts:18-28`) 1:1 — `alert` / `deal` /
@@ -141,82 +142,34 @@ public extension PulseIntent {
     }
 }
 
-/// One reaction kind shown in the bottom strip of a post card. The
-/// backend only persists `like` (helpful); the other counts are
-/// display-only and intent-shaped to match the design.
-public struct PulseReaction: Sendable, Hashable, Identifiable {
-    public enum Kind: String, Sendable, Hashable {
-        case helpful, heart, going, seen, shared
+/// The post's one reaction on its card: its kind's button (Helpful, Going,
+/// Celebrate) and how many people tapped it (`POST /api/posts/:id/like`).
+public struct PulseReaction: Sendable, Hashable {
+    public let kind: PostReactionKind
+    public let likeCount: Int
+
+    public init(kind: PostReactionKind, likeCount: Int) {
+        self.kind = kind
+        self.likeCount = likeCount
     }
 
-    public let id: Kind
-    public let kind: Kind
-    public let icon: PantopusIcon
-    public let label: String
-    public let count: Int
-    /// True iff this reaction maps to the `like` toggle endpoint.
-    public let isInteractive: Bool
+    public init(postType: String?, likeCount: Int) {
+        self.init(kind: PostReactionKind(postType: postType), likeCount: likeCount)
+    }
 
-    public init(kind: Kind, icon: PantopusIcon, label: String, count: Int, isInteractive: Bool) {
-        id = kind
-        self.kind = kind
-        self.icon = icon
-        self.label = label
-        self.count = count
-        self.isInteractive = isInteractive
+    /// What VoiceOver reads: "Helpful, 3", or "Helpful" before anyone tapped it.
+    public var accessibilityLabel: String {
+        likeCount == 0 ? kind.label : "\(kind.label), \(likeCount)"
     }
 }
 
-public extension PulseIntent {
-    /// Returns the reaction strip the design specifies for this intent.
-    /// The first kind is always the one wired to `POST /:id/like`; the
-    /// rest are display-only counts.
-    func reactionTemplate(helpfulCount: Int, secondaryCount: Int = 0) -> [PulseReaction] {
+public extension PostReactionKind {
+    /// The button's icon: a light bulb, a calendar check, a party popper.
+    var icon: PantopusIcon {
         switch self {
-        case .ask:
-            [
-                PulseReaction(kind: .helpful, icon: .lightbulb, label: "helpful", count: helpfulCount, isInteractive: true),
-                PulseReaction(kind: .heart, icon: .heart, label: "", count: secondaryCount, isInteractive: false)
-            ]
-        case .recommend:
-            [
-                PulseReaction(kind: .helpful, icon: .heart, label: "", count: helpfulCount, isInteractive: true),
-                PulseReaction(kind: .heart, icon: .lightbulb, label: "helpful", count: secondaryCount, isInteractive: false)
-            ]
-        case .event:
-            [
-                PulseReaction(kind: .going, icon: .calendarCheck, label: "going", count: helpfulCount, isInteractive: true),
-                PulseReaction(kind: .heart, icon: .heart, label: "", count: secondaryCount, isInteractive: false)
-            ]
-        case .lost:
-            [
-                PulseReaction(kind: .seen, icon: .eye, label: "seen", count: helpfulCount, isInteractive: true),
-                PulseReaction(kind: .shared, icon: .share, label: "shared", count: secondaryCount, isInteractive: false)
-            ]
-        case .announce, .alert:
-            // A03 announce card: eye "seen" + heart.
-            [
-                PulseReaction(kind: .seen, icon: .eye, label: "seen", count: helpfulCount, isInteractive: true),
-                PulseReaction(kind: .heart, icon: .heart, label: "", count: secondaryCount, isInteractive: false)
-            ]
-        case .neighborhoodWin:
-            [
-                PulseReaction(kind: .helpful, icon: .heart, label: "", count: helpfulCount, isInteractive: true),
-                PulseReaction(kind: .seen, icon: .eye, label: "seen", count: secondaryCount, isInteractive: false)
-            ]
-        case .deal, .visitorGuide:
-            [
-                PulseReaction(kind: .helpful, icon: .lightbulb, label: "helpful", count: helpfulCount, isInteractive: true),
-                PulseReaction(kind: .shared, icon: .share, label: "shared", count: secondaryCount, isInteractive: false)
-            ]
-        case .all:
-            [
-                PulseReaction(kind: .helpful, icon: .lightbulb, label: "helpful", count: helpfulCount, isInteractive: true),
-                PulseReaction(kind: .heart, icon: .heart, label: "", count: secondaryCount, isInteractive: false)
-            ]
-        case .generic:
-            // A type this build doesn't know: only the plain like every post has.
-            [PulseReaction(kind: .heart, icon: .heart, label: "", count: helpfulCount, isInteractive: true)]
+        case .helpful: .lightbulb
+        case .going: .calendarCheck
+        case .celebrate: .partyPopper
         }
     }
 }
