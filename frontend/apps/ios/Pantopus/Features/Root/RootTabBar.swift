@@ -24,9 +24,13 @@ struct RootTabReselection: Equatable {
     let id = UUID()
 }
 
-/// The room the bar takes at the bottom of the screen, which the tabs'
+/// The room the bar takes at the bottom or side of the screen, which the tabs'
 /// screens keep clear (`RootTabContainer`).
 struct RootTabBarSpace: Equatable {
+    /// Side bars share the system's reserved strip, measured from the
+    /// display edge like the floating bottom bar. UIKit uses physical edges.
+    var fromLeftEdge: CGFloat = 0
+    var fromRightEdge: CGFloat = 0
     /// Height above the bottom safe area (the flat bar).
     var aboveSafeArea: CGFloat = 0
     /// Height from the screen's bottom edge (the floating bar, which reaches
@@ -60,6 +64,13 @@ struct RootTabBar: View {
             : RootTabBarSpace(aboveSafeArea: height)
     }
 
+    static func space(verticalEdge: HorizontalEdge?, layoutDirection: LayoutDirection) -> RootTabBarSpace {
+        guard let verticalEdge else { return space }
+        let onLeft = (verticalEdge == .leading) == (layoutDirection == .leftToRight)
+        let width = capsuleHeight + edgeInset
+        return RootTabBarSpace(fromLeftEdge: onLeft ? width : 0, fromRightEdge: onLeft ? 0 : width)
+    }
+
     /// The floating glass bar: iOS 26 and later, in an app built with their SDK.
     static var isFloating: Bool {
         #if compiler(>=6.2)
@@ -71,6 +82,7 @@ struct RootTabBar: View {
     let tabs: [RootTab]
     let selected: RootTab
     let badges: [RootTab: Int]
+    var verticalEdge: HorizontalEdge?
     let onSelect: @MainActor (RootTab) -> Void
 
     @Environment(RootTabModel.self) private var rootTabs: RootTabModel?
@@ -96,14 +108,22 @@ struct RootTabBar: View {
     /// Scrolled out of the way; never while VoiceOver or Switch Control is
     /// on, where the bar is how people move between tabs.
     private var isAway: Bool {
-        (rootTabs?.barScrolledAway ?? false) && !voiceOverEnabled && !switchControlEnabled
+        verticalEdge == nil && (rootTabs?.barScrolledAway ?? false) && !voiceOverEnabled && !switchControlEnabled
     }
 
     @ViewBuilder
     private var bar: some View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
-            floatingBar
+            if let verticalEdge {
+                RootTabFloatingColumn(tabs: tabs, selected: selected, badges: badges, onSelect: onSelect)
+                    .frame(width: Self.capsuleHeight)
+                    .padding(.vertical, Self.edgeInset)
+                    .padding(verticalEdge == .leading ? .leading : .trailing, Self.edgeInset)
+                    .ignoresSafeArea(edges: verticalEdge == .leading ? .leading : .trailing)
+            } else {
+                floatingBar
+            }
         } else {
             flatBar
         }
@@ -149,6 +169,80 @@ struct RootTabBar: View {
         }
     }
 }
+
+/// Read the system's preferred bar edge, including a Duo app beside another
+/// app. The content keeps its identity when that edge changes on a fold or turn.
+struct RootTabBarPlacementReader<Content: View>: View {
+    @ViewBuilder let content: (HorizontalEdge?) -> Content
+
+    var body: some View {
+        #if compiler(>=6.4)
+        if #available(iOS 27.1, *) {
+            RootTabBarVerticalPlacement(content: content)
+        } else {
+            content(nil)
+        }
+        #else
+        content(nil)
+        #endif
+    }
+}
+
+#if compiler(>=6.4)
+@available(iOS 27.1, *)
+private struct RootTabBarVerticalPlacement<Content: View>: View {
+    @Environment(\.toolbarVerticalEdge) private var verticalEdge
+    @ViewBuilder let content: (HorizontalEdge?) -> Content
+
+    var body: some View {
+        content(verticalEdge)
+    }
+}
+#endif
+
+#if compiler(>=6.2)
+/// The same capsule, labels, badges and selection treatment arranged along
+/// the system's vertical edge. Its height fits the available safe area.
+@available(iOS 26.0, *)
+private struct RootTabFloatingColumn: View {
+    let tabs: [RootTab]
+    let selected: RootTab
+    let badges: [RootTab: Int]
+    let onSelect: @MainActor (RootTab) -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        GeometryReader { proxy in
+            let inset = RootTabFloatingRow.pillInset
+            let height = min(proxy.size.height, RootTabBar.capsuleHeight * CGFloat(tabs.count) + 2 * inset)
+            let rowHeight = max(0, (height - 2 * inset) / CGFloat(max(tabs.count, 1)))
+            ZStack(alignment: .top) {
+                if let index = tabs.firstIndex(of: selected) {
+                    Capsule()
+                        .fill(Theme.Color.appText.opacity(0.08))
+                        .frame(height: rowHeight)
+                        .padding(.horizontal, inset)
+                        .offset(y: inset + CGFloat(index) * rowHeight)
+                        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.78), value: index)
+                }
+                VStack(spacing: Spacing.s0) {
+                    ForEach(tabs, id: \.self) { tab in
+                        RootTabBarItem(tab: tab, isSelected: tab == selected, badge: badges[tab] ?? 0, style: .floating(offset: 0)) {
+                            onSelect(tab)
+                        }
+                        .frame(height: rowHeight)
+                    }
+                }
+                .padding(.vertical, inset)
+            }
+            .frame(height: height)
+            .glassEffect(.regular.interactive(), in: Capsule())
+            .frame(maxHeight: .infinity, alignment: .bottom)
+        }
+    }
+}
+#endif
 
 /// Where the floating bar's tabs sit across its `width`, as on the system
 /// bar: the first and last tabs' pills reach the capsule's ends (`inset` in)
