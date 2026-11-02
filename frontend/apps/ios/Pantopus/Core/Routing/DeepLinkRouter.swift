@@ -156,7 +156,9 @@ final class DeepLinkRouter {
         /// phase 2 contract §8.2). `?nudge=<notificationId>` opens it at the
         /// brief or nudge that notification carried; `&conversation=<id>`,
         /// added from the notification's metadata, names its conversation.
-        case assistant(nudgeId: String?, conversationId: String?)
+        /// `starter`, `compose` and `surface` (phase 3 contract §8.4) take
+        /// fixed keys only, which the app maps to its own words.
+        case assistant(nudgeId: String?, conversationId: String?, launch: AIAssistantLaunch? = nil)
 
         // MARK: - B1.6 batch-2 routing seam
 
@@ -755,7 +757,12 @@ final class DeepLinkRouter {
             }
             return .assistant(
                 nudgeId: uuid(queryValue("nudge", in: comps)),
-                conversationId: uuid(queryValue("conversation", in: comps))
+                conversationId: uuid(queryValue("conversation", in: comps)),
+                launch: AIAssistantLaunch.fromLink(
+                    starter: queryValue("starter", in: comps),
+                    compose: queryValue("compose", in: comps),
+                    surface: queryValue("surface", in: comps)
+                )
             )
         case "settings":
             // `pantopus://settings/payments` — A14.6,

@@ -118,6 +118,15 @@ public enum AIEndpoints {
         Endpoint(method: .delete, path: "/api/ai/rules/\(id)")
     }
 
+    /// `GET /api/ai/glance/:topic` — `pickup`, `today` or `nearby` in one to
+    /// three sentences for Siri, with up to 5 rows for its card, written by
+    /// the server from facts (phase 3 contract §8.2). `404 { code, speech,
+    /// link }` when there's no home, pickup days or place.
+    /// Route `backend/routes/ai.js:663`.
+    public static func glance(topic: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/ai/glance/\(topic)", timeout: 10)
+    }
+
     /// `GET /api/ai/pulse?homeId=` — the Neighborhood Pulse for a home
     /// (the priority-ranked signal stream behind the Place "Today's
     /// Pulse" surface). NOTE: the query param is camelCase `homeId`

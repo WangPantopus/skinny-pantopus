@@ -5,8 +5,8 @@
 //  DTOs for what the assistant keeps for one person
 //  (`docs/product/ai-assistant-phase3-contract-2026-10-22.md`): the items
 //  they asked it to remember (`/api/ai/memory`, §5.4), what waits on them
-//  (`/api/ai/needs-you`, §6.2) and the standing rules they turned on
-//  (`/api/ai/rules`, §18.5).
+//  (`/api/ai/needs-you`, §6.2), the standing rules they turned on
+//  (`/api/ai/rules`, §18.5) and the glance answers Siri reads (§8.2).
 //
 
 import Foundation
@@ -232,4 +232,47 @@ public struct AIRuleChangeRequest: Encodable, Sendable {
 /// `PATCH /api/ai/rules/:id`: the rule as it is now.
 public struct AIRuleResponse: Decodable, Sendable, Hashable {
     public let rule: AIRuleDTO
+}
+
+// MARK: - Glance answers (§8.2)
+
+/// `GET /api/ai/glance/:topic`: pickup, today or nearby in a few sentences, for Siri.
+public struct AIGlanceResponse: Decodable, Sendable, Hashable {
+    /// One row of the small card under Siri's line.
+    public struct Line: Decodable, Sendable, Hashable {
+        public let label: String?
+        public let value: String
+    }
+
+    public let topic: String?
+    /// "Next pickup".
+    public let title: String
+    /// One to three plain sentences for Siri to say.
+    public let speech: String
+    /// At most 5.
+    public let lines: [Line]
+    /// The screen the answer comes from.
+    public let link: String?
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        topic = try container.decodeIfPresent(String.self, forKey: .topic)
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        speech = try container.decode(String.self, forKey: .speech)
+        lines = try container.decodeIfPresent([Line].self, forKey: .lines) ?? []
+        link = try container.decodeIfPresent(String.self, forKey: .link)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case topic, title, speech, lines, link
+    }
+}
+
+/// A glance the server can't answer (`404`): no home, no pickup days, no place. Its sentence for
+/// Siri and the screen that fixes it.
+public struct AIGlanceRefusal: Decodable, Sendable, Hashable {
+    /// `NO_HOME`, `NO_PICKUP`, `NO_PLACE` or `TOPIC_UNKNOWN`.
+    public let code: String?
+    public let speech: String?
+    public let link: String?
 }

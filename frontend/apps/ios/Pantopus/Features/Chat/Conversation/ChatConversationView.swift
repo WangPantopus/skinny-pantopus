@@ -623,6 +623,8 @@ public struct ChatConversationView: View {
         // The emoji panel replaces the keyboard's space instead of stacking above it.
         .ignoresSafeArea(.keyboard, edges: emojiPickerPresented ? .bottom : [])
         .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: emojiPickerPresented)
+        // A `compose` link starts the assistant's composer with the keyboard up.
+        .onChange(of: viewModel.composerFocusRequest) { _, _ in composerFocused = true }
         .onChange(of: composerFocused) { _, focused in
             if focused { emojiPickerPresented = false }
         }

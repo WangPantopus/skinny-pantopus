@@ -657,6 +657,12 @@ public final class ChatConversationViewModel {
     private var awaitingTargetScroll = false
     /// The brief or nudge the assistant thread was opened at.
     private let aiNudge: AIAssistantNudge?
+    /// What the assistant thread does once open (a link's starter or composer, Siri's words).
+    private var aiLaunch: AIAssistantLaunch?
+    /// The screen a launch named (`plans`, `today`), sent with this thread's messages.
+    private var aiLaunchContext: AIChatContext?
+    /// Bumped when the composer should take the keyboard (a `compose` link).
+    public private(set) var composerFocusRequest = 0
     private let logger = Logger(label: "app.pantopus.ios.ChatConversation")
 
     private var messages: [ChatMessageDTO] = []
@@ -825,6 +831,7 @@ public final class ChatConversationViewModel {
         aiConversationStore: AIConversationStore = .shared,
         aiTopic: AIAskTopic? = nil,
         aiNudge: AIAssistantNudge? = nil,
+        aiLaunch: AIAssistantLaunch? = nil,
         actionDoneStore: AIActionDoneStore = .shared,
         locationProvider: any LocationProviding = DeviceLocationProvider.shared,
         activeThreadTracker: ActiveChatThreadTracker = .shared
@@ -841,6 +848,7 @@ public final class ChatConversationViewModel {
         self.initialTopic = initialTopic
         let nudge: AIAssistantNudge? = if case .ai = mode { aiNudge } else { nil }
         self.aiNudge = nudge
+        if case .ai = mode { self.aiLaunch = aiLaunch }
         self.scrollToMessageId = scrollToMessageId ?? nudge?.notificationId
         self.gigId = gigId
         self.api = api
@@ -941,6 +949,39 @@ public final class ChatConversationViewModel {
         subscribeToSockets()
         prefetchDirectRoomIfNeeded()
         loadGigContextIfNeeded()
+        applyAILaunch()
+    }
+
+    /// Once open, the assistant thread does what its link or Siri asked: sends the starter or
+    /// Siri's words as the person's message, or starts the composer with the keyboard up.
+    private func applyAILaunch() {
+        guard let launch = aiLaunch else { return }
+        aiLaunch = nil
+        Task { [weak self] in
+            guard let self else { return }
+            aiLaunchContext = await Self.launchContext(launch.surface)
+            if let text = launch.send, !text.isEmpty {
+                setComposerTextSilently(text)
+                await send()
+            } else if let text = launch.compose {
+                setComposerTextSilently(text)
+                composerFocusRequest += 1
+            }
+        }
+    }
+
+    /// `plans`, `nearby`, or `today` with the home Today shows.
+    private static func launchContext(_ surface: String?) async -> AIChatContext? {
+        guard let surface else { return nil }
+        switch surface {
+        case "plans", "nearby":
+            return AIChatContext(surface: surface)
+        case "today":
+            let homeId = try? await HomesStoreReads.myHomes().value.defaultHomeId
+            return AIChatContext(surface: "today", homeId: homeId)
+        default:
+            return nil
+        }
     }
 
     private var draftThreadKey: String? {
@@ -1876,8 +1917,8 @@ public final class ChatConversationViewModel {
             conversationId: aiConversationId,
             // PDF references go with the photos' (phase 2 contract §7.1).
             images: references.isEmpty ? nil : references,
-            // Every message of a thread opened from a screen says which screen.
-            context: aiTopic?.context
+            // Every message of a thread opened from a screen (or a link or Siri naming one) says which.
+            context: aiTopic?.context ?? aiLaunchContext
         )
         // The stream is consumed in a stored Task so the composer's stop
         // button (A15.3) can cancel it mid-generation via
