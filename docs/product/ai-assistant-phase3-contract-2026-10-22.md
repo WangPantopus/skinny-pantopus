@@ -1,6 +1,6 @@
 # AI assistant, phase 3: the contract between the server and the apps
 
-October 22, 2026 · Status: ready to build. On October 20 the founder approved phase 3's three tables "when phase 2 ships", memory kept until the person deletes it with a yearly reminder, and Siri and the Android equivalent for five actions (see [NEXT_STEPS.md](../../NEXT_STEPS.md), "Made on October 20 (AI assistant)"). Phase 2's buildable part has shipped (its contract, section 11). On October 22 the founder asked to "finish up the whole AI expansion work", taking the recommended defaults; the ones this contract takes are in section 17. Later that day the founder approved standing rules: "approve", in reply to "approve or decline standing rules (`AgentRule`)". Section 18 says what that builds. The proposal is the [AI expansion page](https://claude.ai/artifact/GD4TLsMHgQiFMgDeusZwCS).
+October 22, 2026 · Status: built. The server shipped on October 22; the iPhone and Android apps shipped on November 2 (#3151–#3156, #3167–#3172), with server fixes from their checks (#3148, #3150, #3176, #3177). NEXT_STEPS records the checks. Where the apps differ from this contract, §6.4 says so. On October 20 the founder approved phase 3's three tables "when phase 2 ships", memory kept until the person deletes it with a yearly reminder, and Siri and the Android equivalent for five actions (see [NEXT_STEPS.md](../../NEXT_STEPS.md), "Made on October 20 (AI assistant)"). Phase 2's buildable part has shipped (its contract, section 11). On October 22 the founder asked to "finish up the whole AI expansion work", taking the recommended defaults; the ones this contract takes are in section 17. Later that day the founder approved standing rules: "approve", in reply to "approve or decline standing rules (`AgentRule`)". Section 18 says what that builds. The proposal is the [AI expansion page](https://claude.ai/artifact/GD4TLsMHgQiFMgDeusZwCS).
 
 Phases 1 and 2 ([phase 1 contract](ai-assistant-phase1-contract-2026-10-20.md), [phase 2 contract](ai-assistant-phase2-contract-2026-10-20.md)) made the assistant see, do and know the app, catch people up and speak first. Phase 3 makes it:
 
@@ -475,6 +475,7 @@ A new read tool, `needs_you()`, returns the same items. It is offered to every b
 - **Placement.** A **Needs you** card on Today, between the Ask Pantopus box and the Plans cards.
   - iOS: `AddressTodayTabView.swift`. Its no-place and load-failed branches have no Ask box, so there the card goes above the Plans cards.
   - Android: `TodayTabScreen.kt`.
+  - **As built (November 2):** the November 1 Today redesign moved Ask to the bottom, so the card sits under the sky and its hours (after the Sun card), above "Coming up at home", on both apps. A task that "Coming up at home" already shows on the same screen is left out of the card, and "Show all (N)" counts what the card shows. The assistant's `needs_you` still lists everything.
 - **Content.** It is hidden when the list is empty.
   - It shows up to 3 rows. "Show all (N)" expands the card in place, up to 20 rows.
   - Each row opens its link with the deep-link router.
