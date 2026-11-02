@@ -23,16 +23,18 @@ public struct PulseEventDetails: Sendable, Hashable {
 
     /// Nil unless an Event post names a start time or a place. `long` spells
     /// the weekday out ("Sunday, Oct 18 · …"), as the post page does.
+    /// `isPlanPost`: a plan's own post, whose times are real moments.
     public init?(
         postType: String?,
         startsAt: String?,
         endsAt: String?,
         venue: String?,
+        isPlanPost: Bool = false,
         long: Bool = false,
         now: Date = Date()
     ) {
         guard postType == "event" else { return nil }
-        let when = Self.when(startsAt: startsAt, endsAt: endsAt, long: long, now: now)
+        let when = Self.when(startsAt: startsAt, endsAt: endsAt, isPlanPost: isPlanPost, long: long, now: now)
         let place = venue?.trimmingCharacters(in: .whitespacesAndNewlines)
         guard when != nil || place?.isEmpty == false else { return nil }
         self.init(when: when, place: place?.isEmpty == false ? place : nil)
@@ -41,10 +43,13 @@ public struct PulseEventDetails: Sendable, Hashable {
     /// Every composer stores the time the poster picked as wall-clock time
     /// labelled UTC (the web card reads it in UTC too), so it's read in UTC,
     /// and "Today" or "Tomorrow" compares it with the phone's own wall clock
-    /// read the same way. An end at or before the start is left out.
-    private static func when(startsAt: String?, endsAt: String?, long: Bool, now: Date) -> String? {
+    /// read the same way. A plan's own post (made by Plans) stores the real
+    /// moment, so it's read in the phone's time zone. An end at or before
+    /// the start is left out.
+    private static func when(startsAt: String?, endsAt: String?, isPlanPost: Bool, long: Bool, now: Date) -> String? {
         guard let start = PlanTime.parse(startsAt) else { return nil }
         let end = PlanTime.parse(endsAt).flatMap { $0 > start ? $0 : nil }
+        if isPlanPost { return PlanFormat.when(start: start, end: end, long: long, now: now) }
         let wallClockNow = now.addingTimeInterval(TimeInterval(TimeZone.current.secondsFromGMT(for: now)))
         return PlanFormat.when(start: start, end: end, long: long, now: wallClockNow, calendar: PlanFormat.calendar(for: "UTC"))
     }

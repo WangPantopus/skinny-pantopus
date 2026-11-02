@@ -270,6 +270,9 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
     public let claimMode: String?
     /// The asker already used "Keep open 7 more days" (`post_metadata.kept_open_at`).
     public let keptOpenAt: String?
+    /// A plan's own post (Plans marks it `post_metadata.plan`): its event
+    /// times are real moments, not the composer's wall clock labelled UTC.
+    public let isPlanPost: Bool
     /// Your own post only: whether it's pinned to your profile (PRF SRV-3);
     /// nil on other people's posts and when the server couldn't tell.
     public let profilePinned: Bool?
@@ -377,7 +380,9 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         resolution = c.lenient(String.self, forKey: .resolution)
         expiresAt = c.lenient(String.self, forKey: .expiresAt)
         claimMode = c.lenient(String.self, forKey: .claimMode)
-        keptOpenAt = c.lenient(PostLifecycleMetadata.self, forKey: .postMetadata)?.keptOpenAt
+        let metadata = c.lenient(PostLifecycleMetadata.self, forKey: .postMetadata)
+        keptOpenAt = metadata?.keptOpenAt
+        isPlanPost = metadata?.plan == true
         profilePinned = c.lenient(Bool.self, forKey: .profilePinned)
         showOnProfile = c.lenient(Bool.self, forKey: .showOnProfile)
     }
@@ -433,6 +438,7 @@ extension PostDetailDTO {
         expiresAt = post.expiresAt
         claimMode = post.claimMode
         keptOpenAt = post.keptOpenAt
+        isPlanPost = post.isPlanPost
         profilePinned = post.profilePinned
         showOnProfile = post.showOnProfile
     }
