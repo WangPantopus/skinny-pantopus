@@ -109,6 +109,38 @@ async function list(actorId,homeId=null) {
   const people = await loadChatPeople(result.invitations.map((invite) => invite?.inviter?.id));
   return result.invitations.map((invite) => (invite?.inviter ? { ...invite, inviter: namedPerson(invite.inviter, people) } : invite));
 }
+// A household invitation emailed before the person had an account reaches them only through the email's link: sending
+// it saved no notice (notifyCreated notifies accounts only), and someone who installs the app and signs up there never
+// sees it. When they sign in, each pending one sent to their confirmed address (the SQL's recipient rule) gets
+// a link of its own, a capability as a resend makes, and the notice an account gets when invited, once per
+// invitation. No push: the app opens the newest right away. Returns that one's token, or null.
+async function deliverEmailInvitations(userId) {
+  const emailed = (await list(userId)).filter((invite) => !invite.invitee_user_id && invite.invitee_email);
+  if (!emailed.length) return null;
+  const key = (invite) => `home-invite-email:${invite.id}:${userId}`;
+  const { data: noticed, error } = await db.from('Notification').select('idempotency_key')
+    .eq('user_id', userId).in('idempotency_key', emailed.map(key));
+  if (error) throw failure();
+  const seen = new Set((noticed || []).map((row) => row.idempotency_key));
+  let newest = null;
+  for (const invite of emailed.filter((row) => !seen.has(key(row)))) { // newest first, as the SQL orders them
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+    const { error: capabilityError } = await db.from('HomeInvitationCapability')
+      .insert({ token_hash: tokenHash, invitation_id: invite.id });
+    if (capabilityError) {
+      logger.warn('Household invitation link for an emailed invitation unsaved', { inviteId: invite.id });
+      continue;
+    }
+    // A concurrent sign-in that saved this notice first wins (null here); the unused capability opens nothing more
+    // than the invitation's own email link does.
+    const notice = await require('./notificationService').notifyHomeInvite({ inviteeUserId: userId,
+      inviterName: await personName(invite.invited_by, 'Someone'), homeName: invite.home?.name || 'A home',
+      homeId: invite.home_id, inviteToken: token, idempotencyKey: key(invite), sendPush: false });
+    if (notice && !newest) newest = token;
+  }
+  return newest;
+}
 async function listRequests(homeId,actorId,status='pending') {
   const result=await rpc('list_home_household_requests',{p_home_id:homeId,p_actor_id:actorId,p_status:status});
   if (!Array.isArray(result.requests)) throw failure();
@@ -167,5 +199,5 @@ async function notifyAccepted(result,actorId) {
       accepterName: await personName(actorId, 'Someone'), homeName: result.home_label, homeId: result.homeId });
   } catch (err) { logger.error('Home invite acceptance notification failed after commit', { errorCode: err.code }); }
 }
-module.exports = { write, act, list, listRequests, notifyCreated, notifySenderDelivery, notifyAccepted, failure,
-  personName, namePreview };
+module.exports = { write, act, list, listRequests, deliverEmailInvitations, notifyCreated, notifySenderDelivery,
+  notifyAccepted, failure, personName, namePreview };

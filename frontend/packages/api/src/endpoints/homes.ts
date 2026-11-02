@@ -451,6 +451,14 @@ export async function getHomeInvitations(): Promise<{ invitations: any[] }> {
 }
 
 /**
+ * Right after signing in or up: the newest household invitation emailed to this address before it had an
+ * account, with a link of its own (`/invite/<token>`), once; null when there is none.
+ */
+export async function getNextHomeInvitation(): Promise<{ token: string | null }> {
+  return get<{ token: string | null }>('/api/homes/invitations/next');
+}
+
+/**
  * Look up an invitation by token (public — no auth required)
  */
 export async function getInviteByToken(token: string): Promise<{

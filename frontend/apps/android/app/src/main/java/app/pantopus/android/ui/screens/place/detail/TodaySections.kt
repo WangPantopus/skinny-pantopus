@@ -7,15 +7,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -23,7 +19,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -45,11 +40,6 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import java.time.ZoneId
-
-private const val MINUTES_PER_HOUR = 60
-
-/** Above this font scale the air and daylight pair stacks. */
-private const val PAIR_STACK_SCALE = 1.3f
 
 /** A Today section's title (the largest type after the sky and an advisory) and its quiet trailing note. */
 @Composable
@@ -99,39 +89,24 @@ fun TodayTextAction(
 }
 
 /**
- * Air quality and daylight side by side (TPR brief 5.6): the number, category, main pollutant, monitor or model
- * estimate and time; the day's length with sunrise and sunset on the place's clock. Each opens its full card; a side
- * that can't answer says so in its own words.
+ * Air quality as one tile (TPR brief 5.6): the number, category, main pollutant, monitor or model estimate and time. It
+ * opens the full card; a reading it can't give says so in its own words. The daylight moved into the Sun card under the
+ * weather.
  */
 @Composable
-fun TodayAirDaylightPair(
+fun TodayAirTile(
     air: PlaceSectionEnvelope?,
-    sun: PlaceSectionEnvelope?,
     zone: ZoneId?,
     onAir: () -> Unit,
-    onSun: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (air == null && sun == null) return
-    // At large text sizes the two sides stack, so a reading never breaks mid-word in a half-width column.
-    if (LocalDensity.current.fontScale > PAIR_STACK_SCALE) {
-        Column(modifier = modifier.fillMaxWidth().padding(top = 16.dp).placeSurface().testTag("today.airDaylight")) {
-            PairHalf(airLines(air, zone), onAir, Modifier.fillMaxWidth().testTag("today.air"))
-            Box(modifier = Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 14.dp).background(PantopusColors.appBorderSubtle))
-            PairHalf(daylightLines(sun, zone), onSun, Modifier.fillMaxWidth().testTag("today.daylight"))
-        }
-        return
-    }
-    Row(
-        modifier = modifier.fillMaxWidth().padding(top = 16.dp).height(IntrinsicSize.Min).placeSurface().testTag("today.airDaylight"),
-    ) {
-        PairHalf(airLines(air, zone), onAir, Modifier.weight(1f).testTag("today.air"))
-        Box(modifier = Modifier.width(1.dp).fillMaxHeight().padding(vertical = 14.dp).background(PantopusColors.appBorderSubtle))
-        PairHalf(daylightLines(sun, zone), onSun, Modifier.weight(1f).testTag("today.daylight"))
+    if (air == null) return
+    Column(modifier = modifier.fillMaxWidth().padding(top = 16.dp).placeSurface().testTag("today.airDaylight")) {
+        PairHalf(airLines(air, zone), onAir, Modifier.fillMaxWidth().testTag("today.air"))
     }
 }
 
-/** One side of the pair: its label, its reading and the line under it. */
+/** The tile's label, its reading and the line under it. */
 private data class PairLines(
     val label: String,
     val value: String,
@@ -162,24 +137,7 @@ private fun airLines(
     )
 }
 
-private fun daylightLines(
-    env: PlaceSectionEnvelope?,
-    zone: ZoneId?,
-): PairLines {
-    val data = env?.sunriseSunset
-    if (env == null || data == null) {
-        val why = env?.let(::unavailableWords) ?: "Not available here yet"
-        return PairLines("Daylight", "—", why, spoken = "Daylight: $why")
-    }
-    val length = "${data.daylightMinutes / MINUTES_PER_HOUR}h ${data.daylightMinutes % MINUTES_PER_HOUR}m"
-    val rise = PlacePresentation.fmtSunClock(data.localSunrise(zone))
-    val set = PlacePresentation.fmtSunClock(data.localSunset(zone))
-    val day = PlacePresentation.fmtSunDay(data, zone)?.takeUnless { it == "today" }
-    val detail = listOfNotNull("↑ $rise  ↓ $set", day).joinToString(" · ")
-    return PairLines("Daylight", length, detail, spoken = "Daylight $length. Sunrise $rise, sunset $set${day?.let { ", $it" } ?: ""}.")
-}
-
-/** An unavailable, unsupported, locked or failed side, in its own words (never read as clear). */
+/** An unavailable, unsupported, locked or failed reading, in its own words (never read as clear). */
 private fun unavailableWords(env: PlaceSectionEnvelope): String =
     when {
         env.status == PlaceSectionStatus.ERROR -> "Couldn't load just now"

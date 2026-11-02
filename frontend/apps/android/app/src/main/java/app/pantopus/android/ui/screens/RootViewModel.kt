@@ -9,6 +9,7 @@ import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.SessionEndReason
 import app.pantopus.android.data.plans.PlansRepository
 import app.pantopus.android.data.realtime.SocketManager
+import app.pantopus.android.data.token_accept.TokenAcceptRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -24,6 +25,7 @@ class RootViewModel
         val stepUpCoordinator: StepUpCoordinator,
         private val socketManager: SocketManager,
         private val plans: PlansRepository,
+        private val invitations: TokenAcceptRepository,
     ) : ViewModel() {
         val authState: StateFlow<AuthRepository.State> = authRepository.state
 
@@ -94,8 +96,19 @@ class RootViewModel
          */
         suspend fun unopenedPlanInvite(): String? = (plans.nextInvite() as? NetworkResult.Success)?.data?.planId
 
+        /**
+         * Someone invited to a household by email before they had an account, who just signed up (or signed in) with
+         * that address instead of tapping the email's button: the invitation's link token to open, once (home.js
+         * `GET /api/homes/invitations/next`), as iOS.
+         */
+        suspend fun unopenedHomeInvite(): String? =
+            (invitations.nextHomeInvite() as? NetworkResult.Success)?.data?.token?.takeIf { it.matches(HOME_INVITE_TOKEN) }
+
         suspend fun signOutFromAppLock() {
             appLockManager.clearTransientState()
             authRepository.signOut()
         }
     }
+
+/** The link token `GET /api/homes/invitations/next` hands out (homeInvitationService.deliverEmailInvitations). */
+private val HOME_INVITE_TOKEN = Regex("[a-f0-9]{64}")

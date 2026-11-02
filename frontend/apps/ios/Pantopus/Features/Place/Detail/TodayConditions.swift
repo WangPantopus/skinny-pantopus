@@ -2,17 +2,17 @@
 //  TodayConditions.swift
 //  Pantopus
 //
-//  Today's compact readings (the November 2026 redesign): air quality and
-//  daylight side by side under the agenda, each opening its full card in
-//  "Sources and full conditions"; "Good day for…" as a list where each
-//  verdict carries its window and anything on the screen that limits it;
-//  and the daily forecast for the full conditions. Parity twin of Android
-//  `TodayConditions.kt`.
+//  Today's compact readings (the November 2026 redesign): air quality under
+//  the agenda, opening its full card in "Sources and full conditions" (the
+//  daylight moved into the Sun card under the weather); "Good day for…" as a
+//  list where each verdict carries its window and anything on the screen that
+//  limits it; and the daily forecast for the full conditions. Parity twin of
+//  Android `TodayConditions.kt`.
 //
 
 import SwiftUI
 
-// MARK: - Air and daylight
+// MARK: - Air
 
 /// The usual names of the server's pollutant tokens ("pm25" is "PM2.5").
 enum TodayAir {
@@ -28,42 +28,29 @@ enum TodayAir {
     }
 }
 
-struct TodayConditionsPair: View {
-    let air: PlaceSectionEnvelope?
-    let sun: PlaceSectionEnvelope?
-    let calendar: Calendar
+/// The air reading as one tile; a tap opens the full AQI card.
+struct TodayAirTile: View {
+    let air: PlaceSectionEnvelope
     /// The place's zone; while it is unknown no clock time is shown.
     let timeZone: TimeZone?
-    let onOpenAir: () -> Void
-    let onOpenSun: () -> Void
-    @Environment(\.dynamicTypeSize) private var typeSize
+    let onOpen: () -> Void
 
     var body: some View {
-        let stacked = typeSize.isAccessibilitySize
-        let layout = stacked
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: 0))
-        layout {
-            if let air { airSide(air) }
-            if air != nil, sun != nil {
-                if stacked { PlaceRowDivider() } else { Rectangle().fill(Theme.Color.appBorderSubtle).frame(width: 1) }
-            }
-            if let sun { sunSide(sun) }
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .background(Theme.Color.appSurface)
-        .clipShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
-        .padding(.top, 24)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("today.conditionsPair")
+        airSide(air)
+            .fixedSize(horizontal: false, vertical: true)
+            .background(Theme.Color.appSurface)
+            .clipShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
+            .padding(.top, 24)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("today.conditionsPair")
     }
 
     private func airSide(_ env: PlaceSectionEnvelope) -> some View {
         let live = env.status == .ready || env.status == .stale
         let data = live ? env.airQuality : nil
         let time = timeZone.flatMap { PlacePresentation.fmtTime(env.asOf, timeZone: $0) }
-        return side(title: "Air quality", action: onOpenAir, identifier: "today.pair.air") {
+        return side(title: "Air quality", action: onOpen, identifier: "today.pair.air") {
             if let data {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("\(data.index)")
@@ -88,35 +75,7 @@ struct TodayConditionsPair: View {
         }
     }
 
-    private func sunSide(_ env: PlaceSectionEnvelope) -> some View {
-        side(title: "Daylight", action: onOpenSun, identifier: "today.pair.daylight") {
-            if let data = env.sunriseSunset {
-                Text("\(data.daylightMinutes / 60)h \(data.daylightMinutes % 60)m")
-                    .font(.system(size: 22, weight: .semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.Color.appText)
-                Text(Self.sunTimes(data, calendar: calendar))
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                if let day = PlacePresentation.fmtSunDay(data, timeZone: calendar.timeZone), day != "today" {
-                    Text(day)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.Color.warning)
-                }
-            } else {
-                unavailable(env)
-            }
-        }
-    }
-
-    /// "Sunrise 6:50 AM · Sunset 4:57 PM", the clock the sun arc reads.
-    static func sunTimes(_ data: PlaceSunriseSunsetData, calendar: Calendar) -> String {
-        let rise = SkyMoment.clockMinutes(data.sunriseClock, calendar: calendar).map(SkyMoment.clockText)
-        let set = SkyMoment.clockMinutes(data.sunsetClock, calendar: calendar).map(SkyMoment.clockText)
-        return [rise.map { "Sunrise \($0)" }, set.map { "Sunset \($0)" }].compactMap { $0 }.joined(separator: " · ")
-    }
-
-    /// Each side's own words for a reading it doesn't have.
+    /// The tile's own words for a reading it doesn't have.
     @ViewBuilder
     private func unavailable(_ env: PlaceSectionEnvelope) -> some View {
         switch env.status {

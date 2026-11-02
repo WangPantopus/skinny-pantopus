@@ -364,6 +364,9 @@ public struct ChatAIActionCard: Sendable, Hashable {
     public var running: String?
     /// The last failure: "" for the card's own actions, else the row's id.
     public var failures: [String: String] = [:]
+    /// The server says it expired with nothing done (phase 3 contract §4.3), whatever this
+    /// phone's clock says.
+    public var expiredOnServer = false
 
     public init(envelope: AIActionCardDTO) {
         self.envelope = envelope

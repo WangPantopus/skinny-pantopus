@@ -77,12 +77,22 @@ public struct MyPostsKebabTarget: Identifiable, Sendable, Equatable {
     public let isArchived: Bool
     /// A moderator removed the post: the sheet offers no Restore.
     public let isRemovedByModerator: Bool
+    /// A plan's own post: the sheet offers Open plan, where the host changes
+    /// or cancels it, instead of Archive and Delete (the server refuses both).
+    public let isPlanPost: Bool
 
-    public init(id: String, postId: String, isArchived: Bool, isRemovedByModerator: Bool = false) {
+    public init(
+        id: String,
+        postId: String,
+        isArchived: Bool,
+        isRemovedByModerator: Bool = false,
+        isPlanPost: Bool = false
+    ) {
         self.id = id
         self.postId = postId
         self.isArchived = isArchived
         self.isRemovedByModerator = isRemovedByModerator
+        self.isPlanPost = isPlanPost
     }
 }
 
@@ -562,6 +572,10 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
             onRestore: { [weak self] in
                 guard let self else { return }
                 Task { @MainActor in await self.unarchive(dto) }
+            },
+            onOpenPlan: { [weak self] in
+                guard let self else { return }
+                Task { @MainActor in self.openPlan(postId: dto.id) }
             }
         )
     }
@@ -607,13 +621,21 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
             id: dto.id,
             postId: dto.id,
             isArchived: isArchived(dto),
-            isRemovedByModerator: dto.isRemovedByModerator
+            isRemovedByModerator: dto.isRemovedByModerator,
+            isPlanPost: dto.isPlanPost
         )
     }
 
     /// Dismiss the kebab sheet without doing anything.
     public func cancelKebab() {
         kebabTarget = nil
+    }
+
+    /// A plan's own post opens its plan on the Plans tab, where Change and
+    /// Cancel tell everyone (the `/plans/<id>` link path).
+    public func openPlan(postId: String) {
+        kebabTarget = nil
+        DeepLinkRouter.shared.handle(path: "/plans/\(postId)")
     }
 
     /// Open the destructive-delete confirmation alert.
@@ -700,17 +722,20 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         public let onKebab: @Sendable () -> Void
         public let onEdit: @Sendable () -> Void
         public let onRestore: @Sendable () -> Void
+        public let onOpenPlan: @Sendable () -> Void
 
         public init(
             onTap: @escaping @Sendable () -> Void = {},
             onKebab: @escaping @Sendable () -> Void = {},
             onEdit: @escaping @Sendable () -> Void = {},
-            onRestore: @escaping @Sendable () -> Void = {}
+            onRestore: @escaping @Sendable () -> Void = {},
+            onOpenPlan: @escaping @Sendable () -> Void = {}
         ) {
             self.onTap = onTap
             self.onKebab = onKebab
             self.onEdit = onEdit
             self.onRestore = onRestore
+            self.onOpenPlan = onOpenPlan
         }
     }
 
@@ -770,6 +795,13 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
                 icon: .arrowsRepeat,
                 accessibilityLabel: "Restore post"
             ) { callbacks.onRestore() }
+        } else if dto.isPlanPost {
+            // A plan's post changes from its plan, which tells everyone.
+            RowEngagementCTA(
+                label: "Open plan",
+                icon: .calendar,
+                accessibilityLabel: "Open plan"
+            ) { callbacks.onOpenPlan() }
         } else {
             RowEngagementCTA(
                 label: "Edit",

@@ -87,8 +87,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             intentIdentifiers: [],
             options: []
         )
-        // Nearby Plans: PLAN_REQUEST, PLAN_REMINDER and PLAN_CHANGED with their buttons.
-        UNUserNotificationCenter.current().setNotificationCategories(Set([pickup, task, taskDoneOnly] + PlanPushActions.categories))
+        // Nearby Plans: PLAN_REQUEST, PLAN_REMINDER and PLAN_CHANGED with their buttons; the
+        // assistant's five (Mark done, Mark solved, Fewer like this; AI phase 3 §9).
+        UNUserNotificationCenter.current().setNotificationCategories(
+            Set([pickup, task, taskDoneOnly] + PlanPushActions.categories + AssistantPushActions.categories)
+        )
     }
 
     private func requestNotificationPermission() {
@@ -287,6 +290,7 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
             // from `type` + `briefingKind` + `briefingDeliveryId`.
             ?? DeepLinkRouter.pushFallbackPath(userInfo: userInfo)
         let planPayload = PlanPushPayload(category: category, userInfo: userInfo)
+        let assistantPayload = AssistantPushPayload(userInfo: userInfo, requestIdentifier: response.notification.request.identifier)
         let reminder = ReminderPayload(
             category: category,
             recipient: recipient,
@@ -302,6 +306,11 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         // (HOME) banner tap crashed the app with SIGABRT (2026-09-22).
         Task { @MainActor in
             defer { completionHandler() }
+            // The assistant's buttons check the account themselves, and say so when they can't run.
+            if AssistantPushActions.all.contains(action) {
+                await AssistantPushActions.handle(action: action, payload: assistantPayload)
+                return
+            }
             // A queued push can arrive after this device changes accounts.
             // Chat pushes must be bound, including when sign-in is deferred.
             guard Self.permitsNotification(type: type, recipient: recipient, allowSignedOut: true) else { return }
