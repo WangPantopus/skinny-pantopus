@@ -22,8 +22,9 @@ struct SideBySideColumnWidth {
     /// The chat list: a bit narrower than a phone, so the conversation gets the bigger side (the founder's pick).
     static let chatList = SideBySideColumnWidth(min: 320, ideal: 340, max: 480)
     /// The Nearby tab's leading column: a phone's width, so the Pulse header's buttons fit as they do closed (the
-    /// founder's pick). Both segments use it, so the switch above them stays put.
-    static let nearby = SideBySideColumnWidth(min: 340, ideal: 382, max: 440)
+    /// founder's pick). Both segments use it, so the switch above them stays put. Fixed, because the split view
+    /// otherwise narrows a column it laid out before a rotation: upright, the post beside it gets the rest.
+    static let nearby = SideBySideColumnWidth(min: 382, ideal: 382, max: 382)
 }
 
 /// Apple's split view with the tab's screen on the leading side. The screens draw their own headers, so the
