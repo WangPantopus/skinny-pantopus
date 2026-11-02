@@ -238,20 +238,21 @@ export default function NotificationBell({
   };
 
   return (
-    <div className="relative" ref={panelRef}>
-      {/* Bell / megaphone button */}
+    // flex: the wrapper is the button's height, not a line of (large) text, so the bell lines up with Messages.
+    <div className="relative flex" ref={panelRef}>
+      {/* Bell / megaphone button. Below the desktop layout it keeps its size whatever the text size (AppShell's top bar). */}
       <button
         onClick={() => setOpen(!open)}
-        className="p-2 hover-bg-app rounded-lg relative"
+        className="p-2 max-lg:p-[8px] hover-bg-app rounded-lg relative"
         aria-label={ariaLabel}
         title={ariaLabel}
         data-testid={`notification-bell-${mode}`}
         data-mode={mode}
       >
         {isAudience ? (
-          <Megaphone className="w-5 h-5 text-teal-600" aria-hidden />
+          <Megaphone className="w-5 h-5 max-lg:w-[20px] max-lg:h-[20px] text-teal-600" aria-hidden />
         ) : (
-          <svg className="w-5 h-5 text-app-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+          <svg className="w-5 h-5 max-lg:w-[20px] max-lg:h-[20px] text-app-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
             <path
               strokeLinecap="round"
               strokeLinejoin="round"

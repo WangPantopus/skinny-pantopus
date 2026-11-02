@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Pin } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { Post } from '@pantopus/types';
-import { getPostTypeConfig } from '@pantopus/ui-utils';
+import { getPostTypeConfig, postReactionCount } from '@pantopus/ui-utils';
 import FeedMediaImage from '@/components/feed/FeedMediaImage';
 import { postTypeIcon } from '@/components/feed/PostCard';
 import { queryKeys } from '@/lib/query-keys';
@@ -44,10 +44,10 @@ export function postFirstLine(post: Pick<Post, 'title' | 'content' | 'post_type'
   return line || getPostTypeConfig(post.post_type || 'general').label;
 }
 
-/** The count that says most about it: Helpful marks, else replies. */
+/** The count that says most about it: its reaction ("2 going", "4 celebrated", "3 helpful"), else replies. */
 function mainCount(post: Post): string | null {
-  const helpful = post.like_count || 0;
-  if (helpful > 0) return `${helpful} helpful`;
+  const reactions = post.like_count || 0;
+  if (reactions > 0) return postReactionCount(post.post_type, reactions);
   const replies = post.comment_count || 0;
   if (replies > 0) return `${replies} ${replies === 1 ? 'reply' : 'replies'}`;
   return null;
