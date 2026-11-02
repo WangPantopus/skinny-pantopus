@@ -961,7 +961,13 @@ fun ChatConversationScreen(
                 onDismissRequest = { showAiDeleteConfirm = false },
                 containerColor = PantopusColors.appSurface,
                 title = { Text(text = "Delete this conversation?") },
-                text = { Text(text = "Pantopus AI won't remember it. Any earlier chats with Pantopus AI are deleted too.") },
+                text = {
+                    Text(
+                        text =
+                            "Pantopus AI won't remember it. Any earlier chats with Pantopus AI are deleted too. " +
+                                "What Pantopus remembers stays until you delete it in Settings.",
+                    )
+                },
                 confirmButton = {
                     TextButton(
                         onClick = {

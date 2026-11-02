@@ -51,6 +51,9 @@ enum class SettingsRoute {
     Privacy,
     IdentityCenter,
     DataExport,
+
+    /** Privacy → What Pantopus remembers (AI assistant phase 3 contract §5.7). */
+    Memory,
     PaymentsPayouts,
     Help,
     Legal,
@@ -194,6 +197,7 @@ class SettingsIndexViewModel
                 "visibility" -> _navigation.value = SettingsRoute.IdentityCenter
                 "notificationPreferences" -> _navigation.value = SettingsRoute.Notifications
                 "export" -> _navigation.value = SettingsRoute.DataExport
+                "memory" -> _navigation.value = SettingsRoute.Memory
                 "paymentsPayouts" -> _navigation.value = SettingsRoute.PaymentsPayouts
                 "help" -> _navigation.value = SettingsRoute.Help
                 "legal" -> _navigation.value = SettingsRoute.Legal
@@ -278,6 +282,13 @@ class SettingsIndexViewModel
                                         control = RowControl.Chevron,
                                     ),
                                     GroupedListRow(id = "export", label = "Data export", control = RowControl.Chevron),
+                                    // What the person asked the assistant to remember, which only they see (phase 3 §5.7).
+                                    GroupedListRow(
+                                        id = "memory",
+                                        label = "What Pantopus remembers",
+                                        control = RowControl.Chevron,
+                                        testTag = "settings.memory",
+                                    ),
                                 ),
                         ),
                     )

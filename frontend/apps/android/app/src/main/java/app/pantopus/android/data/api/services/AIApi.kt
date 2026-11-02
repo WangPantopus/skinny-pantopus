@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions")
+
 package app.pantopus.android.data.api.services
 
 import app.pantopus.android.data.api.models.ai.AICardStateReportBody
@@ -8,11 +10,17 @@ import app.pantopus.android.data.api.models.ai.AIDraftPickupScheduleRequest
 import app.pantopus.android.data.api.models.ai.AIDraftPickupScheduleResponse
 import app.pantopus.android.data.api.models.ai.AIDraftPostRequest
 import app.pantopus.android.data.api.models.ai.AIListingVisionResponse
+import app.pantopus.android.data.api.models.ai.AIMemoryEditBody
+import app.pantopus.android.data.api.models.ai.AIMemoryForgetAllResponse
+import app.pantopus.android.data.api.models.ai.AIMemoryItemResponse
+import app.pantopus.android.data.api.models.ai.AIMemoryListResponse
+import app.pantopus.android.data.api.models.ai.AIMemoryReviewedResponse
 import app.pantopus.android.data.api.models.ai.AIPostDraftResponse
 import app.pantopus.android.data.api.models.place.NeighborhoodPulse
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -103,4 +111,35 @@ interface AIApi {
         @Path("cardId") cardId: String,
         @Body body: AICardStateReportBody,
     ): Unit
+
+    /**
+     * What the person asked Pantopus to remember, newest first, with the yearly review's date (AI assistant phase 3
+     * contract §5.4). Only their own items. Route `backend/routes/ai.js:598`.
+     */
+    @GET("api/ai/memory")
+    suspend fun memory(): AIMemoryListResponse
+
+    /**
+     * New words for a remembered fact, checked as a new one; it counts as reviewing it. `400 MEMORY_FACT_INVALID`
+     * carries the reason. Route `backend/routes/ai.js:611`.
+     */
+    @PATCH("api/ai/memory/{id}")
+    suspend fun editMemory(
+        @Path("id") id: String,
+        @Body body: AIMemoryEditBody,
+    ): AIMemoryItemResponse
+
+    /** Forget one item (204). Route `backend/routes/ai.js:615`. */
+    @DELETE("api/ai/memory/{id}")
+    suspend fun forgetMemory(
+        @Path("id") id: String,
+    ): Unit
+
+    /** Forget everything. Route `backend/routes/ai.js:620`. */
+    @DELETE("api/ai/memory")
+    suspend fun forgetAllMemory(): AIMemoryForgetAllResponse
+
+    /** "Looks right": every item counts as reviewed for another year. Route `backend/routes/ai.js:607`. */
+    @POST("api/ai/memory/reviewed")
+    suspend fun memoryReviewed(): AIMemoryReviewedResponse
 }

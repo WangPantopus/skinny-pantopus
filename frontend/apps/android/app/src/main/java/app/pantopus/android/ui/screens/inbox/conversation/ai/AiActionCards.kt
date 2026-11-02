@@ -364,9 +364,12 @@ private fun actionCardIcon(card: String): PantopusIcon =
         card == "home_system" -> PantopusIcon.Wrench
         card.startsWith("home_") -> PantopusIcon.Home
         card == "notification_settings" -> PantopusIcon.Bell
+        card == "memory_save" -> PantopusIcon.Bookmark
         else -> PantopusIcon.Sparkles
     }
 
+// One label per card: a long `when` of plain strings, not complex logic.
+@Suppress("CyclomaticComplexMethod")
 private fun actionCardLabel(card: String): String =
     when (card) {
         "plan_create" -> "New plan"
@@ -381,6 +384,7 @@ private fun actionCardLabel(card: String): String =
         "home_task_update" -> "Task update"
         "home_system" -> "Home system"
         "notification_settings" -> "Notifications"
+        "memory_save" -> "Remember"
         // A nudge with nothing to do but "Fewer like this" (AI assistant phase 2 §3.6).
         "suggestion" -> "Suggestion"
         else -> if (card.startsWith("home_")) "Home" else "Pantopus"

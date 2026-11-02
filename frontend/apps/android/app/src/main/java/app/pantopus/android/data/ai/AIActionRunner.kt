@@ -54,6 +54,8 @@ internal object AIActionAllowlist {
             "PUT" to "/api/homes/:id/tasks/:id",
             "POST" to "/api/ai/nudges/:id/fewer",
             "POST" to "/api/homes/:id/assets",
+            // Phase 3: a Remember card saves what it showed (contract §12.2).
+            "POST" to "/api/ai/memory",
         ).map { (method, path) -> method to Regex("^" + path.replace(":id", UUID).replace(":system", SYSTEM_KEY) + "$") }
 
     fun allows(request: ChatAICardRequest): Boolean =
