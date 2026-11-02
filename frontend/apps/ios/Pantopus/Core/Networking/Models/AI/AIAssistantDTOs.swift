@@ -4,8 +4,9 @@
 //
 //  DTOs for what the assistant keeps for one person
 //  (`docs/product/ai-assistant-phase3-contract-2026-10-22.md`): the items
-//  they asked it to remember (`/api/ai/memory`, §5.4) and what waits on them
-//  (`/api/ai/needs-you`, §6.2).
+//  they asked it to remember (`/api/ai/memory`, §5.4), what waits on them
+//  (`/api/ai/needs-you`, §6.2) and the standing rules they turned on
+//  (`/api/ai/rules`, §18.5).
 //
 
 import Foundation
@@ -160,4 +161,75 @@ public struct AINeedsYouItemDTO: Decodable, Sendable, Hashable, Identifiable {
         case id, type, title, subtitle, link, subject
         case dueAt = "due_at"
     }
+}
+
+// MARK: - What Pantopus does for you (§18.5)
+
+/// `GET /api/ai/rules`: the person's standing rules, newest first.
+public struct AIRulesResponse: Decodable, Sendable, Hashable {
+    public let rules: [AIRuleDTO]
+    /// 5 a person.
+    public let limit: Int?
+}
+
+/// One standing rule: a weekly plan Pantopus posts, or a household member's pickup reminder.
+public struct AIRuleDTO: Decodable, Sendable, Hashable, Identifiable {
+    /// One time it ran: "Posted Sat Oct 31 · 4 going", with the plan's link.
+    public struct Run: Decodable, Sendable, Hashable {
+        public let at: String?
+        /// `done` or `error`.
+        public let status: String
+        public let label: String
+        public let link: String?
+    }
+
+    public let id: String
+    /// `plan_repeat` or `pickup_reminder`.
+    public let kind: String
+    /// The sentence the card showed: "Post 'Pickup game' every Saturday, 9:00–10:30 AM, at Crown Park".
+    public let summary: String
+    /// The switch.
+    public let enabled: Bool
+    /// Why it stopped on its own: `nobody_came`, `cannot_post`, `ended` or `member_left`.
+    public let pausedReason: String?
+    /// A weekly plan's last day (at most 12 weeks after it was turned on or extended).
+    public let endsAt: String?
+    public let nextRunAt: String?
+    /// The last 5, newest first.
+    public let runs: [Run]
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        kind = try container.decode(String.self, forKey: .kind)
+        summary = try container.decodeIfPresent(String.self, forKey: .summary) ?? ""
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        pausedReason = try container.decodeIfPresent(String.self, forKey: .pausedReason)
+        endsAt = try container.decodeIfPresent(String.self, forKey: .endsAt)
+        nextRunAt = try container.decodeIfPresent(String.self, forKey: .nextRunAt)
+        runs = try container.decodeIfPresent([Run].self, forKey: .runs) ?? []
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, summary, enabled, runs
+        case pausedReason = "paused_reason"
+        case endsAt = "ends_at"
+        case nextRunAt = "next_run_at"
+    }
+}
+
+/// `PATCH /api/ai/rules/:id`: the switch, or Extend (12 more weeks for a weekly plan).
+public struct AIRuleChangeRequest: Encodable, Sendable {
+    public let enabled: Bool?
+    public let extend: Bool?
+
+    public init(enabled: Bool?, extend: Bool?) {
+        self.enabled = enabled
+        self.extend = extend
+    }
+}
+
+/// `PATCH /api/ai/rules/:id`: the rule as it is now.
+public struct AIRuleResponse: Decodable, Sendable, Hashable {
+    public let rule: AIRuleDTO
 }

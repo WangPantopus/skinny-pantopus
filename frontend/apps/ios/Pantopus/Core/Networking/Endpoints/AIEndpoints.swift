@@ -94,6 +94,30 @@ public enum AIEndpoints {
         Endpoint(method: .get, path: "/api/ai/needs-you")
     }
 
+    // MARK: - What Pantopus does for you (phase 3 contract §18.5)
+
+    /// `GET /api/ai/rules` — the person's standing rules with their last 5
+    /// runs. A rule is turned on only from a `rule_save` card they tapped.
+    /// Route `backend/routes/ai.js:688`.
+    public static func rules() -> Endpoint {
+        Endpoint(method: .get, path: "/api/ai/rules")
+    }
+
+    /// `PATCH /api/ai/rules/:id` — `{ enabled }` switches it off or on
+    /// (`409 RULE_CANNOT_RUN` with the reason when it can't run), `{ extend:
+    /// true }` gives a weekly plan 12 more weeks.
+    /// Route `backend/routes/ai.js:699`.
+    public static func changeRule(id: String, _ body: AIRuleChangeRequest) -> Endpoint {
+        Endpoint(method: .patch, path: "/api/ai/rules/\(id)", body: body)
+    }
+
+    /// `DELETE /api/ai/rules/:id` — the rule and its runs (`204`); the plans
+    /// it posted stay.
+    /// Route `backend/routes/ai.js:703`.
+    public static func deleteRule(id: String) -> Endpoint {
+        Endpoint(method: .delete, path: "/api/ai/rules/\(id)")
+    }
+
     /// `GET /api/ai/pulse?homeId=` — the Neighborhood Pulse for a home
     /// (the priority-ranked signal stream behind the Place "Today's
     /// Pulse" surface). NOTE: the query param is camelCase `homeId`

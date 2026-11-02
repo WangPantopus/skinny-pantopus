@@ -149,6 +149,9 @@ final class DeepLinkRouter {
         /// (AI assistant phase 3 contract §5.7): a `memory_save` card's done
         /// link, the assistant's link button and the yearly review notice.
         case assistantMemory
+        /// `pantopus://settings/rules` — Settings → What Pantopus does for you
+        /// (phase 3 contract §18.5): a rule card's done link and the rule notices.
+        case assistantRules
         /// `pantopus://assistant` — the Pantopus AI thread (AI assistant
         /// phase 2 contract §8.2). `?nudge=<notificationId>` opens it at the
         /// brief or nudge that notification carried; `&conversation=<id>`,
@@ -757,8 +760,9 @@ final class DeepLinkRouter {
         case "settings":
             // `pantopus://settings/payments` — A14.6,
             // `pantopus://settings/security` — Devices & sessions,
-            // `pantopus://settings/notifications` — Notifications, and
-            // `pantopus://settings/memory` — What Pantopus remembers. Other
+            // `pantopus://settings/notifications` — Notifications,
+            // `pantopus://settings/memory` — What Pantopus remembers, and
+            // `pantopus://settings/rules` — What Pantopus does for you. Other
             // settings sub-routes aren't deep-linkable yet; the bare host
             // `pantopus://settings` falls through to `.unknown`.
             if segments.dropFirst().first == "payments" {
@@ -772,6 +776,9 @@ final class DeepLinkRouter {
             }
             if segments.dropFirst().first == "memory", segments.count == 2 {
                 return .assistantMemory
+            }
+            if segments.dropFirst().first == "rules", segments.count == 2 {
+                return .assistantRules
             }
             return .unknown(url)
         default:

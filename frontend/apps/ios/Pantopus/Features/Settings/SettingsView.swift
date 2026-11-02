@@ -34,6 +34,8 @@ public enum SettingsStackRoute: Hashable {
     case dataExport
     /// Privacy → What Pantopus remembers (AI phase 3 contract §5.7).
     case assistantMemory
+    /// Privacy → What Pantopus does for you (AI phase 3 contract §18.5).
+    case assistantRules
     /// This iPhone → Storage & data (photos, saved pages, Clear cache).
     case storageData
     /// One route intentionally parked until P8.5: data export wizard.
@@ -154,7 +156,7 @@ public struct SettingsView: View {
                 NotYetAvailableView(tabName: label, icon: .info) { popLast() }
             }
         case .blockedUsers, .password, .securityDevices, .verification, .help, .about, .payments, .dataExport, .storageData,
-             .assistantMemory:
+             .assistantMemory, .assistantRules:
             settingsDestination(for: route)
         }
     }
@@ -181,6 +183,8 @@ public struct SettingsView: View {
             StorageDataView { popLast() }
         case .assistantMemory:
             AssistantMemoryView { popLast() }
+        case .assistantRules:
+            AssistantRulesView { popLast() }
         default:
             EmptyView()
         }
@@ -246,6 +250,7 @@ public struct SettingsView: View {
             .verification: .verification,
             .dataExport: .dataExport,
             .assistantMemory: .assistantMemory,
+            .assistantRules: .assistantRules,
             .storageData: .storageData,
             .paymentsPayouts: .payments,
             .help: .help,

@@ -47,7 +47,10 @@ enum AIActionAllowlist {
         // Phase 3: Remember and check-backs (the server saves from its own copy of the card).
         (.post, "/api/ai/memory"),
         (.post, "/api/ai/follow-ups"),
-        (.delete, "/api/ai/follow-ups/:id")
+        (.delete, "/api/ai/follow-ups/:id"),
+        // Phase 3: turning a standing rule on from its card, and switching one off or on.
+        (.post, "/api/ai/rules"),
+        (.patch, "/api/ai/rules/:id")
     ]
 
     /// The request as an endpoint, or nil when the app never sends it: a

@@ -49,9 +49,10 @@ public struct AIChatStreamRequest: Encodable, Sendable {
     /// `docs/product/ai-assistant-phase1-contract-2026-10-20.md`, section 3).
     /// `state` asks history for each card's done state, which this app reports
     /// (`docs/product/ai-assistant-phase3-contract-2026-10-22.md` §4),
-    /// `memory` offers the Remember card and what the person saved (§5), and
-    /// `follow_up` the check-back cards (§7).
-    public static let supportedCards = ["pickup_schedule", "action", "link", "state", "memory", "follow_up"]
+    /// `memory` offers the Remember card and what the person saved (§5),
+    /// `follow_up` the check-back cards (§7) and `rules` the standing-rule
+    /// cards (§18).
+    public static let supportedCards = ["pickup_schedule", "action", "link", "state", "memory", "follow_up", "rules"]
 
     public let message: String
     public let conversationId: String?

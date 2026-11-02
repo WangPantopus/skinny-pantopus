@@ -307,6 +307,8 @@ struct AIActionCardView: View {
         case "memory_save": ("Memory", .bookmark)
         // Phase 3: "Check back Thursday", and cancelling one.
         case "follow_up", "follow_up_cancel": ("Check back", .calendarClock)
+        // Phase 3: something Pantopus does on its own, and switching it off or on.
+        case "rule_save", "rule_change": ("Rule", .repeat2)
         // A nudge with nothing to do but "Fewer like this" (phase 2 §3.6).
         case "suggestion": ("Suggestion", .sparkles)
         default: ("Action", .sparkles)
