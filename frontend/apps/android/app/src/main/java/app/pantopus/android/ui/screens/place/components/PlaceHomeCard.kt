@@ -3,20 +3,25 @@ package app.pantopus.android.ui.screens.place.components
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -221,36 +226,77 @@ fun PlaceToolsRow(
         1 -> {
             val only = shortcuts.first()
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Row(
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .heightIn(min = 56.dp)
-                            .clickable(role = Role.Button) { onOpenShortcut(only) }
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
-                            .testTag("place.homeTools.${only.tag}"),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    PlaceIconTile(icon = only.icon, tone = PlaceTileTone.MUTED, size = 30.dp)
-                    Text(only.title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-                }
+                ToolRow(only.icon, only.title, { onOpenShortcut(only) }, "place.homeTools.${only.tag}", Modifier.weight(1f))
                 ToolChip(PantopusIcon.LayoutGrid, "All tools", onOpenHomeTools, "place.homeTools", Modifier.padding(end = 6.dp))
             }
         }
         else ->
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp), verticalAlignment = Alignment.Top) {
-                shortcuts.forEach { shortcut ->
-                    ToolChip(
-                        icon = shortcut.icon,
-                        title = shortcut.title,
-                        onClick = { onOpenShortcut(shortcut) },
-                        tag = "place.homeTools.${shortcut.tag}",
-                        modifier = Modifier.weight(1f),
-                    )
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                // A strip while every label fits its cell on one line; at the largest text and display sizes the
+                // tools stack as rows instead, so no label is cut short.
+                val measurer = rememberTextMeasurer()
+                // The label as `ToolChip` draws it: its size and weight on the theme's text style.
+                val labelStyle = LocalTextStyle.current.merge(TextStyle(fontSize = TOOL_LABEL_SIZE, fontWeight = FontWeight.Medium))
+                val labels = shortcuts.map { it.title } + "All tools"
+                val cell = (maxWidth - TOOL_STRIP_INSET * 2) / labels.size - TOOL_CHIP_INSET * 2
+                val cellPx = with(LocalDensity.current) { cell.toPx() }
+                val fits = labels.all { measurer.measure(it, labelStyle, maxLines = 1).size.width <= cellPx }
+                if (fits) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = TOOL_STRIP_INSET), verticalAlignment = Alignment.Top) {
+                        shortcuts.forEach { shortcut ->
+                            ToolChip(
+                                icon = shortcut.icon,
+                                title = shortcut.title,
+                                onClick = { onOpenShortcut(shortcut) },
+                                tag = "place.homeTools.${shortcut.tag}",
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        ToolChip(PantopusIcon.LayoutGrid, "All tools", onOpenHomeTools, "place.homeTools", Modifier.weight(1f))
+                    }
+                } else {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        shortcuts.forEachIndexed { index, shortcut ->
+                            if (index > 0) PlaceHairline()
+                            ToolRow(shortcut.icon, shortcut.title, { onOpenShortcut(shortcut) }, "place.homeTools.${shortcut.tag}")
+                        }
+                        PlaceHairline()
+                        ToolRow(PantopusIcon.LayoutGrid, "All tools", onOpenHomeTools, "place.homeTools")
+                    }
                 }
-                ToolChip(PantopusIcon.LayoutGrid, "All tools", onOpenHomeTools, "place.homeTools", Modifier.weight(1f))
             }
+    }
+}
+
+/** The strip's side inset and each tool's own, around its label. */
+private val TOOL_STRIP_INSET = 6.dp
+private val TOOL_CHIP_INSET = 4.dp
+
+/** A tool's label size in the strip. */
+private val TOOL_LABEL_SIZE = 12.sp
+
+/** A tool as a full-width row: its tile and name (the one tool, or every tool at the largest sizes). */
+@Composable
+private fun ToolRow(
+    icon: PantopusIcon,
+    title: String,
+    onClick: () -> Unit,
+    tag: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .clickable(role = Role.Button, onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .testTag(tag),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PlaceIconTile(icon = icon, tone = PlaceTileTone.MUTED, size = 30.dp)
+        Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
     }
 }
 
@@ -267,7 +313,7 @@ private fun ToolChip(
             modifier
                 .heightIn(min = 48.dp)
                 .clickable(role = Role.Button, onClick = onClick)
-                .padding(horizontal = 4.dp, vertical = 10.dp)
+                .padding(horizontal = TOOL_CHIP_INSET, vertical = 10.dp)
                 .testTag(tag),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -275,7 +321,7 @@ private fun ToolChip(
         PlaceIconTile(icon = icon, tone = PlaceTileTone.MUTED, size = 30.dp)
         Text(
             text = title,
-            fontSize = 12.sp,
+            fontSize = TOOL_LABEL_SIZE,
             fontWeight = FontWeight.Medium,
             color = PantopusColors.appTextStrong,
             maxLines = 1,

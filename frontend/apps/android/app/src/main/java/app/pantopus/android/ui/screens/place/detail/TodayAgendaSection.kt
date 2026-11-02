@@ -93,7 +93,7 @@ fun ComingUpAtHome(
     }
 }
 
-/** "Coming up at home" / "Next 7 days", and the switch between the agenda and the calendar. */
+/** "Coming up at home" / "Next 7 days" ("Next two weeks" over the calendar), and the switch between the two views. */
 @Composable
 private fun AgendaHead(
     calendarOpen: Boolean,
@@ -112,7 +112,7 @@ private fun AgendaHead(
                 letterSpacing = (-0.2).sp,
                 color = PantopusColors.appText,
             )
-            Text("Next 7 days", fontSize = 12.5.sp, color = PantopusColors.appTextMuted)
+            Text(if (calendarOpen) "Next two weeks" else "Next 7 days", fontSize = 12.5.sp, color = PantopusColors.appTextMuted)
         }
         onToggle?.let {
             TodayTextAction(

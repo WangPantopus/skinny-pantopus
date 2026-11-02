@@ -98,6 +98,10 @@ fun TodayTabScreen(
     onOpenTask: (homeId: String, taskId: String) -> Unit = { _, _ -> },
     /** The Today tab tapped again while Today is its root: back to the top. */
     scrollToTop: Flow<Unit>? = null,
+    /** Place's "Next step: Add radon test information" for this Home: the setup opens on the radon question once. */
+    radonHomeId: String? = null,
+    /** The radon question was opened, or this Today can't open it (another place): the request ends. */
+    onRadonShown: () -> Unit = {},
     viewModel: TodayTabViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -107,6 +111,14 @@ fun TodayTabScreen(
     val plansUi = plansViewModel?.ui?.collectAsStateWithLifecycle()?.value
     val scroll = rememberScrollState()
     LaunchedEffect(scrollToTop) { scrollToTop?.collect { scroll.animateScrollTo(0) } }
+    LaunchedEffect(radonHomeId, state) {
+        val shown = state
+        if (radonHomeId != null && shown != TodayTabUiState.Loading &&
+            (shown as? TodayTabUiState.Loaded)?.calendarHomeId != radonHomeId
+        ) {
+            onRadonShown()
+        }
+    }
     ReportContentShown("today", state.showsContent)
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val pullFailed by viewModel.pullFailed.collectAsStateWithLifecycle()
@@ -189,6 +201,8 @@ fun TodayTabScreen(
                                     },
                                 onAddHome = onClaim.takeIf { current.savedPlace != null },
                                 onAsk = onAsk?.let { ask -> { ask(AIScreenContext.today(viewModel.shownHomeId)) } },
+                                radonRequested = homeId != null && radonHomeId == homeId,
+                                onRadonShown = onRadonShown,
                             )
                         CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::pull) {
                             PlaceTodayDetailContent(

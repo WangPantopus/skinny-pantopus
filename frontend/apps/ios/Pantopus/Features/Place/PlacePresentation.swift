@@ -206,7 +206,7 @@ enum PlacePresentation {
         case .alerts: .init(icon: .bell, title: "Alerts", inline: true)
         case .sunriseSunset: .init(icon: .sunrise, title: "Sunrise & sunset", inline: true)
         case .goodDayTo: .init(icon: .listChecks, title: "Good day to\u{2026}", inline: true)
-        case .addressCalendar: .init(icon: .calendarDays, title: "At this address", inline: true)
+        case .addressCalendar: .init(icon: .calendarDays, title: "Address calendar", inline: true)
         // No value trend: the section has no value history, so a line here would be invented.
         case .yourHome: .init(icon: .home, title: "Your home")
         case .homeSystems: .init(icon: .wrench, title: "Systems", inline: true)
@@ -276,13 +276,15 @@ enum PlacePresentation {
                 statusDot: Theme.Color.home
             )
         case .addressCalendar:
+            // "Garbage pickup · Tomorrow", as Android says it.
             guard let d = env.addressCalendar else { return .init() }
             guard let next = d.next else {
-                return .init(value: "Nothing in the next two weeks", statusDot: Theme.Color.home)
+                if d.needsPickupDay { return .init(value: "Set your pickup day") }
+                return .init(value: "Nothing in the next \(d.windowDays) days", statusDot: Theme.Color.home)
             }
-            let when = next.daysUntil == 0 ? "today" : next.daysUntil == 1 ? "tomorrow" : "in \(next.daysUntil) days"
+            let when = next.daysUntil <= 0 ? "Today" : next.daysUntil == 1 ? "Tomorrow" : "In \(next.daysUntil) days"
             return .init(
-                value: "\(next.title) \(when)",
+                value: "\(next.title) · \(when)",
                 statusDot: next.daysUntil <= 1 ? Theme.Color.warning : Theme.Color.home
             )
         case .homeSystems:
@@ -297,7 +299,7 @@ enum PlacePresentation {
                 return .init(value: "\(d.summary.agingCount) aging", statusDot: Theme.Color.warning)
             }
             let unknown = d.systems.filter { $0.status == "unknown" }.count
-            if unknown > 0 { return .init(value: "\(unknown) installation years unknown") }
+            if unknown > 0 { return .init(value: unknown == 1 ? "1 install year unknown" : "\(unknown) install years unknown") }
             return .init(value: "All within expected life", statusDot: Theme.Color.home)
         case .heatCold:
             guard let d = env.heatCold else { return .init() }

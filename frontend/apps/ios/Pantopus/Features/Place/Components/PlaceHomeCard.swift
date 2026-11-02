@@ -118,12 +118,16 @@ struct PlaceHomeCard: View {
     @ViewBuilder
     private var record: some View {
         if let env = yourHome {
-            if let data = env.yourHome, env.access != .locked, env.status == .ready || env.status == .stale {
+            // A record with no known facts says so (as on Android), rather than a source line over nothing.
+            if let data = env.yourHome, env.access != .locked, [.ready, .stale, .partial].contains(env.status),
+               !Self.facts(data).isEmpty {
                 facts(data, env: env)
             } else if env.access == .locked {
                 lockedLine(env)
             } else {
-                Text(env.unavailableReason ?? "This home's record isn't available for this address yet.")
+                // Android's words: a failed read says so; otherwise the server's reason, or that it isn't here yet.
+                Text(env.status == .error ? "Couldn't load the property record."
+                    : (env.unavailableReason ?? "Property details aren't available for this address yet."))
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
