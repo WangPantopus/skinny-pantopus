@@ -114,12 +114,13 @@ struct PlaceTodayDetailContent: View {
         VStack(alignment: .leading, spacing: 0) {
             advisories
             sky(proxy: proxy)
+            sunCard
             agendaSection(proxy: proxy)
             // The person's plans today (Directions, On my way, Message guests) right under the agenda.
             if tab != nil, PlansFlags.shared.plans {
                 PlansTodayCards(gapAbove: true)
             }
-            conditionsPair(proxy: proxy)
+            airTile(proxy: proxy)
             goodDay
             ballotWeek
             setup(proxy: proxy)
@@ -295,6 +296,21 @@ extension PlaceTodayDetailContent {
         }
     }
 
+    /// Sunrise, sunset and the sun's path, right under the weather.
+    @ViewBuilder
+    var sunCard: some View {
+        if let sun = vm.section(.sunriseSunset, in: intel) {
+            if let data = sun.sunriseSunset {
+                let weather = vm.section(.weather, in: intel).flatMap { $0.status == .ready || $0.status == .stale ? $0.weather : nil }
+                TodaySunArcCard(data: data, calendar: skyCalendar, weather: weather?.conditionCode)
+                    .padding(.top, 12)
+            } else {
+                PlaceDetailSectionLabel(text: "Sun")
+                vm.fallbackCard(sun)
+            }
+        }
+    }
+
     /// Opens "Sources and full conditions" and goes to one of its parts.
     func openConditions(_ id: String, proxy: ScrollViewProxy) {
         withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { conditionsOpen = true }
@@ -302,18 +318,9 @@ extension PlaceTodayDetailContent {
     }
 
     @ViewBuilder
-    func conditionsPair(proxy: ScrollViewProxy) -> some View {
-        let air = vm.section(.airQuality, in: intel)
-        let sun = vm.section(.sunriseSunset, in: intel)
-        if air != nil || sun != nil {
-            TodayConditionsPair(
-                air: air,
-                sun: sun,
-                calendar: skyCalendar,
-                timeZone: placeTimeZone,
-                onOpenAir: { openConditions("todayFullAir", proxy: proxy) },
-                onOpenSun: { openConditions("todayFullSun", proxy: proxy) }
-            )
+    func airTile(proxy: ScrollViewProxy) -> some View {
+        if let air = vm.section(.airQuality, in: intel) {
+            TodayAirTile(air: air, timeZone: placeTimeZone) { openConditions("todayFullAir", proxy: proxy) }
         }
     }
 
@@ -655,7 +662,7 @@ extension PlaceTodayDetailContent {
 
 extension PlaceTodayDetailContent {
     /// The full readings and every source: the daily forecast, the AQI gauge,
-    /// every alert with its official text, the sun's arc and the calendar's source.
+    /// every alert with its official text and the calendar's source.
     @ViewBuilder
     var fullConditions: some View {
         PlaceGroupSurface {
@@ -673,14 +680,13 @@ extension PlaceTodayDetailContent {
                 forecastBlock.id("todayFullForecast")
                 airBlock.id("todayFullAir")
                 alertsBlock.id("todayFullAlerts")
-                sunBlock.id("todayFullSun")
                 calendarSource
             }
             .transition(.opacity)
         }
     }
 
-    /// "Forecast · air quality · no active weather alerts · sun and sources".
+    /// "Forecast · air quality · no active weather alerts · sources".
     private var conditionsSummary: String {
         var parts = ["Forecast", "air quality"]
         if let alerts = vm.section(.alerts, in: intel) {
@@ -691,7 +697,7 @@ extension PlaceTodayDetailContent {
                 parts.append("weather alerts unavailable")
             }
         }
-        parts.append("sun and sources")
+        parts.append("sources")
         return parts.joined(separator: " · ")
     }
 
@@ -732,19 +738,6 @@ extension PlaceTodayDetailContent {
                 PlaceSourceNote(name: alerts.source ?? "Source unavailable", asOf: "live")
             } else {
                 vm.fallbackCard(alerts)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var sunBlock: some View {
-        if let sun = vm.section(.sunriseSunset, in: intel) {
-            PlaceDetailSectionLabel(text: "Sun")
-            if let data = sun.sunriseSunset {
-                TodaySunArcCard(data: data, calendar: skyCalendar)
-                PlaceSourceNote(name: "Your location", asOf: PlacePresentation.fmtSunDay(data, timeZone: placeTimeZone))
-            } else {
-                vm.fallbackCard(sun)
             }
         }
     }

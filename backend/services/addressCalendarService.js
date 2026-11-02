@@ -103,12 +103,26 @@ function taxDateGuidance(state) {
 // and county rows are keyed `ST:<5-digit county FIPS>`, e.g. `NE:31055`
 // (county names differ between sources; FIPS codes don't). Best effort:
 // without coordinates or a lookup there are simply no county rules.
+//
+// A point nobody has looked up yet asks the Census geocoder, whose cutoff is
+// 8 s; Today and the Place page wait for this calendar, so it stops waiting a
+// little before Place's 3.5 s section budget. The lookup keeps running and
+// caches the county, so its rules show from the next load.
+const COUNTY_WAIT_MS = 3000;
+
 async function loadCountyRules(home) {
   const state = String((home && home.state) || '').trim().toUpperCase();
   if (!state) return [];
+  let timer = null;
   try {
     // Lazy: the adapters module is large and only this lookup needs it.
-    const fips = await require('./placeSectionAdapters').homeCountyFips(home);
+    const fips = await Promise.race([
+      require('./placeSectionAdapters').homeCountyFips(home),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('county lookup over budget')), COUNTY_WAIT_MS);
+        if (typeof timer.unref === 'function') timer.unref();
+      }),
+    ]);
     if (!fips) return [];
     const { data, error } = await supabaseAdmin
       .from('AddressCalendarRule')
@@ -120,6 +134,8 @@ async function loadCountyRules(home) {
   } catch (err) {
     logger.warn('addressCalendar: county rules unavailable', { homeId: home.id, error: err.message });
     return [];
+  } finally {
+    clearTimeout(timer);
   }
 }
 

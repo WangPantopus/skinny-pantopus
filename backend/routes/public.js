@@ -19,6 +19,7 @@ const placeSectionAdapters = require('../services/placeSectionAdapters');
 const { encodeGeohash, encodeGeohash6 } = require('../utils/geohash');
 const { GeoCache } = require('../utils/geoCache');
 const placePreviewService = require('../services/placePreviewService');
+const { withinBudget } = require('../services/placeIntelligenceService');
 const { foundingSlotsOpen } = require('../services/place/foundingWindow');
 const { recordFunnelEvent, CLIENT_POSTABLE_EVENT_TYPES } = require('../services/funnelEvents');
 const { resolveUsState } = require('../utils/usState');
@@ -541,11 +542,17 @@ async function buildPlacePreview(place) {
   // in-memory boundary lookup (nothing is written for the point).
   const ballot = await ballotOnForEveryone() ? { lookup: lookupGovernmentsCached } : null;
 
+  // Flood, the Census teaser and the money lead get the same per-section
+  // budget as the layers below: FEMA's flood map or the Census geocoder
+  // stalling held the whole preview for its 8 s cutoff. Past it a layer is a
+  // retryable error (the money lead just stays out), and its lookup keeps
+  // running to fill the caches for the next look.
+  const budgetMs = placePreviewService.sectionBudgetMs();
   const [floodSettled, areaSettled, bucketSettled, moneySettled, remoteSettled, foundingSettled] = await Promise.allSettled([
-    fetchFloodCached(place.lat, place.lng),
-    fetchCensusTeaserCached(place.lat, place.lng, resolveTract),
+    withinBudget(fetchFloodCached(place.lat, place.lng), budgetMs),
+    withinBudget(fetchCensusTeaserCached(place.lat, place.lng, resolveTract), budgetMs),
     readDensityBucket(geohash),
-    fetchMoneyLeadCached(place.lat, place.lng, resolveTract),
+    withinBudget(fetchMoneyLeadCached(place.lat, place.lng, resolveTract), budgetMs),
     // The rest of Band A (today / seismic / wildfire / health / rent /
     // civic), each on its own time budget — a slow provider degrades
     // only its own section (placePreviewService).
@@ -563,8 +570,13 @@ async function buildPlacePreview(place) {
   const money = moneySettled.status === 'fulfilled' ? moneySettled.value : null;
   const remote = remoteSettled.status === 'fulfilled' ? remoteSettled.value : [];
   const foundingOpen = foundingSettled.status === 'fulfilled' ? Boolean(foundingSettled.value) : true;
+  // The flood and Census lookups never reject: a rejection is the budget.
+  const late = [
+    ...(floodSettled.status === 'rejected' ? ['flood'] : []),
+    ...(areaSettled.status === 'rejected' ? ['census_context'] : []),
+  ];
 
-  const sections = placePreviewService.assemblePreviewSections({ remote, flood, area, bucket, foundingOpen });
+  const sections = placePreviewService.assemblePreviewSections({ remote, flood, area, bucket, foundingOpen, late });
   const aha = placePreviewService.pickAha(sections, { lat: place.lat, lng: place.lng });
 
   const floodSection = flood && flood.flood_zone

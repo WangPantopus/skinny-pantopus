@@ -25,9 +25,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 8000;
 const CACHE_TTL_MS = 30 * DAY_MS;
 const MAX_STALE_MS = 7 * DAY_MS;
-// The Place page waits for every section, so a saved home's lookup gets
-// the /start preview's per-section budget rather than the fetch timeout.
-const HOME_BUDGET_MS = 3500;
+// A saved home's Place gives each public section the /start preview's
+// per-section budget (3.5 s). The lookup stops a little before that, as the
+// preview's does, so the card can still show its dates without the count.
+const HOME_BUDGET_MS = 3000;
 const SECTION_ID = '_ballot_governments';
 // The District of Columbia's state FIPS code.
 const DC_STATE_GEOID = '11';
