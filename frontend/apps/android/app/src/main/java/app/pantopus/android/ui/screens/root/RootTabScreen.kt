@@ -470,6 +470,7 @@ import app.pantopus.android.ui.screens.settings.legal.LegalIndexScreen
 import app.pantopus.android.ui.screens.settings.memory.MemorySettingsScreen
 import app.pantopus.android.ui.screens.settings.password.PasswordChangeScreen
 import app.pantopus.android.ui.screens.settings.payments.PaymentsScreen
+import app.pantopus.android.ui.screens.settings.rules.RulesSettingsScreen
 import app.pantopus.android.ui.screens.settings.security.DevicesScreen
 import app.pantopus.android.ui.screens.settings.storage.StorageDataScreen
 import app.pantopus.android.ui.screens.settings.verification.VerificationCenterScreen
@@ -1832,6 +1833,9 @@ private object ChildRoutes {
     /** Settings → Privacy → What Pantopus remembers (AI assistant phase 3 contract §5.7). */
     const val SETTINGS_MEMORY = "settings/memory"
 
+    /** Settings → Privacy → What Pantopus does for you (AI assistant phase 3 contract §18.5). */
+    const val SETTINGS_RULES = "settings/rules"
+
     /** Settings → This phone → Storage & data (Instant Screens contract §7). */
     const val SETTINGS_STORAGE = "settings/storage"
     const val PROPERTY_DETAILS_HOME_ID_KEY = "homeId"
@@ -2470,6 +2474,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             DeepLinkRouter.Destination.MemorySettings -> {
                 navController.navigate(ChildRoutes.MENU)
                 navController.navigate(ChildRoutes.SETTINGS_MEMORY)
+                DeepLinkRouter.consume()
+            }
+            // A rule card's Open, the assistant's link and a rule's pause or end notification (phase 3 §18.5).
+            DeepLinkRouter.Destination.RulesSettings -> {
+                navController.navigate(ChildRoutes.MENU)
+                navController.navigate(ChildRoutes.SETTINGS_RULES)
                 DeepLinkRouter.consume()
             }
             // A brief or a nudge (push or notification row): the assistant thread over Messages, where its row is, so
@@ -6015,6 +6025,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 // Parked until P8.5 — see docs/t6-open-questions-decisions.md Q7.
                                 SettingsRoute.DataExport -> navController.navigate(ChildRoutes.SETTINGS_DATA_EXPORT)
                                 SettingsRoute.Memory -> navController.navigate(ChildRoutes.SETTINGS_MEMORY)
+                                SettingsRoute.Rules -> navController.navigate(ChildRoutes.SETTINGS_RULES)
                                 // P5.2 / A14.6 — Settings → Payments (payments-out · Stripe
                                 // setup · payout routing). Distinct from A10.10 Wallet
                                 // (earnings-in) which lives at `ChildRoutes.WALLET` and
@@ -6062,6 +6073,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 }
                 composable(ChildRoutes.SETTINGS_MEMORY) {
                     MemorySettingsScreen(onBack = { navController.popBackStack() })
+                }
+                composable(ChildRoutes.SETTINGS_RULES) {
+                    RulesSettingsScreen(onBack = { navController.popBackStack() })
                 }
                 composable(ChildRoutes.SETTINGS_PASSWORD) {
                     PasswordChangeScreen(onBack = { navController.popBackStack() })

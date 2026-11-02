@@ -54,6 +54,9 @@ enum class SettingsRoute {
 
     /** Privacy → What Pantopus remembers (AI assistant phase 3 contract §5.7). */
     Memory,
+
+    /** Privacy → What Pantopus does for you: standing rules (AI assistant phase 3 contract §18.5). */
+    Rules,
     PaymentsPayouts,
     Help,
     Legal,
@@ -187,6 +190,8 @@ class SettingsIndexViewModel
             _navigation.value = null
         }
 
+        // One destination per row: a long `when` of plain cases, not complex logic.
+        @Suppress("CyclomaticComplexMethod")
         fun onRow(rowId: String) {
             when (rowId) {
                 "editProfile" -> _navigation.value = SettingsRoute.EditProfile
@@ -198,6 +203,7 @@ class SettingsIndexViewModel
                 "notificationPreferences" -> _navigation.value = SettingsRoute.Notifications
                 "export" -> _navigation.value = SettingsRoute.DataExport
                 "memory" -> _navigation.value = SettingsRoute.Memory
+                "rules" -> _navigation.value = SettingsRoute.Rules
                 "paymentsPayouts" -> _navigation.value = SettingsRoute.PaymentsPayouts
                 "help" -> _navigation.value = SettingsRoute.Help
                 "legal" -> _navigation.value = SettingsRoute.Legal
@@ -288,6 +294,13 @@ class SettingsIndexViewModel
                                         label = "What Pantopus remembers",
                                         control = RowControl.Chevron,
                                         testTag = "settings.memory",
+                                    ),
+                                    // The standing rules the person turned on (phase 3 §18.5).
+                                    GroupedListRow(
+                                        id = "rules",
+                                        label = "What Pantopus does for you",
+                                        control = RowControl.Chevron,
+                                        testTag = "settings.rules",
                                     ),
                                 ),
                         ),

@@ -20,6 +20,9 @@ sealed interface RowControl {
     /** Plain navigation row — just a chevron on the right. */
     data object Chevron : RowControl
 
+    /** A line to read, with nothing on the right and no tap (a rule's run that has no screen to open). */
+    data object None : RowControl
+
     /** Binary preference toggle. */
     @Immutable
     data class Toggle(val isOn: Boolean) : RowControl
@@ -126,6 +129,8 @@ data class GroupedListRow(
     val testTag: String? = null,
     /** Keep the existing toggle visible while its save is pending. */
     val toggleEnabled: Boolean = true,
+    /** The switch's Compose testTag; `groupedListToggle_<id>` when null. */
+    val toggleTestTag: String? = null,
 )
 
 /** One group — a card of rows with optional overline + helper. */

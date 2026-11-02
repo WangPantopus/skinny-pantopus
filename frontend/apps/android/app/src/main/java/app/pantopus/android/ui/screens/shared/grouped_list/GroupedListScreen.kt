@@ -466,9 +466,9 @@ private fun RowItem(
                 }
         }
     }
-    // Triad + chip-strip rows own their chip taps; the row itself
+    // Triad + chip-strip rows own their chip taps, and a line to read has none; the row itself
     // isn't tappable.
-    val ownsInnerTaps = control.ownsInnerTaps
+    val ownsInnerTaps = control.ownsInnerTaps || control is RowControl.None
     Row(
         modifier =
             Modifier
@@ -541,6 +541,7 @@ private fun RowItem(
         }
         when (control) {
             is RowControl.Chevron -> ChevronGlyph()
+            is RowControl.None -> Unit
             is RowControl.Toggle ->
                 Switch(
                     checked = control.isOn,
@@ -556,7 +557,7 @@ private fun RowItem(
                         ),
                     modifier =
                         Modifier
-                            .testTag("groupedListToggle_${row.id}")
+                            .testTag(row.toggleTestTag ?: "groupedListToggle_${row.id}")
                             // TalkBack reads a bare "Switch" without this: the label is a separate node beside it.
                             .semantics { contentDescription = row.label },
                 )

@@ -17,6 +17,9 @@ import app.pantopus.android.data.api.models.ai.AIMemoryListResponse
 import app.pantopus.android.data.api.models.ai.AIMemoryReviewedResponse
 import app.pantopus.android.data.api.models.ai.AINeedsYouResponse
 import app.pantopus.android.data.api.models.ai.AIPostDraftResponse
+import app.pantopus.android.data.api.models.ai.AIRuleChangeBody
+import app.pantopus.android.data.api.models.ai.AIRuleResponse
+import app.pantopus.android.data.api.models.ai.AIRulesResponse
 import app.pantopus.android.data.api.models.place.NeighborhoodPulse
 import retrofit2.Response
 import retrofit2.http.Body
@@ -155,4 +158,24 @@ interface AIApi {
     suspend fun needsYou(
         @Header("If-None-Match") etag: String?,
     ): Response<AINeedsYouResponse>
+
+    /** The person's standing rules with their last runs (AI assistant phase 3 contract §18.5). Route `backend/routes/ai.js:688`. */
+    @GET("api/ai/rules")
+    suspend fun rules(): AIRulesResponse
+
+    /**
+     * Switch a rule off or on (turning it on checks again that it can run: `409 RULE_CANNOT_RUN` says why not), or give
+     * a weekly plan 12 more weeks. Route `backend/routes/ai.js:699`.
+     */
+    @PATCH("api/ai/rules/{id}")
+    suspend fun changeRule(
+        @Path("id") id: String,
+        @Body body: AIRuleChangeBody,
+    ): AIRuleResponse
+
+    /** Delete a rule and its runs (204); the plans it posted stay. Route `backend/routes/ai.js:703`. */
+    @DELETE("api/ai/rules/{id}")
+    suspend fun deleteRule(
+        @Path("id") id: String,
+    ): Unit
 }

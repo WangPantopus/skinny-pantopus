@@ -58,6 +58,9 @@ internal object AIActionAllowlist {
             "POST" to "/api/ai/memory",
             "POST" to "/api/ai/follow-ups",
             "DELETE" to "/api/ai/follow-ups/:id",
+            // A standing rule is turned on from its card, or switched by a rule_change card (§18.3, §18.5).
+            "POST" to "/api/ai/rules",
+            "PATCH" to "/api/ai/rules/:id",
         ).map { (method, path) -> method to Regex("^" + path.replace(":id", UUID).replace(":system", SYSTEM_KEY) + "$") }
 
     fun allows(request: ChatAICardRequest): Boolean =

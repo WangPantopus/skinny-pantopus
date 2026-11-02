@@ -240,6 +240,12 @@ object DeepLinkRouter {
         data object MemorySettings : Destination
 
         /**
+         * `pantopus://settings/rules` — Settings → What Pantopus does for you: a rule card's Open, the assistant's link
+         * and a rule's pause or end notification (AI assistant phase 3 contract §18.5, §12.3).
+         */
+        data object RulesSettings : Destination
+
+        /**
          * A14.8 — `pantopus://mailbox/vacation` opens the Vacation hold
          * screen (scheduling or active variant depending on server state
          * once the persistence layer lands).
@@ -1169,8 +1175,9 @@ object DeepLinkRouter {
             "settings" ->
                 // `pantopus://settings/payments` — A14.6,
                 // `pantopus://settings/security` — Devices & sessions,
-                // `pantopus://settings/notifications` and
-                // `pantopus://settings/memory`. Other settings
+                // `pantopus://settings/notifications`,
+                // `pantopus://settings/memory` and
+                // `pantopus://settings/rules`. Other settings
                 // sub-routes aren't deep-linkable yet; the bare host
                 // `pantopus://settings` falls through to `.Unknown`.
                 when (segments.getOrNull(1)) {
@@ -1178,6 +1185,7 @@ object DeepLinkRouter {
                     "security" -> Destination.SecurityDevices
                     "notifications" -> Destination.NotificationSettings
                     "memory" -> Destination.MemorySettings
+                    "rules" -> Destination.RulesSettings
                     else -> Destination.Unknown(raw)
                 }
             else -> Destination.Unknown(raw)

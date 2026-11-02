@@ -366,6 +366,7 @@ private fun actionCardIcon(card: String): PantopusIcon =
         card == "notification_settings" -> PantopusIcon.Bell
         card == "memory_save" -> PantopusIcon.Bookmark
         card == "follow_up" || card == "follow_up_cancel" -> PantopusIcon.CalendarClock
+        card == "rule_save" || card == "rule_change" -> PantopusIcon.ArrowsRepeat
         else -> PantopusIcon.Sparkles
     }
 
@@ -388,6 +389,8 @@ private fun actionCardLabel(card: String): String =
         "memory_save" -> "Remember"
         "follow_up" -> "Check back"
         "follow_up_cancel" -> "Cancel check-back"
+        "rule_save" -> "Standing rule"
+        "rule_change" -> "Rule change"
         // A nudge with nothing to do but "Fewer like this" (AI assistant phase 2 §3.6).
         "suggestion" -> "Suggestion"
         else -> if (card.startsWith("home_")) "Home" else "Pantopus"
