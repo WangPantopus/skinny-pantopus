@@ -3,8 +3,8 @@
  * `contributions` (PRF CONTRACT.md SRV-1). Counts only, the same for every viewer:
  *   support_trains_helped  Support Trains (not drafts) the person signed up to help and didn't cancel, each once
  *   plans_hosted           plans the person hosted that took place (Plan.status 'ended', set by the Plans job)
- *   helpful_marks          Helpful marks (PostLike) other people gave the person's posts that aren't archived or
- *                          removed by moderation
+ *   helpful_marks          Helpful marks (PostLike) other people gave the posts the person made as themselves (not
+ *                          for a business or as a Beacon persona) that aren't archived or removed by moderation
  * Returns null when a count can't be read, so the apps leave the section out rather than show a wrong zero.
  */
 
@@ -34,6 +34,10 @@ async function profileContributions(userId) {
         .eq('post.user_id', userId)
         .is('post.archived_at', null)
         .neq('post.moderation_state', 'removed')
+        // A post written for a business or as a persona doesn't name its writer, so a mark on it never moves the
+        // writer's own count (it would link the two).
+        .or('post_as.is.null,post_as.not.in.(business,persona)', { referencedTable: 'post' })
+        .or('identity_context_type.is.null,identity_context_type.neq.persona', { referencedTable: 'post' })
         .neq('user_id', userId),
     ]);
     for (const result of [trains, plans, marks]) if (result.error) throw result.error;
