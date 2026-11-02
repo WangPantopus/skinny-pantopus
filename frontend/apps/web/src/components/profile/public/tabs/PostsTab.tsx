@@ -85,7 +85,7 @@ export default function PostsTab({
     mutationFn: ({ postId, liked }: { postId: string; liked: boolean }) => api.posts.toggleLike(postId, liked),
     onMutate: ({ postId }) => setLikingIds((prev) => new Set(prev).add(postId)),
     onSuccess: (res, { postId }) => patch(postId, { userHasLiked: res.liked, like_count: res.likeCount }),
-    onError: () => toast.error('Failed to like post'),
+    onError: () => toast.error("Couldn't update your reaction. Please try again."),
     onSettled: (_data, _err, { postId }) => {
       setLikingIds((prev) => {
         const next = new Set(prev);

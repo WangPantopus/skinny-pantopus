@@ -9,10 +9,11 @@ import * as api from '@pantopus/api';
 import {
   MessageCircle, Star, CalendarDays, Search, Megaphone, AlertTriangle,
   Pencil, Siren, Tag, Wrench, Newspaper, Trophy, Compass, User,
-  Heart, X,
+  X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, type PostTypeConfig } from '@pantopus/ui-utils';
+import { getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, postReactionCount, type PostTypeConfig } from '@pantopus/ui-utils';
+import { postReactionIcon } from '@/components/feed/PostCard';
 import type { FeedSurface, MapMarker, PostType } from '@pantopus/api';
 import { BaseMap, MapSkeleton, useCluster, useAnimatedPins, useMapBounds, pinAnimClass, clusterAnimClass, ZoomGateOverlay, NearestActivityPrompt, RETINA_TILE_URL } from '@/components/map';
 import type { Bounds } from '@/components/map';
@@ -118,12 +119,18 @@ function MapPostPopupCard({
       </div>
 
       <div className="mt-3 flex items-center gap-3">
-        {pin.like_count != null && (
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-            <Heart className="h-3 w-3" />
-            {pin.like_count}
-          </span>
-        )}
+        {pin.like_count != null && (() => {
+          const ReactionIcon = postReactionIcon(pin.post_type);
+          return (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400"
+              aria-label={postReactionCount(pin.post_type, pin.like_count)}
+            >
+              <ReactionIcon className="h-3 w-3" aria-hidden="true" />
+              {pin.like_count}
+            </span>
+          );
+        })()}
         {pin.comment_count != null && (
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
             <MessageCircle className="h-3 w-3" />
@@ -723,7 +730,10 @@ export default function FeedMap({
                     {p.content || p.title || 'No content'}
                   </p>
                   <div className="flex items-center gap-2 mt-1.5">
-                    {p.like_count != null && <span className="text-[9px] text-app-muted inline-flex items-center gap-0.5"><Heart className="w-2.5 h-2.5" /> {p.like_count}</span>}
+                    {p.like_count != null && (() => {
+                      const ReactionIcon = postReactionIcon(pt);
+                      return <span className="text-[9px] text-app-muted inline-flex items-center gap-0.5" aria-label={postReactionCount(pt, p.like_count)}><ReactionIcon className="w-2.5 h-2.5" aria-hidden="true" /> {p.like_count}</span>;
+                    })()}
                     {p.comment_count != null && <span className="text-[9px] text-app-muted inline-flex items-center gap-0.5"><MessageCircle className="w-2.5 h-2.5" /> {p.comment_count}</span>}
                   </div>
                 </button>

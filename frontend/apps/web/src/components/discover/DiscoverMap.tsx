@@ -6,6 +6,7 @@ import { Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import * as api from '@pantopus/api';
 import type { MapBusinessMarker, MapMarker } from '@pantopus/api';
+import { postReactionCount } from '@pantopus/ui-utils';
 import { BaseMap, LocateMeButton, MapProgressBar, clusterMarkers, makeClusterIcon, ZoomGateOverlay, NearestActivityPrompt } from '@/components/map';
 import type { Bounds } from '@/components/map';
 import type { NearestActivityCenter } from '@/components/map';
@@ -706,7 +707,7 @@ function PostPinPopup({ marker }: { marker: MapMarker }) {
       <p className="text-xs text-app-text-secondary line-clamp-3">{content}{content.length >= 120 ? '…' : ''}</p>
       {marker.like_count != null && (
         <p className="text-[11px] text-app-text-muted">
-          ❤️ {marker.like_count} · 💬 {marker.comment_count ?? 0}
+          {postReactionCount(marker.post_type, marker.like_count)} · 💬 {marker.comment_count ?? 0}
         </p>
       )}
       <a
