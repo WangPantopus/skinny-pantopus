@@ -160,7 +160,7 @@ async function getPropertySuggestions(input, supabaseAdmin) {
   // Tier 1 — ATTOM (strongest structured signal; one /property/detail call)
   let attom = null;
   let attom_property_detail = null;
-  if (homeAddressRow || process.env.ATTOM_API_KEY) {
+  { // Stored responses remain available without a live provider credential.
     try {
       // A validated address is looked up as validated, and the server keeps
       // the answer: creating the Home stores that copy, not the app's.

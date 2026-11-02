@@ -20,6 +20,7 @@
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const { encodeGeohash } = require('../../utils/geohash');
 const { readThrough } = require('../placeSectionCache');
+const { readResponse, hasData } = require('../external/cacheHelper');
 const logger = require('../../utils/logger');
 
 const CACHE_TTL_DAYS = 90;
@@ -115,14 +116,20 @@ function coarse(lat, lng) {
 async function geocodeToTract(lat, lng) {
   const url = `https://geocoding.geo.census.gov/geocoder/geographies/coordinates?x=${lng}&y=${lat}&benchmark=Public_AR_Current&vintage=Current_Current&format=json`;
 
-  const res = await timedFetch(url);
-  if (!res || !res.ok) {
-    logger.warn('Census geocoder failed', { ...coarse(lat, lng), status: res?.status });
-    return null;
-  }
-
   try {
-    const data = await res.json();
+    const { response: data } = await readResponse({
+      provider: 'CENSUS_GEOGRAPHIES', url, maxAgeMs: Infinity,
+      isUsable: (data) => hasData(data?.result?.geographies),
+      fetch: async () => {
+        const res = await timedFetch(url);
+        if (!res || !res.ok) {
+          logger.warn('Census geocoder failed', { ...coarse(lat, lng), status: res?.status });
+          return null;
+        }
+
+        return res.json();
+      },
+    });
     const geographies = data?.result?.geographies;
     const tracts = geographies?.['Census Tracts'] || geographies?.['2020 Census Tracts'] || [];
 
@@ -164,21 +171,27 @@ async function fetchCensusACS(stateCode, countyCode, tractCode) {
   let url = `https://api.census.gov/data/2023/acs/acs5?get=${variables}&for=tract:${tractCode}&in=state:${stateCode}+county:${countyCode}`;
   if (apiKey) url += `&key=${apiKey}`;
 
-  const res = await timedFetch(url);
-  if (!res || !res.ok) {
-    logger.warn('Census ACS fetch failed', { stateCode, countyCode, tractCode, status: res?.status });
-    return null;
-  }
-  // api.census.gov now REQUIRES a key: keyless calls 302-redirect to an HTML
-  // "missing key" page instead of failing. Surface that clearly rather than
-  // letting it die downstream as a JSON parse error.
-  if (String(res.url || '').includes('missing_key')) {
-    logger.warn('Census ACS requires an API key — set CENSUS_API_KEY (free: api.census.gov/data/key_signup.html)');
-    return null;
-  }
-
   try {
-    const data = await res.json();
+    const { response: data } = await readResponse({
+      provider: 'CENSUS_ACS', url, maxAgeMs: Infinity,
+      isUsable: (data) => Array.isArray(data) && data.length > 1 && hasData(data[1]),
+      fetch: async () => {
+        const res = await timedFetch(url);
+        if (!res || !res.ok) {
+          logger.warn('Census ACS fetch failed', { stateCode, countyCode, tractCode, status: res?.status });
+          return null;
+        }
+        // api.census.gov now REQUIRES a key: keyless calls 302-redirect to an HTML
+        // "missing key" page instead of failing. Surface that clearly rather than
+        // letting it die downstream as a JSON parse error.
+        if (String(res.url || '').includes('missing_key')) {
+          logger.warn('Census ACS requires an API key — set CENSUS_API_KEY (free: api.census.gov/data/key_signup.html)');
+          return null;
+        }
+
+        return res.json();
+      },
+    });
     // Response is [[headers], [values]]
     if (!Array.isArray(data) || data.length < 2) return null;
 
@@ -269,6 +282,7 @@ async function geocodeToTractCached(lat, lng) {
     const { payload } = await readThrough({
       cacheKey: `geo:${gh7}`,
       sectionId: '_tract',
+      reuseStored: true,
       ttlMs: 365 * 24 * 60 * 60 * 1000,
       fetch: () => geocodeToTract(lat, lng),
     });
@@ -300,14 +314,20 @@ async function fetchFloodZone(lat, lng) {
   // FEMA retired the old /gis/nfhl/rest host path; /arcgis/rest is current.
   const url = `https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query?${params}`;
 
-  const res = await timedFetch(url);
-  if (!res || !res.ok) {
-    logger.warn('FEMA flood zone fetch failed', { status: res?.status });
-    return null;
-  }
-
   try {
-    const data = await res.json();
+    const { response: data } = await readResponse({
+      provider: 'FEMA_NFHL', url, maxAgeMs: 90 * 86400000,
+      isUsable: (data) => !data?.error && hasData(data?.features),
+      fetch: async () => {
+        const res = await timedFetch(url);
+        if (!res || !res.ok) {
+          logger.warn('FEMA flood zone fetch failed', { status: res?.status });
+          return null;
+        }
+
+        return res.json();
+      },
+    });
     const features = data?.features;
     if (!features || features.length === 0) return null;
 
