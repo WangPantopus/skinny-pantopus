@@ -5,6 +5,14 @@ package app.pantopus.android.data.api.models.token_accept
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
+// GET /api/homes/invitations/next
+
+/** The household invitation to open after a fresh sign-in, or none. */
+@JsonClass(generateAdapter = true)
+data class HomeNextInviteResponse(
+    val token: String? = null,
+)
+
 // GET /api/homes/invitations/token/:token
 
 @JsonClass(generateAdapter = true)
