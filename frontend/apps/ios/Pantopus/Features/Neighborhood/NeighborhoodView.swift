@@ -24,13 +24,17 @@ struct NeighborhoodView: View {
     private let onOpenSurface: @MainActor (NeighborhoodDoorStore.Surface) -> Void
     /// Start adding a home in the Place tab (no_place state).
     private let onClaimPlace: @MainActor () -> Void
+    /// The map fills the column beside this one (a wide screen): only its key and note show here.
+    private let mapBeside: Bool
 
     init(
         viewModel: NeighborhoodViewModel = NeighborhoodViewModel(),
+        mapBeside: Bool = false,
         onOpenSurface: @escaping @MainActor (NeighborhoodDoorStore.Surface) -> Void,
         onClaimPlace: @escaping @MainActor () -> Void
     ) {
         _viewModel = State(initialValue: viewModel)
+        self.mapBeside = mapBeside
         self.onOpenSurface = onOpenSurface
         self.onClaimPlace = onClaimPlace
     }
@@ -111,7 +115,7 @@ struct NeighborhoodView: View {
     private func lockedBody(_ meter: NeighborhoodMeterDTO) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             // The window (Wedge v2 §4): alive whatever the meter says.
-            if let cells = viewModel.cells { NearbyCellsMapCard(cells: cells) }
+            if let cells = viewModel.cells { window(cells) }
             // Launch cuts #3/#4: the meter counts toward the local marketplace
             // and tasks; with both hidden it goes with them.
             if !Self.launchSurfaces.isEmpty { meterCard(meter) }
@@ -233,7 +237,7 @@ struct NeighborhoodView: View {
 
     private func unlockedBody(_ meter: NeighborhoodMeterDTO) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
-            if let cells = viewModel.cells { NearbyCellsMapCard(cells: cells) }
+            if let cells = viewModel.cells { window(cells) }
             // Launch cuts #3/#4: the "open" banner goes with the surfaces it announces.
             if !Self.launchSurfaces.isEmpty {
                 HStack(spacing: Spacing.s2) {
@@ -281,6 +285,16 @@ struct NeighborhoodView: View {
     }
 
     // MARK: - Shared bits
+
+    /// The map card, or only its key when the map fills the column beside.
+    @ViewBuilder
+    private func window(_ cells: NeighborhoodCellsDTO) -> some View {
+        if mapBeside {
+            NearbyCellsKey(cells: cells)
+        } else {
+            NearbyCellsMapCard(cells: cells)
+        }
+    }
 
     private struct SurfaceRow {
         let icon: PantopusIcon

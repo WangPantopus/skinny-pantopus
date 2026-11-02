@@ -403,10 +403,11 @@ extension PulsePostDetailView {
 
 private struct LoadingLayout: View {
     let onBack: @MainActor () -> Void
+    @Environment(\.pulsePostShowsBack) private var showsBack
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
-            ContentDetailTopBar(title: "Post", onBack: onBack, action: nil)
+            ContentDetailTopBar(title: "Post", onBack: showsBack ? { onBack() } : nil, action: nil)
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 Shimmer(width: 220, height: 22, cornerRadius: Radii.sm)
                 Shimmer(height: 16, cornerRadius: Radii.sm)
@@ -430,10 +431,11 @@ private struct ErrorLayout: View {
     let onBack: @MainActor () -> Void
     /// Nil when Try again can't help (the post is gone or hidden); Back stays.
     let onRetry: (@MainActor () -> Void)?
+    @Environment(\.pulsePostShowsBack) private var showsBack
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
-            ContentDetailTopBar(title: "Post", onBack: onBack, action: nil)
+            ContentDetailTopBar(title: "Post", onBack: showsBack ? { onBack() } : nil, action: nil)
             EmptyState(
                 icon: .alertCircle,
                 headline: "Couldn't load this post",

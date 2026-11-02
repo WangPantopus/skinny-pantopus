@@ -14,7 +14,10 @@
 //  While the Pulse redesign is off (launch cut #11) this is the October 13
 //  Pulse instead: the Nearby tab's Pulse segment (`NeighborhoodTabRoot`,
 //  founder decision 2026-10-20) showing the feed (`FeedView`) under Nearby's
-//  segment header, and Nearby presents Tasks and Marketplace itself.
+//  segment header, and Nearby presents Tasks and Marketplace itself. On a
+//  wide screen (the iPhone Duo open) that feed and the open post sit side by
+//  side (`PulseSplitView`); the feed's models live here, so a fold keeps its
+//  posts, filters and List / Map.
 //
 
 import SwiftUI
@@ -33,6 +36,8 @@ public enum PulseRoute: Hashable {
 public struct PulseTabRoot: View {
     @Environment(AuthManager.self) private var auth
     @Environment(RootTabModel.self) private var rootTabs
+    /// Regular width (the iPhone Duo open) puts the October 13 feed and the open post side by side.
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var path = RouteStack<PulseRoute>()
     @State private var navigationReady = false
     @State private var router = DeepLinkRouter.shared
@@ -41,6 +46,14 @@ public struct PulseTabRoot: View {
     /// The quiet-state card's meter, held here so a pull to refresh re-reads
     /// it with the feed (as a pull on the old Nearby door did).
     @State private var neighborhood = NeighborhoodViewModel()
+    /// The October 13 feed's models (posts and filters, map, viewing area) and its List / Map, kept while a fold
+    /// moves the feed between the stack and the two columns.
+    @State private var feed: PulseFeedViewModel
+    @State private var feedMap: FeedMapViewModel
+    @State private var feedArea: FeedContextBarViewModel
+    @State private var feedViewMode = FeedViewMode.list
+    /// What was open beside the feed, for the stack to show after a fold.
+    @State private var routesBeside: [PulseRoute] = []
 
     /// Starts adding a home (the quiet card's "Set up a home"), in the Place tab.
     private let onAddHome: @MainActor () -> Void
@@ -59,6 +72,15 @@ public struct PulseTabRoot: View {
         self.onAddHome = onAddHome
         self.onClose = onClose
         self.header = header
+        let feed = PulseFeedViewModel()
+        let feedMap = FeedMapViewModel(surface: feed.surface)
+        _feed = State(initialValue: feed)
+        _feedMap = State(initialValue: feedMap)
+        // The viewing area above the feed, as `FeedView` makes it: a new area refetches the feed and moves the map.
+        _feedArea = State(initialValue: FeedContextBarViewModel {
+            Task { await feed.refresh() }
+            Task { await feedMap.followChosenArea() }
+        })
     }
 
     private var currentUserId: String {
@@ -67,47 +89,29 @@ public struct PulseTabRoot: View {
     }
 
     public var body: some View {
-        NavigationStack(path: navigationPathBinding) {
-            Group {
-                if LaunchFeatures.pulseRedesign {
-                    // The Pulse page (Pulse S6) reads `GET /api/pulse/feed`.
-                    PulsePageView(
-                        onOpenPost: { postId in
-                            path.append(.post(postId: postId))
-                        },
-                        onCompose: {
-                            path.append(.compose(intent: PulseIntent.all.rawValue))
-                        },
-                        onEdit: { postId in
-                            path.append(.editPost(postId: postId))
-                        },
-                        topMenu: topMenu,
-                        quietCard: quietCard,
-                        onRefresh: refreshQuietCard,
-                        isActive: path.isEmpty && rootTabs.selected == .pulse && presentedSurface == nil
-                    )
-                } else {
-                    // Launch cut #11 off: the October 13 feed, `GET /api/posts/feed`.
-                    FeedView(
-                        onOpenPost: { postId in
-                            path.append(.post(postId: postId))
-                        },
-                        onCompose: { intent in
-                            path.append(.compose(intent: intent.rawValue))
-                        },
-                        onBack: onClose,
-                        header: header,
-                        asksPantopus: true
-                    )
+        Group {
+            if isSideBySide {
+                PulseSplitView(path: $path) {
+                    feedPage
+                } destination: { route in
+                    destination(for: route)
                 }
-            }
-            .readableColumn()
-            .toolbar(.hidden, for: .navigationBar)
-            .swipesBackFromEdge()
-            .navigationDestination(for: PulseRoute.self) { route in
-                destination(for: route)
-                    .readableColumn()
-                    .toolbar(.hidden, for: .navigationBar)
+                .onChange(of: path.routes, initial: true) { _, routes in
+                    routesBeside = routes
+                }
+            } else {
+                NavigationStack(path: navigationPathBinding) {
+                    feedPage
+                        .readableColumn()
+                        .toolbar(.hidden, for: .navigationBar)
+                        .swipesBackFromEdge()
+                        .navigationDestination(for: PulseRoute.self) { route in
+                            destination(for: route)
+                                .readableColumn()
+                                .toolbar(.hidden, for: .navigationBar)
+                        }
+                }
+                .onAppear { stackRoutesBeside() }
             }
         }
         .accessibilityIdentifier("pulseTabRoot")
@@ -133,6 +137,65 @@ public struct PulseTabRoot: View {
             navigationReady = true
             consumeDeepLinkIfNeeded(pending: router.pending)
             presentPendingSurfaceIfNeeded(door.pendingSurface)
+        }
+    }
+
+    /// The October 13 feed side by side with the post (the Pulse redesign keeps its own stack).
+    private var isSideBySide: Bool {
+        horizontalSizeClass == .regular && !LaunchFeatures.pulseRedesign
+    }
+
+    /// Folded, the stack starts at the feed: what was open beside it goes back on top once the stack is up.
+    private func stackRoutesBeside() {
+        let routes = routesBeside
+        routesBeside = []
+        guard !routes.isEmpty else { return }
+        Task { @MainActor in
+            await Task.yield()
+            guard path.routes.isEmpty || path.routes == routes else { return }
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { path.replace(with: []) }
+            await Task.yield()
+            withTransaction(transaction) { path.replace(with: routes) }
+        }
+    }
+
+    @ViewBuilder private var feedPage: some View {
+        if LaunchFeatures.pulseRedesign {
+            // The Pulse page (Pulse S6) reads `GET /api/pulse/feed`.
+            PulsePageView(
+                onOpenPost: { postId in
+                    path.append(.post(postId: postId))
+                },
+                onCompose: {
+                    path.append(.compose(intent: PulseIntent.all.rawValue))
+                },
+                onEdit: { postId in
+                    path.append(.editPost(postId: postId))
+                },
+                topMenu: topMenu,
+                quietCard: quietCard,
+                onRefresh: refreshQuietCard,
+                isActive: path.isEmpty && rootTabs.selected == .pulse && presentedSurface == nil
+            )
+        } else {
+            // Launch cut #11 off: the October 13 feed, `GET /api/posts/feed`.
+            FeedView(
+                viewModel: feed,
+                mapViewModel: feedMap,
+                contextBarViewModel: feedArea,
+                viewMode: $feedViewMode,
+                onOpenPost: { postId in
+                    path.open(.post(postId: postId), sideBySide: isSideBySide)
+                },
+                onCompose: { intent in
+                    path.append(.compose(intent: intent.rawValue))
+                },
+                onBack: onClose,
+                header: header,
+                asksPantopus: true
+            )
         }
     }
 
