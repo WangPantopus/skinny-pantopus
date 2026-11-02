@@ -783,6 +783,12 @@ public final class ChatConversationViewModel {
         api === APIClient.shared && mode != .ai
     }
 
+    /// Assistant drafts use the same account-scoped encrypted storage. AI
+    /// requests still require an explicit Send and never enter the outbox.
+    private var usesDurableDrafts: Bool {
+        api === APIClient.shared
+    }
+
     /// Inputs needed to (re)send one optimistic message. Captured at
     /// send time so retry doesn't re-read mutated composer state.
     private struct PendingSendContext {
@@ -988,7 +994,7 @@ public final class ChatConversationViewModel {
         switch mode {
         case let .person(id): "person|\(id)|\(asBusinessUserId ?? "")"
         case let .room(id): "room|\(id)|\(asBusinessUserId ?? "")"
-        case .ai: nil
+        case .ai: "ai"
         }
     }
 
@@ -1007,11 +1013,11 @@ public final class ChatConversationViewModel {
     }
 
     private func scheduleDraftSave(immediate: Bool = false) {
-        guard usesDurableOutbox, !isRestoringDraft,
+        guard usesDurableDrafts, !isRestoringDraft,
               case let .signedIn(user) = AuthManager.shared.state, user.id == currentUserId else { return }
         draftMutation += 1
         draftSaveTask?.cancel()
-        guard !isSending, let draft = composerDraft() else { return }
+        guard !isSending || isAIStreaming, let draft = composerDraft() else { return }
         let attachments = queuedAttachments.filter { $0.data != nil }
         let storage = ChatLocalStore.shared
         let reservation = storage.reserveDraft(draft.id)
@@ -1032,13 +1038,18 @@ public final class ChatConversationViewModel {
     }
 
     private func restoreComposerDraft() async {
-        guard usesDurableOutbox, !hasRestoredDraft, let thread = draftThreadKey else { return }
-        hasRestoredDraft = true
+        guard usesDurableDrafts, !hasRestoredDraft, let thread = draftThreadKey else { return }
         let mutation = draftMutation
         let version = ChatLocalStore.shared.sessionVersion
         do {
-            guard let (draft, attachments) = try await ChatOutbox.shared.restoreComposer(thread: thread, expectedAccount: currentUserId),
-                  draftMutation == mutation, ChatLocalStore.shared.sessionVersion == version, !Task.isCancelled,
+            let restored = try await ChatOutbox.shared.restoreComposer(thread: thread, expectedAccount: currentUserId)
+            // A fold can cancel this presentation's task while retaining the
+            // model. Its replacement must still be able to restore the draft.
+            try Task.checkCancellation()
+            guard !hasRestoredDraft else { return }
+            hasRestoredDraft = true
+            guard let (draft, attachments) = restored,
+                  draftMutation == mutation, ChatLocalStore.shared.sessionVersion == version,
                   composerText.isEmpty, queuedAttachments.isEmpty, replyingTo == nil, editingMessageId == nil else { return }
             isRestoringDraft = true
             defer { isRestoringDraft = false }
@@ -1051,10 +1062,14 @@ public final class ChatConversationViewModel {
         } catch is CancellationError {
             return
         } catch {
-            guard ChatLocalStore.shared.sessionVersion == version else { return }
+            guard !hasRestoredDraft, ChatLocalStore.shared.sessionVersion == version else { return }
             actionFailure = "Couldn't restore this draft. Reopen the conversation to try again."
-            hasRestoredDraft = false
         }
+    }
+
+    /// Flush the pending keystrokes before the scene leaves the foreground.
+    func preserveComposerDraft() {
+        scheduleDraftSave(immediate: true)
     }
 
     /// Restore the most recent Ask-Pantopus conversation across app
@@ -1924,6 +1939,9 @@ public final class ChatConversationViewModel {
         // button (A15.3) can cancel it mid-generation via
         // `cancelAIStream()`; partial text already rendered is kept.
         isAIStreaming = true
+        // Uploads succeeded: save the remaining composer, including words
+        // typed during upload or the reply, instead of reviving sent inputs.
+        scheduleDraftSave(immediate: true)
         let task = Task { [weak self] in
             var streamedText = ""
             // A turn ends with `done` or an `error`; a stream that just stops was cut off

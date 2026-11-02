@@ -658,6 +658,7 @@ public struct ChatConversationView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             viewModel.setVisibleReadBoundaries(phase == .active ? visibleReadMessageIds : [])
+            if phase != .active { viewModel.preserveComposerDraft() }
             if phase == .active {
                 ChatPerformance.signposter.emitEvent("Foreground")
                 Task { await viewModel.refresh() }

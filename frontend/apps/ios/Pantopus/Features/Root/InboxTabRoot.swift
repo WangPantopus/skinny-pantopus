@@ -17,6 +17,8 @@ public struct InboxTabRoot: View {
     /// Regular width (the iPhone Duo open) puts the list and the open conversation side by side.
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var path = RouteStack<InboxRoute>()
+    /// A fold replaces the navigation presentation, not its conversations.
+    @State private var conversationModels = InboxConversationModels()
     @State private var router = DeepLinkRouter.shared
     /// P6.6 — "Invite to Pantopus" opens the system share sheet with the
     /// store link prefilled.
@@ -56,6 +58,12 @@ public struct InboxTabRoot: View {
             consumeDeepLinkIfNeeded(pending: router.pending)
         }
         .sheet(item: $systemSheet) { request in request.makeView() }
+        .onChange(of: path.routes) { _, routes in
+            conversationModels.retain(routes: routes, userId: currentUserId)
+        }
+        .onChange(of: currentUserId) { _, userId in
+            conversationModels.retain(routes: [], userId: userId)
+        }
     }
 
     private var navigationPathBinding: Binding<NavigationPath> {
@@ -188,17 +196,7 @@ public struct InboxTabRoot: View {
         switch route {
         case let .conversation(dest):
             ChatConversationView(
-                viewModel: ChatConversationViewModel(
-                    mode: Self.viewModelMode(for: dest.mode),
-                    counterparty: Self.counterparty(for: dest),
-                    currentUserId: currentUserId,
-                    scrollToMessageId: dest.scrollToMessageId,
-                    initialTopic: dest.initialTopic,
-                    gigId: dest.gigId,
-                    asBusinessUserId: dest.asBusinessUserId,
-                    aiNudge: dest.assistantNudge,
-                    aiLaunch: dest.assistantLaunch
-                ),
+                viewModel: conversationModel(for: dest),
                 mode: dest.kind,
                 onUseAIDraft: { draft in
                     path.append(draftRoute(for: draft))
@@ -348,9 +346,57 @@ public struct InboxTabRoot: View {
     }
 }
 
+/// Owned above both navigation branches. Only routes still on this account's
+/// stack keep their models; leaving a thread releases its in-memory content.
+@MainActor
+private final class InboxConversationModels {
+    private var userId = ""
+    private var models: [InboxConversationDestination: ChatConversationViewModel] = [:]
+
+    func model(
+        for destination: InboxConversationDestination,
+        userId: String,
+        make: () -> ChatConversationViewModel
+    ) -> ChatConversationViewModel {
+        if self.userId != userId {
+            models.removeAll()
+            self.userId = userId
+        }
+        if let model = models[destination] { return model }
+        let model = make()
+        models[destination] = model
+        return model
+    }
+
+    func retain(routes: [InboxRoute], userId: String) {
+        let destinations = Set(routes.compactMap { route -> InboxConversationDestination? in
+            guard case let .conversation(destination) = route else { return nil }
+            return destination
+        })
+        models = self.userId == userId ? models.filter { destinations.contains($0.key) } : [:]
+        self.userId = userId
+    }
+}
+
 // MARK: - Chat list
 
 private extension InboxTabRoot {
+    func conversationModel(for destination: InboxConversationDestination) -> ChatConversationViewModel {
+        conversationModels.model(for: destination, userId: currentUserId) {
+            ChatConversationViewModel(
+                mode: Self.viewModelMode(for: destination.mode),
+                counterparty: Self.counterparty(for: destination),
+                currentUserId: currentUserId,
+                scrollToMessageId: destination.scrollToMessageId,
+                initialTopic: destination.initialTopic,
+                gigId: destination.gigId,
+                asBusinessUserId: destination.asBusinessUserId,
+                aiNudge: destination.assistantNudge,
+                aiLaunch: destination.assistantLaunch
+            )
+        }
+    }
+
     var isSideBySide: Bool {
         horizontalSizeClass == .regular
     }
