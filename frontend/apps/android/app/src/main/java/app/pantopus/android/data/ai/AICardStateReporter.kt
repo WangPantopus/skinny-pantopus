@@ -42,6 +42,22 @@ class AICardStateReporter
             link: String?,
         ) = report(AIActionCardStore.Report(userId, cardId, STATUS_DONE, itemId = itemId, actionId = actionId, link = link))
 
+        /**
+         * [reportDone] for a notification button (phase 3 contract §9.3): it waits for the answer, within the button's
+         * time limit; a report that doesn't get through stays unreported for the thread to send.
+         */
+        suspend fun reportDoneNow(
+            userId: String,
+            cardId: String,
+            itemId: String?,
+            actionId: String,
+        ) {
+            val report = AIActionCardStore.Report(userId, cardId, STATUS_DONE, itemId = itemId, actionId = actionId)
+            if (report.userId.isBlank()) return
+            store.markUnreported(report)
+            sending.withLock { deliver(report) }
+        }
+
         /** "Not now". */
         fun reportDismissed(
             userId: String,

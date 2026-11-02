@@ -133,6 +133,11 @@
             android:name=".push.PlanActionReceiver"
             android:exported="false" />
 
+        <!-- The assistant's Mark done / Mark solved / Fewer like this notification buttons (AI assistant phase 3). -->
+        <receiver
+            android:name=".push.AssistantActionReceiver"
+            android:exported="false" />
+
         <!-- Google Maps API key -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"

@@ -106,6 +106,11 @@ class NotificationDispatcher
             val planId: String? = null,
             val requestId: String? = null,
             val chatNotificationKey: String? = null,
+            /** A brief's or nudge's notification id (its "Fewer like this", and the note a failed button leaves). */
+            val nudgeId: String? = null,
+            val conversationId: String? = null,
+            /** The one card action a Mark done or Mark solved button sends (AI assistant phase 3 contract §9.2). */
+            val assistantAction: String? = null,
         )
 
         /**
@@ -170,6 +175,9 @@ class NotificationDispatcher
                 date = data["pickupDate"] ?: data["date"], recipientUserId = data["recipient_user_id"], pushType = data["type"],
                 planId = data["plan_id"], requestId = data["request_id"],
                 chatNotificationKey = if (channel == Channel.CHAT) data["notificationId"] ?: data["message_id"] else null,
+                nudgeId = data["notificationId"].takeIf { DeepLinkRouter.assistantNotificationPath(data["type"], null, null) != null },
+                conversationId = data["conversation_id"],
+                assistantAction = data["assistant_action"],
             )
         }
 
@@ -271,6 +279,7 @@ class NotificationDispatcher
                     .setPriority(routing.channel.toCompatPriority())
                     .apply { addReminderActions(this, routing, notificationId) }
                     .apply { addPlanActions(this, routing, notificationId) }
+                    .apply { addAssistantActions(this, routing, notificationId) }
                     .build()
 
             val nm = NotificationManagerCompat.from(appContext)
@@ -384,6 +393,56 @@ class NotificationDispatcher
                         .build(),
                 )
             }
+        }
+
+        /**
+         * The assistant's buttons (AI assistant phase 3 contract §9): Mark done or Mark solved when the push carries
+         * the one card action they send and it passes both allowlists, and Fewer like this on every suggestion. They
+         * run in the background for the person the push names, on this session only; Mark done and Mark solved need
+         * the phone unlocked, as the task reminder's Done does. A button whose part is missing is left out.
+         */
+        private fun addAssistantActions(
+            builder: NotificationCompat.Builder,
+            routing: Routing,
+            notificationId: Int,
+        ) {
+            val buttons = AssistantActionReceiver.buttonsFor(routing.category) ?: return
+            val identity = runCatching { runBlocking { tokens.sessionIdentity() } }.getOrNull()
+            if (identity?.first != routing.recipientUserId) return
+            val session = ReminderActionReceiver.sessionFingerprint(identity) ?: return
+            val action = AssistantActionReceiver.ButtonAction.parse(routing.assistantAction)
+            buttons
+                .filter { button ->
+                    when (button.action) {
+                        AssistantActionReceiver.FEWER -> routing.nudgeId != null
+                        else -> action?.fits(button.action) == true
+                    }
+                }.forEachIndexed { index, button ->
+                    val intent =
+                        Intent(appContext, AssistantActionReceiver::class.java).apply {
+                            this.action = button.action
+                            data = Uri.parse("pantopus-assistant-action://$notificationId/${button.action}")
+                            putExtra(AssistantActionReceiver.RECIPIENT, routing.recipientUserId)
+                            putExtra(AssistantActionReceiver.SESSION, session)
+                            putExtra(AssistantActionReceiver.NOTIFICATION_ID, notificationId)
+                            putExtra(AssistantActionReceiver.NUDGE, routing.nudgeId)
+                            putExtra(AssistantActionReceiver.CONVERSATION, routing.conversationId)
+                            putExtra(AssistantActionReceiver.ASSISTANT_ACTION, routing.assistantAction)
+                        }
+                    val pending =
+                        PendingIntent.getBroadcast(
+                            appContext,
+                            notificationId * PLAN_ACTION_SLOTS + index,
+                            intent,
+                            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE,
+                        )
+                    builder.addAction(
+                        NotificationCompat.Action
+                            .Builder(0, button.label, pending)
+                            .setAuthenticationRequired(button.needsUnlock)
+                            .build(),
+                    )
+                }
         }
 
         /**
