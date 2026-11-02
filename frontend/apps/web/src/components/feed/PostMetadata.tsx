@@ -4,12 +4,24 @@ import { Calendar, MapPin, Store, Clock, Search, CheckCircle, Wrench } from 'luc
 import type { Post } from '@pantopus/types';
 import { lostFoundContactLabel } from './composer/LostFoundFields';
 
+/**
+ * An Event's start or end, "Nov 8, 7:00 PM". Every composer stores the wall-clock time the poster picked, labelled UTC,
+ * so it's shown in UTC. A plan's post (made by Plans, `post_metadata.plan`) stores the real moment, so it's shown in
+ * the reader's own time zone.
+ */
+function eventTime(value: string, plan: boolean): string {
+  return new Date(value).toLocaleDateString(undefined, {
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...(plan ? {} : { timeZone: 'UTC' }),
+  });
+}
+
 /** Keep the same saved details visible in cards, reply panels and full post pages. */
 export default function PostMetadata({ post, onClick, spacing = 'mx-4 mb-2' }: {
   post: Post;
   onClick?: () => void;
   spacing?: string;
 }) {
+  const plan = post.post_metadata?.plan === true;
   return <>
       {(post.post_type === 'event') && (post.event_date || post.event_venue) && (
         <div className={`${spacing} p-3 bg-blue-50 rounded-xl border-l-4 border-blue-400 space-y-1${onClick ? ' cursor-pointer' : ''}`} onClick={onClick}>
@@ -17,9 +29,8 @@ export default function PostMetadata({ post, onClick, spacing = 'mx-4 mb-2' }: {
             <div className="flex items-center gap-2 text-xs text-blue-800">
               <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
               <span>
-                {/* Stored as the wall-clock time the poster picked, labelled UTC (every composer), so shown in UTC. */}
-                {new Date(post.event_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })}
-                {post.event_end_date ? ` – ${new Date(post.event_end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })}` : ''}
+                {eventTime(post.event_date, plan)}
+                {post.event_end_date ? ` – ${eventTime(post.event_end_date, plan)}` : ''}
               </span>
             </div>
           )}

@@ -1216,7 +1216,8 @@ public final class PulseFeedViewModel {
                 postType: post.postType,
                 startsAt: post.eventDate,
                 endsAt: post.eventEndDate,
-                venue: post.eventVenue
+                venue: post.eventVenue,
+                isPlanPost: post.isPlanPost
             ),
             // The backend persists a single like counter; the secondary
             // verb is display-only and has no count source, so it stays 0

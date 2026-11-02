@@ -99,7 +99,7 @@ private val reportReasons =
  * null for other posts.
  */
 internal fun eventDetails(post: PostDetailDto): PulseEventDetails? =
-    pulseEventDetails(post.postType, post.eventDate, post.eventEndDate, post.eventVenue, long = true)
+    pulseEventDetails(post.postType, post.eventDate, post.eventEndDate, post.eventVenue, post.isPlanPost, long = true)
 
 /** A Deal’s business and expiry, matching the web detail’s calendar date. */
 internal fun dealDetailLine(post: PostDetailDto): String? {
@@ -716,7 +716,8 @@ private fun ErrorLayout(
 
 /**
  * An event that hasn't ended: its end, else its start, is still ahead. Composers post the poster's wall clock
- * labelled UTC, so it compares with the phone's own wall clock read the same way (`pulseEventDetails`).
+ * labelled UTC, so it compares with the phone's own wall clock read the same way (`pulseEventDetails`); a plan's own
+ * post holds real moments, which compare with now.
  */
 private fun isEventAhead(
     post: PostDetailDto,
@@ -724,6 +725,7 @@ private fun isEventAhead(
 ): Boolean {
     if (post.postType != "event") return false
     val last = PlanFormat.instant(post.eventEndDate) ?: PlanFormat.instant(post.eventDate) ?: return true
+    if (post.isPlanPost) return last.isAfter(now)
     return last.isAfter(now.plusSeconds(ZoneId.systemDefault().rules.getOffset(now).totalSeconds.toLong()))
 }
 
