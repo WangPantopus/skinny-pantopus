@@ -1426,6 +1426,19 @@ router.get('/invitations', verifyToken, async (req, res) => {
 });
 
 /**
+ * GET /api/homes/invitations/next
+ * Right after signing in or up: household invitations emailed to this person's confirmed address before they had an
+ * account get a link of their own and the notice an account gets when invited, once each
+ * (homeInvitationService.deliverEmailInvitations). { token } of the newest, which the apps and web open in their
+ * invitation screen (/invite/<token>), or { token: null }.
+ */
+router.get('/invitations/next', verifyToken, async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  try { res.json({ token: await homeInvitationService.deliverEmailInvitations(req.user.id) }); }
+  catch (err) { res.status(err.statusCode || 503).json({ error: err.message, code: err.code }); }
+});
+
+/**
  * GET /api/homes/invitations/token/:token
  * Public endpoint — look up an invitation by token.
  * Used by the invite acceptance page. No auth required so new users can see the invite.
