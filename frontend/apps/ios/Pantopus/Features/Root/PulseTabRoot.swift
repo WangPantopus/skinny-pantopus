@@ -52,6 +52,9 @@ public struct PulseTabRoot: View {
     @State private var feedViewMode = FeedViewMode.list
     /// What was open beside the feed, for the stack to show after a fold or a turn upright.
     @State private var routesBeside: [PulseRoute] = []
+    /// Keep detail models above both layouts, including the stack's brief route replay.
+    @State private var detailModels = PulseDetailModels()
+    @State private var restoringRoutes: [PulseRoute] = []
 
     /// Starts adding a home (the quiet card's "Set up a home"), in the Place tab.
     private let onAddHome: @MainActor () -> Void
@@ -118,6 +121,12 @@ public struct PulseTabRoot: View {
             }
         }
         .accessibilityIdentifier("pulseTabRoot")
+        .onChange(of: path.routes + routesBeside + restoringRoutes) { _, routes in
+            detailModels.retain(routes: routes, userId: currentUserId)
+        }
+        .onChange(of: currentUserId) { _, userId in
+            detailModels.retain(routes: [], userId: userId)
+        }
         .sheet(item: $presentedSurface) { surface in
             surfaceRoot(surface)
         }
@@ -152,9 +161,11 @@ public struct PulseTabRoot: View {
     /// stack is up.
     private func stackRoutesBeside() {
         let routes = routesBeside
+        restoringRoutes = routes
         routesBeside = []
         guard !routes.isEmpty else { return }
         Task { @MainActor in
+            defer { if restoringRoutes == routes { restoringRoutes = [] } }
             await Task.yield()
             guard path.routes.isEmpty || path.routes == routes else { return }
             var transaction = Transaction()
@@ -289,6 +300,7 @@ public struct PulseTabRoot: View {
             PulsePostDetailView(
                 postId: postId,
                 currentUserId: currentUserId.isEmpty ? nil : currentUserId,
+                viewModel: detailModels.model(postId: postId, userId: currentUserId),
                 onBack: pop,
                 onOpenProfile: { userId in
                     Task { @MainActor in path.append(.publicProfile(userId: userId)) }
@@ -356,6 +368,31 @@ public struct PulseTabRoot: View {
                 onBack: pop
             )
         }
+    }
+}
+
+/// A fold replaces the detail view, but must not replace an unfinished reply.
+/// Models leave this account-scoped cache when their routes actually close.
+@MainActor
+private final class PulseDetailModels {
+    private var userId = ""
+    private var models: [String: PulsePostDetailViewModel] = [:]
+
+    func model(postId: String, userId: String) -> PulsePostDetailViewModel {
+        if self.userId != userId { retain(routes: [], userId: userId) }
+        if let model = models[postId] { return model }
+        let model = PulsePostDetailViewModel(postId: postId, currentUserId: userId.isEmpty ? nil : userId)
+        models[postId] = model
+        return model
+    }
+
+    func retain(routes: [PulseRoute], userId: String) {
+        let postIds = Set(routes.compactMap { route -> String? in
+            guard case let .post(postId) = route else { return nil }
+            return postId
+        })
+        models = self.userId == userId ? models.filter { postIds.contains($0.key) } : [:]
+        self.userId = userId
     }
 }
 

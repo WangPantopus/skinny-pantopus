@@ -237,14 +237,13 @@ public struct InboxTabRoot: View {
             )
         case .search:
             ChatSearchView(
-                viewModel: ChatSearchViewModel(
-                    onOpenResult: { result in
-                        Task { @MainActor in path.open(.conversation(destination(from: result)), sideBySide: isSideBySide) }
-                    },
-                    onCancel: {
-                        Task { @MainActor in path.closeSearch(sideBySide: isSideBySide) }
-                    }
-                )
+                viewModel: conversationModels.search(userId: currentUserId),
+                onOpenResult: { result in
+                    Task { @MainActor in path.open(.conversation(destination(from: result)), sideBySide: isSideBySide) }
+                },
+                onCancel: {
+                    Task { @MainActor in path.closeSearch(sideBySide: isSideBySide) }
+                }
             )
         case let .composeGig(category):
             GigComposeWizardView(preselectedCategoryKey: category) { _ in
@@ -355,6 +354,7 @@ public struct InboxTabRoot: View {
 private final class InboxConversationModels {
     private var userId = ""
     private var models: [InboxConversationDestination: ChatConversationViewModel] = [:]
+    private var searchModel: ChatSearchViewModel?
 
     func model(
         for destination: InboxConversationDestination,
@@ -362,12 +362,19 @@ private final class InboxConversationModels {
         make: () -> ChatConversationViewModel
     ) -> ChatConversationViewModel {
         if self.userId != userId {
-            models.removeAll()
-            self.userId = userId
+            retain(routes: [], userId: userId)
         }
         if let model = models[destination] { return model }
         let model = make()
         models[destination] = model
+        return model
+    }
+
+    func search(userId: String) -> ChatSearchViewModel {
+        if self.userId != userId { retain(routes: [], userId: userId) }
+        if let searchModel { return searchModel }
+        let model = ChatSearchViewModel()
+        searchModel = model
         return model
     }
 
@@ -377,6 +384,10 @@ private final class InboxConversationModels {
             return destination
         })
         models = self.userId == userId ? models.filter { destinations.contains($0.key) } : [:]
+        if self.userId != userId || !routes.contains(.search) {
+            searchModel?.teardown()
+            searchModel = nil
+        }
         self.userId = userId
     }
 }

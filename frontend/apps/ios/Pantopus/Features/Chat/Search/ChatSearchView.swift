@@ -15,8 +15,17 @@ import SwiftUI
 public struct ChatSearchView: View {
     @State private var viewModel: ChatSearchViewModel
 
-    init(viewModel: ChatSearchViewModel) {
+    private let onOpenResult: @Sendable (ChatSearchResult) -> Void
+    private let onCancel: @Sendable () -> Void
+
+    init(
+        viewModel: ChatSearchViewModel,
+        onOpenResult: @escaping @Sendable (ChatSearchResult) -> Void,
+        onCancel: @escaping @Sendable () -> Void
+    ) {
         _viewModel = State(initialValue: viewModel)
+        self.onOpenResult = onOpenResult
+        self.onCancel = onCancel
     }
 
     public var body: some View {
@@ -33,7 +42,7 @@ public struct ChatSearchView: View {
             emptyState: viewModel.emptyState,
             row: { result in
                 VStack(spacing: 0) {
-                    ChatSearchResultRow(result: result, onOpen: viewModel.onOpenResult)
+                    ChatSearchResultRow(result: result, onOpen: onOpenResult)
                     if result.id == viewModel.results.last?.id, viewModel.hasMore {
                         Button(viewModel.isLoadingMore ? "Loading…" : "Load more results") {
                             Task { await viewModel.loadMore() }
@@ -44,12 +53,13 @@ public struct ChatSearchView: View {
                     }
                 }
             },
-            onCancel: { viewModel.onCancel() }
+            onCancel: onCancel
         )
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .refreshFailureToast($viewModel.failureMessage)
         .task { await viewModel.load() }
-        .onDisappear { viewModel.teardown() }
+        // The Inbox route owner tears down search when the route leaves. A
+        // presentation disappearing during a fold must not cancel its query.
         .accessibilityIdentifier("chatSearch")
     }
 }
