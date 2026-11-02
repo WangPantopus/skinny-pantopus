@@ -54,7 +54,8 @@ private const val READ_AHEAD_MS = 60 * 1000L
  * scoped to this server and the signed-in account. Screens read from here and never keep their own copy.
  *
  * - **Read:** the copy in memory shows at once; a request goes out only when the copy is out of date (its kind's
- *   "fresh for" window passed, or a topic marked it) or the read is forced (pull to refresh, Retry).
+ *   "fresh for" window passed, a topic marked it, or it came from the phone's saved copy) or the read is forced
+ *   (pull to refresh, Retry).
  * - **One request per key:** concurrent reads share the one in flight, which finishes even if the screen that
  *   started it leaves, so the next visit finds the reply.
  * - **Conditional:** a read sends the stored ETag; a 304 keeps the copy and counts it as checked now.
@@ -825,7 +826,8 @@ class ScreenStore
 
         /**
          * A new entry starts from its saved copy on the phone, when there is a usable one (contract §6 "Read"): the copy
-         * read ahead at launch, with the marks queued since, else the file.
+         * read ahead at launch, with the marks queued since, else the file. It shows at once and is checked once, as on
+         * iOS (a 304 keeps it).
          */
         private fun loadSavedLocked(
             slot: Slot,
@@ -845,9 +847,10 @@ class ScreenStore
             // A queued own edit retires a current-format copy (its disk work is deleting the file): it is not shown.
             if (!retired || copy.legacy) {
                 slot.etag = copy.etag.takeUnless { edited }
-                // A process can end before its queued disk mark finishes. Always revalidate a restored inbox
-                // online while keeping its encrypted rows available when the connection is down.
-                slot.stale = copy.stale || marks.isNotEmpty() || slot.key.kind == StoreKind.MESSAGES_LIST
+                // Out of date whatever its age: no signal reached it while the app wasn't running (an address saved on
+                // another device), and a process can end before its queued disk mark finishes. Offline it still
+                // shows, the inbox with its encrypted rows.
+                slot.stale = true
                 slot.persist = true
                 slot.state.value = Stored(copy.data, fetchedAt = copy.fetchedAt)
             }
