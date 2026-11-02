@@ -46,8 +46,8 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
     darkTextColor: '#A78BFA',
     bgLight: '#F5F3FF',
     borderColor: '#C4B5FD',
-    ctaLabel: 'Interested',
-    ctaIcon: 'hand',
+    ctaLabel: 'Reply',
+    ctaIcon: 'message-circle',
   },
   lost_found: {
     label: 'Lost & Found',
@@ -86,8 +86,8 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
     darkTextColor: '#9CA3AF',
     bgLight: '#F9FAFB',
     borderColor: '#E5E7EB',
-    ctaLabel: 'Good to Know',
-    ctaIcon: 'thumbs-up',
+    ctaLabel: 'Reply',
+    ctaIcon: 'message-circle',
   },
   neighborhood_win: {
     label: 'Win',
@@ -96,8 +96,8 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
     darkTextColor: '#34D399',
     bgLight: '#F0FDF4',
     borderColor: '#A7F3D0',
-    ctaLabel: 'Celebrate',
-    ctaIcon: 'party-popper',
+    ctaLabel: 'Reply',
+    ctaIcon: 'message-circle',
   },
   visitor_guide: {
     label: 'Guide',
@@ -133,8 +133,8 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
     darkTextColor: '#2DD4BF',
     bgLight: '#F0FDFA',
     borderColor: '#99F6E4',
-    ctaLabel: 'Good to Know',
-    ctaIcon: 'thumbs-up',
+    ctaLabel: 'Reply',
+    ctaIcon: 'message-circle',
   },
   service_offer: {
     label: 'Service',
@@ -163,8 +163,8 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
     darkTextColor: '#34D399',
     bgLight: '#F0FDF4',
     borderColor: '#A7F3D0',
-    ctaLabel: 'Celebrate',
-    ctaIcon: 'party-popper',
+    ctaLabel: 'Reply',
+    ctaIcon: 'message-circle',
   },
 };
 
@@ -173,6 +173,35 @@ export const POST_TYPE_CONFIG: Record<string, PostTypeConfig> = {
  */
 export function getPostTypeConfig(type: string): PostTypeConfig {
   return POST_TYPE_CONFIG[type] || POST_TYPE_CONFIG.general;
+}
+
+// ── The post's reaction ──
+// Every post has one reaction (POST /api/posts/:id/like, counted in like_count), named for what it means on that
+// kind of post, the same on web, iPhone and Android and in the author's notice (backend/utils/postReaction.js):
+// Going on an event, Celebrate on a win, Helpful on every other kind.
+
+export type PostReaction = 'going' | 'celebrate' | 'helpful';
+
+export function postReaction(type: string | null | undefined): PostReaction {
+  if (type === 'event') return 'going';
+  if (type === 'neighborhood_win' || type === 'progress_wins') return 'celebrate';
+  return 'helpful';
+}
+
+/** The reaction's button: "Going", "Celebrate", "Helpful". */
+export const POST_REACTION_LABEL: Record<PostReaction, string> = {
+  going: 'Going',
+  celebrate: 'Celebrate',
+  helpful: 'Helpful',
+};
+
+/** The reaction's count in words: "2 going", "4 celebrated", "3 helpful". */
+export function postReactionCount(type: string | null | undefined, count: number): string {
+  switch (postReaction(type)) {
+    case 'going': return `${count} going`;
+    case 'celebrate': return `${count} celebrated`;
+    default: return `${count} helpful`;
+  }
 }
 
 // ── Platform-specific icon maps ──
