@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent }
 import * as api from '@pantopus/api';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
 import ModalShell from '@/components/ui/ModalShell';
+import { confirmStore } from '@/components/ui/confirm-store';
 import type {
   ComposeMode, QuickComposeForm, StructuredComposeForm,
   MailType, QuickDestinationType, MailDeliveryVisibility, ObjectFormat, AvailableHome,
@@ -64,6 +65,8 @@ export default function ComposeMailModal({
   useEffect(() => {
     if (sendError) sendErrorRef.current?.scrollIntoView({ block: 'nearest' });
   }, [sendError]);
+  // While "Discard this letter?" is up, a second Escape or click doesn't ask again.
+  const askingToDiscard = useRef(false);
 
   // Quick compose state
   const [quickComposeData, setQuickComposeData] = useState<QuickComposeForm>(() => ({
@@ -348,6 +351,27 @@ export default function ComposeMailModal({
     onClose();
   };
 
+  // Close, Cancel, Escape and a click outside all come here. A letter with something written in it asks first, so a
+  // stray key or click doesn't throw it away.
+  const requestClose = async () => {
+    if (askingToDiscard.current) return;
+    const written = [quickComposeData.subject, quickComposeData.content, structuredComposeData.subject, structuredComposeData.content]
+      .some((text) => text.trim() !== '');
+    if (written) {
+      askingToDiscard.current = true;
+      const discard = await confirmStore.open({
+        title: 'Discard this letter?',
+        description: 'What you wrote won’t be saved.',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep writing',
+        variant: 'destructive',
+      });
+      askingToDiscard.current = false;
+      if (!discard) return;
+    }
+    handleClose();
+  };
+
   const renderRecipientDropdown = (
     results: RecipientUser[], loading: boolean, query: string,
     activeIndex: number, setActiveIndex: (i: number) => void,
@@ -385,8 +409,8 @@ export default function ComposeMailModal({
     <ModalShell
       open
       title="Compose Mail"
-      onClose={handleClose}
-      onCancel={handleClose}
+      onClose={() => { void requestClose(); }}
+      onCancel={() => { void requestClose(); }}
       cancelLabel="Cancel"
       submitLabel="Send"
       submitting={composeLoading}
