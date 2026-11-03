@@ -137,19 +137,7 @@ public struct MailDetailView: View {
                     .presentationDragIndicator(.visible)
             }
         }
-        .confirmationDialog(
-            "File in the Vault",
-            isPresented: Binding(get: { viewModel.showsFilePicker }, set: { viewModel.showsFilePicker = $0 }),
-            titleVisibility: .visible
-        ) {
-            ForEach(viewModel.fileFolders) { folder in
-                Button(folder.label) { Task { await viewModel.act(.file, folderId: folder.id) } }
-                    .accessibilityIdentifier("mailLetterFolder.\(folder.id)")
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Choose a folder for it.")
-        }
+        .modifier(MailVaultFolderPickers(viewModel: viewModel))
         .confirmationDialog(
             "Done with it?",
             isPresented: Binding(get: { viewModel.confirmsDone }, set: { viewModel.confirmsDone = $0 }),
@@ -173,26 +161,6 @@ public struct MailDetailView: View {
             Text(shredMessage)
         }
         .quickLookPreview(Binding(get: { viewModel.quickLookURL }, set: { viewModel.quickLookURL = $0 }))
-        .confirmationDialog(
-            "Save to vault",
-            isPresented: Binding(
-                get: { viewModel.showsSaveToVaultPicker },
-                set: { viewModel.showsSaveToVaultPicker = $0 }
-            ),
-            titleVisibility: .visible
-        ) {
-            ForEach(viewModel.saveToVaultFolders) { folder in
-                Button(folder.label) {
-                    Task { await viewModel.saveToVault(folderId: folder.id) }
-                }
-                .accessibilityIdentifier("mailDetail_saveToVault_\(folder.id)")
-            }
-            Button("Cancel", role: .cancel) {
-                viewModel.showsSaveToVaultPicker = false
-            }
-        } message: {
-            Text("Pick a folder to keep this mail in.")
-        }
         .confirmationDialog(
             destructiveActionTitle,
             isPresented: Binding(
@@ -615,6 +583,96 @@ private struct ErrorLayout: View {
         }
         .background(Theme.Color.appBg)
         .accessibilityIdentifier("mailDetail_error")
+    }
+}
+
+/// Keep the ordinary folder dialogs; a scrollable sheet fits large text on narrow Duo layouts.
+private struct MailVaultFolderPickers: ViewModifier {
+    let viewModel: MailDetailViewModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog(
+                "File in the Vault",
+                isPresented: Binding(
+                    get: { viewModel.showsFilePicker && !dynamicTypeSize.isAccessibilitySize },
+                    set: { viewModel.showsFilePicker = $0 }
+                ),
+                titleVisibility: .visible
+            ) {
+                ForEach(viewModel.fileFolders) { folder in
+                    Button(folder.label) { Task { await viewModel.act(.file, folderId: folder.id) } }
+                        .accessibilityIdentifier("mailLetterFolder.\(folder.id)")
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Choose a folder for it.")
+            }
+            .confirmationDialog(
+                "Save to vault",
+                isPresented: Binding(
+                    get: { viewModel.showsSaveToVaultPicker && !dynamicTypeSize.isAccessibilitySize },
+                    set: { viewModel.showsSaveToVaultPicker = $0 }
+                ),
+                titleVisibility: .visible
+            ) {
+                ForEach(viewModel.saveToVaultFolders) { folder in
+                    Button(folder.label) { Task { await viewModel.saveToVault(folderId: folder.id) } }
+                        .accessibilityIdentifier("mailDetail_saveToVault_\(folder.id)")
+                }
+                Button("Cancel", role: .cancel) { viewModel.showsSaveToVaultPicker = false }
+            } message: {
+                Text("Pick a folder to keep this mail in.")
+            }
+            .sheet(isPresented: Binding(
+                get: { dynamicTypeSize.isAccessibilitySize && (viewModel.showsFilePicker || viewModel.showsSaveToVaultPicker) },
+                set: { if !$0 { closePickers() } }
+            )) {
+                accessiblePicker
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+    }
+
+    private var accessiblePicker: some View {
+        let isLetter = viewModel.showsFilePicker
+        let folders = isLetter ? viewModel.fileFolders : viewModel.saveToVaultFolders
+        return NavigationStack {
+            List {
+                Section {
+                    ForEach(folders) { folder in
+                        Button(folder.label) {
+                            closePickers()
+                            Task {
+                                if isLetter {
+                                    await viewModel.act(.file, folderId: folder.id)
+                                } else {
+                                    await viewModel.saveToVault(folderId: folder.id)
+                                }
+                            }
+                        }
+                        .accessibilityIdentifier(isLetter ? "mailLetterFolder.\(folder.id)" : "mailDetail_saveToVault_\(folder.id)")
+                    }
+                } header: {
+                    // The same words as the dialog this sheet stands in for.
+                    Text(isLetter ? "Choose a folder for it." : "Pick a folder to keep this mail in.")
+                        .textCase(nil)
+                }
+            }
+            .navigationTitle(isLetter ? "File in the Vault" : "Save to vault")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: closePickers)
+                }
+            }
+        }
+    }
+
+    private func closePickers() {
+        viewModel.showsFilePicker = false
+        viewModel.showsSaveToVaultPicker = false
     }
 }
 

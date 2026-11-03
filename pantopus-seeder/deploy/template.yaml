@@ -819,11 +819,13 @@ Resources:
       AlarmActions:
         - !Ref JobAlarmTopic
 
+  # One window per 10-minute run. The next run tries a failed weather or AirNow
+  # fetch again (AirNow blips most evenings), so only two failed runs in a row notify.
   AlertCheckerErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub pantopus-alert-checker-errors-${Environment}
-      AlarmDescription: 'A scheduled run crashed or reported a caught/partial failure. Check CloudWatch logs; quiet days are successful.'
+      AlarmDescription: 'Two scheduled runs in a row crashed or reported a caught/partial failure. Check CloudWatch logs; quiet days are successful.'
       Metrics:
         - Id: failures
           Expression: crashes + outcomes
@@ -837,7 +839,7 @@ Resources:
               Dimensions:
                 - Name: FunctionName
                   Value: !Ref AlertCheckerFunction
-            Period: 900
+            Period: 600
             Stat: Sum
         - Id: outcomes
           ReturnData: false
@@ -848,9 +850,10 @@ Resources:
               Dimensions:
                 - Name: FunctionName
                   Value: !Ref AlertCheckerFunction
-            Period: 900
+            Period: 600
             Stat: Sum
-      EvaluationPeriods: 1
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching

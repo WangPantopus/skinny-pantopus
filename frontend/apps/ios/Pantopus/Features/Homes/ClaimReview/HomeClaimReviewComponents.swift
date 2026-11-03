@@ -38,7 +38,8 @@ struct HomeClaimReviewTabStrip: View {
                 } label: {
                     VStack(spacing: Spacing.s2) {
                         Text(entry.title)
-                            .font(.system(size: 13, weight: selection == entry.tab ? .semibold : .medium))
+                            .scaledFont(13, weight: selection == entry.tab ? .semibold : .medium)
+                            .fixedSize(horizontal: false, vertical: true)
                             .foregroundStyle(
                                 selection == entry.tab
                                     ? Theme.Color.primaryInk
@@ -54,12 +55,18 @@ struct HomeClaimReviewTabStrip: View {
                     }
                     .padding(.top, Spacing.s3)
                     .frame(maxWidth: .infinity)
+                    .frame(minHeight: 44)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("homeClaimReview_tab_\(entry.tab.rawValue)")
+                .accessibilityShowsLargeContentViewer()
             }
         }
+        // Like a system segmented control, the tabs stop growing at the
+        // largest standard size, so the pinned chrome leaves room for the
+        // claims; a long press shows a tab's name large.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .background(Theme.Color.appSurface)
         .overlay(alignment: .bottom) {
             Rectangle()
@@ -79,7 +86,7 @@ struct HomeClaimMetaChip: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11, weight: .medium))
+            .scaledFont(11, weight: .medium)
             .foregroundStyle(foreground)
             .padding(.horizontal, Spacing.s2)
             .padding(.vertical, Spacing.s1)
@@ -114,7 +121,7 @@ struct HomeClaimChallengeNotice: View {
         HStack(alignment: .top, spacing: Spacing.s2) {
             Icon(.shield, size: 16, color: Theme.Color.warning)
             Text("This claim is in the challenge path and should go through admin review.")
-                .pantopusTextStyle(.caption)
+                .scaledFont(12)
                 .foregroundStyle(Theme.Color.warning)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -153,13 +160,15 @@ struct HomeClaimActionButton: View {
                 Icon(icon, size: 16, color: foreground)
                 if let title {
                     Text(title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .scaledFont(13, weight: .semibold)
                         .foregroundStyle(foreground)
-                        .lineLimit(1)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .frame(maxWidth: title == nil ? 40 : .infinity)
-            .frame(height: 40)
+            .padding(.vertical, Spacing.s2)
+            .frame(maxWidth: title == nil ? 44 : .infinity)
+            .frame(minHeight: 44)
             .background(background)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .overlay {
@@ -200,37 +209,57 @@ struct HomeClaimActionButton: View {
     }
 }
 
+extension DynamicTypeSize {
+    /// A claim card's action buttons: side by side, stacked at the
+    /// accessibility sizes, where their labels grow with the text.
+    var claimActionLayout: AnyLayout {
+        isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: Spacing.s2))
+            : AnyLayout(HStackLayout(spacing: Spacing.s2))
+    }
+
+    /// A claim card's avatar and name: side by side, or the avatar above the
+    /// name at the accessibility sizes, so the name gets the card's width.
+    func claimHeaderLayout(alignment: VerticalAlignment) -> AnyLayout {
+        isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.s2))
+            : AnyLayout(HStackLayout(alignment: alignment, spacing: Spacing.s3))
+    }
+}
+
 // MARK: - Cards
 
 /// One pending ownership claim + its action row.
 struct HomeClaimOwnershipCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let item: HomeClaimReviewOwnershipItem
     let isBusy: Bool
     let onVerdict: (HomeClaimReviewVerdict) -> Void
     let onRelationship: (HomeClaimRelationshipAction) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s3) {
-            HStack(alignment: .top, spacing: Spacing.s3) {
+        let header = dynamicTypeSize.claimHeaderLayout(alignment: .top)
+        return VStack(alignment: .leading, spacing: Spacing.s3) {
+            header {
                 HomeClaimAvatar(initials: item.initials)
                 VStack(alignment: .leading, spacing: Spacing.s1) {
                     Text(item.displayName)
-                        .font(.system(size: 14, weight: .semibold))
+                        .scaledFont(14, weight: .semibold)
                         .foregroundStyle(Theme.Color.appText)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                     if let subtitle = item.subtitle {
                         Text(subtitle)
-                            .pantopusTextStyle(.caption)
+                            .scaledFont(12)
                             .foregroundStyle(Theme.Color.appTextSecondary)
-                            .lineLimit(1)
+                            .lineLimit(isLarge ? nil : 1)
                     }
                     signalRow
+                    // Beside the name there's no room for it at the accessibility sizes.
+                    if isLarge { submittedText }
                 }
-                Spacer(minLength: Spacing.s0)
-                if let submitted = item.submittedLabel {
-                    Text(submitted)
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.Color.appTextMuted)
+                if !isLarge {
+                    Spacer(minLength: Spacing.s0)
+                    submittedText
                 }
             }
 
@@ -249,7 +278,7 @@ struct HomeClaimOwnershipCard: View {
                         .accessibilityIdentifier("homeClaimReview_ownershipBusy")
                     Spacer()
                 }
-                .frame(height: 40)
+                .frame(minHeight: 44)
             } else {
                 actionRow
             }
@@ -265,11 +294,29 @@ struct HomeClaimOwnershipCard: View {
         .accessibilityIdentifier("homeClaimReview_ownershipCard")
     }
 
+    private var isLarge: Bool {
+        dynamicTypeSize.isAccessibilitySize
+    }
+
+    @ViewBuilder
+    private var submittedText: some View {
+        if let submitted = item.submittedLabel {
+            Text(submitted)
+                .scaledFont(10)
+                .foregroundStyle(Theme.Color.appTextMuted)
+        }
+    }
+
+    /// The claimant's account age, method, risk and evidence: one line, or
+    /// one under another at the accessibility sizes.
     private var signalRow: some View {
-        HStack(spacing: Spacing.s2) {
+        let layout = isLarge
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.s1))
+            : AnyLayout(HStackLayout(spacing: Spacing.s2))
+        return layout {
             ForEach(signals, id: \.self) { signal in
                 Text(signal)
-                    .font(.system(size: 11))
+                    .scaledFont(11)
                     .foregroundStyle(Theme.Color.appTextMuted)
             }
         }
@@ -284,7 +331,7 @@ struct HomeClaimOwnershipCard: View {
     private var actionRow: some View {
         switch item.actionMode {
         case .relationship:
-            HStack(spacing: Spacing.s2) {
+            dynamicTypeSize.claimActionLayout {
                 HomeClaimActionButton(
                     title: item.inviteTitle,
                     icon: .userPlus,
@@ -318,7 +365,7 @@ struct HomeClaimOwnershipCard: View {
             .clipShape(RoundedRectangle(cornerRadius: Radii.pill, style: .continuous))
             .accessibilityIdentifier("homeClaimReview_adminRequired")
         case .verdict:
-            HStack(spacing: Spacing.s2) {
+            dynamicTypeSize.claimActionLayout {
                 HomeClaimActionButton(
                     title: "Approve",
                     icon: .check,
@@ -344,14 +391,16 @@ struct HomeClaimOwnershipCard: View {
 
 /// One pending residency claim + approve / deny.
 struct HomeClaimResidencyCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let item: HomeResidencyQueueClaim
     let isBusy: Bool
     let onApprove: () -> Void
     let onReject: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s3) {
-            HStack(alignment: .center, spacing: Spacing.s3) {
+        let header = dynamicTypeSize.claimHeaderLayout(alignment: .center)
+        return VStack(alignment: .leading, spacing: Spacing.s3) {
+            header {
                 HomeClaimAvatar(
                     initials: (HomeResidencyQueueValidation.personName(item.displayName) ?? MadeUpUsername.chosen(item.username))
                         .flatMap { $0.first.map { String($0).uppercased() } } ?? "?",
@@ -360,17 +409,17 @@ struct HomeClaimResidencyCard: View {
                 )
                 VStack(alignment: .leading, spacing: 1) {
                     Text(item.applicantLabel)
-                        .font(.system(size: 15, weight: .semibold))
+                        .scaledFont(15, weight: .semibold)
                         .foregroundStyle(Theme.Color.appText)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(item.roleLabel)
-                        .font(.system(size: 13))
+                        .scaledFont(13)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
-                Spacer(minLength: Spacing.s0)
+                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: Spacing.s0) }
             }
             Text(item.dateLabel)
-                .pantopusTextStyle(.caption)
+                .scaledFont(12)
                 .foregroundStyle(Theme.Color.appTextMuted)
             if isBusy {
                 HStack {
@@ -379,9 +428,9 @@ struct HomeClaimResidencyCard: View {
                         .accessibilityIdentifier("homeClaimReview_residencyBusy")
                     Spacer()
                 }
-                .frame(height: 40)
+                .frame(minHeight: 44)
             } else {
-                HStack(spacing: Spacing.s2) {
+                dynamicTypeSize.claimActionLayout {
                     HomeClaimActionButton(
                         title: "Approve",
                         icon: .check,
@@ -521,12 +570,20 @@ struct HomeClaimComparePanel: View {
 /// Wrapping chip row — `metaChips` can overflow one line on small
 /// devices, matching the RN `flexWrap` behaviour.
 struct HomeClaimChipFlow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let chips: [String]
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Spacing.s2) {
+        if dynamicTypeSize.isAccessibilitySize {
+            // Chips this large would scroll out of sight sideways: one under another.
+            VStack(alignment: .leading, spacing: Spacing.s2) {
                 ForEach(chips, id: \.self) { HomeClaimMetaChip(text: $0) }
+            }
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: Spacing.s2) {
+                    ForEach(chips, id: \.self) { HomeClaimMetaChip(text: $0) }
+                }
             }
         }
     }

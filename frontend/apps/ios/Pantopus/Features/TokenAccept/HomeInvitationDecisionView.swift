@@ -20,9 +20,9 @@ struct HomeInvitationDecisionView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s4) {
-                Text(title).pantopusTextStyle(.h2).accessibilityIdentifier("homeInvitationHeading")
+                Text(title).scaledFont(24, weight: .semibold).accessibilityIdentifier("homeInvitationHeading")
                 Text("Signed in as \(model.accountLabel)")
-                    .pantopusTextStyle(.body)
+                    .scaledFont(16)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .accessibilityIdentifier("homeInvitationAccount")
                 if let error = model.error {
@@ -109,7 +109,7 @@ struct HomeInvitationDecisionView: View {
 
     private func offer(_ context: HomeInvitationDecisionContext) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text(context.homeLabel).pantopusTextStyle(.h3).accessibilityIdentifier("homeInvitationHome")
+            Text(context.homeLabel).scaledFont(20, weight: .semibold).accessibilityIdentifier("homeInvitationHome")
             Text(context.city).foregroundStyle(Theme.Color.appTextSecondary)
             Text("Invited by \(context.inviter)")
             Text("Offered role: \(TokenAcceptViewModel.humanRole(context.role))")
@@ -125,7 +125,7 @@ struct HomeInvitationDecisionView: View {
                 id: \.0
             ) { key, label in
                 if let raw = context.invitation[key]?.stringValue, let date = HomeInvitationValidation.date(raw) {
-                    Text("\(label) \(date.formatted(date: .abbreviated, time: .shortened)).").pantopusTextStyle(.caption)
+                    Text("\(label) \(date.formatted(date: .abbreviated, time: .shortened)).").scaledFont(12)
                 }
             }
             Button("Accept invitation") {
@@ -151,7 +151,7 @@ struct HomeInvitationDecisionView: View {
 
     private func recovery(_ draft: PendingHomeInvitationDecision) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text(draft.homeLabel).pantopusTextStyle(.h3).accessibilityIdentifier("homeInvitationOriginalHome")
+            Text(draft.homeLabel).scaledFont(20, weight: .semibold).accessibilityIdentifier("homeInvitationOriginalHome")
             Text("Your answer: \(draft.action == .accept ? "Accept" : "Decline")")
             if draft.token != model.token {
                 Text("This is an earlier invitation. Finish it before answering the one you just opened.")

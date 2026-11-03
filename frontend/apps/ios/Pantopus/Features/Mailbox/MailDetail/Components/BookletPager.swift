@@ -17,6 +17,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 /// Rendering mode for the pager. Exposed at the view init so the variant
 /// view can persist the mode in its caller (e.g. across re-renders).
@@ -27,6 +28,7 @@ public enum BookletPagerMode: Sendable, Hashable {
 
 @MainActor
 public struct BookletPager: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private let pages: [URL]
     private let pageCount: Int
     private let ocrTexts: [String]
@@ -101,18 +103,20 @@ public struct BookletPager: View {
                         .frame(width: 32, height: 32)
                         .background(Theme.Color.appSurfaceSunken)
                         .clipShape(Circle())
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(currentIndex == 0)
                 .accessibilityLabel("Previous page")
                 .accessibilityIdentifier("bookletPager_prev")
                 VStack(alignment: .center, spacing: 1) {
-                    HStack(spacing: Spacing.s1) {
+                    pageLabelLayout {
                         Text("Page \(currentIndex + 1)")
-                            .font(.system(size: 13, weight: .bold))
+                            .scaledFont(13, weight: .bold)
                             .foregroundStyle(Theme.Color.appText)
                         Text("of \(pageCount)")
-                            .font(.system(size: 13))
+                            .scaledFont(13)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     }
                     .accessibilityLabel("Page \(currentIndex + 1) of \(pageCount)")
@@ -126,6 +130,8 @@ public struct BookletPager: View {
                         .frame(width: 32, height: 32)
                         .background(Theme.Color.appSurfaceSunken)
                         .clipShape(Circle())
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(currentIndex >= pages.count - 1)
@@ -139,13 +145,15 @@ public struct BookletPager: View {
                 HStack(spacing: Spacing.s1) {
                     Icon(.fileType, size: 12, color: Theme.Color.primaryInk)
                     Text("View all pages")
-                        .font(.system(size: 11, weight: .semibold))
+                        .scaledFont(11, weight: .semibold)
                         .foregroundStyle(Theme.Color.primaryInk)
                 }
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s1)
                 .background(Theme.Color.primary50)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("bookletPager_toggleGrid")
@@ -157,6 +165,12 @@ public struct BookletPager: View {
                 .stroke(Theme.Color.appBorder, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
+    }
+
+    private var pageLabelLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: Spacing.s1))
+            : AnyLayout(HStackLayout(spacing: Spacing.s1))
     }
 
     private var scrubber: some View {
@@ -180,22 +194,28 @@ public struct BookletPager: View {
 
     // MARK: - Grid mode
 
+    private var gridHeaderLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.s2))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: Spacing.s2))
+    }
+
     private var gridMode: some View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
-            HStack(alignment: .center, spacing: Spacing.s2) {
+            gridHeaderLayout {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("ALL PAGES")
-                        .font(.system(size: 11, weight: .bold))
+                        .scaledFont(11, weight: .bold)
                         .tracking(0.5)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .accessibilityAddTraits(.isHeader)
                     Text("Tap a thumbnail to jump there")
-                        .font(.system(size: 11))
+                        .scaledFont(11)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
-                Spacer(minLength: Spacing.s0)
+                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: Spacing.s0) }
                 Text("\(pageCount) pages")
-                    .font(.system(size: 11, weight: .bold))
+                    .scaledFont(11, weight: .bold)
                     .foregroundStyle(Theme.Color.appTextStrong)
                     .padding(.horizontal, Spacing.s2)
                     .padding(.vertical, Spacing.s1)
@@ -235,13 +255,15 @@ public struct BookletPager: View {
                     HStack(spacing: Spacing.s1) {
                         Icon(.chevronLeft, size: 12, color: Theme.Color.primaryInk)
                         Text("Back to reader")
-                            .font(.system(size: 11, weight: .semibold))
+                            .scaledFont(11, weight: .semibold)
                             .foregroundStyle(Theme.Color.primaryInk)
                     }
                     .padding(.horizontal, Spacing.s3)
                     .padding(.vertical, Spacing.s1)
                     .background(Theme.Color.primary50)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("bookletPager_togglePage")
@@ -291,7 +313,7 @@ private struct BookletPageImage: View {
                 Icon(icon, size: 24, color: Theme.Color.appTextMuted)
                 if !label.isEmpty {
                     Text(label)
-                        .font(.system(size: 11))
+                        .scaledFont(11)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
             }
@@ -357,12 +379,11 @@ private struct ThumbnailCell: View {
     }
 }
 
-/// OCR transcript card (booklet.jsx OCRCard): scan chip + "Text from this
-/// page" header with the OCR confidence pill, the per-page transcript
-/// (first line = overline, second = title, rest = body), and inert
-/// Copy / Translate / Read aloud actions.
+/// The supplied per-page transcript. Only show actions we can perform;
+/// the stored payload does not supply an OCR confidence score.
 private struct BookletOCRCard: View {
     let text: String
+    @State private var copied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -370,11 +391,15 @@ private struct BookletOCRCard: View {
             transcript
             VStack(alignment: .leading, spacing: 10) {
                 Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
-                HStack(spacing: 14) {
-                    action(icon: .copy, label: "Copy text", color: Theme.Color.primary600)
-                    action(icon: .globe, label: "Translate", color: Theme.Color.appTextMuted)
-                    action(icon: .megaphone, label: "Read aloud", color: Theme.Color.appTextMuted)
+                Button {
+                    UIPasteboard.general.string = text
+                    copied = true
+                } label: {
+                    action(icon: .copy, label: copied ? "Copied" : "Copy text", color: Theme.Color.primary600)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
         }
         .padding(Spacing.s3)
@@ -387,6 +412,7 @@ private struct BookletOCRCard: View {
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("bookletPager_ocrCard")
+        .onChange(of: text) { _, _ in copied = false }
     }
 
     private var header: some View {
@@ -396,17 +422,10 @@ private struct BookletOCRCard: View {
                 .background(Theme.Color.appSurfaceSunken)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.sm))
             Text("Text from this page")
-                .font(.system(size: 12, weight: .bold))
+                .scaledFont(12, weight: .bold)
                 .foregroundStyle(Theme.Color.appText)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
-            Text("OCR · 99%")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(Theme.Color.success)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2)
-                .background(Theme.Color.successBg)
-                .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
         }
     }
 
@@ -418,17 +437,17 @@ private struct BookletOCRCard: View {
                 switch idx {
                 case 0:
                     Text(line)
-                        .font(.system(size: 10, weight: .bold))
+                        .scaledFont(10, weight: .bold)
                         .tracking(0.8)
                         .textCase(.uppercase)
                         .foregroundStyle(Theme.Color.appTextMuted)
                 case 1:
                     Text(line)
-                        .font(.system(size: 14, weight: .bold))
+                        .scaledFont(14, weight: .bold)
                         .foregroundStyle(Theme.Color.appText)
                 default:
                     Text(line)
-                        .font(.system(size: 12.5))
+                        .scaledFont(12.5)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .lineSpacing(3)
                 }
@@ -440,7 +459,7 @@ private struct BookletOCRCard: View {
         HStack(spacing: Spacing.s1) {
             Icon(icon, size: 12, color: color)
             Text(label)
-                .font(.system(size: 12, weight: .semibold))
+                .scaledFont(12, weight: .semibold)
                 .foregroundStyle(color)
         }
     }

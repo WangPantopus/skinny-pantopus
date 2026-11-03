@@ -84,7 +84,7 @@ public struct AddEmergencyInfoFormView: View {
                     showsMemberPicker = false
                 }
             )
-            .presentationDetents([.medium])
+            .presentationDetents([.medium, .large])
         }
     }
 
