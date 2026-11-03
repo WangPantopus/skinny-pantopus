@@ -281,49 +281,7 @@ public struct BusinessPageBlocksView: View {
 
             Divider().overlay(Theme.Color.appBorderSubtle)
 
-            HStack(spacing: Spacing.s2) {
-                Button { viewModel.moveUp(index) } label: {
-                    Icon(
-                        .arrowUp,
-                        size: 16,
-                        color: index == 0 ? Theme.Color.appBorderStrong : Theme.Color.appTextSecondary
-                    )
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(index == 0)
-                .accessibilityLabel("Move up")
-                .accessibilityIdentifier("businessPageBlocks.moveUp.\(index)")
-
-                Button { viewModel.moveDown(index) } label: {
-                    Icon(
-                        .arrowDown,
-                        size: 16,
-                        color: index == viewModel.blocks.count - 1
-                            ? Theme.Color.appBorderStrong
-                            : Theme.Color.appTextSecondary
-                    )
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(index == viewModel.blocks.count - 1)
-                .accessibilityLabel("Move down")
-                .accessibilityIdentifier("businessPageBlocks.moveDown.\(index)")
-
-                Spacer()
-
-                Button { viewModel.pendingDeleteIndex = index } label: {
-                    Icon(.trash2, size: 16, color: Theme.Color.error)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Delete block")
-                .accessibilityIdentifier("businessPageBlocks.delete.\(index)")
-            }
-            .padding(.horizontal, Spacing.s3)
+            blockActions(index: index)
         }
         .background(Theme.Color.appSurface)
         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
@@ -334,6 +292,52 @@ public struct BusinessPageBlocksView: View {
                     lineWidth: 1
                 )
         }
+    }
+
+    private func blockActions(index: Int) -> some View {
+        HStack(spacing: Spacing.s2) {
+            Button { viewModel.moveUp(index) } label: {
+                Icon(
+                    .arrowUp,
+                    size: 16,
+                    color: index == 0 ? Theme.Color.appBorderStrong : Theme.Color.appTextSecondary
+                )
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(index == 0)
+            .accessibilityLabel("Move up")
+            .accessibilityIdentifier("businessPageBlocks.moveUp.\(index)")
+
+            Button { viewModel.moveDown(index) } label: {
+                Icon(
+                    .arrowDown,
+                    size: 16,
+                    color: index == viewModel.blocks.count - 1
+                        ? Theme.Color.appBorderStrong
+                        : Theme.Color.appTextSecondary
+                )
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(index == viewModel.blocks.count - 1)
+            .accessibilityLabel("Move down")
+            .accessibilityIdentifier("businessPageBlocks.moveDown.\(index)")
+
+            Spacer()
+
+            Button { viewModel.pendingDeleteIndex = index } label: {
+                Icon(.trash2, size: 16, color: Theme.Color.error)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Delete block")
+            .accessibilityIdentifier("businessPageBlocks.delete.\(index)")
+        }
+        .padding(.horizontal, Spacing.s3)
     }
 
     private var bottomBar: some View {
