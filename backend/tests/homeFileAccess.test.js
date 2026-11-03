@@ -159,6 +159,11 @@ test('the legacy Home listing excludes byte-contract documents with separate vis
 
 
 describe('Existing standalone upload types', () => {
+  // Photos are real images: the upload refuses one it can't clean of its metadata.
+  let jpeg;
+  beforeAll(async () => {
+    jpeg = await require('sharp')({ create: { width: 2, height: 2, channels: 3, background: '#888888' } }).jpeg().toBuffer();
+  });
   beforeEach(() => {
     s3.generateS3Key.mockImplementation((folder, name, actor) => `${folder}/${actor}/${name}`);
     s3.generateOpaqueS3Key.mockImplementation((folder, name) => `${folder}/${name}`);
@@ -177,7 +182,8 @@ describe('Existing standalone upload types', () => {
   ])('stores existing caller type %s within the existing File schema', async (requested, stored, context, mime, name) => {
     let req = request(app).post('/api/files/upload');
     if (requested) req = req.field('file_type', requested);
-    const response = await req.attach('file', Buffer.from('synthetic standalone attachment'), { filename: name, contentType: mime });
+    const bytes = mime.startsWith('image/') ? jpeg : Buffer.from('synthetic standalone attachment');
+    const response = await req.attach('file', bytes, { filename: name, contentType: mime });
     expect(response.status).toBe(201);
     expect(db.getTable('File').at(-1)).toMatchObject({
       user_id: userId, file_type: stored, ...(context ? { file_context: context } : {}), visibility: 'private', processing_status: 'completed',
@@ -219,7 +225,7 @@ describe('Existing standalone upload types', () => {
     s3.createPrivateGigCompletionFile.mockResolvedValue(file);
     const response = await request(app).post('/api/files/upload')
       .field('file_type', 'gig_completion').field('gig_id', gigId)
-      .attach('file', Buffer.from('proof'), { filename: 'proof.jpg', contentType: 'image/jpeg' });
+      .attach('file', jpeg, { filename: 'proof.jpg', contentType: 'image/jpeg' });
     expect(response.status).toBe(201);
     expect(s3.createPrivateGigCompletionFile).toHaveBeenCalledWith(gigId, userId, expect.objectContaining({ originalname: 'proof.jpg' }));
     expect(s3.uploadToS3).not.toHaveBeenCalled();

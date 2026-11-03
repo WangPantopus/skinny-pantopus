@@ -522,9 +522,10 @@ async function createBulkNotifications(notifications, { sendPush = true } = {}) 
 // ============================================================
 
 /**
- * Notify a user they've been invited to a home.
+ * Notify a user they've been invited to a home. An invitation emailed before the person had an account passes
+ * an idempotencyKey (one notice per invitation) and no push (homeInvitationService.deliverEmailInvitations).
  */
-async function notifyHomeInvite({ inviteeUserId, inviterName, homeName, homeId, inviteToken }) {
+async function notifyHomeInvite({ inviteeUserId, inviterName, homeName, homeId, inviteToken, idempotencyKey, sendPush = true }) {
   return createNotification({
     userId: inviteeUserId,
     type: 'home_invite',
@@ -533,6 +534,8 @@ async function notifyHomeInvite({ inviteeUserId, inviterName, homeName, homeId, 
     icon: '🏠',
     link: `/invite/${inviteToken}`,
     metadata: { home_id: homeId, inviter_name: inviterName },
+    ...(idempotencyKey ? { idempotencyKey } : {}),
+    sendPush,
   });
 }
 

@@ -1,5 +1,6 @@
 package app.pantopus.android.data.store
 
+import app.pantopus.android.data.api.models.ai.AINeedsYouResponse
 import app.pantopus.android.data.api.models.businesses.MyBusinessesResponse
 import app.pantopus.android.data.api.models.chats.ChatMessagesResponse
 import app.pantopus.android.data.api.models.chats.ConversationTopicsResponse
@@ -427,6 +428,17 @@ object StoreKeys {
         kind = StoreKind.NOTIFICATIONS,
         topics = setOf(StoreTopics.NOTIFICATIONS),
     )
+
+    /**
+     * Today's Needs you card (AI assistant phase 3 contract §6.4): what waits on the viewer. Kept in memory only, as the
+     * notifications list is, since it names other people; marked by the changes that move it.
+     */
+    val needsYou =
+        StoreKey<AINeedsYouResponse>(
+            "api/ai/needs-you",
+            kind = StoreKind.NOTIFICATIONS,
+            topics = setOf(StoreTopics.NOTIFICATIONS, StoreTopics.TODAY, StoreTopics.CONNECTIONS, StoreTopics.HOMES),
+        )
 
     /** The viewer's own profile (contract §4 "You": fresh 10 minutes). */
     val ownProfile =

@@ -81,6 +81,14 @@ public final class ProfilePostCardsModel {
     /// Whether the card's "Post options" menu has anything in it.
     func hasOptions(_ card: PulsePostCardContent) -> Bool {
         shareURL(postId: card.id) != nil || card.actions.canReport || pinTitle(postId: card.id) != nil
+            || card.actions.canOpenPlan
+    }
+
+    /// The host's own plan post opens its plan on the Plans tab, where Change
+    /// and Cancel tell everyone (the `/plans/<id>` link path).
+    func openPlan(postId: String) {
+        overflowPostId = nil
+        DeepLinkRouter.shared.handle(path: "/plans/\(postId)")
     }
 
     // MARK: - Taps

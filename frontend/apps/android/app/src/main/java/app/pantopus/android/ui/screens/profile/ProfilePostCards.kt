@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.core.identity.ProfileChanges
+import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.api.models.feed.FeedPost
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
@@ -125,6 +126,12 @@ class ProfilePostCards internal constructor(
 
     fun dismissOptions() {
         _optionsPostId.value = null
+    }
+
+    /** The host's own plan post opens its plan on the Plans tab, where Change and Cancel tell everyone. */
+    fun openPlan(postId: String) {
+        _optionsPostId.value = null
+        DeepLinkRouter.handle("/plans/$postId")
     }
 
     fun beginReport(postId: String) {
@@ -317,7 +324,7 @@ data class ProfilePostCardActions(
     val onToggleRepost: (String) -> Unit = {},
 )
 
-/** The card's "Post options": Share… and Report post, worded as in Pulse. */
+/** The card's "Post options": Share… and Report post, worded as in Pulse; Open plan on your own plan's post. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ProfilePostOptionsSheet(
@@ -326,6 +333,7 @@ internal fun ProfilePostOptionsSheet(
     onReport: () -> Unit,
     onDismiss: () -> Unit,
     onToggleProfilePin: () -> Unit = {},
+    onOpenPlan: () -> Unit = {},
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -338,6 +346,9 @@ internal fun ProfilePostOptionsSheet(
             verticalArrangement = Arrangement.spacedBy(Spacing.s1),
         ) {
             Text(text = "Post options", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = PantopusColors.appText)
+            if (card.actions.canOpenPlan) {
+                OptionRow(label = "Open plan", testTag = "profilePostOptionsOpenPlan", onClick = onOpenPlan)
+            }
             if (card.actions.canShareExternally) {
                 OptionRow(label = "Share…", testTag = "profilePostOptionsShare", onClick = onShare)
             }
@@ -417,6 +428,10 @@ internal fun profileCardColors(
 internal fun profilePreviewCard(post: FeedPost): PulsePostCardContent =
     profileCardColors(post, pulseCardContent(post = post, viewerId = null, surface = null, live = PulseCardLiveValues.of(post)))
 
-/** Whether a profile card's "Post options" menu has anything in it: share, report, or your own post's pin. */
+/**
+ * Whether a profile card's "Post options" menu has anything in it: share, report, your own post's pin, or Open plan
+ * on your own plan's post.
+ */
 internal fun profilePostHasOptions(card: PulsePostCardContent): Boolean =
-    card.actions.canShareExternally || card.actions.canReport || card.actions.profilePinned != null
+    card.actions.canShareExternally || card.actions.canReport || card.actions.profilePinned != null ||
+        card.actions.canOpenPlan

@@ -62,6 +62,9 @@ public struct InboxConversationDestination: Hashable, Sendable {
     public let asBusinessUserId: String?
     /// The assistant thread opened at a brief or nudge (`pantopus://assistant?nudge=`).
     public let assistantNudge: AIAssistantNudge?
+    /// What the assistant thread does once open: a starter sent, the composer started, or
+    /// Siri's words sent (AI phase 3 contract §8.3, §8.4).
+    public let assistantLaunch: AIAssistantLaunch?
 
     public init(
         mode: Mode,
@@ -75,7 +78,8 @@ public struct InboxConversationDestination: Hashable, Sendable {
         gigId: String? = nil,
         arrivalRoomId: String? = nil,
         asBusinessUserId: String? = nil,
-        assistantNudge: AIAssistantNudge? = nil
+        assistantNudge: AIAssistantNudge? = nil,
+        assistantLaunch: AIAssistantLaunch? = nil
     ) {
         self.mode = mode
         self.kind = kind
@@ -89,5 +93,6 @@ public struct InboxConversationDestination: Hashable, Sendable {
         self.arrivalRoomId = arrivalRoomId
         self.asBusinessUserId = asBusinessUserId
         self.assistantNudge = assistantNudge
+        self.assistantLaunch = assistantLaunch
     }
 }

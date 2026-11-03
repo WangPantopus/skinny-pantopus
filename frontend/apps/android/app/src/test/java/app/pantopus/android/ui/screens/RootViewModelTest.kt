@@ -8,6 +8,7 @@ import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.SessionEndReason
 import app.pantopus.android.data.plans.PlansRepository
 import app.pantopus.android.data.realtime.SocketManager
+import app.pantopus.android.data.token_accept.TokenAcceptRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -35,6 +36,7 @@ class RootViewModelTest {
     private val appLock: AppLockManager = mockk(relaxed = true)
     private val stepUp: StepUpCoordinator = mockk(relaxed = true)
     private val plans: PlansRepository = mockk(relaxed = true)
+    private val invitations: TokenAcceptRepository = mockk(relaxed = true)
     private val revoked = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 1)
     private val sockets: SocketManager = mockk(relaxed = true) { coEvery { sessionRevoked } returns revoked }
     private val user = UserDto(id = "u_1", email = "a@b.com", displayName = "A", avatarUrl = null)
@@ -54,7 +56,7 @@ class RootViewModelTest {
     fun `onAppStart does nothing while signed out`() =
         runTest {
             val repo = repo(AuthRepository.State.SignedOut)
-            RootViewModel(repo, appLock, stepUp, sockets, plans).onAppStart()
+            RootViewModel(repo, appLock, stepUp, sockets, plans, invitations).onAppStart()
 
             coVerify(exactly = 0) { repo.refreshIfExpiringSoon(any()) }
             coVerify(exactly = 0) { repo.signOut(any()) }
@@ -67,7 +69,7 @@ class RootViewModelTest {
             val reason = SessionEndReason.fromCode(AuthErrorCodes.SESSION_REVOKED)
             coEvery { repo.refreshIfExpiringSoon(any()) } returns AuthRepository.RefreshOutcome.AuthRejected(reason)
 
-            RootViewModel(repo, appLock, stepUp, sockets, plans).onAppStart()
+            RootViewModel(repo, appLock, stepUp, sockets, plans, invitations).onAppStart()
 
             coVerify(exactly = 1) { repo.signOut(reason) }
         }
@@ -77,18 +79,18 @@ class RootViewModelTest {
         runTest {
             val rotated = repo(AuthRepository.State.SignedIn(user))
             coEvery { rotated.refreshIfExpiringSoon(any()) } returns AuthRepository.RefreshOutcome.Rotated("new")
-            RootViewModel(rotated, appLock, stepUp, sockets, plans).onAppStart()
+            RootViewModel(rotated, appLock, stepUp, sockets, plans, invitations).onAppStart()
             coVerify(exactly = 0) { rotated.signOut(any()) }
 
             val transient = repo(AuthRepository.State.SignedIn(user))
             coEvery { transient.refreshIfExpiringSoon(any()) } returns AuthRepository.RefreshOutcome.Transient
-            RootViewModel(transient, appLock, stepUp, sockets, plans).onAppStart()
+            RootViewModel(transient, appLock, stepUp, sockets, plans, invitations).onAppStart()
             coVerify(exactly = 0) { transient.signOut(any()) }
 
             // No refresh was needed (null) — nothing happens either.
             val fresh = repo(AuthRepository.State.SignedIn(user))
             coEvery { fresh.refreshIfExpiringSoon(any()) } returns null
-            RootViewModel(fresh, appLock, stepUp, sockets, plans).onAppStart()
+            RootViewModel(fresh, appLock, stepUp, sockets, plans, invitations).onAppStart()
             coVerify(exactly = 0) { fresh.signOut(any()) }
         }
 
@@ -103,7 +105,7 @@ class RootViewModelTest {
         runTest {
             val repo = repo(AuthRepository.State.SignedIn(user))
 
-            RootViewModel(repo, appLock, stepUp, sockets, plans)
+            RootViewModel(repo, appLock, stepUp, sockets, plans, invitations)
             revoked.emit(Unit)
 
             coVerify(exactly = 1) { repo.confirmSessionRevoked() }

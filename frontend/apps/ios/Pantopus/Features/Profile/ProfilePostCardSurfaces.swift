@@ -3,8 +3,9 @@
 //  Pantopus
 //
 //  The modals behind a profile's Pulse cards (`ProfilePostCardsModel`): the
-//  card's "Post options" menu (Share…, Pin to profile on your own posts,
-//  Report post), Pulse's report-reason picker and the system share sheet.
+//  card's "Post options" menu (Open plan on your own plan's post, Share…,
+//  Pin to profile on your own posts, Report post), Pulse's report-reason
+//  picker and the system share sheet.
 //  Copy and ids follow the Pulse feed's (`FeedPostActionSurfaces`).
 //
 
@@ -57,6 +58,10 @@ struct ProfilePostCardSurfaces: ViewModifier {
 
     @ViewBuilder private var optionsMenu: some View {
         if let card = model.overflowCard {
+            if card.actions.canOpenPlan {
+                Button("Open plan") { model.openPlan(postId: card.id) }
+                    .accessibilityIdentifier("profilePostOptionsOpenPlan")
+            }
             if model.shareURL(postId: card.id) != nil {
                 Button("Share…") {
                     model.overflowPostId = nil

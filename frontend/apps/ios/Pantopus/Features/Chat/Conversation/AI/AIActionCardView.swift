@@ -98,6 +98,7 @@ extension ChatAIActionCard {
 
     /// Past `expires_at`, the card's actions are off.
     var isExpired: Bool {
+        if expiredOnServer { return true }
         guard let raw = envelope.expiresAt else { return false }
         let fractional = ISO8601DateFormatter()
         fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -302,6 +303,12 @@ struct AIActionCardView: View {
         // An appliance, the year's plan and any later home card.
         case let other where other.hasPrefix("home_"): ("Home", .home)
         case "notification_settings": ("Notifications", .bell)
+        // Phase 3: something the person asked Pantopus to remember.
+        case "memory_save": ("Memory", .bookmark)
+        // Phase 3: "Check back Thursday", and cancelling one.
+        case "follow_up", "follow_up_cancel": ("Check back", .calendarClock)
+        // Phase 3: something Pantopus does on its own, and switching it off or on.
+        case "rule_save", "rule_change": ("Rule", .repeat2)
         // A nudge with nothing to do but "Fewer like this" (phase 2 §3.6).
         case "suggestion": ("Suggestion", .sparkles)
         default: ("Action", .sparkles)

@@ -20,6 +20,17 @@
     <string name="widget_tasks_near_me_title">Tasks near me</string>
     <string name="widget_tasks_near_me_description">See open tasks near you at a glance.</string>
     <string name="widget_tasks_near_me_empty">Open Pantopus to see tasks near you</string>
+    <!-- Launcher shortcuts (res/xml/shortcuts.xml, AI assistant phase 3 contract §8.4). -->
+    <string name="shortcut_next_pickup_short">Next pickup</string>
+    <string name="shortcut_next_pickup_long">Next pickup</string>
+    <string name="shortcut_whats_on_today_short">Today</string>
+    <string name="shortcut_whats_on_today_long">What\'s on today</string>
+    <string name="shortcut_catch_up_nearby_short">Catch me up</string>
+    <string name="shortcut_catch_up_nearby_long">Catch me up nearby</string>
+    <string name="shortcut_start_plan_short">Start a plan</string>
+    <string name="shortcut_start_plan_long">Start a plan</string>
+    <string name="shortcut_remind_household_short">Remind</string>
+    <string name="shortcut_remind_household_long">Remind my household</string>
     <plurals name="widget_tasks_nearby">
         <item quantity="one">%d task nearby</item>
         <item quantity="other">%d tasks nearby</item>

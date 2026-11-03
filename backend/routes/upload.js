@@ -19,6 +19,7 @@ const s3 = require('../services/s3Service');
 // Letters' enclosures are kept privately (Mail tab, SRV-4).
 const mailEnclosures = require('../services/mailEnclosures');
 const imageResizeService = require('../services/marketplace/imageResizeService');
+const { PhotoNotCleanedError, cleanUploadedPhoto } = require('../services/photoMetadata');
 const { photoReference, pdfFacts, MAX_PDF_BYTES, MAX_PDF_PAGES } = require('../services/ai/photos');
 const { calculateAndStoreCompleteness } = require('../utils/businessCompleteness');
 const { requireIdentityFirewallEnabled, requirePersonaEnabled } = require('../utils/featureFlags');
@@ -136,32 +137,8 @@ async function validateFileMime(file) {
 }
 
 /**
- * Strip EXIF/metadata from image buffers using sharp.
- * Applies EXIF orientation via .rotate() then strips all metadata.
- * Mutates file.buffer in place. Never throws.
- */
-async function stripImageMetadata(file) {
-  try {
-    if (!sharp) return;
-    if (!file || !file.buffer || !file.mimetype || !file.mimetype.startsWith('image/')) return;
-    // Skip GIF — sharp re-encodes animated GIFs, losing animation
-    if (file.mimetype === 'image/gif') return;
-
-    const stripped = await sharp(file.buffer)
-      .rotate()    // Apply EXIF orientation then discard EXIF
-      .toBuffer();
-    file.buffer = stripped;
-    file.size = stripped.length;
-  } catch (err) {
-    logger.warn('Failed to strip image metadata — using original', {
-      originalname: file?.originalname,
-      error: err.message,
-    });
-  }
-}
-
-/**
- * Middleware: validate MIME types and strip EXIF for all uploaded files.
+ * Middleware: validate MIME types and remove photos' metadata (location, camera, time taken) for all uploaded
+ * files. A photo that can't be cleaned is refused, never stored as it was sent; an iPhone HEIC becomes a JPEG.
  * Must run AFTER multer and AFTER enforceFileSizeLimits.
  */
 async function validateAndStripUploads(req, res, next) {
@@ -192,8 +169,13 @@ async function validateAndStripUploads(req, res, next) {
         });
       }
 
-      // 2. EXIF stripping for images (never throw — catch inside stripImageMetadata)
-      await stripImageMetadata(file);
+      // 2. Photos lose their metadata (services/photoMetadata.js)
+      try {
+        await cleanUploadedPhoto(file);
+      } catch (err) {
+        if (!(err instanceof PhotoNotCleanedError)) throw err;
+        return res.status(err.status).json({ error: err.message, code: err.code });
+      }
     }
     next();
   } catch (err) {
@@ -670,7 +652,7 @@ router.delete('/gig-media/:gigId/:mediaId', verifyToken, async (req, res) => {
  * POST /api/upload/chat-media/:roomId
  * Upload chat attachments (documents/images) and return File records.
  */
-const streamedChatUpload = require('../services/chatMediaUpload')({ validateFileMime, sharp });
+const streamedChatUpload = require('../services/chatMediaUpload')({ validateFileMime });
 const chatUploadLimiter = rateLimit({ windowMs: 60 * 1000, max: 60,
   keyGenerator: req => req.user.id, standardHeaders: true, legacyHeaders: false,
   handler: (_req, res) => res.status(429).set('Retry-After', '60').json({
@@ -1895,7 +1877,8 @@ router.post(
   ]),
   // Note: enforceFileSizeLimits and validateAndStripUploads expect req.files
   // to be an array, but upload.fields() returns an object. This endpoint does
-  // its own type + size validation below, so we skip those middlewares.
+  // its own type + size validation below and cleans the still itself, so we
+  // skip those middlewares.
   async (req, res) => {
     try {
       const userId = req.user.id;
@@ -1929,6 +1912,14 @@ router.post(
         return res.status(413).json({
           error: `Live Photo video exceeds 15 MB limit (${Math.round(videoFile.size / 1024 / 1024)} MB)`,
         });
+      }
+
+      // The still is stored without its metadata (a HEIC as a JPEG), or not at all.
+      try {
+        await cleanUploadedPhoto(imageFile);
+      } catch (err) {
+        if (!(err instanceof PhotoNotCleanedError)) throw err;
+        return res.status(err.status).json({ error: err.message, code: err.code });
       }
 
       // ── Generate linked S3 keys ──
@@ -1985,6 +1976,6 @@ router.post(
 
 module.exports = router;
 // P2.12 — exported for direct unit testing of the EXIF strip pipeline.
-// The middleware (validateAndStripUploads) wraps stripImageMetadata
+// The middleware (validateAndStripUploads) runs the same cleaner
 // for every multipart upload so the same code path runs in production.
-module.exports.stripImageMetadata = stripImageMetadata;
+module.exports.stripImageMetadata = cleanUploadedPhoto;

@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import React, { useState, type CSSProperties, type ReactNode } from 'react';
 import {
   MessageCircle, Star, CalendarDays, Search, Megaphone,
@@ -155,6 +156,9 @@ function PostCard({
   const ctaSaves = config.ctaIcon === 'bookmark' && Boolean(onSave);
   const authorUserId = post.author_user_id || post.user_id;
   const isOwn = authorUserId === currentUserId;
+  // A plan's own post (made by Plans) is changed or cancelled from the plan, which tells everyone; the server
+  // refuses editing, deleting or archiving it as a post.
+  const isPlanPost = post.post_metadata?.plan === true;
   const publicAuthor = post.author || null;
   const isOwnPersona = publicAuthor?.type === 'persona'
     && (publicAuthor as AudienceProfile).viewer?.isOwner === true;
@@ -318,7 +322,16 @@ function PostCard({
           </button>
           {menuOpen && (
             <div className="absolute right-0 top-full mt-1 w-40 bg-surface rounded-xl shadow-xl border border-app py-1 z-20">
-              {isOwn && onEdit && (
+              {isOwn && isPlanPost && (
+                <Link
+                  href={`/plans/${post.id}`}
+                  onClick={() => setMenuOpen(false)}
+                  className="block w-full text-left px-3 py-2 text-xs text-app-muted hover-bg-app"
+                >
+                  Open plan
+                </Link>
+              )}
+              {isOwn && !isPlanPost && onEdit && (
                 <button
                   onClick={() => { onEdit(post); setMenuOpen(false); }}
                   className="w-full text-left px-3 py-2 text-xs text-app-muted hover-bg-app"
@@ -334,7 +347,7 @@ function PostCard({
                   {post.profile_pinned ? 'Unpin from profile' : 'Pin to profile'}
                 </button>
               )}
-              {isOwn && onDelete && (
+              {isOwn && !isPlanPost && onDelete && (
                 <button
                   onClick={async () => { const yes = await confirmStore.open({ title: 'Delete this post?', confirmLabel: 'Delete', variant: 'destructive' }); if (yes) { onDelete(post.id); setMenuOpen(false); } }}
                   className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-50"

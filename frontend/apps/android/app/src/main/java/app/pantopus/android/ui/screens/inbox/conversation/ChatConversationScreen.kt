@@ -114,6 +114,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -392,6 +393,9 @@ fun ChatConversationScreen(
     val isFanThread = conversationMode == ChatConversationMode.FanThread
     val isFanReplyLocked = isFanThread && fanEntitlement != null && !fanEntitlement.canReply
 
+    // A launcher shortcut's opening happens once, not again after a rotation or a restored process.
+    var aiOpeningDone by rememberSaveable { mutableStateOf(false) }
+    var focusComposer by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         viewModel.configure(
             args.mode,
@@ -405,6 +409,10 @@ fun ChatConversationScreen(
             args.aiConversationId,
         )
         viewModel.load()
+        if (!aiOpeningDone) {
+            aiOpeningDone = true
+            focusComposer = args.aiOpening?.let(viewModel::openWith) == true
+        }
     }
     LifecycleStartEffect(viewModel) {
         viewModel.setForeground(true)
@@ -451,6 +459,14 @@ fun ChatConversationScreen(
     BackHandler(enabled = showEmojiPanel) { dismissInput() }
     LaunchedEffect(isSelectionMode, composerClosedNote, planChat.closed) {
         if (isSelectionMode || composerClosedNote != null || planChat.closed) dismissInput()
+    }
+    // A shortcut's words wait in the composer with the keyboard up (AI assistant phase 3 contract §8.4).
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(focusComposer, canShowComposer) {
+        if (!focusComposer || !canShowComposer) return@LaunchedEffect
+        withFrameNanos { }
+        if (runCatching { composerFocusRequester.requestFocus() }.isSuccess) keyboard?.show()
+        focusComposer = false
     }
     val emojiDismissScroll =
         remember {
@@ -961,7 +977,13 @@ fun ChatConversationScreen(
                 onDismissRequest = { showAiDeleteConfirm = false },
                 containerColor = PantopusColors.appSurface,
                 title = { Text(text = "Delete this conversation?") },
-                text = { Text(text = "Pantopus AI won't remember it. Any earlier chats with Pantopus AI are deleted too.") },
+                text = {
+                    Text(
+                        text =
+                            "Pantopus AI won't remember it. Any earlier chats with Pantopus AI are deleted too. " +
+                                "What Pantopus remembers stays until you delete it in Settings.",
+                    )
+                },
                 confirmButton = {
                     TextButton(
                         onClick = {

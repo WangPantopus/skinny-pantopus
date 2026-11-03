@@ -63,7 +63,7 @@ const typeRank = (type) => (TYPE_ORDER.includes(type) ? TYPE_ORDER.indexOf(type)
 const nearbyReadToolDefinitions = [
   {
     name: 'catch_up_nearby',
-    description: "What is new on the person's Nearby feed within about 10 miles: since they last looked, or over the last `days`. Counts by type and the top posts, heads-ups and lost and found first, each with its post_id for a link button. Without days it covers the time since their last visit (at most 14 days), or the last 7 days when they haven't looked yet or are looking at the feed right now. Use it for \"what did I miss\" and \"what's new around here\".",
+    description: "What is new on the person's Nearby feed within about 10 miles: since they last looked, or over the last `days`. Counts by type and the top posts, heads-ups and lost and found first, each with its post_id for a link button. Without days it covers the time since their last visit (at most 14 days), or the last 7 days when they haven't looked yet or are looking at the feed right now. The person's own posts are left out: every post here is a neighbor's (`yours: false`), even one by someone with their first name. Use it for \"what did I miss\" and \"what's new around here\".",
     input_schema: {
       type: 'object',
       properties: {
@@ -174,6 +174,8 @@ async function catchUpNearby(args, ctx) {
       .map(([type, count]) => ({ type, label: TYPE_LABELS[type] || 'other posts', count })),
     posts: ordered.slice(0, CATCH_UP_ITEMS).map((post) => ({
       ...postForModel(post, ctx.timeZone),
+      // Their own posts were left out above; say so, since a neighbor can share their first name.
+      yours: false,
       body_text: clip(post.content, 160),
       ...(post.safety_alert_kind ? { heads_up_kind: post.safety_alert_kind } : {}),
       ...(post.lost_found_type ? { lost_or_found: post.lost_found_type } : {}),

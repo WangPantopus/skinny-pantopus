@@ -25,10 +25,10 @@ private val UUID = Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
 
 /**
  * Instant Screens contract §8, the change signal. `sync:changed {topics}` from the server marks the named entries out
- * of date; after the socket reconnects, every household, Messages and notifications entry is marked (signals may have
- * been missed meanwhile); coming back to the app after 15 minutes marks everything. Screens on show read again through
- * [ScreenStore.changes], also when the phone is back online. Nothing depends on a signal arriving: the freshness
- * windows still apply.
+ * of date; after the socket reconnects, every household, Messages and notifications entry is marked, and so is every
+ * entry a `homes` signal marks (signals may have been missed meanwhile); coming back to the app after 15 minutes marks
+ * everything. Screens on show read again through [ScreenStore.changes], also when the phone is back online. Nothing
+ * depends on a signal arriving: the freshness windows still apply.
  */
 @Singleton
 class StoreSync
@@ -72,7 +72,12 @@ class StoreSync
                 var connectedBefore = false
                 socket.connectionState.collect { state ->
                     if (state != SocketManager.ConnectionState.Connected) return@collect
-                    if (connectedBefore) store.markStale(CATCH_UP_KINDS)
+                    if (connectedBefore) {
+                        store.markStale(CATCH_UP_KINDS)
+                        // A missed `homes` signal also covers entries of other kinds: the addresses saved on another
+                        // device, which pick the Place tab's root, their previews, and Nearby's meter and map.
+                        store.markStale(StoreTopics.HOMES)
+                    }
                     connectedBefore = true
                 }
             }

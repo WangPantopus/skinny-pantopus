@@ -145,11 +145,20 @@ final class DeepLinkRouter {
         /// `pantopus://settings/notifications` — Settings → Notifications
         /// (quiet hours, briefings, alerts), from a Pantopus AI link button.
         case notificationSettings
+        /// `pantopus://settings/memory` — Settings → What Pantopus remembers
+        /// (AI assistant phase 3 contract §5.7): a `memory_save` card's done
+        /// link, the assistant's link button and the yearly review notice.
+        case assistantMemory
+        /// `pantopus://settings/rules` — Settings → What Pantopus does for you
+        /// (phase 3 contract §18.5): a rule card's done link and the rule notices.
+        case assistantRules
         /// `pantopus://assistant` — the Pantopus AI thread (AI assistant
         /// phase 2 contract §8.2). `?nudge=<notificationId>` opens it at the
         /// brief or nudge that notification carried; `&conversation=<id>`,
         /// added from the notification's metadata, names its conversation.
-        case assistant(nudgeId: String?, conversationId: String?)
+        /// `starter`, `compose` and `surface` (phase 3 contract §8.4) take
+        /// fixed keys only, which the app maps to its own words.
+        case assistant(nudgeId: String?, conversationId: String?, launch: AIAssistantLaunch? = nil)
 
         // MARK: - B1.6 batch-2 routing seam
 
@@ -748,12 +757,19 @@ final class DeepLinkRouter {
             }
             return .assistant(
                 nudgeId: uuid(queryValue("nudge", in: comps)),
-                conversationId: uuid(queryValue("conversation", in: comps))
+                conversationId: uuid(queryValue("conversation", in: comps)),
+                launch: AIAssistantLaunch.fromLink(
+                    starter: queryValue("starter", in: comps),
+                    compose: queryValue("compose", in: comps),
+                    surface: queryValue("surface", in: comps)
+                )
             )
         case "settings":
             // `pantopus://settings/payments` — A14.6,
-            // `pantopus://settings/security` — Devices & sessions, and
-            // `pantopus://settings/notifications` — Notifications. Other
+            // `pantopus://settings/security` — Devices & sessions,
+            // `pantopus://settings/notifications` — Notifications,
+            // `pantopus://settings/memory` — What Pantopus remembers, and
+            // `pantopus://settings/rules` — What Pantopus does for you. Other
             // settings sub-routes aren't deep-linkable yet; the bare host
             // `pantopus://settings` falls through to `.unknown`.
             if segments.dropFirst().first == "payments" {
@@ -764,6 +780,12 @@ final class DeepLinkRouter {
             }
             if segments.dropFirst().first == "notifications", segments.count == 2 {
                 return .notificationSettings
+            }
+            if segments.dropFirst().first == "memory", segments.count == 2 {
+                return .assistantMemory
+            }
+            if segments.dropFirst().first == "rules", segments.count == 2 {
+                return .assistantRules
             }
             return .unknown(url)
         default:

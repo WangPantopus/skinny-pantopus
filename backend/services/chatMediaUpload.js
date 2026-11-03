@@ -7,6 +7,7 @@ const { Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const multer = require('multer');
 const s3 = require('./s3Service');
+const { cleanUploadedPhoto } = require('./photoMetadata');
 const logger = require('../utils/logger');
 
 const MAX_BATCH_BYTES = 250 * 1024 * 1024;
@@ -42,7 +43,7 @@ async function expireAbandonedDirectories() {
   }
 }
 
-module.exports = function chatMediaUpload({ validateFileMime, sharp }) {
+module.exports = function chatMediaUpload({ validateFileMime }) {
   expireAbandonedDirectories().catch(() => logger.warn('Chat temporary upload cleanup deferred'));
 
   const storage = {
@@ -137,19 +138,16 @@ module.exports = function chatMediaUpload({ validateFileMime, sharp }) {
         req.chatUpload.controller.signal.throwIfAborted();
         const result = await validateFileMime(file);
         if (!result.valid) throw uploadError('This attachment does not match its declared file type.');
-        // Work from bounded disk streams. Invalid images do not silently retain
-        // metadata or fall back to an unprocessed original.
-        if (file.mimetype.startsWith('image/') && file.mimetype !== 'image/gif') {
-          if (!sharp) throw uploadError('Image processing is unavailable. Please retry.', 503);
+        // Photos (at most the image size limit) are stored without their metadata, or refused: never with
+        // retained metadata or as an unprocessed original. An iPhone HEIC becomes a JPEG (services/photoMetadata.js).
+        if (file.mimetype.startsWith('image/')) {
           await processImage(async () => {
-            const stripped = `${file.path}.stripped`;
-            const transform = pipeline(fs.createReadStream(file.path), sharp({ limitInputPixels: 64 * 1024 * 1024 }).rotate(),
-              fs.createWriteStream(stripped, { mode: 0o600 }), { signal: req.chatUpload.controller.signal });
-            req.chatUpload.work.add(transform);
-            try { await transform; } finally { req.chatUpload.work.delete(transform); }
-            await fsp.rename(stripped, file.path);
+            const photo = { buffer: await fsp.readFile(file.path), mimetype: file.mimetype, originalname: file.originalname };
+            await cleanUploadedPhoto(photo, { limitInputPixels: 64 * 1024 * 1024 });
+            req.chatUpload.controller.signal.throwIfAborted();
+            await fsp.writeFile(file.path, photo.buffer);
+            Object.assign(file, { mimetype: photo.mimetype, originalname: photo.originalname, size: photo.buffer.length });
           }, req.chatUpload.controller.signal);
-          file.size = (await fsp.stat(file.path)).size;
           if (file.size > s3.MAX_FILE_SIZES.image) throw uploadError('This image exceeds the file size limit.', 413, 'CHAT_UPLOAD_TOO_LARGE');
         }
         const hash = crypto.createHash('sha256');

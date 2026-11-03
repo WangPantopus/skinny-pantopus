@@ -234,6 +234,18 @@ object DeepLinkRouter {
         data object NotificationSettings : Destination
 
         /**
+         * `pantopus://settings/memory` — Settings → What Pantopus remembers: a Remember card's Open, the assistant's
+         * link and the yearly review notification (AI assistant phase 3 contract §5.7, §12.3).
+         */
+        data object MemorySettings : Destination
+
+        /**
+         * `pantopus://settings/rules` — Settings → What Pantopus does for you: a rule card's Open, the assistant's link
+         * and a rule's pause or end notification (AI assistant phase 3 contract §18.5, §12.3).
+         */
+        data object RulesSettings : Destination
+
+        /**
          * A14.8 — `pantopus://mailbox/vacation` opens the Vacation hold
          * screen (scheduling or active variant depending on server state
          * once the persistence layer lands).
@@ -412,10 +424,17 @@ object DeepLinkRouter {
          * `pantopus://assistant` opens the assistant thread; `?nudge=<notificationId>` opens it at that brief's or
          * nudge's message (AI assistant phase 2 contract §8.2), and `&conversation=<id>` names the conversation it was
          * added to. Each is null without one, or when it isn't a UUID.
+         *
+         * The launcher shortcuts add fixed keys only, never anyone's words (phase 3 contract §8.4): `starter`
+         * (`catch_up_nearby`: its question is sent), `compose` (`start_plan`, `remind_household`: its words wait in the
+         * composer) and `surface` (`plans`, `today`: the thread is about that screen). An unknown key is left out.
          */
         data class Assistant(
             val nudgeId: String? = null,
             val conversationId: String? = null,
+            val starter: String? = null,
+            val compose: String? = null,
+            val surface: String? = null,
         ) : Destination
 
         data class Unknown(val uri: String) : Destination
@@ -821,6 +840,9 @@ object DeepLinkRouter {
                     Destination.Assistant(
                         nudgeId = Paths.queryParam(queryPart, "nudge")?.takeIf(MAIL_UUID::matches),
                         conversationId = Paths.queryParam(queryPart, "conversation")?.takeIf(MAIL_UUID::matches),
+                        starter = Paths.queryParam(queryPart, "starter")?.takeIf { it in ASSISTANT_STARTERS },
+                        compose = Paths.queryParam(queryPart, "compose")?.takeIf { it in ASSISTANT_COMPOSE },
+                        surface = Paths.queryParam(queryPart, "surface")?.takeIf { it in ASSISTANT_SURFACES },
                     )
                 } else {
                     Destination.Unknown(raw)
@@ -1162,14 +1184,18 @@ object DeepLinkRouter {
                 }
             "settings" ->
                 // `pantopus://settings/payments` — A14.6,
-                // `pantopus://settings/security` — Devices & sessions, and
-                // `pantopus://settings/notifications`. Other settings
+                // `pantopus://settings/security` — Devices & sessions,
+                // `pantopus://settings/notifications`,
+                // `pantopus://settings/memory` and
+                // `pantopus://settings/rules`. Other settings
                 // sub-routes aren't deep-linkable yet; the bare host
                 // `pantopus://settings` falls through to `.Unknown`.
                 when (segments.getOrNull(1)) {
                     "payments" -> Destination.PaymentsSettings
                     "security" -> Destination.SecurityDevices
                     "notifications" -> Destination.NotificationSettings
+                    "memory" -> Destination.MemorySettings
+                    "rules" -> Destination.RulesSettings
                     else -> Destination.Unknown(raw)
                 }
             else -> Destination.Unknown(raw)
@@ -1190,6 +1216,15 @@ object DeepLinkRouter {
         val owner = HomeTaskNotificationRoute.canonicalId(ownerId)?.takeIf { ownerKind == "home" || ownerKind == "business" }
         return owner?.let { Destination.BookingDetail(bookingId, ownerKind, it) }
     }
+
+    /** `pantopus://assistant?starter=`: the questions a link may send, by fixed key (AI assistant phase 3 §8.4). */
+    val ASSISTANT_STARTERS = setOf("catch_up_nearby")
+
+    /** `pantopus://assistant?compose=`: the words a link may put in the composer, by fixed key. */
+    val ASSISTANT_COMPOSE = setOf("start_plan", "remind_household")
+
+    /** `pantopus://assistant?surface=`: the screens a link may say the thread is about. */
+    val ASSISTANT_SURFACES = setOf("plans", "today")
 
     /** Briefs and nudges: the notification types the assistant sends first (AI assistant phase 2 contract §3.2). */
     private val ASSISTANT_NOTIFICATION_TYPES = setOf("assistant_brief", "assistant_nudge")

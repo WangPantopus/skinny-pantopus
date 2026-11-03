@@ -2839,6 +2839,13 @@ router.get('/:id', optionalAuth, async (req, res) => {
   }
 });
 
+// A plan lives on its post (Plan.post_id cascades from Post), and only planActions.createPlan marks one, so the
+// generic routes leave it alone: a delete would take the plan and every ask and invitation with it, unannounced;
+// an edit would skip the plan's own change (the zone-correct times, "Still coming?", the notices); an archive
+// would drop it from the Plans map. The plan's Change and Cancel (/api/plans/:id) tell everyone.
+const isPlanPost = (post) => post?.post_metadata?.plan === true;
+const PLAN_POST_REFUSAL = { error: "This is your plan's post. Open the plan to change or cancel it.", code: 'PLAN_POST' };
+
 router.patch('/:id', verifyToken, validate(updatePostSchema), async (req, res) => {
   try {
     const { id } = req.params;
@@ -2851,6 +2858,7 @@ router.patch('/:id', verifyToken, validate(updatePostSchema), async (req, res) =
       .eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only edit your own posts' });
+    if (isPlanPost(existing)) return res.status(409).json(PLAN_POST_REFUSAL);
     if (req.body.eventDate !== undefined || req.body.eventEndDate !== undefined) {
       const dateError = eventRangeError(
         req.body.eventDate !== undefined ? req.body.eventDate : existing.event_date,
@@ -2930,11 +2938,12 @@ router.delete('/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
     const { data: existing, error: lookupError } = await supabaseAdmin.from('Post')
-      .select('user_id, media_urls, media_thumbnails, media_live_urls').eq('id', id).maybeSingle();
+      .select('user_id, media_urls, media_thumbnails, media_live_urls, post_metadata').eq('id', id).maybeSingle();
     if (lookupError) return res.status(500).json({ error: 'Failed to delete post' });
     // A lost successful reply must not make the desired absence unrecoverable.
     if (!existing) return res.json({ message: 'Post deleted successfully' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only delete your own posts' });
+    if (isPlanPost(existing)) return res.status(409).json(PLAN_POST_REFUSAL);
 
     const keys = new Set();
     // This post's own uploads (POST /api/upload/post-media) sit in posts/<post>/, or in posts/<post>/<writer>/ when
@@ -3000,9 +3009,10 @@ router.post('/:id/archive', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
-    const { data: existing } = await supabaseAdmin.from('Post').select('user_id').eq('id', id).single();
+    const { data: existing } = await supabaseAdmin.from('Post').select('user_id, post_metadata').eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only archive your own posts' });
+    if (isPlanPost(existing)) return res.status(409).json(PLAN_POST_REFUSAL);
 
     const archivedAt = new Date().toISOString();
     const { error } = await supabaseAdmin

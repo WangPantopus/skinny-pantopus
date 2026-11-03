@@ -30,6 +30,8 @@ struct AddressTodayTabView: View {
     @State private var resolveID = UUID()
     /// The account the shown place was resolved for. Another account starts blank.
     @State private var resolvedUserID: String?
+    /// Needs you (AI phase 3): one list for the tab, whichever view shows it.
+    @State private var needsYou = TodayNeedsYouModel()
 
     init(onAddHome: @escaping () -> Void) {
         self.onAddHome = onAddHome
@@ -44,7 +46,15 @@ struct AddressTodayTabView: View {
         .task(id: resolveKey) {
             if rootTabs.selected == .today { await resolveHome() }
         }
-        .refreshesOnStoreChange(onBackground: discardTemporaryPlace) { if rootTabs.selected == .today { await resolveHome() } }
+        // Needs you reads again each time Today shows, beside the place.
+        .task(id: resolveKey) {
+            if rootTabs.selected == .today { await needsYou.load() }
+        }
+        .refreshesOnStoreChange(onBackground: discardTemporaryPlace) {
+            guard rootTabs.selected == .today else { return }
+            await resolveHome()
+            await needsYou.load()
+        }
         .onChange(of: rootTabs.selected) { _, tab in
             if tab != .today { discardTemporaryPlace() }
         }
@@ -133,17 +143,20 @@ struct AddressTodayTabView: View {
                 viewModel: detail,
                 savedPlace: savedPlace,
                 claim: claimInReview,
+                needsYou: needsYou,
                 onAddHome: onAddHome,
                 onResolvePlace: resolveHome
             ) { openBallot() }
                 .id(detail.savedPlaceId ?? detail.homeId)
         } else if loadFailed {
             VStack(spacing: 0) {
+                TodayNeedsYouCard(model: needsYou).padding(.horizontal, Spacing.s4)
                 if PlansFlags.shared.plans { PlansTodayCards().padding(.horizontal, Spacing.s4) }
                 couldNotLoad
             }
         } else {
             VStack(spacing: 0) {
+                TodayNeedsYouCard(model: needsYou).padding(.horizontal, Spacing.s4)
                 if PlansFlags.shared.plans { PlansTodayCards().padding(.horizontal, Spacing.s4) }
                 noPlace
             }
@@ -359,6 +372,7 @@ private struct AddressTodayLoaded: View {
     let savedPlace: SavedPlaceDTO?
     /// A claim in review: this is the claimed address's public view, its status on top.
     let claim: OwnershipClaimDTO?
+    let needsYou: TodayNeedsYouModel
     let onAddHome: () -> Void
     let onResolvePlace: () async -> Void
     let onOpenPlace: () -> Void
@@ -447,7 +461,8 @@ private struct AddressTodayLoaded: View {
                         savedPlace: savedPlace != nil,
                         onAddHome: onAddHome,
                         onAsk: { askTopic = .today(homeId: viewModel.savedPlaceId == nil ? viewModel.homeId : nil) },
-                        onOpenTask: { homeId, taskId in openedTask = TodayOpenedTask(homeId: homeId, taskId: taskId) }
+                        onOpenTask: { homeId, taskId in openedTask = TodayOpenedTask(homeId: homeId, taskId: taskId) },
+                        needsYou: needsYou
                     )
                 )
             }
@@ -471,6 +486,7 @@ private struct AddressTodayLoaded: View {
             guard scope.isCurrent else { sessionChanged = true
                 return
             }
+            await needsYou.load()
             await loadSavedAnchor()
         }
     }

@@ -185,6 +185,11 @@ data class TodayTabParts(
     /** Place's "Next step: Add radon test information" for this Home: the setup opens on the radon question once. */
     val radonRequested: Boolean = false,
     val onRadonShown: () -> Unit = {},
+    /**
+     * Needs you (AI assistant phase 3), under the sky and its hourly strip: it gets the tasks "Coming up at home" lists,
+     * so a task shows in one place only.
+     */
+    val needsYou: (@Composable (agendaTaskIds: Set<String>) -> Unit)? = null,
 )
 
 /**
@@ -261,6 +266,8 @@ fun PlaceTodayDetailContent(
         },
         onDetails = { openConditions(targets.conditions) },
     )
+    // The sun's path, sunrise, sunset and the day's length, right under the weather.
+    TodaySunCard(intel)
     // 5. Coming up at home, with the full calendar one tap away.
     val ballot = BallotPlacement.ballot(intel)
     val election = intel.section(PlaceSectionId.CIVIC_ELECTION)?.civicElection?.takeIf { ballot != null }?.let { it.name to it.date }
@@ -277,6 +284,9 @@ fun PlaceTodayDetailContent(
                 guest = intel.viewer?.role == "nonresident",
             )
         }
+    // What waits on the person, before what is coming up at home (phase 3 brief section 3).
+    val agendaTasks = remember(items, now.toLocalDate()) { agendaTaskIds(items, now.toLocalDate()) }
+    tab.needsYou?.invoke(agendaTasks)
     var governments by remember { mutableStateOf<BallotGovernments?>(null) }
     // A place with no address calendar (a saved place) and nothing else coming shows no agenda; its plan cards stay.
     if (calendarEnv == null && items.isEmpty()) {
@@ -302,13 +312,11 @@ fun PlaceTodayDetailContent(
             plans = tab.plansBlock,
         )
     }
-    // 6. Air and daylight side by side; each opens its full card below.
-    TodayAirDaylightPair(
+    // 6. Air quality; it opens its full card below.
+    TodayAirTile(
         air = intel.section(PlaceSectionId.AIR_QUALITY),
-        sun = intel.section(PlaceSectionId.SUNRISE_SUNSET),
         zone = intel.homeZone,
         onAir = { openConditions(targets.air) },
-        onSun = { openConditions(targets.sun) },
     )
     // 7. Good day for…, with what the screen itself says could limit it.
     TodayGoodDaySection(intel, active, now)
@@ -512,7 +520,6 @@ private class TodayTargets {
     val calendar = BringIntoViewRequester()
     val conditions = BringIntoViewRequester()
     val air = BringIntoViewRequester()
-    val sun = BringIntoViewRequester()
 }
 
 /**
@@ -602,6 +609,20 @@ private fun TodayWeatherSection(
             Box(modifier = Modifier.weight(1f)) { source() }
             actions()
         }
+    }
+}
+
+/** The Sun card under the weather, its sky matching the reported weather; a place without sun times says why. */
+@Composable
+private fun TodaySunCard(intel: PlaceIntelligence) {
+    val env = intel.section(PlaceSectionId.SUNRISE_SUNSET) ?: return
+    val data = env.sunriseSunset
+    if (data != null) {
+        val weather = intel.section(PlaceSectionId.WEATHER)?.takeIf { it.isLive() }?.weather
+        TodaySunArcCard(data, Modifier.padding(top = 12.dp), timeZone = placeSkyZone(intel), weather = weather?.conditionCode)
+    } else {
+        PlaceDetailSectionLabel("Sun")
+        PlaceDetailFallbackCard(env)
     }
 }
 
@@ -1591,8 +1612,8 @@ private fun TodayHomeSetup(
 
 /**
  * "Sources and full conditions", folded (TPR brief 5.11): the daily forecast, the AQI gauge with its full guidance and
- * source, every alert's official text (or the scoped all-clear with its check time), the sun arc, and the radon card
- * once answered. "Weather details" and the air and daylight sides open it at their card.
+ * source, every alert's official text (or the scoped all-clear with its check time), and the radon card once answered.
+ * "Weather details" and the air tile open it at their card.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -1616,7 +1637,6 @@ private fun TodayFullConditions(
         intel.section(PlaceSectionId.WEATHER)?.weather?.daily?.takeIf { it.isNotEmpty() }?.let { DailyForecast(it, now) }
         Column(modifier = Modifier.bringIntoViewRequester(targets.air)) { TodayAirSection(intel) }
         TodayAlertsSection(intel, alertsCheck, now)
-        Column(modifier = Modifier.bringIntoViewRequester(targets.sun)) { TodaySunSection(intel) }
         // The calendar's own source, also under the calendar view.
         calendar?.let {
             PlaceDetailSectionLabel("Calendar")
@@ -1711,20 +1731,7 @@ private fun TodayAlertsSection(
     }
 }
 
-@Composable
-private fun TodaySunSection(intel: PlaceIntelligence) {
-    val env = intel.section(PlaceSectionId.SUNRISE_SUNSET) ?: return
-    PlaceDetailSectionLabel("Sun")
-    val data = env.sunriseSunset
-    if (data != null) {
-        TodaySunArcCard(data, timeZone = placeSkyZone(intel))
-        PlaceSourceNote("Your location", PlacePresentation.fmtSunDay(data, intel.homeZone))
-    } else {
-        PlaceDetailFallbackCard(env)
-    }
-}
-
-/** "Forecast · air quality · no active weather alerts · sun and sources", the alerts part as checked now. */
+/** "Forecast · air quality · no active weather alerts · sources", the alerts part as checked now. */
 private fun conditionsSummary(
     intel: PlaceIntelligence,
     alertsCheck: TodayAlertsCheck,
@@ -1739,5 +1746,16 @@ private fun conditionsSummary(
             active.size == 1 -> "1 weather alert"
             else -> "${active.size} weather alerts"
         }
-    return listOfNotNull("Forecast", "air quality", alerts, "sun and sources").joinToString(" · ")
+    return listOfNotNull("Forecast", "air quality", alerts, "sources").joinToString(" · ")
 }
+
+/** The tasks "Coming up at home" lists: its week's rows, or the next row it names after an empty week. */
+private fun agendaTaskIds(
+    items: List<AgendaItem>,
+    today: LocalDate,
+): Set<String> =
+    TodayAgenda
+        .window(items, today)
+        .ifEmpty { listOfNotNull(items.firstOrNull()) }
+        .mapNotNull { (it.source as? AgendaSource.Task)?.task?.id }
+        .toSet()

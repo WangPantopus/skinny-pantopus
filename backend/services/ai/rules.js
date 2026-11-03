@@ -135,6 +135,12 @@ function planSentence(plan, config) {
 const untilLabel = (config, endsMs) => `${lastBy(config, endsMs).toFormat('ccc, LLL d')} (${WEEKS} weeks)`;
 
 /**
+ * A weekly plan's `ends_at`: the start of its last game by `endsMs`, the date the card's Until shows, so the
+ * rules list (which shows `ends_at`) says the same day. The run posts a game that starts at or before it.
+ */
+const endsAtFor = (config, endsMs) => (validSlot(config) ? lastBy(config, endsMs).toUTC().toISO() : new Date(endsMs).toISOString());
+
+/**
  * The next week's plan, copied from the latest occurrence with new times (the host's edits carry forward).
  * No hosted_again_from: the funnel's "hosted again" counts a host choosing to host again, not a rule's repost.
  */
@@ -368,7 +374,7 @@ async function draftPlanRule(args, ctx) {
   const draft = ruleCard({
     lines: [line('What', what), line('Until', untilLabel(config, endsAt))],
     warning: PLAN_WARNING,
-    rule: { ...rule, summary: what, ends_at: new Date(endsAt).toISOString() },
+    rule: { ...rule, summary: what, ends_at: endsAtFor(config, endsAt) },
   });
   return cardResult(draft, args.note, 'Tap Turn on, and Pantopus posts it each week and tells you each time.');
 }
@@ -675,7 +681,7 @@ async function saveFromCard(userId, cardId, attempt = 0) {
   const now = Date.now();
   // At most 12 weeks after it is turned on: the card's own Until, or less when it was tapped later.
   const endsAt = stored.kind === 'plan_repeat'
-    ? new Date(Math.min(Date.parse(stored.ends_at) || Infinity, now + WEEKS * WEEK_MS)).toISOString()
+    ? endsAtFor(stored.config, Math.min(Date.parse(stored.ends_at) || Infinity, now + WEEKS * WEEK_MS))
     : null;
   const at = new Date(now).toISOString();
   const { data: rule, error: insertError } = await supabaseAdmin.from('AgentRule').insert({
@@ -730,7 +736,7 @@ async function changeRule(user, id, { enabled, extend } = {}) {
   const fields = {};
   if (enabled === false) Object.assign(fields, { enabled: false, paused_reason: null });
   if (extend || (turnOn && row.kind === 'plan_repeat' && !(Date.parse(row.ends_at) > now))) {
-    fields.ends_at = new Date(now + WEEKS * WEEK_MS).toISOString();
+    fields.ends_at = endsAtFor(row.config, now + WEEKS * WEEK_MS);
   }
   if (turnOn && !row.enabled) {
     const why = await whyItCantRun(row, user);
