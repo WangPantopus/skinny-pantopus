@@ -284,6 +284,7 @@ private struct BookletPageImage: View {
     let url: URL
     let pageNumber: Int
     let hasNextPage: Bool
+    @State private var retryAttempt = 0
 
     var body: some View {
         BookletPaperPageChrome(hasNextPage: hasNextPage) {
@@ -294,19 +295,20 @@ private struct BookletPageImage: View {
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .accessibilityLabel("Booklet page \(pageNumber)")
                 case .failure:
-                    fallback(icon: .alertCircle, label: "Couldn't load page")
+                    fallback(icon: .alertCircle, label: "Couldn't load page", canRetry: true)
                 case .empty:
                     fallback(icon: .fileType, label: "Loading...")
                 @unknown default:
                     fallback(icon: .fileType, label: "")
                 }
             }
+            .id(retryAttempt)
         }
-        .accessibilityLabel("Booklet page \(pageNumber)")
     }
 
-    private func fallback(icon: PantopusIcon, label: String) -> some View {
+    private func fallback(icon: PantopusIcon, label: String, canRetry: Bool = false) -> some View {
         ZStack {
             Theme.Color.appSurfaceSunken
             VStack(spacing: Spacing.s2) {
@@ -315,8 +317,25 @@ private struct BookletPageImage: View {
                     Text(label)
                         .scaledFont(11)
                         .foregroundStyle(Theme.Color.appTextSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                if canRetry {
+                    Button {
+                        retryAttempt += 1
+                    } label: {
+                        Text("Try again")
+                            .scaledFont(11, weight: .semibold)
+                            .foregroundStyle(Theme.Color.primaryInk)
+                            .padding(.horizontal, Spacing.s3)
+                            .padding(.vertical, Spacing.s2)
+                            .frame(minHeight: 44)
+                            .background(Theme.Color.primary50, in: RoundedRectangle(cornerRadius: Radii.pill))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Retry page \(pageNumber)")
                 }
             }
+            .padding(Spacing.s4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
