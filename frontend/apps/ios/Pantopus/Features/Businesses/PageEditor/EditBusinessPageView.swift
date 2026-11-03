@@ -68,13 +68,12 @@ public struct EditBusinessPageView: View {
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityIdentifier("editBusinessPage")
         .task { await viewModel.load() }
-        .confirmationDialog(
+        .alert(
             "Discard unsaved edits?",
             isPresented: Binding(
                 get: { viewModel.showsDiscardConfirm },
                 set: { viewModel.showsDiscardConfirm = $0 }
-            ),
-            titleVisibility: .visible
+            )
         ) {
             Button("Discard edits", role: .destructive) {
                 let destination = pendingExit
