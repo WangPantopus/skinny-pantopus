@@ -1725,6 +1725,9 @@ const sendCardSchema = Joi.object({
     user_id: Joi.string().uuid(),
     email: Joi.string().email().max(320),
   }).xor('user_id', 'email').required(),
+  // One per card draft, sent again with every retry of it: a repeat of the send answers with the card it stored
+  // (services/holidayCards requestRowId). Apps from before it send none and are answered as before.
+  request_id: Joi.string().uuid(),
 });
 
 const cardsOn = () => areLaunchFeaturesEnabled(['mailbox', 'holiday_cards']);
@@ -1732,8 +1735,8 @@ const sendCardsOff = (res) => res.status(404).json({ error: 'Not found' });
 const sendCardUnavailable = (res) =>
   res.status(503).json({ error: 'Couldn’t send your card just now. Try again in a moment.', code: 'CARD_UNAVAILABLE' });
 
-// The cards this person sent today where they live, newest first. A card taken back doesn't count: one to a person is
-// gone, one by email is withdrawn.
+// The cards this person sent since the start of this day where they live (today unless `now` says otherwise), newest
+// first. A card taken back doesn't count: one to a person is gone or withdrawn, one by email is withdrawn.
 async function cardsSentToday(senderId, timeZone, now = new Date()) {
   const { data, error } = await supabaseAdmin.from('Mail')
     .select('id, created_at, delivered_at, escrow_status, object_id, mail_extracted')
@@ -1741,23 +1744,101 @@ async function cardsSentToday(senderId, timeZone, now = new Date()) {
     .contains('tags', [holidayCards.CARD_TAG])
     .gte('created_at', holidayCards.dayStart(timeZone, now).toISOString())
     .or('escrow_status.is.null,escrow_status.neq.withdrawn')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false });
   if (error) throw new Error(error.message);
   return data || [];
 }
 
 // A card's stored note, removed with the card when it is taken back (or loses a same-day race). Best effort: the copy
-// is private and nothing links to it once the card is gone.
+// is private and nothing links to it once the card is gone. Its file goes only with its row: the database keeps the
+// row of a note a stored card still points to, and with it the file.
 async function removeCardObject(objectId) {
   if (!objectId) return;
   try {
-    const { data: row } = await supabaseAdmin.from('MailObject').select('id, bucket_name, object_key')
-      .eq('id', objectId).maybeSingle();
-    await supabaseAdmin.from('MailObject').delete().eq('id', objectId);
+    const { data: removed, error } = await supabaseAdmin.from('MailObject').delete().eq('id', objectId)
+      .select('id, bucket_name, object_key');
+    if (error) throw new Error(error.message);
+    const [row] = removed || [];
     if (row?.bucket_name && row?.object_key) await mailObjects.remove(row);
   } catch (err) {
     logger.warn('Card copy not removed', { objectId, error: err.message });
   }
+}
+
+// ---- One card per send (request IDs) and one card a day ----
+// A send with a request ID stores its card under an id made from the sender and that ID, so however the send is
+// repeated (a double tap, a lost answer retried, Android's own resend) the database refuses a second card. A card is
+// answered as sent only once settleCard has decided it is the day's card; every repeat answers from what is stored.
+
+const CARD_REQUEST_SELECT = 'id, sender_user_id, created_at, delivered_at, escrow_status, escrow_expires_at, object_id, mail_extracted';
+const cardNote = (message) => String(message || '').replace(/\r\n?/g, '\n').trim();
+const cardRequestDigest = (body) => holidayCards.requestDigest({
+  design: String(body.design), message: cardNote(body.message), arrival: body.arrival,
+  toUserId: body.to.user_id || null, toEmail: body.to.user_id ? null : normalizeEscrowContact(body.to.email),
+});
+const cardRequestOf = (mail) => mail?.mail_extracted?.card?.request || null;
+const cardTakenBack = (res, mail) => res.status(409).json({
+  error: mail?.mail_extracted?.card?.withdrawn?.reason === 'blocked' ? 'This card wasn’t sent.' : 'You took this card back.',
+  code: 'CARD_TAKEN_BACK' });
+const cardRequestSent = (res, mail, now) => res.status(409).json({
+  error: 'You’ve already sent this card.', code: 'CARD_REQUEST_SENT', card: holidayCards.sentSummary(mail, now) });
+const cardDailyLimit = (res) =>
+  res.status(429).json({ error: 'You’ve sent today’s card. You can send another tomorrow.', code: 'CARD_DAILY_LIMIT' });
+
+// The card a send with this request ID stored, or null. Throws on a read failure.
+async function cardOfRequest(rowId, senderId) {
+  const { data, error } = await supabaseAdmin.from('Mail').select(CARD_REQUEST_SELECT)
+    .eq('id', rowId).eq('sender_user_id', senderId).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data || null;
+}
+
+/**
+ * One card a day, decided once a card is stored: the first card of its day stays (by when it was stored, then id), and
+ * a later one, from another draft sent at the same time, goes. Every write is conditional and the answer is what it
+ * left, so two copies of one send never get different answers. { outcome: 'sent', mail } for the day's card (marked
+ * settled when it carries a request ID), 'gone' when it lost, 'taken_back' when it was taken back meanwhile. Throws when
+ * it can't decide (a read or a write failed); a card with a request ID is then left for a retry to settle.
+ */
+async function settleCard(mail, senderZone) {
+  const request = cardRequestOf(mail);
+  const day = await cardsSentToday(mail.sender_user_id, senderZone, new Date(mail.created_at));
+  if (day[day.length - 1]?.id === mail.id) {
+    if (!request || request.settled_at) return { outcome: 'sent', mail };
+    const extracted = { ...mail.mail_extracted,
+      card: { ...mail.mail_extracted.card, request: { ...request, settled_at: new Date().toISOString() } } };
+    const { data: settled, error } = await supabaseAdmin.from('Mail').update({ mail_extracted: extracted })
+      .eq('id', mail.id).or('escrow_status.is.null,escrow_status.neq.withdrawn')
+      .select(CARD_REQUEST_SELECT);
+    if (error) throw new Error(error.message);
+    if (settled?.length) return { outcome: 'sent', mail: settled[0] };
+  } else {
+    // A card another copy of this send already settled stays; only an undecided one goes.
+    let later = supabaseAdmin.from('Mail').delete().eq('id', mail.id).or('escrow_status.is.null,escrow_status.neq.withdrawn');
+    if (request) later = later.is('mail_extracted->card->request->>settled_at', null);
+    const { data: removed, error } = await later.select('id');
+    if (error) throw new Error(error.message);
+    if (removed?.length) {
+      await removeCardObject(mail.object_id);
+      return { outcome: 'gone' };
+    }
+  }
+  // Someone else's write came first: answer from what it left.
+  const stored = await cardOfRequest(mail.id, mail.sender_user_id);
+  if (!stored) return { outcome: 'gone' };
+  if (stored.escrow_status === 'withdrawn') return { outcome: 'taken_back', mail: stored };
+  if (cardRequestOf(stored)?.settled_at) return { outcome: 'sent', mail: stored };
+  throw new Error('card not settled');
+}
+
+// What became of the card a request ID already stored: taken back (it never sends again), sent, or gone (it lost the
+// day's card to another draft, so the send may be tried again).
+async function requestOutcome(mail) {
+  if (mail.escrow_status === 'withdrawn') return { outcome: 'taken_back', mail };
+  if (cardRequestOf(mail)?.settled_at) return { outcome: 'sent', mail };
+  const zone = (await mailDelivery.personTimeZone(mail.sender_user_id)) || mailDelivery.FALLBACK_TIME_ZONE;
+  return settleCard(mail, zone);
 }
 
 // Why a card can't go to this person, or null when it can: not to oneself, no block either way, and only someone the
@@ -1793,7 +1874,7 @@ async function checkCard(senderId, body, now) {
   const { arrival } = body;
   const design = holidayCards.designById(body.design);
   if (!design) return refuse(400, 'Pick one of the Christmas cards.', 'CARD_DESIGN_UNKNOWN');
-  const message = String(body.message || '').replace(/\r\n?/g, '\n').trim();
+  const message = cardNote(body.message);
   if (!message) return refuse(400, 'Write a few words on the back of the card.', 'CARD_MESSAGE_EMPTY');
   if ([...message].length > holidayCards.MESSAGE_LIMIT) {
     return refuse(400, `Keep the note to ${holidayCards.MESSAGE_LIMIT} letters.`, 'CARD_MESSAGE_TOO_LONG');
@@ -1916,19 +1997,41 @@ router.get('/cards/arrivals', verifyToken, async (req, res) => {
 });
 
 /**
- * POST /api/mailbox/cards  { design, message, arrival, to: { user_id } | { email } }
+ * POST /api/mailbox/cards  { design, message, arrival, to: { user_id } | { email }, request_id? }
  * Send today's card. To a person it comes with their next 7 a.m. mail (sealed until Christmas morning or not) or on
  * Christmas morning, and the sender can take it back until the next 7 a.m. pickup. By email it waits for them (90
  * days, like a letter) and they get an email saying only who it's from. Answers 201 { card } (what the sender sees).
+ * A repeat of a send with the same request ID answers from the card it stored: 200 { card }, 409 CARD_TAKEN_BACK once
+ * that card was taken back (it never sends again), or 409 CARD_REQUEST_SENT with the card when the content changed. A
+ * 503 means the outcome isn't known yet; the same request ID finds it.
  */
 router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) => {
   if (!cardsOn()) return sendCardsOff(res);
   const senderId = req.user.id;
+  const requestId = req.body.request_id ? String(req.body.request_id).toLowerCase() : null;
+  const rowId = requestId ? holidayCards.requestRowId(senderId, requestId) : null;
   try {
     const now = new Date();
+    const digest = requestId ? cardRequestDigest(req.body) : null;
+    // A card this send's request ID stored answers it, unless it lost the day's card to another draft (null: send).
+    const answerRepeat = async (earlier) => {
+      const { outcome, mail: stored } = await requestOutcome(earlier);
+      if (outcome === 'taken_back') return cardTakenBack(res, stored);
+      if (outcome !== 'sent') return null;
+      return cardRequestOf(stored).digest === digest
+        ? res.status(200).json({ card: holidayCards.sentSummary(stored, now) })
+        : cardRequestSent(res, stored, now);
+    };
+    const earlier = rowId ? await cardOfRequest(rowId, senderId) : null;
+    if (earlier) {
+      const answered = await answerRepeat(earlier);
+      if (answered) return answered;
+    }
+
     const checked = await checkCard(senderId, req.body, now);
     if (checked.refusal) return res.status(checked.refusal.status).json(checked.refusal.body);
     const { design, message, arrival, senderZone, toUserId, toEmail, card, delivery } = checked;
+    if (requestId) card.request = { id: requestId, digest };
     const escrow = toEmail ? { token: crypto.randomBytes(32).toString('hex'), expiresAt: checked.escrowExpiresAt } : null;
 
     // The note lives only in the card's private stored copy, never in the Mail row (services/holidayCards).
@@ -1949,6 +2052,7 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
     }
 
     const stored = {
+      ...(rowId ? { id: rowId } : {}),
       sender_user_id: senderId, sender_entity_id: null, sender_display: checked.senderDisplay,
       sender_trust: 'pantopus_user', sender_business_name: null, sender_address: null,
       type: 'letter', subject: holidayCards.SUBJECT, display_title: holidayCards.SUBJECT, content: '', content_excerpt: '',
@@ -1965,24 +2069,43 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
           recipient_id: null, escrow_recipient_contact: toEmail, escrow_status: 'pending',
           escrow_expires_at: escrow.expiresAt, escrow_claim_token_hash: hashClaimToken(escrow.token) }),
     };
-    const { data: mail, error: insertError } = await insertMailWithCompatibility(stored, { delivery });
-    if (insertError || !mail) {
-      logger.error('Card not stored', { senderId, error: insertError?.message });
-      await removeCardObject(objectResult.objectId);
-      return sendCardUnavailable(res);
+    const { data: inserted, error: insertError } = await insertMailWithCompatibility(stored, { delivery });
+    let mail = insertError ? null : inserted;
+    if (!mail) {
+      // With a request ID the card may be stored all the same: by another copy of this send (the database refused this
+      // one), or by this one with only its answer lost.
+      const found = rowId ? await cardOfRequest(rowId, senderId).catch(() => null) : null;
+      if (found && found.object_id === objectResult.objectId) {
+        mail = found;
+      } else {
+        await removeCardObject(objectResult.objectId);
+        const answered = found ? await answerRepeat(found) : null;
+        if (answered) return answered;
+        logger.error('Card not stored', { senderId, error: insertError?.message || null });
+        return sendCardUnavailable(res);
+      }
     }
 
-    // Two sends at once: the first card of the day stays, the other goes.
-    const sentToday = await cardsSentToday(senderId, senderZone, now).catch(() => [mail]);
-    if (sentToday.length > 1 && sentToday[sentToday.length - 1].id !== mail.id) {
-      await supabaseAdmin.from('Mail').delete().eq('id', mail.id);
-      await removeCardObject(objectResult.objectId);
-      return res.status(429).json({ error: 'You’ve sent today’s card. You can send another tomorrow.', code: 'CARD_DAILY_LIMIT' });
+    // One card a day: two drafts sent at once keep the first, decided before anything answers or emails.
+    let settled;
+    try {
+      settled = await settleCard(mail, senderZone);
+    } catch (settleErr) {
+      logger.warn('Card not settled', { mailId: mail.id, senderId, error: settleErr.message });
+      if (!rowId) {
+        // Nothing would find this card again, so it goes and the sender tries again.
+        const { data: removed } = await supabaseAdmin.from('Mail').delete().eq('id', mail.id).select('id');
+        if (removed?.length) await removeCardObject(objectResult.objectId);
+      }
+      return sendCardUnavailable(res);
     }
+    if (settled.outcome === 'gone') return cardDailyLimit(res);
+    if (settled.outcome === 'taken_back') return cardTakenBack(res, settled.mail);
+    mail = settled.mail;
 
     if (escrow) {
       const claimLink = escrowClaimLink(mail.id, escrow.token);
-      const senderName = mail.sender_display;
+      const senderName = checked.senderDisplay;
       (async () => {
         if (skipForLaunchCut(['mailbox', 'holiday_cards'], 'cardEmail')) return;
         try {
@@ -2009,13 +2132,21 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
  * "Look it over": exactly what the other person will see, before the card is sent. It runs every check the send runs
  * (checkCard), with the same refusals, and stores, sends and records nothing. `piece` is the card as it will lie in their
  * Mailbox (named and postmarked by the same lookups, dated by their clock); by email, `email` holds the words the real
- * email uses and `link_page` what its link's page shows. Never their time zone, address or ids.
+ * email uses and `link_page` what its link's page shows. Never their time zone, address or ids. A draft whose request ID
+ * already sent its card answers 409 CARD_REQUEST_SENT with that card, or CARD_TAKEN_BACK, instead of today's limit.
  */
 router.post('/cards/preview', verifyToken, validate(sendCardSchema), async (req, res) => {
   if (!cardsOn()) return sendCardsOff(res);
   const senderId = req.user.id;
   try {
     const now = new Date();
+    const earlier = req.body.request_id
+      ? await cardOfRequest(holidayCards.requestRowId(senderId, req.body.request_id), senderId) : null;
+    if (earlier) {
+      const { outcome, mail: stored } = await requestOutcome(earlier);
+      if (outcome === 'taken_back') return cardTakenBack(res, stored);
+      if (outcome === 'sent') return cardRequestSent(res, stored, now);
+    }
     const checked = await checkCard(senderId, req.body, now);
     if (checked.refusal) return res.status(checked.refusal.status).json(checked.refusal.body);
     const { message, arrival, toEmail, card, zone, senderDisplay, delivery } = checked;
@@ -2092,6 +2223,22 @@ router.post('/cards/:id/take-back', verifyToken, async (req, res) => {
           .select('escrow_status, escrow_expires_at').eq('id', id).maybeSingle();
         return tooLate({ ...mail, ...(fresh || {}) });
       }
+    } else if (cardRequestOf(mail)) {
+      // Only while it waits for the pickup, and nobody ever saw it. Sent with a request ID, it stays as a withdrawn
+      // record with no recipient, note or picture (the shape a card by email has once taken back), so a late retry of
+      // its send finds it and never sends it again.
+      const { data: withdrawn, error: withdrawError } = await supabaseAdmin.from('Mail')
+        .update({
+          escrow_status: 'withdrawn', recipient_user_id: null, delivery_target_type: null, delivery_target_id: null,
+          recipient_type: null, recipient_id: null, object_id: null,
+          mail_extracted: { card: { request: cardRequestOf(mail), withdrawn: { reason: 'taken_back', at: now.toISOString() } } },
+        })
+        .eq('id', id).eq('sender_user_id', senderId).is('escrow_status', null)
+        .gt('delivered_at', now.toISOString())
+        .select('id');
+      if (withdrawError) throw new Error(withdrawError.message);
+      if (!withdrawn?.length) return tooLate(mail);
+      await removeCardObject(mail.object_id);
     } else {
       // Only while it waits for the pickup: the row goes, and nobody ever saw it.
       const { data: removed, error: deleteError } = await supabaseAdmin.from('Mail').delete()
