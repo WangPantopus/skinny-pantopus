@@ -413,6 +413,9 @@ function closedEscrowReason(mail) {
     return closed(409, `This ${thing} has already been added to a mailbox.`, 'MAIL_CLAIMED');
   }
   if (mail.escrow_status === 'withdrawn') {
+    if ((mail.mail_extracted?.card?.withdrawn || mail.mail_extracted?.withdrawn)?.reason === 'blocked') {
+      return closed(410, `This ${thing} is no longer available.`, 'MAIL_WITHDRAWN');
+    }
     return closed(410, `The sender took this ${thing} back.`, 'MAIL_WITHDRAWN');
   }
   if (mail.escrow_status === 'expired' || (mail.escrow_expires_at && new Date(mail.escrow_expires_at) <= new Date())) {
@@ -2079,6 +2082,9 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
         mail = found;
       } else {
         await removeCardObject(objectResult.objectId);
+        if (insertError?.message === 'MAIL_RECIPIENT_UNAVAILABLE') {
+          return res.status(403).json({ error: 'This person can’t receive your card.', code: 'CARD_RECIPIENT_UNAVAILABLE' });
+        }
         const answered = found ? await answerRepeat(found) : null;
         if (answered) return answered;
         logger.error('Card not stored', { senderId, error: insertError?.message || null });
@@ -2189,7 +2195,8 @@ router.post('/cards/preview', verifyToken, validate(sendCardSchema), async (req,
  * free again), one by email until they open it (its link then says the sender took it back).
  */
 router.post('/cards/:id/take-back', verifyToken, async (req, res) => {
-  if (!cardsOn()) return sendCardsOff(res);
+  // Sent survives the seasonal sending switch; taking back its waiting cards must too.
+  if (!sentOn()) return sendCardsOff(res);
   const senderId = req.user.id;
   const { id } = req.params;
   const notHere = () => res.status(404).json({ error: 'This card isn’t here any more.', code: 'CARD_NOT_FOUND' });
@@ -2759,6 +2766,10 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       const { data: escrowMail, error: escrowError } = await insertMailWithCompatibility(escrowMailData);
 
       if (escrowError) {
+        if (escrowError.message === 'MAIL_RECIPIENT_UNAVAILABLE') {
+          await removeCardObject(objectResult?.objectId);
+          return res.status(403).json({ error: 'This person can’t receive your mail.', code: 'MAIL_RECIPIENT_UNAVAILABLE' });
+        }
         logger.error('Error creating escrowed mail', { error: escrowError.message, senderId });
         return res.status(500).json({ error: "Couldn't send this mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
       }
@@ -2991,6 +3002,10 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
     const { data: mail, error } = await insertMailWithCompatibility(mailData);
 
     if (error) {
+      if (error.message === 'MAIL_RECIPIENT_UNAVAILABLE') {
+        await removeCardObject(objectResult?.objectId);
+        return res.status(403).json({ error: 'This person can’t receive your mail.', code: 'MAIL_RECIPIENT_UNAVAILABLE' });
+      }
       logger.error('Error sending mail', { error: error.message, senderId });
       return res.status(500).json({ error: "Couldn't send this mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
     }
@@ -3336,6 +3351,9 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
       .select('id');
 
     if (updateError) {
+      if (updateError.message === 'MAIL_RECIPIENT_UNAVAILABLE') {
+        return res.status(404).json({ error: 'This letter is no longer available.', code: 'MAIL_UNAVAILABLE' });
+      }
       logger.error('Escrow claim update failed', { error: updateError.message, mailId });
       return res.status(500).json({ error: 'Failed to claim mail' });
     }
