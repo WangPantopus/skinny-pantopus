@@ -24,9 +24,12 @@ struct FilterChipGroupControl: View {
                     onChange(next)
                 } label: {
                     Text(option.label)
-                        .font(.system(size: 14, weight: isOn ? .semibold : .regular))
+                        .scaledFont(14, weight: isOn ? .semibold : .regular)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.center)
                         .foregroundStyle(isOn ? Theme.Color.primaryInk : Theme.Color.appText)
                         .padding(.horizontal, Spacing.s3)
+                        .padding(.vertical, Spacing.s1)
                         .frame(minHeight: 36)
                         .background(isOn ? Theme.Color.primary50 : Theme.Color.appSurface)
                         .overlay(
@@ -65,9 +68,12 @@ struct FilterSingleChipControl: View {
                     onChange(isOn ? nil : option.id)
                 } label: {
                     Text(option.label)
-                        .font(.system(size: 14, weight: isOn ? .semibold : .regular))
+                        .scaledFont(14, weight: isOn ? .semibold : .regular)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.center)
                         .foregroundStyle(isOn ? Theme.Color.primaryInk : Theme.Color.appText)
                         .padding(.horizontal, Spacing.s3)
+                        .padding(.vertical, Spacing.s1)
                         .frame(minHeight: 36)
                         .background(isOn ? Theme.Color.primary50 : Theme.Color.appSurface)
                         .overlay(
@@ -109,7 +115,8 @@ struct FilterRadioControl: View {
                     HStack(spacing: Spacing.s3) {
                         radioGlyph(isOn: isOn)
                         Text(option.label)
-                            .font(.system(size: 15, weight: isOn ? .semibold : .regular))
+                            .scaledFont(15, weight: isOn ? .semibold : .regular)
+                            .fixedSize(horizontal: false, vertical: true)
                             .foregroundStyle(Theme.Color.appText)
                         Spacer(minLength: Spacing.s0)
                     }
@@ -170,7 +177,8 @@ struct FilterMultiSelectControl: View {
                     HStack(spacing: Spacing.s3) {
                         checkboxGlyph(isOn: isOn)
                         Text(option.label)
-                            .font(.system(size: 15, weight: .regular))
+                            .scaledFont(15, weight: .regular)
+                            .fixedSize(horizontal: false, vertical: true)
                             .foregroundStyle(Theme.Color.appText)
                         Spacer(minLength: Spacing.s0)
                     }
@@ -236,7 +244,8 @@ struct FilterToggleControl: View {
                     )
                 ) {
                     Text(option.label)
-                        .font(.system(size: 15, weight: .regular))
+                        .scaledFont(15, weight: .regular)
+                        .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(Theme.Color.appText)
                 }
                 .toggleStyle(SwitchToggleStyle(tint: Theme.Color.primary600))
@@ -289,16 +298,16 @@ struct FilterStepSliderControl: View {
             .accessibilityValue(currentStop?.label ?? "")
             HStack {
                 Text(stops.first?.label ?? "")
-                    .pantopusTextStyle(.caption)
+                    .scaledFont(PantopusTextStyle.caption.size)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 Spacer()
                 Text(currentStop?.label ?? "")
-                    .font(.system(size: 14, weight: .semibold))
+                    .scaledFont(14, weight: .semibold)
                     .foregroundStyle(Theme.Color.primaryInk)
                     .accessibilityIdentifier("filterStepSliderValue_\(sectionId)")
                 Spacer()
                 Text(stops.last?.label ?? "")
-                    .pantopusTextStyle(.caption)
+                    .scaledFont(PantopusTextStyle.caption.size)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
         }
@@ -354,11 +363,11 @@ struct FilterRangeSliderControl: View {
             .frame(height: thumbSize)
             HStack {
                 Text("\(Int(range.lower))")
-                    .font(.system(size: 13, weight: .semibold))
+                    .scaledFont(13, weight: .semibold)
                     .foregroundStyle(Theme.Color.appText)
                 Spacer()
                 Text("\(Int(range.upper))")
-                    .font(.system(size: 13, weight: .semibold))
+                    .scaledFont(13, weight: .semibold)
                     .foregroundStyle(Theme.Color.appText)
             }
         }

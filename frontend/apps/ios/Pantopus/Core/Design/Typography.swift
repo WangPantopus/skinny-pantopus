@@ -136,8 +136,12 @@ public extension Text {
     ///
     /// Casing runs on the string as given, so this takes a `String` rather
     /// than a `LocalizedStringKey`; localized copy would need resolving first.
-    init(_ content: String, style: PantopusTextStyle) {
-        self = Text(verbatim: style.cased(content)).pantopusTextStyle(style)
+    /// Supply `font` when the caller scales the role's size with `ScaledMetric`.
+    /// Applying it here avoids retaining the role's fixed font inside the text.
+    init(_ content: String, style: PantopusTextStyle, font: Font? = nil) {
+        self = Text(verbatim: style.cased(content))
+            .font(font ?? Theme.Font.role(style))
+            .tracking(style.tracking)
     }
 
     /// Apply a design-system role's font and tracking to existing `Text`.
