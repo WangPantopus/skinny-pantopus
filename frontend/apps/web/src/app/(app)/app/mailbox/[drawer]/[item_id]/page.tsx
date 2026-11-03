@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, useParams } from 'next/navigation';
 import type { CertifiedMail, BookletItem, AuditEvent, PartyParticipant, MailboxHome } from '@/types/mailbox';
@@ -8,7 +8,6 @@ import * as api from '@pantopus/api';
 import {
   useItemDetail,
   useMailboxDrawers,
-  useMarkItemOpened,
   useFileItemToVault,
   useAcknowledgeCertifiedMail,
   useVaultFolders,
@@ -60,7 +59,6 @@ function ItemDetailPage() {
 
   // ── Data fetching ─────────────────────────────────────────
   const { data: detail, isLoading, error, refetch } = useItemDetail(itemId);
-  const markOpened = useMarkItemOpened();
 
   // A link that didn't know the letter's drawer (a notification's
   // /app/mailbox/<id> opens it in Me) moves to the letter's own drawer, so
@@ -79,15 +77,6 @@ function ItemDetailPage() {
     if (!detail || detail.wrapper.id !== itemId || cardFirstOpen?.id === itemId) return;
     setCardFirstOpen({ id: itemId, first: Boolean(detail.piece.just_opened) || !detail.wrapper.opened_at });
   }, [detail, itemId, cardFirstOpen]);
-
-  // Mark as opened on first load
-  const markedRef = useRef(false);
-  useEffect(() => {
-    if (detail && !detail.wrapper.opened_at && !markedRef.current) {
-      markedRef.current = true;
-      markOpened.mutate(itemId);
-    }
-  }, [detail, itemId, markOpened]);
 
   // ── Current user ──────────────────────────────────────────
   const [currentUserId, setCurrentUserId] = useState('');

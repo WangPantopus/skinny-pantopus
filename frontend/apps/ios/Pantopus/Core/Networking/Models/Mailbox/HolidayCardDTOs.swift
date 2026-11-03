@@ -197,6 +197,14 @@ public struct SendHolidayCardBody: Encodable, Sendable {
     public let message: String
     public let arrival: String
     public let to: Recipient
+    /// One per card draft, sent with every look and retry of it: the server
+    /// answers a repeat with the card it stored, never a second one.
+    public let requestId: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case design, message, arrival, to
+        case requestId = "request_id"
+    }
 
     public enum Recipient: Encodable, Sendable {
         case person(userId: String)
@@ -216,11 +224,12 @@ public struct SendHolidayCardBody: Encodable, Sendable {
         }
     }
 
-    public init(design: String, message: String, arrival: HolidayCardArrival, to: Recipient) {
+    public init(design: String, message: String, arrival: HolidayCardArrival, to: Recipient, requestId: String? = nil) {
         self.design = design
         self.message = message
         self.arrival = arrival.rawValue
         self.to = to
+        self.requestId = requestId
     }
 }
 

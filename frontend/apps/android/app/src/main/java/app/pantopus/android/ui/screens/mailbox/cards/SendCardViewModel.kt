@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.models.mail_compose.MailRecipientDto
 import app.pantopus.android.data.api.models.mailbox.HolidayCardArrivalsFor
 import app.pantopus.android.data.api.models.mailbox.HolidayCardPreview
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
+import app.pantopus.android.data.api.models.mailbox.SendHolidayCardResponse
 import app.pantopus.android.data.api.models.mailbox.SentHolidayCard
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
@@ -18,6 +19,7 @@ import app.pantopus.android.data.mailbox.CardLook
 import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.data.network.NetworkMonitor
 import app.pantopus.android.ui.screens.mailbox.components.mailMessage
+import com.squareup.moshi.Moshi
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -28,6 +30,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.util.UUID
 import javax.inject.Inject
 
 /** The five steps, and the card on its way. */
@@ -129,10 +132,27 @@ data class SendCardForm(
     val takeBackError: String? = null,
     /** "You took your card back. You can send a card again today." */
     val tookBack: Boolean = false,
+    /** A retry of a card that was taken back meanwhile: the server's sentence, on a new card's first step. */
+    val takenBackNote: String? = null,
+    /**
+     * One request ID per card, sent with every look and retry of it (saved with the screen), so a send whose answer was
+     * lost, or that OkHttp sent again by itself, is answered with the card it stored, never a second one. A new card
+     * starts once this one is sent or taken back.
+     */
+    val requestId: String? = null,
 ) {
     /** What step 4 says under its choices: why the card didn't go, or that the look can't be shown. */
     val sealNotice: String? get() = sealError ?: LOOK_UNAVAILABLE.takeIf { lookUnavailable }
+
+    /** What step 1 says about a card taken back, if anything. */
+    val backNote: String? get() = takenBackNote ?: TOOK_BACK.takeIf { tookBack }
+
+    /** This form with its card's request ID, made now if it has none yet. */
+    fun withRequestId(): SendCardForm = if (requestId != null) this else copy(requestId = UUID.randomUUID().toString())
 }
+
+/** Step 1 once a card was taken back from this flow. */
+private const val TOOK_BACK = "You took your card back. You can send a card again today."
 
 /** Step 4 when the server can't show the look; "Seal and send" is then on step 4. */
 private const val LOOK_UNAVAILABLE = "Pantopus can’t show how your card will look yet. You can still seal and send it."
@@ -328,7 +348,8 @@ class SendCardViewModel
             val design = form.design ?: return
             val arrival = form.arrival ?: return
             if (form.previewing || form.sending || form.message.isBlank()) return
-            _form.value = form.copy(previewing = true, sealError = null)
+            val started = form.withRequestId()
+            _form.value = started.copy(previewing = true, sealError = null)
             viewModelScope.launch {
                 val look =
                     repo.preview(
@@ -337,22 +358,31 @@ class SendCardViewModel
                         arrival = arrival,
                         toUserId = (to as? CardRecipient.Person)?.userId,
                         toEmail = (to as? CardRecipient.Email)?.email,
+                        requestId = started.requestId,
                     )
-                _form.update {
-                    val same = it.step == SendCardStep.Seal && it.to == to && it.design == design && it.arrival == arrival
-                    when {
-                        // Back, or another choice, while it was read: only an answer for what's chosen now counts.
-                        !same || it.message != form.message -> it.copy(previewing = false)
-                        look is CardLook.Shown ->
-                            it.copy(previewing = false, preview = look.preview, step = SendCardStep.Look, sendError = null)
-                        look is CardLook.Unavailable -> it.copy(previewing = false, lookUnavailable = true)
-                        look is CardLook.Failed ->
-                            it.copy(previewing = false, sealError = sendMessage(look.error, doing = "show how your card will look"))
-                        else -> it
-                    }
-                }
-                if ((look as? CardLook.Failed)?.error?.serverCode() == ARRIVAL_CLOSED) readTheirs()
+                if (!wentEarlier(look)) showLook(look, form)
             }
+        }
+
+        /** Step 5 from the look's answer, when it's for what's still chosen; step 4 says why it couldn't be shown. */
+        private fun showLook(
+            look: CardLook,
+            asked: SendCardForm,
+        ) {
+            _form.update {
+                val same = it.step == SendCardStep.Seal && it.to == asked.to && it.design == asked.design && it.arrival == asked.arrival
+                when {
+                    // Back, or another choice, while it was read: only an answer for what's chosen now counts.
+                    !same || it.message != asked.message -> it.copy(previewing = false)
+                    look is CardLook.Shown ->
+                        it.copy(previewing = false, preview = look.preview, step = SendCardStep.Look, sendError = null)
+                    look is CardLook.Unavailable -> it.copy(previewing = false, lookUnavailable = true)
+                    look is CardLook.Failed ->
+                        it.copy(previewing = false, sealError = sendMessage(look.error, doing = "show how your card will look"))
+                    else -> it
+                }
+            }
+            if ((look as? CardLook.Failed)?.error?.serverCode() == ARRIVAL_CLOSED) readTheirs()
         }
 
         /**
@@ -366,7 +396,8 @@ class SendCardViewModel
             val design = form.design ?: return
             val arrival = form.arrival ?: return
             if (form.sending || form.previewing || form.message.isBlank()) return
-            _form.value = form.copy(sending = true, sendError = null, sealError = null)
+            val started = form.withRequestId()
+            _form.value = started.copy(sending = true, sendError = null, sealError = null)
             viewModelScope.launch {
                 val result =
                     repo.send(
@@ -375,12 +406,14 @@ class SendCardViewModel
                         arrival = arrival,
                         toUserId = (to as? CardRecipient.Person)?.userId,
                         toEmail = (to as? CardRecipient.Email)?.email,
+                        requestId = started.requestId,
                     )
+                if (result is NetworkResult.Failure && wentEarlier(result.error)) return@launch
                 val closed = (result as? NetworkResult.Failure)?.error?.serverCode() == ARRIVAL_CLOSED
                 _form.update {
                     when {
                         result is NetworkResult.Success ->
-                            it.copy(sending = false, sent = result.data, step = SendCardStep.Sent, preview = null)
+                            it.copy(sending = false, sent = result.data, step = SendCardStep.Sent, preview = null, requestId = null)
                         // Sent from step 4, or a choice that closed: step 4 says why, under its choices.
                         result is NetworkResult.Failure && (closed || it.step == SendCardStep.Seal) ->
                             it.copy(sending = false, step = SendCardStep.Seal, preview = null, sealError = sendMessage(result.error))
@@ -390,6 +423,40 @@ class SendCardViewModel
                 }
                 if (closed) readTheirs()
             }
+        }
+
+        /** [wentEarlier] for a look that couldn't be shown. */
+        private fun wentEarlier(look: CardLook): Boolean = look is CardLook.Failed && wentEarlier(look.error)
+
+        /**
+         * This card already went with an earlier try whose answer was lost (or that OkHttp sent again by itself): show
+         * the card it sent, or, once it was taken back, say so and start a new card. True when it was one of those.
+         */
+        private fun wentEarlier(error: NetworkError): Boolean {
+            when (error.serverCode()) {
+                REQUEST_SENT -> {
+                    val card = error.storedCard() ?: return false
+                    _form.update {
+                        it.copy(
+                            sending = false,
+                            previewing = false,
+                            sent = card,
+                            step = SendCardStep.Sent,
+                            preview = null,
+                            sendError = null,
+                            sealError = null,
+                            requestId = null,
+                            tookBack = false,
+                        )
+                    }
+                }
+                TAKEN_BACK -> {
+                    _query.value = ""
+                    _form.value = SendCardForm(takenBackNote = sendMessage(error))
+                }
+                else -> return false
+            }
+            return true
         }
 
         /** Take it back (confirmed by the screen): the day's card is free again, and the flow starts over. */
@@ -475,6 +542,7 @@ class SendCardViewModel
                 design = design,
                 message = message,
                 arrival = saved.get<String>(KEY_ARRIVAL),
+                requestId = saved.get<String>(KEY_REQUEST_ID),
             )
         }
 
@@ -490,6 +558,7 @@ class SendCardViewModel
             saved[KEY_DESIGN] = form.design.takeIf { form.step != SendCardStep.Sent }
             saved[KEY_MESSAGE] = form.message.takeIf { form.step != SendCardStep.Sent }
             saved[KEY_ARRIVAL] = form.arrival.takeIf { form.step != SendCardStep.Sent }
+            saved[KEY_REQUEST_ID] = form.requestId.takeIf { form.step != SendCardStep.Sent }
         }
 
         private fun takeBackMessage(error: NetworkError): String =
@@ -508,6 +577,12 @@ class SendCardViewModel
             /** The arrival chosen closed meanwhile (their 7 a.m. came): step 4 offers what's open now. */
             private const val ARRIVAL_CLOSED = "CARD_ARRIVAL_CLOSED"
 
+            /** This draft's card already went (its answer was lost) and the draft changed since: the answer carries it. */
+            private const val REQUEST_SENT = "CARD_REQUEST_SENT"
+
+            /** This draft's card was taken back meanwhile: it never sends again. */
+            private const val TAKEN_BACK = "CARD_TAKEN_BACK"
+
             private const val KEY_STEP = "sendCard.step"
             private const val KEY_BY_EMAIL = "sendCard.byEmail"
             private const val KEY_EMAIL = "sendCard.email"
@@ -517,8 +592,15 @@ class SendCardViewModel
             private const val KEY_DESIGN = "sendCard.design"
             private const val KEY_MESSAGE = "sendCard.message"
             private const val KEY_ARRIVAL = "sendCard.arrival"
+            private const val KEY_REQUEST_ID = "sendCard.requestId"
         }
     }
+
+/** The card a `CARD_REQUEST_SENT` refusal carries: the one an earlier try of this draft sent. */
+private fun NetworkError.storedCard(): SentHolidayCard? {
+    val body = (this as? NetworkError.ClientError)?.body ?: return null
+    return runCatching { Moshi.Builder().build().adapter(SendHolidayCardResponse::class.java).fromJson(body)?.card }.getOrNull()
+}
 
 /** The machine code a refusal carried (`{ error, code }`), when the server sent one. */
 private fun NetworkError.serverCode(): String? {

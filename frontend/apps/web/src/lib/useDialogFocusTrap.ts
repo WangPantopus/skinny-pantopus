@@ -39,6 +39,11 @@ export function useDialogFocusTrap<T extends HTMLElement>(onClose: () => void, r
     if (!container.contains(document.activeElement)) (getFocusable()[0] || container).focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      // A dialog opened above this one (the shared confirm, say) answers its own keys: its Escape must not close this
+      // dialog too, and Tab must stay inside it.
+      const focused = document.activeElement;
+      if (focused && !container.contains(focused) && focused.closest('[aria-modal="true"]')) return;
+
       if (event.key === 'Escape') {
         event.preventDefault();
         onCloseRef.current();

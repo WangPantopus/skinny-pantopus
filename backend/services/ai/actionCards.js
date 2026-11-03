@@ -42,6 +42,9 @@ const NOTE = 'One short sentence shown under the card: the assumption that matte
 const LIST_CLAIM = /\balready\b[^.]{0,40}\b(list|tasks?|added|scheduled)\b/i;
 // What a home paper's end date can be (a task's details.kind; the home_paperwork nudge reads it).
 const DOCUMENT_KINDS = ['warranty', 'policy', 'lease'];
+// What HomeTask's checks take (HomeTask_type_chk, HomeTask_priority_chk).
+const TASK_TYPES = ['reminder', 'chore', 'repair', 'project', 'shopping'];
+const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 // The kinds of item the assistant records (HomeAsset categories, without consumables).
 const ASSET_KINDS = ['appliance', 'electronics', 'furniture', 'tool', 'valuable', 'fixture', 'other'];
 const ASSET_KIND_LABELS = {
@@ -279,7 +282,7 @@ const actionCardDefinitions = [
         home_id: nullable({ type: 'string', description: 'Null for the home Today shows.' }),
         title: { type: 'string', description: 'Up to 255 characters, e.g. "Change the furnace filter".' },
         description: nullable({ type: 'string' }),
-        task_type: { type: 'string', enum: ['reminder', 'chore', 'repair', 'project', 'shopping'] },
+        task_type: { type: 'string', enum: TASK_TYPES },
         assignee_user_id: nullable({ type: 'string', description: 'A user_id from get_household, or null for no one in particular.' }),
         due_date: nullable({ type: 'string', description: 'Local date YYYY-MM-DD. Required when it repeats.' }),
         due_time: nullable({ type: 'string', description: 'Local time HH:MM, or null for 9:00 AM.' }),
@@ -292,7 +295,7 @@ const actionCardDefinitions = [
           required: ['frequency', 'every'],
           additionalProperties: false,
         },
-        priority: nullable({ type: 'string', enum: ['low', 'medium', 'high', 'urgent'] }),
+        priority: nullable({ type: 'string', enum: TASK_PRIORITIES }),
         document: {
           type: ['object', 'null'],
           description: 'For a reminder about a home paper they sent (a warranty, policy or lease that ends): what it is, what ends and when, and the page. Null otherwise.',
@@ -1130,6 +1133,15 @@ function sourceText(source) {
 const REPEAT_WORDS = { daily: ['day', 'DAILY'], weekly: ['week', 'WEEKLY'], monthly: ['month', 'MONTHLY'] };
 const SEEN_BY = { managers: "The home's managers", sensitive: 'People who see private home records' };
 
+// The model sometimes names a type outside the schema's list, and the database refuses it: "maintenance"
+// made Add task fail with "Check the record details and try again." A card keeps only a type HomeTask
+// takes, reading the usual words as the nearest one, and anything else as a reminder.
+const TASK_TYPE_WORDS = { maintenance: 'repair', upkeep: 'repair', fix: 'repair', cleaning: 'chore', errand: 'shopping', groceries: 'shopping' };
+function taskType(value) {
+  const word = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return TASK_TYPES.includes(word) ? word : TASK_TYPE_WORDS[word] || 'reminder';
+}
+
 /** "Every month", "Every 3 months", "Every year" for a repeat ({ frequency, every }), or null. */
 function repeatText(repeat) {
   if (!repeat || !REPEAT_WORDS[repeat.frequency]) return null;
@@ -1232,12 +1244,12 @@ async function draftHomeTask(args, ctx) {
 
   const visibility = await newTaskVisibility(home.id, ctx.userId, assignee?.id);
   const body = {
-    task_type: args.task_type || 'reminder',
+    task_type: taskType(args.task_type),
     title,
     ...(args.description ? { description: clip(args.description, 2000) } : {}),
     ...(assignee ? { assigned_to: assignee.id } : {}),
     ...(dueAt ? { due_at: dueAt } : {}),
-    ...(args.priority ? { priority: args.priority } : {}),
+    ...(TASK_PRIORITIES.includes(args.priority) ? { priority: args.priority } : {}),
     visibility,
     // How home_paperwork finds it, and what it calls it. The server keeps details.source for tasks made from mail.
     ...(paper ? { details: { origin: 'document', kind: paper.kind, ends_on: paper.ends_on, name: clip(paper.name, 80) } } : {}),

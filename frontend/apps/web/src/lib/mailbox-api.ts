@@ -57,6 +57,8 @@ export class MailboxApiError extends Error {
     public retryable: boolean,
     /** The server's stable code (MAIL_NOT_FOUND …): its `error` is then a sentence people can read. */
     public serverCode?: string,
+    /** The rest of the server's answer, for a refusal that carries more (CARD_REQUEST_SENT carries the `card`). */
+    public data?: Record<string, unknown>,
   ) {
     super(message);
     this.name = 'MailboxApiError';
@@ -81,7 +83,7 @@ async function call<T>(fn: () => Promise<T>): Promise<T> {
     const e = err as {
       message?: string;
       statusCode?: number;
-      data?: { error?: string; code?: string };
+      data?: { error?: string; code?: string; [key: string]: unknown };
     };
 
     // Network-level failure (no response at all)
@@ -113,6 +115,7 @@ async function call<T>(fn: () => Promise<T>): Promise<T> {
       e.statusCode,
       e.statusCode >= 500,
       typeof e.data?.code === 'string' ? e.data.code : undefined,
+      e.data,
     );
   }
 }
@@ -134,6 +137,8 @@ export async function sendHolidayCard(data: {
   message: string;
   arrival: HolidayCardArrival;
   to: { user_id: string } | { email: string };
+  /** The draft's request ID (packages/api sendHolidayCard). */
+  request_id?: string;
 }): Promise<{ card: SentHolidayCard }> {
   return call(() => mailbox.sendHolidayCard(data));
 }

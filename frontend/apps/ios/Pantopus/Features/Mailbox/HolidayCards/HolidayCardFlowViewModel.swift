@@ -119,8 +119,20 @@ final class HolidayCardFlowViewModel {
     private(set) var takeBackError: String?
     /// A card was taken back: step 1 says the day is free again.
     private(set) var tookBack = false
+    /// A retry of a card that was taken back meanwhile: the server's
+    /// sentence, on a new card's first step.
+    private(set) var takenBackNote: String?
     /// Asks "Take your card back?" first.
     var confirmsTakeBack = false
+    /// One request ID per card, sent with every look and retry of it, so a
+    /// send whose answer was lost is answered with the card it stored, never
+    /// a second one. A new card starts once this one is sent or taken back.
+    private var requestId: String?
+
+    /// What step 1 says about a card taken back, if anything.
+    var backNote: String? {
+        takenBackNote ?? (tookBack ? "You took your card back. You can send a card again today." : nil)
+    }
 
     /// Who it's for: the name typed, the search, or an email address.
     var query = "" {
@@ -273,7 +285,9 @@ final class HolidayCardFlowViewModel {
     /// on step 4 with the server's sentence; a server that can't show the
     /// look leaves "Seal and send" on step 4.
     func lookItOver() async {
-        guard let body = sendBody, !previewing else { return }
+        guard !previewing else { return }
+        requestId = requestId ?? UUID().uuidString.lowercased()
+        guard let body = sendBody else { return }
         previewing = true
         previewError = nil
         defer { previewing = false }
@@ -283,6 +297,7 @@ final class HolidayCardFlowViewModel {
             sendError = nil
             step = .look
         } catch {
+            if await wentEarlier(error) { return }
             if Self.lookIsUnavailable(error) {
                 lookUnavailable = true
                 return
@@ -348,7 +363,8 @@ final class HolidayCardFlowViewModel {
             design: design.id,
             message: message.trimmingCharacters(in: .whitespacesAndNewlines),
             arrival: arrival,
-            to: to
+            to: to,
+            requestId: requestId
         )
     }
 
@@ -357,17 +373,21 @@ final class HolidayCardFlowViewModel {
     /// choice that closed meanwhile (the 7 a.m. pickup came) goes back to
     /// step 4 to pick again.
     func send() async {
-        guard let body = sendBody, !sending else { return }
+        guard !sending else { return }
+        requestId = requestId ?? UUID().uuidString.lowercased()
+        guard let body = sendBody else { return }
         sending = true
         sendError = nil
         if step == .seal { previewError = nil }
         defer { sending = false }
         do {
             let response: SendHolidayCardResponse = try await answer(HolidayCardEndpoints.send(body))
+            requestId = nil
             sent = response.card
             step = .sent
             tookBack = false
         } catch {
+            if await wentEarlier(error) { return }
             let sentence = Self.refusal(error, fallback: "Couldn’t send your card just now. Try again in a moment.")
             let closed = Self.refusalCode(error) == "CARD_ARRIVAL_CLOSED"
             guard closed || step == .seal else {
@@ -402,24 +422,56 @@ final class HolidayCardFlowViewModel {
         defer { takingBack = false }
         do {
             let _: TakeBackHolidayCardResponse = try await answer(HolidayCardEndpoints.takeBack(cardId: card.id))
-            sent = nil
-            preview = nil
-            lookUnavailable = false
             tookBack = true
-            recipient = nil
-            theirs = nil
-            designId = nil
-            message = ""
-            arrival = nil
-            query = ""
-            email = ""
-            byEmail = false
-            step = .to
+            takenBackNote = nil
+            startOver()
             // Today's card is free again.
             await fetch()
         } catch {
             takeBackError = Self.refusal(error, fallback: "Couldn’t take your card back just now. Try again in a moment.")
         }
+    }
+
+    /// Everything written goes, and the next card starts on step 1 with a
+    /// request ID of its own.
+    private func startOver() {
+        requestId = nil
+        sent = nil
+        preview = nil
+        lookUnavailable = false
+        recipient = nil
+        theirs = nil
+        designId = nil
+        message = ""
+        arrival = nil
+        query = ""
+        email = ""
+        byEmail = false
+        step = .to
+    }
+
+    /// This card already went with an earlier try whose answer was lost: show
+    /// the card it sent, or, once it was taken back, say so and start a new
+    /// card. True when it was one of those.
+    private func wentEarlier(_ error: any Error) async -> Bool {
+        switch Self.refusalCode(error) {
+        case "CARD_REQUEST_SENT":
+            guard let card = Self.storedCard(error) else { return false }
+            requestId = nil
+            sent = card
+            preview = nil
+            tookBack = false
+            step = .sent
+        case "CARD_TAKEN_BACK":
+            takenBackNote = Self.refusal(error, fallback: "You took this card back.")
+            startOver()
+            await fetch()
+        default:
+            return false
+        }
+        sendError = nil
+        previewError = nil
+        return true
     }
 
     /// A card answer (`answer(_:api:)`).
@@ -488,6 +540,13 @@ extension HolidayCardFlowViewModel {
         default:
             return nil
         }
+    }
+
+    /// The card a `CARD_REQUEST_SENT` answer carries: the one an earlier try
+    /// of this draft sent.
+    static func storedCard(_ error: any Error) -> SentHolidayCard? {
+        guard case let .clientError(_, body) = error as? APIError, let data = body?.data(using: .utf8) else { return nil }
+        return (try? JSONDecoder().decode(SendHolidayCardResponse.self, from: data))?.card
     }
 
     /// The server can't show the look: it has no Look it over yet (a 404

@@ -711,6 +711,11 @@ export default function SendCardFlow() {
   const [sent, setSent] = useState<SentHolidayCard | null>(null);
   const [takeBackError, setTakeBackError] = useState<string | null>(null);
   const [tookBack, setTookBack] = useState(false);
+  // A retry of a card that was taken back meanwhile: the server's sentence, on a new card's first step.
+  const [takenBackNote, setTakenBackNote] = useState<string | null>(null);
+  // One request ID per card, sent with every look and retry of it, so a send whose answer was lost is answered with the
+  // card it stored, never a second one. A new card starts once this one is sent or taken back.
+  const requestId = useRef<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   const data = cards.data;
@@ -740,9 +745,40 @@ export default function SendCardFlow() {
     send.reset();
   };
 
-  const cardToSend = () => (to && design && arrival
-    ? { design: design.id, message: message.trim(), arrival, to: to.kind === 'person' ? { user_id: to.userId } : { email: to.email } }
-    : null);
+  const cardToSend = () => {
+    if (!to || !design || !arrival) return null;
+    requestId.current ??= crypto.randomUUID();
+    return {
+      design: design.id, message: message.trim(), arrival, to: to.kind === 'person' ? { user_id: to.userId } : { email: to.email },
+      request_id: requestId.current,
+    };
+  };
+
+  // Everything written goes, and the next card starts on its first step with a request ID of its own.
+  const startOver = () => {
+    requestId.current = null;
+    setSent(null);
+    setTo(null); setDesignId(null); setMessage(''); setArrival(null); setLook(null); setLookUnavailable(false);
+    setStep('to');
+  };
+
+  // This card already went with an earlier try whose answer was lost: show the card it sent, or, once it was taken
+  // back, say so and start a new card. True when it was one of those.
+  const wentEarlier = (error: MailboxApiError) => {
+    const card = error.serverCode === 'CARD_REQUEST_SENT' ? (error.data?.card as SentHolidayCard | undefined) : undefined;
+    if (card) {
+      requestId.current = null;
+      setSent(card); setLook(null); setStep('sent');
+    } else if (error.serverCode === 'CARD_TAKEN_BACK') {
+      setTakenBackNote(error.message);
+      startOver();
+    } else {
+      return false;
+    }
+    preview.reset();
+    send.reset();
+    return true;
+  };
 
   const doLook = () => {
     const card = cardToSend();
@@ -755,7 +791,10 @@ export default function SendCardFlow() {
         setLook(res);
         setStep('look');
       },
-      onError: (error) => { if (lookIsUnavailable(error)) setLookUnavailable(true); },
+      onError: (error) => {
+        if (wentEarlier(error)) return;
+        if (lookIsUnavailable(error)) setLookUnavailable(true);
+      },
     });
   };
 
@@ -766,8 +805,9 @@ export default function SendCardFlow() {
     const fromSeal = step === 'seal';
     setSealError(null);
     send.mutate(card, {
-      onSuccess: (res) => { setSent(res.card); setLook(null); setStep('sent'); },
+      onSuccess: (res) => { requestId.current = null; setSent(res.card); setLook(null); setStep('sent'); },
       onError: (error) => {
+        if (wentEarlier(error)) return;
         if (error.serverCode !== 'CARD_ARRIVAL_CLOSED') {
           if (fromSeal) { setSealError(sendMessage(error, to?.kind === 'email')); send.reset(); }
           return;
@@ -791,10 +831,9 @@ export default function SendCardFlow() {
     setTakeBackError(null);
     takeBack.mutate(today.id, {
       onSuccess: () => {
-        setSent(null);
         setTookBack(true);
-        setTo(null); setDesignId(null); setMessage(''); setArrival(null); setLook(null); setLookUnavailable(false);
-        setStep('to');
+        setTakenBackNote(null);
+        startOver();
       },
       onError: (error) => setTakeBackError(sendMessage(error)),
     });
@@ -845,9 +884,9 @@ export default function SendCardFlow() {
     <div className={`${page} pb-6`}>
       <div className="mx-auto w-full max-w-[560px]">
       <StepHeader step={step} onBack={back} headingRef={headingRef} />
-      {tookBack && step === 'to' ? (
+      {(tookBack || takenBackNote) && step === 'to' ? (
         <p role="status" className="mx-4 mt-2 rounded-xl border border-[#e7dcc6] bg-[#fbf6ec] px-3.5 py-2.5 text-[14px] text-[#374151]">
-          You took your card back. You can send a card again today.
+          {takenBackNote ?? 'You took your card back. You can send a card again today.'}
         </p>
       ) : null}
       {step !== 'to' && step !== 'sent' && to ? (
