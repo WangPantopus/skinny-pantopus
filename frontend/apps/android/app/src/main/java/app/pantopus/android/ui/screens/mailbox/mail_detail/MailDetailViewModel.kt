@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.mailbox.MailDetail
+import app.pantopus.android.data.api.models.mailbox.MailDetailResponse
 import app.pantopus.android.data.api.models.mailbox.MailRemovedDto
 import app.pantopus.android.data.api.models.mailbox.v2.BookletDetailDto
 import app.pantopus.android.data.api.models.mailbox.v2.CertifiedDetailDto
@@ -388,7 +389,12 @@ class MailDetailViewModel
                     _state.value = MailDetailUiState.Error("Your account changed. Reopen this mail item to continue.")
                     return@launch
                 }
-                val result = repo.detail(mailId)
+                val initial = repo.detail(mailId)
+                if (!bidCheckout.isCurrentReadScope()) {
+                    _state.value = MailDetailUiState.Error("Your account changed. Reopen this mail item to continue.")
+                    return@launch
+                }
+                val result = loadBookletPayload(initial)
                 if (!bidCheckout.isCurrentReadScope()) {
                     _state.value = MailDetailUiState.Error("Your account changed. Reopen this mail item to continue.")
                     return@launch
@@ -423,6 +429,28 @@ class MailDetailViewModel
                                 result.error.displayMessage("Couldn't load this item.")
                             }
                         _state.value = MailDetailUiState.Error(message)
+                    }
+                }
+            }
+        }
+
+        /** The legacy detail envelope may contain storage metadata only; V2 reads its private booklet pages. */
+        private suspend fun loadBookletPayload(initial: NetworkResult<MailDetailResponse>): NetworkResult<MailDetailResponse> {
+            if (initial !is NetworkResult.Success) return initial
+            val detail = initial.data.mail
+            if (detail.removed != null || categoryFor(detail) != MailItemCategory.Booklet ||
+                BookletDetailDto.decodeFromObjectPayload(detail.objectPayload ?: detail.`object`) != null
+            ) {
+                return initial
+            }
+            return when (val item = repo.item(mailId)) {
+                is NetworkResult.Failure -> item
+                is NetworkResult.Success -> {
+                    val payload = item.data.mail.objectPayload
+                    if (BookletDetailDto.decodeFromObjectPayload(payload) == null) {
+                        NetworkResult.Failure(NetworkError.Decoding(IllegalStateException("Booklet pages unavailable")))
+                    } else {
+                        NetworkResult.Success(initial.data.copy(mail = detail.copy(objectPayload = payload)))
                     }
                 }
             }
@@ -1292,6 +1320,14 @@ class MailDetailViewModel
             /** Characters of the letter id in a Pantopus certified mail reference. */
             private const val PANTOPUS_REFERENCE_LENGTH = 8
 
+            private fun categoryFor(detail: MailDetail): MailItemCategory =
+                when {
+                    detail.certified -> MailItemCategory.Certified
+                    detail.kind.equals("booklet", ignoreCase = true) ||
+                        detail.mailType.equals("book", ignoreCase = true) -> MailItemCategory.Booklet
+                    else -> MailItemCategory.fromRaw(detail.mailType ?: detail.type)
+                }
+
             /**
              * Pure projection from the backend [MailDetail] envelope to
              * the generic A17.1 content. Static so the test suite can
@@ -1300,8 +1336,7 @@ class MailDetailViewModel
             @JvmStatic
             fun project(detail: MailDetail): MailDetailContent {
                 // `Mail.certified` makes a live letter certified mail (`Mail_mail_type_check` has no 'certified' type).
-                val category =
-                    if (detail.certified) MailItemCategory.Certified else MailItemCategory.fromRaw(detail.mailType ?: detail.type)
+                val category = categoryFor(detail)
                 // The hero pill reads the letter's stored sender_trust, like the Mailbox list does.
                 val trust = MailTrust.fromRaw(detail.senderTrust)
                 val senderDisplayName = resolveSenderName(detail)
@@ -1324,7 +1359,7 @@ class MailDetailViewModel
                 val bodyParagraphs = bodyParagraphs(detail.contentText ?: detail.content)
                 val ackRequired = detail.ackRequired == true
                 val ackStatus = detail.ackStatus?.lowercase() == "acknowledged" || detail.acknowledgedAt != null
-                val variants = decodeVariantDetails(category = category, payload = detail.`object`)
+                val variants = decodeVariantDetails(category = category, payload = detail.objectPayload ?: detail.`object`)
                 val certifiedDetail = variants.certified ?: pantopusCertified(detail)
                 val resolvedAck = ackStatus || (certifiedDetail?.isAcknowledged == true)
                 val readStatusLabel = if (detail.viewed || detail.openedAt != null || resolvedAck) "Read" else "Unread"

@@ -24,12 +24,14 @@ data class BookletDetailDto(
         fun decodeFromObjectPayload(payload: JsonValue?): BookletDetailDto? {
             if (payload == null) return null
             val rawPages = payload["pages"] as? List<*> ?: emptyList<Any?>()
-            val pages = rawPages.mapNotNull { it as? String }
+            val pageIndices = rawPages.indices.filter { (rawPages[it] as? String)?.isNotBlank() == true }
+            val pages = pageIndices.map { rawPages[it] as String }
             if (pages.isEmpty()) return null
             val pageCount =
                 (payload["page_count"] as? Number)?.toInt() ?: pages.size
-            val ocrTexts =
-                (payload["ocr_texts"] as? List<*>)?.mapNotNull { it as? String }.orEmpty()
+            val rawText = payload["ocr_texts"] as? List<*>
+            // Missing text on one page must not move the next page's transcript onto it.
+            val ocrTexts = pageIndices.map { rawText?.getOrNull(it) as? String ?: "" }
             return BookletDetailDto(
                 pages = pages,
                 summary = payload["summary"] as? String,
