@@ -204,10 +204,21 @@ struct HomeClaimActionButton: View {
     }
 }
 
+extension DynamicTypeSize {
+    /// A claim card's action buttons: side by side, stacked at the
+    /// accessibility sizes, where their labels grow with the text.
+    var claimActionLayout: AnyLayout {
+        isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: Spacing.s2))
+            : AnyLayout(HStackLayout(spacing: Spacing.s2))
+    }
+}
+
 // MARK: - Cards
 
 /// One pending ownership claim + its action row.
 struct HomeClaimOwnershipCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let item: HomeClaimReviewOwnershipItem
     let isBusy: Bool
     let onVerdict: (HomeClaimReviewVerdict) -> Void
@@ -253,7 +264,7 @@ struct HomeClaimOwnershipCard: View {
                         .accessibilityIdentifier("homeClaimReview_ownershipBusy")
                     Spacer()
                 }
-                .frame(height: 40)
+                .frame(minHeight: 44)
             } else {
                 actionRow
             }
@@ -288,7 +299,7 @@ struct HomeClaimOwnershipCard: View {
     private var actionRow: some View {
         switch item.actionMode {
         case .relationship:
-            HStack(spacing: Spacing.s2) {
+            dynamicTypeSize.claimActionLayout {
                 HomeClaimActionButton(
                     title: item.inviteTitle,
                     icon: .userPlus,
@@ -322,7 +333,7 @@ struct HomeClaimOwnershipCard: View {
             .clipShape(RoundedRectangle(cornerRadius: Radii.pill, style: .continuous))
             .accessibilityIdentifier("homeClaimReview_adminRequired")
         case .verdict:
-            HStack(spacing: Spacing.s2) {
+            dynamicTypeSize.claimActionLayout {
                 HomeClaimActionButton(
                     title: "Approve",
                     icon: .check,
@@ -384,12 +395,9 @@ struct HomeClaimResidencyCard: View {
                         .accessibilityIdentifier("homeClaimReview_residencyBusy")
                     Spacer()
                 }
-                .frame(height: 40)
+                .frame(minHeight: 44)
             } else {
-                let layout = dynamicTypeSize.isAccessibilitySize
-                    ? AnyLayout(VStackLayout(spacing: Spacing.s2))
-                    : AnyLayout(HStackLayout(spacing: Spacing.s2))
-                layout {
+                dynamicTypeSize.claimActionLayout {
                     HomeClaimActionButton(
                         title: "Approve",
                         icon: .check,
