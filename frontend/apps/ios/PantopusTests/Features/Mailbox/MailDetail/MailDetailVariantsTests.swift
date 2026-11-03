@@ -65,7 +65,7 @@ final class MailDetailVariantsTests: XCTestCase {
         """
         var metadata = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: [String: Any]])
         metadata["mail"]?.removeValue(forKey: "object_payload")
-        let metadataBody = try String(decoding: JSONSerialization.data(withJSONObject: metadata), as: UTF8.self)
+        let metadataBody = try XCTUnwrap(String(data: JSONSerialization.data(withJSONObject: metadata), encoding: .utf8))
         SequencedURLProtocol.sequence = [.status(200, body: metadataBody), .status(200, body: body)]
         let vm = MailDetailViewModel(mailId: "m1", api: makeAPI())
         await vm.load()
