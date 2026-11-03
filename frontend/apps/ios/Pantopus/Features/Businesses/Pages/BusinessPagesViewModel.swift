@@ -86,6 +86,7 @@ public final class BusinessPagesViewModel {
     public private(set) var isCreating = false
     public private(set) var isLoadingRevisions = false
     public private(set) var revisions: [BusinessPageRevisionRow] = []
+    public private(set) var revisionsErrorMessage: String?
     /// Page id whose revision history is expanded, nil when collapsed.
     public private(set) var expandedRevisionsPageId: String?
     public private(set) var restoringRevision: Int?
@@ -143,9 +144,10 @@ public final class BusinessPagesViewModel {
         } catch {
             guard !Task.isCancelled, pagesRequestId == requestId else { return }
             let message = message(for: error, fallback: "Failed to load pages")
-            if case .loaded = state {
+            if case .loaded = state, (error as? APIError)?.isTransient == true {
                 toastMessage = message
             } else {
+                collapseRevisions()
                 state = .error(message: message)
             }
         }
@@ -213,9 +215,15 @@ public final class BusinessPagesViewModel {
         await loadRevisions(pageId: row.id)
     }
 
+    public func retryRevisions() async {
+        guard let pageId = expandedRevisionsPageId else { return }
+        await loadRevisions(pageId: pageId)
+    }
+
     private func loadRevisions(pageId: String) async {
         let requestId = UUID()
         revisionsRequestId = requestId
+        revisionsErrorMessage = nil
         isLoadingRevisions = true
         defer {
             if revisionsRequestId == requestId { isLoadingRevisions = false }
@@ -230,14 +238,15 @@ public final class BusinessPagesViewModel {
         } catch {
             guard !Task.isCancelled, revisionsRequestId == requestId,
                   expandedRevisionsPageId == pageId else { return }
-            revisions = []
-            toastMessage = message(for: error, fallback: "Failed to load revisions")
+            if (error as? APIError)?.isTransient != true { revisions = [] }
+            revisionsErrorMessage = message(for: error, fallback: "Failed to load revisions")
         }
     }
 
     public func collapseRevisions() {
         revisionsRequestId = nil
         isLoadingRevisions = false
+        revisionsErrorMessage = nil
         expandedRevisionsPageId = nil
         revisions = []
     }
