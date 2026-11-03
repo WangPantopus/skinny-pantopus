@@ -1,14 +1,10 @@
 package app.pantopus.android
 
-import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -17,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -110,25 +105,6 @@ class MainActivity : FragmentActivity() {
      */
     private val toastController = ToastController()
 
-    /**
-     * Runtime POST_NOTIFICATIONS launcher (Android 13+). Mirrors iOS's
-     * `UNUserNotificationCenter.requestAuthorization` — same trigger
-     * point (first launch), same observable outcome (system prompt then
-     * grant or deny). The result is logged; the syncer will fire either
-     * way so a denial doesn't strand the FCM token off-device.
-     */
-    private val notificationPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            Timber.d("POST_NOTIFICATIONS granted=$granted")
-            if (!granted) {
-                Timber.i("Push permission denied — system notifications will be suppressed")
-            }
-            // Kick the syncer regardless. Even if the user denies the
-            // system prompt the backend should still know the token so
-            // server-side preference toggles can re-enable later.
-            launchPushTokenSync()
-        }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // First, so the copies are in memory before the first screens ask for them.
@@ -184,12 +160,10 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
-        // Mirror iOS AppDelegate.requestNotificationPermission():
-        // on Android 13+ the OS requires an explicit runtime prompt.
-        // On earlier versions notifications are granted by default.
-        // Asking at launch lets radon, task, briefing and Support Train
-        // reminders arrive even when the pickup primer is never opened.
-        requestNotificationPermissionIfNeeded()
+        // Android 13+ asks for notifications in the briefings notice after
+        // sign-in, with the reason on screen (BriefingNotice), not at launch
+        // before anyone has an account. As on iPhone. Token sync runs in onStart
+        // either way.
     }
 
     override fun onStart() {
@@ -315,21 +289,6 @@ class MainActivity : FragmentActivity() {
             appLockManager.preferenceEnabled.collect { enabled ->
                 secureWindowController.setPrivacyHold(enabled)
             }
-        }
-    }
-
-    private fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            // onStart handles token sync, including devices without a runtime prompt.
-            return
-        }
-        val granted =
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.POST_NOTIFICATIONS,
-            ) == PackageManager.PERMISSION_GRANTED
-        if (!granted) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 

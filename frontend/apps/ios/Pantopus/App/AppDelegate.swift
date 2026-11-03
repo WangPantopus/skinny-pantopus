@@ -59,7 +59,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         }
         registerReminderCategories()
         UNUserNotificationCenter.current().delegate = self
-        requestNotificationPermission()
+        registerForPushIfAllowed()
         return true
     }
 
@@ -94,24 +94,22 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         )
     }
 
-    private func requestNotificationPermission() {
+    /// Not asked at launch, before anyone has a reason or an account: the
+    /// briefings notice asks after sign-in, with the reason on screen
+    /// (`BriefingNoticeView`). A phone that already allows notifications
+    /// registers at every launch so its token stays current.
+    private func registerForPushIfAllowed() {
         if ProcessInfo.processInfo.environment["UI_TESTS_DISABLE_NOTIFICATIONS"] == "1" {
             return
         }
-
-        // Ask at launch so radon, task, briefing and Support Train reminders can
-        // arrive even when the person never opens the pickup primer.
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { [weak self] granted, error in
-            if let error {
-                self?.logger.error("Push permission error", metadata: ["error": .string(error.localizedDescription)])
-                return
-            }
-            guard granted else {
-                self?.logger.info("Push permission denied by user")
-                return
-            }
-            DispatchQueue.main.async {
-                UIApplication.shared.registerForRemoteNotifications()
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            switch settings.authorizationStatus {
+            case .authorized, .provisional, .ephemeral:
+                DispatchQueue.main.async {
+                    UIApplication.shared.registerForRemoteNotifications()
+                }
+            default:
+                break
             }
         }
     }

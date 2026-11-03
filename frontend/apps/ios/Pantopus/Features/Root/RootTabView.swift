@@ -191,7 +191,7 @@ public struct RootTabView: View {
             .background {
                 if signedInUserID != nil, !AppLockManager.shared.isLocked,
                    !showProfile, pendingInviteToken == nil {
-                    BriefingNoticeView().id(signedInUserID)
+                    BriefingNoticeView(mayShow: briefingNoticeMayShow).id(signedInUserID)
                 }
             }
             .task {
@@ -498,6 +498,17 @@ public struct RootTabView: View {
     private func presentProfile(at route: YouRoute) {
         profileInitialRoute = route
         showProfile = true
+    }
+
+    /// The briefings notice waits until nothing else is asking: the Place tab
+    /// on its own root (not under "Keep this address handy", nor a plan or post
+    /// opened by a link), or Today.
+    private var briefingNoticeMayShow: Bool {
+        switch model.selected {
+        case .place: model.placeAtRoot
+        case .today: true
+        default: false
+        }
     }
 
     private var tabBinding: Binding<RootTab> {
