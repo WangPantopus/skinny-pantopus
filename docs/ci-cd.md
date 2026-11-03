@@ -97,7 +97,7 @@ this scrape endpoint.
    An automatic run skips quietly (no failure, no notification) when a newer merge
    has superseded its commit, or when nothing in `backend/`, `scripts/deploy/`, the
    root package files or this workflow changed since the environment's last
-   release: each rollout restarts the API for about half a minute. A manual
+   release: each rollout replaces the API and restarts the worker. A manual
    dispatch always deploys the head.
 
    GitHub lists every automatic run under `master`, because a `workflow_run` runs
@@ -118,12 +118,23 @@ this scrape endpoint.
    files are frozen and no hosted SQL executes. If a newer commit reaches the
    branch while the release builds, the release stops before cutover and the newer
    commit's run releases it.
-6. On EC2, start an unexposed API candidate with background jobs disabled. Its
-   `/health` probe must reach Supabase successfully before cutover.
-7. Preserve the old containers; replace API and worker together. If startup,
-   binding or readiness fails, stop partial replacements and restore the old
-   containers. This is a short stop/start deployment, so existing sockets may
-   disconnect; it is not a zero-downtime load-balancer rollout.
+6. On EC2, start the new API beside the live one with background jobs disabled,
+   reachable only on the loopback port the live one doesn't use (the target's
+   port plus 100 or plus 200). Its `/health` probe must reach Supabase
+   successfully before anything else changes.
+7. Replace the worker (stop the old one, start the new one, wait for its
+   readiness), then switch the API without closing the target's port. A small
+   nginx TCP proxy, `pantopus-backend-proxy` (staging:
+   `pantopus-backend-staging-proxy`), holds the port host nginx sends to
+   (`BACKEND_API_BIND`). On reload it sends new connections to the new API
+   while connections already open finish on the old one; its configuration is
+   `~/pantopus/proxy-<target>/nginx.conf`, and `docker logs` shows only
+   connections that failed. The old API then has up to 60 seconds to finish its
+   requests and stops; Socket.IO clients reconnect to the new one. If startup,
+   readiness or the switch fails, the proxy stays on (or returns to) the old
+   API, partial replacements are removed and the old worker is restored. The
+   first release with the proxy moves the port from the API container to the
+   proxy, so that one release still drops requests for about 10 seconds.
 8. Keep stopped previous containers/images and record the release digest in the
    Actions summary. Never automatically prune the only rollback image. Before
    each pull, remove this repository's untagged release images that no
@@ -158,7 +169,7 @@ And these environment **variables**:
 
 | Variable | Value |
 |---|---|
-| `BACKEND_API_BIND` | `127.0.0.1:8000` (production) or `127.0.0.1:18001` (staging) |
+| `BACKEND_API_BIND` | `127.0.0.1:8000` (production) or `127.0.0.1:18001` (staging); the target's proxy listens there, and its API on `127.0.0.1` at that port plus 100 or plus 200 (8100/8200, 18101/18201) |
 | `SUPABASE_SESSION_POOLER_HOST` | The project's session-pooler host (below) |
 | `DB_MIGRATIONS_ENABLED` | `true` once the project's database has every migration in `supabase/migrations` (`supabase db push --dry-run` reports nothing to push); until then each release stops at **Require database releases in this environment** |
 | `BACKEND_DEPLOY_ENABLED` | `true`, last |
@@ -218,6 +229,19 @@ release's containers stopped as `*-previous`; the API was unreachable for about
 2.6 s during a swap. A release whose candidate could not reach the database
 stopped after readiness timed out without touching the running API, and an image
 whose revision label didn't match the expected commit was refused at once.
+
+Rehearsed again on November 3 for the proxy (ZDD, PR 3206) on a local imitation
+of the host: its own Docker engine, host nginx in front of ports 8000 and 18001,
+a registry, and Postgres with PostgREST for `/health`. Request loops ran through
+host nginx (`/`, `/health`, a POST and six signed-in Socket.IO connections).
+With the previous script, a release refused requests for 14 s and 26 s: the old
+API waited out its 10 s shutdown timer whenever a socket was open, then the
+worker stopped, then the new API booted. With the proxy, releases, a rollback to
+the older digest and a staging release had no failed request and no refused
+socket; requests running on the old API finished before it stopped, and sockets
+closed cleanly and reconnected. A new API or worker that failed readiness, and
+a release stopped with SIGTERM, ended with the old API still serving and no
+failed request. A host restart brought back the proxy and the live API.
 
 ## Required check and permissions
 
