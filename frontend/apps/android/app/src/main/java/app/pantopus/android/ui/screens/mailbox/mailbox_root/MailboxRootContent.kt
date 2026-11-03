@@ -66,15 +66,24 @@ import app.pantopus.android.ui.theme.Spacing
 fun MailboxHeroCard(
     hero: MailboxHeroState,
     waiting: Int = 0,
+    waitingLetters: Int = 0,
     onOpenSent: () -> Unit = {},
 ) {
-    val flag = waiting > 0
+    val count = waiting + waitingLetters
+    val flag = count > 0
     val title = if (flag) "Your flag is up" else hero.title
+    // What waits, by what it is: cards, letters, or pieces for both.
+    val what =
+        when {
+            waitingLetters == 0 -> "card"
+            waiting == 0 -> "letter"
+            else -> "piece"
+        }
     val detail =
         when {
             !flag -> hero.detail
-            waiting == 1 -> "1 card waits for the 7 a.m. pickup"
-            else -> "$waiting cards wait for the 7 a.m. pickup"
+            count == 1 -> "1 $what waits for the 7 a.m. pickup"
+            else -> "$count ${what}s wait for the 7 a.m. pickup"
         }
     // One sentence each, with words for the "·" a screen reader would otherwise read out.
     val spoken =

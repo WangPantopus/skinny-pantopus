@@ -9,11 +9,12 @@
 
 import { useState } from 'react';
 import { FileText, Paperclip, Sparkles } from 'lucide-react';
-import type { MailItemV2 } from '@/types/mailbox';
+import type { BookletItem, MailItemV2 } from '@/types/mailbox';
 import { getEnclosureLink, MailboxApiError } from '@/lib/mailbox-api';
 import MailPiece, { pieceKind, pieceOutside, pieceTrust } from './MailPiece';
 import { mailLoadMessage } from './mailLoadMessage';
 import MailContentRenderer from '@/app/(app)/app/mailbox/_components/MailContentRenderer';
+import BookletViewer from './BookletViewer';
 
 const SERIF = "'Iowan Old Style', 'Hoefler Text', Charter, Georgia, serif";
 
@@ -138,6 +139,14 @@ export default function LetterView({
   } as Enclosure & { url: string }));
   const body = piece.content || piece.preview_text || '';
   const title = piece.display_title || piece.subject || '';
+  const isBooklet = !piece.certified && (kind === 'booklet' || piece.mail_type === 'book');
+  const payload: Record<string, unknown> = piece.object_payload ?? {};
+  const rawPages: unknown[] = Array.isArray(payload.pages) ? payload.pages : [];
+  const rawText: unknown[] = Array.isArray(payload.ocr_texts) ? payload.ocr_texts : [];
+  const pages = rawPages.flatMap((url, index) => typeof url === 'string' && url.trim()
+    ? [{ page_number: index + 1, image_url: url, text_content: typeof rawText[index] === 'string' ? rawText[index] as string : undefined }]
+    : []);
+  const booklet: BookletItem = { mail_id: piece.id, pages, page_count: pages.length, streaming_available: false };
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 pb-6 pt-2">
@@ -183,6 +192,13 @@ export default function LetterView({
           ) : (
             <p className="mt-3 text-sm italic text-[#5f6775]">This piece has no letter inside. What it says is on the outside.</p>
           )}
+          {isBooklet ? (
+            pages.length ? (
+              <section aria-label="Booklet pages" className="mt-4 h-[min(70vh,720px)] min-h-[400px] rounded-lg bg-app-surface">
+                <BookletViewer key={piece.id} booklet={booklet} title={title || 'Booklet'} sender={from} />
+              </section>
+            ) : <p role="status" className="mt-3 text-sm">This booklet has no readable pages.</p>
+          ) : null}
           {enclosures.length ? (
             <section aria-label="Enclosed" className="mt-5">
               <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.06em] text-[#4e5563]">

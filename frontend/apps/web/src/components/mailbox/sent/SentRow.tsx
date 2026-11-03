@@ -31,7 +31,7 @@ export default function SentRow({
   const toLine = sentToLine(piece);
   const statusLine = sentStatusLine(piece);
   // Read out as a sentence: "Your card to Maya O. In their mailbox since Sat, Oct 31."
-  const who = `your card to ${(piece.to_name || 'them').replace(/\.$/, '')}${piece.by_email ? ' by email' : ''}`;
+  const who = `your ${piece.kind === 'letter' ? 'letter' : 'card'} to ${(piece.to_name || 'them').replace(/\.$/, '')}${piece.by_email && piece.kind !== 'letter' ? ' by email' : ''}`;
 
   // Wider screens keep Sent in place beside the card (as Incoming does); phones open it as its own screen.
   const open = (event: MouseEvent<HTMLAnchorElement>) => {

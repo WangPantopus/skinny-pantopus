@@ -14,7 +14,7 @@ import Foundation
 enum MailSentWords {
     /// "To Maya O. · Christmas card", or "To m***@example.com · by email".
     static func toLine(_ piece: MailSentPiece) -> String {
-        "To \(piece.toName) · \(piece.byEmail ? "by email" : "Christmas card")"
+        "To \(piece.toName) · \(piece.isLetter ? "Letter" : (piece.byEmail ? "by email" : "Christmas card"))"
     }
 
     /// Where it is now, as its row and its page say it.
@@ -29,11 +29,11 @@ enum MailSentWords {
         case .delivered:
             return piece.sealed ? "In their mailbox, sealed until Christmas" : "In their mailbox since \(day)"
         case .emailWaiting:
-            return "Waiting for them to open the email"
+            return piece.isLetter ? "Waiting for them to claim it" : "Waiting for them to open the email"
         case .claimed:
-            return "They joined Pantopus and have it"
+            return piece.isLetter ? "They claimed your letter" : "They joined Pantopus and have it"
         case .expired:
-            return "They didn’t open the email in 90 days"
+            return piece.isLetter ? "The claim link expired" : "They didn’t open the email in 90 days"
         }
     }
 
@@ -76,9 +76,15 @@ enum MailSentWords {
 
     // MARK: Its trail
 
+    /// Who it went to, as "Maya’s" phrases name them: their first name, or a
+    /// household whole ("their household").
+    static func recipientFirst(_ piece: MailSentPiece) -> String {
+        piece.toHousehold ? piece.toName : HolidayCardWords.firstName(piece.toName)
+    }
+
     /// A step's words: "Sealed by you", "Delivered with Maya’s 7 a.m. mail" …
     static func trailTitle(_ step: MailSentPiece.TrailStep, piece: MailSentPiece) -> String {
-        let first = HolidayCardWords.possessive(HolidayCardWords.firstName(piece.toName))
+        let first = HolidayCardWords.possessive(recipientFirst(piece))
         let title = switch step.step {
         case "sealed": "Sealed by you"
         case "delivered" where piece.arrival == .christmasMorning: "Delivered with \(first) Christmas morning mail"
@@ -86,11 +92,11 @@ enum MailSentWords {
         case "picked_up": "Picked up by the carrier"
         case "opens": "Opens on Christmas morning"
         // Once claimed, the name is whoever joined, not the address it went to.
-        case "emailed": "Emailed to \(piece.status == .claimed ? "them" : piece.toName)"
+        case "emailed": "\(piece.isLetter ? "Sent" : "Emailed") to \(piece.status == .claimed ? "them" : piece.toName)"
         // Not yet: the drawing's words, as on the web and Android.
-        case "joined" where !step.done: "They join Pantopus and have it"
-        case "joined": "They joined Pantopus and have it"
-        case "returned": "They didn’t open the email in 90 days"
+        case "joined" where !step.done: piece.isLetter ? "They claim your letter" : "They join Pantopus and have it"
+        case "joined": piece.isLetter ? "They claimed your letter" : "They joined Pantopus and have it"
+        case "returned": piece.isLetter ? "The claim link expired" : "They didn’t open the email in 90 days"
         default: step.step.replacingOccurrences(of: "_", with: " ").capitalized
         }
         return step.done ? title : "\(title) · not yet"
@@ -144,13 +150,14 @@ extension MailPieceModel {
             note: nil,
             postmarkTown: nil,
             postmarkDate: posted.map { MailDates.postmarkDay($0, calendar: calendar) } ?? "",
-            postmarkYear: String(piece.card.year),
+            postmarkYear: piece
+                .isLetter ? (posted.map { String(Calendar.current.component(.year, from: $0)) } ?? "") : String(piece.card.year),
             isOpened: false,
             isFaded: false,
             stamp: piece.card.number.map(MailStampArt.forCard(number:)) ?? MailStampArt.forPiece(piece.id),
             peekLine: nil,
             meta: MailPieceMeta(parts: [], due: nil, dueIsSettled: false),
-            card: MailCard(design: design, year: piece.card.year, sealed: piece.sealed),
+            card: piece.isLetter ? nil : MailCard(design: design, year: piece.card.year, sealed: piece.sealed),
             isPostmarked: posted != nil
         )
     }

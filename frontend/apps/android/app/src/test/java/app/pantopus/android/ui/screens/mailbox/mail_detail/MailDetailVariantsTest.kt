@@ -8,6 +8,8 @@ import app.pantopus.android.data.api.models.mailbox.MailDetailResponse
 import app.pantopus.android.data.api.models.mailbox.MarkMailViewedResponse
 import app.pantopus.android.data.api.models.mailbox.v2.CommunityRsvpResponse
 import app.pantopus.android.data.api.models.mailbox.v2.CommunityRsvpStatus
+import app.pantopus.android.data.api.models.mailbox.v2.MailboxV2Item
+import app.pantopus.android.data.api.models.mailbox.v2.MailboxV2ItemResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.gigs.GigsRepository
@@ -19,6 +21,7 @@ import app.pantopus.android.ui.screens.gigs.checkout.gigIdentityFixture
 import app.pantopus.android.ui.screens.mailbox.item_detail.MailItemCategory
 import app.pantopus.android.ui.screens.shared.mail_item_detail.MailDetailTrust
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -38,8 +41,8 @@ import org.junit.Test
 /**
  * T6.5c (P21) — Tests for the booklet + certified variant projections.
  * Mirrors iOS `MailDetailVariantsTests`. The shared VM decodes
- * `BookletDetailDto` / `CertifiedDetailDto` from the V1 detail
- * response's `object` field; variant layouts dispatch on the optional
+ * Legacy inline variants and private booklet pages from V2;
+ * variant layouts dispatch on the optional
  * payload fields exposed by `MailDetailContent`.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -106,26 +109,27 @@ class MailDetailVariantsTest {
     // ─── Booklet ───────────────────────────────────────────
 
     @Test
-    fun booklet_projection_decodes_pages_from_object() =
+    fun booklet_projection_loads_private_pages_and_keeps_legacy_inline_pages() =
         runTest {
+            val payload =
+                mapOf(
+                    "page_count" to 3,
+                    "summary" to "Voter guide.",
+                    "pages" to listOf("https://example.test/p1.jpg", "https://example.test/p2.jpg", "https://example.test/p3.jpg"),
+                )
+            val detail =
+                makeDetail(category = MailItemCategory.Booklet, objectPayload = mapOf("storage_path" to "private/book.json"))
+                    .copy(mailType = "book", kind = "booklet")
             coEvery { repo.detail("m1") } returns
+                NetworkResult.Success(MailDetailResponse(mail = detail))
+            coEvery { repo.item("m1") } returns
                 NetworkResult.Success(
-                    MailDetailResponse(
-                        mail =
-                            makeDetail(
-                                category = MailItemCategory.Booklet,
-                                objectPayload =
-                                    mapOf(
-                                        "page_count" to 3,
-                                        "summary" to "Voter guide.",
-                                        "pages" to
-                                            listOf(
-                                                "https://example.test/p1.jpg",
-                                                "https://example.test/p2.jpg",
-                                                "https://example.test/p3.jpg",
-                                            ),
-                                    ),
-                            ),
+                    MailboxV2ItemResponse(
+                        MailboxV2Item(
+                            id = "m1", type = "book", createdAt = detail.createdAt, displayTitle = null,
+                            previewText = null, sender = null, senderDisplay = "Sender", senderTrust = "pantopus_user",
+                            `package` = null, objectPayload = payload,
+                        ),
                     ),
                 )
             val vm = makeVm()
@@ -138,20 +142,22 @@ class MailDetailVariantsTest {
             assertEquals(3, content.bookletDetail?.pages?.size)
             assertEquals(3, content.bookletDetail?.pageCount)
             assertNull(content.certifiedDetail)
+            assertEquals(MailItemCategory.Certified, MailDetailViewModel.project(detail.copy(certified = true)).category)
+            assertEquals(3, MailDetailViewModel.project(makeDetail(MailItemCategory.Booklet, payload)).bookletDetail?.pages?.size)
         }
 
     @Test
-    fun booklet_payload_absent_leaves_null() =
+    fun booklet_payload_failure_is_retryable_without_marking_it_viewed() =
         runTest {
             coEvery { repo.detail("m1") } returns
                 NetworkResult.Success(
                     MailDetailResponse(mail = makeDetail(category = MailItemCategory.Booklet)),
                 )
+            coEvery { repo.item("m1") } returns NetworkResult.Failure(NetworkError.Server(503, null))
             val vm = makeVm()
             vm.load()
-            val content = (vm.state.value as MailDetailUiState.Loaded).content
-            assertEquals(MailItemCategory.Booklet, content.category)
-            assertNull(content.bookletDetail)
+            assertTrue(vm.state.value is MailDetailUiState.Error)
+            coVerify(exactly = 0) { repo.markViewed(any()) }
         }
 
     @Test

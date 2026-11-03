@@ -3462,6 +3462,9 @@ public struct HubTabRoot: View {
             MailSentPieceView(viewModel: MailSentPieceViewModel(id: id)) {
                 Task { @MainActor in pop() }
             }
+            // A notice that swaps one open Sent page for another gets a fresh page,
+            // not the first piece's view model.
+            .id(id)
         case .mailParty:
             MailPartyView(
                 onOpenMail: { mailId in

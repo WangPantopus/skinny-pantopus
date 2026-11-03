@@ -6,13 +6,16 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.mailbox.MailboxRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -30,6 +33,52 @@ class CeremonialMailOpenViewModel
         private val _isVoicePlaying = MutableStateFlow(false)
         val isVoicePlaying: StateFlow<Boolean> = _isVoicePlaying.asStateFlow()
 
+        private val _isSaved = MutableStateFlow(false)
+        val isSaved = _isSaved.asStateFlow()
+        private val _actionInFlight = MutableStateFlow(false)
+        val actionInFlight = _actionInFlight.asStateFlow()
+        private val _didArchive = MutableStateFlow(false)
+        val didArchive = _didArchive.asStateFlow()
+        private val _toast = MutableStateFlow<String?>(null)
+        val toast = _toast.asStateFlow()
+
+        fun clearToast() {
+            _toast.value = null
+        }
+
+        /** Use the same filing/archive endpoints and list invalidation as the standard letter reader. */
+        fun performOutcome(action: String) {
+            if (action !in setOf("save", "archive") || _actionInFlight.value ||
+                _state.value !is CeremonialMailOpenUiState.Loaded
+            ) {
+                return
+            }
+            if (action == "save" && _isSaved.value) return
+            _actionInFlight.value = true
+            viewModelScope.launch {
+                try {
+                    withContext(NonCancellable) {
+                        val result = if (action == "save") repository.itemAction(mailId, "file") else repository.archive(mailId)
+                        when (result) {
+                            is NetworkResult.Success -> {
+                                MailboxRepository.announceMailLeftList(mailId)
+                                if (action == "save") {
+                                    _isSaved.value = true
+                                    _toast.value = "Saved to the Vault."
+                                } else {
+                                    _didArchive.value = true
+                                }
+                            }
+                            is NetworkResult.Failure ->
+                                _toast.value = result.error.displayMessage("Couldn't $action this letter. Try again.")
+                        }
+                    }
+                } finally {
+                    _actionInFlight.value = false
+                }
+            }
+        }
+
         fun load() {
             if (mailId.isBlank()) {
                 _state.value = CeremonialMailOpenUiState.Error("Missing mail id.")
@@ -40,6 +89,7 @@ class CeremonialMailOpenViewModel
                 when (val result = repository.item(mailId)) {
                     is NetworkResult.Success -> {
                         val letter = project(result.data, mailId)
+                        _isSaved.value = result.data.mail.lifecycle == "filed"
                         _state.value = CeremonialMailOpenUiState.Loaded(letter, CeremonialMailPhase.Sealed)
                     }
                     is NetworkResult.Failure ->

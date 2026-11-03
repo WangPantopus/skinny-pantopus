@@ -996,6 +996,9 @@ public struct YouTabRoot: View {
             MailSentPieceView(viewModel: MailSentPieceViewModel(id: id)) {
                 Task { @MainActor in pop() }
             }
+            // A notice that swaps one open Sent page for another gets a fresh page,
+            // not the first piece's view model.
+            .id(id)
         case .communityMail:
             CommunityMailView(
                 viewModel: CommunityMailViewModel { Task { @MainActor in pop() } }

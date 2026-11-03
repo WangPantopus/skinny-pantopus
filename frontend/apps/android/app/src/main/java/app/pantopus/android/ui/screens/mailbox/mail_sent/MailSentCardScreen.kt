@@ -166,12 +166,13 @@ private fun SentCardPage(
     onTakeBack: () -> Unit,
 ) {
     val to = card.toName?.takeIf { it.isNotBlank() } ?: "them"
-    val first = to.trim().split(Regex("\\s+")).firstOrNull()?.takeIf { it.isNotEmpty() } ?: to
+    // A household is said whole ("their household’s 7 a.m. mail"), a person by their first name.
+    val first = if (card.toHousehold) to else to.trim().split(Regex("\\s+")).firstOrNull()?.takeIf { it.isNotEmpty() } ?: to
     val sent = HolidayCardTimes.shortDay(card.sentAt, zone)
     val line = MailSentWords.line(card, zone)
     Column {
         Text(
-            "Your card to $to",
+            "Your ${if (card.kind == "letter") "letter" else "card"} to $to",
             fontSize = 24.sp,
             lineHeight = 32.sp,
             fontWeight = FontWeight.Bold,
@@ -186,15 +187,25 @@ private fun SentCardPage(
             modifier = Modifier.padding(top = 2.dp),
         )
     }
-    val joined = !card.byEmail || card.status == "claimed"
-    PageSection(if (joined) "In $first’s Mailbox" else "Once they join with that address") {
+    val delivered = card.status == "delivered" || card.status == "claimed"
+    val mailboxLabel = if (card.byEmail) "Once they claim it" else "Addressed to $first"
+    PageSection(if (delivered) "In $first’s Mailbox" else mailboxLabel) {
         val envelope = MailSentWords.envelope(card)
         Box(modifier = Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = envelope.accessibilityLabel }) {
             MailPiece(envelope)
         }
     }
-    sentLetterCard(card)?.let { face ->
-        PageSection("The card you sent") { BothSides(face, card.envelope?.from?.takeIf { it.isNotBlank() } ?: "You") }
+    if (card.kind == "letter") {
+        PageSection("The letter you sent") {
+            card.subject?.let { Text(it, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText) }
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                Text(card.note.orEmpty(), fontSize = 16.sp, lineHeight = 25.sp, color = PantopusColors.appText)
+            }
+        }
+    } else {
+        sentLetterCard(card)?.let { face ->
+            PageSection("The card you sent") { BothSides(face, card.envelope?.from?.takeIf { it.isNotBlank() } ?: "You") }
+        }
     }
     Trail(card, first, zone)
     if (card.canTakeBack) ChangedYourMind(card, zone, takingBack, onTakeBack)
@@ -293,7 +304,7 @@ private fun Trail(
         ) {
             PantopusIconImage(icon = PantopusIcon.Lock, contentDescription = null, size = 15.dp, tint = PantopusColors.appTextStrong)
             Text(
-                "Like real mail, a card never tells you when it was opened.",
+                "Mail never tells you when it was opened.",
                 fontSize = 13.sp,
                 lineHeight = 18.sp,
                 color = PantopusColors.appTextStrong,
@@ -414,7 +425,7 @@ private fun Loading() {
         modifier =
             Modifier
                 .padding(Spacing.s4)
-                .semantics { contentDescription = "Loading your card" },
+                .semantics { contentDescription = "Loading your mail" },
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
         Shimmer(width = 260.dp, height = 28.dp)
@@ -437,19 +448,7 @@ private fun trailStep(
     first: String,
     zone: ZoneId,
 ): MailTrailStep {
-    val round = if (card.arrival == "christmas_morning") "Christmas morning" else "7 a.m."
-    val title =
-        when (step.step) {
-            "sealed" -> "Sealed by you"
-            "picked_up" -> "Picked up by the carrier"
-            "delivered" -> "Delivered with $first’s $round mail"
-            "opens" -> "Opens on Christmas morning"
-            // Once claimed, Sent names the person instead of the address it went to (as the web says it).
-            "emailed" -> "Emailed to ${card.toName?.takeIf { card.status != "claimed" && it.isNotBlank() } ?: "them"}"
-            "joined" -> if (step.done) "They joined Pantopus and have it" else "They join Pantopus and have it"
-            "returned" -> "They didn’t open the email in 90 days"
-            else -> step.step
-        }
+    val title = sentTrailTitle(step, card, first)
     val detail =
         step.at?.let { at -> HolidayCardTimes.parse(at)?.atZone(zone)?.format(trailTime) }
             ?: step.on?.let { on -> runCatching { LocalDate.parse(on.take(10)) }.getOrNull()?.format(trailDay) }
@@ -479,4 +478,35 @@ private fun sentLetterCard(card: SentCard): MailLetterCard? {
         firstOpen = false,
         pictureHeight = face.height,
     )
+}
+
+private fun claimStepTitle(
+    done: Boolean,
+    letter: Boolean,
+): String =
+    if (letter) {
+        if (done) "They claimed your letter" else "They claim your letter"
+    } else {
+        if (done) "They joined Pantopus and have it" else "They join Pantopus and have it"
+    }
+
+private fun sentTrailTitle(
+    step: SentCardStep,
+    card: SentCard,
+    first: String,
+): String {
+    val round = if (card.arrival == "christmas_morning") "Christmas morning" else "7 a.m."
+    val contactTo = card.toName?.takeIf { card.status != "claimed" && it.isNotBlank() } ?: "them"
+    val letter = card.kind == "letter"
+    return when (step.step) {
+        "sealed" -> "Sealed by you"
+        "picked_up" -> "Picked up by the carrier"
+        "delivered" -> "Delivered with $first’s $round mail"
+        "opens" -> "Opens on Christmas morning"
+        // Once claimed, Sent names the person instead of the address it went to (as the web says it).
+        "emailed" -> "${if (letter) "Sent" else "Emailed"} to $contactTo"
+        "joined" -> claimStepTitle(step.done, letter)
+        "returned" -> if (letter) "The claim link expired" else "They didn’t open the email in 90 days"
+        else -> step.step
+    }
 }

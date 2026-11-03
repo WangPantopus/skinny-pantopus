@@ -25,8 +25,10 @@ data class DrawerListResponse(
 @JsonClass(generateAdapter = true)
 data class MailSentSummary(
     val any: Boolean = false,
-    /** Cards to a person still waiting for the carrier's 7 a.m. pickup. */
+    /** Letters and cards to a person still waiting for the carrier's 7 a.m. pickup. */
     val waiting: Int = 0,
+    /** Of those, the letters (the rest are cards; 0 from an older server). */
+    @Json(name = "waiting_letters") val waitingLetters: Int = 0,
 )
 
 /**
@@ -258,6 +260,7 @@ data class MailboxV2Item(
     @Json(name = "preview_text") val previewText: String?,
     val viewed: Boolean = false,
     val archived: Boolean = false,
+    val lifecycle: String? = null,
     val sender: DrawerMail.SenderRef?,
     @Json(name = "sender_display") val senderDisplay: String,
     @Json(name = "sender_trust") val senderTrust: String,
