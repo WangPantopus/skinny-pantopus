@@ -30,6 +30,7 @@ public struct PantopusTextField: View {
     private let contentType: UITextContentType?
     private let identifier: String?
     private let containerColor: Color
+    private let axis: Axis
 
     @FocusState private var isFocused: Bool
 
@@ -44,7 +45,8 @@ public struct PantopusTextField: View {
         keyboardType: UIKeyboardType = .default,
         contentType: UITextContentType? = nil,
         identifier: String? = nil,
-        containerColor: Color = Theme.Color.appSurface
+        containerColor: Color = Theme.Color.appSurface,
+        axis: Axis = .horizontal
     ) {
         self.label = label
         _text = text
@@ -57,6 +59,7 @@ public struct PantopusTextField: View {
         self.contentType = contentType
         self.identifier = identifier
         self.containerColor = containerColor
+        self.axis = axis
     }
 
     public var body: some View {
@@ -110,7 +113,7 @@ public struct PantopusTextField: View {
                 .accessibilityLabel(a11yLabel)
                 .modifier(IdentifierModifier(identifier: identifier))
         } else {
-            TextField(placeholder, text: $text)
+            TextField(placeholder, text: $text, axis: axis)
                 .textContentType(contentType)
                 .keyboardType(keyboardType)
                 .focused($isFocused)

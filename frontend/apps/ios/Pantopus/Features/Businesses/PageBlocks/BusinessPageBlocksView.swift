@@ -15,6 +15,8 @@ import SwiftUI
 /// Block builder for one custom business page.
 @MainActor
 public struct BusinessPageBlocksView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var viewModel: BusinessPageBlocksViewModel
     private let pageTitle: String
     private let onBack: @MainActor () -> Void
@@ -158,7 +160,7 @@ public struct BusinessPageBlocksView: View {
             HStack(spacing: Spacing.s2) {
                 Icon(.eye, size: 16, color: Theme.Color.warning)
                 Text("Preview mode — changes not saved")
-                    .pantopusTextStyle(.small)
+                    .scaledFont(14)
                     .foregroundStyle(Theme.Color.warning)
                 Spacer()
             }
@@ -211,28 +213,31 @@ public struct BusinessPageBlocksView: View {
     }
 
     private var revisionStrip: some View {
-        HStack(spacing: Spacing.s2) {
+        actionLayout {
             if viewModel.publishedRevision > 0 {
                 Text("v\(viewModel.publishedRevision)")
-                    .pantopusTextStyle(.caption)
+                    .scaledFont(12)
                     .foregroundStyle(Theme.Color.success)
                     .accessibilityIdentifier("businessPageBlocks.publishedRevision")
             } else {
                 Text("Unpublished")
-                    .pantopusTextStyle(.caption)
+                    .scaledFont(12)
                     .foregroundStyle(Theme.Color.appTextMuted)
             }
             if viewModel.hasChanges {
-                Circle()
-                    .fill(Theme.Color.warningSolid)
-                    .frame(width: 6, height: 6)
-                Text("Unsaved")
-                    .pantopusTextStyle(.caption)
-                    .foregroundStyle(Theme.Color.warning)
-                    .accessibilityIdentifier("businessPageBlocks.unsaved")
+                HStack(spacing: Spacing.s2) {
+                    Circle()
+                        .fill(Theme.Color.warningSolid)
+                        .frame(width: 6, height: 6)
+                        .accessibilityHidden(true)
+                    Text("Unsaved")
+                        .scaledFont(12)
+                        .foregroundStyle(Theme.Color.warning)
+                        .accessibilityIdentifier("businessPageBlocks.unsaved")
+                }
             }
-            Spacer()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Spacing.s4)
         .padding(.vertical, Spacing.s2)
     }
@@ -252,12 +257,13 @@ public struct BusinessPageBlocksView: View {
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(entry.label)
-                            .pantopusTextStyle(.body)
+                            .scaledFont(16)
                             .foregroundStyle(Theme.Color.appTextStrong)
                         Text(block.summaryLine)
-                            .pantopusTextStyle(.caption)
+                            .scaledFont(12)
                             .foregroundStyle(Theme.Color.appTextSecondary)
-                            .lineLimit(1)
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
                     if !block.isVisible {
@@ -282,6 +288,8 @@ public struct BusinessPageBlocksView: View {
                         size: 16,
                         color: index == 0 ? Theme.Color.appBorderStrong : Theme.Color.appTextSecondary
                     )
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(index == 0)
@@ -296,6 +304,8 @@ public struct BusinessPageBlocksView: View {
                             ? Theme.Color.appBorderStrong
                             : Theme.Color.appTextSecondary
                     )
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(index == viewModel.blocks.count - 1)
@@ -306,13 +316,14 @@ public struct BusinessPageBlocksView: View {
 
                 Button { viewModel.pendingDeleteIndex = index } label: {
                     Icon(.trash2, size: 16, color: Theme.Color.error)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Delete block")
                 .accessibilityIdentifier("businessPageBlocks.delete.\(index)")
             }
             .padding(.horizontal, Spacing.s3)
-            .padding(.vertical, Spacing.s2)
         }
         .background(Theme.Color.appSurface)
         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
@@ -340,7 +351,20 @@ public struct BusinessPageBlocksView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Add block")
             .accessibilityIdentifier("businessPageBlocks.addBlock")
+            saveActions
+        }
+        .padding(Spacing.s4)
+        .background(Theme.Color.appSurface)
+    }
 
+    private var actionLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize && horizontalSizeClass != .regular
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.s2))
+            : AnyLayout(HStackLayout(spacing: Spacing.s2))
+    }
+
+    private var saveActions: some View {
+        actionLayout {
             GhostButton(
                 title: "Save draft",
                 isLoading: viewModel.isSaving,
@@ -359,8 +383,6 @@ public struct BusinessPageBlocksView: View {
             }
             .accessibilityIdentifier("businessPageBlocks.publish")
         }
-        .padding(Spacing.s4)
-        .background(Theme.Color.appSurface)
     }
 
     // MARK: - Bindings

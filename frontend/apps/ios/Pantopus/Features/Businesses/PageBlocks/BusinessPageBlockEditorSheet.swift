@@ -16,6 +16,8 @@ import SwiftUI
 /// the picker is driven off `BusinessPageBlockKind.pickable`.
 @MainActor
 public struct BusinessPageBlockTypePicker: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     private let onSelect: @MainActor (BusinessPageBlockKind) -> Void
     private let onClose: @MainActor () -> Void
 
@@ -31,7 +33,10 @@ public struct BusinessPageBlockTypePicker: View {
         NavigationStack {
             ScrollView {
                 LazyVGrid(
-                    columns: Array(repeating: GridItem(spacing: Spacing.s3), count: 2),
+                    columns: Array(
+                        repeating: GridItem(spacing: Spacing.s3),
+                        count: dynamicTypeSize.isAccessibilitySize && horizontalSizeClass != .regular ? 1 : 2
+                    ),
                     spacing: Spacing.s3
                 ) {
                     ForEach(BusinessPageBlockKind.pickable, id: \.rawValue) { kind in
@@ -42,12 +47,13 @@ public struct BusinessPageBlockTypePicker: View {
                             VStack(alignment: .leading, spacing: Spacing.s2) {
                                 Icon(entry.icon, size: 24, color: Theme.Color.primaryInk)
                                 Text(entry.label)
-                                    .pantopusTextStyle(.body)
+                                    .scaledFont(16)
                                     .foregroundStyle(Theme.Color.appTextStrong)
                                 Text(entry.summary)
-                                    .pantopusTextStyle(.caption)
+                                    .scaledFont(12)
                                     .foregroundStyle(Theme.Color.appTextSecondary)
-                                    .lineLimit(2)
+                                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                                    .fixedSize(horizontal: false, vertical: true)
                                     .multilineTextAlignment(.leading)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -115,6 +121,7 @@ public struct BusinessPageBlockEditorSheet: View {
                 }
                 .padding(Spacing.s4)
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(Theme.Color.appBg)
             .navigationTitle("Edit \(entry.label)")
             .navigationBarTitleDisplayMode(.inline)
@@ -136,7 +143,7 @@ public struct BusinessPageBlockEditorSheet: View {
         HStack(spacing: Spacing.s2) {
             Icon(entry.icon, size: 18, color: Theme.Color.primaryInk)
             Text(entry.label)
-                .pantopusTextStyle(.small)
+                .scaledFont(14)
                 .foregroundStyle(Theme.Color.primaryInk)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -155,7 +162,7 @@ public struct BusinessPageBlockEditorSheet: View {
             buttonListEditor(title: "Call-to-Action Buttons", key: "cta")
         case .text:
             stringField("Heading", key: "heading", placeholder: "Section heading")
-            stringField("Body", key: "body", placeholder: "Body text…")
+            stringField("Body", key: "body", placeholder: "Body text…", axis: .vertical)
         case .gallery:
             stringField("Heading", key: "heading", placeholder: "Gallery")
             hint("Photos can't be added to a gallery yet, so visitors don't see this block")
@@ -201,11 +208,12 @@ public struct BusinessPageBlockEditorSheet: View {
             } label: {
                 HStack {
                     Text("Block settings")
-                        .pantopusTextStyle(.body)
+                        .scaledFont(16)
                         .foregroundStyle(Theme.Color.appTextStrong)
                     Spacer()
                     Icon(showsSettings ? .chevronUp : .chevronDown, size: 18, color: Theme.Color.appTextSecondary)
                 }
+                .frame(minHeight: 44)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -214,7 +222,7 @@ public struct BusinessPageBlockEditorSheet: View {
             if showsSettings {
                 Toggle(isOn: visibleBinding) {
                     Text("Visible to visitors")
-                        .pantopusTextStyle(.small)
+                        .scaledFont(14)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 .tint(Theme.Color.primary600)
@@ -231,7 +239,7 @@ public struct BusinessPageBlockEditorSheet: View {
 
     // MARK: - Field builders
 
-    private func stringField(_ label: String, key: String, placeholder: String) -> some View {
+    private func stringField(_ label: String, key: String, placeholder: String, axis: Axis = .horizontal) -> some View {
         PantopusTextField(
             label,
             text: Binding(
@@ -239,7 +247,8 @@ public struct BusinessPageBlockEditorSheet: View {
                 set: { setString(key, $0) }
             ),
             placeholder: placeholder,
-            identifier: "businessPageBlocks.field.\(key)"
+            identifier: "businessPageBlocks.field.\(key)",
+            axis: axis
         )
     }
 
@@ -261,7 +270,7 @@ public struct BusinessPageBlockEditorSheet: View {
 
     private func hint(_ text: String) -> some View {
         Text(text)
-            .pantopusTextStyle(.caption)
+            .scaledFont(12)
             .foregroundStyle(Theme.Color.appTextMuted)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -274,7 +283,7 @@ public struct BusinessPageBlockEditorSheet: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text(title)
-                .pantopusTextStyle(.caption)
+                .scaledFont(12)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.s2) {
@@ -283,7 +292,7 @@ public struct BusinessPageBlockEditorSheet: View {
                             onSelect(option.key)
                         } label: {
                             Text(option.label)
-                                .pantopusTextStyle(.caption)
+                                .scaledFont(12)
                                 .foregroundStyle(
                                     selected == option.key
                                         ? Theme.Color.appTextInverse
@@ -297,6 +306,8 @@ public struct BusinessPageBlockEditorSheet: View {
                                         : Theme.Color.appSurface
                                 )
                                 .clipShape(Capsule())
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityAddTraits(selected == option.key ? [.isSelected] : [])
@@ -313,7 +324,7 @@ public struct BusinessPageBlockEditorSheet: View {
         let buttons = draft.buttonList(key: key)
         return VStack(alignment: .leading, spacing: Spacing.s2) {
             Text(title)
-                .pantopusTextStyle(.caption)
+                .scaledFont(12)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             ForEach(Array(buttons.enumerated()), id: \.offset) { index, button in
                 VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -387,7 +398,7 @@ public struct BusinessPageBlockEditorSheet: View {
         let items = draft.faqItems
         return VStack(alignment: .leading, spacing: Spacing.s2) {
             Text("Questions & answers")
-                .pantopusTextStyle(.caption)
+                .scaledFont(12)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -420,7 +431,8 @@ public struct BusinessPageBlockEditorSheet: View {
                                 setFaq(next)
                             }
                         ),
-                        placeholder: "Answer"
+                        placeholder: "Answer",
+                        axis: .vertical
                     )
                 }
                 .padding(Spacing.s3)
@@ -437,7 +449,7 @@ public struct BusinessPageBlockEditorSheet: View {
         let stats = draft.stats
         return VStack(alignment: .leading, spacing: Spacing.s2) {
             Text("Stats")
-                .pantopusTextStyle(.caption)
+                .scaledFont(12)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             ForEach(Array(stats.enumerated()), id: \.offset) { index, stat in
                 HStack(alignment: .top, spacing: Spacing.s2) {
@@ -487,6 +499,8 @@ public struct BusinessPageBlockEditorSheet: View {
     ) -> some View {
         Button(action: action) {
             Icon(.xCircle, size: 20, color: Theme.Color.error)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .padding(.top, Spacing.s5)
@@ -503,9 +517,11 @@ public struct BusinessPageBlockEditorSheet: View {
             HStack(spacing: Spacing.s1) {
                 Icon(.plusCircle, size: 18, color: Theme.Color.primaryInk)
                 Text(title)
-                    .pantopusTextStyle(.small)
+                    .scaledFont(14)
                     .foregroundStyle(Theme.Color.primaryInk)
             }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)
