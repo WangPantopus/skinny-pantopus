@@ -37,11 +37,14 @@ export default function BookletViewer({
   onShare,
 }: BookletViewerProps) {
   const isLarge = (booklet.download_size_bytes ?? 0) > 10 * 1024 * 1024;
-  const defaultMode = isLarge ? 'stream' : getStoredMode();
+  const storedMode = getStoredMode();
+  const canStream = Boolean(booklet.streaming_available && booklet.download_url);
+  const defaultMode = isLarge && canStream ? 'stream'
+    : storedMode === 'scroll' || (storedMode === 'stream' && canStream) ? storedMode : 'flip';
   const [mode, setMode] = useState<ReadingMode>(defaultMode);
   const [currentPage, setCurrentPage] = useState(1);
   const pages = booklet.pages;
-  const totalPages = booklet.page_count || pages.length;
+  const totalPages = pages.length;
 
   // Persist reading mode preference
   useEffect(() => {
@@ -52,6 +55,8 @@ export default function BookletViewer({
   useEffect(() => {
     if (mode !== 'flip') return;
     const handler = (e: KeyboardEvent) => {
+      if (e.altKey || e.ctrlKey || e.metaKey ||
+        (e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable="true"]'))) return;
       if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault();
         setCurrentPage(p => Math.max(1, p - 1));
@@ -105,7 +110,7 @@ export default function BookletViewer({
         {/* Reading mode toggle */}
         <div className="flex items-center gap-1 mt-3">
           <span className="text-[10px] text-app-text-muted mr-2">Reading mode:</span>
-          {(['flip', 'scroll', 'stream'] as const).map((m) => (
+          {(['flip', 'scroll', ...(canStream ? ['stream' as const] : [])] as const).map((m) => (
             <button
               key={m}
               type="button"
@@ -223,6 +228,12 @@ function FlipMode({
         )}
       </div>
 
+      {pageData?.image_url && pageData.text_content ? (
+        <p className="mt-3 max-h-32 overflow-y-auto whitespace-pre-wrap text-sm text-app-text" aria-label={`Text from page ${currentPage}`}>
+          {pageData.text_content}
+        </p>
+      ) : null}
+
       {/* Navigation controls */}
       <div className="flex items-center gap-4 mt-4 flex-shrink-0">
         <button
@@ -290,6 +301,9 @@ function ScrollMode({ pages }: { pages: BookletPageEntry[] }) {
                 <p className="text-xs text-app-text-muted">Page {i + 1}</p>
               </div>
             )}
+            {page.image_url && page.text_content ? (
+              <p className="mt-2 whitespace-pre-wrap text-sm text-app-text" aria-label={`Text from page ${i + 1}`}>{page.text_content}</p>
+            ) : null}
           </div>
         ))}
       </div>
