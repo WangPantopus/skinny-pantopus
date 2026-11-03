@@ -159,11 +159,12 @@ async function getPropertySuggestions(input, supabaseAdmin) {
 
   // Tier 1 — ATTOM (strongest structured signal; one /property/detail call)
   let attom = null;
-  let attom_property_detail = null;
   { // Stored responses remain available without a live provider credential.
     try {
       // A validated address is looked up as validated, and the server keeps
-      // the answer: creating the Home stores that copy, not the app's.
+      // the answer: creating the Home stores that copy, not the app's. The
+      // county record itself never goes back to the app; only the Home's
+      // verified owners read it, on Property details.
       const bundle = homeAddressRow
         ? await fetchAttomPropertyDetailBundleForAddress(homeAddressRow)
         : await fetchAttomPropertyDetailBundle({
@@ -174,7 +175,6 @@ async function getPropertySuggestions(input, supabaseAdmin) {
           zipcode: zipCode,
         });
       attom = bundle.snapshot;
-      attom_property_detail = bundle.attomPayload;
     } catch (e) {
       logger.warn('ATTOM snapshot failed', { error: e.message });
     }
@@ -268,12 +268,12 @@ async function getPropertySuggestions(input, supabaseAdmin) {
     }
   }
 
+  // 'attom' in tiers_used is how the apps know a county record was found.
   return {
     suggestions: merged,
     field_sources: sources,
     tiers_used: [...new Set(tiersUsed)],
     llm_enabled: isLlmEnabled(),
-    attom_property_detail,
   };
 }
 
