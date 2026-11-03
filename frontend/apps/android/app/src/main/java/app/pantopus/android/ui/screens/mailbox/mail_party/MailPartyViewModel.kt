@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.OccupantDto
 import app.pantopus.android.data.api.models.mailbox.v2.DrawerMail
 import app.pantopus.android.data.api.models.mailbox.v2.MailPartySessionDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.homes.HomeMembersRepository
@@ -96,6 +97,7 @@ data class MailPartyLiveSession(
     val status: MailPartyStatus,
     /** Assign roster. Empty in the [MailPartyLiveUiState.Empty] state. */
     val members: List<MailPartyMember>,
+    val rosterRestricted: Boolean = false,
 )
 
 /** The reaction just sent, held for [ttlSeconds] so the view can echo it. */
@@ -196,6 +198,12 @@ class MailPartyViewModel
 
         private val _toast = MutableStateFlow<ToastPayload?>(null)
         val toast: StateFlow<ToastPayload?> = _toast.asStateFlow()
+
+        /**
+         * The session the live frame was opened for. Kept apart from [live], which holds no
+         * session once the roster read fails, so Try again can read it again.
+         */
+        private var enteredCard: MailPartySessionCard? = null
 
         /** Screen subtitle — "2 happening now" once loaded. */
         val discoverSubtitle: String
@@ -367,6 +375,7 @@ class MailPartyViewModel
          * frame. A session without a `home_id` has no roster to read.
          */
         private suspend fun enterSession(card: MailPartySessionCard) {
+            enteredCard = card
             _reactionEcho.value = null
             _live.value = MailPartyLiveUiState.Loading
             val homeId = card.homeId
@@ -386,34 +395,32 @@ class MailPartyViewModel
                         }
                 }
 
-                is NetworkResult.Failure ->
+                is NetworkResult.Failure -> {
+                    // Party membership does not grant access to the household directory.
                     _live.value =
-                        MailPartyLiveUiState.Error(
-                            result.error.displayMessage("Couldn't open the party."),
-                        )
+                        if (result.error is NetworkError.Forbidden) {
+                            MailPartyLiveUiState.Empty(
+                                projectSession(card, emptyList()).copy(rosterRestricted = true),
+                            )
+                        } else {
+                            MailPartyLiveUiState.Error(
+                                result.error.displayMessage("Couldn't open the party."),
+                            )
+                        }
+                }
             }
         }
 
         /** Retry the roster read after an error live frame. */
         fun retryLiveSession() {
-            val session = liveSession ?: return
-            viewModelScope.launch {
-                enterSession(
-                    MailPartySessionCard(
-                        sessionId = session.sessionId,
-                        mailId = session.mailId,
-                        homeId = session.homeId,
-                        title = session.title,
-                        senderDisplay = session.senderDisplay,
-                        status = session.status,
-                    ),
-                )
-            }
+            val card = enteredCard ?: return
+            viewModelScope.launch { enterSession(card) }
         }
 
         /** Leave the live frame and re-read the discover list. */
         fun closeSession() {
             _live.value = null
+            enteredCard = null
             _reactionEcho.value = null
             fetchDiscover()
         }

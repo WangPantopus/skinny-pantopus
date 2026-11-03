@@ -277,7 +277,7 @@ struct MailPartyView: View {
                 reactionRow
                 sectionHeader("HAND IT TO")
                 if rosterIsEmpty {
-                    rosterEmptyCard
+                    rosterEmptyCard(restricted: session.rosterRestricted)
                 } else {
                     VStack(spacing: Spacing.s2) {
                         ForEach(session.members) { member in
@@ -358,12 +358,14 @@ struct MailPartyView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var rosterEmptyCard: some View {
+    private func rosterEmptyCard(restricted: Bool) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s1) {
-            Text("No one to hand this to")
+            Text(restricted ? "Member assignment unavailable" : "No one to hand this to")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)
-            Text("Only household members can take this item. Invite someone to your home first.")
+            Text(restricted
+                ? "You can still take part. Your home permissions don't include the household member list."
+                : "Only household members can take this item. Invite someone to your home first.")
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }

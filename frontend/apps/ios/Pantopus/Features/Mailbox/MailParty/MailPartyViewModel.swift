@@ -156,6 +156,7 @@ public struct MailPartyLiveSession: Sendable, Equatable {
     public let status: MailPartyStatus
     /// Assign roster. Empty in the `.empty` state.
     public let members: [MailPartyMember]
+    public let rosterRestricted: Bool
 
     public init(
         sessionId: String,
@@ -164,7 +165,8 @@ public struct MailPartyLiveSession: Sendable, Equatable {
         title: String,
         senderDisplay: String,
         status: MailPartyStatus,
-        members: [MailPartyMember]
+        members: [MailPartyMember],
+        rosterRestricted: Bool = false
     ) {
         self.sessionId = sessionId
         self.mailId = mailId
@@ -173,6 +175,7 @@ public struct MailPartyLiveSession: Sendable, Equatable {
         self.senderDisplay = senderDisplay
         self.status = status
         self.members = members
+        self.rosterRestricted = rosterRestricted
     }
 }
 
@@ -228,6 +231,11 @@ public final class MailPartyViewModel {
     public private(set) var reactionEcho: MailPartyReactionEcho?
 
     public var toast: ToastMessage?
+
+    /// The session the live frame was opened for. Kept apart from `live`,
+    /// which holds no session once the roster read fails, so Try again can
+    /// read it again.
+    private var enteredCard: MailPartySessionCard?
 
     private let api: APIClient
     private let onOpenMail: (String) -> Void
@@ -380,6 +388,7 @@ public final class MailPartyViewModel {
     /// Fetch the assign roster for the session's home and show the live
     /// frame. A session without a `home_id` has no roster to read.
     private func enterSession(_ card: MailPartySessionCard) async {
+        enteredCard = card
         reactionEcho = nil
         live = .loading
         guard let homeId = card.homeId else {
@@ -393,6 +402,10 @@ public final class MailPartyViewModel {
             let members = response.occupants.filter(\.isActive).map(Self.member)
             let session = Self.session(card, members: members)
             live = members.isEmpty ? .empty(session) : .loaded(session)
+        } catch APIError.forbidden {
+            // Joining a party does not grant access to the household directory.
+            // Keep the successful session usable without exposing its roster.
+            live = .empty(Self.session(card, members: [], rosterRestricted: true))
         } catch {
             live = .error(
                 message: (error as? APIError)?.errorDescription
@@ -403,13 +416,14 @@ public final class MailPartyViewModel {
 
     /// Retry the roster read after a `.error` live frame.
     public func retryLiveSession() async {
-        guard let card = liveCard else { return }
+        guard let card = enteredCard else { return }
         await enterSession(card)
     }
 
     /// Leave the live frame and re-read the discover list.
     public func closeSession() async {
         live = nil
+        enteredCard = nil
         reactionEcho = nil
         await fetchDiscover()
     }
@@ -484,19 +498,6 @@ public final class MailPartyViewModel {
         }
     }
 
-    /// Card form of the live session, for a roster retry.
-    private var liveCard: MailPartySessionCard? {
-        guard let session = liveSession else { return nil }
-        return MailPartySessionCard(
-            id: session.sessionId,
-            mailId: session.mailId,
-            homeId: session.homeId,
-            title: session.title,
-            senderDisplay: session.senderDisplay,
-            status: session.status
-        )
-    }
-
     // MARK: - List maintenance
 
     /// Drop a session from the discover list without a refetch — used when
@@ -552,7 +553,8 @@ public final class MailPartyViewModel {
 
     private static func session(
         _ card: MailPartySessionCard,
-        members: [MailPartyMember]
+        members: [MailPartyMember],
+        rosterRestricted: Bool = false
     ) -> MailPartyLiveSession {
         MailPartyLiveSession(
             sessionId: card.id,
@@ -561,7 +563,8 @@ public final class MailPartyViewModel {
             title: card.title,
             senderDisplay: card.senderDisplay,
             status: card.status,
-            members: members
+            members: members,
+            rosterRestricted: rosterRestricted
         )
     }
 
