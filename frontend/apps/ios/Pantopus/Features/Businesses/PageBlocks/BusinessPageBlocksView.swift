@@ -16,6 +16,7 @@ import SwiftUI
 @MainActor
 public struct BusinessPageBlocksView: View {
     @State private var viewModel: BusinessPageBlocksViewModel
+    @State private var showsDiscardConfirm = false
     private let pageTitle: String
     private let onBack: @MainActor () -> Void
 
@@ -61,7 +62,7 @@ public struct BusinessPageBlocksView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button { onBack() } label: {
+                Button { requestBack() } label: {
                     Icon(.arrowLeft, size: 20, color: Theme.Color.appText)
                 }
                 .accessibilityLabel("Back")
@@ -81,6 +82,12 @@ public struct BusinessPageBlocksView: View {
         }
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
+        .alert("Discard unsaved changes?", isPresented: $showsDiscardConfirm) {
+            Button("Discard edits", role: .destructive) { requestBack(discardingChanges: true) }
+            Button("Keep editing", role: .cancel) {}
+        } message: {
+            Text("Your changes to this page haven't been saved.")
+        }
         .sheet(isPresented: pickerBinding) {
             BusinessPageBlockTypePicker(
                 onSelect: { kind in
@@ -157,7 +164,7 @@ public struct BusinessPageBlocksView: View {
         VStack(spacing: Spacing.s0) {
             HStack(spacing: Spacing.s2) {
                 Icon(.eye, size: 16, color: Theme.Color.warning)
-                Text("Preview mode — changes not saved")
+                Text(viewModel.hasChanges ? "Preview mode — changes not saved" : "Preview mode — saved draft")
                     .pantopusTextStyle(.small)
                     .foregroundStyle(Theme.Color.warning)
                 Spacer()
@@ -207,6 +214,19 @@ public struct BusinessPageBlocksView: View {
                 }
             }
             bottomBar
+        }
+        .disabled(viewModel.isBusy)
+    }
+
+    private func requestBack(discardingChanges: Bool = false) {
+        guard !viewModel.isSaving, !viewModel.isPublishing else {
+            viewModel.toastMessage = "Please wait for your changes to finish saving."
+            return
+        }
+        if viewModel.hasChanges, !discardingChanges {
+            showsDiscardConfirm = true
+        } else {
+            onBack()
         }
     }
 
@@ -344,7 +364,7 @@ public struct BusinessPageBlocksView: View {
             GhostButton(
                 title: "Save draft",
                 isLoading: viewModel.isSaving,
-                isEnabled: viewModel.hasChanges
+                isEnabled: viewModel.hasChanges && !viewModel.isBusy
             ) {
                 await viewModel.saveDraft()
             }
@@ -353,7 +373,7 @@ public struct BusinessPageBlocksView: View {
             PrimaryButton(
                 title: "Publish",
                 isLoading: viewModel.isPublishing,
-                isEnabled: !viewModel.blocks.isEmpty
+                isEnabled: !viewModel.blocks.isEmpty && !viewModel.isBusy
             ) {
                 await viewModel.publish()
             }
