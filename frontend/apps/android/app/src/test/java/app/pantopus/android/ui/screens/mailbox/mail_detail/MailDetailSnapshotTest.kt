@@ -175,6 +175,8 @@ class MailDetailSnapshotTest {
             aiSummary = "Pantopus found the key sections and can jump you to the relevant pages.",
             ackRequired = false,
             isAcknowledged = false,
+            // These booklets came with their PDF, so the PDF tile shows.
+            bookletHasPdf = true,
         )
 
     @Composable

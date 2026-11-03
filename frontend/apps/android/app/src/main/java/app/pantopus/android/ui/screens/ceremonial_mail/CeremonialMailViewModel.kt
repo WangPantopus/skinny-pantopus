@@ -16,7 +16,6 @@ import app.pantopus.android.ui.screens.shared.wizard.WizardChrome
 import app.pantopus.android.ui.screens.shared.wizard.WizardLeadingControl
 import app.pantopus.android.ui.screens.shared.wizard.WizardModel
 import app.pantopus.android.ui.screens.shared.wizard.WizardProgressLabel
-import app.pantopus.android.ui.screens.shared.wizard.WizardSecondaryCta
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -229,12 +228,6 @@ class CeremonialMailViewModel
                     leading = if (current.step == CeremonialMailStep.Decide) WizardLeadingControl.Close else WizardLeadingControl.Back,
                     primaryCtaLabel = primaryCtaLabelFor(current.step),
                     primaryCtaEnabled = primaryEnabledFor(current),
-                    secondaryCta =
-                        if (current.step == CeremonialMailStep.Success) {
-                            WizardSecondaryCta(label = "Back to Hub", testTag = "ceremonialBackToHub")
-                        } else {
-                            null
-                        },
                     isSubmitting = _isSubmitting.value,
                     dirty = dirtyFor(current),
                     showsProgressBar = current.step != CeremonialMailStep.Success,
@@ -283,12 +276,6 @@ class CeremonialMailViewModel
                 }
                 CeremonialMailStep.Commit -> submit()
                 CeremonialMailStep.Success -> _pendingEvent.value = CeremonialMailEvent.Dismiss
-            }
-        }
-
-        override fun onSecondary() {
-            if (_form.value.step == CeremonialMailStep.Success) {
-                _pendingEvent.value = CeremonialMailEvent.Dismiss
             }
         }
 

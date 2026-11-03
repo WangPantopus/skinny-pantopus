@@ -159,6 +159,8 @@ data class MailDetail(
     @Json(name = "bundle_label") val bundleLabel: String? = null,
     @Json(name = "bundle_item_count") val bundleItemCount: Int? = null,
     @Json(name = "page_count") val pageCount: Int? = null,
+    /** A booklet's PDF (`Mail.download_url`); null when it came without one. */
+    @Json(name = "download_url") val downloadUrl: String? = null,
     @Json(name = "due_date") val dueDate: String? = null,
     /** "Pantopus read this for you" (SRV-2). */
     val summary: MailSummary? = null,

@@ -75,9 +75,9 @@ fun BookletDetailLayout(
     onSaveToVault: () -> Unit = {},
     // S2-08 — archives the letter (`PATCH /api/mailbox/:id/archive`).
     onArchive: () -> Unit = {},
-    // A17.2 — fetches the rendered booklet PDF
-    // (`POST …/p2/booklet/:mailId/download`). RN reports the file size in
-    // the confirmation (`src/app/mailbox/booklet.tsx:43`).
+    // A17.2 — opens the booklet's PDF (`POST …/p2/booklet/:mailId/download`
+    // answers its address). Offered only when the booklet came with one
+    // ([MailDetailContent.bookletHasPdf]), as the web's Download link is.
     onDownloadPdf: () -> Unit = {},
     // `true` while the PDF fetch is in flight — the tile disables so a
     // double-tap can't fire two downloads.
@@ -107,6 +107,7 @@ fun BookletDetailLayout(
             sender = { SenderCard(content = content, onOpenProfile = onOpenSenderProfile) },
             actions = {
                 ActionsRow(
+                    hasPdf = content.bookletHasPdf,
                     onSaveToVault = onSaveToVault,
                     onArchive = onArchive,
                     onDownloadPdf = onDownloadPdf,
@@ -130,9 +131,10 @@ private fun makeTopBar(
         onBack = onBack,
         trailingAction = null,
         overflowItems =
-            listOf(
+            listOfNotNull(
                 MailOverflowItem("saveToVault", PantopusIcon.Bookmark, "Save to vault") { onSaveToVault() },
-                MailOverflowItem("download", PantopusIcon.Download, "Save PDF") { onDownloadPdf() },
+                // Only a booklet that came with a PDF offers it.
+                MailOverflowItem("download", PantopusIcon.Download, "Save PDF") { onDownloadPdf() }.takeIf { content.bookletHasPdf },
                 MailOverflowItem("archive", PantopusIcon.Archive, "Archive") { onArchive() },
             ),
     )
@@ -412,6 +414,7 @@ private fun SenderCard(
 
 @Composable
 private fun ActionsRow(
+    hasPdf: Boolean,
     onSaveToVault: () -> Unit,
     onArchive: () -> Unit,
     onDownloadPdf: () -> Unit,
@@ -446,13 +449,16 @@ private fun ActionsRow(
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            SecondaryTile(
-                icon = PantopusIcon.Download,
-                label = "PDF",
-                modifier = Modifier.weight(1f).testTag("mailDetail_booklet_downloadPdf"),
-                enabled = !downloadInFlight,
-                onClick = onDownloadPdf,
-            )
+            // Only a booklet that came with a PDF offers it; without one, Archive spans the row.
+            if (hasPdf) {
+                SecondaryTile(
+                    icon = PantopusIcon.Download,
+                    label = "PDF",
+                    modifier = Modifier.weight(1f).testTag("mailDetail_booklet_downloadPdf"),
+                    enabled = !downloadInFlight,
+                    onClick = onDownloadPdf,
+                )
+            }
             SecondaryTile(
                 icon = PantopusIcon.Archive,
                 label = "Archive",
