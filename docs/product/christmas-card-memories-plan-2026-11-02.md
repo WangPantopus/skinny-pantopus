@@ -6,6 +6,13 @@ Extend the existing Christmas card so someone can enclose a personal photograph 
 
 The founder approved these three areas and asked for this plan. Revision 2 folded in the founder's review, and revision 3 folds in the second review; both were on November 2. The limits and interaction rules below are proposed implementation defaults. This document does not enable features, authorize a production migration, or schedule a release. Scope is the backend, web, iOS, and Android.
 
+**Decided on November 2, at step 1:**
+- card photos and voices are stored in S3, the chat-files approach;
+- "Report this card" shares that one card with admins;
+- a photo from someone who isn't a connection stays covered until tapped.
+
+The [contract](christmas-card-memories-contract-2026-11-02.md) records these decisions, with the names, answers and rules for steps 3–8.
+
 ## What changed
 
 Since revision 2:
@@ -15,7 +22,7 @@ Since revision 2:
 - **A working moderation path before photos switch on.** “Report this card” shares that one card with Pantopus admins, if the founder approves, and someone works the queue.
 - **Blocks stop scheduled mail.** A block withdraws every pending card and reply between the two people, today's text cards included, with reads as a backstop.
 - **The voice test runs alongside** the contract and the drawings, and holds up only voice.
-- **The store is chosen before building.** The Supabase private bucket is recommended; Free or Pro waits for switch-on.
+- **The store is chosen before building.** The Supabase private bucket was recommended; the founder chose S3, the chat-files approach.
 
 Since the first version:
 - **Order.** Photo first, then replies, then voice, then the Christmas collection. Anything not merged and checked on all three apps when the ~December 1 store builds are cut stays out of them.
@@ -110,7 +117,7 @@ A reply arrives as one new Mail piece; its look in the Mailbox list is part of t
 
 Every received card and reply page gets a menu with “Report this card” and “Block [name].”
 
-**Report this card.** It files a report of the person through the existing `POST /api/users/:userId/report`, with a reason. If the founder approves, it also shares that one card, and only that card, with Pantopus admins for review.
+**Report this card.** It files a report of the person through the existing `POST /api/users/:userId/report`, with a reason. It also shares that one card, and only that card, with Pantopus admins for review (the founder's choice, November 2).
 - The report sheet says so plainly, for example: “Pantopus will be able to see this card to review it.”
 - Admins open the card from the existing Reports queue (web admin, `adminReports.js`), and each opening is logged.
 - Nothing else of either person's mail becomes visible.
@@ -124,7 +131,7 @@ Every received card and reply page gets a menu with “Report this card” and �
 - an admin can open the reported card and resolve the report;
 - someone works the queue promptly.
 
-**Optional filtering, if the founder chooses it.** A photo from someone who isn't your connection stays covered until you tap to show it.
+**Filtering (the founder's choice, November 2).** A photo from someone who isn't your connection stays covered until you tap to show it.
 
 ### Christmas collection (a separate piece, after replies)
 
@@ -150,7 +157,7 @@ If a favorites filter is added, use the existing starring the recipient owns. Ne
 | --- | --- |
 | `backend/services/holidayCards.js` | Season, artwork, seals, delivery presentation, and Sent. Add personal-content descriptors and tell original cards and replies apart explicitly. |
 | `backend/routes/mailbox.js` | Extend card send and preview, Sent, and enclosure access. Add narrowly scoped reply and collection routes here. Reuse card eligibility, email claim, block, take-back, and delivery rules, but gate reply routes by the reply feature, not by `holiday_cards`. |
-| `backend/services/mailEnclosures.js`, `backend/routes/upload.js` | Private bucket, owner-bound upload references, short-lived read links. Add a card-media purpose with its own validation, photo derivative, and audio check. The session fixing HEIC upload metadata owns the shared `stripImageMetadata` step; card work adds its own path and rebases on that fix. |
+| `backend/services/s3Service.js`, `backend/services/chatMediaUpload.js`, `GET /api/chat/files/:fileId` (`routes/chats.js`), `backend/services/photoMetadata.js` | The chat-files approach the founder chose for card media: private `File` rows and S3 objects, bytes streamed by an API route that checks the reader, byte ranges, no-store. Photos are cleaned by `photoMetadata` (#3166). Card media add their own route, purpose, photo derivative, and audio check (contract sections 2–4). Letter enclosures stay in `mailEnclosures.js`. |
 | `backend/services/mailObjectStorage.js` | Keep the note and the media arrangement in the existing private MailObject. Put no private media links or voice in public artwork. |
 | `backend/services/mailPiece.js` | Optional presentation fields. Protect new server-owned metadata from generic compose payloads. |
 | `backend/services/mailDelivery.js`, `mailMorningNotice.js`, `mailVacation.js` | Recipient-local delivery and the morning notice; replies use ordinary morning delivery. Cards skip vacation holds by their card data (`mailVacation.js` ~95), and replies must match that rule. |
@@ -181,8 +188,8 @@ Facts checked on master `c6f23e87d9`:
   - Blocking doesn't touch pending mail (`blocks.js`), so a pending card still arrives after a block today.
   - `UserBlock` records when each block was made.
 - **Reports.** An admin Reports queue exists for people, posts, tasks, and neighbor messages. A direct message is reported as the person only. `UserReport` has a reason and free-text details, with no link to a piece of mail.
-- **HEIC.** The server's image library can't decode HEIC (sharp 0.35.5 prebuilt). When the shared upload step can't clean a file, it keeps the original, metadata included (`upload.js` ~143).
-  - The fix for existing uploads is its own session.
+- **HEIC.** The server's image library can't decode HEIC (sharp 0.35.5 prebuilt). When the shared upload step couldn't clean a file, it kept the original, metadata included (`upload.js` ~143).
+  - Fixed since this plan was first written: [#3166](https://github.com/WangPantopus/skinny-pantopus/pull/3166) (`services/photoMetadata.js`) cleans every stored photo and converts HEIC to JPEG on the server.
   - Card photos must never fall back to an original.
 - **Storage.** Mail enclosures live in the Supabase private bucket. Production is on Supabase's free plan, which the whole app shares: 1 GB of file storage, plus 5 GB of uncached and 5 GB of cached egress a month.
 - **On this day.** Its positive-category filter leaves out `holiday_card`.
@@ -192,7 +199,7 @@ Facts checked on master `c6f23e87d9`:
 
 ### Personal media
 
-Extend `POST /api/upload/mail-attachments` with an optional card-media purpose; other mail keeps today's behavior. Card uploads return owner-bound references plus server-verified kind, size, and dimensions or duration, never a persistent public URL.
+Card media upload through their own route, `POST /api/mailbox/cards/media` (contract section 4); other mail keeps today's `POST /api/upload/mail-attachments`. Card uploads return owner-bound references plus server-verified kind, size, and dimensions or duration, never a persistent public URL.
 
 **Photos.** One still image, with a 10 MiB input limit, checked again at send.
 - The apps hand over JPEG:
@@ -212,11 +219,12 @@ Extend `POST /api/upload/mail-attachments` with an optional card-media purpose; 
 
 Web must test recording support and handle recorder failure even after a positive capability result; see [MediaRecorder capability checks](https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/isTypeSupported_static). Android documents AAC-LC in MPEG-4/M4A; see [supported formats](https://developer.android.com/media/platform/supported-formats). This does not replace device verification.
 
-**Storage, decided before step 3.** The choice of store shapes references, access, cleanup, and verification.
-- **Recommended:** the existing Supabase private bucket. Mail's private enclosures already run there, with signed references, the private-bucket check, and five-minute links.
-- **The alternative:** S3, which would mean moving card media to the chat-files approach.
-- **The plan tier** (Free or Pro) is a billing choice at switch-on, made from actual use. The sizes above keep usage low either way.
+**Storage: S3, the chat-files approach (the founder's choice, November 2).** The choice of store shapes references, access, cleanup, and verification.
+- Each photo or voice is a private `File` row and a private S3 object under a key that names no one. Its bytes come only through API routes that check the reader on every request, with no-store responses; the chat-files route works the same way.
+- This replaces the recommendation of the Supabase private bucket that Mail's letter enclosures use. Letters keep their enclosures where they are.
+- Locally, S3 is the stack's own S3 endpoint, and the kit's launcher refuses any other. Hosted S3 costs and limits are the founder's to check before switch-on.
 - Originals are kept only while processing needs them.
+- The [contract](christmas-card-memories-contract-2026-11-02.md) has the names and routes.
 
 **Cleanup.**
 - New purpose-bound references expire after a 72-hour draft window.
@@ -229,10 +237,10 @@ Cleanup is server-only, so it can land after the store builds if needed.
 **Access.**
 - The owner may preview an upload through an owner-only reference check.
 - After sending, links come through one of three routes:
-  - the existing enclosure route, for a permitted recipient, with the seal check;
+  - a card-media route on the piece, for a permitted recipient, with the seal check (`GET /api/mailbox/:id/card-media/:fileId`);
   - an explicit Sent route, for that piece's author;
   - an admin route, for a reported card only (see Report this card).
-- Use short-lived links, private no-store responses, and account-scoped caches.
+- Serve the bytes through the API with private no-store responses, never a link to storage, and keep downloads in account-scoped caches.
 - A supplied enclosure ID or storage path never establishes permission.
 
 ### Represent a reply as existing Mail
@@ -469,12 +477,12 @@ Compare sender completion, time to send, recipient claim completion, voluntary r
 
 In the order they're needed:
 
-1. **The store, before step 3.** Recommended: the existing Supabase private bucket. The alternative is S3, the chat-files approach.
-2. **The moderation path, before photos switch on (step 1).** Recommended: “Report this card” shares that one card with admins, with the disclosure and logged access. Also decide whether a photo from someone who isn't a connection stays covered until tapped.
+1. **The store, before step 3.** Decided November 2: S3, the chat-files approach.
+2. **The moderation path, before photos switch on (step 1).** Decided November 2: “Report this card” shares that one card with admins, with the disclosure and logged access, and a photo from someone who isn't a connection stays covered until tapped.
 3. **Voice, after the recording test.** Choose between no converter, a converter on the server, or recording only where the browser can.
-4. **The index migration,** only if step 1 picks it over derived row ids.
+4. **The index migration:** not needed. Step 1 uses derived row ids, which give the guarantee with no migration (contract section 6).
 5. **The drawings,** including how a reply looks in the Mailbox.
-6. **Supabase Free or Pro,** at switch-on, from actual use.
+6. **Hosting costs at switch-on,** from actual use: S3 for card media, and Supabase Free or Pro for the rest.
 7. **The native collection screens:** whether they go into the ~December 1 store builds.
 
 The release is ready when five things hold:
