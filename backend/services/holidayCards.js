@@ -11,6 +11,7 @@
  * The pictures come in collections. The website serves every picture (/holiday-cards/<design id>.jpg); the phone apps
  * carry the first 17 and load the rest from the website. Each app prints the caption, the year and the postmark.
  */
+const crypto = require('crypto');
 const { DateTime } = require('luxon');
 const supabaseAdmin = require('../config/supabaseAdmin');
 
@@ -111,6 +112,23 @@ function designById(id) {
 
 function isCard(mail) {
   return Boolean(mail?.mail_extracted?.card?.design);
+}
+
+/**
+ * The row id of the card one send stores (POST /api/mailbox/cards with a `request_id`): the same sender and request ID
+ * always give the same id, so the database refuses a second card for one send, however it's repeated. Formatted as the
+ * gig-completion File ids are (services/s3Service).
+ */
+function requestRowId(senderId, requestId) {
+  const digest = crypto.createHash('sha256')
+    .update(JSON.stringify(['holiday_card_v1', String(senderId), String(requestId).toLowerCase()])).digest('hex');
+  return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-5${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+}
+
+/** What a send asked for, as one digest: the same request ID with other content asks for another card. */
+function requestDigest({ design, message, arrival, toUserId, toEmail }) {
+  return crypto.createHash('sha256')
+    .update(JSON.stringify([design, message, arrival, toUserId || null, toEmail || null])).digest('hex');
 }
 
 /** Whether this card is still sealed: its note stays on the server until `sealed_until`. */
@@ -352,6 +370,7 @@ async function sentLine(userId, now = new Date()) {
 
 module.exports = {
   CARD_TAG, MESSAGE_LIMIT, SUBJECT, SEALED_NOTE, SEASON, COLLECTIONS, DESIGNS, PERSON_ARRIVALS, EMAIL_ARRIVALS,
-  designById, isCard, isSealed, sealedView, christmasMorning, seasonOpen, dayStart, daysBetween, arrivalsFor,
+  designById, isCard, requestRowId, requestDigest, isSealed, sealedView, christmasMorning, seasonOpen, dayStart,
+  daysBetween, arrivalsFor,
   personDelivery, cardView, pickupAt, sentSummary, sentCards, sentStatus, sentPiece, sentTrail, sentLine,
 };
