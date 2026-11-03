@@ -655,11 +655,12 @@ private struct MailVaultFolderPickers: ViewModifier {
                         .accessibilityIdentifier(isLetter ? "mailLetterFolder.\(folder.id)" : "mailDetail_saveToVault_\(folder.id)")
                     }
                 } header: {
-                    Text("Choose a folder for it.")
+                    // The same words as the dialog this sheet stands in for.
+                    Text(isLetter ? "Choose a folder for it." : "Pick a folder to keep this mail in.")
                         .textCase(nil)
                 }
             }
-            .navigationTitle("File in the Vault")
+            .navigationTitle(isLetter ? "File in the Vault" : "Save to vault")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
