@@ -292,8 +292,8 @@ public struct EditBusinessPageLoadedView: View {
                         closeBusinessSection(onCloseBusiness)
                     }
                 }
-                .padding(.bottom, Spacing.s4)
             }
+            .contentMargins(.bottom, Spacing.s4, for: .scrollContent)
             .scrollDismissesKeyboard(.interactively)
             .background(Theme.Color.appBg)
             EditBusinessStickySave(
