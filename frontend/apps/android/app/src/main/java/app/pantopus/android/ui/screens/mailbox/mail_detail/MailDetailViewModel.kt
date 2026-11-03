@@ -536,7 +536,8 @@ class MailDetailViewModel
         private fun reloadLetter() {
             if (_state.value !is MailDetailUiState.Loaded) return
             viewModelScope.launch {
-                val result = repo.detail(mailId)
+                // A stored booklet's pages are read again too, or coming back (from its PDF, say) drops them.
+                val result = loadBookletPayload(repo.detail(mailId))
                 if (result is NetworkResult.Success) {
                     lastDetail = result.data.mail
                     noteCardFirstOpen(result.data.mail)
