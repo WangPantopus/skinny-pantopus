@@ -80,9 +80,10 @@ public struct WaitingRoomView: View {
                 $0.names(topic: ScreenTopic.homes, kind: .homes)
                     || $0.names(topic: ScreenTopic.home(viewModel.homeId), kind: .homes)
             },
-            recheckOnAttach: true,
-            perform: { await viewModel.refresh() }
-        )
+            recheckOnAttach: true
+        ) {
+            await viewModel.refresh()
+        }
         .onChange(of: viewModel.pendingNav) { _, nav in
             guard let nav else { return }
             onNav(nav)
