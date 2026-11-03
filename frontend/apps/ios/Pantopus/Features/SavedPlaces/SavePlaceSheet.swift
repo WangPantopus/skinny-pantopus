@@ -41,7 +41,8 @@ public struct SaveBookmarkButton: View {
                 )
             }
             .frame(width: size, height: size)
-            .contentShape(Circle())
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isSaved ? "Saved" : "Save")
@@ -89,6 +90,7 @@ public struct SavePlaceSheet: View {
     private let onSave: @MainActor (_ label: String, _ choice: SavePlaceTypeChoice) -> Void
     private let onClose: @MainActor () -> Void
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var name: String
     @State private var choice: SavePlaceTypeChoice = .other
     @FocusState private var nameFocused: Bool
@@ -119,7 +121,7 @@ public struct SavePlaceSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Theme.Color.appSurface)
-        .presentationDetents([.height(420), .large])
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(420), .large])
         .presentationDragIndicator(.visible)
         .accessibilityIdentifier("savePlace.sheet")
     }
@@ -127,12 +129,12 @@ public struct SavePlaceSheet: View {
     private var header: some View {
         HStack {
             Text("Save place")
-                .font(.system(size: 18, weight: .bold))
+                .scaledFont(18, weight: .bold)
                 .foregroundStyle(Theme.Color.appText)
             Spacer()
             Button(action: onClose) {
                 Icon(.x, size: 18, color: Theme.Color.appTextSecondary)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -144,11 +146,11 @@ public struct SavePlaceSheet: View {
     private var nameField: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text("Name")
-                .font(.system(size: 12, weight: .semibold))
+                .scaledFont(12, weight: .semibold)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             HStack(spacing: Spacing.s2) {
                 TextField("Name this place", text: $name)
-                    .font(.system(size: 15, weight: .medium))
+                    .scaledFont(15, weight: .medium)
                     .foregroundStyle(Theme.Color.appText)
                     .focused($nameFocused)
                     .submitLabel(.done)
@@ -156,7 +158,8 @@ public struct SavePlaceSheet: View {
                 Icon(.pencil, size: 15, color: Theme.Color.appTextMuted)
             }
             .padding(.horizontal, Spacing.s3)
-            .frame(height: 46)
+            .padding(.vertical, Spacing.s2)
+            .frame(minHeight: 46)
             .background(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).fill(Theme.Color.appSurfaceSunken))
             .overlay(
                 RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
@@ -168,13 +171,22 @@ public struct SavePlaceSheet: View {
     private var typePicker: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text("Type")
-                .font(.system(size: 12, weight: .semibold))
+                .scaledFont(12, weight: .semibold)
                 .foregroundStyle(Theme.Color.appTextSecondary)
-            HStack(spacing: Spacing.s3) {
-                ForEach(SavePlaceTypeChoice.allCases) { option in
-                    typeOption(option)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Spacing.s3) {
+                    typeOptions
+                }
+                VStack(spacing: Spacing.s3) {
+                    typeOptions
                 }
             }
+        }
+    }
+
+    private var typeOptions: some View {
+        ForEach(SavePlaceTypeChoice.allCases) { option in
+            typeOption(option)
         }
     }
 
@@ -189,7 +201,8 @@ public struct SavePlaceSheet: View {
                 }
                 .frame(width: 44, height: 44)
                 Text(option.label)
-                    .font(.system(size: 12.5, weight: .semibold))
+                    .scaledFont(12.5, weight: .semibold)
+                    .fixedSize(horizontal: true, vertical: false)
                     .foregroundStyle(active ? Theme.Color.appText : Theme.Color.appTextSecondary)
             }
             .frame(maxWidth: .infinity)
@@ -204,6 +217,9 @@ public struct SavePlaceSheet: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(option.label)
+        .accessibilityValue(active ? "Selected" : "Not selected")
+        .accessibilityAddTraits(active ? [.isSelected] : [])
         .accessibilityIdentifier(option.accessibilityID)
     }
 
@@ -215,11 +231,12 @@ public struct SavePlaceSheet: View {
             HStack(spacing: Spacing.s2) {
                 Icon(.bookmark, size: 17, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
                 Text("Save")
-                    .font(.system(size: 15, weight: .bold))
+                    .scaledFont(15, weight: .bold)
                     .foregroundStyle(Theme.Color.appTextInverse)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 50)
+            .padding(.vertical, Spacing.s2)
+            .frame(minHeight: 50)
             .background(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).fill(Theme.Color.primarySolid))
         }
         .buttonStyle(.plain)
