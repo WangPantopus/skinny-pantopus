@@ -783,6 +783,12 @@ public final class ChatConversationViewModel {
         api === APIClient.shared && mode != .ai
     }
 
+    /// Assistant drafts use the same account-scoped encrypted storage. AI
+    /// requests still require an explicit Send and never enter the outbox.
+    private var usesDurableDrafts: Bool {
+        api === APIClient.shared
+    }
+
     /// Inputs needed to (re)send one optimistic message. Captured at
     /// send time so retry doesn't re-read mutated composer state.
     private struct PendingSendContext {
@@ -810,6 +816,8 @@ public final class ChatConversationViewModel {
     private var hasRestoredDraft = false
     private var isRestoringDraft = false
     private var draftSaveTask: Task<Void, Never>?
+    /// The screens showing this thread (`presentationDidAppear()`).
+    private var presentationCount = 0
 
     private enum ChatSendError: Error {
         case noRoom
@@ -914,9 +922,10 @@ public final class ChatConversationViewModel {
 
     // No `deinit { cancel }` — Swift 6's strict concurrency disallows
     // touching `@MainActor`-isolated stored properties from the
-    // nonisolated `deinit`. The view calls `teardown()` from
-    // `.onDisappear`, and each task captures `[weak self]` so it
-    // exits cleanly once the VM is deallocated.
+    // nonisolated `deinit`. The view's `.onDisappear` calls `teardown()`
+    // once no screen shows the thread (`presentationDidDisappear()`), and
+    // each task captures `[weak self]` so it exits cleanly once the VM is
+    // deallocated.
 
     /// The copies of photos sent to the assistant go with the view-model (their folder is a constant).
     deinit {
@@ -988,7 +997,7 @@ public final class ChatConversationViewModel {
         switch mode {
         case let .person(id): "person|\(id)|\(asBusinessUserId ?? "")"
         case let .room(id): "room|\(id)|\(asBusinessUserId ?? "")"
-        case .ai: nil
+        case .ai: "ai"
         }
     }
 
@@ -1007,11 +1016,11 @@ public final class ChatConversationViewModel {
     }
 
     private func scheduleDraftSave(immediate: Bool = false) {
-        guard usesDurableOutbox, !isRestoringDraft,
+        guard usesDurableDrafts, !isRestoringDraft,
               case let .signedIn(user) = AuthManager.shared.state, user.id == currentUserId else { return }
         draftMutation += 1
         draftSaveTask?.cancel()
-        guard !isSending, let draft = composerDraft() else { return }
+        guard !isSending || isAIStreaming, let draft = composerDraft() else { return }
         let attachments = queuedAttachments.filter { $0.data != nil }
         let storage = ChatLocalStore.shared
         let reservation = storage.reserveDraft(draft.id)
@@ -1032,13 +1041,18 @@ public final class ChatConversationViewModel {
     }
 
     private func restoreComposerDraft() async {
-        guard usesDurableOutbox, !hasRestoredDraft, let thread = draftThreadKey else { return }
-        hasRestoredDraft = true
+        guard usesDurableDrafts, !hasRestoredDraft, let thread = draftThreadKey else { return }
         let mutation = draftMutation
         let version = ChatLocalStore.shared.sessionVersion
         do {
-            guard let (draft, attachments) = try await ChatOutbox.shared.restoreComposer(thread: thread, expectedAccount: currentUserId),
-                  draftMutation == mutation, ChatLocalStore.shared.sessionVersion == version, !Task.isCancelled,
+            let restored = try await ChatOutbox.shared.restoreComposer(thread: thread, expectedAccount: currentUserId)
+            // A fold can cancel this presentation's task while retaining the
+            // model. Its replacement must still be able to restore the draft.
+            try Task.checkCancellation()
+            guard !hasRestoredDraft else { return }
+            hasRestoredDraft = true
+            guard let (draft, attachments) = restored,
+                  draftMutation == mutation, ChatLocalStore.shared.sessionVersion == version,
                   composerText.isEmpty, queuedAttachments.isEmpty, replyingTo == nil, editingMessageId == nil else { return }
             isRestoringDraft = true
             defer { isRestoringDraft = false }
@@ -1051,10 +1065,14 @@ public final class ChatConversationViewModel {
         } catch is CancellationError {
             return
         } catch {
-            guard ChatLocalStore.shared.sessionVersion == version else { return }
+            guard !hasRestoredDraft, ChatLocalStore.shared.sessionVersion == version else { return }
             actionFailure = "Couldn't restore this draft. Reopen the conversation to try again."
-            hasRestoredDraft = false
         }
+    }
+
+    /// Flush the pending keystrokes before the scene leaves the foreground.
+    func preserveComposerDraft() {
+        scheduleDraftSave(immediate: true)
     }
 
     /// Restore the most recent Ask-Pantopus conversation across app
@@ -1924,6 +1942,9 @@ public final class ChatConversationViewModel {
         // button (A15.3) can cancel it mid-generation via
         // `cancelAIStream()`; partial text already rendered is kept.
         isAIStreaming = true
+        // Uploads succeeded: save the remaining composer, including words
+        // typed during upload or the reply, instead of reviving sent inputs.
+        scheduleDraftSave(immediate: true)
         let task = Task { [weak self] in
             var streamedText = ""
             // A turn ends with `done` or an `error`; a stream that just stops was cut off
@@ -2311,6 +2332,19 @@ public final class ChatConversationViewModel {
                 if boundaries.allSatisfy({ lastReadBoundaries[$0.key] == $0.value }) { scheduleMarkRead() }
             }
         }
+    }
+
+    /// A fold or a turn swaps the open thread's screen for a new one on the
+    /// same model (`InboxTabRoot` keeps it), and the old screen can leave
+    /// after the new one appeared and loaded. The thread stops listening only
+    /// when the last screen showing it leaves.
+    func presentationDidAppear() {
+        presentationCount += 1
+    }
+
+    func presentationDidDisappear() {
+        presentationCount = max(presentationCount - 1, 0)
+        if presentationCount == 0 { teardown() }
     }
 
     public func teardown() {

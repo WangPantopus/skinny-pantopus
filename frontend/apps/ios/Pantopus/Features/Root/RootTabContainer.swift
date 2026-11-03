@@ -55,7 +55,7 @@ struct RootTabContainer: UIViewControllerRepresentable {
     /// The tabs on the bar, in order.
     let tabs: [RootTab]
     let selected: RootTab
-    /// The room the bar takes at the bottom; `.none` while a screen hides it.
+    /// The room the bar takes at its current edge; `.none` while hidden.
     let barSpace: RootTabBarSpace
     let environment: RootTabEnvironment
     /// Changes when the selected tab is tapped again: its stack goes back to its root.
@@ -184,7 +184,12 @@ final class RootTabContainerController: UIViewController {
     }
 
     private var insets: UIEdgeInsets {
-        UIEdgeInsets(top: 0, left: 0, bottom: barInset, right: 0)
+        UIEdgeInsets(
+            top: 0,
+            left: max(0, barSpace.fromLeftEdge - view.safeAreaInsets.left),
+            bottom: barInset,
+            right: max(0, barSpace.fromRightEdge - view.safeAreaInsets.right)
+        )
     }
 
     /// Keeps each tab's screens clear of the bar: the flat bar's height over
@@ -194,9 +199,8 @@ final class RootTabContainerController: UIViewController {
         let safeAreaBottom = view.safeAreaInsets.bottom
         let inset = barSpace.inset(safeAreaBottom: safeAreaBottom)
         scrollWatcher.barHeight = inset > 0 ? inset + safeAreaBottom : 0
-        guard inset != barInset else { return }
         barInset = inset
-        for host in hosts.values {
+        for host in hosts.values where host.additionalSafeAreaInsets != insets {
             host.additionalSafeAreaInsets = insets
         }
     }

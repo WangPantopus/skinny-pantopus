@@ -14,7 +14,7 @@ extension MailDetailViewModel {
         let item = detail.item
         // `Mail.certified` is what makes a live letter certified mail
         // (`Mail_mail_type_check` has no 'certified' mail type).
-        let category = item.certified ? MailItemCategory.certified : MailItemCategory.fromRaw(item.mailType ?? item.type)
+        let category = detailCategory(for: item)
         // The hero pill reads the letter's stored sender_trust, like the Mailbox list does.
         let trust = MailTrust.fromRaw(item.senderTrust)
         // Same order as the server's resolveSenderDisplay and the web: the name
@@ -41,6 +41,9 @@ extension MailDetailViewModel {
         let ackRequired = item.ackRequired ?? false
         let isAcknowledged = (item.ackStatus ?? "").lowercased() == "acknowledged" || item.acknowledgedAt != nil
         let variants = decodeVariantDetails(category: category, object: detail.object)
+        let booklet = category == .booklet
+            ? BookletDetailDTO.decode(from: detail.objectPayload) ?? variants.booklet
+            : nil
         let certifiedDetail = variants.certified ?? (item.certified ? CertifiedDetailDTO.pantopus(
             reference: "Ref \(item.id.prefix(8).uppercased())",
             receivedAt: item.deliveredAt ?? item.createdAt,
@@ -83,7 +86,7 @@ extension MailDetailViewModel {
             ackRequired: ackRequired,
             isAcknowledged: resolvedAck,
             isArchived: item.archived,
-            bookletDetail: variants.booklet,
+            bookletDetail: booklet,
             certifiedDetail: certifiedDetail,
             communityDetail: variants.community,
             couponDetail: variants.coupon,
@@ -96,6 +99,12 @@ extension MailDetailViewModel {
         )
         content.letter = MailLetter.make(detail: detail, homes: MailBadgeStore.shared.homes, personName: MailPieceRecipient.personName)
         return content
+    }
+
+    private static func detailCategory(for item: MailItem) -> MailItemCategory {
+        if item.certified { return .certified }
+        if MailPieceKind.of(item) == .booklet { return .booklet }
+        return MailItemCategory.fromRaw(item.mailType ?? item.type)
     }
 
     /// The note's key facts as the summary strip's bullets.

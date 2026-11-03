@@ -350,6 +350,8 @@ public struct MailDetailResponse: Decodable, Sendable, Hashable {
         public let item: MailItem
         public let sender: Sender?
         public let object: JSONValue?
+        /// The authorized stored content; `object` contains storage metadata on current servers.
+        public let objectPayload: JSONValue?
         public let contentFormat: String?
         public let contentText: String?
         public let links: [JSONValue]
@@ -388,6 +390,7 @@ public struct MailDetailResponse: Decodable, Sendable, Hashable {
             let c = try decoder.container(keyedBy: Keys.self)
             sender = try c.decodeIfPresent(Sender.self, forKey: .sender)
             object = try c.decodeIfPresent(JSONValue.self, forKey: .object)
+            objectPayload = try c.decodeIfPresent(JSONValue.self, forKey: .objectPayload)
             contentFormat = try c.decodeIfPresent(String.self, forKey: .contentFormat)
             contentText = try c.decodeIfPresent(String.self, forKey: .contentText)
             links = try c.decodeIfPresent([JSONValue].self, forKey: .links) ?? []
@@ -408,6 +411,7 @@ public struct MailDetailResponse: Decodable, Sendable, Hashable {
 
         private enum Keys: String, CodingKey {
             case sender, object
+            case objectPayload = "object_payload"
             case contentFormat = "content_format"
             case contentText = "content_text"
             case links

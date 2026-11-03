@@ -105,19 +105,21 @@ public struct SavePlaceSheet: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s4) {
-            header
-            nameField
-            typePicker
-            saveButton
-            Spacer(minLength: 0)
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.s4) {
+                header
+                nameField
+                typePicker
+                saveButton
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Spacing.s5)
+            .padding(.top, Spacing.s4)
+            .padding(.bottom, Spacing.s5)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, Spacing.s5)
-        .padding(.top, Spacing.s4)
-        .padding(.bottom, Spacing.s5)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.Color.appSurface)
-        .presentationDetents([.height(420)])
+        .presentationDetents([.height(420), .large])
         .presentationDragIndicator(.visible)
         .accessibilityIdentifier("savePlace.sheet")
     }

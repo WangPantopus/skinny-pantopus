@@ -63,11 +63,11 @@ public struct PantopusTextField: View {
         VStack(alignment: .leading, spacing: Spacing.s1) {
             HStack(spacing: 2) {
                 Text(label)
-                    .pantopusTextStyle(.caption)
+                    .scaledFont(12)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 if isRequired {
                     Text("*")
-                        .pantopusTextStyle(.caption)
+                        .scaledFont(12)
                         .foregroundStyle(Theme.Color.error)
                         .accessibilityHidden(true)
                 }
@@ -95,7 +95,7 @@ public struct PantopusTextField: View {
 
             if case let .error(message) = state {
                 Text(message)
-                    .pantopusTextStyle(.caption)
+                    .scaledFont(12)
                     .foregroundStyle(Theme.Color.error)
                     .accessibilityLabel("Error: \(message)")
             }

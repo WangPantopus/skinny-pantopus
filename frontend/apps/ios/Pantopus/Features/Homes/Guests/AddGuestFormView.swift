@@ -133,7 +133,6 @@ public struct AddGuestFormView: View {
                     showsCustomRange = false
                 }
             )
-            .presentationDetents([.medium])
         }
     }
 
@@ -150,7 +149,7 @@ private struct GuestDateRangeSheet: View {
     let onDone: () -> Void
     let onClear: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
@@ -167,24 +166,27 @@ private struct GuestDateRangeSheet: View {
             .padding(Spacing.s4)
             Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
 
-            VStack(alignment: .leading, spacing: Spacing.s4) {
-                DatePicker(
-                    "Starts",
-                    selection: $start,
-                    displayedComponents: [.date]
-                )
-                .accessibilityIdentifier("customRange_start")
-                DatePicker(
-                    "Ends",
-                    selection: $end,
-                    in: start...,
-                    displayedComponents: [.date]
-                )
-                .accessibilityIdentifier("customRange_end")
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.s4) {
+                    if dynamicTypeSize.isAccessibilitySize {
+                        Text("Starts").font(.body)
+                        DatePicker("Starts", selection: $start, displayedComponents: [.date])
+                            .labelsHidden()
+                            .accessibilityIdentifier("customRange_start")
+                        Text("Ends").font(.body)
+                        DatePicker("Ends", selection: $end, in: start..., displayedComponents: [.date])
+                            .labelsHidden()
+                            .accessibilityIdentifier("customRange_end")
+                    } else {
+                        DatePicker("Starts", selection: $start, displayedComponents: [.date])
+                            .accessibilityIdentifier("customRange_start")
+                        DatePicker("Ends", selection: $end, in: start..., displayedComponents: [.date])
+                            .accessibilityIdentifier("customRange_end")
+                    }
+                }
+                .padding(Spacing.s4)
             }
-            .padding(Spacing.s4)
-
-            Spacer(minLength: Spacing.s0)
+            .scrollBounceBehavior(.basedOnSize)
 
             Button(action: onDone) {
                 Text("Use these dates")
@@ -199,6 +201,7 @@ private struct GuestDateRangeSheet: View {
             .accessibilityIdentifier("customRange_done")
         }
         .background(Theme.Color.appSurface)
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
     }
 }
 
