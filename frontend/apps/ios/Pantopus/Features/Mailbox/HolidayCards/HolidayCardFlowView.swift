@@ -145,8 +145,8 @@ struct HolidayCardFlowView: View {
             HolidayCardsClosedView(onDone: onClose)
         } else {
             VStack(alignment: .leading, spacing: Spacing.s3) {
-                if viewModel.tookBack, viewModel.step == .to {
-                    Text("You took your card back. You can send a card again today.")
+                if let note = viewModel.backNote, viewModel.step == .to {
+                    Text(note)
                         .font(.system(size: 14))
                         .foregroundStyle(MailPaper.cardTextSoft)
                         .fixedSize(horizontal: false, vertical: true)
