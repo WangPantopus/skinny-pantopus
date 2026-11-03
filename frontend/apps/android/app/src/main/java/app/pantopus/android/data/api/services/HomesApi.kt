@@ -154,9 +154,8 @@ interface HomesApi {
     /**
      * `POST /api/homes/property-suggestions` — route `backend/routes/home.js:540`.
      * Tiered property hints (ATTOM → heuristics → optional LLM) that
-     * pre-fill the Add-Home wizard's Details block. The nested
-     * `attom_property_detail` bundle stays untyped — its shape is
-     * provider-defined.
+     * pre-fill the Add-Home wizard's Details block. The county record
+     * itself stays on the server.
      */
     @POST("api/homes/property-suggestions")
     suspend fun propertySuggestions(

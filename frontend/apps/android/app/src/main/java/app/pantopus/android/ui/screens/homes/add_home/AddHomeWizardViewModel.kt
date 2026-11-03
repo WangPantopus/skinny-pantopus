@@ -1156,7 +1156,6 @@ open class AddHomeWizardViewModel
                     yearBuilt = details.yearBuilt.toIntOrNull(),
                     isOwner = role == AddHomeRole.Owner,
                     role = role.claimedRole,
-                    attomPropertyDetail = _state.value.propertySuggestions?.attomPropertyDetail,
                 )
             _state.update { it.copy(showsCreationRecovery = true) }
             try {
