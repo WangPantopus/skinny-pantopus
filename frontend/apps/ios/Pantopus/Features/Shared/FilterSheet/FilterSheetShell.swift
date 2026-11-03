@@ -170,12 +170,15 @@ public struct FilterSheetShell: View {
 
 @MainActor
 struct FilterSectionRow: View {
+    @ScaledMetric(relativeTo: .caption2) private var titleSize = PantopusTextStyle.overline.size
     let section: FilterSection
     let onUpdate: @MainActor (FilterSection) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             Text(section.title, style: .overline)
+                .font(.system(size: titleSize, weight: PantopusTextStyle.overline.weight))
+                .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("filterSection_\(section.id)_title")

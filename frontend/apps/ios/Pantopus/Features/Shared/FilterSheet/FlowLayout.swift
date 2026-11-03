@@ -17,7 +17,7 @@ struct FilterSheetFlowLayout: Layout {
         var maxRowWidth: CGFloat = 0
 
         for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
+            let size = view.sizeThatFits(ProposedViewSize(width: maxWidth.isFinite ? maxWidth : nil, height: nil))
             if x + size.width > maxWidth, x > 0 {
                 totalHeight += rowHeight + spacing
                 maxRowWidth = max(maxRowWidth, x - spacing)
@@ -40,7 +40,7 @@ struct FilterSheetFlowLayout: Layout {
         var rowHeight: CGFloat = 0
 
         for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
+            let size = view.sizeThatFits(ProposedViewSize(width: maxWidth.isFinite ? maxWidth : nil, height: nil))
             if x + size.width > bounds.minX + maxWidth, x > bounds.minX {
                 x = bounds.minX
                 y += rowHeight + spacing
