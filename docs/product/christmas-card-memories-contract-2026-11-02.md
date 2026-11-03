@@ -146,10 +146,11 @@ It never says whether, or when, the other person opened, kept or shredded anythi
 | Withdrawn (taken back, or withdrawn by a block) | 409 `CARD_TAKEN_BACK`. It never sends again. |
 | Different digest | 409 `CARD_REQUEST_SENT`, with the stored card |
 | Settled | 200 `{ card }`, the same summary the first answer gave |
-| Not settled yet | Waits for it to settle (10 seconds at most), then answers as above. A card still unsettled after 10 seconds (its request failed partway) is settled by the repeat itself. |
+| Not settled yet (its first request is still running, or failed partway) | The repeat runs the same-day check itself, then answers as above. Every write in that check is conditional (the delete only removes an unsettled card, and the mark skips a withdrawn one), and each answer is read from what the writes left. Two requests deciding at once therefore always agree. |
 
 - **Look it over with a request ID whose card exists** answers 409 `CARD_REQUEST_SENT` (with the card) or `CARD_TAKEN_BACK`, never the day's limit.
-- **Failures.** A failed recount, `settled_at` write or delete answers 503 `CARD_UNAVAILABLE`, which means "not known; retry with the same request ID". It is never answered as sent, and never "You've sent today's card" while the card stays. The card is left for the retry to settle.
+- **Failures.** A failed recount, `settled_at` write or delete answers 503 `CARD_UNAVAILABLE`, which means "not known; retry with the same request ID". It is never answered as sent, and never "You've sent today's card" while the card stays. The card is left for the retry to settle. A card sent without a request ID can't be found by a retry, so a failed recount removes it first.
+- **Lost answers inside the server.** An insert that reached the database while its answer to the backend was lost is found again by its row id, and the send carries on.
 - **Notes left behind.** A card's stored note is removed only after its `MailObject` row is really deleted. Today a failed delete still removes the note's file, so the card that stays has no note.
 
 **Take-back keeps a withdrawn record.** For a card to a person sent with a request ID, take-back no longer deletes the row. It becomes the shape a taken-back email card already has:
@@ -158,7 +159,18 @@ It never says whether, or when, the other person opened, kept or shredded anythi
 - no note: `object_id` is cleared and the `MailObject` removed;
 - `mail_extracted` reduced to `{ card: { request, withdrawn } }`, with no design. The record is no longer a card to any reader, so no list, count, notice, Sent or search can show it.
 
-A taken-back email card is already such a record. Cards sent without a request ID are deleted on take-back, as today. The day's card is free again either way, because withdrawn rows never count.
+A taken-back card by email already stays as a withdrawn record, as before. It keeps its address and note, so its link can say the card was taken back, and email limits still count it. Cards to a person sent without a request ID are deleted on take-back, as today. The day's card is free again either way, because withdrawn rows never count.
+
+**Built and proven in step 1.**
+
+| Part | PR | State |
+| --- | --- | --- |
+| Server | [#3187](https://github.com/WangPantopus/skinny-pantopus/pull/3187) | Merged |
+| Web | [#3189](https://github.com/WangPantopus/skinny-pantopus/pull/3189) | Open |
+| iPhone | [#3190](https://github.com/WangPantopus/skinny-pantopus/pull/3190) | Open |
+| Android | [#3191](https://github.com/WangPantopus/skinny-pantopus/pull/3191) | Open |
+
+Cases 1–5 and 7 of the plan's section 4 were checked against a real local backend and database, with fault proxies; each PR lists its evidence.
 
 **Replies (step 5).**
 - **Row id.** `sha256(["holiday_card_reply_v1", card_id])`, so a card has at most one reply row.

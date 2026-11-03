@@ -212,7 +212,17 @@ Card media upload through their own route, `POST /api/mailbox/cards/media` (cont
 
 **Voice.** One clip, with a 5 MiB input limit and 60 seconds of decoded audio, checked again at send. The stored form is AAC-LC in M4A, mono, at speech quality (about 48 kbps, roughly 360 KB a minute). iOS and Android record this natively.
 
-**The recording test runs alongside steps 1 and 2 and holds up only voice.** It takes real recordings from Chrome, Safari, the iPhone app, and the Android app, and plays each on all four. The result decides:
+**The recording test runs alongside steps 1 and 2 and holds up only voice.** It takes real recordings from Chrome, Safari, the iPhone app, and the Android app, and plays each on all four.
+
+**Result (November 3):** the [voice test](christmas-card-voice-test-2026-11-02.md) found the following:
+- every recorder makes AAC-LC in MP4;
+- every reader plays every recording to its end;
+- the browsers write fragmented MP4, and Android misreports one kind's length;
+- the iPhone can't play WebM.
+
+No converter is needed. The founder picks the option.
+
+The result decides:
 - **Every recorder can make AAC/M4A:** the server only checks format and duration, and no converter is needed.
 - **Some browsers can't:** the founder chooses between two options. One is a converter in the backend image, at a pinned version, with size, duration, time, and concurrency limits. The other is that the web plays voices but records only where the browser makes AAC.
 - **The test isn't clean by the time photo and replies are done:** voice stays off this season. The capability field hides Record without new builds.
@@ -479,7 +489,10 @@ In the order they're needed:
 
 1. **The store, before step 3.** Decided November 2: S3, the chat-files approach.
 2. **The moderation path, before photos switch on (step 1).** Decided November 2: “Report this card” shares that one card with admins, with the disclosure and logged access, and a photo from someone who isn't a connection stays covered until tapped.
-3. **Voice, after the recording test.** Choose between no converter, a converter on the server, or recording only where the browser can.
+3. **Voice, after the recording test.** The test passed. The options are in the [voice test](christmas-card-voice-test-2026-11-02.md):
+   - no converter, with the web recording in one piece and Record only where the browser makes AAC (recommended);
+   - a remux on the server;
+   - a converter on the server.
 4. **The index migration:** not needed. Step 1 uses derived row ids, which give the guarantee with no migration (contract section 6).
 5. **The drawings,** including how a reply looks in the Mailbox.
 6. **Hosting costs at switch-on,** from actual use: S3 for card media, and Supabase Free or Pro for the rest.
