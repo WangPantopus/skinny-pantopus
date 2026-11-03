@@ -87,9 +87,9 @@ class MailSentCardViewModel
                         is NetworkResult.Success -> MailSentCardState.Loaded(result.data)
                         is NetworkResult.Failure ->
                             if (result.error is NetworkError.NotFound) {
-                                MailSentCardState.Gone("This card isn’t here any more.")
+                                MailSentCardState.Gone("This mail isn’t here any more.")
                             } else {
-                                MailSentCardState.Error(result.error.mailMessage(online = network.isOnline.value, doing = "load your card"))
+                                MailSentCardState.Error(result.error.mailMessage(online = network.isOnline.value, doing = "load your mail"))
                             }
                     }
             }
@@ -106,7 +106,7 @@ class MailSentCardViewModel
                     is NetworkResult.Failure -> {
                         _takeBackError.value =
                             when (result.error) {
-                                is NetworkError.NotFound -> "This card isn’t here any more."
+                                is NetworkError.NotFound -> "This mail isn’t here any more."
                                 else -> result.error.mailMessage(online = network.isOnline.value, doing = "take your card back")
                             }
                         // Refused (picked up or opened meanwhile, or gone): the page shows where it is now. Not reached

@@ -335,8 +335,7 @@ public final class CeremonialMailViewModel: WizardModel {
         do {
             let _: SendMailResponse = try await api.request(MailComposeEndpoints.send(body: body))
             step = .success
-            // The sent letter belongs to the recipient. Stay on confirmation;
-            // opening it as the sender would lead to an inaccessible reader.
+            NotificationCenter.default.post(name: .mailboxSentChanged, object: nil)
         } catch {
             submitError = (error as? APIError)?.errorDescription ?? "Couldn't send your letter. Try again."
         }

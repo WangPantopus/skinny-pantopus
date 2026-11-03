@@ -413,6 +413,9 @@ function closedEscrowReason(mail) {
     return closed(409, `This ${thing} has already been added to a mailbox.`, 'MAIL_CLAIMED');
   }
   if (mail.escrow_status === 'withdrawn') {
+    if ((mail.mail_extracted?.card?.withdrawn || mail.mail_extracted?.withdrawn)?.reason === 'blocked') {
+      return closed(410, `This ${thing} is no longer available.`, 'MAIL_WITHDRAWN');
+    }
     return closed(410, `The sender took this ${thing} back.`, 'MAIL_WITHDRAWN');
   }
   if (mail.escrow_status === 'expired' || (mail.escrow_expires_at && new Date(mail.escrow_expires_at) <= new Date())) {
@@ -2079,6 +2082,9 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
         mail = found;
       } else {
         await removeCardObject(objectResult.objectId);
+        if (insertError?.message === 'MAIL_RECIPIENT_UNAVAILABLE') {
+          return res.status(403).json({ error: 'This person can’t receive your card.', code: 'CARD_RECIPIENT_UNAVAILABLE' });
+        }
         const answered = found ? await answerRepeat(found) : null;
         if (answered) return answered;
         logger.error('Card not stored', { senderId, error: insertError?.message || null });
@@ -2189,7 +2195,8 @@ router.post('/cards/preview', verifyToken, validate(sendCardSchema), async (req,
  * free again), one by email until they open it (its link then says the sender took it back).
  */
 router.post('/cards/:id/take-back', verifyToken, async (req, res) => {
-  if (!cardsOn()) return sendCardsOff(res);
+  // Sent survives the seasonal sending switch; taking back its waiting cards must too.
+  if (!sentOn()) return sendCardsOff(res);
   const senderId = req.user.id;
   const { id } = req.params;
   const notHere = () => res.status(404).json({ error: 'This card isn’t here any more.', code: 'CARD_NOT_FOUND' });
@@ -2260,13 +2267,12 @@ router.post('/cards/:id/take-back', verifyToken, async (req, res) => {
 // ============================================================
 // SENT (launch key mailbox; services/holidayCards sentPiece)
 // ============================================================
-// What a person sent: their Christmas cards, newest first, each with where it is now and never whether it was opened.
-// It answers with the mailbox on, so sent cards stay after the cards close. Letters aren't listed yet. Declared before
-// GET /:id.
+// Personal letters and Christmas cards, newest first. Recipient reading/filing activity stays private.
+// Sent remains available with mailbox on when seasonal sending closes. Declared before GET /:id.
 
-const SENT_SELECT = 'id, created_at, delivered_at, escrow_status, escrow_expires_at, recipient_user_id, sender_display, object_id, mail_extracted';
+const SENT_SELECT = 'id, created_at, delivered_at, escrow_status, escrow_expires_at, escrow_recipient_contact, recipient_user_id, recipient_home_id, sender_display, object_id, mail_extracted, subject, display_title';
 const sentOn = () => areLaunchFeaturesEnabled(['mailbox']);
-const sentNotFound = (res) => res.status(404).json({ error: 'This card isn’t here any more.', code: 'SENT_NOT_FOUND' });
+const sentNotFound = (res) => res.status(404).json({ error: 'This mail isn’t here any more.', code: 'SENT_NOT_FOUND' });
 
 // Sent's paging cursor: the last card's sent time, exactly as stored, and its id.
 const sentCursor = (mail) => Buffer.from(`${mail.created_at}|${mail.id}`).toString('base64url');
@@ -2277,17 +2283,24 @@ function readSentCursor(value) {
 
 // What sentPiece needs for each card: the name on its envelope (the sender's Local Profile, as the recipient sees it),
 // the name it went to (by email: the masked address, or whoever claimed it as neighbors see them) and the clock its days
-// are told by (the recipient's; the sender's own for a card by email nobody has claimed).
+// are told by (the recipient's; the sender's own for a card by email nobody has claimed). A letter to a Home itself
+// went to "their household" ("your household" for the sender's own Home), which the apps say whole, never as a name.
 async function sentContexts(rows, userId) {
-  const claimers = rows.filter((mail) => mail.escrow_status === 'claimed' && mail.recipient_user_id)
+  const claimers = rows.filter((mail) => mail.recipient_user_id)
     .map((mail) => mail.recipient_user_id);
   const people = await loadChatPeople([userId, ...claimers]);
   const recipients = [...new Set(rows.filter((mail) => mail.recipient_user_id).map((mail) => String(mail.recipient_user_id)))];
   const zones = new Map(await Promise.all([userId, ...recipients].map(async (id) =>
     [String(id), (await mailDelivery.personTimeZone(id)) || mailDelivery.FALLBACK_TIME_ZONE])));
+  const toHousehold = (mail) => !mail.recipient_user_id && Boolean(mail.recipient_home_id);
+  const ownHomes = new Set(rows.some(toHousehold) ? (await getAccessibleHomeIds(userId)).map(String) : []);
   return rows.map((mail) => ({
     toName: (mail.escrow_status === 'claimed' && people.get(String(mail.recipient_user_id))?.displayName)
-      || mail.mail_extracted?.card?.to_name || null,
+      || mail.mail_extracted?.card?.to_name
+      || (mail.escrow_recipient_contact ? maskContact(mail.escrow_recipient_contact) : null)
+      || people.get(String(mail.recipient_user_id))?.displayName
+      || (toHousehold(mail) ? `${ownHomes.has(String(mail.recipient_home_id)) ? 'your' : 'their'} household` : 'them'),
+    toHousehold: toHousehold(mail),
     senderName: people.get(String(userId))?.displayName || mail.sender_display || 'Someone',
     zone: zones.get(String(mail.recipient_user_id || userId)),
   }));
@@ -2338,20 +2351,23 @@ router.get('/sent/:id', verifyToken, async (req, res) => {
   if (!UUID_REGEX.test(id)) return sentNotFound(res);
   try {
     const now = new Date();
-    const { data: mail, error } = await holidayCards.sentCards(userId, SENT_SELECT).eq('id', id).maybeSingle();
+    const { data: mail, error } = await holidayCards.sentCards(userId, `${SENT_SELECT}, content`).eq('id', id).maybeSingle();
     if (error) throw new Error(error.message);
-    if (!mail || !holidayCards.isCard(mail) || !mail.object_id) return sentNotFound(res);
-    // The sender's own words live only in the card's private stored copy (services/holidayCards).
-    const { payload } = await mailObjects.readPayload(mail.object_id);
+    if (!mail) return sentNotFound(res);
+    // Cards keep their note only in private storage; legacy letters may use inline content.
+    const { metadata, payload } = mail.object_id ? await mailObjects.readPayload(mail.object_id) : { payload: null };
+    const content = [payload?.body?.content, payload?.content, mail.content].find((value) => typeof value === 'string') || '';
+    const format = [payload?.body?.payload?.bodyFormat, payload?.objectFormat, metadata?.format]
+      .find((value) => CONTENT_RENDER_FORMATS.includes(value)) || mailObjects.storedFormat(content);
     const [context] = await sentContexts([mail], userId);
     return res.json({ item: {
       ...holidayCards.sentPiece(mail, { ...context, now }),
-      note: typeof payload?.body?.content === 'string' ? payload.body.content : '',
+      note: holidayCards.isCard(mail) ? (payload?.body?.content || '') : (mailObjects.textContent(content, format) || ''),
       trail: holidayCards.sentTrail(mail, { ...context, now }),
     } });
   } catch (err) {
     logger.error('Sent card read error', { error: err.message, mailId: id, userId });
-    return res.status(503).json({ error: 'Couldn’t open your card just now. Try again in a moment.', code: 'MAIL_UNAVAILABLE' });
+    return res.status(503).json({ error: 'Couldn’t open your mail just now. Try again in a moment.', code: 'MAIL_UNAVAILABLE' });
   }
 });
 
@@ -2759,6 +2775,10 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
       const { data: escrowMail, error: escrowError } = await insertMailWithCompatibility(escrowMailData);
 
       if (escrowError) {
+        if (escrowError.message === 'MAIL_RECIPIENT_UNAVAILABLE') {
+          await removeCardObject(objectResult?.objectId);
+          return res.status(403).json({ error: 'This person can’t receive your mail.', code: 'MAIL_RECIPIENT_UNAVAILABLE' });
+        }
         logger.error('Error creating escrowed mail', { error: escrowError.message, senderId });
         return res.status(500).json({ error: "Couldn't send this mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
       }
@@ -2991,6 +3011,10 @@ router.post('/send', verifyToken, validate(sendMailSchema), async (req, res) => 
     const { data: mail, error } = await insertMailWithCompatibility(mailData);
 
     if (error) {
+      if (error.message === 'MAIL_RECIPIENT_UNAVAILABLE') {
+        await removeCardObject(objectResult?.objectId);
+        return res.status(403).json({ error: 'This person can’t receive your mail.', code: 'MAIL_RECIPIENT_UNAVAILABLE' });
+      }
       logger.error('Error sending mail', { error: error.message, senderId });
       return res.status(500).json({ error: "Couldn't send this mail. Try again in a moment.", code: 'MAIL_UNAVAILABLE' });
     }
@@ -3336,6 +3360,9 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
       .select('id');
 
     if (updateError) {
+      if (updateError.message === 'MAIL_RECIPIENT_UNAVAILABLE') {
+        return res.status(404).json({ error: 'This letter is no longer available.', code: 'MAIL_UNAVAILABLE' });
+      }
       logger.error('Escrow claim update failed', { error: updateError.message, mailId });
       return res.status(500).json({ error: 'Failed to claim mail' });
     }
@@ -3363,10 +3390,10 @@ router.post('/claim/:mailId', verifyToken, async (req, res) => {
         } : {
           userId: mail.sender_user_id,
           type: 'mail_escrow_claimed',
-          title: 'Your mail was opened',
+          title: 'Your mail arrived',
           body: `${claimerName} claimed your letter. It's been delivered to their mailbox.`,
           icon: '✉️',
-          link: `/app/mailbox/${mailId}`,
+          link: `/app/mailbox/sent/${mailId}`,
           metadata: { mail_id: mailId, claimer_id: claimerId },
         });
       } catch (notifErr) {

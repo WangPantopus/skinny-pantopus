@@ -56,6 +56,7 @@ import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.api.models.mailbox.HolidayCardsResponse
 import app.pantopus.android.data.api.models.mailbox.SentCard
 import app.pantopus.android.data.api.models.mailbox.v2.MailHome
+import app.pantopus.android.data.api.models.mailbox.v2.MailSentSummary
 import app.pantopus.android.data.api.models.mailbox.v2.MailVacationHold
 import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.ui.components.NavigationMenuButton
@@ -192,11 +193,13 @@ fun MailboxRootScreen(
                     onVerify = { home -> verifyHome = home },
                     cards = cards,
                     onOpenCards = onOpenCards,
-                    // The flag is a card part (keys `holiday_cards` + `mailbox`); Sent itself needs only `mailbox`.
+                    // The flag counts cards with `holiday_cards` on and letters with `mail_extras` on; Sent itself needs
+                    // only `mailbox`.
                     sent =
                         SentContent(
                             list = sentList,
-                            waiting = if (LaunchFeatures.holidayCards) sent?.waiting ?: 0 else 0,
+                            waiting = if (LaunchFeatures.holidayCards) waitingCardsOf(sent) else 0,
+                            waitingLetters = if (LaunchFeatures.mailExtras) sent?.waitingLetters ?: 0 else 0,
                             onOpen = onOpenSentCard,
                             onTakeBack = { confirmTakeBack = it },
                         ),
@@ -330,7 +333,7 @@ private fun MailboxList(
         // Always the first item, so the card coming in after the first frame isn't inserted above the scroll position.
         item(key = "hero") {
             if (hero != null) {
-                MailboxHeroCard(hero, waiting = sent.waiting, onOpenSent = viewModel::openSent)
+                MailboxHeroCard(hero, waiting = sent.waiting, waitingLetters = sent.waitingLetters, onOpenSent = viewModel::openSent)
             } else {
                 MailboxHeroPlaceholder()
             }
@@ -474,10 +477,14 @@ private fun loadNextPage(
     }
 }
 
-/** Sent, for the list: its view model, the cards that put the flag up, opening a card, and Take it back (confirmed). */
+/** The cards among what waits for the 7 a.m. pickup (the rest are letters). */
+private fun waitingCardsOf(sent: MailSentSummary?): Int = ((sent?.waiting ?: 0) - (sent?.waitingLetters ?: 0)).coerceAtLeast(0)
+
+/** Sent, for the list: its view model, the cards and letters that put the flag up, opening one, and Take it back (confirmed). */
 private class SentContent(
     val list: MailSentViewModel,
     val waiting: Int,
+    val waitingLetters: Int,
     val onOpen: (String) -> Unit,
     val onTakeBack: (SentCard) -> Unit,
 )

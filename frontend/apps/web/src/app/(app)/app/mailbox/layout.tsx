@@ -129,15 +129,17 @@ function MailboxLayoutInner({ children }: { children: React.ReactNode }) {
   // opened from one is its own screen on phones.
   const bannerClass = view.kind === 'main' || view.kind === 'sent' ? (view.pushed ? 'hidden md:flex' : 'flex') : 'hidden';
 
-  // The flag is up while a card you sent waits for the 7 a.m. pickup (Christmas cards on).
-  const waiting = launchFeatures.holidayCards ? drawers?.sent?.waiting ?? 0 : 0;
+  // The flag is up while a card (Christmas cards on) or a letter (letters on) you sent waits for the 7 a.m. pickup.
+  const sentLetters = drawers?.sent?.waiting_letters ?? 0;
+  const waiting = launchFeatures.holidayCards ? Math.max(0, (drawers?.sent?.waiting ?? 0) - sentLetters) : 0;
+  const waitingLetters = launchFeatures.mailExtras ? sentLetters : 0;
 
   return (
     <div className="bg-app md:flex md:h-[calc(100vh-3.5rem)] md:flex-col md:overflow-hidden">
       <MailboxHeader
         view={view}
         backHref={backHref}
-        hero={drawers ? <MailboxHero delivery={delivery} homes={drawers.homes} opening={deliveryOpening} waiting={waiting} /> : null}
+        hero={drawers ? <MailboxHero delivery={delivery} homes={drawers.homes} opening={deliveryOpening} waiting={waiting} waitingLetters={waitingLetters} /> : null}
         onWriteLetter={launchFeatures.mailExtras ? () => setComposeOpen(true) : undefined}
       />
 

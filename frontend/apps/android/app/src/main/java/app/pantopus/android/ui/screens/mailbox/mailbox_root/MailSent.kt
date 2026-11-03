@@ -206,7 +206,7 @@ class MailSentViewModel
                         next = result.data.next
                     }
                     is NetworkResult.Failure ->
-                        loadMoreError = result.error.mailMessage(online = network.isOnline.value, doing = "load more of your cards")
+                        loadMoreError = result.error.mailMessage(online = network.isOnline.value, doing = "load more of your mail")
                 }
                 publish()
             }
@@ -307,7 +307,8 @@ object MailSentWords {
     /** "To Maya O. · Christmas card"; by email "To d***@example.com · by email". */
     fun title(card: SentCard): String {
         val to = card.toName?.takeIf { it.isNotBlank() } ?: "them"
-        return if (card.byEmail) "To $to · by email" else "To $to · Christmas card"
+        val kind = if (card.kind == "letter") "Letter" else "Christmas card"
+        return if (card.byEmail && card.kind != "letter") "To $to · by email" else "To $to · $kind"
     }
 
     /** Where it is, in a line: their 7 a.m. mail by their day, never turned into the sender's hours. */
@@ -325,9 +326,9 @@ object MailSentWords {
                 }
             "picked_up" -> "Arrives on Christmas morning"
             "delivered" -> if (card.sealed) "In their mailbox, sealed until Christmas" else "In their mailbox since $day"
-            "email_waiting" -> "Waiting for them to open the email"
-            "claimed" -> "They joined Pantopus and have it"
-            "expired" -> "They didn’t open the email in 90 days"
+            "email_waiting" -> if (card.kind == "letter") "Waiting for them to claim it" else "Waiting for them to open the email"
+            "claimed" -> if (card.kind == "letter") "They claimed your letter" else "They joined Pantopus and have it"
+            "expired" -> if (card.kind == "letter") "The claim link expired" else "They didn’t open the email in 90 days"
             else -> ""
         }
     }
@@ -372,8 +373,8 @@ object MailSentWords {
             stamp = card.card?.let { MailStamp.forCard(it.number, it.design.orEmpty()) } ?: MailStamp.forPiece(card.id),
             note = null,
             meta = "",
-            accessibilityLabel = "Christmas card from $from to $to, $state.",
-            card = MailPieceCard(design = design, sealed = card.sealed),
+            accessibilityLabel = "${if (card.kind == "letter") "Letter" else "Christmas card"} from $from to $to, $state.",
+            card = if (card.kind == "letter") null else MailPieceCard(design = design, sealed = card.sealed),
         )
     }
 }
@@ -404,7 +405,9 @@ internal fun LazyListScope.sentItems(
         MailSentState.Loading -> items(SENT_SKELETONS, key = { "sentSkeleton-$it" }) { MailPieceSkeleton() }
         is MailSentState.Error -> item(key = "sentError") { MailboxErrorCard(state.message, onRetry) }
         MailSentState.Empty ->
-            item(key = "sentEmpty") { MailboxEmptyCard("Nothing sent yet.", "Cards you send show up here, with when they arrive.") }
+            item(
+                key = "sentEmpty",
+            ) { MailboxEmptyCard("Nothing sent yet.", "Letters and cards you send show up here, with when they arrive.") }
         is MailSentState.Loaded -> {
             if (state.waiting.isNotEmpty()) {
                 item(key = "sentWaitingTitle") { MailSectionHeader("Waiting for pickup") }
@@ -481,7 +484,7 @@ private fun SentRow(
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClickLabel = "Open the card", onClick = onOpen)
+                    .clickable(onClickLabel = "Open the mail", onClick = onOpen)
                     .clearAndSetSemantics {
                         contentDescription = spoken
                         role = Role.Button

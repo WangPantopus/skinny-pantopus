@@ -51,10 +51,19 @@ public struct MailSentPiece: Decodable, Sendable, Hashable, Identifiable {
     }
 
     public let id: String
+    public let kind: String
+    public let subject: String?
+    public var isLetter: Bool {
+        kind == "letter"
+    }
+
     public let sentAt: String?
     /// The person's name as it was sent, or the address masked; by email the
     /// name of whoever claimed it once it's claimed.
     public let toName: String
+    /// A letter to a Home itself: `toName` ("their household") is said
+    /// whole, never as a first name.
+    public let toHousehold: Bool
     public let byEmail: Bool
     public let arrival: HolidayCardArrival?
     public let status: Status
@@ -139,9 +148,10 @@ public struct MailSentPiece: Decodable, Sendable, Hashable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, arrival, status, sealed, envelope, card, note, trail
+        case id, kind, subject, arrival, status, sealed, envelope, card, note, trail
         case sentAt = "sent_at"
         case toName = "to_name"
+        case toHousehold = "to_household"
         case byEmail = "by_email"
         case arrivesAt = "arrives_at"
         case arrivesOn = "arrives_on"
@@ -153,8 +163,11 @@ public struct MailSentPiece: Decodable, Sendable, Hashable, Identifiable {
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
+        kind = (try? c.decodeIfPresent(String.self, forKey: .kind)) ?? "card"
+        subject = try? c.decodeIfPresent(String.self, forKey: .subject)
         sentAt = try? c.decodeIfPresent(String.self, forKey: .sentAt)
         toName = (try? c.decodeIfPresent(String.self, forKey: .toName)) ?? ""
+        toHousehold = (try? c.decodeIfPresent(Bool.self, forKey: .toHousehold)) ?? false
         byEmail = (try? c.decodeIfPresent(Bool.self, forKey: .byEmail)) ?? false
         arrival = (try? c.decodeIfPresent(String.self, forKey: .arrival)).flatMap(HolidayCardArrival.init(rawValue:))
         let status = (try? c.decodeIfPresent(String.self, forKey: .status)).flatMap(Status.init(rawValue:))

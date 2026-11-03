@@ -37,20 +37,24 @@ struct MailboxHeroModel: Equatable {
     let houseNumber: String?
     /// Cards to a person still waiting for the 7 a.m. pickup (Sent).
     var waitingCards = 0
+    /// Letters to a person still waiting for the pickup.
+    var waitingLetters = 0
 
-    /// The flag is up while a card waits for the carrier.
+    /// The flag is up while a card or letter waits for the carrier.
     var flagUp: Bool {
-        waitingCards > 0
+        waitingCards + waitingLetters > 0
     }
 
     static func make(
         delivery: DrawerListResponse.MailDelivery?,
         homes: [DrawerListResponse.MailboxHome],
         waitingCards: Int = 0,
+        waitingLetters: Int = 0,
         now: Date = Date()
     ) -> MailboxHeroModel {
         var model = roundModel(delivery: delivery, homes: homes, now: now)
         model.waitingCards = waitingCards
+        model.waitingLetters = waitingLetters
         return model
     }
 
@@ -99,7 +103,10 @@ struct MailboxHeroModel: Equatable {
         if flagUp {
             // "7 a.m." stays on one line.
             let pickup = "the 7\u{00A0}a.m. pickup"
-            return waitingCards == 1 ? "1 card waits for \(pickup)" : "\(waitingCards) cards wait for \(pickup)"
+            let count = waitingCards + waitingLetters
+            // What waits, by what it is: cards, letters, or pieces for both.
+            let what = waitingLetters == 0 ? "card" : waitingCards == 0 ? "letter" : "piece"
+            return count == 1 ? "1 \(what) waits for \(pickup)" : "\(count) \(what)s wait for \(pickup)"
         }
         switch round {
         case let .cameToday(_, count, unopened):

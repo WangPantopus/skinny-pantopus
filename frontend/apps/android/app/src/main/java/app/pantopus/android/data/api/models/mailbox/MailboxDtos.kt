@@ -119,6 +119,8 @@ data class MailDetail(
     @Json(name = "created_at") val createdAt: String,
     val sender: Sender?,
     val `object`: JsonValue?,
+    /** Hydrated private contents; `object` can contain only MailObject storage metadata. */
+    @Json(name = "object_payload") val objectPayload: JsonValue? = null,
     @Json(name = "content_format") val contentFormat: String?,
     val links: JsonArrayValue = emptyList(),
     /**

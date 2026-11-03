@@ -250,16 +250,16 @@ function sentSummary(mail, now = new Date()) {
   };
 }
 
-// ---- Sent: the cards a person sent (GET /api/mailbox/sent, /sent/:id, and the Mailbox flag in v2 drawers) ----
+// ---- Sent: personal letters and cards (GET /api/mailbox/sent, /sent/:id, and the Mailbox flag in v2 drawers) ----
 
 /**
- * The cards this person sent as themselves (not as a business) that weren't taken back: one to a person that was taken
+ * The letters and cards this person sent as themselves (not as a business) that weren't taken back: a card that was taken
  * back is gone, one by email is withdrawn. A query to add filters and order to.
  */
 function sentCards(userId, select, options) {
   return supabaseAdmin.from('Mail').select(select, options)
     .eq('sender_user_id', userId)
-    .contains('tags', [CARD_TAG])
+    .eq('type', 'letter')
     .is('sender_entity_id', null)
     .or('escrow_status.is.null,escrow_status.neq.withdrawn');
 }
@@ -294,18 +294,22 @@ function instant(at) {
  * A card in its sender's Sent. `toName`: the name stored when it was sent, or by email the masked address until it's
  * claimed, then the name neighbors see the person by. `senderName`: the name on the envelope (the sender's Local Profile,
  * as the recipient sees it). `zone`: the clock their days are told by (theirs; the sender's own for a card by email
- * nobody has claimed). Never the recipient's ids, address or time zone, nor anything they did with it.
+ * nobody has claimed). `toHousehold`: a letter to a Home itself, whose `toName` ("their household") is said whole, never
+ * as a first name. Never the recipient's ids, address or time zone, nor anything they did with it.
  */
-function sentPiece(mail, { toName, senderName, zone, now = new Date() }) {
+function sentPiece(mail, { toName, toHousehold = false, senderName, zone, now = new Date() }) {
+  const isHolidayCard = isCard(mail);
   const card = mail.mail_extracted?.card || {};
   const view = cardView(mail, now) || {};
   const byEmail = Boolean(mail.escrow_status);
   const status = sentStatus(mail, now);
   return {
     id: mail.id,
-    kind: 'card',
+    kind: isHolidayCard ? 'card' : 'letter',
+    subject: isHolidayCard ? SUBJECT : (mail.subject || mail.display_title || 'A letter'),
     sent_at: instant(mail.created_at),
     to_name: toName || null,
+    to_household: Boolean(toHousehold),
     by_email: byEmail,
     arrival: card.arrival || null,
     status,
@@ -314,8 +318,8 @@ function sentPiece(mail, { toName, senderName, zone, now = new Date() }) {
     opens_on: dayIn(card.sealed_until, zone),
     sealed: isSealed(mail, now),
     // The same rule as take-back: to a person until the pickup, by email until they open it.
-    can_take_back: status === 'waiting' || status === 'email_waiting',
-    take_back_until: byEmail ? null : instant(pickupAt(mail)),
+    can_take_back: isHolidayCard && (status === 'waiting' || status === 'email_waiting'),
+    take_back_until: byEmail || !isHolidayCard ? null : instant(pickupAt(mail)),
     // The envelope as it reaches them: postmarked once the carrier has it (by email, the day it was sent).
     envelope: { from: senderName, postmarked_on: status === 'waiting' ? null : dayIn(mail.created_at, zone) },
     card: { design: view.design || null, number: view.number ?? null, caption: view.caption || null, paper: view.paper || null,
@@ -352,8 +356,9 @@ function sentTrail(mail, { zone, now = new Date() }) {
 }
 
 /**
- * The Mailbox's Sent line (GET /api/mailbox/v2/drawers `sent`): whether the person has sent a card (not taken back),
- * and how many cards to a person still wait for the 7 a.m. pickup (the mailbox's flag is up while any do).
+ * The Mailbox's Sent line (GET /api/mailbox/v2/drawers `sent`): whether the person has sent a letter or card (not taken back),
+ * and how many letters or cards to a person still wait for the 7 a.m. pickup (the mailbox's flag is up while any do), of
+ * them `waiting_letters` letters, so the flag says what waits.
  */
 async function sentLine(userId, now = new Date()) {
   const [any, coming] = await Promise.all([
@@ -362,9 +367,11 @@ async function sentLine(userId, now = new Date()) {
       .gt('delivered_at', now.toISOString()),
   ]);
   if (any.error || coming.error) throw new Error((any.error || coming.error).message);
+  const waiting = (coming.data || []).filter((mail) => sentStatus(mail, now) === 'waiting');
   return {
     any: Boolean(any.data?.length),
-    waiting: (coming.data || []).filter((mail) => sentStatus(mail, now) === 'waiting').length,
+    waiting: waiting.length,
+    waiting_letters: waiting.filter((mail) => !isCard(mail)).length,
   };
 }
 
