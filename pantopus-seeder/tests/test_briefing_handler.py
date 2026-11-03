@@ -567,7 +567,7 @@ class TestEndToEnd:
 
         process_count = [0]
 
-        def mock_process(uid, sec, briefing_kind="morning"):
+        def mock_process(uid, sec, briefing_kind="morning", retry=None):
             process_count[0] += 1
             return {"outcome": "sent"}
 
