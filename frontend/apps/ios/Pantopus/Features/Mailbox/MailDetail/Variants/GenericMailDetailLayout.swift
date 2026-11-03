@@ -61,7 +61,11 @@ struct GenericMailDetailLayout: View {
                     // A Christmas card opens as a card, from its envelope.
                     HolidayCardView(letter: letter, card: card, firstOpen: hooks.cardFirstOpen, onEnvelope: hooks.onEnvelope)
                 } else {
-                    MailEnvelopeButton(piece: letter.piece, onTap: hooks.onEnvelope)
+                    MailEnvelopeButton(
+                        piece: letter.piece,
+                        onTap: hooks.onEnvelope,
+                        compactBooklet: content.bookletDetail != nil
+                    )
                 }
             },
             body: {

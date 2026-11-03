@@ -18,6 +18,7 @@ import SwiftUI
 
 struct MailPieceView: View {
     let model: MailPieceModel
+    var compactBooklet = false
 
     var body: some View {
         VStack(spacing: Spacing.s0) {
@@ -54,7 +55,7 @@ struct MailPieceView: View {
             case .letter: LetterPiece(model: model)
             case .bill, .notice: WindowEnvelopePiece(model: model)
             case .postcard: PostcardPiece(model: model)
-            case .booklet: BookletPiece(model: model)
+            case .booklet: BookletPiece(model: model, compact: compactBooklet)
             case .parcel: ParcelPiece(model: model)
             case .bundle: BundlePiece(model: model)
             }
@@ -282,68 +283,124 @@ private struct PostcardPiece: View {
 
 private struct BookletPiece: View {
     let model: MailPieceModel
+    var compact = false
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: Radii.xs, style: .continuous)
-                    .fill(MailPaper.bookletPageUnder)
-                    .padding(.leading, 6)
-                    .padding(.top, 6)
-                RoundedRectangle(cornerRadius: Radii.xs, style: .continuous)
-                    .fill(MailPaper.bookletPage)
-                    .padding(3)
-                cover(width: geo.size.width - 6)
+        Group {
+            if compact {
+                compactCover
                     .padding(.trailing, 6)
                     .padding(.bottom, 6)
+                    .background {
+                        RoundedRectangle(cornerRadius: Radii.xs, style: .continuous)
+                            .fill(MailPaper.bookletPageUnder)
+                            .padding(.leading, 6)
+                            .padding(.top, 6)
+                        RoundedRectangle(cornerRadius: Radii.xs, style: .continuous)
+                            .fill(MailPaper.bookletPage)
+                            .padding(3)
+                    }
+            } else {
+                GeometryReader { geo in
+                    ZStack(alignment: .topLeading) {
+                        RoundedRectangle(cornerRadius: Radii.xs, style: .continuous)
+                            .fill(MailPaper.bookletPageUnder)
+                            .padding(.leading, 6)
+                            .padding(.top, 6)
+                        RoundedRectangle(cornerRadius: Radii.xs, style: .continuous)
+                            .fill(MailPaper.bookletPage)
+                            .padding(3)
+                        cover(width: geo.size.width - 6)
+                            .padding(.trailing, 6)
+                            .padding(.bottom, 6)
+                    }
+                }
+                .frame(height: 172)
             }
         }
-        .frame(height: 172)
         .shadow(color: .black.opacity(0.1), radius: 9, x: 0, y: 6)
+    }
+
+    /// An opened booklet keeps its cover identity without an empty, full-size
+    /// illustration competing with the page the person is reading.
+    private var compactCover: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .bottom, spacing: Spacing.s4) {
+                coverHeading.fixedSize(horizontal: true, vertical: false)
+                Spacer(minLength: Spacing.s2)
+                addressee.frame(width: 150)
+            }
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                coverHeading
+                addressee
+                    .frame(maxWidth: 150, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        }
+        .padding(Spacing.s4)
+        .background(MailPaper.bookletCover)
+        .clipShape(RoundedRectangle(cornerRadius: Radii.xs, style: .continuous))
+    }
+
+    private var coverHeading: some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            sender
+            title
+        }
     }
 
     private func cover(width: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             MailPaper.bookletCover
-            HStack(spacing: Spacing.s2) {
-                if model.trust == .pantopus {
-                    PantopusMark(size: 22, variant: .reverse)
-                }
-                Text(model.from)
-                    .font(.system(size: 11, weight: .semibold))
-                    .tracking(0.6)
-                    .textCase(.uppercase)
-                    .lineLimit(1)
-            }
-            .foregroundStyle(MailPaper.bookletSubtitle)
-            .padding(.leading, 22)
-            .padding(.top, Spacing.s4)
-
-            if let note = model.note {
-                Text(note)
-                    .font(.system(size: 20, design: .serif))
-                    .foregroundStyle(MailPaper.bookletTitle)
-                    .lineLimit(3)
-                    .minimumScaleFactor(0.8)
-                    .frame(width: width * 0.52, alignment: .leading)
-                    .padding(.leading, 22)
-                    .padding(.top, 50)
-            }
-
-            VStack(alignment: .leading, spacing: Spacing.s0) {
-                Text(model.to).lineLimit(1)
-                if let line = model.toLine { Text(line).lineLimit(1) }
-            }
-            .font(.system(size: 9.5, design: .monospaced))
-            .foregroundStyle(MailPaper.postalInk)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 7)
-            .frame(width: min(150, width * 0.42), alignment: .leading)
-            .background(MailPaper.envelope, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            .padding(Spacing.s3)
+            sender
+                .padding(.leading, 22)
+                .padding(.top, Spacing.s4)
+            title
+                .frame(width: width * 0.52, alignment: .leading)
+                .padding(.leading, 22)
+                .padding(.top, 50)
+            addressee
+                .frame(width: min(150, width * 0.42), alignment: .leading)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(Spacing.s3)
         }
         .clipShape(RoundedRectangle(cornerRadius: Radii.xs, style: .continuous))
+    }
+
+    private var sender: some View {
+        HStack(spacing: Spacing.s2) {
+            if model.trust == .pantopus {
+                PantopusMark(size: 22, variant: .reverse)
+            }
+            Text(model.from)
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(0.6)
+                .textCase(.uppercase)
+                .lineLimit(1)
+        }
+        .foregroundStyle(MailPaper.bookletSubtitle)
+    }
+
+    @ViewBuilder private var title: some View {
+        if let note = model.note {
+            Text(note)
+                .font(.system(size: 20, design: .serif))
+                .foregroundStyle(MailPaper.bookletTitle)
+                .lineLimit(3)
+                .minimumScaleFactor(0.8)
+        }
+    }
+
+    private var addressee: some View {
+        VStack(alignment: .leading, spacing: Spacing.s0) {
+            Text(model.to).lineLimit(1)
+            if let line = model.toLine { Text(line).lineLimit(1) }
+        }
+        .font(.system(size: 9.5, design: .monospaced))
+        .foregroundStyle(MailPaper.postalInk)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .background(MailPaper.envelope, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
     }
 }
 

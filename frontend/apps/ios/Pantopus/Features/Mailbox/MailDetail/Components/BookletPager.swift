@@ -95,68 +95,18 @@ public struct BookletPager: View {
 
     private var pageIndicator: some View {
         VStack(spacing: Spacing.s2) {
-            HStack(alignment: .center, spacing: Spacing.s2) {
-                Button {
-                    currentIndex = max(0, currentIndex - 1)
-                } label: {
-                    Icon(.chevronLeft, size: 14, color: Theme.Color.appTextStrong)
-                        .frame(width: 32, height: 32)
-                        .background(Theme.Color.appSurfaceSunken)
-                        .clipShape(Circle())
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Spacing.s4) {
+                    pageNavigation.fixedSize(horizontal: true, vertical: false)
+                    Spacer(minLength: Spacing.s2)
+                    gridButton.fixedSize(horizontal: true, vertical: false)
                 }
-                .buttonStyle(.plain)
-                .disabled(currentIndex == 0)
-                .accessibilityLabel("Previous page")
-                .accessibilityIdentifier("bookletPager_prev")
-                VStack(alignment: .center, spacing: 1) {
-                    pageLabelLayout {
-                        Text("Page \(currentIndex + 1)")
-                            .scaledFont(13, weight: .bold)
-                            .foregroundStyle(Theme.Color.appText)
-                        Text("of \(pageCount)")
-                            .scaledFont(13)
-                            .foregroundStyle(Theme.Color.appTextSecondary)
-                    }
-                    .accessibilityLabel("Page \(currentIndex + 1) of \(pageCount)")
-                    .accessibilityIdentifier("bookletPager_pageLabel")
+                VStack(spacing: Spacing.s2) {
+                    pageNavigation
+                    gridButton
                 }
-                .frame(maxWidth: .infinity)
-                Button {
-                    currentIndex = min(pages.count - 1, currentIndex + 1)
-                } label: {
-                    Icon(.chevronRight, size: 14, color: Theme.Color.appTextStrong)
-                        .frame(width: 32, height: 32)
-                        .background(Theme.Color.appSurfaceSunken)
-                        .clipShape(Circle())
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(currentIndex >= pages.count - 1)
-                .accessibilityLabel("Next page")
-                .accessibilityIdentifier("bookletPager_next")
             }
             scrubber
-            Button {
-                mode = .grid
-            } label: {
-                HStack(spacing: Spacing.s1) {
-                    Icon(.fileType, size: 12, color: Theme.Color.primaryInk)
-                    Text("View all pages")
-                        .scaledFont(11, weight: .semibold)
-                        .foregroundStyle(Theme.Color.primaryInk)
-                }
-                .padding(.horizontal, Spacing.s3)
-                .padding(.vertical, Spacing.s1)
-                .background(Theme.Color.primary50)
-                .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("bookletPager_toggleGrid")
         }
         .padding(Spacing.s3)
         .background(Theme.Color.appSurface)
@@ -167,10 +117,74 @@ public struct BookletPager: View {
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
     }
 
-    private var pageLabelLayout: AnyLayout {
-        dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: Spacing.s1))
-            : AnyLayout(HStackLayout(spacing: Spacing.s1))
+    private var pageNavigation: some View {
+        HStack(spacing: Spacing.s2) {
+            Button {
+                currentIndex = max(0, currentIndex - 1)
+            } label: {
+                Icon(.chevronLeft, size: 14, color: Theme.Color.appTextStrong)
+                    .frame(width: 32, height: 32)
+                    .background(Theme.Color.appSurfaceSunken)
+                    .clipShape(Circle())
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(currentIndex == 0)
+            .accessibilityLabel("Previous page")
+            .accessibilityIdentifier("bookletPager_prev")
+            pageLabel
+                .frame(maxWidth: .infinity)
+            Button {
+                currentIndex = min(pages.count - 1, currentIndex + 1)
+            } label: {
+                Icon(.chevronRight, size: 14, color: Theme.Color.appTextStrong)
+                    .frame(width: 32, height: 32)
+                    .background(Theme.Color.appSurfaceSunken)
+                    .clipShape(Circle())
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(currentIndex >= pages.count - 1)
+            .accessibilityLabel("Next page")
+            .accessibilityIdentifier("bookletPager_next")
+        }
+    }
+
+    private var pageLabel: some View {
+        (
+            Text("Page \(currentIndex + 1) ")
+                .fontWeight(.bold)
+                .foregroundColor(Theme.Color.appText)
+                + Text("of \(pageCount)")
+                .foregroundColor(Theme.Color.appTextSecondary)
+        )
+        .scaledFont(13)
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityIdentifier("bookletPager_pageLabel")
+    }
+
+    private var gridButton: some View {
+        Button {
+            mode = .grid
+        } label: {
+            HStack(spacing: Spacing.s1) {
+                Icon(.fileType, size: 12, color: Theme.Color.primaryInk)
+                Text("View all pages")
+                    .scaledFont(11, weight: .semibold)
+                    .foregroundStyle(Theme.Color.primaryInk)
+            }
+            .padding(.horizontal, Spacing.s3)
+            .padding(.vertical, Spacing.s1)
+            .background(Theme.Color.primary50)
+            .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("bookletPager_toggleGrid")
     }
 
     private var scrubber: some View {

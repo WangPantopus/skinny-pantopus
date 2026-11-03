@@ -14,11 +14,12 @@ import SwiftUI
 struct MailEnvelopeButton: View {
     let piece: MailPieceModel
     let onTap: () -> Void
+    var compactBooklet = false
 
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 6) {
-                MailPieceView(model: piece)
+                MailPieceView(model: piece, compactBooklet: compactBooklet)
                 HStack(spacing: Spacing.s1) {
                     Text("Who sent it, and its trail")
                     Icon(.chevronRight, size: 12, strokeWidth: 2.25, color: Theme.Color.appTextMuted)
