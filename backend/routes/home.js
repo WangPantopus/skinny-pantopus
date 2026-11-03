@@ -147,8 +147,9 @@ const createHomeSchema = Joi.object({
   wifi_password: Joi.string().max(200).optional().allow('', null),
 
   /**
-   * property-suggestions' ATTOM bundle, which the apps send back. Accepted and
-   * ignored: the Home stores the server's own copy for its address.
+   * The ATTOM bundle that property-suggestions used to answer with; older
+   * app builds still send it back. Accepted and ignored: the Home stores the
+   * server's own copy for its address.
    */
   attom_property_detail: Joi.object().unknown(true).optional().allow(null),
 }).custom((value, helpers) => {
@@ -574,6 +575,8 @@ const propertySuggestionsSchema = Joi.object({
 /**
  * POST /api/homes/property-suggestions
  * Tiered hints for Add Home step 2: ATTOM → heuristics → optional LLM (PROPERTY_SUGGESTIONS_LLM=1).
+ * Answers with the basics only. The county record stays on the server for the
+ * new Home, where only its verified owners see it (GET /:id/property-details).
  */
 router.post('/property-suggestions', verifyToken, homeOutboundLimiter, validate(propertySuggestionsSchema), async (req, res) => {
   try {

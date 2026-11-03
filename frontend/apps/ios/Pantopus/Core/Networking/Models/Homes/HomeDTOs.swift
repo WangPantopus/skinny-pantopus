@@ -391,8 +391,8 @@ public struct HomePublicProfileResponse: Decodable, Sendable, Hashable {
 }
 
 /// `POST /api/homes` request. Shape validated by `createHomeSchema` on the
-/// server; we expose the commonly-used fields and let callers pass
-/// additional ATTOM hints via `attomPropertyDetail` as a pre-built payload.
+/// server; we expose the commonly-used fields. The server stores its own
+/// county record for the address, so none is sent.
 /// Route: `backend/routes/home.js:677`.
 public struct CreateHomeRequest: Encodable, Sendable {
     public let addressId: String?
@@ -425,7 +425,6 @@ public struct CreateHomeRequest: Encodable, Sendable {
     /// `move_in_date` (YYYY-MM-DD). Set from the wizard's "Just moved in"
     /// switch; drives the first-week card. Web and Android write it too.
     public let moveInDate: String?
-    public let attomPropertyDetail: JSONEncodable?
 
     public init(
         address: String,
@@ -447,7 +446,6 @@ public struct CreateHomeRequest: Encodable, Sendable {
         isOwner: Bool? = nil,
         role: String? = nil,
         moveInDate: String? = nil,
-        attomPropertyDetail: JSONEncodable? = nil,
         addressId: String? = nil
     ) {
         self.addressId = addressId
@@ -470,7 +468,6 @@ public struct CreateHomeRequest: Encodable, Sendable {
         self.isOwner = isOwner
         self.role = role
         self.moveInDate = moveInDate
-        self.attomPropertyDetail = attomPropertyDetail
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -489,7 +486,6 @@ public struct CreateHomeRequest: Encodable, Sendable {
         case isOwner = "is_owner"
         case role
         case moveInDate = "move_in_date"
-        case attomPropertyDetail = "attom_property_detail"
     }
 }
 
@@ -616,29 +612,25 @@ public struct PropertySuggestionsFields: Decodable, Sendable, Hashable {
 }
 
 /// `POST /api/homes/property-suggestions` response envelope —
-/// `backend/services/ai/propertySuggestionsService.js:261-267`. The
-/// `attom_property_detail` bundle is provider-defined, so it stays a raw
-/// `JSONValue` that we hand straight back to `POST /api/homes`.
+/// `backend/services/ai/propertySuggestionsService.js:272-277`. The county
+/// record itself stays on the server; only the basics come back.
 public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
     public let suggestions: PropertySuggestionsFields?
     /// Per-field provenance (`attom` / `heuristic` / `llm`).
     public let fieldSources: [String: String]?
     public let tiersUsed: [String]?
     public let llmEnabled: Bool?
-    public let attomPropertyDetail: JSONValue?
 
     public init(
         suggestions: PropertySuggestionsFields? = nil,
         fieldSources: [String: String]? = nil,
         tiersUsed: [String]? = nil,
-        llmEnabled: Bool? = nil,
-        attomPropertyDetail: JSONValue? = nil
+        llmEnabled: Bool? = nil
     ) {
         self.suggestions = suggestions
         self.fieldSources = fieldSources
         self.tiersUsed = tiersUsed
         self.llmEnabled = llmEnabled
-        self.attomPropertyDetail = attomPropertyDetail
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -646,16 +638,13 @@ public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
         case fieldSources = "field_sources"
         case tiersUsed = "tiers_used"
         case llmEnabled = "llm_enabled"
-        case attomPropertyDetail = "attom_property_detail"
     }
 
     /// True when ATTOM actually returned a public record for the address —
-    /// drives the "Public records (ATTOM)" card. RN keys off the same
-    /// field (`DetailsStep.tsx:53`).
+    /// drives the "Public records (ATTOM)" card. The server lists `attom`
+    /// in `tiers_used` only when it found one.
     public var hasAttomRecord: Bool {
-        guard let attomPropertyDetail else { return false }
-        if case .null = attomPropertyDetail { return false }
-        return true
+        tiersUsed?.contains("attom") ?? false
     }
 }
 
@@ -824,20 +813,5 @@ public struct CheckAddressResponse: Decodable, Sendable, Hashable {
             ?? (homeId == nil ? 0 : 1)
         hasVerifiedMembers = try container.decodeIfPresent(Bool.self, forKey: .hasVerifiedMembers)
             ?? (status == Self.statusFoundClaimed)
-    }
-}
-
-/// Type-erased `Encodable` wrapper for request bodies whose schema is
-/// defined server-side (e.g. ATTOM property details).
-public struct JSONEncodable: Encodable, Sendable {
-    private let encodeClosure: @Sendable (any Encoder) throws -> Void
-    public init(_ wrapped: some Encodable & Sendable) {
-        encodeClosure = { encoder in
-            try wrapped.encode(to: encoder)
-        }
-    }
-
-    public func encode(to encoder: any Encoder) throws {
-        try encodeClosure(encoder)
     }
 }
