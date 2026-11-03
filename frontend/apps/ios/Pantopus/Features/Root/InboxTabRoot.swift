@@ -17,7 +17,6 @@ public struct InboxTabRoot: View {
     /// Regular width (the iPhone Duo open) puts the list and the open conversation side by side.
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var availableWidth: CGFloat = 0
     @State private var path = RouteStack<InboxRoute>()
     /// A fold replaces the navigation presentation, not its conversations.
     @State private var conversationModels = InboxConversationModels()
@@ -59,7 +58,6 @@ public struct InboxTabRoot: View {
         .task {
             consumeDeepLinkIfNeeded(pending: router.pending)
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
         .sheet(item: $systemSheet) { request in request.makeView() }
         .onChange(of: path.routes) { _, routes in
             conversationModels.retain(routes: routes, userId: currentUserId)
@@ -400,9 +398,10 @@ private extension InboxTabRoot {
         }
     }
 
+    /// Upright, the open Duo keeps both columns too (the founder's pick on
+    /// November 2). At the accessibility text sizes one column reads better.
     var isSideBySide: Bool {
         horizontalSizeClass == .regular && !dynamicTypeSize.isAccessibilitySize
-            && SideBySideColumnWidth.chatList.fitsBeside(in: availableWidth)
     }
 
     func chatList(onEmptyChange: @escaping @MainActor (Bool) -> Void = { _ in }) -> some View {
