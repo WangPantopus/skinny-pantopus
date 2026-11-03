@@ -143,7 +143,16 @@ data class SendCardForm(
 ) {
     /** What step 4 says under its choices: why the card didn't go, or that the look can't be shown. */
     val sealNotice: String? get() = sealError ?: LOOK_UNAVAILABLE.takeIf { lookUnavailable }
+
+    /** What step 1 says about a card taken back, if anything. */
+    val backNote: String? get() = takenBackNote ?: TOOK_BACK.takeIf { tookBack }
+
+    /** This form with its card's request ID, made now if it has none yet. */
+    fun withRequestId(): SendCardForm = if (requestId != null) this else copy(requestId = UUID.randomUUID().toString())
 }
+
+/** Step 1 once a card was taken back from this flow. */
+private const val TOOK_BACK = "You took your card back. You can send a card again today."
 
 /** Step 4 when the server can't show the look; "Seal and send" is then on step 4. */
 private const val LOOK_UNAVAILABLE = "Pantopus can’t show how your card will look yet. You can still seal and send it."
@@ -339,8 +348,8 @@ class SendCardViewModel
             val design = form.design ?: return
             val arrival = form.arrival ?: return
             if (form.previewing || form.sending || form.message.isBlank()) return
-            val requestId = form.requestId ?: UUID.randomUUID().toString()
-            _form.value = form.copy(previewing = true, sealError = null, requestId = requestId)
+            val started = form.withRequestId()
+            _form.value = started.copy(previewing = true, sealError = null)
             viewModelScope.launch {
                 val look =
                     repo.preview(
@@ -349,24 +358,31 @@ class SendCardViewModel
                         arrival = arrival,
                         toUserId = (to as? CardRecipient.Person)?.userId,
                         toEmail = (to as? CardRecipient.Email)?.email,
-                        requestId = requestId,
+                        requestId = started.requestId,
                     )
-                if (look is CardLook.Failed && wentEarlier(look.error)) return@launch
-                _form.update {
-                    val same = it.step == SendCardStep.Seal && it.to == to && it.design == design && it.arrival == arrival
-                    when {
-                        // Back, or another choice, while it was read: only an answer for what's chosen now counts.
-                        !same || it.message != form.message -> it.copy(previewing = false)
-                        look is CardLook.Shown ->
-                            it.copy(previewing = false, preview = look.preview, step = SendCardStep.Look, sendError = null)
-                        look is CardLook.Unavailable -> it.copy(previewing = false, lookUnavailable = true)
-                        look is CardLook.Failed ->
-                            it.copy(previewing = false, sealError = sendMessage(look.error, doing = "show how your card will look"))
-                        else -> it
-                    }
-                }
-                if ((look as? CardLook.Failed)?.error?.serverCode() == ARRIVAL_CLOSED) readTheirs()
+                if (!wentEarlier(look)) showLook(look, form)
             }
+        }
+
+        /** Step 5 from the look's answer, when it's for what's still chosen; step 4 says why it couldn't be shown. */
+        private fun showLook(
+            look: CardLook,
+            asked: SendCardForm,
+        ) {
+            _form.update {
+                val same = it.step == SendCardStep.Seal && it.to == asked.to && it.design == asked.design && it.arrival == asked.arrival
+                when {
+                    // Back, or another choice, while it was read: only an answer for what's chosen now counts.
+                    !same || it.message != asked.message -> it.copy(previewing = false)
+                    look is CardLook.Shown ->
+                        it.copy(previewing = false, preview = look.preview, step = SendCardStep.Look, sendError = null)
+                    look is CardLook.Unavailable -> it.copy(previewing = false, lookUnavailable = true)
+                    look is CardLook.Failed ->
+                        it.copy(previewing = false, sealError = sendMessage(look.error, doing = "show how your card will look"))
+                    else -> it
+                }
+            }
+            if ((look as? CardLook.Failed)?.error?.serverCode() == ARRIVAL_CLOSED) readTheirs()
         }
 
         /**
@@ -380,8 +396,8 @@ class SendCardViewModel
             val design = form.design ?: return
             val arrival = form.arrival ?: return
             if (form.sending || form.previewing || form.message.isBlank()) return
-            val requestId = form.requestId ?: UUID.randomUUID().toString()
-            _form.value = form.copy(sending = true, sendError = null, sealError = null, requestId = requestId)
+            val started = form.withRequestId()
+            _form.value = started.copy(sending = true, sendError = null, sealError = null)
             viewModelScope.launch {
                 val result =
                     repo.send(
@@ -390,7 +406,7 @@ class SendCardViewModel
                         arrival = arrival,
                         toUserId = (to as? CardRecipient.Person)?.userId,
                         toEmail = (to as? CardRecipient.Email)?.email,
-                        requestId = requestId,
+                        requestId = started.requestId,
                     )
                 if (result is NetworkResult.Failure && wentEarlier(result.error)) return@launch
                 val closed = (result as? NetworkResult.Failure)?.error?.serverCode() == ARRIVAL_CLOSED
@@ -408,6 +424,9 @@ class SendCardViewModel
                 if (closed) readTheirs()
             }
         }
+
+        /** [wentEarlier] for a look that couldn't be shown. */
+        private fun wentEarlier(look: CardLook): Boolean = look is CardLook.Failed && wentEarlier(look.error)
 
         /**
          * This card already went with an earlier try whose answer was lost (or that OkHttp sent again by itself): show
