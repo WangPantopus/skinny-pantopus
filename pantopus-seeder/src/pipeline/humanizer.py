@@ -443,5 +443,32 @@ def _call_api(client, messages: list[dict], system_prompt: str = "") -> tuple[st
             return None, "empty_response"
         return text, None
     except Exception as exc:
-        log.warning("Claude API error (error_type=%s)", type(exc).__name__)
+        status = getattr(exc, "status_code", None)
+        if status is None:
+            log.warning("Claude API error (error_type=%s)", type(exc).__name__)
+        else:
+            # Claude's answer names the cause (credit balance, spend limit, a refused
+            # parameter); the stored error stays the class name.
+            api_type, message = _claude_error_details(exc)
+            log.warning(
+                "Claude API error (error_type=%s status=%s api_error=%s request_id=%s): %s",
+                type(exc).__name__,
+                status,
+                api_type,
+                getattr(exc, "request_id", None) or "",
+                message,
+            )
         return None, f"api_error:{type(exc).__name__}"
+
+
+_KEY_LIKE = re.compile(r"sk-[A-Za-z0-9_-]{8,}")
+
+
+def _claude_error_details(exc: Exception) -> tuple[str, str]:
+    """Claude's own error type and message, trimmed, with anything key-shaped hidden."""
+    body = getattr(exc, "body", None)
+    error = body.get("error") if isinstance(body, dict) else None
+    if not isinstance(error, dict):
+        error = {}
+    message = str(error.get("message") or getattr(exc, "message", "") or "")
+    return str(error.get("type") or ""), _KEY_LIKE.sub("[redacted]", message)[:300]

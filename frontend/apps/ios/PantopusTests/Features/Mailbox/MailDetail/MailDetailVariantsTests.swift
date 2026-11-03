@@ -28,13 +28,14 @@ final class MailDetailVariantsTests: XCTestCase {
 
     // MARK: - Booklet projection
 
-    func testBookletProjectionDecodesPagesFromObject() async {
+    func testBookletProjectionDecodesPagesFromStoredPayload() async throws {
         let body = """
         {
           "mail": {
             "id": "m1",
-            "type": "booklet",
-            "mail_type": "booklet",
+            "type": "letter",
+            "mail_type": "book",
+            "kind": "booklet",
             "display_title": "June 2026 primary voter guide",
             "preview_text": "28 pages.",
             "subject": null,
@@ -49,7 +50,8 @@ final class MailDetailVariantsTests: XCTestCase {
             "attachments": null,
             "ack_required": false,
             "created_at": "2026-05-15T12:00:00Z",
-            "object": {
+            "object": { "id": "stored-booklet", "format": "mailjson_v1" },
+            "object_payload": {
               "page_count": 3,
               "summary": "Voter guide summary.",
               "pages": [
@@ -61,7 +63,10 @@ final class MailDetailVariantsTests: XCTestCase {
           }
         }
         """
-        SequencedURLProtocol.sequence = [.status(200, body: body)]
+        var metadata = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: [String: Any]])
+        metadata["mail"]?.removeValue(forKey: "object_payload")
+        let metadataBody = try XCTUnwrap(String(data: JSONSerialization.data(withJSONObject: metadata), encoding: .utf8))
+        SequencedURLProtocol.sequence = [.status(200, body: metadataBody), .status(200, body: body)]
         let vm = MailDetailViewModel(mailId: "m1", api: makeAPI())
         await vm.load()
         guard case let .loaded(content) = vm.state else {
@@ -73,6 +78,9 @@ final class MailDetailVariantsTests: XCTestCase {
         XCTAssertEqual(content.bookletDetail?.pages.count, 3)
         XCTAssertEqual(content.bookletDetail?.pageCount, 3)
         XCTAssertNil(content.certifiedDetail)
+        XCTAssertEqual(SequencedURLProtocol.capturedRequests.prefix(2).compactMap { $0.url?.path }, [
+            "/api/mailbox/m1", "/api/mailbox/v2/item/m1"
+        ])
     }
 
     func testBookletPayloadAbsentLeavesNil() async {
@@ -99,7 +107,7 @@ final class MailDetailVariantsTests: XCTestCase {
           }
         }
         """
-        SequencedURLProtocol.sequence = [.status(200, body: body)]
+        SequencedURLProtocol.sequence = [.status(200, body: body), .status(200, body: body)]
         let vm = MailDetailViewModel(mailId: "m1", api: makeAPI())
         await vm.load()
         guard case let .loaded(content) = vm.state else {

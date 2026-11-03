@@ -171,6 +171,7 @@ public struct RootTabView: View {
     @State private var addHomeRequest: UUID?
     @Environment(AuthManager.self) private var auth
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.layoutDirection) private var layoutDirection
     /// Nearby Plans' two server flags, read at launch and on foreground.
     @State private var plansFlags = PlansFlags.shared
     /// The side menu's model, made once (a view model made in `body` can
@@ -586,24 +587,28 @@ extension RootTabView {
     private var drawnTabs: some View {
         let onBar = RootTab.barTabs(plans: plansFlags.plans)
         let showsBar = model.barHiders.isEmpty
-        return ZStack(alignment: .bottom) {
-            RootTabContainer(
-                tabs: onBar,
-                selected: model.selected,
-                barSpace: showsBar ? RootTabBar.space : .none,
-                environment: RootTabEnvironment(auth: auth, tabs: model, scenePhase: scenePhase),
-                reselection: model.reselection,
-                makeRoot: tabRoot(for:)
-            )
-            .ignoresSafeArea()
-            if showsBar {
-                RootTabBar(
+        return RootTabBarPlacementReader { verticalEdge in
+            ZStack(alignment: verticalEdge.map { $0 == .leading ? .leading : .trailing } ?? .bottom) {
+                RootTabContainer(
                     tabs: onBar,
                     selected: model.selected,
-                    badges: [.mail: mailBadgeStore.unopened, .messages: model.messagesBadge],
-                    onSelect: select
+                    barSpace: showsBar ? RootTabBar.space(verticalEdge: verticalEdge, layoutDirection: layoutDirection) : .none,
+                    environment: RootTabEnvironment(auth: auth, tabs: model, scenePhase: scenePhase),
+                    reselection: model.reselection,
+                    makeRoot: tabRoot(for:)
                 )
+                .ignoresSafeArea()
+                if showsBar {
+                    RootTabBar(
+                        tabs: onBar,
+                        selected: model.selected,
+                        badges: [.mail: mailBadgeStore.unopened, .messages: model.messagesBadge],
+                        verticalEdge: verticalEdge,
+                        onSelect: select
+                    )
+                }
             }
+            .onChange(of: verticalEdge) { _, _ in model.barScrolledAway = false }
         }
         // The keyboard covers the bar, as it covers the system one; each
         // tab's screens make room for it in their own hosting controller.

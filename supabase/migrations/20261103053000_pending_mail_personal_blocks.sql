@@ -1,6 +1,9 @@
 -- Backwards compatible: yes. Existing tables and mail shapes are unchanged. Personal blocks now withdraw
 -- undelivered personal correspondence and reject new deliveries across that block. Delivered correspondence,
 -- household mail and mail sent as a business keep their existing rules. No new table or client requirement.
+-- Personal correspondence is a letter or card a person sends to a person or to an email/phone contact. The
+-- iPhone and Android composers also put the person's Home on the envelope (recipient_home_id with a 'user'
+-- delivery target), so only mail addressed to a Home itself counts as household mail here.
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 
@@ -35,6 +38,7 @@ BEGIN
   -- Its private storage object is unlinked, just as for a sender's take-back; no recipient route can read it.
   UPDATE public."Mail" m SET
     escrow_status = 'withdrawn', recipient_user_id = NULL, recipient_home_id = NULL,
+    address_id = NULL, address_home_id = NULL,
     delivery_target_type = NULL, delivery_target_id = NULL, recipient_type = NULL, recipient_id = NULL,
     attn_user_id = NULL, attn_label = NULL, delivery_visibility = NULL,
     object_id = NULL, content = '', content_excerpt = '', preview_text = NULL, attachments = '{}',
@@ -44,7 +48,7 @@ BEGIN
         'request', m.mail_extracted #> '{card,request}',
         'withdrawn', jsonb_build_object('reason', 'blocked', 'at', clock_timestamp())))
       ELSE jsonb_build_object('withdrawn', jsonb_build_object('reason', 'blocked', 'at', clock_timestamp())) END
-  WHERE m.sender_entity_id IS NULL AND m.recipient_home_id IS NULL
+  WHERE m.sender_entity_id IS NULL AND m.type = 'letter' AND m.delivery_target_type IS DISTINCT FROM 'home'
     AND (m.delivered_at > clock_timestamp() OR m.escrow_status = 'pending')
     AND ((m.sender_user_id = p_first AND coalesce(m.recipient_user_id,
             public.personal_mail_contact_user(m.escrow_recipient_contact)) = p_second)
@@ -74,8 +78,8 @@ CREATE FUNCTION public.admit_personal_mail_unblocked()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
 DECLARE v_recipient uuid;
 BEGIN
-  IF NEW.sender_entity_id IS NOT NULL OR NEW.recipient_home_id IS NOT NULL
-    OR NEW.sender_user_id IS NULL THEN
+  IF NEW.sender_entity_id IS NOT NULL OR NEW.sender_user_id IS NULL OR NEW.type IS DISTINCT FROM 'letter'
+    OR NEW.delivery_target_type IS NOT DISTINCT FROM 'home' THEN
     RETURN NEW;
   END IF;
   IF TG_OP = 'UPDATE' AND NEW.sender_user_id IS NOT DISTINCT FROM OLD.sender_user_id
@@ -114,7 +118,7 @@ BEGIN
         OR (m.sender_user_id = b.blocked_user_id AND coalesce(m.recipient_user_id,
           public.personal_mail_contact_user(m.escrow_recipient_contact)) = b.blocker_user_id))
     WHERE (m.delivered_at > clock_timestamp() OR m.escrow_status = 'pending')
-      AND m.sender_entity_id IS NULL AND m.recipient_home_id IS NULL
+      AND m.sender_entity_id IS NULL AND m.type = 'letter' AND m.delivery_target_type IS DISTINCT FROM 'home'
     ORDER BY b.blocker_user_id, b.blocked_user_id
   LOOP
     PERFORM public.withdraw_pending_personal_mail(v_pair.blocker_user_id, v_pair.blocked_user_id);
