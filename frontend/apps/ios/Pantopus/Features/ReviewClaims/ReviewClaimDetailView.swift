@@ -1,18 +1,9 @@
-//
-//  ReviewClaimDetailView.swift
-//  Pantopus
-//
-//  P7.2 (A13.3) — Admin claim-detail screen. Reads a claim id, renders
-//  the home context strip, the claimant card (gradient avatar + trust
-//  chips + claim summary tile), an evidence strip of synthetic document
-//  previews, and the claim statement. The verdict bar offers Accept
-//  (primary) / Challenge / Reject; Challenge opens a reason-chip +
-//  question composer sheet, Reject opens a reason-note sheet.
-//
+// Admin claim detail, private evidence, approval requirements and review actions.
 
 import SwiftUI
 
 public struct ReviewClaimDetailView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var viewModel: ReviewClaimDetailViewModel
     @State private var showRejectSheet = false
     @State private var rejectNote: String = ""
@@ -198,28 +189,33 @@ public struct ReviewClaimDetailView: View {
                     } else if !isReviewable {
                         TerminalStateBanner(state: detail.claim.state)
                             .accessibilityIdentifier("reviewClaimDetail_terminal")
-                    } else { // Room under the card: the verdict bar floats over the scroll content.
+                    } else {
                         OverlineSection(title: "Approve as") { ApprovalChoiceCard(detail: detail, viewModel: viewModel) }
-                            .padding(.bottom, verdictBarHeight)
+                            .padding(.bottom, dynamicTypeSize.isAccessibilitySize ? 0 : verdictBarHeight)
+                        if dynamicTypeSize.isAccessibilitySize { verdictBar(detail) }
                     }
                 }
                 .padding(.horizontal, Spacing.s4)
             },
             cta: {
-                if isReviewable {
-                    VerdictBar(
-                        reviewingAction: viewModel.reviewingAction,
-                        acceptBlockedReason: viewModel.acceptBlockedReason(detail),
-                        acceptLabel: viewModel.acceptLabel(detail),
-                        onAccept: { Task { _ = await viewModel.review(.approve) } },
-                        onChallenge: { showChallengeSheet = true },
-                        onReject: { showRejectSheet = true }
-                    )
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { verdictBarHeight = $0 }
+                if isReviewable, !dynamicTypeSize.isAccessibilitySize {
+                    verdictBar(detail)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { verdictBarHeight = $0 }
                 } else {
                     EmptyView()
                 }
             }
+        )
+    }
+
+    private func verdictBar(_ detail: AdminClaimDetailResponse) -> some View {
+        VerdictBar(
+            reviewingAction: viewModel.reviewingAction,
+            acceptBlockedReason: viewModel.acceptBlockedReason(detail),
+            acceptLabel: viewModel.acceptLabel(detail),
+            onAccept: { Task { _ = await viewModel.review(.approve) } },
+            onChallenge: { showChallengeSheet = true },
+            onReject: { showRejectSheet = true }
         )
     }
 
@@ -230,6 +226,7 @@ public struct ReviewClaimDetailView: View {
                 Icon(.alertCircle, size: 20, color: Theme.Color.warning)
                 Text("No documents uploaded yet")
                     .pantopusTextStyle(.small)
+                    .scaledFont(14)
                     .foregroundStyle(Theme.Color.warning)
                 Spacer(minLength: Spacing.s0)
             }
@@ -413,7 +410,7 @@ private struct OverlineSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text(title)
-                .font(.system(size: 11, weight: .semibold))
+                .scaledFont(11, weight: .semibold)
                 .tracking(0.06 * 11) // overline tracking +0.06em
                 .textCase(.uppercase)
                 .foregroundStyle(Theme.Color.appTextSecondary)
@@ -426,6 +423,7 @@ private struct OverlineSection<Content: View>: View {
 // MARK: - Home card
 
 private struct HomeCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let home: AdminClaimHomeDTO?
 
     var body: some View {
@@ -438,16 +436,17 @@ private struct HomeCard: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(home?.name?.isEmpty == false ? (home?.name ?? "") : (home?.address ?? "Unknown home"))
-                    .font(.system(size: 14, weight: .semibold))
+                    .scaledFont(14, weight: .semibold)
                     .foregroundStyle(Theme.Color.appText)
-                    .lineLimit(1)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                 let extras = [home?.address, home?.city, home?.state, home?.zipcode]
                     .compactMap { $0?.isEmpty == false ? $0 : nil }
                 if !extras.isEmpty {
                     Text(extras.joined(separator: ", "))
                         .pantopusTextStyle(.caption)
+                        .scaledFont(12)
                         .foregroundStyle(Theme.Color.appTextSecondary)
-                        .lineLimit(2)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 }
             }
             Spacer(minLength: Spacing.s0)
@@ -472,7 +471,7 @@ private struct TerminalStateBanner: View {
         HStack(spacing: Spacing.s2) {
             Icon(.info, size: 20, color: Theme.Color.appTextSecondary)
             Text(message)
-                .font(.system(size: 13))
+                .scaledFont(13)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             Spacer(minLength: Spacing.s0)
         }

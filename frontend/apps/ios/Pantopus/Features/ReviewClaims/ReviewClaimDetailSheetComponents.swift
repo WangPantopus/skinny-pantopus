@@ -10,6 +10,9 @@ import SwiftUI
 // MARK: - Challenge composer sheet
 
 struct ChallengeComposerSheet: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @FocusState private var questionFocused: Bool
+    @ScaledMetric(relativeTo: .body) private var editorHeight = 104.0
     let claimantFirstName: String
     let coOwnerCount: Int
     @Binding var question: String
@@ -23,22 +26,46 @@ struct ChallengeComposerSheet: View {
     private let charLimit = 600
 
     var body: some View {
+        NavigationStack {
+            content.toolbar(.hidden, for: .navigationBar)
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: Spacing.s4) {
             Capsule()
                 .fill(Theme.Color.appBorderStrong)
                 .frame(width: 38, height: 4)
                 .padding(.top, Spacing.s2)
 
-            header
-            scrollBody
-            actions
+            if dynamicTypeSize.isAccessibilitySize {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Spacing.s4) {
+                        header
+                        form
+                        actions
+                    }
+                }
+                .scrollDismissesKeyboard(.interactively)
+            } else {
+                header
+                ScrollView(showsIndicators: false) { form }
+                    .scrollDismissesKeyboard(.interactively)
+                actions
+            }
         }
         .padding(.horizontal, Spacing.s4)
         .padding(.bottom, Spacing.s6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Theme.Color.appSurface)
-        .presentationDetents([.fraction(0.78)])
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.fraction(0.78), .large])
         .presentationDragIndicator(.hidden)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { questionFocused = false }
+            }
+        }
         .accessibilityIdentifier("reviewClaimDetail_challengeComposer")
     }
 
@@ -56,56 +83,56 @@ struct ChallengeComposerSheet: View {
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text("Request more information")
-                    .font(.system(size: 16, weight: .bold))
+                    .scaledFont(16, weight: .bold)
                     .foregroundStyle(Theme.Color.appText)
                     .accessibilityAddTraits(.isHeader)
                 Text("Save questions for this claim review.")
-                    .font(.system(size: 11.5))
+                    .scaledFont(11.5)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             Spacer(minLength: Spacing.s0)
         }
     }
 
-    private var scrollBody: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: Spacing.s4) {
-                VStack(alignment: .leading, spacing: Spacing.s2) {
-                    fieldLabel("Reasons (pick any)", required: false)
-                    ReviewClaimFlowLayout(spacing: 6) {
-                        ForEach(ChallengeReason.allCases) { reason in
-                            ReasonChip(
-                                label: reason.label,
-                                selected: selectedReasons.contains(reason)
-                            ) {
-                                onToggleReason(reason)
-                            }
-                            .accessibilityIdentifier("reviewClaimDetail_reason_\(reason.rawValue)")
+    private var form: some View {
+        VStack(alignment: .leading, spacing: Spacing.s4) {
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                fieldLabel("Reasons (pick any)", required: false)
+                ReviewClaimFlowLayout(spacing: 6) {
+                    ForEach(ChallengeReason.allCases) { reason in
+                        ReasonChip(
+                            label: reason.label,
+                            selected: selectedReasons.contains(reason)
+                        ) {
+                            onToggleReason(reason)
                         }
+                        .accessibilityIdentifier("reviewClaimDetail_reason_\(reason.rawValue)")
                     }
                 }
-
-                VStack(alignment: .leading, spacing: Spacing.s2) {
-                    fieldLabel("Your questions for \(claimantFirstName)", required: true)
-                    questionEditor
-                    Text("\(question.count) / \(charLimit)")
-                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                        .foregroundStyle(Theme.Color.appTextMuted)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                }
-
-                visibilityCard
             }
-            .padding(.bottom, Spacing.s2)
+
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                fieldLabel("Your questions for \(claimantFirstName)", required: true)
+                questionEditor
+                Text("\(question.count) / \(charLimit)")
+                    .scaledFont(10.5, weight: .medium)
+                    .fontDesign(.monospaced)
+                    .foregroundStyle(Theme.Color.appTextMuted)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+
+            visibilityCard
         }
+        .padding(.bottom, Spacing.s2)
     }
 
     private var questionEditor: some View {
         TextEditor(text: $question)
-            .font(.system(size: 13.5))
+            .scaledFont(13.5)
+            .focused($questionFocused)
             .foregroundStyle(Theme.Color.appText)
             .scrollContentBackground(.hidden)
-            .frame(minHeight: 104)
+            .frame(minHeight: editorHeight)
             .padding(10)
             .background(Theme.Color.appSurfaceMuted)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md))
@@ -114,6 +141,7 @@ struct ChallengeComposerSheet: View {
                     .stroke(Theme.Color.appBorder, lineWidth: 1)
             )
             .accessibilityIdentifier("reviewClaimDetail_challengeQuestion")
+            .accessibilityLabel("Your questions for \(claimantFirstName)")
     }
 
     private var visibilityCard: some View {
@@ -136,17 +164,17 @@ struct ChallengeComposerSheet: View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Icon(icon, size: 14, color: Theme.Color.appTextSecondary)
             Text(text)
-                .font(.system(size: 11.5))
+                .scaledFont(11.5)
                 .foregroundStyle(Theme.Color.appTextStrong)
             Spacer(minLength: Spacing.s0)
         }
     }
 
     private var actions: some View {
-        HStack(spacing: Spacing.s2) {
+        actionsLayout {
             Button(action: onBack) {
                 Text("Back")
-                    .font(.system(size: 14, weight: .semibold))
+                    .scaledFont(14, weight: .semibold)
                     .foregroundStyle(Theme.Color.appText)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 46)
@@ -169,7 +197,7 @@ struct ChallengeComposerSheet: View {
                         Icon(.send, size: 15, color: Theme.Color.appTextInverse)
                     }
                     Text(isSubmitting ? "Saving…" : "Save request")
-                        .font(.system(size: 14, weight: .semibold))
+                        .scaledFont(14, weight: .semibold)
                         .foregroundStyle(Theme.Color.appTextInverse)
                 }
                 .frame(maxWidth: .infinity)
@@ -184,14 +212,20 @@ struct ChallengeComposerSheet: View {
         }
     }
 
+    private var actionsLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: Spacing.s2))
+            : AnyLayout(HStackLayout(spacing: Spacing.s2))
+    }
+
     private func fieldLabel(_ text: String, required: Bool) -> some View {
         HStack(spacing: 3) {
             Text(text)
-                .font(.system(size: 12, weight: .semibold))
+                .scaledFont(12, weight: .semibold)
                 .foregroundStyle(Theme.Color.appTextStrong)
             if required {
                 Text("*")
-                    .font(.system(size: 12, weight: .semibold))
+                    .scaledFont(12, weight: .semibold)
                     .foregroundStyle(Theme.Color.error)
             }
         }
@@ -210,8 +244,9 @@ private struct ReasonChip: View {
                     Icon(.check, size: 11, strokeWidth: 3, color: Theme.Color.warmAmber)
                 }
                 Text(label)
-                    .font(.system(size: 12, weight: selected ? .semibold : .medium))
+                    .scaledFont(12, weight: selected ? .semibold : .medium)
                     .foregroundStyle(selected ? Theme.Color.warmAmber : Theme.Color.appTextStrong)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 11)
             .padding(.vertical, 7)
@@ -222,6 +257,7 @@ private struct ReasonChip: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 }
 
@@ -241,7 +277,7 @@ struct ReviewClaimFlowLayout: Layout {
         var maxRowWidth: CGFloat = 0
 
         for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
+            let size = view.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
             if x + size.width > maxWidth, x > 0 {
                 totalHeight += rowHeight + spacing
                 maxRowWidth = max(maxRowWidth, x - spacing)
@@ -264,7 +300,7 @@ struct ReviewClaimFlowLayout: Layout {
         var rowHeight: CGFloat = 0
 
         for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
+            let size = view.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
             if x + size.width > bounds.minX + maxWidth, x > bounds.minX {
                 x = bounds.minX
                 y += rowHeight + spacing
@@ -280,6 +316,9 @@ struct ReviewClaimFlowLayout: Layout {
 // MARK: - Note capture sheet (reject reason)
 
 struct ReviewClaimNoteCaptureSheet: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @FocusState private var noteFocused: Bool
+    @ScaledMetric(relativeTo: .body) private var editorHeight = 120.0
     let title: String
     let prompt: String
     let placeholder: String
@@ -291,62 +330,82 @@ struct ReviewClaimNoteCaptureSheet: View {
     let onCancel: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s4) {
-            HStack {
-                Text(title)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(Theme.Color.appText)
-                Spacer(minLength: Spacing.s0)
-                Button(action: onCancel) {
-                    Icon(.x, size: 22, color: Theme.Color.appTextSecondary)
+        NavigationStack {
+            content.toolbar(.hidden, for: .navigationBar)
+        }
+    }
+
+    private var content: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.s4) {
+                HStack {
+                    Text(title)
+                        .scaledFont(18, weight: .bold)
+                        .foregroundStyle(Theme.Color.appText)
+                    Spacer(minLength: Spacing.s0)
+                    Button(action: onCancel) {
+                        Icon(.x, size: 22, color: Theme.Color.appTextSecondary)
+                            .frame(minWidth: 44, minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close")
+                }
+                Text(prompt)
+                    .pantopusTextStyle(.small)
+                    .scaledFont(14)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                TextEditor(text: $note)
+                    .focused($noteFocused)
+                    .frame(minHeight: editorHeight)
+                    .padding(Spacing.s2)
+                    .background(Theme.Color.appBg)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Radii.md)
+                            .stroke(Theme.Color.appBorder, lineWidth: 1)
+                    )
+                    .accessibilityIdentifier("reviewClaimDetail_noteEditor")
+                    .accessibilityLabel("\(title) note")
+                    .accessibilityHint(placeholder)
+                Button(role: primaryRole, action: onPrimary) {
+                    HStack(spacing: Spacing.s2) {
+                        if isSubmitting {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: Theme.Color.appTextInverse))
+                        }
+                        Text(isSubmitting ? "Sending…" : primaryTitle)
+                            .scaledFont(15, weight: .bold)
+                            .foregroundStyle(Theme.Color.appTextInverse)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 48)
+                    .background(primaryBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: Radii.xl))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Close")
-            }
-            Text(prompt)
-                .pantopusTextStyle(.small)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-            TextEditor(text: $note)
-                .frame(minHeight: 120)
-                .padding(Spacing.s2)
-                .background(Theme.Color.appBg)
-                .overlay(
-                    RoundedRectangle(cornerRadius: Radii.md)
-                        .stroke(Theme.Color.appBorder, lineWidth: 1)
-                )
-                .accessibilityIdentifier("reviewClaimDetail_noteEditor")
-            Button(role: primaryRole, action: onPrimary) {
-                HStack(spacing: Spacing.s2) {
-                    if isSubmitting {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: Theme.Color.appTextInverse))
-                    }
-                    Text(isSubmitting ? "Sending…" : primaryTitle)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(Theme.Color.appTextInverse)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 48)
-                .background(primaryBackground)
-                .clipShape(RoundedRectangle(cornerRadius: Radii.xl))
-            }
-            .buttonStyle(.plain)
-            .disabled(isSubmitting)
-            .accessibilityIdentifier("reviewClaimDetail_notePrimary")
+                .disabled(isSubmitting)
+                .accessibilityIdentifier("reviewClaimDetail_notePrimary")
 
-            Button(action: onCancel) {
-                Text("Cancel")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 44)
+                Button(action: onCancel) {
+                    Text("Cancel")
+                        .scaledFont(14, weight: .semibold)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: 44)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .padding(Spacing.s5)
         }
-        .padding(Spacing.s5)
+        .scrollDismissesKeyboard(.interactively)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Theme.Color.appSurface)
-        .presentationDetents([.medium, .large])
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { noteFocused = false }
+            }
+        }
     }
 
     private var primaryBackground: Color {

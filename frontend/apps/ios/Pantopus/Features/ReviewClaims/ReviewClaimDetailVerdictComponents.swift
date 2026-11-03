@@ -16,14 +16,15 @@ struct StatementBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text(statement)
-                .font(.system(size: 13.5).italic())
+                .italic()
+                .scaledFont(13.5)
                 .foregroundStyle(Theme.Color.appText)
                 .fixedSize(horizontal: false, vertical: true)
             if let attribution {
                 HStack(spacing: Spacing.s1) {
                     Icon(.fileSignature, size: 10, color: Theme.Color.appTextMuted)
                     Text(attribution.uppercased())
-                        .font(.system(size: 10.5, weight: .semibold))
+                        .scaledFont(10.5, weight: .semibold)
                         .foregroundStyle(Theme.Color.appTextMuted)
                 }
             }
@@ -70,7 +71,7 @@ struct ApprovalChoiceCard: View {
             } label: {
                 HStack(spacing: Spacing.s2) {
                     Text(title(for: viewModel.approveAs))
-                        .font(.system(size: 14, weight: .semibold))
+                        .scaledFont(14, weight: .semibold)
                         .foregroundStyle(Theme.Color.appText)
                     Spacer(minLength: Spacing.s2)
                     Icon(.chevronDown, size: 16, color: Theme.Color.appTextSecondary)
@@ -89,6 +90,7 @@ struct ApprovalChoiceCard: View {
             .accessibilityLabel("Approve as \(viewModel.approveAs.label)")
             Text(viewModel.approveAs.hint)
                 .pantopusTextStyle(.caption)
+                .scaledFont(12)
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }
         .padding(Spacing.s4)
@@ -109,6 +111,7 @@ struct ApprovalChoiceCard: View {
 // MARK: - Verdict bar
 
 struct VerdictBar: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let reviewingAction: AdminClaimReviewAction?
     /// Why Accept is off (approval would refuse), shown above it; nil when it can go ahead.
     var acceptBlockedReason: String?
@@ -121,7 +124,7 @@ struct VerdictBar: View {
         VStack(spacing: Spacing.s2) {
             if let acceptBlockedReason {
                 Text(acceptBlockedReason)
-                    .font(.system(size: 12.5))
+                    .scaledFont(12.5)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityIdentifier("reviewClaimDetail_acceptBlocked")
@@ -137,7 +140,7 @@ struct VerdictBar: View {
             .accessibilityIdentifier("reviewClaimDetail_accept")
             .accessibilityLabel(acceptLabel)
 
-            HStack(spacing: Spacing.s2) {
+            secondaryActionsLayout {
                 VerdictButton(
                     style: .challenge,
                     label: "Request info",
@@ -171,6 +174,12 @@ struct VerdictBar: View {
         )
         .shadow(color: Theme.Color.appText.opacity(0.08), radius: 12, y: 4)
     }
+
+    private var secondaryActionsLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: Spacing.s2))
+            : AnyLayout(HStackLayout(spacing: Spacing.s2))
+    }
 }
 
 private struct VerdictButton: View {
@@ -193,7 +202,7 @@ private struct VerdictButton: View {
                     Icon(icon, size: style == .accept ? 17 : 15, color: foreground)
                 }
                 Text(label)
-                    .font(.system(size: style == .accept ? 15 : 13.5, weight: .semibold))
+                    .scaledFont(style == .accept ? 15 : 13.5, weight: .semibold)
                     .foregroundStyle(foreground)
             }
             .frame(maxWidth: .infinity)
