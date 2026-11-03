@@ -16,7 +16,10 @@ public struct InboxTabRoot: View {
     @Environment(AuthManager.self) private var auth
     /// Regular width (the iPhone Duo open) puts the list and the open conversation side by side.
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var path = RouteStack<InboxRoute>()
+    /// A fold replaces the navigation presentation, not its conversations.
+    @State private var conversationModels = InboxConversationModels()
     @State private var router = DeepLinkRouter.shared
     /// P6.6 — "Invite to Pantopus" opens the system share sheet with the
     /// store link prefilled.
@@ -56,6 +59,12 @@ public struct InboxTabRoot: View {
             consumeDeepLinkIfNeeded(pending: router.pending)
         }
         .sheet(item: $systemSheet) { request in request.makeView() }
+        .onChange(of: path.routes) { _, routes in
+            conversationModels.retain(routes: routes, userId: currentUserId)
+        }
+        .onChange(of: currentUserId) { _, userId in
+            conversationModels.retain(routes: [], userId: userId)
+        }
     }
 
     private var navigationPathBinding: Binding<NavigationPath> {
@@ -188,17 +197,7 @@ public struct InboxTabRoot: View {
         switch route {
         case let .conversation(dest):
             ChatConversationView(
-                viewModel: ChatConversationViewModel(
-                    mode: Self.viewModelMode(for: dest.mode),
-                    counterparty: Self.counterparty(for: dest),
-                    currentUserId: currentUserId,
-                    scrollToMessageId: dest.scrollToMessageId,
-                    initialTopic: dest.initialTopic,
-                    gigId: dest.gigId,
-                    asBusinessUserId: dest.asBusinessUserId,
-                    aiNudge: dest.assistantNudge,
-                    aiLaunch: dest.assistantLaunch
-                ),
+                viewModel: conversationModel(for: dest),
                 mode: dest.kind,
                 onUseAIDraft: { draft in
                     path.append(draftRoute(for: draft))
@@ -236,14 +235,13 @@ public struct InboxTabRoot: View {
             )
         case .search:
             ChatSearchView(
-                viewModel: ChatSearchViewModel(
-                    onOpenResult: { result in
-                        Task { @MainActor in path.open(.conversation(destination(from: result)), sideBySide: isSideBySide) }
-                    },
-                    onCancel: {
-                        Task { @MainActor in path.closeSearch(sideBySide: isSideBySide) }
-                    }
-                )
+                viewModel: conversationModels.search(userId: currentUserId),
+                onOpenResult: { result in
+                    Task { @MainActor in path.open(.conversation(destination(from: result)), sideBySide: isSideBySide) }
+                },
+                onCancel: {
+                    Task { @MainActor in path.closeSearch(sideBySide: isSideBySide) }
+                }
             )
         case let .composeGig(category):
             GigComposeWizardView(preselectedCategoryKey: category) { _ in
@@ -348,11 +346,73 @@ public struct InboxTabRoot: View {
     }
 }
 
+/// Owned above both navigation branches. Only routes still on this account's
+/// stack keep their models; leaving a thread releases its in-memory content.
+@MainActor
+private final class InboxConversationModels {
+    private var userId = ""
+    private var models: [InboxConversationDestination: ChatConversationViewModel] = [:]
+    private var searchModel: ChatSearchViewModel?
+
+    func model(
+        for destination: InboxConversationDestination,
+        userId: String,
+        make: () -> ChatConversationViewModel
+    ) -> ChatConversationViewModel {
+        if self.userId != userId {
+            retain(routes: [], userId: userId)
+        }
+        if let model = models[destination] { return model }
+        let model = make()
+        models[destination] = model
+        return model
+    }
+
+    func search(userId: String) -> ChatSearchViewModel {
+        if self.userId != userId { retain(routes: [], userId: userId) }
+        if let searchModel { return searchModel }
+        let model = ChatSearchViewModel()
+        searchModel = model
+        return model
+    }
+
+    func retain(routes: [InboxRoute], userId: String) {
+        let destinations = Set(routes.compactMap { route -> InboxConversationDestination? in
+            guard case let .conversation(destination) = route else { return nil }
+            return destination
+        })
+        models = self.userId == userId ? models.filter { destinations.contains($0.key) } : [:]
+        if self.userId != userId || !routes.contains(.search) {
+            searchModel?.teardown()
+            searchModel = nil
+        }
+        self.userId = userId
+    }
+}
+
 // MARK: - Chat list
 
 private extension InboxTabRoot {
+    func conversationModel(for destination: InboxConversationDestination) -> ChatConversationViewModel {
+        conversationModels.model(for: destination, userId: currentUserId) {
+            ChatConversationViewModel(
+                mode: Self.viewModelMode(for: destination.mode),
+                counterparty: Self.counterparty(for: destination),
+                currentUserId: currentUserId,
+                scrollToMessageId: destination.scrollToMessageId,
+                initialTopic: destination.initialTopic,
+                gigId: destination.gigId,
+                asBusinessUserId: destination.asBusinessUserId,
+                aiNudge: destination.assistantNudge,
+                aiLaunch: destination.assistantLaunch
+            )
+        }
+    }
+
+    /// Upright, the open Duo keeps both columns too (the founder's pick on
+    /// November 2). At the accessibility text sizes one column reads better.
     var isSideBySide: Bool {
-        horizontalSizeClass == .regular
+        horizontalSizeClass == .regular && !dynamicTypeSize.isAccessibilitySize
     }
 
     func chatList(onEmptyChange: @escaping @MainActor (Bool) -> Void = { _ in }) -> some View {

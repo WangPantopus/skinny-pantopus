@@ -46,7 +46,7 @@ public struct PantopusButton: View {
             ZStack {
                 // A label that wraps stays centred, with room above and below.
                 Text(title)
-                    .pantopusTextStyle(.body)
+                    .scaledFont(16)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .opacity(isLoading ? 0 : 1)

@@ -36,6 +36,37 @@ WINDOW_MINUTES = 15
 # HTTP timeout for calling the Node backend (seconds)
 SEND_TIMEOUT_S = 30
 
+# A backend release restarts the API: for some seconds nginx answers 502 or the
+# connection drops. Both backend calls are safe to repeat (/timezones only reads;
+# /send skips a briefing already composing or sent).
+RESTART_STATUSES = frozenset({502, 503, 504})
+RESTART_PAUSE_S = 10
+
+
+class _RestartRetry:
+    """Lets one backend call per run wait out a restart and try again.
+
+    Once per run, so a real outage still fails the run and its alarm without
+    stacking a pause onto every user.
+    """
+
+    def __init__(self) -> None:
+        self.used = False
+
+    def post(self, url: str, **kwargs: Any) -> httpx.Response:
+        try:
+            response = httpx.post(url, **kwargs)
+        except (httpx.NetworkError, httpx.RemoteProtocolError):
+            if self.used:
+                raise
+        else:
+            if self.used or response.status_code not in RESTART_STATUSES:
+                return response
+        self.used = True
+        log.warning("Backend unavailable, maybe restarting; trying again in %ds", RESTART_PAUSE_S)
+        time.sleep(RESTART_PAUSE_S)
+        return httpx.post(url, **kwargs)
+
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Briefing scheduler Lambda entry point. Triggered each minute by EventBridge."""
@@ -68,8 +99,10 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
         log.exception("Failed to initialize Supabase client")
         return {"error": "supabase_init_failed", "users_processed": 0}
 
+    retry = _RestartRetry()
+
     # Find eligible users
-    eligible = _find_eligible_users(supabase, secrets=secrets)
+    eligible = _find_eligible_users(supabase, secrets=secrets, retry=retry)
     log.info("Briefing scheduler: %d eligible users found", len(eligible))
 
     if len(eligible) > MAX_USERS_PER_RUN:
@@ -89,6 +122,7 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
                 user["user_id"],
                 secrets,
                 briefing_kind=user.get("briefing_kind", "morning"),
+                retry=retry,
             )
             outcome = result.get("outcome", "failed")
             if outcome == "sent":
@@ -127,7 +161,7 @@ def _run(event: dict[str, Any], context: Any) -> dict[str, Any]:
 # ── Find eligible users ──────────────────────────────────────────
 
 
-def _find_eligible_users(supabase, *, secrets=None) -> list[dict[str, Any]]:
+def _find_eligible_users(supabase, *, secrets=None, retry: _RestartRetry | None = None) -> list[dict[str, Any]]:
     """Find users whose morning/evening briefing window is now and not yet processed today."""
 
     # 1. Fetch preference rows
@@ -162,10 +196,11 @@ def _find_eligible_users(supabase, *, secrets=None) -> list[dict[str, Any]]:
     missing = [row["user_id"] for row in prefs_rows]
     resolved = {}
     if missing and secrets:
+        post = retry.post if retry else httpx.post
         for offset in range(0, len(missing), 100):
-            response = httpx.post(f"{secrets.pantopus_api_base_url}/api/internal/briefing/timezones",
-                                  json={"userIds": missing[offset:offset + 100]},
-                                  headers={"x-internal-api-key": secrets.internal_api_key}, timeout=SEND_TIMEOUT_S)
+            response = post(f"{secrets.pantopus_api_base_url}/api/internal/briefing/timezones",
+                            json={"userIds": missing[offset:offset + 100]},
+                            headers={"x-internal-api-key": secrets.internal_api_key}, timeout=SEND_TIMEOUT_S)
             response.raise_for_status()
             resolved.update(response.json().get("timezones", {}))
     for row in prefs_rows:
@@ -288,12 +323,17 @@ def _is_in_quiet_hours(current_hhmm, start_hhmm, end_hhmm) -> bool:
 # ── Process single user ──────────────────────────────────────────
 
 
-def _process_user(user_id: str, secrets: BriefingSecrets, briefing_kind: str = "morning") -> dict[str, str]:
+def _process_user(
+    user_id: str,
+    secrets: BriefingSecrets,
+    briefing_kind: str = "morning",
+    retry: _RestartRetry | None = None,
+) -> dict[str, str]:
     """Call the Node backend to compose and send the briefing for one user."""
     url = f"{secrets.pantopus_api_base_url}/api/internal/briefing/send"
 
     try:
-        response = httpx.post(
+        response = (retry.post if retry else httpx.post)(
             url,
             json={"userId": user_id, "briefingKind": briefing_kind},
             headers={

@@ -159,9 +159,15 @@ public final class MailDetailViewModel {
 
     private func fetch() async {
         do {
-            let response: MailDetailResponse = try await api.request(
+            var response: MailDetailResponse = try await api.request(
                 MailboxEndpoints.detail(mailId: mailId)
             )
+            // The original detail route returns storage metadata, but no pages.
+            // Fetch the authorized stored payload for a booklet's existing reader.
+            if !response.mail.item.certified, MailPieceKind.of(response.mail.item) == .booklet,
+               response.mail.objectPayload == nil, BookletDetailDTO.decode(from: response.mail.object) == nil {
+                response = try await api.request(MailboxV2Endpoints.item(mailId: mailId))
+            }
             removed = response.mail.removed
             // Ceremonial mail never lands on the generic detail — hand it
             // straight to the open experience and hold the loading frame

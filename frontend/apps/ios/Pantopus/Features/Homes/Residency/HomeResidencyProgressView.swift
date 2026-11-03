@@ -18,26 +18,26 @@ struct HomeResidencyProgressView: View {
                     ProgressView("Checking your current status…")
                         .accessibilityIdentifier("homeResidencyLoading")
                 } else if let error = viewModel.error {
-                    Text(error).pantopusTextStyle(.body)
+                    Text(error).scaledFont(16)
                         .accessibilityIdentifier("homeResidencyError")
                     Button("Retry") { Task { await viewModel.refresh() } }.frame(minHeight: 44)
                         .accessibilityIdentifier("homeResidencyRetry")
                 } else if let progress = viewModel.progress {
                     if let request = progress.request {
                         VStack(alignment: .leading, spacing: Spacing.s2) {
-                            Text("Your request").pantopusTextStyle(.caption)
-                            Text(request.label).pantopusTextStyle(.body)
+                            Text("Your request").scaledFont(12)
+                            Text(request.label).scaledFont(16)
                                 .accessibilityIdentifier("homeResidencyAddress")
-                            Text(request.reviewLabel).pantopusTextStyle(.caption).foregroundStyle(Theme.Color.appTextSecondary)
+                            Text(request.reviewLabel).scaledFont(12).foregroundStyle(Theme.Color.appTextSecondary)
                         }
                         .padding(Spacing.s4)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Theme.Color.appSurface)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
                     }
-                    Text(progress.title).pantopusTextStyle(.h3)
+                    Text(progress.title).scaledFont(20, weight: .semibold)
                         .accessibilityIdentifier("homeResidencyHeading")
-                    Text(progress.explanation).pantopusTextStyle(.body).foregroundStyle(Theme.Color.appTextSecondary)
+                    Text(progress.explanation).scaledFont(16).foregroundStyle(Theme.Color.appTextSecondary)
                     if viewModel.permits(.home) { action("Open Home", .home) }
                     if viewModel.permits(.mail) { action("Verify by mail", .mail) }
                     if viewModel.permits(.ownership) { action("Continue ownership verification", .ownership) }
@@ -55,8 +55,6 @@ struct HomeResidencyProgressView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Theme.Color.appBg)
-        // Most of this screen uses fixed-size styles; capping keeps its buttons from outgrowing them.
-        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .navigationTitle("Residency status")
         .accessibilityIdentifier("homeResidencyStatus")
         .task { visible = true

@@ -24,22 +24,16 @@ public final class ChatSearchViewModel {
         )
     }
 
-    let onOpenResult: @Sendable (ChatSearchResult) -> Void
-    let onCancel: @Sendable () -> Void
     private let api: APIClient
     private var queryTask: Task<Void, Never>?
     private var generation = 0
     private var namesCursor: String?
     private var messagesCursor: String?
 
-    init(
-        api: APIClient = .shared,
-        onOpenResult: @escaping @Sendable (ChatSearchResult) -> Void = { _ in },
-        onCancel: @escaping @Sendable () -> Void = {}
-    ) {
+    /// The Inbox route owns the model across folds and turns, and the
+    /// search screen hands results and Cancel to it (`ChatSearchView`).
+    init(api: APIClient = .shared) {
         self.api = api
-        self.onOpenResult = onOpenResult
-        self.onCancel = onCancel
     }
 
     public func load() async {
