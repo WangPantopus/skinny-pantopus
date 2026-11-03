@@ -165,10 +165,10 @@ A taken-back card by email already stays as a withdrawn record, as before. It ke
 
 | Part | PR | State |
 | --- | --- | --- |
-| Server | [#3187](https://github.com/WangPantopus/skinny-pantopus/pull/3187) | Merged |
-| Web | [#3189](https://github.com/WangPantopus/skinny-pantopus/pull/3189) | Open |
-| iPhone | [#3190](https://github.com/WangPantopus/skinny-pantopus/pull/3190) | Open |
-| Android | [#3191](https://github.com/WangPantopus/skinny-pantopus/pull/3191) | Open |
+| Server | [#3187](https://github.com/WangPantopus/skinny-pantopus/pull/3187) | Merged (16bbfd69b2), live in production since November 3 |
+| Web | [#3189](https://github.com/WangPantopus/skinny-pantopus/pull/3189) | Merged (a85faf3719) |
+| iPhone | [#3190](https://github.com/WangPantopus/skinny-pantopus/pull/3190) | Merged (832fee785c) |
+| Android | [#3191](https://github.com/WangPantopus/skinny-pantopus/pull/3191) | Merged (ec7cb16449) |
 
 Cases 1–5 and 7 of the plan's section 4 were checked against a real local backend and database, with fault proxies; each PR lists its evidence.
 
