@@ -20,8 +20,8 @@ import org.junit.runner.RunWith
 /**
  * Instrumented coverage of the Android-13+ POST_NOTIFICATIONS flow.
  *
- * Mirrors what `AppDelegate.requestNotificationPermission()` exercises
- * on iOS — that the manifest carries the permission and the OS treats
+ * Mirrors what the briefings notice's "Allow notifications" exercises
+ * (iOS `BriefingNoticeView`) — that the manifest carries the permission and the OS treats
  * it as granted after the user accepts the prompt. We can't actually
  * tap the system dialog from a deterministic test, so we use
  * [GrantPermissionRule] to skip it and assert the post-grant state

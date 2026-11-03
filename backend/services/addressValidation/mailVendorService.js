@@ -37,6 +37,17 @@ class MailVendorService {
   }
 
   /**
+   * Postcards can go out here: Lob is configured, or this is local development,
+   * whose mock prints the code. A hosted server without Lob (production while
+   * DEFER_ADDRESS_PROVIDER_SETUP holds) refuses to send them.
+   * @returns {boolean}
+   */
+  canSendPostcards() {
+    return lobMailProvider.isAvailable()
+      || !(process.env.NODE_ENV === 'production' || ['staging', 'production'].includes(process.env.APP_ENV));
+  }
+
+  /**
    * Dispatch a postcard for a MailVerificationJob.
    *
    * Reads the job record, sends via the active provider, then updates
@@ -51,9 +62,7 @@ class MailVendorService {
    * @returns {Promise<{success: boolean, error?: string, vendorJobId?: string}>}
    */
   async dispatchPostcard(jobId, code) {
-    if ((process.env.NODE_ENV === 'production'
-      || ['staging', 'production'].includes(process.env.APP_ENV))
-      && !lobMailProvider.isAvailable()) {
+    if (!this.canSendPostcards()) {
       return { success: false, deliveryUnknown: false, error: 'Mail provider is not configured' };
     }
 

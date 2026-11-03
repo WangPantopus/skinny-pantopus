@@ -144,6 +144,11 @@ final class AuthManager {
     /// `AuthContext.lastInteractiveSignInAt` (`AuthContext.tsx:28`).
     private(set) var lastInteractiveSignInAt: Date?
 
+    /// The password typed at sign-up, in memory only (never stored), so the
+    /// device that signed up signs itself in once the email is confirmed
+    /// instead of asking for it again. Cleared by any sign-in.
+    @ObservationIgnored private var pendingSignIn: PendingSignIn?
+
     /// Why the last session ended (401 code from `/refresh`, or a plain
     /// expiry). The auth screens read it to show "You were signed out for
     /// security" instead of a generic message; cleared on the next
@@ -366,6 +371,7 @@ final class AuthManager {
         AccountHintStore.remember(AccountHint(user: user, lastMethod: method, lastSeenAt: now()), in: store)
         installMarker.commit(installId: pendingInstallId ?? installMarker.installIdForDescriptor(store: store), store: store)
         pendingInstallId = nil
+        pendingSignIn = nil
         sessionEndReason = nil
         didSignOutDeliberately = false
         // Both interactive entry points (email/password + OAuth callback)
@@ -430,6 +436,7 @@ final class AuthManager {
                 AuthEndpoints.register(body)
             )
             PlacePendingStore.bind(to: response.user.id)
+            rememberSignUp(email: email, password: password)
             Observability.shared.track("auth.signed_up")
             logger.info("Registered", metadata: ["userId": .string(response.user.id)])
             return SignUpResult(
@@ -579,5 +586,56 @@ extension AuthManager {
         }
         let outcome = await task.value
         return generation == requestSessionGeneration ? outcome : .transient
+    }
+}
+
+// MARK: - Sign in after confirming the email
+
+/// A sign-up waiting for its email confirmation (`AuthManager.pendingSignIn`).
+private struct PendingSignIn {
+    let email: String
+    let password: String
+    let until: Date
+}
+
+extension AuthManager {
+    enum ConfirmedSignIn: Equatable {
+        case signedIn, notConfirmedYet, unavailable
+    }
+
+    /// How long a sign-up keeps its password to sign in after the email is confirmed.
+    static let pendingSignInLifetime: TimeInterval = 30 * 60
+
+    /// Signs in with the password typed at sign-up, once the email is
+    /// confirmed (`/login` answers 403 until then: `backend/routes/users.js`).
+    /// `unavailable` when nothing is remembered for `email`, it expired, or
+    /// the sign-in failed some other way: the person then logs in as usual.
+    func signInAfterConfirmation(email: String?) async -> ConfirmedSignIn {
+        guard let pending = pendingSignIn, now() < pending.until else { return .unavailable }
+        if let email, Self.normalizedEmail(email) != pending.email { return .unavailable }
+        do {
+            let response: LoginResponse = try await apiClient.request(
+                AuthEndpoints.login(email: pending.email, password: pending.password, device: makeDeviceDescriptor())
+            )
+            try persistLoginResponse(response, method: .password)
+            return .signedIn
+        } catch APIError.forbidden {
+            return .notConfirmedYet
+        } catch {
+            return .unavailable
+        }
+    }
+
+    /// Remembers the password just used to sign up (`signUp`).
+    func rememberSignUp(email: String, password: String) {
+        pendingSignIn = PendingSignIn(
+            email: Self.normalizedEmail(email),
+            password: password,
+            until: now().addingTimeInterval(Self.pendingSignInLifetime)
+        )
+    }
+
+    private static func normalizedEmail(_ email: String) -> String {
+        email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }

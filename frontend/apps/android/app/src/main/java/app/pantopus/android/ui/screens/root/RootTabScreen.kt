@@ -2287,6 +2287,9 @@ private val SAVED_PAGE_OFFLINE_STRIP_ROUTES =
  */
 private val TAB_BAR_STAYS_ROUTES = setOf(ChildRoutes.CHAT_CONVERSATION, ChildRoutes.MAILBOX_ITEM_DETAIL, PantopusRoute.Plans.path)
 
+/** Where the first-run notices may show: nothing else is asking there. */
+private val NOTICE_ROUTES = setOf(PantopusRoute.Place.path, PantopusRoute.Today.path)
+
 @Composable
 fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val navController = rememberNavController()
@@ -2301,11 +2304,6 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         ) { uri ->
             if (uri != null) inviteShare.share(appContext, InviteLinks.INVITE_MESSAGE, "Invite to Pantopus")
         }
-    val briefingNotice: BriefingNoticeViewModel = hiltViewModel()
-    BriefingNotice(onManage = { navController.navigate(ChildRoutes.SETTINGS_NOTIFICATIONS) }, viewModel = briefingNotice)
-    // AI assistant phase 2: asks once whether to turn on Suggestions from Pantopus, after the briefing notice.
-    val briefingNoticeShowing by briefingNotice.preferences.collectAsStateWithLifecycle()
-    SuggestionsNotice(waiting = briefingNoticeShowing != null)
     val sessionViewModel: RootSessionViewModel = hiltViewModel()
     val chatBadgeViewModel: ChatBadgeViewModel = hiltViewModel()
     val mailBadgeViewModel: MailBadgeViewModel = hiltViewModel()
@@ -2387,6 +2385,21 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     val placeHost: HomeTabHostViewModel? = placeRootEntry?.let { hiltViewModel(it) }
     val currentPlaceHost by rememberUpdatedState(placeHost)
     val placeLinkScope = rememberCoroutineScope()
+
+    // The briefings notice, then (AI assistant phase 2) the one about Suggestions from Pantopus, wait until nothing
+    // else is asking: Place or Today on top, not the "Keep this address handy" step nor a plan or post opened by a
+    // link. As on iPhone. The Place root draws that step itself, so its host says whether the step is open.
+    val topRoute = backStackEntry?.destination?.route
+    val placeArrivalOpen = placeHost?.arrivalOpen?.collectAsStateWithLifecycle()?.value == true
+    val noticesMayShow = topRoute in NOTICE_ROUTES && !(topRoute == PantopusRoute.Place.path && placeArrivalOpen)
+    val briefingNotice: BriefingNoticeViewModel = hiltViewModel()
+    BriefingNotice(
+        onManage = { navController.navigate(ChildRoutes.SETTINGS_NOTIFICATIONS) },
+        mayShow = noticesMayShow,
+        viewModel = briefingNotice,
+    )
+    val briefingNoticeShowing by briefingNotice.preferences.collectAsStateWithLifecycle()
+    SuggestionsNotice(waiting = briefingNoticeShowing != null || !noticesMayShow)
 
     // Consume pending deep links — when the host activity (or a
     // notification tap) routed a URL or path through DeepLinkRouter,

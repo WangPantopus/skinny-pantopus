@@ -158,6 +158,8 @@ private fun PlaceLaunchHost(openAuth: Boolean = false) {
     // Saveable: rotating or switching dark mode recreates the activity, and the
     // person stays on the sign-in or sign-up screen they were using.
     var showAuth by rememberSaveable { mutableStateOf(openAuth) }
+    // Continue after the address preview opens Create account; Sign in opens Log in.
+    var startOnSignUp by rememberSaveable { mutableStateOf(false) }
     val prefersLogin by DeepLinkRouter.prefersLoginPresentation.collectAsStateWithLifecycle()
 
     // Persistent login: a session-end banner is pending → show the login
@@ -185,11 +187,23 @@ private fun PlaceLaunchHost(openAuth: Boolean = false) {
     }
 
     if (showAuth) {
-        AuthNavHost()
+        AuthNavHost(
+            startOnSignUp = startOnSignUp,
+            onCloseSignUp = {
+                showAuth = false
+                startOnSignUp = false
+            },
+        )
     } else {
         app.pantopus.android.ui.screens.place.launch.PlaceLaunchScreen(
-            onSignIn = { showAuth = true },
-            onCreateAccount = { showAuth = true },
+            onSignIn = {
+                startOnSignUp = false
+                showAuth = true
+            },
+            onCreateAccount = {
+                startOnSignUp = true
+                showAuth = true
+            },
         )
     }
 }

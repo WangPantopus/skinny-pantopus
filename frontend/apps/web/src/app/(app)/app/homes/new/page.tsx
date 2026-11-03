@@ -14,7 +14,6 @@ import type {
 import AddressAutocomplete from '@/components/AddressAutocomplete';
 import MailVerificationFlow from '@/components/address/MailVerificationFlow';
 import PrivacyPromise from '@/components/place/PrivacyPromise';
-import AttomStructuredFields from '@/components/homes/AttomStructuredFields';
 import { useHomeCreation } from '@/components/homes/creation/useHomeCreation';
 import { validHomeCreationInput, type HomeCreationInput } from '@/components/homes/creation/homeCreationModel';
 import HomeCreationRecoveryView from '@/components/homes/creation/HomeCreationRecoveryView';
@@ -160,7 +159,6 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
   const [amenities, setAmenities] = useState<Record<string, boolean>>({});
   const [propertySuggestionNote, setPropertySuggestionNote] = useState('');
   const [attomPropertyDetail, setAttomPropertyDetail] = useState<AttomPropertyDetailPayload | null>(null);
-  const [showAttomJson, setShowAttomJson] = useState(false);
 
   // Step 3 — Your Setup
   const [isOwner, setIsOwner] = useState(true);
@@ -197,14 +195,6 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     const n = parseInt(lotSqft, 10);
     return Number.isFinite(n) ? n : undefined;
   }, [lotSqft]);
-
-  const attomJsonPreview = useMemo(() => {
-    if (!attomPropertyDetail) return '';
-    if (attomPropertyDetail.full_response != null) {
-      return JSON.stringify(attomPropertyDetail.full_response, null, 2);
-    }
-    return JSON.stringify(attomPropertyDetail, null, 2);
-  }, [attomPropertyDetail]);
 
   const addressRevision = useRef(0);
   const addressSelectionRevision = useRef(0);
@@ -1146,27 +1136,8 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                 />
               </div>
 
-              {attomPropertyDetail && attomJsonPreview ? (
-                <div className="rounded-lg border border-app-border bg-app-surface-raised p-4 space-y-2">
-                  <div className="text-sm font-semibold text-app-text-strong">Public records (ATTOM)</div>
-                  <p className="text-xs text-app-text-secondary">
-                    County / assessor fields below; full JSON at the bottom. All of this is saved with your home.
-                  </p>
-                  <AttomStructuredFields attomPropertyDetail={attomPropertyDetail} />
-                  <button
-                    type="button"
-                    onClick={() => setShowAttomJson((v) => !v)}
-                    className="text-sm font-medium text-blue-700 hover:text-blue-900 pt-2"
-                  >
-                    {showAttomJson ? 'Hide raw JSON' : 'Show raw JSON'}
-                  </button>
-                  {showAttomJson ? (
-                    <pre className="text-[10px] leading-snug overflow-auto max-h-72 p-3 rounded-md bg-app-surface-sunken border border-app-border font-mono whitespace-pre text-app-text">
-                      {attomJsonPreview}
-                    </pre>
-                  ) : null}
-                </div>
-              ) : null}
+              {/* The county record itself is for a verified owner (Property details), not this form:
+                  only its basics above are filled in for the person to check. */}
 
               {/* Amenities grid */}
               <div>

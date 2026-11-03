@@ -6,17 +6,24 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import PantopusBadge from '@/components/PantopusBadge';
 import { authPageHref, readAuthRedirectQuery, safeRedirectPath, extractApiError, normalizeEmail } from '@/lib/auth-utils';
-import { rememberSignInHandoff } from '@/lib/email-verified-handoff';
+import { rememberSignInHandoff, takeSignInHandoff } from '@/lib/email-verified-handoff';
+import { announceEmailConfirmed } from '@/lib/pending-sign-in';
 
 type VerifyState = 'verifying' | 'success' | 'error';
+
+/** How long a sign-up tab in this browser gets to sign in before this one offers Log in. */
+const SIGN_UP_TAB_WAIT_MS = 3000;
 
 function VerifyEmailPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = safeRedirectPath(readAuthRedirectQuery(searchParams), '/app/place');
   const loginHref = authPageHref('/login', redirectTo);
+  // Log in after a confirmation says so instead of "Welcome back".
+  const confirmedLoginHref = authPageHref('/login', redirectTo, { confirmed: '1' });
   const requestRef = useRef<{ key: string; promise: ReturnType<typeof api.auth.verifyEmail> } | null>(null);
   const redirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopAnnouncingRef = useRef<(() => void) | null>(null);
 
   const [state, setState] = useState<VerifyState>('verifying');
   const [message, setMessage] = useState('Verifying your email...');
@@ -31,6 +38,7 @@ function VerifyEmailPageContent() {
   useEffect(() => {
     return () => {
       if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
+      stopAnnouncingRef.current?.();
     };
   }, []);
 
@@ -83,7 +91,15 @@ function VerifyEmailPageContent() {
           setState('success');
           setMessage(res?.message || 'Email verified successfully. You can now sign in.');
           rememberSignInHandoff(email, 'email-confirmed');
-          redirectTimeoutRef.current = setTimeout(() => router.push(loginHref), 1200);
+          // The tab in this browser that signed up with this address signs itself in; this one then follows it
+          // into the app. Otherwise (another browser or device), Log in here.
+          stopAnnouncingRef.current?.();
+          stopAnnouncingRef.current = announceEmailConfirmed(email, () => {
+            if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
+            takeSignInHandoff();
+            router.push(redirectTo);
+          });
+          redirectTimeoutRef.current = setTimeout(() => router.push(confirmedLoginHref), SIGN_UP_TAB_WAIT_MS);
         }
       } catch (err: unknown) {
         if (timeoutId) clearTimeout(timeoutId);
@@ -101,7 +117,7 @@ function VerifyEmailPageContent() {
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [searchParams, router, loginHref, attempt]);
+  }, [searchParams, router, confirmedLoginHref, redirectTo, attempt]);
 
   const retry = () => {
     setState('verifying');

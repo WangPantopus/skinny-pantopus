@@ -191,6 +191,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  // "Keep this address handy · Save privately" after sign-up: the briefings notice waits until it's answered.
+  const placePreviewOpen = pathname === '/app/place' && Boolean(searchParams.get('preview'));
   const queryClient = useQueryClient();
   // Each tab's page opens again where you left it.
   useTabScroll(pathname);
@@ -682,7 +684,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       <FloatingChatWidget />
       <FloatingPromoModal />
       {/* Asked once of an account with no name (sign-up didn't ask before October 2026). */}
-      {user?.id && !namePromptOpen && !feedComposerOpen && !composerOpen && <BriefingNotice key={user.id} accountId={user.id} />}
+      {user?.id && !namePromptOpen && !feedComposerOpen && !composerOpen && !placePreviewOpen && <BriefingNotice key={user.id} accountId={user.id} />}
       <NamePrompt
         user={user}
         onOpenChange={setNamePromptOpen}
