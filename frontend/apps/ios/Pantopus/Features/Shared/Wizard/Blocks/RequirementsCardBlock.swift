@@ -36,6 +36,8 @@ public struct RequirementsRow: Identifiable, Sendable {
 /// Card block listing prerequisite requirements for a wizard flow.
 @MainActor
 public struct RequirementsCardBlock: View {
+    @ScaledMetric(relativeTo: .caption2) private var overlineSize = PantopusTextStyle.overline.size
+
     private let title: String
     private let rows: [RequirementsRow]
 
@@ -47,6 +49,7 @@ public struct RequirementsCardBlock: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             Text(title, style: .overline)
+                .font(.system(size: overlineSize, weight: .semibold))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityAddTraits(.isHeader)
             ForEach(rows) { row in
@@ -65,10 +68,10 @@ public struct RequirementsCardBlock: View {
                         .padding(.top, 1)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(row.title)
-                            .pantopusTextStyle(.body)
+                            .scaledFont(PantopusTextStyle.body.size)
                             .foregroundStyle(Theme.Color.appText)
                         Text(row.subcopy)
-                            .pantopusTextStyle(.caption)
+                            .scaledFont(PantopusTextStyle.caption.size)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     }
                     Spacer(minLength: Spacing.s0)

@@ -20,12 +20,15 @@ public struct HeadlineBlock: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text(text)
-                .pantopusTextStyle(.h2)
+                .scaledFont(PantopusTextStyle.h2.size, weight: .semibold)
+                .tracking(PantopusTextStyle.h2.tracking)
+                .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityAddTraits(.isHeader)
             if let subtitle {
                 Text(subtitle)
-                    .pantopusTextStyle(.body)
+                    .scaledFont(PantopusTextStyle.body.size)
+                    .fixedSize(horizontal: false, vertical: true)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
         }

@@ -10,12 +10,16 @@ import SwiftUI
 
 /// Green home-pillar pill identifying the home being claimed.
 struct ClaimHomeChip: View {
+    @ScaledMetric(relativeTo: .caption2) private var overlineSize = PantopusTextStyle.overline.size
+
     let label: String
 
     var body: some View {
         HStack(spacing: Spacing.s1) {
             Icon(.home, size: 11, color: Theme.Color.home)
             Text("Home · \(label)", style: .overline)
+                .font(.system(size: overlineSize, weight: .semibold))
+                .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(Theme.Color.home)
         }
         .padding(.horizontal, Spacing.s3)
