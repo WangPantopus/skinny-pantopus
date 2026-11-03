@@ -2283,7 +2283,8 @@ function readSentCursor(value) {
 
 // What sentPiece needs for each card: the name on its envelope (the sender's Local Profile, as the recipient sees it),
 // the name it went to (by email: the masked address, or whoever claimed it as neighbors see them) and the clock its days
-// are told by (the recipient's; the sender's own for a card by email nobody has claimed).
+// are told by (the recipient's; the sender's own for a card by email nobody has claimed). A letter to a Home itself
+// went to "their household" ("your household" for the sender's own Home), which the apps say whole, never as a name.
 async function sentContexts(rows, userId) {
   const claimers = rows.filter((mail) => mail.recipient_user_id)
     .map((mail) => mail.recipient_user_id);
@@ -2291,12 +2292,15 @@ async function sentContexts(rows, userId) {
   const recipients = [...new Set(rows.filter((mail) => mail.recipient_user_id).map((mail) => String(mail.recipient_user_id)))];
   const zones = new Map(await Promise.all([userId, ...recipients].map(async (id) =>
     [String(id), (await mailDelivery.personTimeZone(id)) || mailDelivery.FALLBACK_TIME_ZONE])));
+  const toHousehold = (mail) => !mail.recipient_user_id && Boolean(mail.recipient_home_id);
+  const ownHomes = new Set(rows.some(toHousehold) ? (await getAccessibleHomeIds(userId)).map(String) : []);
   return rows.map((mail) => ({
     toName: (mail.escrow_status === 'claimed' && people.get(String(mail.recipient_user_id))?.displayName)
       || mail.mail_extracted?.card?.to_name
       || (mail.escrow_recipient_contact ? maskContact(mail.escrow_recipient_contact) : null)
       || people.get(String(mail.recipient_user_id))?.displayName
-      || (mail.recipient_home_id ? 'their household' : 'them'),
+      || (toHousehold(mail) ? `${ownHomes.has(String(mail.recipient_home_id)) ? 'your' : 'their'} household` : 'them'),
+    toHousehold: toHousehold(mail),
     senderName: people.get(String(userId))?.displayName || mail.sender_display || 'Someone',
     zone: zones.get(String(mail.recipient_user_id || userId)),
   }));

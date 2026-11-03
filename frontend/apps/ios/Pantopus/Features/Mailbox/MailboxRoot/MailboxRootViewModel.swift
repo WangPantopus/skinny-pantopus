@@ -654,7 +654,13 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     /// Cards to a person still waiting for the 7 a.m. pickup: the flag is up.
     /// A card part, so only while cards are on too.
     var waitingCards: Int {
-        LaunchFeatures.mailbox && LaunchFeatures.holidayCards ? sentSummary?.waiting ?? 0 : 0
+        guard LaunchFeatures.mailbox, LaunchFeatures.holidayCards, let sent = sentSummary else { return 0 }
+        return max(0, sent.waiting - sent.waitingLetters)
+    }
+
+    /// Letters to a person still waiting for the pickup, while letters are on.
+    var waitingLetters: Int {
+        LaunchFeatures.mailbox && LaunchFeatures.mailExtras ? sentSummary?.waitingLetters ?? 0 : 0
     }
 
     /// Sent in place of the drawer's tabs and mail.
@@ -785,7 +791,9 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
             homes = response.homes
             vacationHold = response.vacationHold
             sentSummary = response.sent
-            hero = MailboxHeroModel.make(delivery: response.delivery, homes: response.homes, waitingCards: waitingCards)
+            hero = MailboxHeroModel.make(
+                delivery: response.delivery, homes: response.homes, waitingCards: waitingCards, waitingLetters: waitingLetters
+            )
             if !loadedMail.isEmpty { applyLiveState(drawer: selectedDrawer, tab: currentTab) }
         } catch {
             // Badges are non-blocking chrome — leave them empty on failure

@@ -15,6 +15,11 @@ export function firstName(name: string | null | undefined): string {
   return text.split(/\s+/)[0] || text;
 }
 
+/** Who it went to, as "Maya’s" phrases name them: their first name, or a household whole ("their household"). */
+export function sentFirst(piece: SentPiece): string {
+  return (piece.to_household ? piece.to_name : firstName(piece.to_name)) || 'them';
+}
+
 /** "To Maya O. · Christmas card", or by email "To d***@example.com · by email". */
 export function sentToLine(piece: SentPiece): string {
   return `To ${piece.to_name || 'them'} · ${piece.kind === 'letter' ? 'Letter' : (piece.by_email ? 'by email' : 'Christmas card')}`;
@@ -90,7 +95,7 @@ export function sentEnvelope(piece: SentPiece): MailItemV2 {
 
 /** A step of its trail in words; one not reached yet adds "· not yet". */
 export function trailLabel(step: SentTrailStep, piece: SentPiece): string {
-  const first = firstName(piece.to_name) || 'them';
+  const first = sentFirst(piece);
   let label: string;
   switch (step.step) {
     case 'sealed': label = 'Sealed by you'; break;

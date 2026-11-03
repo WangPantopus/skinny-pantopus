@@ -66,11 +66,19 @@ function houseNumber(addressLine: string | undefined): string | null {
   return addressLine?.match(/^\s*(\d+[A-Za-z]?)\b/)?.[1] ?? null;
 }
 
+/** What waits for the pickup, by what it is: "1 card waits", "2 letters wait", or "3 pieces wait" for both. */
+function waitingLine(cards: number, letters: number): string {
+  const count = cards + letters;
+  const what = letters === 0 ? 'card' : cards === 0 ? 'letter' : 'piece';
+  return `${count} ${what}${count === 1 ? ' waits' : 's wait'} for the 7 a.m. pickup`;
+}
+
 export default function MailboxHero({
   delivery,
   homes,
   opening = false,
   waiting = 0,
+  waitingLetters = 0,
 }: {
   delivery?: MailDelivery;
   homes?: MailboxHome[];
@@ -78,16 +86,18 @@ export default function MailboxHero({
   opening?: boolean;
   /** Cards you sent that wait for the 7 a.m. pickup: the flag is up, and the mailbox opens Sent. */
   waiting?: number;
+  /** Letters you sent that wait for the pickup too. */
+  waitingLetters?: number;
 }) {
   const state = deliveryState(delivery);
   const home = homes?.find((h) => h.mail_access === 'open');
-  const flagUp = waiting > 0;
+  const flagUp = waiting + waitingLetters > 0;
   const title = flagUp ? 'Your flag is up'
     : !state ? 'Your mailbox'
       : state.kind === 'came' ? `Today's mail came at ${deliveryTime(state.at, delivery?.time_zone)}`
         : state.kind === 'before' ? 'Your mail comes this morning'
           : 'No mail today';
-  const detail = flagUp ? `${waiting === 1 ? '1 card waits' : `${waiting} cards wait`} for the 7 a.m. pickup`
+  const detail = flagUp ? waitingLine(waiting, waitingLetters)
     : !state ? null
       : state.kind === 'came' ? piecesLine(state.count, state.unopened)
         : state.kind === 'before' ? "Usually by 8 a.m. You'll get one notification."

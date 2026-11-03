@@ -754,6 +754,8 @@ export interface SentPiece {
   sent_at: string;
   /** Their name as it was when sent; by email the masked address, or whoever claimed it. */
   to_name: string | null;
+  /** A letter to a Home itself: `to_name` ("their household", "your household") is said whole, never as a first name. */
+  to_household?: boolean;
   by_email: boolean;
   arrival: HolidayCardArrival | null;
   /** To a person: before the 7 a.m. pickup, picked up (a Christmas-morning card on its way), in their mailbox. */

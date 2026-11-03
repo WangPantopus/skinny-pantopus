@@ -76,9 +76,15 @@ enum MailSentWords {
 
     // MARK: Its trail
 
+    /// Who it went to, as "Maya’s" phrases name them: their first name, or a
+    /// household whole ("their household").
+    static func recipientFirst(_ piece: MailSentPiece) -> String {
+        piece.toHousehold ? piece.toName : HolidayCardWords.firstName(piece.toName)
+    }
+
     /// A step's words: "Sealed by you", "Delivered with Maya’s 7 a.m. mail" …
     static func trailTitle(_ step: MailSentPiece.TrailStep, piece: MailSentPiece) -> String {
-        let first = HolidayCardWords.possessive(HolidayCardWords.firstName(piece.toName))
+        let first = HolidayCardWords.possessive(recipientFirst(piece))
         let title = switch step.step {
         case "sealed": "Sealed by you"
         case "delivered" where piece.arrival == .christmasMorning: "Delivered with \(first) Christmas morning mail"

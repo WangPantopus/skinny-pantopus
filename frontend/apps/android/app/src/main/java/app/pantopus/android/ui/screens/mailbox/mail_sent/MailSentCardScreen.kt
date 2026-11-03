@@ -166,7 +166,8 @@ private fun SentCardPage(
     onTakeBack: () -> Unit,
 ) {
     val to = card.toName?.takeIf { it.isNotBlank() } ?: "them"
-    val first = to.trim().split(Regex("\\s+")).firstOrNull()?.takeIf { it.isNotEmpty() } ?: to
+    // A household is said whole ("their household’s 7 a.m. mail"), a person by their first name.
+    val first = if (card.toHousehold) to else to.trim().split(Regex("\\s+")).firstOrNull()?.takeIf { it.isNotEmpty() } ?: to
     val sent = HolidayCardTimes.shortDay(card.sentAt, zone)
     val line = MailSentWords.line(card, zone)
     Column {

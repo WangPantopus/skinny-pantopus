@@ -109,7 +109,7 @@ struct MailSentPieceView: View {
     }
 
     private func loaded(_ piece: MailSentPiece) -> some View {
-        let first = HolidayCardWords.firstName(piece.toName)
+        let first = MailSentWords.recipientFirst(piece)
         let envelope = MailPieceModel.sent(piece)
         let delivered = piece.status == .delivered || piece.status == .claimed
         let waiting = piece.byEmail ? "Once they claim it" : "Addressed to \(first)"

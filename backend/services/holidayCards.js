@@ -294,9 +294,10 @@ function instant(at) {
  * A card in its sender's Sent. `toName`: the name stored when it was sent, or by email the masked address until it's
  * claimed, then the name neighbors see the person by. `senderName`: the name on the envelope (the sender's Local Profile,
  * as the recipient sees it). `zone`: the clock their days are told by (theirs; the sender's own for a card by email
- * nobody has claimed). Never the recipient's ids, address or time zone, nor anything they did with it.
+ * nobody has claimed). `toHousehold`: a letter to a Home itself, whose `toName` ("their household") is said whole, never
+ * as a first name. Never the recipient's ids, address or time zone, nor anything they did with it.
  */
-function sentPiece(mail, { toName, senderName, zone, now = new Date() }) {
+function sentPiece(mail, { toName, toHousehold = false, senderName, zone, now = new Date() }) {
   const isHolidayCard = isCard(mail);
   const card = mail.mail_extracted?.card || {};
   const view = cardView(mail, now) || {};
@@ -308,6 +309,7 @@ function sentPiece(mail, { toName, senderName, zone, now = new Date() }) {
     subject: isHolidayCard ? SUBJECT : (mail.subject || mail.display_title || 'A letter'),
     sent_at: instant(mail.created_at),
     to_name: toName || null,
+    to_household: Boolean(toHousehold),
     by_email: byEmail,
     arrival: card.arrival || null,
     status,
@@ -355,7 +357,8 @@ function sentTrail(mail, { zone, now = new Date() }) {
 
 /**
  * The Mailbox's Sent line (GET /api/mailbox/v2/drawers `sent`): whether the person has sent a letter or card (not taken back),
- * and how many letters or cards to a person still wait for the 7 a.m. pickup (the mailbox's flag is up while any do).
+ * and how many letters or cards to a person still wait for the 7 a.m. pickup (the mailbox's flag is up while any do), of
+ * them `waiting_letters` letters, so the flag says what waits.
  */
 async function sentLine(userId, now = new Date()) {
   const [any, coming] = await Promise.all([
@@ -364,9 +367,11 @@ async function sentLine(userId, now = new Date()) {
       .gt('delivered_at', now.toISOString()),
   ]);
   if (any.error || coming.error) throw new Error((any.error || coming.error).message);
+  const waiting = (coming.data || []).filter((mail) => sentStatus(mail, now) === 'waiting');
   return {
     any: Boolean(any.data?.length),
-    waiting: (coming.data || []).filter((mail) => sentStatus(mail, now) === 'waiting').length,
+    waiting: waiting.length,
+    waiting_letters: waiting.filter((mail) => !isCard(mail)).length,
   };
 }
 

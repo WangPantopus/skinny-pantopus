@@ -22,7 +22,7 @@ import CardBack from '../cards/CardBack';
 import CardFlip from '../cards/CardFlip';
 import { askTakeBack, takeBackMessage } from '../cards/takeBack';
 import { shortDay, WAX } from '../cards/cardArt';
-import { firstName, sentEnvelope, sentStatusLine, trailLabel, trailWhen } from './sentWords';
+import { sentEnvelope, sentFirst, sentStatusLine, trailLabel, trailWhen } from './sentWords';
 
 const label = 'text-[11px] font-semibold uppercase leading-4 tracking-[0.06em] text-app-text-secondary';
 const shadow = 'rounded-[3px] shadow-[0_14px_30px_rgba(60,40,10,0.28)]';
@@ -100,7 +100,7 @@ export default function SentPieceView({ id }: { id: string }) {
   }
 
   const name = piece.to_name || 'them';
-  const first = firstName(piece.to_name) || 'them';
+  const first = sentFirst(piece);
   const card = piece.card;
   const front = card.design ? (
     <CardFront design={card.design} caption={card.caption} paper={card.paper ?? '#f7eee0'} year={card.year ?? new Date(piece.sent_at).getFullYear()} mailedOn={piece.envelope.postmarked_on ?? piece.sent_at} className={shadow} />
