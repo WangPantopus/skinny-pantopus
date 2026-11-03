@@ -291,13 +291,13 @@ public struct EditBusinessPageLoadedView: View {
                     if let onCloseBusiness {
                         closeBusinessSection(onCloseBusiness)
                     }
-
-                    Color.clear.frame(height: 100)
                 }
+                .padding(.bottom, Spacing.s4)
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(Theme.Color.appBg)
         }
-        .overlay(alignment: .bottom) {
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             EditBusinessStickySave(
                 mode: stickyMode,
                 onDiscard: onDiscard,
