@@ -651,10 +651,13 @@ public struct ChatConversationView: View {
         .onChange(of: hasLoadedContent, initial: true) { _, loaded in
             if loaded { onContentLoaded() }
         }
-        .onAppear { frameGapMonitor.start() }
+        .onAppear {
+            frameGapMonitor.start()
+            viewModel.presentationDidAppear()
+        }
         .onDisappear {
             frameGapMonitor.stop()
-            viewModel.teardown()
+            viewModel.presentationDidDisappear()
         }
         .onChange(of: scenePhase) { _, phase in
             viewModel.setVisibleReadBoundaries(phase == .active ? visibleReadMessageIds : [])
