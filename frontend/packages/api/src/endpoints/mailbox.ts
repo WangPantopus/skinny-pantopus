@@ -749,7 +749,8 @@ export async function previewHolidayCard(data: Parameters<typeof sendHolidayCard
  */
 export interface SentPiece {
   id: string;
-  kind: 'card';
+  kind: 'card' | 'letter';
+  subject?: string | null;
   sent_at: string;
   /** Their name as it was when sent; by email the masked address, or whoever claimed it. */
   to_name: string | null;

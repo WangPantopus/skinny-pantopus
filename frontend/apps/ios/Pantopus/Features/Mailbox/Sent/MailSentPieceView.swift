@@ -84,17 +84,17 @@ struct MailSentPieceView: View {
             }
             .padding(.top, Spacing.s2)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Loading your card")
+            .accessibilityLabel("Loading your mail")
         case let .error(message):
-            ErrorState(headline: "Couldn't load your card", message: message) {
+            ErrorState(headline: "Couldn't load your mail", message: message) {
                 await viewModel.retry()
             }
             .padding(.top, Spacing.s8)
         case let .gone(message):
             ErrorState(
-                // A heading, like "Couldn't load your card": no closing period.
+                // A heading, like "Couldn't load your mail": no closing period.
                 headline: HolidayCardWords.withoutPeriod(message),
-                message: "Go back to Sent to see the cards you’ve sent.",
+                message: "Go back to Sent to see the mail you’ve sent.",
                 retryTitle: "Back to Sent"
             ) {
                 // Sent drops it too, and the flag follows.
@@ -111,12 +111,12 @@ struct MailSentPieceView: View {
     private func loaded(_ piece: MailSentPiece) -> some View {
         let first = HolidayCardWords.firstName(piece.toName)
         let envelope = MailPieceModel.sent(piece)
-        let mailbox = piece.byEmail && piece.status != .claimed
-            ? "Once they join with that address"
-            : "In \(HolidayCardWords.possessive(first)) Mailbox"
+        let delivered = piece.status == .delivered || piece.status == .claimed
+        let waiting = piece.byEmail ? "Once they claim it" : "Addressed to \(first)"
+        let mailbox = delivered ? "In \(HolidayCardWords.possessive(first)) Mailbox" : waiting
         return VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: "Your card to \(piece.toName)")
+                Text(verbatim: "Your \(piece.isLetter ? "letter" : "card") to \(piece.toName)")
                     .font(.system(size: 24, weight: .bold))
                     .tracking(-0.36)
                     .foregroundStyle(Theme.Color.appText)
@@ -131,8 +131,12 @@ struct MailSentPieceView: View {
             section(mailbox) {
                 MailPieceView(model: envelope)
             }
-            section("The card you sent") {
-                theCard(piece, envelope: envelope)
+            if piece.isLetter {
+                section("The letter you sent") {
+                    SentLetterText(piece: piece)
+                }
+            } else {
+                section("The card you sent") { theCard(piece, envelope: envelope) }
             }
             trail(piece)
             if piece.canTakeBack {
@@ -215,7 +219,7 @@ struct MailSentPieceView: View {
             HStack(alignment: .top, spacing: Spacing.s2) {
                 Icon(.lock, size: 15, color: Theme.Color.appTextStrong)
                     .padding(.top, 1)
-                Text("Like real mail, a card never tells you when it was opened.")
+                Text("Mail never tells you when it was opened.")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.Color.appTextStrong)
                     .fixedSize(horizontal: false, vertical: true)
@@ -328,12 +332,30 @@ struct MailSentPieceView: View {
         .background(MailPaper.cardNote, in: RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous).strokeBorder(MailPaper.cardRowLine, lineWidth: 1))
     }
+}
 
-    private func errorLine(_ text: String) -> some View {
+private extension MailSentPieceView {
+    func errorLine(_ text: String) -> some View {
         Text(verbatim: text)
             .font(.system(size: 14, weight: .medium))
             .foregroundStyle(Theme.Color.error)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("mailSentPieceError")
+    }
+}
+
+private struct SentLetterText: View {
+    let piece: MailSentPiece
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.s4) {
+            if let subject = piece.subject { Text(verbatim: subject).font(.headline) }
+            Text(verbatim: piece.note ?? "")
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Spacing.s5)
+        .background(Theme.Color.appSurface, in: RoundedRectangle(cornerRadius: Radii.lg))
     }
 }

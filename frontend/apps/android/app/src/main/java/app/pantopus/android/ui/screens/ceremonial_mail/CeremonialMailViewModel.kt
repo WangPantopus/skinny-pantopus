@@ -11,6 +11,7 @@ import app.pantopus.android.data.api.models.mail_compose.SendMailObject
 import app.pantopus.android.data.api.models.mail_compose.SendMailPayload
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.mail_compose.MailComposeRepository
+import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.ui.screens.shared.wizard.WizardChrome
 import app.pantopus.android.ui.screens.shared.wizard.WizardLeadingControl
 import app.pantopus.android.ui.screens.shared.wizard.WizardModel
@@ -193,8 +194,9 @@ class CeremonialMailViewModel
                     expiresAt = null,
                 )
             viewModelScope.launch {
-                when (repository.send(body)) {
+                when (val result = repository.send(body)) {
                     is NetworkResult.Success -> {
+                        result.data.mail?.id?.let(HolidayCardsRepository::announceMovedOn)
                         _isSubmitting.value = false
                         _form.value = form.copy(step = CeremonialMailStep.Success)
                         // Stay on confirmation; the recipient owns the sent letter.

@@ -46,7 +46,7 @@ struct MailSentShelf: View {
             EmptyState(
                 icon: .send,
                 headline: "Nothing sent yet.",
-                subcopy: "Cards you send show up here, with when they arrive.",
+                subcopy: "Letters and cards you send show up here, with when they arrive.",
                 cta: nil
             )
             .padding(.top, Spacing.s8)
@@ -174,13 +174,15 @@ private struct MailSentRow: View {
                     VStack(alignment: .leading, spacing: Spacing.s2) {
                         MailPieceView(model: .sent(piece))
                         HStack(spacing: 10) {
-                            HolidayCardPictureView(
-                                design: piece.card.design, paper: piece.card.paper, height: piece.card.height, thumb: true
-                            )
-                            .frame(width: 30)
-                            .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
-                            .shadow(color: MailPaper.cardShadow.opacity(0.25), radius: 3, x: 0, y: 2)
-                            .rotationEffect(.degrees(-3))
+                            if !piece.isLetter {
+                                HolidayCardPictureView(
+                                    design: piece.card.design, paper: piece.card.paper, height: piece.card.height, thumb: true
+                                )
+                                .frame(width: 30)
+                                .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+                                .shadow(color: MailPaper.cardShadow.opacity(0.25), radius: 3, x: 0, y: 2)
+                                .rotationEffect(.degrees(-3))
+                            }
                             VStack(alignment: .leading, spacing: Spacing.s0) {
                                 Text(verbatim: MailSentWords.toLine(piece))
                                     .foregroundStyle(Theme.Color.appTextStrong)
@@ -197,7 +199,7 @@ private struct MailSentRow: View {
                 .buttonStyle(MailPieceButtonStyle())
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(MailSentWords.toLine(piece)). \(MailSentWords.statusLine(piece)).")
-                .accessibilityHint("Shows the card and its trail.")
+                .accessibilityHint("Shows the mail and its trail.")
                 .accessibilityAddTraits(.isButton)
                 .accessibilityIdentifier("mailSentRow.\(piece.id)")
                 if piece.canTakeBack {

@@ -208,6 +208,7 @@ data class SentCardResponse(
 data class SentCard(
     val id: String,
     val kind: String? = null,
+    val subject: String? = null,
     @Json(name = "sent_at") val sentAt: String? = null,
     /** Their name when it was sent; by email the masked address, or the name of whoever claimed it. */
     @Json(name = "to_name") val toName: String? = null,
