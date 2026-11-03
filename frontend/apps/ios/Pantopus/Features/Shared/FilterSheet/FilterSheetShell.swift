@@ -176,12 +176,15 @@ struct FilterSectionRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text(section.title, style: .overline)
-                .font(.system(size: titleSize, weight: PantopusTextStyle.overline.weight))
-                .fixedSize(horizontal: false, vertical: true)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("filterSection_\(section.id)_title")
+            Text(
+                section.title,
+                style: .overline,
+                font: .system(size: titleSize, weight: PantopusTextStyle.overline.weight)
+            )
+            .fixedSize(horizontal: false, vertical: true)
+            .foregroundStyle(Theme.Color.appTextSecondary)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityIdentifier("filterSection_\(section.id)_title")
             control
         }
         .accessibilityIdentifier("filterSection_\(section.id)")
