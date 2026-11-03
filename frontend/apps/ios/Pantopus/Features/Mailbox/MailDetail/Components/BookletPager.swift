@@ -2,18 +2,9 @@
 //  BookletPager.swift
 //  Pantopus
 //
-//  T6.5c (P21) — Booklet variant of the A17 shell's body slot.
-//
-//  Two render modes per `booklet.jsx`:
-//    - `.page` — indicator strip ("Page N of M" + sky scrubber +
-//      grid-mode toggle button) above a full-width `TabView` swiping
-//      through folded paper page images.
-//    - `.grid` — 3-column thumbnail grid; tap a thumbnail to jump
-//      straight back to `.page` mode at that page.
-//
-//  Lives in the feature folder per the P21 brief — the swipeable
-//  paper-page geometry doesn't generalise to other mail variants.
-//  Community attachments (P22) use a different shape.
+//  Stored booklet pages with width-adaptive controls, a thumbnail grid
+//  and optional per-page transcripts. Page and grid selection belong to
+//  the reader and survive layout changes while it remains open.
 //
 
 import SwiftUI
@@ -119,37 +110,27 @@ public struct BookletPager: View {
 
     private var pageNavigation: some View {
         HStack(spacing: Spacing.s2) {
-            Button {
-                currentIndex = max(0, currentIndex - 1)
-            } label: {
-                Icon(.chevronLeft, size: 14, color: Theme.Color.appTextStrong)
-                    .frame(width: 32, height: 32)
-                    .background(Theme.Color.appSurfaceSunken)
-                    .clipShape(Circle())
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(currentIndex == 0)
-            .accessibilityLabel("Previous page")
-            .accessibilityIdentifier("bookletPager_prev")
-            pageLabel
-                .frame(maxWidth: .infinity)
-            Button {
-                currentIndex = min(pages.count - 1, currentIndex + 1)
-            } label: {
-                Icon(.chevronRight, size: 14, color: Theme.Color.appTextStrong)
-                    .frame(width: 32, height: 32)
-                    .background(Theme.Color.appSurfaceSunken)
-                    .clipShape(Circle())
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(currentIndex >= pages.count - 1)
-            .accessibilityLabel("Next page")
-            .accessibilityIdentifier("bookletPager_next")
+            pageStepButton(forward: false)
+            pageLabel.frame(maxWidth: .infinity)
+            pageStepButton(forward: true)
         }
+    }
+
+    private func pageStepButton(forward: Bool) -> some View {
+        Button {
+            currentIndex = min(max(0, currentIndex + (forward ? 1 : -1)), max(0, pages.count - 1))
+        } label: {
+            Icon(forward ? .chevronRight : .chevronLeft, size: 14, color: Theme.Color.appTextStrong)
+                .frame(width: 32, height: 32)
+                .background(Theme.Color.appSurfaceSunken)
+                .clipShape(Circle())
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(forward ? currentIndex >= pages.count - 1 : currentIndex == 0)
+        .accessibilityLabel(forward ? "Next page" : "Previous page")
+        .accessibilityIdentifier(forward ? "bookletPager_next" : "bookletPager_prev")
     }
 
     private var pageLabel: some View {
