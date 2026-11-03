@@ -33,7 +33,7 @@ public extension View {
     /// opens; scrolling still scrolls. Put it on the rows inside the scroll
     /// view, not on the scroll view.
     func closesKeyboardFirst(_ isTyping: Bool) -> some View {
-        allowsHitTesting(!isTyping)
+        modifier(ClosesKeyboardFirstWhileTyping(isTyping: isTyping))
     }
 
     /// The same while anything is being typed, for content whose text box
@@ -45,8 +45,13 @@ public extension View {
 }
 
 private struct ClosesKeyboardFirstWhileTyping: ViewModifier {
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    var isTyping: Bool?
+
     func body(content: Content) -> some View {
-        content.allowsHitTesting(!TextEditingState.shared.isEditing)
+        // Disabling hit testing also removes the controls from VoiceOver.
+        // Its explicit activation can open a result while the field is focused.
+        content.allowsHitTesting(voiceOverEnabled || !(isTyping ?? TextEditingState.shared.isEditing))
     }
 }
 
