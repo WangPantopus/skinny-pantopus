@@ -159,7 +159,7 @@ public struct EditBusinessPageView: View {
                     title: "Edit business page",
                     rightLabel: "Preview",
                     rightEnabled: false,
-                    onBack: { requestExit(.back) }
+                    onBack: onBack
                 ) {}
                 // Hand-rolled shimmer mirroring the loaded geometry — strip,
                 // banner, two section placeholders. Never a screen-level
@@ -210,7 +210,7 @@ public struct EditBusinessPageView: View {
                     title: "Edit business page",
                     rightLabel: "Preview",
                     rightEnabled: false,
-                    onBack: { requestExit(.back) }
+                    onBack: onBack
                 ) {}
                 EmptyState(
                     icon: .building2,
@@ -229,7 +229,7 @@ public struct EditBusinessPageView: View {
                     title: "Edit business page",
                     rightLabel: "Preview",
                     rightEnabled: false,
-                    onBack: { requestExit(.back) }
+                    onBack: onBack
                 ) {}
                 EmptyState(
                     icon: .alertCircle,
