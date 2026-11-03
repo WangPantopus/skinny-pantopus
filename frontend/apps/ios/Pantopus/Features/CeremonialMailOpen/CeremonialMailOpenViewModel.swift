@@ -18,6 +18,10 @@ import Observation
 public final class CeremonialMailOpenViewModel {
     public private(set) var state: CeremonialMailOpenState = .loading
     public private(set) var isVoicePlaying: Bool = false
+    public private(set) var isSaved = false
+    public private(set) var actionInFlight = false
+    public private(set) var didArchive = false
+    public var toast: String?
 
     private let mailId: String
     private let api: APIClient
@@ -47,6 +51,7 @@ public final class CeremonialMailOpenViewModel {
             let response: MailboxV2ItemResponse =
                 try await api.request(MailboxV2Endpoints.item(mailId: mailId))
             let letter = Self.project(response: response, mailId: mailId)
+            isSaved = response.mail.base.lifecycle == "filed"
             state = .loaded(letter, phase: .sealed)
         } catch {
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load this letter."
@@ -111,6 +116,29 @@ public final class CeremonialMailOpenViewModel {
 
     public func stopVoicePlayback() {
         isVoicePlaying = false
+    }
+
+    /// The same filing/archive endpoints and mailbox updates as the standard letter reader.
+    public func performOutcome(_ action: String) async {
+        guard letter != nil, !actionInFlight, ["save", "archive"].contains(action),
+              !(action == "save" && isSaved) else { return }
+        actionInFlight = true
+        defer { actionInFlight = false }
+        do {
+            if action == "save" {
+                let _: MailboxItemActionResponse = try await api.request(
+                    MailboxV2Endpoints.itemAction(mailId: mailId, action: "file")
+                )
+                isSaved = true
+                toast = "Saved to the Vault."
+            } else {
+                let _: ArchiveMailResponse = try await api.request(MailboxEndpoints.archive(mailId: mailId))
+                didArchive = true
+            }
+            NotificationCenter.default.post(name: .mailboxMailLeftList, object: mailId)
+        } catch {
+            toast = (error as? APIError)?.errorDescription ?? "Couldn't \(action) this letter. Try again."
+        }
     }
 
     // MARK: - Projection

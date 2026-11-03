@@ -41,7 +41,6 @@ public struct CeremonialMailOpenView: View {
 
     private let onBack: @MainActor () -> Void
     private let onWriteBack: @MainActor (String) -> Void
-    private let onOutcome: @MainActor (CeremonialOutcomeCTA) -> Void
     /// Pantopus's letters leave this reader once the seal breaks: the host
     /// shows them on the Mail tab's letter page (the first day's welcome).
     private let onLetterOpened: (@MainActor () -> Void)?
@@ -50,13 +49,11 @@ public struct CeremonialMailOpenView: View {
         viewModel: CeremonialMailOpenViewModel,
         onBack: @escaping @MainActor () -> Void = {},
         onWriteBack: @escaping @MainActor (String) -> Void = { _ in },
-        onOutcome: @escaping @MainActor (CeremonialOutcomeCTA) -> Void = { _ in },
         onLetterOpened: (@MainActor () -> Void)? = nil
     ) {
         _viewModel = State(initialValue: viewModel)
         self.onBack = onBack
         self.onWriteBack = onWriteBack
-        self.onOutcome = onOutcome
         self.onLetterOpened = onLetterOpened
     }
 
@@ -75,6 +72,19 @@ public struct CeremonialMailOpenView: View {
         }
         .background(Theme.Color.appBg.ignoresSafeArea())
         .task { await viewModel.load() }
+        .onChange(of: viewModel.didArchive) { _, archived in
+            if archived { onBack() }
+        }
+        .overlay(alignment: .bottom) {
+            if let toast = viewModel.toast {
+                ToastView(message: ToastMessage(text: toast))
+                    .padding(.bottom, 110)
+                    .task(id: toast) {
+                        try? await Task.sleep(for: ToastMessage.duration(for: toast))
+                        viewModel.toast = nil
+                    }
+            }
+        }
         .accessibilityIdentifier("ceremonialMailOpen")
     }
 
@@ -167,32 +177,16 @@ public struct CeremonialMailOpenView: View {
                 opacity: paperOpacity,
                 slideOffset: paperOffset,
                 isVoicePlaying: viewModel.isVoicePlaying,
+                isSaved: viewModel.isSaved,
+                actionInFlight: viewModel.actionInFlight,
                 onToggleVoice: { viewModel.toggleVoicePlayback() },
                 onReply: {
                     viewModel.enterReplying()
                     onWriteBack(letter.sender.displayName)
                 },
                 onClose: { onBack() },
-                onSave: {
-                    onOutcome(
-                        CeremonialOutcomeCTA(
-                            id: "save",
-                            label: "Save to records",
-                            icon: .check,
-                            style: .ghost
-                        )
-                    )
-                },
-                onArchive: {
-                    onOutcome(
-                        CeremonialOutcomeCTA(
-                            id: "archive",
-                            label: "Archive",
-                            icon: .archive,
-                            style: .ghost
-                        )
-                    )
-                }
+                onSave: { Task { await viewModel.performOutcome("save") } },
+                onArchive: { Task { await viewModel.performOutcome("archive") } }
             )
             .accessibilityIdentifier("ceremonialMail_frame_open")
         case .replying:
@@ -556,6 +550,8 @@ private struct ReadingFrame: View {
     let opacity: Double
     let slideOffset: CGFloat
     let isVoicePlaying: Bool
+    let isSaved: Bool
+    let actionInFlight: Bool
     let onToggleVoice: @MainActor () -> Void
     let onReply: @MainActor () -> Void
     let onClose: @MainActor () -> Void
@@ -853,7 +849,7 @@ private struct ReadingFrame: View {
             Button(action: onSave) {
                 HStack(spacing: 6) {
                     Icon(.bookmark, size: 14, color: letter.ink.color)
-                    Text("Save")
+                    Text(isSaved ? "Saved" : "Save")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(letter.ink.color)
                 }
@@ -864,6 +860,7 @@ private struct ReadingFrame: View {
                 .clipShape(Capsule())
             }
             .buttonStyle(.plain)
+            .disabled(actionInFlight || isSaved)
             .accessibilityIdentifier("ceremonialMailOutcome_save")
             Button(action: onArchive) {
                 Icon(.archive, size: 15, color: letter.ink.color)
@@ -873,6 +870,7 @@ private struct ReadingFrame: View {
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
+            .disabled(actionInFlight)
             .accessibilityIdentifier("ceremonialMailOutcome_archive")
             .accessibilityLabel("Archive letter")
         }

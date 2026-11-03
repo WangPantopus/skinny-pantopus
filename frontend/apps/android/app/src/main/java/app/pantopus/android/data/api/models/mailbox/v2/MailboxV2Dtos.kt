@@ -258,6 +258,7 @@ data class MailboxV2Item(
     @Json(name = "preview_text") val previewText: String?,
     val viewed: Boolean = false,
     val archived: Boolean = false,
+    val lifecycle: String? = null,
     val sender: DrawerMail.SenderRef?,
     @Json(name = "sender_display") val senderDisplay: String,
     @Json(name = "sender_trust") val senderTrust: String,
