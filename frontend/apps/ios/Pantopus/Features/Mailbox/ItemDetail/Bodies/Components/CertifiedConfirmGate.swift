@@ -36,82 +36,84 @@ public struct CertifiedConfirmGate: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s4) {
-            Capsule()
-                .fill(Theme.Color.appBorderStrong)
-                .frame(width: 42, height: 4)
-                .frame(maxWidth: .infinity)
-                .accessibilityHidden(true)
-
-            HStack(alignment: .top, spacing: Spacing.s3) {
-                Icon(.badgeCheck, size: 22, color: Theme.Color.warning)
-                    .frame(width: 44, height: 44)
-                    .background(Theme.Color.warningBg)
-                    .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.s4) {
+                Capsule()
+                    .fill(Theme.Color.appBorderStrong)
+                    .frame(width: 42, height: 4)
+                    .frame(maxWidth: .infinity)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: Spacing.s1) {
-                    Text("Sign for delivery")
-                        .pantopusTextStyle(.h3)
-                        .foregroundStyle(Theme.Color.appText)
-                        .accessibilityAddTraits(.isHeader)
-                    Text("This certified item isn't signed yet. Signing records a delivery receipt in the chain of custody.")
-                        .pantopusTextStyle(.small)
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
 
-            VStack(alignment: .leading, spacing: Spacing.s0) {
-                SummaryRow(label: "From", value: senderName, icon: .landmark)
-                Divider().background(Theme.Color.appBorderSubtle)
-                SummaryRow(label: "Tracking", value: referenceNumber, icon: .hash, isCode: true)
-                if let deadlineLabel {
+                HStack(alignment: .top, spacing: Spacing.s3) {
+                    Icon(.badgeCheck, size: 22, color: Theme.Color.warning)
+                        .frame(width: 44, height: 44)
+                        .background(Theme.Color.warningBg)
+                        .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: Spacing.s1) {
+                        Text("Sign for delivery")
+                            .pantopusTextStyle(.h3)
+                            .foregroundStyle(Theme.Color.appText)
+                            .accessibilityAddTraits(.isHeader)
+                        Text("This certified item isn't signed yet. Signing records a delivery receipt in the chain of custody.")
+                            .pantopusTextStyle(.small)
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: Spacing.s0) {
+                    SummaryRow(label: "From", value: senderName, icon: .landmark)
                     Divider().background(Theme.Color.appBorderSubtle)
-                    SummaryRow(label: "Respond by", value: deadlineLabel, icon: .calendarClock)
+                    SummaryRow(label: "Tracking", value: referenceNumber, icon: .hash, isCode: true)
+                    if let deadlineLabel {
+                        Divider().background(Theme.Color.appBorderSubtle)
+                        SummaryRow(label: "Respond by", value: deadlineLabel, icon: .calendarClock)
+                    }
                 }
+                .background(Theme.Color.appSurface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radii.lg)
+                        .stroke(Theme.Color.appBorder, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
+
+                PantopusCheckbox(
+                    isChecked: $didConfirm,
+                    label: "I am the recipient and understand this confirms delivery only.",
+                    accessibilityIdentifier: "certifiedConfirmGate_confirmation"
+                )
+                .padding(Spacing.s3)
+                .background(Theme.Color.appSurfaceRaised)
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radii.lg)
+                        .stroke(Theme.Color.appBorder, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
+
+                VStack(spacing: Spacing.s2) {
+                    PrimaryButton(
+                        title: "Sign for delivery",
+                        isLoading: isSigning,
+                        isEnabled: didConfirm && !isSigning
+                    ) {
+                        await MainActor.run { onSign() }
+                    }
+                    GhostButton(title: "Review first", isEnabled: !isSigning) {
+                        await MainActor.run { onReviewFirst() }
+                    }
+                }
+
+                Text("Signing does not waive your right to appeal, dispute, or pay through the issuing agency.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.Color.appTextMuted)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
             }
-            .background(Theme.Color.appSurface)
-            .overlay(
-                RoundedRectangle(cornerRadius: Radii.lg)
-                    .stroke(Theme.Color.appBorder, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
-
-            PantopusCheckbox(
-                isChecked: $didConfirm,
-                label: "I am the recipient and understand this confirms delivery only.",
-                accessibilityIdentifier: "certifiedConfirmGate_confirmation"
-            )
-            .padding(Spacing.s3)
-            .background(Theme.Color.appSurfaceRaised)
-            .overlay(
-                RoundedRectangle(cornerRadius: Radii.lg)
-                    .stroke(Theme.Color.appBorder, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
-
-            VStack(spacing: Spacing.s2) {
-                PrimaryButton(
-                    title: "Sign for delivery",
-                    isLoading: isSigning,
-                    isEnabled: didConfirm && !isSigning
-                ) {
-                    await MainActor.run { onSign() }
-                }
-                GhostButton(title: "Review first", isEnabled: !isSigning) {
-                    await MainActor.run { onReviewFirst() }
-                }
-            }
-
-            Text("Signing does not waive your right to appeal, dispute, or pay through the issuing agency.")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.Color.appTextMuted)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
+            .padding(Spacing.s4)
         }
-        .padding(Spacing.s4)
         .background(Theme.Color.appBg)
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .accessibilityIdentifier("certifiedConfirmGate")
     }

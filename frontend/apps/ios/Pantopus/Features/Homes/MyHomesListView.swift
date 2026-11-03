@@ -28,7 +28,6 @@ struct MyHomesListView: View {
             if savedAttempts.removal {
                 Button("Check an unfinished removal") { showingRemovalRecovery = true }
                     .frame(minHeight: 44)
-                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .accessibilityIdentifier("myHomesRemovalRecovery")
             }
             ListOfRowsView(dataSource: viewModel)

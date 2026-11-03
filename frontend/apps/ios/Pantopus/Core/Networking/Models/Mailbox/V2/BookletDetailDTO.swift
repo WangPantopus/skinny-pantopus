@@ -2,9 +2,8 @@
 //  BookletDetailDTO.swift
 //  Pantopus
 //
-//  Booklet sub-payload decoded from `mail.object_payload` when
-//  `mail_type == "booklet"`. Backend stores this as untyped JSON in S3
-//  (route handler at `backend/routes/mailboxV2.js:412`); the DTO is
+//  Booklet sub-payload decoded from the V2 item's `mail.object_payload`
+//  for `kind == "booklet"` (stored `mail_type == "book"`). The DTO is
 //  defensive and `decode(from:)` returns nil if the payload doesn't
 //  carry a single page URL.
 //

@@ -5,6 +5,7 @@ import SwiftUI
 /// contract §3.4) while the server holds no answer, after the briefing notice
 /// when both are due.
 struct BriefingNoticeView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var model = NotificationSettingsViewModel()
     private var scope: HomeClaimSessionScope {
         model.sessionScope
@@ -60,7 +61,7 @@ struct BriefingNoticeView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .foregroundStyle(Theme.Color.appText)
-                    .presentationDetents([.medium, .large])
+                    .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
                     .interactiveDismissDisabled(saving)
                     .accessibilityIdentifier("briefingDefaultsNotice")
                     .task { _ = await recordNotice() }
@@ -95,7 +96,7 @@ struct BriefingNoticeView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .foregroundStyle(Theme.Color.appText)
-        .presentationDetents([.medium, .large])
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
         // One tap answers it; closing it without one would only bring it back.
         .interactiveDismissDisabled()
         .accessibilityIdentifier("suggestionsNotice")

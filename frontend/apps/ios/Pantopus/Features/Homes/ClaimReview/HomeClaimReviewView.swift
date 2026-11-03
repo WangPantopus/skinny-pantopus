@@ -21,6 +21,7 @@ import SwiftUI
 /// Owner-facing claim triage for one home.
 public struct HomeClaimReviewView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var visible = false
     @State private var queue: HomeResidencyQueueViewModel
     @State private var viewModel: HomeClaimReviewViewModel
@@ -45,34 +46,11 @@ public struct HomeClaimReviewView: View {
     public var body: some View {
         VStack(spacing: Spacing.s0) {
             topBar
-            if savedDecisions.relationship {
-                Button("Check an unfinished ownership decision") {
-                    queue.suspend()
-                    relationshipTarget = HomeRelationshipViewModel(homeId: viewModel.homeId)
-                }
-                .frame(minHeight: 44)
-                .padding(Spacing.s3)
-                .accessibilityIdentifier("homeClaimReview.relationshipRecovery")
-                // Above this size the links split the screen with the queue and cut their own labels.
-                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+            // At the accessibility sizes these links wait in the top bar's menu,
+            // so the pinned chrome leaves the claims most of the screen.
+            if !dynamicTypeSize.isAccessibilitySize {
+                reviewActions
             }
-            if savedDecisions.residency {
-                Button("Check an unfinished residency decision") {
-                    queue.suspend()
-                    residencyTarget = .live(homeId: viewModel.homeId)
-                }
-                .frame(minHeight: 44)
-                .padding(Spacing.s3)
-                .accessibilityIdentifier("homeClaimReview.residencyRecovery")
-                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-            }
-            Button("Your past decisions") { queue.suspend()
-                showingResidencyHistory = true
-            }
-            .frame(minHeight: 44)
-            .padding(Spacing.s3)
-            .accessibilityIdentifier("homeClaimReview.residencyHistory")
-            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             HomeClaimReviewTabStrip(tabs: tabItems, selection: tabBinding)
             if viewModel.selectedTab == .residency {
                 HomeResidencyQueueView(model: queue) { claimId, action in
@@ -174,6 +152,34 @@ public struct HomeClaimReviewView: View {
         } else { queue.suspend() }
     }
 
+    @ViewBuilder
+    private var reviewActions: some View {
+        if savedDecisions.relationship {
+            Button("Check an unfinished ownership decision") {
+                queue.suspend()
+                relationshipTarget = HomeRelationshipViewModel(homeId: viewModel.homeId)
+            }
+            .frame(minHeight: 44)
+            .padding(Spacing.s3)
+            .accessibilityIdentifier("homeClaimReview.relationshipRecovery")
+        }
+        if savedDecisions.residency {
+            Button("Check an unfinished residency decision") {
+                queue.suspend()
+                residencyTarget = .live(homeId: viewModel.homeId)
+            }
+            .frame(minHeight: 44)
+            .padding(Spacing.s3)
+            .accessibilityIdentifier("homeClaimReview.residencyRecovery")
+        }
+        Button("Your past decisions") { queue.suspend()
+            showingResidencyHistory = true
+        }
+        .frame(minHeight: 44)
+        .padding(Spacing.s3)
+        .accessibilityIdentifier("homeClaimReview.residencyHistory")
+    }
+
     // MARK: - Chrome
 
     private var topBar: some View {
@@ -188,16 +194,38 @@ public struct HomeClaimReviewView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
             .accessibilityIdentifier("homeClaimReview_back")
+            .accessibilityShowsLargeContentViewer {
+                Icon(.chevronLeft, size: 22)
+                Text("Back")
+            }
 
+            // Like a system bar's title, it stops growing at the largest
+            // standard size; a long press shows it large.
             Text("Review claims")
-                .font(.system(size: 16, weight: .semibold))
+                .scaledFont(16, weight: .semibold)
                 .foregroundStyle(Theme.Color.appText)
+                .lineLimit(1)
                 .frame(maxWidth: .infinity)
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                .accessibilityShowsLargeContentViewer()
 
-            Color.clear.frame(width: 44, height: 44)
+            if dynamicTypeSize.isAccessibilitySize {
+                Menu { reviewActions } label: {
+                    Icon(.moreHorizontal, size: 22, color: Theme.Color.appText)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("Review actions")
+                .accessibilityIdentifier("homeClaimReview.actions")
+                .accessibilityShowsLargeContentViewer {
+                    Icon(.moreHorizontal, size: 22)
+                    Text("Review actions")
+                }
+            } else {
+                Color.clear.frame(width: 44, height: 44)
+            }
         }
         .padding(.horizontal, Spacing.s3)
-        .frame(height: 52)
+        .frame(minHeight: 52)
         .background(Theme.Color.appSurface)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.Color.appBorder).frame(height: 1)

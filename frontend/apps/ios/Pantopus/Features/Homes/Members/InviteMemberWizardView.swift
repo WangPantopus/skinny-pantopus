@@ -34,9 +34,9 @@ struct InviteMemberWizardView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s4) {
-                Text(title).pantopusTextStyle(.h2).accessibilityIdentifier("homeInvitationSenderHeading")
+                Text(title).scaledFont(24, weight: .semibold).accessibilityIdentifier("homeInvitationSenderHeading")
                 Text("Signed in as \(model.accountLabel)")
-                    .pantopusTextStyle(.body)
+                    .scaledFont(16)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .accessibilityIdentifier("homeInvitationSenderAccount")
                 if let error = model.errorMessage {
@@ -56,7 +56,7 @@ struct InviteMemberWizardView: View {
                 Button("Close") { onClose(nil) }.frame(minHeight: 44).accessibilityIdentifier("homeInvitationSenderClose")
                 Text("An invitation gives someone household access for the role you choose. "
                     + "It doesn't verify that they live here or own the Home.")
-                    .pantopusTextStyle(.caption).foregroundStyle(Theme.Color.appTextSecondary)
+                    .scaledFont(12).foregroundStyle(Theme.Color.appTextSecondary)
             }.padding(Spacing.s5).frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Theme.Color.appBg)
@@ -165,8 +165,8 @@ struct InviteMemberWizardView: View {
             }.pickerStyle(.segmented).accessibilityIdentifier("homeInvitationSenderRole")
             Text("Members can see and help with household tasks. Guests get limited, view-only access. "
                 + "For a short visit, send a guest pass from the Guests tab instead.")
-                .pantopusTextStyle(.caption).foregroundStyle(Theme.Color.appTextSecondary)
-            Text("Personal note (optional)").pantopusTextStyle(.caption)
+                .scaledFont(12).foregroundStyle(Theme.Color.appTextSecondary)
+            Text("Personal note (optional)").scaledFont(12)
             TextEditor(text: $model.message).frame(minHeight: 80)
                 .accessibilityIdentifier("inviteMember_message")
             control("Review invitation", "homeInvitationSenderPrepare") { await model.prepare() }
@@ -175,7 +175,7 @@ struct InviteMemberWizardView: View {
 
     private func review(_ context: HomeInvitationSenderContext) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text("Check the details").pantopusTextStyle(.h3)
+            Text("Check the details").scaledFont(20, weight: .semibold)
             if model.target.action == .create, let payload = context.intent.dictValue?["payload"]?.dictValue {
                 Text(payload["email"]?.stringValue ?? "").accessibilityIdentifier("homeInvitationSenderRecipient")
                 Text("Role: \(TokenAcceptViewModel.humanRole(payload["relationship"]?.stringValue ?? ""))")
