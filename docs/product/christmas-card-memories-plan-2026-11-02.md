@@ -220,7 +220,11 @@ Card media upload through their own route, `POST /api/mailbox/cards/media` (cont
 - the browsers write fragmented MP4, and Android misreports one kind's length;
 - the iPhone can't play WebM.
 
-No converter is needed. The founder picks the option.
+No converter is needed, and the founder chose **no converter** on November 3:
+- the server checks each upload's format and length from the file itself and stores it as it came;
+- the web records in one piece;
+- the apps show the server's length;
+- Record shows only where the browser can make AAC in MP4, so Firefox can play voices but not record them.
 
 The result decides:
 - **Every recorder can make AAC/M4A:** the server only checks format and duration, and no converter is needed.
@@ -489,10 +493,7 @@ In the order they're needed:
 
 1. **The store, before step 3.** Decided November 2: S3, the chat-files approach.
 2. **The moderation path, before photos switch on (step 1).** Decided November 2: “Report this card” shares that one card with admins, with the disclosure and logged access, and a photo from someone who isn't a connection stays covered until tapped.
-3. **Voice, after the recording test.** The test passed. The options are in the [voice test](christmas-card-voice-test-2026-11-02.md):
-   - no converter, with the web recording in one piece and Record only where the browser makes AAC (recommended);
-   - a remux on the server;
-   - a converter on the server.
+3. **Voice, after the recording test.** Decided November 3: no converter. The [voice test](christmas-card-voice-test-2026-11-02.md) passed, and the web records in one piece and offers Record only where the browser makes AAC.
 4. **The index migration:** not needed. Step 1 uses derived row ids, which give the guarantee with no migration (contract section 6).
 5. **The drawings,** including how a reply looks in the Mailbox.
 6. **Hosting costs at switch-on,** from actual use: S3 for card media, and Supabase Free or Pro for the rest.

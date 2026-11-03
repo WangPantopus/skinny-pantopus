@@ -12,8 +12,9 @@ This is the agreed shape for steps 3 to 8: names, answers, who may do what, medi
 | Report this card | **Yes, that card only.** A report can share the reported card or reply with Pantopus admins. The report sheet says so, and each admin opening is logged. Nothing else of either person's mail becomes visible. |
 | Covered photos | **Yes.** A photo from someone who isn't the reader's connection stays covered until tapped. |
 | Duplicate prevention | **Derived row ids, no migration** (section 6). The index-only migration isn't needed. |
+| Voice (November 3, after the [voice test](christmas-card-voice-test-2026-11-02.md)) | **No converter.** Each upload is checked as AAC-LC in MP4 and stored as it came. The web records in one piece, the apps show the server's length, and Record shows only where the browser can make AAC in MP4 (section 3). |
 
-Still open, in the plan's order: the voice option (after the recording test), the drawings, Supabase Free or Pro (now only for the rest of the app; card media no longer use Supabase storage), and the native collection screens.
+Still open, in the plan's order: the drawings, Supabase Free or Pro (now only for the rest of the app; card media no longer use Supabase storage), and the native collection screens.
 
 ## 2. Names
 
@@ -58,7 +59,7 @@ Checked when uploaded and again when sent.
 | --- | --- | --- |
 | Per piece | One | One |
 | Input | 10 MiB at most. The apps send JPEG: iOS and Android convert HEIC on the device, and the web converts where the browser can. Since #3166 the server can also convert HEIC, but sending JPEG keeps uploads small and saves server memory. | 5 MiB and 60 seconds of decoded audio at most |
-| Stored | One JPEG, at most 1600 px on the long side, upright, with every piece of metadata removed (about 300 to 400 KB). The original is never stored. | AAC-LC in M4A, mono, about 48 kbps (about 360 KB a minute). Whether the server converts is decided by the voice test. |
+| Stored | One JPEG, at most 1600 px on the long side, upright, with every piece of metadata removed (about 300 to 400 KB). The original is never stored. | AAC-LC in MP4, mono, about 48 kbps (about 360 KB a minute), stored exactly as uploaded: the server doesn't convert (founder, November 3). It accepts an ordinary or fragmented MP4 holding one AAC-LC track and refuses anything else, WebM and Ogg included. It counts the length from the file's own boxes, adding the fragments' sample durations, and returns it as `duration_ms`, which the apps show instead of the player's guess. The web records with `MediaRecorder.start()` and no timeslice, and offers Record only where `MediaRecorder.isTypeSupported('audio/mp4;codecs=mp4a.40.2')` is true. |
 | Refused | Unreadable: 415 `CARD_PHOTO_UNREADABLE`. Video or animated: 415 `CARD_PHOTO_NOT_STILL`. Too large: 413 `CARD_PHOTO_TOO_LARGE`. | Wrong format: 415 `CARD_VOICE_UNREADABLE`. Too long: 413 `CARD_VOICE_TOO_LONG`. Too large: 413 `CARD_VOICE_TOO_LARGE`. |
 | Description | Optional `alt`, 200 letters at most, read by screen readers | None. The note is never labeled as a transcript. |
 
