@@ -78,7 +78,11 @@ public struct MembersListView: View {
             handle(event)
         }
         .onChange(of: invitationTarget?.id) { _, id in
-            if id == nil { savedAttempts = .current() }
+            if id == nil {
+                savedAttempts = .current()
+            } else {
+                invitationResult = nil
+            }
         }
         .sheet(item: $invitationTarget, onDismiss: { Task { await viewModel.refresh() } }, content: { target in
             InviteMemberWizardView(homeId: homeId, target: target) { original in
