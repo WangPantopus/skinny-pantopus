@@ -86,16 +86,18 @@ public struct PendingSavePlace: Identifiable, Sendable, Hashable {
 
 public struct SavePlaceSheet: View {
     private let pending: PendingSavePlace
-    private let onSave: @MainActor (_ label: String, _ choice: SavePlaceTypeChoice) -> Void
+    private let onSave: @MainActor (_ label: String, _ choice: SavePlaceTypeChoice) async throws -> Void
     private let onClose: @MainActor () -> Void
 
     @State private var name: String
     @State private var choice: SavePlaceTypeChoice = .other
+    @State private var isSaving = false
+    @State private var saveError: String?
     @FocusState private var nameFocused: Bool
 
     public init(
         pending: PendingSavePlace,
-        onSave: @escaping @MainActor (String, SavePlaceTypeChoice) -> Void,
+        onSave: @escaping @MainActor (String, SavePlaceTypeChoice) async throws -> Void,
         onClose: @escaping @MainActor () -> Void
     ) {
         self.pending = pending
@@ -109,7 +111,15 @@ public struct SavePlaceSheet: View {
             VStack(alignment: .leading, spacing: Spacing.s4) {
                 header
                 nameField
+                    .disabled(isSaving)
                 typePicker
+                    .disabled(isSaving)
+                if let saveError {
+                    Text(saveError)
+                        .scaledFont(14)
+                        .foregroundStyle(Theme.Color.error)
+                        .accessibilityIdentifier("savePlace.error")
+                }
                 saveButton
                 Spacer(minLength: 0)
             }
@@ -121,6 +131,7 @@ public struct SavePlaceSheet: View {
         .background(Theme.Color.appSurface)
         .presentationDetents([.height(420), .large])
         .presentationDragIndicator(.visible)
+        .interactiveDismissDisabled(isSaving)
         .accessibilityIdentifier("savePlace.sheet")
     }
 
@@ -138,6 +149,7 @@ public struct SavePlaceSheet: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Close")
             .accessibilityIdentifier("savePlace.close")
+            .disabled(isSaving)
         }
     }
 
@@ -209,12 +221,23 @@ public struct SavePlaceSheet: View {
 
     private var saveButton: some View {
         Button {
+            guard !isSaving else { return }
             let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-            onSave(trimmed.isEmpty ? pending.label : trimmed, choice)
+            nameFocused = false
+            isSaving = true
+            saveError = nil
+            Task {
+                defer { isSaving = false }
+                do {
+                    try await onSave(trimmed.isEmpty ? pending.label : trimmed, choice)
+                } catch {
+                    saveError = "Couldn’t save this place. Please try again."
+                }
+            }
         } label: {
             HStack(spacing: Spacing.s2) {
                 Icon(.bookmark, size: 17, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
-                Text("Save")
+                Text(isSaving ? "Saving…" : "Save")
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(Theme.Color.appTextInverse)
             }
@@ -225,6 +248,7 @@ public struct SavePlaceSheet: View {
         .buttonStyle(.plain)
         .padding(.top, Spacing.s1)
         .accessibilityIdentifier("savePlace.saveBtn")
+        .disabled(isSaving)
     }
 }
 
@@ -310,10 +334,9 @@ public final class SavedPlacesStore {
         }
     }
 
-    /// Commit the Save sheet — POST then optimistically insert the echo.
-    public func commitSave(label: String, choice: SavePlaceTypeChoice) async {
+    /// Keep the editor draft until the server confirms; failures leave it available for retry.
+    public func commitSave(label: String, choice: SavePlaceTypeChoice) async throws {
         guard let pending = pendingSave else { return }
-        pendingSave = nil
         let body = SavePlaceBody(
             label: label,
             placeType: choice.wire,
@@ -347,9 +370,10 @@ public final class SavedPlacesStore {
                 saved[i] = response.savedPlace
             }
             HomesStoreReads.savedPlacesChanged(store: ScreenStore.store(for: api))
+            if pendingSave?.id == pending.id { pendingSave = nil }
         } catch {
             saved.removeAll { $0.id == optimistic.id }
-            toast = ToastMessage(text: "Couldn\u{2019}t save \(label).", kind: .error)
+            throw error
         }
     }
 
