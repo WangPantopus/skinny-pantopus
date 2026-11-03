@@ -86,7 +86,7 @@ public struct BusinessPageBlocksView: View {
             Button("Discard edits", role: .destructive) { requestBack(discardingChanges: true) }
             Button("Keep editing", role: .cancel) {}
         } message: {
-            Text("Your changes to this page haven't been saved.")
+            Text("Edits will be lost.")
         }
         .sheet(isPresented: pickerBinding) {
             BusinessPageBlockTypePicker(
