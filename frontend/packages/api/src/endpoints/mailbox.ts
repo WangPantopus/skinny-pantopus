@@ -707,6 +707,12 @@ export async function sendHolidayCard(data: {
   message: string;
   arrival: HolidayCardArrival;
   to: { user_id: string } | { email: string };
+  /**
+   * One per card draft, sent again with every look and retry of it: a repeat of a send answers with the card it
+   * stored (200), CARD_TAKEN_BACK once that card was taken back, or CARD_REQUEST_SENT (with `card`) when the draft
+   * changed after it went.
+   */
+  request_id?: string;
 }): Promise<{ card: SentHolidayCard }> {
   return post<{ card: SentHolidayCard }>('/api/mailbox/cards', data);
 }
