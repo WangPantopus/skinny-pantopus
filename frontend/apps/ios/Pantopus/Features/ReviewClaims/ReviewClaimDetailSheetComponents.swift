@@ -351,7 +351,6 @@ struct ReviewClaimNoteCaptureSheet: View {
                     .accessibilityLabel("Close")
                 }
                 Text(prompt)
-                    .pantopusTextStyle(.small)
                     .scaledFont(14)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 TextEditor(text: $note)

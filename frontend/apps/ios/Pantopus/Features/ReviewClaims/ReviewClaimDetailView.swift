@@ -225,7 +225,6 @@ public struct ReviewClaimDetailView: View {
             HStack(spacing: Spacing.s2) {
                 Icon(.alertCircle, size: 20, color: Theme.Color.warning)
                 Text("No documents uploaded yet")
-                    .pantopusTextStyle(.small)
                     .scaledFont(14)
                     .foregroundStyle(Theme.Color.warning)
                 Spacer(minLength: Spacing.s0)
@@ -443,7 +442,6 @@ private struct HomeCard: View {
                     .compactMap { $0?.isEmpty == false ? $0 : nil }
                 if !extras.isEmpty {
                     Text(extras.joined(separator: ", "))
-                        .pantopusTextStyle(.caption)
                         .scaledFont(12)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)

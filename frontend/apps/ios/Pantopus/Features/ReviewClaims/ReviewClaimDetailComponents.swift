@@ -196,7 +196,6 @@ struct ClaimantCard: View {
                         HStack(spacing: Spacing.s1) {
                             Icon(.atSign, size: 11, color: Theme.Color.appTextSecondary)
                             Text(email)
-                                .pantopusTextStyle(.caption)
                                 .scaledFont(12)
                                 .foregroundStyle(Theme.Color.appTextSecondary)
                                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)

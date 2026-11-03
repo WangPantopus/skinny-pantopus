@@ -89,7 +89,6 @@ struct ApprovalChoiceCard: View {
             .accessibilityIdentifier("reviewClaimDetail_approveAs")
             .accessibilityLabel("Approve as \(viewModel.approveAs.label)")
             Text(viewModel.approveAs.hint)
-                .pantopusTextStyle(.caption)
                 .scaledFont(12)
                 .foregroundStyle(Theme.Color.appTextSecondary)
         }
