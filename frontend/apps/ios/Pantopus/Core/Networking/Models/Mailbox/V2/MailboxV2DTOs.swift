@@ -47,17 +47,21 @@ public struct DrawerListResponse: Decodable, Sendable, Hashable {
     public struct MailSent: Decodable, Sendable, Hashable {
         /// Something sent and not taken back.
         public let any: Bool
-        /// Cards to a person still before the 7 a.m. pickup.
+        /// Letters and cards to a person still before the 7 a.m. pickup.
         public let waiting: Int
+        /// Of those, the letters (the rest are cards; 0 from an older server).
+        public let waitingLetters: Int
 
         public init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             any = (try? c.decodeIfPresent(Bool.self, forKey: .any)) ?? false
             waiting = (try? c.decodeIfPresent(Int.self, forKey: .waiting)) ?? 0
+            waitingLetters = (try? c.decodeIfPresent(Int.self, forKey: .waitingLetters)) ?? 0
         }
 
         private enum CodingKeys: String, CodingKey {
             case any, waiting
+            case waitingLetters = "waiting_letters"
         }
     }
 

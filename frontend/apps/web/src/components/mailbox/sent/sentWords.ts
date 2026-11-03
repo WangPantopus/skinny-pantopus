@@ -15,9 +15,14 @@ export function firstName(name: string | null | undefined): string {
   return text.split(/\s+/)[0] || text;
 }
 
+/** Who it went to, as "Maya’s" phrases name them: their first name, or a household whole ("their household"). */
+export function sentFirst(piece: SentPiece): string {
+  return (piece.to_household ? piece.to_name : firstName(piece.to_name)) || 'them';
+}
+
 /** "To Maya O. · Christmas card", or by email "To d***@example.com · by email". */
 export function sentToLine(piece: SentPiece): string {
-  return `To ${piece.to_name || 'them'} · ${piece.by_email ? 'by email' : 'Christmas card'}`;
+  return `To ${piece.to_name || 'them'} · ${piece.kind === 'letter' ? 'Letter' : (piece.by_email ? 'by email' : 'Christmas card')}`;
 }
 
 /** Where it is now, in a line. Their 7 a.m. mail comes by their clock, so only their day is said. */
@@ -32,11 +37,11 @@ export function sentStatusLine(piece: SentPiece): string {
     case 'delivered':
       return piece.sealed ? 'In their mailbox, sealed until Christmas' : `In their mailbox since ${day}`;
     case 'email_waiting':
-      return 'Waiting for them to open the email';
+      return piece.kind === 'letter' ? 'Waiting for them to claim it' : 'Waiting for them to open the email';
     case 'claimed':
-      return 'They joined Pantopus and have it';
+      return piece.kind === 'letter' ? 'They claimed your letter' : 'They joined Pantopus and have it';
     case 'expired':
-      return 'They didn’t open the email in 90 days';
+      return piece.kind === 'letter' ? 'The claim link expired' : 'They didn’t open the email in 90 days';
     default:
       return '';
   }
@@ -74,7 +79,7 @@ export function sentEnvelope(piece: SentPiece): MailItemV2 {
     sender_trust: 'pantopus_user',
     sender_business_name: null,
     postmark: piece.envelope.postmarked_on ? { town: null, date: piece.envelope.postmarked_on } : null,
-    card: {
+    card: piece.kind === 'letter' ? null : {
       design: piece.card.design ?? '',
       number: piece.card.number,
       caption: piece.card.caption,
@@ -90,18 +95,18 @@ export function sentEnvelope(piece: SentPiece): MailItemV2 {
 
 /** A step of its trail in words; one not reached yet adds "· not yet". */
 export function trailLabel(step: SentTrailStep, piece: SentPiece): string {
-  const first = firstName(piece.to_name) || 'them';
+  const first = sentFirst(piece);
   let label: string;
   switch (step.step) {
     case 'sealed': label = 'Sealed by you'; break;
-    case 'emailed': label = `Emailed to ${piece.status === 'claimed' ? 'them' : piece.to_name || 'them'}`; break;
+    case 'emailed': label = `${piece.kind === 'letter' ? 'Sent' : 'Emailed'} to ${piece.status === 'claimed' ? 'them' : piece.to_name || 'them'}`; break;
     case 'picked_up': label = 'Picked up by the carrier'; break;
     case 'delivered':
       label = piece.arrival === 'christmas_morning' ? `Delivered with ${first}’s Christmas morning mail` : `Delivered with ${first}’s 7 a.m. mail`;
       break;
     case 'opens': label = 'Opens on Christmas morning'; break;
-    case 'joined': label = step.done ? 'They joined Pantopus and have it' : 'They join Pantopus and have it'; break;
-    case 'returned': label = 'They didn’t open the email in 90 days'; break;
+    case 'joined': label = piece.kind === 'letter' ? (step.done ? 'They claimed your letter' : 'They claim your letter') : (step.done ? 'They joined Pantopus and have it' : 'They join Pantopus and have it'); break;
+    case 'returned': label = piece.kind === 'letter' ? 'The claim link expired' : 'They didn’t open the email in 90 days'; break;
     default: label = '';
   }
   return step.done ? label : `${label} · not yet`;

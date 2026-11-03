@@ -34,6 +34,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,10 +47,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -179,12 +183,13 @@ private fun PageMode(
 
 /**
  * OCR transcript card (booklet.jsx OCRCard): scan chip + "Text from this
- * page" header with the OCR confidence pill, the per-page transcript
- * (first line = overline, second = title, rest = body), and inert
- * Copy / Translate / Read aloud actions.
+ * page" header, the per-page transcript (first line = overline, second = title,
+ * rest = body), and a working Copy action. No confidence is supplied by the server.
  */
 @Composable
 private fun BookletOcrCard(text: String) {
+    val clipboard = LocalClipboardManager.current
+    var copied by rememberSaveable(text) { mutableStateOf(false) }
     Column(
         modifier =
             Modifier
@@ -223,17 +228,6 @@ private fun BookletOcrCard(text: String) {
                 fontWeight = FontWeight.Bold,
                 color = PantopusColors.appText,
             )
-            Text(
-                text = "OCR · 99%",
-                modifier =
-                    Modifier
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(PantopusColors.successBg)
-                        .padding(horizontal = 7.dp, vertical = 2.dp),
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                color = PantopusColors.success,
-            )
         }
         // Transcript lines map onto the JSX kinds by position: line 0 is
         // the overline, line 1 the title, the remainder body copy.
@@ -267,9 +261,10 @@ private fun BookletOcrCard(text: String) {
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(PantopusColors.appBorderSubtle))
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            OcrAction(icon = PantopusIcon.Copy, label = "Copy text", color = PantopusColors.primary600)
-            OcrAction(icon = PantopusIcon.Globe, label = "Translate", color = PantopusColors.appTextMuted)
-            OcrAction(icon = PantopusIcon.Megaphone, label = "Read aloud", color = PantopusColors.appTextMuted)
+            OcrAction(icon = PantopusIcon.Copy, label = if (copied) "Copied" else "Copy text", color = PantopusColors.primary600) {
+                clipboard.setText(AnnotatedString(text))
+                copied = true
+            }
         }
     }
 }
@@ -279,8 +274,10 @@ private fun OcrAction(
     icon: PantopusIcon,
     label: String,
     color: Color,
+    onClick: () -> Unit,
 ) {
     Row(
+        modifier = Modifier.minimumInteractiveComponentSize().clickable(role = Role.Button, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {

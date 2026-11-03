@@ -242,3 +242,130 @@ and Android emulator. It adds two repairs to the earlier PR changes:
   unverified in this pass. Local SMTP capture verifies the local email flow,
   not delivery through an external provider. This record does not claim every
   button, device size or optional subpage has passed.
+
+## November 2 follow-up — Mail readiness and regular Sent history
+
+This pass used rebuilt iOS and Android apps against a real isolated local
+backend, database and private storage, with synthetic accounts. The review
+stack starts from master `da6a2ccd943af9fef8d7de32cf832891d6a52fa6`.
+Nothing was merged, deployed or enabled in production.
+
+### Repairs prepared for review
+
+- [#3194](https://github.com/WangPantopus/skinny-pantopus/pull/3194): either
+  person's block withdraws undelivered personal mail, including pending claims
+  addressed to an already known verified contact. The additive migration
+  serializes send/block operations, scrubs the withdrawn row and retains the
+  request receipt so retries cannot resurrect it. Storage references are
+  removed; this does not claim immediate deletion of stored object bytes.
+- [#3195](https://github.com/WangPantopus/skinny-pantopus/pull/3195): Android
+  reads stored booklet pages through the existing authorized item endpoint,
+  preserves certified-mail precedence and shows the matching page transcript
+  with a working Copy action.
+- [#3196](https://github.com/WangPantopus/skinny-pantopus/pull/3196): iOS and
+  Android ceremonial letter Save and Archive use the existing APIs, show
+  failures, preserve Saved on reopen and update the mailbox list.
+- [#3197](https://github.com/WangPantopus/skinny-pantopus/pull/3197): web Mail
+  and Vault reuse the existing booklet reader for stored pages and transcripts.
+- The regular Sent extension in this branch lists personal letters and
+  holiday cards together on web, iOS and Android. Letter detail includes the
+  sender's own subject/text and delivery trail. Recipient reading/filing
+  activity, private contact details and identifiers remain absent. Take-back
+  remains limited to eligible holiday cards. Successful regular composition
+  refreshes Sent, and claim notifications open the sender's own Sent detail.
+
+### Observed app checks
+
+| Flow | Observed result |
+| --- | --- |
+| Regular mail across platforms | Composed and sent a regular letter on iOS; Android opened its envelope and read the exact note. The sender's iOS Sent list/detail retained the letter and delivered trail after relaunch. |
+| Holiday mail across platforms | Composed and sent a holiday card on Android, then opened it from Sent. iOS received, opened and flipped the card with the exact note. Android Sent retained the design, note and delivery state after reinstall/relaunch. |
+| iOS holiday history | Sent retained both a future Christmas-morning card and an already delivered but Christmas-sealed card. The future card's detail showed the saved design/note, working flip and pending delivery trail. |
+| Regular Sent on Android and web | Both listed regular letters alongside cards and opened the sender's full text and delivery trail. Android was freshly launched; web retained the detail after reload. |
+| iOS Save and Archive | Saved a received ceremonial letter, observed Saved and its removal from Incoming, then relaunched and reopened it from Vault with the full text and Saved state. Archived it, relaunched, and reopened it from the Archived section. |
+| Android Save and Archive | Saved the iOS-composed letter, observed Saved, then relaunched and reopened it from Vault with the full text and Saved state. Archived it and verified the letter in the Archived shelf. |
+| Android booklet | Opened a stored three-page booklet, advanced to the matching image/transcript, copied the transcript and filed it into a folder. The filed booklet remained readable after relaunch. |
+| Web booklet | Opened the filed booklet, checked page navigation and matching transcript, switched to scrolling all three pages, and reloaded successfully. |
+
+To exercise recipient screens without waiting overnight, only the synthetic
+letters' local delivery timestamps were advanced. This is not a wall-clock
+scheduler or Christmas release check. Native verification used an iOS 27
+simulator and Android API 34 emulator, not physical phones.
+
+### Existing checks and local privacy verification
+
+- Backend: 342 existing suites passed, 6,632 tests passed, 16 skipped.
+- Web: all 123 existing suites and 2,383 tests passed; typecheck and targeted
+  lint passed.
+- iOS: 31 existing compose/ceremonial-reader tests passed; simulator build,
+  SwiftFormat and strict SwiftLint passed.
+- Android: 106 existing compose/reader/category tests passed across 11 suites;
+  debug assembly, ktlint and detekt passed.
+- Fresh database replay and function lint passed. Local transactions exercised
+  send-first and block-first ordering, blocked claim preview/claim rejection,
+  denied future recipient access, retry after unblock, and take-back while
+  seasonal sending was disabled.
+- Real local Sent requests checked sender-only detail access, duplicate-free
+  pagination, regular text, holiday picture/note, and omission of recipient
+  activity/contact/identity fields. No new unit tests were added.
+
+### Remaining production gates
+
+1. Review and integrate the unmerged repair stack, apply the additive migration
+   through the normal release process, and ship compatible native builds
+   before enabling Mail. During the audit, another session's merge of
+   [#3188](https://github.com/WangPantopus/skinny-pantopus/pull/3188) brought the
+   separate iOS stored-booklet repair
+   [#3186](https://github.com/WangPantopus/skinny-pantopus/pull/3186) into master
+   `f95394b48c7931738ce82ec06b2a4c6e87da573f`. Its device evidence belongs to
+   that PR. The audit stack applies cleanly to that revision; the combined
+   release build still needs verification before rollout.
+2. Verify hosted private storage, provider email/SMS claims and native claim
+   deep links with approved test recipients. Local storage/SMTP evidence does
+   not establish hosted provider delivery.
+3. Verify push/background delivery and the actual scheduled morning and
+   Christmas release paths in the release environment, including time-zone
+   boundaries. The local timestamp advancement above does not cover these.
+4. Run the release builds on physical iOS and Android phones. This pass does
+   not certify performance, every business role, optional paid/AI/provider
+   flows, or every screen size.
+
+Hosted launch-cut flags and configuration remain unchanged by this work.
+
+## November 3 review of #3194–#3198
+
+A review pass rebuilt the stack with master `7c9469dd8b` folded in and ran it
+against an isolated local backend, database, private storage and mail
+capture, with synthetic accounts, in headless Chrome, an iOS 27 simulator and
+an Android API 34 emulator. It added three repairs to the stack:
+
+- [#3194](https://github.com/WangPantopus/skinny-pantopus/pull/3194): the
+  iPhone and Android composers send a person's letter with that person's Home
+  (`recipient_home_id` with a `user` delivery target), so the block rule
+  skipped it and the letter still arrived after the recipient blocked the
+  sender. The migration now treats every letter or card addressed to a person
+  or contact as personal correspondence, whatever Home is on it; mail
+  addressed to a Home itself and household package notices keep their rules.
+- [#3198](https://github.com/WangPantopus/skinny-pantopus/pull/3198): the
+  mailbox flag said "1 card waits" for a letter, and a letter to a Home read
+  "In their’s Mailbox". Drawers now report `waiting_letters` and Sent marks
+  `to_household`; all three apps name cards, letters or pieces, and say the
+  household whole ("your household" for the sender's own Home).
+- iPhone: a Sent notice opened while another Sent page was showing in Mail
+  showed the earlier piece. The Sent route now gets a fresh page per piece.
+
+### Observed app checks
+
+| Flow | Observed result |
+| --- | --- |
+| Block withdraws waiting mail | The recipient tapped Block on the sender's profile in the iPhone app; the sender's waiting app-composed letter was withdrawn and its text cleared, never reached the recipient's lists, details or phone after its round, and left the sender's Sent. Through the block API, a web letter, an email letter and a card were withdrawn too, a household letter stayed, and an unblock brought nothing back. |
+| Android booklet | A stored three-page booklet showed each page's image and its own text, Copy text worked, and the booklet filed into a Vault folder reopened readable after relaunch. |
+| Native Save and Archive | On both phones Save showed Saved and the Vault toast, left Incoming and reopened as Saved after relaunch; Archive closed the reader and the letter was on the Archived shelf. Web's Vault listed the letters saved on both phones and the booklet filed on Android. |
+| Web booklet | Pages, matching page text, arrow keys and Scroll mode (kept after reload) worked; Stream is hidden. |
+| Sent | Regular letters listed with their text and trail on all three apps, with no take-back. A letter composed on iPhone appeared in its Sent at once. A claimed email letter's notice opened its Sent page from the notification list on iPhone and Android; web opened Sent pages by the same link. |
+| Flag and household wording | After the repairs the flag read "1 letter waits" and "2 letters wait", and a household letter read "Your letter to your household" and "Delivered with your household’s 7 a.m. mail" on all three apps. |
+
+Not changed here: Android's booklet "PDF" tile answers "Download not
+available" when there is no PDF and only reports "Download started" when there
+is one, and both composers' success screens still offer "Back to Hub", which
+does the same as Done. The production gates above are unchanged.

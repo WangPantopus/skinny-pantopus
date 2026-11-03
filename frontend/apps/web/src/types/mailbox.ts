@@ -248,8 +248,9 @@ export interface MailboxDrawers {
   delivery?: MailDelivery;
   /** One row per Home the person lives at; `needs_proof` keeps its mail closed. */
   homes?: MailboxHome[];
-  /** Sent: whether they've sent a card, and how many to a person wait for the 7 a.m. pickup (the flag is up). */
-  sent?: { any: boolean; waiting: number } | null;
+  /** Sent: whether they've sent mail, and how many to a person wait for the 7 a.m. pickup (the flag is up), of them
+   * `waiting_letters` letters (the rest are cards; older servers leave it out). */
+  sent?: { any: boolean; waiting: number; waiting_letters?: number } | null;
 }
 
 export interface MailDelivery {

@@ -92,7 +92,7 @@ export default function SentList({ selectedId }: { selectedId?: string }) {
         <section aria-label="Nothing sent yet" className="flex flex-col items-center px-6 py-12 text-center">
           <MailboxIllustration state="closed" size={132} />
           <h3 className="mt-3 text-lg font-semibold text-app-text">Nothing sent yet.</h3>
-          <p className="mt-1 max-w-xs text-sm text-app-text-secondary">Cards you send show up here, with when they arrive.</p>
+          <p className="mt-1 max-w-xs text-sm text-app-text-secondary">Letters and cards you send show up here, with when they arrive.</p>
         </section>
       ) : (
         <>

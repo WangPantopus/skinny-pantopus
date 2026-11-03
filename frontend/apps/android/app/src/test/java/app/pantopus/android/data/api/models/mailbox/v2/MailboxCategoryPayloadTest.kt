@@ -43,12 +43,14 @@ class MailboxCategoryPayloadTest {
                 "pages" to listOf("https://x/p1.png", "https://x/p2.png"),
                 "summary" to "Spring catalog",
                 "page_count" to 24,
+                "ocr_texts" to listOf(null, "Second page text"),
             )
         val resolved = MailboxCategoryPayload.resolve(MailItemCategory.Booklet, payload)
         assertTrue(resolved is MailboxCategoryPayload.Booklet)
         val booklet = (resolved as MailboxCategoryPayload.Booklet).detail
         assertEquals(2, booklet.pages.size)
         assertEquals(24, booklet.pageCount)
+        assertEquals(listOf("", "Second page text"), booklet.ocrTexts)
     }
 
     @Test fun booklet_no_pages_falls_back() {

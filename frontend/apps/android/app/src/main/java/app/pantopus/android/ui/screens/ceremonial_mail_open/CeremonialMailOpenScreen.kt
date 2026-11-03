@@ -69,6 +69,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.components.Toast
+import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -100,6 +103,10 @@ fun CeremonialMailOpenScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val isVoicePlaying by viewModel.isVoicePlaying.collectAsStateWithLifecycle()
+    val isSaved by viewModel.isSaved.collectAsStateWithLifecycle()
+    val actionInFlight by viewModel.actionInFlight.collectAsStateWithLifecycle()
+    val didArchive by viewModel.didArchive.collectAsStateWithLifecycle()
+    val toast by viewModel.toast.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val reduceMotion =
         reduceMotionOverride ?: remember(context) {
@@ -110,6 +117,13 @@ fun CeremonialMailOpenScreen(
             ) == 0f
         }
     LaunchedEffect(Unit) { viewModel.load() }
+    LaunchedEffect(didArchive) { if (didArchive) onBack() }
+    LaunchedEffect(toast) {
+        toast?.let {
+            kotlinx.coroutines.delay(toastDurationMillis(it))
+            viewModel.clearToast()
+        }
+    }
 
     Box(
         modifier =
@@ -144,7 +158,11 @@ fun CeremonialMailOpenScreen(
                                 onWriteBack(current.letter.sender.displayName)
                             },
                             onClose = onBack,
-                            onOutcome = onOutcome,
+                            onOutcome = { action ->
+                                if (action.id in setOf("save", "archive")) viewModel.performOutcome(action.id) else onOutcome(action)
+                            },
+                            isSaved = isSaved,
+                            actionInFlight = actionInFlight,
                         )
                     CeremonialMailPhase.Replying ->
                         ReplyHandoffFrame(
@@ -154,6 +172,13 @@ fun CeremonialMailOpenScreen(
                         )
                 }
             }
+        }
+        toast?.let {
+            Toast(
+                text = it,
+                appearance = ToastAppearance(background = PantopusColors.appText),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 110.dp),
+            )
         }
     }
 }
@@ -826,6 +851,8 @@ private fun ReadingFrame(
     onReply: () -> Unit,
     onClose: () -> Unit,
     onOutcome: (CeremonialOutcomeCta) -> Unit,
+    isSaved: Boolean = false,
+    actionInFlight: Boolean = false,
 ) {
     val opacity by animateFloatAsState(
         targetValue = 1f,
@@ -891,6 +918,8 @@ private fun ReadingFrame(
         }
         StickyBottomBar(
             letter = letter,
+            isSaved = isSaved,
+            actionInFlight = actionInFlight,
             onReply = onReply,
             onSave = {
                 onOutcome(
@@ -1215,6 +1244,8 @@ private fun EndOrnament(letter: CeremonialMailLetter) {
 @Composable
 private fun StickyBottomBar(
     letter: CeremonialMailLetter,
+    isSaved: Boolean,
+    actionInFlight: Boolean,
     onReply: () -> Unit,
     onSave: () -> Unit,
     onArchive: () -> Unit,
@@ -1256,14 +1287,14 @@ private fun StickyBottomBar(
                     .clip(RoundedCornerShape(Radii.pill))
                     .background(Color.White.copy(alpha = 0.65f))
                     .border(1.dp, letter.ink.color.copy(alpha = 0.13f), RoundedCornerShape(Radii.pill))
-                    .clickable(onClick = onSave)
+                    .clickable(enabled = !actionInFlight && !isSaved, onClick = onSave)
                     .padding(horizontal = Spacing.s4, vertical = Spacing.s3)
                     .testTag("ceremonialMailOutcome_save"),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             PantopusIconImage(icon = PantopusIcon.Bookmark, contentDescription = null, size = 14.dp, tint = letter.ink.color)
-            Text(text = "Save", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = letter.ink.color)
+            Text(text = if (isSaved) "Saved" else "Save", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = letter.ink.color)
         }
         Box(
             modifier =
@@ -1272,7 +1303,7 @@ private fun StickyBottomBar(
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.65f))
                     .border(1.dp, letter.ink.color.copy(alpha = 0.13f), CircleShape)
-                    .clickable(onClick = onArchive)
+                    .clickable(enabled = !actionInFlight, onClick = onArchive)
                     .testTag("ceremonialMailOutcome_archive")
                     .semantics { contentDescription = "Archive letter" },
             contentAlignment = Alignment.Center,

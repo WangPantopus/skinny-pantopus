@@ -22,7 +22,7 @@ import CardBack from '../cards/CardBack';
 import CardFlip from '../cards/CardFlip';
 import { askTakeBack, takeBackMessage } from '../cards/takeBack';
 import { shortDay, WAX } from '../cards/cardArt';
-import { firstName, sentEnvelope, sentStatusLine, trailLabel, trailWhen } from './sentWords';
+import { sentEnvelope, sentFirst, sentStatusLine, trailLabel, trailWhen } from './sentWords';
 
 const label = 'text-[11px] font-semibold uppercase leading-4 tracking-[0.06em] text-app-text-secondary';
 const shadow = 'rounded-[3px] shadow-[0_14px_30px_rgba(60,40,10,0.28)]';
@@ -65,7 +65,7 @@ export default function SentPieceView({ id }: { id: string }) {
 
   if (isLoading) {
     return (
-      <div className="h-full overflow-y-auto" role="status" aria-label="Opening your card">
+      <div className="h-full overflow-y-auto" role="status" aria-label="Opening your mail">
         <BackToSent onBack={backToSent} />
         <div className="mx-auto max-w-2xl space-y-4 px-4 py-5">
           <div className="h-6 w-56 rounded bg-app-surface-sunken animate-pulse" />
@@ -84,7 +84,7 @@ export default function SentPieceView({ id }: { id: string }) {
         <BackToSent onBack={backToSent} />
         <div className="flex flex-1 items-center justify-center p-8">
           <div role="alert" className="max-w-sm text-center">
-            <h2 className="mb-1 text-base font-semibold text-app-text">{gone ? mailLoadMessage(error) : 'Couldn’t open this card'}</h2>
+            <h2 className="mb-1 text-base font-semibold text-app-text">{gone ? mailLoadMessage(error) : 'Couldn’t open this mail'}</h2>
             {gone ? null : <p className="mb-4 text-sm text-app-text-secondary">{mailLoadMessage(error)}</p>}
             <button
               type="button"
@@ -100,13 +100,14 @@ export default function SentPieceView({ id }: { id: string }) {
   }
 
   const name = piece.to_name || 'them';
-  const first = firstName(piece.to_name) || 'them';
+  const first = sentFirst(piece);
   const card = piece.card;
   const front = card.design ? (
     <CardFront design={card.design} caption={card.caption} paper={card.paper ?? '#f7eee0'} year={card.year ?? new Date(piece.sent_at).getFullYear()} mailedOn={piece.envelope.postmarked_on ?? piece.sent_at} className={shadow} />
   ) : null;
   const back = <CardBack paper={card.paper ?? '#f7eee0'} fromName={piece.envelope.from} year={card.year ?? new Date(piece.sent_at).getFullYear()} message={piece.note} className={shadow} />;
-  const theirMailbox = piece.by_email && piece.status !== 'claimed' ? 'Once they join with that address' : `In ${first}’s Mailbox`;
+  const delivered = piece.status === 'delivered' || piece.status === 'claimed';
+  const theirMailbox = delivered ? `In ${first}’s Mailbox` : (piece.by_email ? 'Once they claim it' : `Addressed to ${first}`);
 
   const doTakeBack = async () => {
     const sentToday = calendarDay(new Date(piece.sent_at), timeZone) === calendarDay(new Date(), timeZone);
@@ -124,7 +125,7 @@ export default function SentPieceView({ id }: { id: string }) {
       <BackToSent onBack={backToSent} />
       <div className="flex-1 md:min-h-0 md:overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl px-4 pb-8 pt-1 md:px-7 md:pt-6">
-          <h2 className="text-2xl font-bold leading-8 tracking-tight text-app-text">Your card to {name}</h2>
+          <h2 className="text-2xl font-bold leading-8 tracking-tight text-app-text">Your {piece.kind === 'letter' ? 'letter' : 'card'} to {name}</h2>
           <p className="mt-0.5 text-sm leading-5 text-app-text-secondary">Sent {shortDay(piece.sent_at)} · {sentStatusLine(piece)}</p>
 
           <div className="mt-5 grid gap-5 [grid-template-areas:'envelope'_'card'_'trail'_'take'] md:grid-cols-[340px_minmax(0,1fr)] md:[grid-template-areas:'envelope_trail'_'card_card'_'take_take']">
@@ -135,7 +136,13 @@ export default function SentPieceView({ id }: { id: string }) {
               </div>
             </section>
 
-            <section aria-label="The card you sent" className="[grid-area:card]">
+            {piece.kind === 'letter' ? (
+              <section aria-label="The letter you sent" className="rounded-xl border border-app-border bg-app-surface p-5 [grid-area:card]">
+                <h3 className={label}>The letter you sent</h3>
+                <h4 className="mt-3 text-lg font-semibold text-app-text">{piece.subject}</h4>
+                <p className="mt-4 whitespace-pre-wrap break-words text-base leading-7 text-app-text">{piece.note}</p>
+              </section>
+            ) : <section aria-label="The card you sent" className="[grid-area:card]">
               <h3 className={label}>The card you sent</h3>
               <div className="mt-3.5 grid max-w-[584px] items-start gap-5 md:grid-cols-2">
                 <div className="mx-auto w-full max-w-[300px] md:max-w-none">
@@ -159,7 +166,7 @@ export default function SentPieceView({ id }: { id: string }) {
                   </div>
                 ) : null}
               </div>
-            </section>
+            </section>}
 
             <section aria-label="Its trail" data-testid="mailSentTrail" className="rounded-[20px] border border-app-border bg-app-surface p-4 [grid-area:trail] md:self-start">
               <h3 className={`${label} mb-3`}>Its trail</h3>
@@ -182,7 +189,7 @@ export default function SentPieceView({ id }: { id: string }) {
               </ol>
               <p className="mt-4 flex items-start gap-2 rounded-xl bg-app-surface-sunken px-3 py-2.5 text-[13px] leading-[18px] text-app-text-strong">
                 <Lock className="mt-px h-[15px] w-[15px] flex-shrink-0" aria-hidden />
-                <span>Like real mail, a card never tells you when it was opened.</span>
+                <span>Mail never tells you when it was opened.</span>
               </p>
             </section>
 
