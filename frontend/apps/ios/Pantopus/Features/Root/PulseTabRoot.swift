@@ -95,6 +95,44 @@ public struct PulseTabRoot: View {
     }
 
     public var body: some View {
+        navigationLayout
+            .accessibilityIdentifier("pulseTabRoot")
+            .onChange(of: retainedRoutes) { _, routes in
+                detailModels.retain(routes: routes, userId: currentUserId)
+            }
+            .onChange(of: currentUserId) { _, userId in
+                detailModels.retain(routes: [], userId: userId)
+            }
+            .sheet(item: $presentedSurface) { surface in
+                surfaceRoot(surface)
+            }
+            .onChange(of: router.pending) { _, pending in
+                consumeDeepLinkIfNeeded(pending: pending)
+            }
+            .onChange(of: door.pendingSurface) { _, pending in
+                presentPendingSurfaceIfNeeded(pending)
+            }
+            .onChange(of: rootTabs.selected) { _, selected in
+                // A link owned by another tab selects it underneath a presented
+                // surface sheet; close the sheet so the destination is visible.
+                if selected != .pulse { presentedSurface = nil }
+                consumeDeepLinkIfNeeded(pending: router.pending)
+                presentPendingSurfaceIfNeeded(door.pendingSurface)
+            }
+            .task {
+                await Task.yield()
+                guard !Task.isCancelled else { return }
+                navigationReady = true
+                consumeDeepLinkIfNeeded(pending: router.pending)
+                presentPendingSurfaceIfNeeded(door.pendingSurface)
+            }
+    }
+
+    private var retainedRoutes: [PulseRoute] {
+        path.routes + routesBeside + restoringRoutes
+    }
+
+    private var navigationLayout: some View {
         Group {
             if isSideBySide {
                 PulseSplitView(path: $path) {
@@ -119,36 +157,6 @@ public struct PulseTabRoot: View {
                 }
                 .onAppear { stackRoutesBeside() }
             }
-        }
-        .accessibilityIdentifier("pulseTabRoot")
-        .onChange(of: path.routes + routesBeside + restoringRoutes) { _, routes in
-            detailModels.retain(routes: routes, userId: currentUserId)
-        }
-        .onChange(of: currentUserId) { _, userId in
-            detailModels.retain(routes: [], userId: userId)
-        }
-        .sheet(item: $presentedSurface) { surface in
-            surfaceRoot(surface)
-        }
-        .onChange(of: router.pending) { _, pending in
-            consumeDeepLinkIfNeeded(pending: pending)
-        }
-        .onChange(of: door.pendingSurface) { _, pending in
-            presentPendingSurfaceIfNeeded(pending)
-        }
-        .onChange(of: rootTabs.selected) { _, selected in
-            // A link owned by another tab selects it underneath a presented
-            // surface sheet; close the sheet so the destination is visible.
-            if selected != .pulse { presentedSurface = nil }
-            consumeDeepLinkIfNeeded(pending: router.pending)
-            presentPendingSurfaceIfNeeded(door.pendingSurface)
-        }
-        .task {
-            await Task.yield()
-            guard !Task.isCancelled else { return }
-            navigationReady = true
-            consumeDeepLinkIfNeeded(pending: router.pending)
-            presentPendingSurfaceIfNeeded(door.pendingSurface)
         }
     }
 
