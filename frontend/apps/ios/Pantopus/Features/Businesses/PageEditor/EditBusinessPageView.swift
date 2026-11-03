@@ -296,8 +296,6 @@ public struct EditBusinessPageLoadedView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Theme.Color.appBg)
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
             EditBusinessStickySave(
                 mode: stickyMode,
                 onDiscard: onDiscard,
