@@ -24,6 +24,13 @@ import SwiftUI
 @MainActor
 public struct EditBusinessPageView: View {
     @State private var viewModel: EditBusinessPageViewModel
+    @State private var pendingExit: EditorExit?
+
+    private enum EditorExit {
+        case back
+        case preview
+    }
+
     private let onBack: @MainActor () -> Void
     private let onPreview: @MainActor () -> Void
     private let onClosed: @MainActor () -> Void
@@ -70,9 +77,14 @@ public struct EditBusinessPageView: View {
             titleVisibility: .visible
         ) {
             Button("Discard edits", role: .destructive) {
-                Task { await viewModel.discardConfirmed() }
+                let destination = pendingExit
+                pendingExit = nil
+                Task {
+                    await viewModel.discardConfirmed()
+                    if let destination { finishExit(destination) }
+                }
             }
-            Button("Keep editing", role: .cancel) {}
+            Button("Keep editing", role: .cancel) { pendingExit = nil }
         }
         .alert(
             "Image wasn't updated",
@@ -107,6 +119,26 @@ public struct EditBusinessPageView: View {
         }
     }
 
+    private func requestExit(_ destination: EditorExit) {
+        guard !viewModel.hasInFlightOperation else {
+            viewModel.toastMessage = "Wait for the current update to finish, then try again."
+            return
+        }
+        if viewModel.hasUnsavedChanges {
+            pendingExit = destination
+            viewModel.discardRequested()
+        } else {
+            finishExit(destination)
+        }
+    }
+
+    private func finishExit(_ destination: EditorExit) {
+        switch destination {
+        case .back: onBack()
+        case .preview: onPreview()
+        }
+    }
+
     /// Owner only; nil hides the Close business section.
     private var closeBusinessAction: (@MainActor () -> Void)? {
         guard viewModel.canClose else { return nil }
@@ -127,7 +159,7 @@ public struct EditBusinessPageView: View {
                     title: "Edit business page",
                     rightLabel: "Preview",
                     rightEnabled: false,
-                    onBack: onBack
+                    onBack: { requestExit(.back) }
                 ) {}
                 // Hand-rolled shimmer mirroring the loaded geometry — strip,
                 // banner, two section placeholders. Never a screen-level
@@ -155,9 +187,12 @@ public struct EditBusinessPageView: View {
         case let .loaded(payload):
             EditBusinessPageLoadedView(
                 content: payload,
-                onBack: onBack,
-                onPreview: onPreview,
-                onDiscard: { viewModel.discardRequested() },
+                onBack: { requestExit(.back) },
+                onPreview: { requestExit(.preview) },
+                onDiscard: {
+                    pendingExit = nil
+                    viewModel.discardRequested()
+                },
                 onSave: { Task { await viewModel.save() } },
                 onSaveDraft: { Task { await viewModel.saveDraft() } },
                 onPublish: { Task { await viewModel.publish() } },
@@ -175,7 +210,7 @@ public struct EditBusinessPageView: View {
                     title: "Edit business page",
                     rightLabel: "Preview",
                     rightEnabled: false,
-                    onBack: onBack
+                    onBack: { requestExit(.back) }
                 ) {}
                 EmptyState(
                     icon: .building2,
@@ -194,7 +229,7 @@ public struct EditBusinessPageView: View {
                     title: "Edit business page",
                     rightLabel: "Preview",
                     rightEnabled: false,
-                    onBack: onBack
+                    onBack: { requestExit(.back) }
                 ) {}
                 EmptyState(
                     icon: .alertCircle,
