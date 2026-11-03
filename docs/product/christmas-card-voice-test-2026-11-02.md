@@ -61,9 +61,11 @@ Every AAC recording played to its end on every reader. Only the reported length 
 - **The server must read fragmented MP4** to check the 60-second limit: add the fragments' sample durations, since the top-level duration can be empty. It's a few dozen lines of box parsing, or a small library.
 - **Size.** The iPhone recorder adds a fixed 55 KB padding box per file. That's about 15% on a 60-second clip, which stays well under the plan's 5 MiB input limit. A remux would drop it.
 
-## Options for you
+## Options
 
-1. **No converter (recommended).**
+**The founder chose option 1, no converter, on November 3.** The other options are kept here for the record; option 2 stays the fallback if real phones show a problem.
+
+1. **No converter (chosen).**
    - The server checks that each upload is AAC-LC in MP4, at most 60 seconds and 5 MiB, by reading its boxes, and stores it as it came.
    - The web records in one piece.
    - The apps show the server's `duration_ms`.
