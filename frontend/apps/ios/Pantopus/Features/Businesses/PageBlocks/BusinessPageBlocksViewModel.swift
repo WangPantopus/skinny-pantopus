@@ -162,7 +162,6 @@ public final class BusinessPageBlocksViewModel {
         defer { isSaving = false }
         do {
             try await pushDraft()
-            hasChanges = false
             toastMessage = "Draft saved"
         } catch {
             toastMessage = message(for: error, fallback: "Failed to save")
@@ -185,7 +184,6 @@ public final class BusinessPageBlocksViewModel {
                 BusinessPagesEndpoints.publishPage(businessId: businessId, pageId: pageId)
             )
             if let revision = response.publishedRevision { publishedRevision = revision }
-            hasChanges = false
             toastMessage = "Page published as v\(publishedRevision)"
         } catch {
             toastMessage = message(for: error, fallback: "Failed to publish")
@@ -210,6 +208,8 @@ public final class BusinessPageBlocksViewModel {
         blocks = response.blocks.enumerated().map { index, dto in
             BusinessPageBlock(dto: dto, index: index)
         }
+        // A failed publish still leaves this successfully saved draft intact.
+        hasChanges = false
         state = .loaded(blocks: blocks)
     }
 
