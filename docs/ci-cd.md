@@ -230,7 +230,7 @@ release's containers stopped as `*-previous`; the API was unreachable for about
 stopped after readiness timed out without touching the running API, and an image
 whose revision label didn't match the expected commit was refused at once.
 
-Rehearsed again on November 3 for the proxy (ZDD) on a local imitation
+Rehearsed again on November 3 for the proxy (ZDD, PR 3206) on a local imitation
 of the host: its own Docker engine, host nginx in front of ports 8000 and 18001,
 a registry, and Postgres with PostgREST for `/health`. Request loops ran through
 host nginx (`/`, `/health`, a POST and six signed-in Socket.IO connections).
