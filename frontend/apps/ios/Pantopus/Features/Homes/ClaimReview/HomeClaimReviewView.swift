@@ -46,12 +46,9 @@ public struct HomeClaimReviewView: View {
     public var body: some View {
         VStack(spacing: Spacing.s0) {
             topBar
-            if dynamicTypeSize.isAccessibilitySize {
-                Menu("Review actions") { reviewActions }
-                    .padding(Spacing.s3)
-                    .frame(minHeight: 44)
-                    .accessibilityIdentifier("homeClaimReview.actions")
-            } else {
+            // At the accessibility sizes these links wait in the top bar's menu,
+            // so the pinned chrome leaves the claims most of the screen.
+            if !dynamicTypeSize.isAccessibilitySize {
                 reviewActions
             }
             HomeClaimReviewTabStrip(tabs: tabItems, selection: tabBinding)
@@ -197,13 +194,35 @@ public struct HomeClaimReviewView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
             .accessibilityIdentifier("homeClaimReview_back")
+            .accessibilityShowsLargeContentViewer {
+                Icon(.chevronLeft, size: 22)
+                Text("Back")
+            }
 
+            // Like a system bar's title, it stops growing at the largest
+            // standard size; a long press shows it large.
             Text("Review claims")
                 .scaledFont(16, weight: .semibold)
                 .foregroundStyle(Theme.Color.appText)
+                .lineLimit(1)
                 .frame(maxWidth: .infinity)
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                .accessibilityShowsLargeContentViewer()
 
-            Color.clear.frame(width: 44, height: 44)
+            if dynamicTypeSize.isAccessibilitySize {
+                Menu { reviewActions } label: {
+                    Icon(.moreHorizontal, size: 22, color: Theme.Color.appText)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("Review actions")
+                .accessibilityIdentifier("homeClaimReview.actions")
+                .accessibilityShowsLargeContentViewer {
+                    Icon(.moreHorizontal, size: 22)
+                    Text("Review actions")
+                }
+            } else {
+                Color.clear.frame(width: 44, height: 44)
+            }
         }
         .padding(.horizontal, Spacing.s3)
         .frame(minHeight: 52)
