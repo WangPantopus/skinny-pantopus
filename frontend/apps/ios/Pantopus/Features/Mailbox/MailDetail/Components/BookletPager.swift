@@ -17,6 +17,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 /// Rendering mode for the pager. Exposed at the view init so the variant
 /// view can persist the mode in its caller (e.g. across re-renders).
@@ -357,12 +358,11 @@ private struct ThumbnailCell: View {
     }
 }
 
-/// OCR transcript card (booklet.jsx OCRCard): scan chip + "Text from this
-/// page" header with the OCR confidence pill, the per-page transcript
-/// (first line = overline, second = title, rest = body), and inert
-/// Copy / Translate / Read aloud actions.
+/// The supplied per-page transcript. Only show actions we can perform;
+/// the stored payload does not supply an OCR confidence score.
 private struct BookletOCRCard: View {
     let text: String
+    @State private var copied = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -370,11 +370,13 @@ private struct BookletOCRCard: View {
             transcript
             VStack(alignment: .leading, spacing: 10) {
                 Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
-                HStack(spacing: 14) {
-                    action(icon: .copy, label: "Copy text", color: Theme.Color.primary600)
-                    action(icon: .globe, label: "Translate", color: Theme.Color.appTextMuted)
-                    action(icon: .megaphone, label: "Read aloud", color: Theme.Color.appTextMuted)
+                Button {
+                    UIPasteboard.general.string = text
+                    copied = true
+                } label: {
+                    action(icon: .copy, label: copied ? "Copied" : "Copy text", color: Theme.Color.primary600)
                 }
+                .buttonStyle(.plain)
             }
         }
         .padding(Spacing.s3)
@@ -387,6 +389,7 @@ private struct BookletOCRCard: View {
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("bookletPager_ocrCard")
+        .onChange(of: text) { _, _ in copied = false }
     }
 
     private var header: some View {
@@ -400,13 +403,6 @@ private struct BookletOCRCard: View {
                 .foregroundStyle(Theme.Color.appText)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
-            Text("OCR · 99%")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(Theme.Color.success)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2)
-                .background(Theme.Color.successBg)
-                .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
         }
     }
 
