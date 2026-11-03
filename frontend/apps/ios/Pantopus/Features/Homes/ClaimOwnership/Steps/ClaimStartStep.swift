@@ -85,8 +85,7 @@ private struct ClaimMethodPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text("Verification method", style: .overline)
-                .font(.system(size: overlineSize, weight: .semibold))
+            Text("Verification method", style: .overline, font: .system(size: overlineSize, weight: .semibold))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityAddTraits(.isHeader)
 

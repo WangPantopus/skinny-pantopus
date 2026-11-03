@@ -48,8 +48,7 @@ public struct RequirementsCardBlock: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text(title, style: .overline)
-                .font(.system(size: overlineSize, weight: .semibold))
+            Text(title, style: .overline, font: .system(size: overlineSize, weight: .semibold))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityAddTraits(.isHeader)
             ForEach(rows) { row in

@@ -17,8 +17,7 @@ struct ClaimHomeChip: View {
     var body: some View {
         HStack(spacing: Spacing.s1) {
             Icon(.home, size: 11, color: Theme.Color.home)
-            Text("Home · \(label)", style: .overline)
-                .font(.system(size: overlineSize, weight: .semibold))
+            Text("Home · \(label)", style: .overline, font: .system(size: overlineSize, weight: .semibold))
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(Theme.Color.home)
         }

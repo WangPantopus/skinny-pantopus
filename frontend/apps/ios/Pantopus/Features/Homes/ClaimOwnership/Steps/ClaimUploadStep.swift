@@ -64,8 +64,7 @@ struct ClaimUploadStepContent: View {
 
             if !documentOptions.isEmpty {
                 VStack(alignment: .leading, spacing: Spacing.s3) {
-                    Text("1. Select document type", style: .overline)
-                        .font(.system(size: overlineSize, weight: .semibold))
+                    Text("1. Select document type", style: .overline, font: .system(size: overlineSize, weight: .semibold))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                     ClaimDocumentTypePicker(
                         options: documentOptions,
@@ -77,8 +76,7 @@ struct ClaimUploadStepContent: View {
 
             if documentOptions.isEmpty || selectedDocumentType != nil {
                 VStack(alignment: .leading, spacing: Spacing.s3) {
-                    Text(uploadSectionLabel, style: .overline)
-                        .font(.system(size: overlineSize, weight: .semibold))
+                    Text(uploadSectionLabel, style: .overline, font: .system(size: overlineSize, weight: .semibold))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                     ForEach(slots) { slot in
                         UploadSlot(
