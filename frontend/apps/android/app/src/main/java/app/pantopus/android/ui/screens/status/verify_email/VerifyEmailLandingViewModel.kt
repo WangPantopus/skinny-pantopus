@@ -120,6 +120,18 @@ class VerifyEmailLandingViewModel
             }
         }
 
+        /**
+         * Continue after a confirmed link: signed in with the password typed
+         * at sign-up when this phone just signed up with that address;
+         * otherwise [toLogIn]. Mirrors iOS `LoginView.continueAfterConfirmation`.
+         */
+        fun continueAfterConfirmation(toLogIn: () -> Unit) {
+            viewModelScope.launch {
+                val outcome = authRepository.signInAfterConfirmation(_uiState.value.email)
+                if (outcome != AuthRepository.ConfirmedSignIn.SignedIn) toLogIn()
+            }
+        }
+
         /** "Try again" from the unavailable frame: checks the same link once more. */
         fun retry() {
             if (_uiState.value.phase != Phase.Unavailable) return

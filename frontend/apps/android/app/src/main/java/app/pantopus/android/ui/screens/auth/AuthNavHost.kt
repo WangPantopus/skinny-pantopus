@@ -204,7 +204,7 @@ fun AuthNavHost(
                     }
                 },
                 onConfirmed = { email ->
-                    email?.let(loginViewModel::onEmailChange)
+                    loginViewModel.onEmailConfirmed(email)
                     navController.popBackStack(AuthRoutes.LOGIN, inclusive = false)
                 },
             )
@@ -229,12 +229,17 @@ fun AuthNavHost(
             val loginEntry = remember(entry) { navController.getBackStackEntry(AuthRoutes.LOGIN) }
             val loginViewModel: LoginViewModel = hiltViewModel(loginEntry)
             val confirmedEmail = entry.arguments?.getString(VerifyEmailLandingViewModel.EMAIL_KEY)
+            val landingViewModel: VerifyEmailLandingViewModel = hiltViewModel()
             VerifyEmailLandingScreen(
-                // No session after verification (backend revokes it), so
-                // Continue drops back to login to sign in.
+                viewModel = landingViewModel,
+                // No session after verification (backend revokes it). The phone
+                // that signed up signs in with the password it was given;
+                // otherwise Continue drops back to login to sign in.
                 onContinue = {
-                    confirmedEmail?.takeIf { it.isNotBlank() }?.let(loginViewModel::onEmailChange)
-                    navController.popBackStack(AuthRoutes.LOGIN, inclusive = false)
+                    landingViewModel.continueAfterConfirmation {
+                        loginViewModel.onEmailConfirmed(confirmedEmail)
+                        navController.popBackStack(AuthRoutes.LOGIN, inclusive = false)
+                    }
                 },
                 onUseDifferentEmail = {
                     navController.navigate(AuthRoutes.signUp()) {

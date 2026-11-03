@@ -51,14 +51,14 @@ struct LoginView: View {
                         .padding(.bottom, Spacing.s10)
 
                     VStack(spacing: Spacing.s2) {
-                        Text("Welcome back", style: .overline)
+                        Text(headerOverline, style: .overline)
                             .foregroundStyle(Theme.Color.primaryInk)
                             .tracking(1.2)
-                        Text("Log in to Pantopus")
+                        Text(headerTitle)
                             .pantopusTextStyle(.h2)
                             .foregroundStyle(Theme.Color.appText)
                             .accessibilityAddTraits(.isHeader)
-                        Text("Pick up where you left off on your block.")
+                        Text(headerSubtitle)
                             .pantopusTextStyle(.small)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                             .multilineTextAlignment(.center)
@@ -307,10 +307,10 @@ struct LoginView: View {
                         VerifyEmailLandingView(
                             email: email,
                             token: token,
-                            // No session after verification (backend revokes it),
-                            // so Continue drops back to login to sign in, from the
-                            // address that was just confirmed.
-                            onContinue: { continueToLogin(confirmedEmail: email) },
+                            // No session after verification (backend revokes it).
+                            // The phone that signed up signs in with the password it
+                            // was given; otherwise back to login from that address.
+                            onContinue: { continueAfterConfirmation(email: email) },
                             onUseDifferentEmail: { path = [.signUp(inviteCode: nil)] }
                         )
                     case let .error(authError):
@@ -412,6 +412,28 @@ private extension LoginView {
             }
         )
         .id(inviteCode)
+    }
+
+    /// Right after confirming an email this is someone new, not a return: the header says so.
+    var headerOverline: String {
+        viewModel.arrivedConfirmed ? "Email confirmed" : "Welcome back"
+    }
+
+    var headerTitle: String {
+        viewModel.arrivedConfirmed ? "Log in to finish" : "Log in to Pantopus"
+    }
+
+    var headerSubtitle: String {
+        viewModel.arrivedConfirmed ? "Use the password you chose when you signed up." : "Pick up where you left off on your block."
+    }
+
+    /// After the email link: signed in when this phone just signed up with that address.
+    func continueAfterConfirmation(email: String?) {
+        Task {
+            if await auth.signInAfterConfirmation(email: email) != .signedIn {
+                continueToLogin(confirmedEmail: email)
+            }
+        }
     }
 
     /// Create account opened by the address preview's Continue closes back to
@@ -866,8 +888,12 @@ final class LoginViewModel {
         !isLoading && AuthValidation.email(email) == nil && password.count >= 6
     }
 
+    /// True once a confirmed email led here: the header says so instead of "Welcome back".
+    private(set) var arrivedConfirmed = false
+
     /// The address a person just confirmed: sign-in starts from it.
     func prefill(confirmedEmail: String?) {
+        arrivedConfirmed = true
         guard let confirmedEmail, !confirmedEmail.isEmpty else { return }
         email = confirmedEmail
     }
