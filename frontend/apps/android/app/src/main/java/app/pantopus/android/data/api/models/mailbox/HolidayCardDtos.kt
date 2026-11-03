@@ -107,6 +107,11 @@ data class SendHolidayCardBody(
     val message: String,
     val arrival: String,
     val to: HolidayCardRecipient,
+    /**
+     * One per card draft, sent with every look and retry of it (OkHttp's own resend included): the server answers a
+     * repeat with the card it stored, never a second one.
+     */
+    @Json(name = "request_id") val requestId: String? = null,
 )
 
 /** Exactly one of the two. */
