@@ -38,7 +38,8 @@ struct HomeClaimReviewTabStrip: View {
                 } label: {
                     VStack(spacing: Spacing.s2) {
                         Text(entry.title)
-                            .font(.system(size: 13, weight: selection == entry.tab ? .semibold : .medium))
+                            .scaledFont(13, weight: selection == entry.tab ? .semibold : .medium)
+                            .fixedSize(horizontal: false, vertical: true)
                             .foregroundStyle(
                                 selection == entry.tab
                                     ? Theme.Color.primaryInk
@@ -54,6 +55,7 @@ struct HomeClaimReviewTabStrip: View {
                     }
                     .padding(.top, Spacing.s3)
                     .frame(maxWidth: .infinity)
+                    .frame(minHeight: 44)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -153,13 +155,15 @@ struct HomeClaimActionButton: View {
                 Icon(icon, size: 16, color: foreground)
                 if let title {
                     Text(title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .scaledFont(13, weight: .semibold)
                         .foregroundStyle(foreground)
-                        .lineLimit(1)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .frame(maxWidth: title == nil ? 40 : .infinity)
-            .frame(height: 40)
+            .padding(.vertical, Spacing.s2)
+            .frame(maxWidth: title == nil ? 44 : .infinity)
+            .frame(minHeight: 44)
             .background(background)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .overlay {
@@ -344,6 +348,7 @@ struct HomeClaimOwnershipCard: View {
 
 /// One pending residency claim + approve / deny.
 struct HomeClaimResidencyCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let item: HomeResidencyQueueClaim
     let isBusy: Bool
     let onApprove: () -> Void
@@ -360,17 +365,17 @@ struct HomeClaimResidencyCard: View {
                 )
                 VStack(alignment: .leading, spacing: 1) {
                     Text(item.applicantLabel)
-                        .font(.system(size: 15, weight: .semibold))
+                        .scaledFont(15, weight: .semibold)
                         .foregroundStyle(Theme.Color.appText)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(item.roleLabel)
-                        .font(.system(size: 13))
+                        .scaledFont(13)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 Spacer(minLength: Spacing.s0)
             }
             Text(item.dateLabel)
-                .pantopusTextStyle(.caption)
+                .scaledFont(12)
                 .foregroundStyle(Theme.Color.appTextMuted)
             if isBusy {
                 HStack {
@@ -381,7 +386,10 @@ struct HomeClaimResidencyCard: View {
                 }
                 .frame(height: 40)
             } else {
-                HStack(spacing: Spacing.s2) {
+                let layout = dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(spacing: Spacing.s2))
+                    : AnyLayout(HStackLayout(spacing: Spacing.s2))
+                layout {
                     HomeClaimActionButton(
                         title: "Approve",
                         icon: .check,
