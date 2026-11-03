@@ -227,7 +227,8 @@ extension AuthManager {
     }
 
     /// Bookkeeping after the server confirmed the session: marker, hint
-    /// freshness, device registration on app update, telemetry.
+    /// freshness, device registration (on app update, or with a push token
+    /// waiting), telemetry.
     private func afterSuccessfulRestore(user: UserDTO, reinstall: Bool) {
         setSessionEndReason(nil)
         installMarker.commit(installId: pendingInstallId ?? installMarker.installIdForDescriptor(store: store), store: store)
@@ -237,7 +238,10 @@ extension AuthManager {
             "session_restore_ok",
             properties: ["path": reinstall ? "L2" : "L1", "reinstall": reinstall ? "1" : "0"]
         )
-        scheduleDeviceRegistration(enrolStepUpKey: false, onlyIfAppUpdated: !reinstall)
+        // APNs usually hands over the token while the restore is still running,
+        // and `pushTokenDidChange` only holds it then. Send it on every launch,
+        // so a token the server lost comes back without signing in again.
+        scheduleDeviceRegistration(enrolStepUpKey: false, onlyIfAppUpdated: !reinstall && pendingPushToken == nil)
     }
 
     /// Enter `.resumable` with the best hint we have for the stored user —
