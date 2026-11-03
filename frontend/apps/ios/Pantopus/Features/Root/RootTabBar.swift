@@ -11,7 +11,9 @@
 //
 //  It looks like the system bar it stands in for (founder, 2026-10-30): on
 //  iOS 26 and later the floating Liquid Glass capsule, with the selected tab
-//  on a pill that slides to the tab tapped; before iOS 26 the flat bar.
+//  on a pill that slides to the tab tapped; before iOS 26 the flat bar. Where
+//  the system puts its bars along the side (an iPhone Duo's strip, iOS 27.1),
+//  it is the system side bar's column of icons.
 //  Scrolling down a page slides it away, so there's more room to read, and
 //  scrolling up brings it back (`RootTabBarScrollWatcher`).
 //
@@ -24,9 +26,13 @@ struct RootTabReselection: Equatable {
     let id = UUID()
 }
 
-/// The room the bar takes at the bottom of the screen, which the tabs'
+/// The room the bar takes at the bottom or side of the screen, which the tabs'
 /// screens keep clear (`RootTabContainer`).
 struct RootTabBarSpace: Equatable {
+    /// Side bars share the system's reserved strip, measured from the
+    /// display edge like the floating bottom bar. UIKit uses physical edges.
+    var fromLeftEdge: CGFloat = 0
+    var fromRightEdge: CGFloat = 0
     /// Height above the bottom safe area (the flat bar).
     var aboveSafeArea: CGFloat = 0
     /// Height from the screen's bottom edge (the floating bar, which reaches
@@ -50,6 +56,11 @@ struct RootTabBar: View {
     /// iPhone SE.
     static let capsuleHeight: CGFloat = 62
     static let edgeInset: CGFloat = 21
+    /// The column along the screen's side (an iPhone Duo's strip), and its
+    /// distance from that side and the bottom: the system side bar's,
+    /// measured on the closed iPhone Duo.
+    static let columnWidth: CGFloat = 48
+    static let columnEdgeInset: CGFloat = 24
     /// How far the bar slides down when it steps aside: past the screen's edge.
     static let awayDistance: CGFloat = 120
 
@@ -58,6 +69,13 @@ struct RootTabBar: View {
         isFloating
             ? RootTabBarSpace(fromBottomEdge: capsuleHeight + edgeInset)
             : RootTabBarSpace(aboveSafeArea: height)
+    }
+
+    static func space(verticalEdge: HorizontalEdge?, layoutDirection: LayoutDirection) -> RootTabBarSpace {
+        guard let verticalEdge else { return space }
+        let onLeft = (verticalEdge == .leading) == (layoutDirection == .leftToRight)
+        let width = columnWidth + columnEdgeInset
+        return RootTabBarSpace(fromLeftEdge: onLeft ? width : 0, fromRightEdge: onLeft ? 0 : width)
     }
 
     /// The floating glass bar: iOS 26 and later, in an app built with their SDK.
@@ -71,6 +89,7 @@ struct RootTabBar: View {
     let tabs: [RootTab]
     let selected: RootTab
     let badges: [RootTab: Int]
+    var verticalEdge: HorizontalEdge?
     let onSelect: @MainActor (RootTab) -> Void
 
     @Environment(RootTabModel.self) private var rootTabs: RootTabModel?
@@ -96,14 +115,23 @@ struct RootTabBar: View {
     /// Scrolled out of the way; never while VoiceOver or Switch Control is
     /// on, where the bar is how people move between tabs.
     private var isAway: Bool {
-        (rootTabs?.barScrolledAway ?? false) && !voiceOverEnabled && !switchControlEnabled
+        verticalEdge == nil && (rootTabs?.barScrolledAway ?? false) && !voiceOverEnabled && !switchControlEnabled
     }
 
     @ViewBuilder
     private var bar: some View {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
-            floatingBar
+            if let verticalEdge {
+                // Measured from the screen's side and bottom, as the system side bar is.
+                RootTabFloatingColumn(tabs: tabs, selected: selected, badges: badges, onSelect: onSelect)
+                    .frame(width: Self.columnWidth)
+                    .padding(.vertical, Self.columnEdgeInset)
+                    .padding(verticalEdge == .leading ? .leading : .trailing, Self.columnEdgeInset)
+                    .ignoresSafeArea(edges: Edge.Set(verticalEdge == .leading ? .leading : .trailing).union(.bottom))
+            } else {
+                floatingBar
+            }
         } else {
             flatBar
         }
@@ -149,6 +177,89 @@ struct RootTabBar: View {
         }
     }
 }
+
+/// Read the system's preferred bar edge, including a Duo app beside another
+/// app. The content keeps its identity when that edge changes on a fold or turn.
+struct RootTabBarPlacementReader<Content: View>: View {
+    @ViewBuilder let content: (HorizontalEdge?) -> Content
+
+    var body: some View {
+        #if compiler(>=6.4)
+        if #available(iOS 27.1, *) {
+            RootTabBarVerticalPlacement(content: content)
+        } else {
+            content(nil)
+        }
+        #else
+        content(nil)
+        #endif
+    }
+}
+
+#if compiler(>=6.4)
+@available(iOS 27.1, *)
+private struct RootTabBarVerticalPlacement<Content: View>: View {
+    @Environment(\.toolbarVerticalEdge) private var verticalEdge
+    @ViewBuilder let content: (HorizontalEdge?) -> Content
+
+    var body: some View {
+        content(verticalEdge)
+    }
+}
+#endif
+
+#if compiler(>=6.2)
+/// The same glass capsule, icons, badges and selection treatment arranged
+/// along the system's vertical edge, as the system side bar shows them: icons
+/// only (each name is VoiceOver's and the large content viewer's), a tab every
+/// 50 points, the selected one on a 42 x 52 pill. Its height fits the
+/// available safe area.
+@available(iOS 26.0, *)
+private struct RootTabFloatingColumn: View {
+    static let rowHeight: CGFloat = 50
+    /// The first and last tabs' distance from the capsule's ends.
+    static let endInset: CGFloat = 5
+    /// The selected pill's distance from the capsule's sides.
+    static let pillInset: CGFloat = 3
+
+    let tabs: [RootTab]
+    let selected: RootTab
+    let badges: [RootTab: Int]
+    let onSelect: @MainActor (RootTab) -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        GeometryReader { proxy in
+            let inset = Self.endInset
+            let height = min(proxy.size.height, Self.rowHeight * CGFloat(tabs.count) + 2 * inset)
+            let rowHeight = max(0, (height - 2 * inset) / CGFloat(max(tabs.count, 1)))
+            ZStack(alignment: .top) {
+                if let index = tabs.firstIndex(of: selected) {
+                    Capsule()
+                        .fill(Theme.Color.appText.opacity(0.08))
+                        .frame(height: rowHeight + 2)
+                        .padding(.horizontal, Self.pillInset)
+                        .offset(y: inset - 1 + CGFloat(index) * rowHeight)
+                        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.78), value: index)
+                }
+                VStack(spacing: Spacing.s0) {
+                    ForEach(tabs, id: \.self) { tab in
+                        RootTabBarItem(tab: tab, isSelected: tab == selected, badge: badges[tab] ?? 0, style: .side) {
+                            onSelect(tab)
+                        }
+                        .frame(height: rowHeight)
+                    }
+                }
+                .padding(.vertical, inset)
+            }
+            .frame(height: height)
+            .glassEffect(.regular.interactive(), in: Capsule())
+            .frame(maxHeight: .infinity, alignment: .bottom)
+        }
+    }
+}
+#endif
 
 /// Where the floating bar's tabs sit across its `width`, as on the system
 /// bar: the first and last tabs' pills reach the capsule's ends (`inset` in)
@@ -233,6 +344,8 @@ private struct RootTabBarItem: View {
         /// one in the tint; the icon and name sit `offset` from the middle
         /// of the stretch the tab answers to.
         case floating(offset: CGFloat)
+        /// The floating bar's filled icon alone, along the screen's side.
+        case side
     }
 
     let tab: RootTab
@@ -250,6 +363,9 @@ private struct RootTabBarItem: View {
                 case let .floating(offset):
                     floatingLabel
                         .offset(x: offset)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .side:
+                    floatingIcon
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
@@ -287,14 +403,7 @@ private struct RootTabBarItem: View {
         // Icon and name on the system bar's lines (the extra point at the top
         // lowers them half a point in the capsule).
         VStack(spacing: 3.5) {
-            Icon(tab.icon, size: 23, color: floatingTint)
-                .symbolVariant(.fill)
-                .overlay(alignment: .topLeading) {
-                    if badge > 0 {
-                        RootTabBadge(count: badge, ring: false)
-                            .offset(x: 15, y: -5)
-                    }
-                }
+            floatingIcon
             Text(tab.label)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(floatingTint)
@@ -302,6 +411,17 @@ private struct RootTabBarItem: View {
                 .minimumScaleFactor(0.8)
         }
         .padding(.top, 1)
+    }
+
+    private var floatingIcon: some View {
+        Icon(tab.icon, size: 23, color: floatingTint)
+            .symbolVariant(.fill)
+            .overlay(alignment: .topLeading) {
+                if badge > 0 {
+                    RootTabBadge(count: badge, ring: false)
+                        .offset(x: 15, y: -5)
+                }
+            }
     }
 
     private var flatTint: Color {

@@ -36,13 +36,14 @@ public struct PulsePostDetailView: View {
     public init(
         postId: String,
         currentUserId: String? = nil,
+        viewModel: PulsePostDetailViewModel? = nil,
         onBack: @escaping @MainActor () -> Void,
         onOpenProfile: @escaping @MainActor (String) -> Void = { _ in },
         onEdit: @escaping @MainActor (String) -> Void = { _ in },
         onOpenBusiness: @escaping @MainActor (String) -> Void = { _ in },
         onContentLoaded: @escaping @MainActor () -> Void = {}
     ) {
-        _viewModel = State(initialValue: PulsePostDetailViewModel(
+        _viewModel = State(initialValue: viewModel ?? PulsePostDetailViewModel(
             postId: postId,
             currentUserId: currentUserId
         ))

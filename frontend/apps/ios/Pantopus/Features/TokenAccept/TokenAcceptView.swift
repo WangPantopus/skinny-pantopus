@@ -12,6 +12,7 @@
 import SwiftUI
 
 public struct TokenAcceptView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: TokenAcceptViewModel
     @State private var visible = false
@@ -46,21 +47,27 @@ public struct TokenAcceptView: View {
     }
 
     private var topBar: some View {
-        HStack {
-            // Capped like the fixed-size title beside it, so the bar keeps its shape at the largest text sizes.
-            Button("Close") { viewModel.close() }.frame(minWidth: 44, minHeight: 44)
-                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.s2))
+            : AnyLayout(HStackLayout())
+        return layout {
+            Button("Close") { viewModel.close() }
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(minWidth: 44, minHeight: 44)
                 .accessibilityIdentifier("tokenAcceptClose")
-            Spacer()
+            if !dynamicTypeSize.isAccessibilitySize { Spacer() }
             Text("Invitation")
-                .font(.system(size: 16, weight: .semibold))
+                .scaledFont(16, weight: .semibold)
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityAddTraits(.isHeader)
-            Spacer()
-            Color.clear.frame(width: 36, height: 36)
+            if !dynamicTypeSize.isAccessibilitySize {
+                Spacer()
+                Color.clear.frame(width: 36, height: 36)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Spacing.s3)
-        .frame(height: 52)
+        .frame(minHeight: 52)
         .background(Theme.Color.appSurface)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.Color.appBorder).frame(height: 1)

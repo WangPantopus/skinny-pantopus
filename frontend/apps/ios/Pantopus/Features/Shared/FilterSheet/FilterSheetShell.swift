@@ -4,7 +4,7 @@
 //
 //  Shared bottom-sheet scaffold for filter / sort surfaces. The host
 //  wraps this view in `.sheet(isPresented:)` and supplies
-//  `.presentationDetents([.medium])` (or accepts the default applied
+//  `.presentationDetents([.medium, .large])` (or accepts the default applied
 //  here). The shell owns the working copy of the selection so Reset
 //  doesn't leak back to the host until Apply is tapped, and tap-outside
 //  dismisses without firing the apply callback.
@@ -34,6 +34,7 @@ public struct FilterSheetShell: View {
 
     @State private var working: [FilterSection]
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// - Parameters:
     ///   - title: Sheet header label — typically `"Filters"` or `"Sort"`.
@@ -86,7 +87,7 @@ public struct FilterSheetShell: View {
             footer
         }
         .background(Theme.Color.appSurface)
-        .presentationDetents([.medium])
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
         .presentationDragIndicator(.visible)
         .pantopusAnimation(.componentState, value: working)
         .accessibilityIdentifier("filterSheet")
@@ -97,7 +98,7 @@ public struct FilterSheetShell: View {
     private var header: some View {
         HStack {
             Text(title)
-                .font(.system(size: 18, weight: .semibold))
+                .scaledFont(18, weight: .semibold)
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("filterSheetTitle")
@@ -115,7 +116,7 @@ public struct FilterSheetShell: View {
         }
         .padding(.leading, Spacing.s4)
         .padding(.trailing, Spacing.s2)
-        .frame(height: 56)
+        .frame(minHeight: 56)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
         }
@@ -123,7 +124,10 @@ public struct FilterSheetShell: View {
 
     private var footer: some View {
         VStack(spacing: Spacing.s2) {
-            HStack(spacing: Spacing.s3) {
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(spacing: Spacing.s3))
+                : AnyLayout(HStackLayout(spacing: Spacing.s3))
+            layout {
                 GhostButton(title: resetLabel) {
                     await reset()
                 }
