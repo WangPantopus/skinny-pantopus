@@ -76,10 +76,9 @@ struct LoginView: View {
                         RememberedAccountCard(hint: remembered) {
                             showRemoveConfirmation = true
                         }
-                        .confirmationDialog(
+                        .alert(
                             "Remove this account from this device?",
-                            isPresented: $showRemoveConfirmation,
-                            titleVisibility: .visible
+                            isPresented: $showRemoveConfirmation
                         ) {
                             Button("Remove account", role: .destructive) {
                                 Task {
