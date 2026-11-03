@@ -7,7 +7,6 @@ import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import type {
   AddressCheckResult,
-  AttomPropertyDetailPayload,
   NormalizedAddress as VerifiedNormalizedAddress,
   ValidateAddressResponse,
 } from '@pantopus/api';
@@ -158,7 +157,6 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
   const [description, setDescription] = useState('');
   const [amenities, setAmenities] = useState<Record<string, boolean>>({});
   const [propertySuggestionNote, setPropertySuggestionNote] = useState('');
-  const [attomPropertyDetail, setAttomPropertyDetail] = useState<AttomPropertyDetailPayload | null>(null);
 
   // Step 3 — Your Setup
   const [isOwner, setIsOwner] = useState(true);
@@ -238,7 +236,6 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     setExistingHomeId(null);
     setIsClaimingExistingHome(false);
     setAddressStepUpRequirement(null);
-    setAttomPropertyDetail(null);
     setLotSqft('');
   };
 
@@ -324,7 +321,6 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
       lot_sq_ft: parsedLotSqft,
       year_built: parsedYearBuilt,
       description: description.trim() || undefined,
-      attom_property_detail: attomPropertyDetail || undefined,
       amenities: Object.fromEntries(Object.entries(amenities).filter(([, v]) => v)),
       is_owner: isOwner,
       role: isOwner ? 'owner' : 'renter',
@@ -448,7 +444,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     setBathrooms(input.bathrooms?.toString() || ''); setSqft(input.sq_ft?.toString() || '');
     setLotSqft(input.lot_sq_ft?.toString() || ''); setYearBuilt(input.year_built?.toString() || '');
     setDescription(input.description || ''); setAmenities(input.amenities || {});
-    setAttomPropertyDetail(input.attom_property_detail || null); setIsOwner(input.role === 'owner');
+    setIsOwner(input.role === 'owner');
     setMoveInDate(input.move_in_date || ''); setWifiName(input.wifi_name || ''); setWifiPassword(input.wifi_password || '');
     setShowWifiPassword(false); setEntryInstructions(input.entry_instructions || ''); setParkingInstructions(input.parking_instructions || '');
     setError(''); setFieldErrors({}); setStep(1);
@@ -995,7 +991,6 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                         });
                         if (!ok.current()) return;
                         const s = res?.suggestions;
-                        setAttomPropertyDetail(res?.attom_property_detail ?? null);
                         if (s?.home_type) {
                           setHomeType(s.home_type as NonNullable<Parameters<typeof api.homes.createHome>[0]['home_type']>);
                         }

@@ -73,11 +73,6 @@ export interface PropertySuggestionsResponse {
   /** Includes 'attom' when a county record was found for the address. */
   tiers_used: string[];
   llm_enabled: boolean;
-  /**
-   * No longer sent: the county record stays on the server, and only the new
-   * Home's verified owners see it (getHomePropertyDetail).
-   */
-  attom_property_detail?: AttomPropertyDetailPayload | null;
 }
 
 /** One label / value row of a county record, worded and formatted by the server. */
@@ -195,8 +190,6 @@ export async function createHome(data: {
   amenities?: Record<string, boolean>;
   wifi_name?: string;
   wifi_password?: string;
-  /** Ignored: the Home stores the server's own county record for its address. */
-  attom_property_detail?: AttomPropertyDetailPayload | null;
 }): Promise<{ home: Home; message: string; requires_verification?: boolean }> {
   return post<{ home: Home; message: string; requires_verification?: boolean }>('/api/homes', data);
 }
