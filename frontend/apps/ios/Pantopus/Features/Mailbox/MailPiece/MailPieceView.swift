@@ -286,34 +286,23 @@ private struct BookletPiece: View {
     var compact = false
 
     var body: some View {
-        Group {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: Radii.xs, style: .continuous)
+                .fill(MailPaper.bookletPageUnder)
+                .padding(.leading, 6)
+                .padding(.top, 6)
+            RoundedRectangle(cornerRadius: Radii.xs, style: .continuous)
+                .fill(MailPaper.bookletPage)
+                .padding(3)
             if compact {
                 compactCover
                     .padding(.trailing, 6)
                     .padding(.bottom, 6)
-                    .background {
-                        RoundedRectangle(cornerRadius: Radii.xs, style: .continuous)
-                            .fill(MailPaper.bookletPageUnder)
-                            .padding(.leading, 6)
-                            .padding(.top, 6)
-                        RoundedRectangle(cornerRadius: Radii.xs, style: .continuous)
-                            .fill(MailPaper.bookletPage)
-                            .padding(3)
-                    }
             } else {
                 GeometryReader { geo in
-                    ZStack(alignment: .topLeading) {
-                        RoundedRectangle(cornerRadius: Radii.xs, style: .continuous)
-                            .fill(MailPaper.bookletPageUnder)
-                            .padding(.leading, 6)
-                            .padding(.top, 6)
-                        RoundedRectangle(cornerRadius: Radii.xs, style: .continuous)
-                            .fill(MailPaper.bookletPage)
-                            .padding(3)
-                        cover(width: geo.size.width - 6)
-                            .padding(.trailing, 6)
-                            .padding(.bottom, 6)
-                    }
+                    cover(width: geo.size.width - 6)
+                        .padding(.trailing, 6)
+                        .padding(.bottom, 6)
                 }
                 .frame(height: 172)
             }
