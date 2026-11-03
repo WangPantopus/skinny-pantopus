@@ -38,6 +38,9 @@ struct LoginView: View {
     /// (Create account from a friend's link, Forgot password, Terms) keeps
     /// just its own close or back.
     var onClose: (() -> Void)?
+    /// The address preview's Continue opens Create account first, with Log in under it. Its X closes back
+    /// to the preview until Log in has shown; after that it goes back to Log in, as on Android.
+    @State private var signUpIsFirst: Bool
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -48,14 +51,14 @@ struct LoginView: View {
                         .padding(.bottom, Spacing.s10)
 
                     VStack(spacing: Spacing.s2) {
-                        Text("Welcome back", style: .overline)
+                        Text(headerOverline, style: .overline)
                             .foregroundStyle(Theme.Color.primaryInk)
                             .tracking(1.2)
-                        Text("Log in to Pantopus")
+                        Text(headerTitle)
                             .pantopusTextStyle(.h2)
                             .foregroundStyle(Theme.Color.appText)
                             .accessibilityAddTraits(.isHeader)
-                        Text("Pick up where you left off on your block.")
+                        Text(headerSubtitle)
                             .pantopusTextStyle(.small)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                             .multilineTextAlignment(.center)
@@ -304,10 +307,10 @@ struct LoginView: View {
                         VerifyEmailLandingView(
                             email: email,
                             token: token,
-                            // No session after verification (backend revokes it),
-                            // so Continue drops back to login to sign in, from the
-                            // address that was just confirmed.
-                            onContinue: { continueToLogin(confirmedEmail: email) },
+                            // No session after verification (backend revokes it).
+                            // The phone that signed up signs in with the password it
+                            // was given; otherwise back to login from that address.
+                            onContinue: { continueAfterConfirmation(email: email) },
                             onUseDifferentEmail: { path = [.signUp(inviteCode: nil)] }
                         )
                     case let .error(authError):
@@ -324,6 +327,7 @@ struct LoginView: View {
                 consumeAuthDeepLinkIfNeeded()
             }
             .onChange(of: deepLink.pending) { _, _ in consumeAuthDeepLinkIfNeeded() }
+            .onChange(of: path) { _, newPath in if newPath.isEmpty { signUpIsFirst = false } }
         }
     }
 
@@ -394,8 +398,9 @@ private extension LoginView {
     func signUpScreen(inviteCode: String?) -> some View {
         SignUpView(
             inviteCode: inviteCode,
-            onClose: { if !path.isEmpty { path.removeLast() } },
+            onClose: closeSignUp,
             onOpenLegal: { document in path.append(.legal(document)) },
+            onLogIn: { path = [] },
             onSuccess: { email in
                 // Backend hard-gates login on email_confirmed_at
                 // today (see docs/mobile/auth-backend-contracts.md
@@ -408,9 +413,47 @@ private extension LoginView {
         )
         .id(inviteCode)
     }
+
+    /// Right after confirming an email this is someone new, not a return: the header says so.
+    var headerOverline: String {
+        viewModel.arrivedConfirmed ? "Email confirmed" : "Welcome back"
+    }
+
+    var headerTitle: String {
+        viewModel.arrivedConfirmed ? "Log in to finish" : "Log in to Pantopus"
+    }
+
+    var headerSubtitle: String {
+        viewModel.arrivedConfirmed ? "Use the password you chose when you signed up." : "Pick up where you left off on your block."
+    }
+
+    /// After the email link: signed in when this phone just signed up with that address.
+    func continueAfterConfirmation(email: String?) {
+        Task {
+            if await auth.signInAfterConfirmation(email: email) != .signedIn {
+                continueToLogin(confirmedEmail: email)
+            }
+        }
+    }
+
+    /// Create account opened by the address preview's Continue closes back to
+    /// the preview, like Log in's own X; reached from Log in, it goes back there.
+    func closeSignUp() {
+        if signUpIsFirst, path.count == 1, let onClose {
+            onClose()
+        } else if !path.isEmpty {
+            path.removeLast()
+        }
+    }
 }
 
 extension LoginView {
+    init(startsOnSignUp: Bool = false, onClose: (() -> Void)? = nil) {
+        _signUpIsFirst = State(initialValue: startsOnSignUp)
+        self.onClose = onClose
+        _path = State(initialValue: startsOnSignUp ? [.signUp(inviteCode: nil)] : [])
+    }
+
     /// A shared link opened before signing in waits in `PendingDeepLinkStore`
     /// and opens once the person is in. Say what it is, so someone new who
     /// tapped a neighbor's plan doesn't meet a bare "Welcome back".
@@ -845,8 +888,12 @@ final class LoginViewModel {
         !isLoading && AuthValidation.email(email) == nil && password.count >= 6
     }
 
+    /// True once a confirmed email led here: the header says so instead of "Welcome back".
+    private(set) var arrivedConfirmed = false
+
     /// The address a person just confirmed: sign-in starts from it.
     func prefill(confirmedEmail: String?) {
+        arrivedConfirmed = true
         guard let confirmedEmail, !confirmedEmail.isEmpty else { return }
         email = confirmedEmail
     }

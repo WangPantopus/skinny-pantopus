@@ -46,6 +46,8 @@ class VerifyEmailViewModel
             val didComplete: Boolean = false,
             val errorMessage: AuthError? = null,
             val resendCooldownUntilEpochMs: Long? = null,
+            /** "Already confirmed? Log in" found the email not confirmed yet. */
+            val notConfirmedYet: Boolean = false,
         ) {
             /**
              * True when the resend CTA is tappable (no in-flight call AND no
@@ -76,6 +78,35 @@ class VerifyEmailViewModel
         val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
         fun clearError() = _uiState.update { it.copy(errorMessage = null) }
+
+        private var signingIn = false
+
+        /**
+         * Signs in with the password typed at sign-up once the email is
+         * confirmed. [asked] (the "Already confirmed?" tap) says "not confirmed
+         * yet" when it isn't, and hands [onUnavailable] the email when this
+         * phone can't sign in by itself; a return to the app stays quiet.
+         */
+        fun signInIfConfirmed(
+            asked: Boolean = false,
+            onUnavailable: (String?) -> Unit = {},
+        ) {
+            if (signingIn) return
+            signingIn = true
+            viewModelScope.launch {
+                try {
+                    val email = _uiState.value.email
+                    when (authRepository.signInAfterConfirmation(email)) {
+                        AuthRepository.ConfirmedSignIn.SignedIn -> Unit
+                        AuthRepository.ConfirmedSignIn.NotConfirmedYet ->
+                            if (asked) _uiState.update { it.copy(notConfirmedYet = true) }
+                        AuthRepository.ConfirmedSignIn.Unavailable -> if (asked) onUnavailable(email)
+                    }
+                } finally {
+                    signingIn = false
+                }
+            }
+        }
 
         /**
          * Fired once from the screen's `LaunchedEffect`. If a token was

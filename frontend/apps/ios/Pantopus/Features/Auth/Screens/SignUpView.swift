@@ -28,6 +28,8 @@ struct SignUpView: View {
     /// **not** toggle the acceptance checkbox — mirrors RN
     /// (`src/app/(auth)/register.tsx:303-341`).
     var onOpenLegal: (LegalDocument) -> Void = { _ in }
+    /// "Already have an account? Log in" — back to Log in.
+    var onLogIn: (() -> Void)?
     /// Invoked when signUp returns 201, with the email that was registered
     /// so the host can push `AuthRoute.verifyEmail(email:)` onto the auth
     /// stack and the verify-email surface can render + resend correctly.
@@ -69,6 +71,22 @@ struct SignUpView: View {
 
             AuthOAuthTermsLine(identifier: "signUpLegalTermsLine", onOpenLegal: onOpenLegal)
                 .padding(.horizontal, Spacing.s4)
+
+            if let onLogIn {
+                HStack(spacing: Spacing.s1) {
+                    Text("Already have an account?")
+                        .pantopusTextStyle(.small)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                    Button(action: onLogIn) {
+                        Text("Log in")
+                            .pantopusTextStyle(.small)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Theme.Color.primaryInk)
+                    }
+                    .accessibilityIdentifier("signUpLogInLink")
+                }
+                .frame(maxWidth: .infinity)
+            }
 
             // First and last name are required (middle is optional), as on web:
             // they are how the household, neighbors and helpers know the person.

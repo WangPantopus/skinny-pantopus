@@ -192,24 +192,7 @@ fun LoginScreen(
         BrandLockup()
         Box(modifier = Modifier.height(40.dp))
 
-        Text(
-            text = "WELCOME BACK",
-            style = PantopusTextStyle.overline,
-            color = PantopusColors.primary600,
-        )
-        Box(modifier = Modifier.height(Spacing.s1))
-        Text(
-            text = "Log in to Pantopus",
-            style = PantopusTextStyle.h2,
-            color = PantopusColors.appText,
-            modifier = Modifier.semantics { heading() },
-        )
-        Box(modifier = Modifier.height(Spacing.s1))
-        Text(
-            text = "Pick up where you left off on your block.",
-            style = PantopusTextStyle.small,
-            color = PantopusColors.appTextSecondary,
-        )
+        LoginHeader(arrivedConfirmed = state.arrivedConfirmed)
 
         Box(modifier = Modifier.height(Spacing.s5))
 
@@ -665,6 +648,34 @@ private fun BrandLockup() {
             color = PantopusColors.appTextSecondary,
         )
     }
+}
+
+/** Right after confirming an email, this is someone new, not a return: the header says so. */
+@Composable
+private fun LoginHeader(arrivedConfirmed: Boolean) {
+    Text(
+        text = if (arrivedConfirmed) "EMAIL CONFIRMED" else "WELCOME BACK",
+        style = PantopusTextStyle.overline,
+        color = PantopusColors.primary600,
+    )
+    Box(modifier = Modifier.height(Spacing.s1))
+    Text(
+        text = if (arrivedConfirmed) "Log in to finish" else "Log in to Pantopus",
+        style = PantopusTextStyle.h2,
+        color = PantopusColors.appText,
+        modifier = Modifier.semantics { heading() },
+    )
+    Box(modifier = Modifier.height(Spacing.s1))
+    Text(
+        text =
+            if (arrivedConfirmed) {
+                "Use the password you chose when you signed up."
+            } else {
+                "Pick up where you left off on your block."
+            },
+        style = PantopusTextStyle.small,
+        color = PantopusColors.appTextSecondary,
+    )
 }
 
 @Composable
