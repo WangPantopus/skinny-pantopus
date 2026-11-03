@@ -1,6 +1,7 @@
 package app.pantopus.android.data.api.models.users
 
 import app.pantopus.android.data.api.models.common.JsonValue
+import app.pantopus.android.data.api.models.profile.ProfilePromptDto
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -75,6 +76,8 @@ data class UserProfile(
     val profilePicture: String?,
     val bio: String?,
     val tagline: String?,
+    /** PRF SRV-2: your prompt answers, in saved order. */
+    val prompts: List<ProfilePromptDto>? = null,
     val socialLinks: SocialLinks?,
     val skills: List<String>?,
     @Json(name = "followers_count") val followersCount: Int?,
@@ -144,6 +147,8 @@ data class ProfileUpdateRequest(
     val twitter: String? = null,
     val instagram: String? = null,
     val facebook: String? = null,
+    /** PRF SRV-2: replaces your prompt answers (0–3, in this order); only sent when they changed. */
+    @Json(name = "profile_prompts") val profilePrompts: List<ProfilePromptDto>? = null,
 )
 
 /** Envelope for `PATCH /api/users/profile`. Route: `backend/routes/users.js:1503`. */

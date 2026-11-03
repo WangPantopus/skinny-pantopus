@@ -6,6 +6,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.identity.ProfileChanges
+import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.api.models.posts.PostCommentDto
 import app.pantopus.android.data.api.models.posts.PostCommentRequest
 import app.pantopus.android.data.api.models.posts.PostDetailDto
@@ -23,6 +25,7 @@ import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.feed.pulse.PostStatus
+import app.pantopus.android.ui.screens.profile.ProfilePinCopy
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.PostCommentRow
 import app.pantopus.android.ui.screens.shared.content_detail.bodies.PostReactionCounts
 import app.pantopus.android.ui.screens.shared.content_detail.headers.PostIntent
@@ -41,9 +44,6 @@ import javax.inject.Inject
 
 /** Nav-arg key for the Pulse post ID. */
 const val PULSE_POST_DETAIL_ID_KEY = "postId"
-
-/** Emoji choices surfaced by the heart pill's long-press popover. */
-val pulseReactionEmojis = listOf("👍", "❤️", "🔥", "😂", "💯", "🎉")
 
 /** The comment a reply is being drafted against. */
 data class PulseReplyTarget(
@@ -158,10 +158,6 @@ class PulsePostDetailViewModel
         private val _commentsLoading = MutableStateFlow(false)
         val commentsLoading: StateFlow<Boolean> = _commentsLoading.asStateFlow()
 
-        /** Emoji chosen from the long-press popover (session-local). */
-        private val _selectedReactionEmoji = MutableStateFlow<String?>(null)
-        val selectedReactionEmoji: StateFlow<String?> = _selectedReactionEmoji.asStateFlow()
-
         /** Comment being replied to — drives the composer banner. */
         private val _replyTarget = MutableStateFlow<PulseReplyTarget?>(null)
         val replyTarget: StateFlow<PulseReplyTarget?> = _replyTarget.asStateFlow()
@@ -174,12 +170,52 @@ class PulsePostDetailViewModel
          * True when the signed-in user authored the post on screen. The
          * screen uses this to gate the Edit / Delete overflow actions.
          */
+        /**
+         * Your own post: whether it's pinned to your profile (PRF step 5); null hides the menu item. A plan's post never
+         * shows on a profile, so the server refuses its pin (iOS hides it too).
+         */
+        val profilePinned: Boolean?
+            get() =
+                (_state.value as? PulsePostDetailUiState.Loaded)?.content?.post?.profilePinned?.takeIf {
+                    isOwner && !isPlanPost
+                }
+
+        /** "Pin to profile" / "Unpin from profile"; a 4th pin shows the server's sentence. */
+        fun toggleProfilePin() {
+            val pinned = profilePinned ?: return
+            dismissOverflowMenu()
+            viewModelScope.launch {
+                when (val result = repo.setProfilePin(postId, !pinned)) {
+                    is NetworkResult.Success -> {
+                        _toastMessage.value = if (result.data.profilePinned) ProfilePinCopy.PINNED else ProfilePinCopy.UNPINNED
+                        ProfileChanges.notifyChanged()
+                        postsRefresh.notifyPostsDidChange()
+                        load()
+                    }
+                    is NetworkResult.Failure -> _toastMessage.value = result.error.displayMessage(ProfilePinCopy.FAILED)
+                }
+            }
+        }
+
         val isOwner: Boolean
             get() {
                 val loaded = _state.value as? PulsePostDetailUiState.Loaded ?: return false
                 val signedIn = authRepo.state.value as? AuthRepository.State.SignedIn ?: return false
                 return loaded.content.post.userId == signedIn.user.id
             }
+
+        /**
+         * A plan's own post (Plans marks it `post_metadata.plan`): the author's menu opens the plan, where Change and
+         * Cancel tell everyone, instead of Edit post and Delete post (the server refuses both for a plan's post).
+         */
+        val isPlanPost: Boolean
+            get() = (_state.value as? PulsePostDetailUiState.Loaded)?.content?.post?.isPlanPost == true
+
+        /** Opens this post's plan on the Plans tab (the `/plans/<id>` link path). */
+        fun openPlan() {
+            dismissOverflowMenu()
+            DeepLinkRouter.handle("/plans/$postId")
+        }
 
         private val signedInUserId: String?
             get() = (authRepo.state.value as? AuthRepository.State.SignedIn)?.user?.id
@@ -356,22 +392,18 @@ class PulsePostDetailViewModel
             _replyTarget.value = null
         }
 
-        /**
-         * Tap one of the reaction pills. Only `.Helpful` is wired to a
-         * backend route today; unliking also clears the chosen emoji.
-         */
-        fun tapReaction(kind: PostReactionKind) {
+        /** Tap the post's reaction (Helpful, Going or Celebrate, by its kind): the like toggle, optimistic. */
+        fun tapReaction() {
             val loaded = _state.value as? PulsePostDetailUiState.Loaded ?: return
-            if (!kind.isBackendWired || _likePending.value) return
+            if (_likePending.value) return
             _likePending.value = true
             reactionRevision++
             val initialReactions = loaded.content.reactions
-            val wasOn = initialReactions.userReaction == PostReactionKind.Helpful
-            if (wasOn) _selectedReactionEmoji.value = null
+            val wasOn = initialReactions.isOn
             val optimistic =
                 initialReactions.copy(
-                    helpful = if (wasOn) (initialReactions.helpful - 1).coerceAtLeast(0) else initialReactions.helpful + 1,
-                    userReaction = if (wasOn) null else PostReactionKind.Helpful,
+                    likeCount = if (wasOn) (initialReactions.likeCount - 1).coerceAtLeast(0) else initialReactions.likeCount + 1,
+                    isOn = !wasOn,
                 )
             _state.value = PulsePostDetailUiState.Loaded(loaded.content.copy(reactions = optimistic))
 
@@ -379,11 +411,7 @@ class PulsePostDetailViewModel
                 try {
                     when (val result = repo.toggleLike(postId, liked = !wasOn)) {
                         is NetworkResult.Success -> {
-                            val reconciled =
-                                optimistic.copy(
-                                    helpful = result.data.likeCount,
-                                    userReaction = if (result.data.liked) PostReactionKind.Helpful else null,
-                                )
+                            val reconciled = optimistic.copy(likeCount = result.data.likeCount, isOn = result.data.liked)
                             _state.update { current ->
                                 (current as? PulsePostDetailUiState.Loaded)?.let {
                                     PulsePostDetailUiState.Loaded(it.content.copy(reactions = reconciled))
@@ -408,15 +436,6 @@ class PulsePostDetailViewModel
                     reactionRevision++
                     load()
                 }
-            }
-        }
-
-        /** Choose an emoji from the popover — records a like when needed. */
-        fun pickReactionEmoji(emoji: String) {
-            _selectedReactionEmoji.value = emoji
-            val loaded = _state.value as? PulsePostDetailUiState.Loaded ?: return
-            if (loaded.content.reactions.userReaction != PostReactionKind.Helpful) {
-                tapReaction(PostReactionKind.Helpful)
             }
         }
 
@@ -708,10 +727,9 @@ class PulsePostDetailViewModel
                     ),
                 reactions =
                     PostReactionCounts(
-                        helpful = post.likeCount,
-                        heart = 0,
-                        going = 0,
-                        userReaction = if (post.userHasLiked) PostReactionKind.Helpful else null,
+                        kind = PostReactionKind.fromPostType(post.postType),
+                        likeCount = post.likeCount,
+                        isOn = post.userHasLiked,
                     ),
                 comments = rows,
                 hiddenReplyCount = hidden,

@@ -177,6 +177,8 @@ public final class NeighborsSeeYouViewModel {
         defer { busy = nil }
         do {
             try await apply(change())
+            // Saved at once, so your profile (behind the editor) shows it now, not on its next read.
+            NotificationCenter.default.post(name: .pantopusProfileDidChange, object: nil)
             onToast(ToastMessage(text: success, kind: .success))
         } catch {
             onToast(ToastMessage(text: error.localizedDescription, kind: .error))

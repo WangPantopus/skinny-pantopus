@@ -2,9 +2,11 @@
 //  AddressTodayTabView.swift
 //  Pantopus
 //
-//  The Today tab as its own screen (Wedge v2 D2): weather now, what to do
-//  with it, the address calendar, then air, alerts and sun, for the
-//  person's primary place. The hub briefing (`TodayDetailView`) is still
+//  The Today tab as its own screen (Wedge v2 D2; the November 2026
+//  redesign's order is in `PlaceTodayDetailContent`): any advisory, the sky
+//  and the hours ahead, what's coming up at home, air and daylight, then
+//  setup and the full conditions, for the person's primary place. The hub
+//  briefing (`TodayDetailView`) is still
 //  reachable from a morning-push deep link; this is what the tab shows
 //  on its own. With no place but a claim in review, it is the claimed
 //  address's public Today under the claim's status. Parity twin of
@@ -12,6 +14,8 @@
 //
 
 import SwiftUI
+
+// swiftlint:disable file_length
 
 struct AddressTodayTabView: View {
     let onAddHome: () -> Void
@@ -26,6 +30,8 @@ struct AddressTodayTabView: View {
     @State private var resolveID = UUID()
     /// The account the shown place was resolved for. Another account starts blank.
     @State private var resolvedUserID: String?
+    /// Needs you (AI phase 3): one list for the tab, whichever view shows it.
+    @State private var needsYou = TodayNeedsYouModel()
 
     init(onAddHome: @escaping () -> Void) {
         self.onAddHome = onAddHome
@@ -40,7 +46,15 @@ struct AddressTodayTabView: View {
         .task(id: resolveKey) {
             if rootTabs.selected == .today { await resolveHome() }
         }
-        .refreshesOnStoreChange(onBackground: discardTemporaryPlace) { if rootTabs.selected == .today { await resolveHome() } }
+        // Needs you reads again each time Today shows, beside the place.
+        .task(id: resolveKey) {
+            if rootTabs.selected == .today { await needsYou.load() }
+        }
+        .refreshesOnStoreChange(onBackground: discardTemporaryPlace) {
+            guard rootTabs.selected == .today else { return }
+            await resolveHome()
+            await needsYou.load()
+        }
         .onChange(of: rootTabs.selected) { _, tab in
             if tab != .today { discardTemporaryPlace() }
         }
@@ -87,7 +101,7 @@ struct AddressTodayTabView: View {
                     .kerning(-0.4)
                     .foregroundStyle(Theme.Color.appText)
                 // The date beside the title (the f1-today-tab design); it turns over at midnight.
-                TimelineView(.everyMinute) { minute in
+                TimelineView(.everyClockMinute) { minute in
                     Text(minute.date.formatted(
                         Date.FormatStyle(timeZone: placeTimeZone)
                             .weekday(.abbreviated)
@@ -129,17 +143,20 @@ struct AddressTodayTabView: View {
                 viewModel: detail,
                 savedPlace: savedPlace,
                 claim: claimInReview,
+                needsYou: needsYou,
                 onAddHome: onAddHome,
                 onResolvePlace: resolveHome
             ) { openBallot() }
                 .id(detail.savedPlaceId ?? detail.homeId)
         } else if loadFailed {
             VStack(spacing: 0) {
+                TodayNeedsYouCard(model: needsYou).padding(.horizontal, Spacing.s4)
                 if PlansFlags.shared.plans { PlansTodayCards().padding(.horizontal, Spacing.s4) }
                 couldNotLoad
             }
         } else {
             VStack(spacing: 0) {
+                TodayNeedsYouCard(model: needsYou).padding(.horizontal, Spacing.s4)
                 if PlansFlags.shared.plans { PlansTodayCards().padding(.horizontal, Spacing.s4) }
                 noPlace
             }
@@ -355,14 +372,17 @@ private struct AddressTodayLoaded: View {
     let savedPlace: SavedPlaceDTO?
     /// A claim in review: this is the claimed address's public view, its status on top.
     let claim: OwnershipClaimDTO?
+    let needsYou: TodayNeedsYouModel
     let onAddHome: () -> Void
     let onResolvePlace: () async -> Void
     let onOpenPlace: () -> Void
     @State private var scope = HomeClaimSessionScope(api: .shared)
     @State private var savedAnchorMatches = false
     @State private var sessionChanged = false
-    /// The assistant, opened from the box at the top about this day.
+    /// The assistant, opened from the box at the end about this day.
     @State private var askTopic: AIAskTopic?
+    /// An agenda task opened over Today: Back comes back here.
+    @State private var openedTask: TodayOpenedTask?
 
     var body: some View {
         Group {
@@ -373,58 +393,12 @@ private struct AddressTodayLoaded: View {
                 case .loading:
                     PlaceDetailSkeleton()
                 case let .loaded(intel):
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 0) {
-                            if let claim {
-                                // My homes' words for what the claim waits on; its Waiting Room has the steps.
-                                PlaceVerifyBanner(
-                                    icon: .clock,
-                                    message: "Your claim is in review. \(claim.waitingLabel).",
-                                    action: "Check claim status",
-                                    identifier: "today.claimBanner"
-                                ) { openClaimStatus(claim) }
-                                    .padding(.bottom, 12)
+                    ScrollViewReader { proxy in
+                        loadedScroll(intel)
+                            // Tapping Today again on its page goes back to the top.
+                            .onChange(of: rootTabs.todayReselected) { _, _ in
+                                withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(Self.topAnchor, anchor: .top) }
                             }
-                            // The assistant reads a claimed Home's public view, as this screen shows it.
-                            AskPantopusBox { askTopic = .today(homeId: viewModel.savedPlaceId == nil ? viewModel.homeId : nil) }
-                                .padding(.bottom, 12)
-                            // Nearby Plans on the day (A1, A2): nothing unless the `plans` flag is on.
-                            if PlansFlags.shared.plans { PlansTodayCards() }
-                            if savedAnchorMatches {
-                                StatusChip("Saved place · Only you", variant: .neutral)
-                                    .padding(.bottom, 12)
-                            }
-                            PlaceTodayDetailContent(
-                                intel: intel,
-                                vm: viewModel,
-                                showHomeRadon: savedPlace == nil && claim == nil,
-                                onOpenBallot: onOpenPlace
-                            )
-                            if savedPlace != nil {
-                                remindersRow.padding(.top, 12)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, Spacing.s10)
-                    }
-                    // The home-screen widget shows what Today just showed for this place.
-                    .task(id: WidgetSource(intel: intel, fallback: viewModel.fallbackCalendar)) {
-                        guard scope.isCurrent,
-                              PlaceStoreReads.allowsCopy(homeId: viewModel.homeId, savedPlaceId: viewModel.savedPlaceId) else {
-                            WidgetSnapshotStore.shared.clearToday()
-                            return
-                        }
-                        WidgetSnapshotStore.shared.writeToday(TodayWidgetSnapshot(intel: intel, viewModel: viewModel))
-                    }
-                    .refreshable {
-                        guard scope.isCurrent else { sessionChanged = true
-                            return
-                        }
-                        await viewModel.refresh()
-                        guard scope.isCurrent else { sessionChanged = true
-                            return
-                        }
-                        await loadSavedAnchor()
                     }
                 case let .error(message):
                     if viewModel.accessDenied, let claim {
@@ -439,6 +413,9 @@ private struct AddressTodayLoaded: View {
         }
         .refreshFailureToast($viewModel.refreshFailureMessage)
         .askPantopus($askTopic)
+        .navigationDestination(item: $openedTask) { task in
+            TodayTaskPage(task: task)
+        }
         .task {
             guard scope.isCurrent else { sessionChanged = true
                 return
@@ -453,20 +430,65 @@ private struct AddressTodayLoaded: View {
         }
     }
 
-    private var remindersRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Get reminders for this address")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Theme.Color.appText)
-            Text("Pickup and radon reminders need your home on Pantopus.")
-                .font(.system(size: 14)).foregroundStyle(Theme.Color.appTextSecondary)
-            GhostButton(title: "Add your home") { onAddHome() }
+    private static let topAnchor = "today.top"
+
+    private func loadedScroll(_ intel: PlaceIntelligence) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Color.clear.frame(height: 0).id(Self.topAnchor)
+                if let claim {
+                    // My homes' words for what the claim waits on; its Waiting Room has the steps.
+                    PlaceVerifyBanner(
+                        icon: .clock,
+                        message: "Your claim is in review. \(claim.waitingLabel).",
+                        action: "Check claim status",
+                        identifier: "today.claimBanner"
+                    ) { openClaimStatus(claim) }
+                        .padding(.bottom, 12)
+                }
+                if savedAnchorMatches {
+                    StatusChip("Saved place · Only you", variant: .neutral)
+                        .padding(.bottom, 4)
+                }
+                // Plans cards (with `plans` on), the saved place's reminders row and Ask
+                // Pantopus come with the tab; the assistant reads a claimed Home's public view.
+                PlaceTodayDetailContent(
+                    intel: intel,
+                    vm: viewModel,
+                    showHomeRadon: savedPlace == nil && claim == nil,
+                    onOpenBallot: onOpenPlace,
+                    tab: TodayTabExtras(
+                        savedPlace: savedPlace != nil,
+                        onAddHome: onAddHome,
+                        onAsk: { askTopic = .today(homeId: viewModel.savedPlaceId == nil ? viewModel.homeId : nil) },
+                        onOpenTask: { homeId, taskId in openedTask = TodayOpenedTask(homeId: homeId, taskId: taskId) },
+                        needsYou: needsYou
+                    )
+                )
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, Spacing.s10)
         }
-        .padding(16)
-        .background(Theme.Color.appSurface)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
-        .accessibilityIdentifier("todaySavedPlaceReminders")
+        // The home-screen widget shows what Today just showed for this place.
+        .task(id: WidgetSource(intel: intel, fallback: viewModel.fallbackCalendar)) {
+            guard scope.isCurrent,
+                  PlaceStoreReads.allowsCopy(homeId: viewModel.homeId, savedPlaceId: viewModel.savedPlaceId) else {
+                WidgetSnapshotStore.shared.clearToday()
+                return
+            }
+            WidgetSnapshotStore.shared.writeToday(TodayWidgetSnapshot(intel: intel, viewModel: viewModel))
+        }
+        .refreshable {
+            guard scope.isCurrent else { sessionChanged = true
+                return
+            }
+            await viewModel.refresh()
+            guard scope.isCurrent else { sessionChanged = true
+                return
+            }
+            await needsYou.load()
+            await loadSavedAnchor()
+        }
     }
 
     private func checkSavedAnchor() async throws -> Bool {
@@ -488,6 +510,29 @@ private struct AddressTodayLoaded: View {
         } catch {
             if !scope.isCurrent { sessionChanged = true }
         }
+    }
+}
+
+/// A household task opened from Today's agenda.
+private struct TodayOpenedTask: Hashable {
+    let homeId: String
+    let taskId: String
+}
+
+/// The task's page over Today, as Place shows it, with its editor over it.
+private struct TodayTaskPage: View {
+    let task: TodayOpenedTask
+    @State private var editing = false
+
+    var body: some View {
+        HouseholdTaskDetailView(homeId: task.homeId, taskId: task.taskId) { editing = true }
+            .readableColumn()
+            .navigationDestination(isPresented: $editing) {
+                // The editor draws its own Close and Save, so the stack's bar stays hidden (as in Place).
+                AddHouseholdTaskFormView(homeId: task.homeId, taskId: task.taskId) { editing = false }
+                    .readableColumn()
+                    .toolbar(.hidden, for: .navigationBar)
+            }
     }
 }
 

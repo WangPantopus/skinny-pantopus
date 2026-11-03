@@ -124,9 +124,14 @@ public final class RootTabModel {
     /// Changes each time the Place tab is tapped again while already on its
     /// root, so the root scrolls back to the top.
     public var placeReselectedAtRoot: UUID?
+    /// Changes each time the Today tab is tapped again: its page scrolls back to the top.
+    public var todayReselected: UUID?
     /// "Open your ballot" (Today, or Place's Today page): this Home's Your
     /// Place scrolls to its ballot card once, then clears it (as on Android).
     public var placeBallotHomeId: String?
+    /// "Add radon test information" (Place's risk list): Today opens its
+    /// home setup on this Home's radon question once, then clears it (as on Android).
+    public var todayRadonHomeId: String?
     /// The side menu is open (each tab's menu button sets it; the drawer,
     /// hosted by `RootTabView`, clears it when it closes).
     public var showsNavigationMenu = false
@@ -142,6 +147,9 @@ public final class RootTabModel {
     var barScrolledAway = false
     /// The selected tab tapped again, for the drawn bar's container.
     var reselection: RootTabReselection?
+    /// A screen from your own profile's "Your account" list, asked for where
+    /// the profile was pushed in another tab: the profile cover opens on it.
+    var profileCoverDestination: ProfileOwnerDestination?
     public init() {}
 }
 
@@ -165,11 +173,6 @@ public struct RootTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     /// Nearby Plans' two server flags, read at launch and on foreground.
     @State private var plansFlags = PlansFlags.shared
-    /// The You cover's model, kept across openings (Instant Screens): the
-    /// cover shows its last content at once and refreshes it quietly once
-    /// stale. Replaced for another account.
-    @State private var youModel = MeViewModel()
-    @State private var youModelUserID: String?
     /// The side menu's model, made once (a view model made in `body` can
     /// write observed state while the bar draws: the Xcode 16.4 render loop).
     @State private var drawerModel = NavigationDrawerViewModel(context: .personal(name: ""))
@@ -199,11 +202,6 @@ public struct RootTabView: View {
                 await TabWarmer.warm()
             }
             .task(id: signedInUserID) {
-                // Another account never sees the previous account's You screen.
-                if youModelUserID != signedInUserID {
-                    if youModelUserID != nil { youModel = MeViewModel() }
-                    youModelUserID = signedInUserID
-                }
                 await plansFlags.refresh(account: signedInUserID)
                 // Every invite shares the person's own link; read it before anyone taps one.
                 await PersonalInviteLink.shared.load(account: signedInUserID)
@@ -238,6 +236,11 @@ public struct RootTabView: View {
             .onChange(of: router.pending) { _, pending in
                 consumeInviteDeepLinkIfNeeded(pending: pending)
             }
+            .onChange(of: model.profileCoverDestination) { _, destination in
+                guard let destination else { return }
+                model.profileCoverDestination = nil
+                presentProfile(at: YouTabRoot.route(for: destination))
+            }
             .task {
                 consumeInviteDeepLinkIfNeeded(pending: router.pending)
             }
@@ -245,14 +248,14 @@ public struct RootTabView: View {
                 isPresented: $showProfile,
                 onDismiss: {
                     expandMonthlyReceipt = false
-                    youModel.expandMonthlyReceipt = false
                     profileInitialRoute = nil
                 },
                 content: {
+                    // Your own profile (the 11-01 redesign); it reads through the
+                    // screen store, so it shows its last content at once.
                     YouTabRoot(
                         expandMonthlyReceipt: expandMonthlyReceipt,
-                        initialRoute: profileInitialRoute,
-                        meViewModel: youModel
+                        initialRoute: profileInitialRoute
                     ) {
                         showProfile = false
                     }
@@ -269,6 +272,7 @@ public struct RootTabView: View {
                         onDeclined: { pendingInviteToken = nil }
                     )
                 )
+                .readableColumn()
                 // A newer link while this one is open must load its own token, not keep the first link's state.
                 .id(item.id)
             }
@@ -339,7 +343,7 @@ public struct RootTabView: View {
              .verifyLandlord, .postcardVerification,
              .notifications, .createBusiness, .businessProfile, .businessPage,
              .editBusinessPage,
-             .wallet, .paymentsSettings, .securityDevices, .notificationSettings,
+             .wallet, .paymentsSettings, .securityDevices, .notificationSettings, .assistantMemory, .assistantRules,
              .businessOwner, .businessConversation, .viewAs, .waitingRoom, .neighborMessage,
              .bookingDetail, .myBookings,
              .invoiceDetail:
@@ -355,7 +359,6 @@ public struct RootTabView: View {
             // `monthly_receipt` push — open the profile cover with the
             // receipt card expanded.
             expandMonthlyReceipt = true
-            youModel.expandMonthlyReceipt = true
             showProfile = true
             _ = router.consume()
         case .creatorInbox:
@@ -505,6 +508,7 @@ public struct RootTabView: View {
                 if tab == .place, model.selected == .place, model.placeAtRoot {
                     model.placeReselectedAtRoot = UUID()
                 }
+                if tab == .today, model.selected == .today { model.todayReselected = UUID() }
                 model.selected = tab
             }
         )
@@ -648,6 +652,7 @@ extension RootTabView {
             return
         }
         if tab == .place, model.placeAtRoot { model.placeReselectedAtRoot = UUID() }
+        if tab == .today { model.todayReselected = UUID() }
         model.reselection = RootTabReselection(tab: tab)
     }
 
@@ -707,11 +712,13 @@ public struct TodayTabRoot: View {
                     AddressTodayTabView(onAddHome: onAddHome)
                 }
             }
+            .readableColumn()
             .toolbar(.hidden, for: .navigationBar)
             .swipesBackFromEdge()
             .accessibilityIdentifier("todayTabRoot")
             .navigationDestination(isPresented: $showsNotificationSettings) {
                 NotificationSettingsView { showsNotificationSettings = false }
+                    .readableColumn()
                     .toolbar(.hidden, for: .navigationBar)
             }
         }

@@ -120,6 +120,25 @@ final class EditProfileViewModel {
     /// Bio "Generate with AI" leg state.
     var bioDraftState: EditProfileBioDraftState = .idle
 
+    /// The name and photo neighbors see (`GET`/`PATCH /api/local-profiles/me`).
+    /// Its name field saves with the form's Save; a photo change saves at once,
+    /// as on Privacy before.
+    let neighbors: NeighborsSeeYouViewModel
+    /// "Who sees your city": `public`, `followers` (connections and household,
+    /// the default) or `private` (`show_neighborhood`, `GET`/`PATCH
+    /// /api/privacy/settings`). Nil until read.
+    var cityAudience: String?
+    /// The preview card's trust line, and your account id for its avatar color.
+    var previewFacts = ProfileTrustFacts(isVerifiedNeighbor: false, city: nil, joined: nil)
+    var accountId: String?
+    /// "Get to know" answers as you edit them and as last saved (PRF SRV-2);
+    /// they ride the profile PATCH. Nil while the server doesn't know prompts.
+    var prompts: [ProfilePrompt]?
+    var savedPrompts: [ProfilePrompt]?
+    /// Your pinned posts, for "Pinned posts" (PRF SRV-3). Nil until read, and
+    /// after a failed read or from an older server (the section hides).
+    var pinnedPosts: [FeedPostDTO]?
+
     let api: APIClient
     /// The profile the You screen already read (You: fresh 10 minutes),
     /// so the form fills in the first frame.
@@ -133,6 +152,7 @@ final class EditProfileViewModel {
         store = ScreenStore.store(for: api)
         self.uploader = uploader
         usernameCheck = UsernameAvailabilityChecker(api: api)
+        neighbors = NeighborsSeeYouViewModel(api: api, uploader: uploader)
         for field in EditProfileField.allCases {
             fields[field] = FormFieldState(id: field.rawValue, originalValue: "")
         }
@@ -211,7 +231,7 @@ final class EditProfileViewModel {
     /// Skills ride their own PUT, so they widen the form's dirty state
     /// without appearing in `aggregate`.
     var isDirty: Bool {
-        aggregate.isDirty || isSkillsDirty
+        aggregate.isDirty || isSkillsDirty || neighbors.isNameChanged || isPromptsDirty
     }
 
     /// True when the working skill list differs from the last-saved one.
@@ -223,7 +243,8 @@ final class EditProfileViewModel {
     /// last-saved baseline. Drives the A13.9 sticky "N unsaved" pill.
     /// The skill list counts as one such field.
     var dirtyFieldCount: Int {
-        fields.values.filter(\.isDirty).count + (isSkillsDirty ? 1 : 0)
+        fields.values.filter(\.isDirty).count + (isSkillsDirty ? 1 : 0) + (neighbors.isNameChanged ? 1 : 0)
+            + (isPromptsDirty ? 1 : 0)
     }
 
     /// Revert all unsaved edits to the last-saved baseline.
@@ -237,6 +258,8 @@ final class EditProfileViewModel {
         }
         skills = savedSkills
         skillDraft = ""
+        prompts = savedPrompts
+        if let shown = neighbors.loaded?.profile.displayName { neighbors.editName(shown) }
     }
 
     /// Runs all validators and returns the first failing field id, if any.
@@ -268,9 +291,11 @@ final class EditProfileViewModel {
             Analytics.track(.formEditProfileValidationError(field: invalidField.rawValue))
             return false
         }
-        let fieldsDirty = aggregate.isDirty
+        // Prompts ride the profile PATCH.
+        let fieldsDirty = aggregate.isDirty || isPromptsDirty
         let skillsDirty = isSkillsDirty
-        guard fieldsDirty || skillsDirty else { return false }
+        let nameDirty = neighbors.isNameChanged
+        guard fieldsDirty || skillsDirty || nameDirty else { return false }
         if !NetworkMonitor.shared.isOnline {
             // P15: don't silently queue. Surface the error inline.
             toast = ToastMessage(
@@ -307,6 +332,11 @@ final class EditProfileViewModel {
             } catch {
                 failure = failure ?? (error as? APIError)?.errorDescription ?? "Couldn't save skills."
             }
+        }
+        if nameDirty {
+            // The name neighbors see: its own route, its own checks.
+            await neighbors.saveName()
+            if let error = neighbors.nameError { failure = failure ?? error }
         }
         if let failure {
             toast = ToastMessage(text: failure, kind: .error)
@@ -365,6 +395,9 @@ final class EditProfileViewModel {
         seed(.profileVisibility, profile.profileVisibility ?? "public")
         seed(.showEmail, Self.boolString(profile.showEmail))
         seed(.showPhone, Self.boolString(profile.showPhone))
+        // The PATCH echo carries prompts too, so a save re-baselines them.
+        prompts = profile.prompts
+        savedPrompts = profile.prompts
     }
 
     private func seed(_ field: EditProfileField, _ value: String) {
@@ -378,62 +411,6 @@ final class EditProfileViewModel {
     private func validator(for field: EditProfileField) -> FormValidator {
         Self.validators[field] ?? FormValidator { _ in nil }
     }
-
-    /// Static validator table. Each entry mirrors the corresponding Joi
-    /// rule in `updateProfileSchema` (`backend/routes/users.js:324-351`).
-    private static let validators: [EditProfileField: FormValidator] = [
-        // Checked again by the server; empty keeps the current username.
-        .username: FormValidator { value in
-            let username = UsernameAvailabilityChecker.normalize(value)
-            return username.isEmpty ? nil : AuthValidation.username(username)
-        },
-        // Required name fields — Joi `.string().min(1).max(255)`.
-        .firstName: .all([.required("First name"), .maxLength(255)]),
-        .lastName: .all([.required("Last name"), .maxLength(255)]),
-        // Optional name fields with length bounds.
-        .middleName: .optionalLength("Middle name", min: 1, max: 255),
-        // `.allow('', null)` text fields — only an upper bound applies.
-        .bio: .maxLength(2000),
-        .tagline: .maxLength(255),
-        // E.164 phone (optional). Empty allowed at the validator layer
-        // but skipped from the PATCH body (see fieldAllowsEmpty).
-        .phoneNumber: .e164Phone(),
-        // ISO-8601 date or empty.
-        .dateOfBirth: .isoDateOrEmpty(),
-        // Optional address fields — Joi enforces min/max only when set.
-        .address: .optionalLength("Address", min: 5, max: 255),
-        .city: .optionalLength("City", min: 2, max: 100),
-        .state: .optionalLength("State", min: 2, max: 50),
-        .zipcode: .optionalLength("Zipcode", min: 3, max: 20),
-        // Social links — Joi `urlOrEmpty`.
-        .website: .urlOrEmpty(),
-        .linkedin: .urlOrEmpty(),
-        .twitter: .urlOrEmpty(),
-        .instagram: .urlOrEmpty(),
-        .facebook: .urlOrEmpty(),
-        // Visibility enum — restrict to the three schema values.
-        .profileVisibility: FormValidator { value in
-            ["public", "registered", "private"].contains(value)
-                ? nil
-                : "Pick a visibility option."
-        },
-        // Boolean-backed toggles — the only invalid state is an unseeded
-        // field, which the loader never produces.
-        .showEmail: FormValidator { value in
-            ["true", "false"].contains(value) ? nil : "Pick an option."
-        },
-        .showPhone: FormValidator { value in
-            ["true", "false"].contains(value) ? nil : "Pick an option."
-        }
-    ]
-
-    /// Whether the schema explicitly allows an empty / null payload for
-    /// the given field — see the Joi declarations at
-    /// `backend/routes/users.js:324-351`.
-    private static let allowsEmpty: Set<EditProfileField> = [
-        .middleName, .bio, .tagline, .dateOfBirth,
-        .website, .linkedin, .twitter, .instagram, .facebook
-    ]
 
     // swiftlint:disable cyclomatic_complexity
 
@@ -474,6 +451,7 @@ final class EditProfileViewModel {
             case .showPhone: update.showPhone = trimmed == "true"
             }
         }
+        if isPromptsDirty { update.profilePrompts = prompts ?? [] }
         return update
     }
     // swiftlint:enable cyclomatic_complexity

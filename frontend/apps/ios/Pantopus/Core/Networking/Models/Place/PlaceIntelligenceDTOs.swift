@@ -373,10 +373,31 @@ public struct PlaceWeatherAlert: Decodable, Sendable, Hashable, Identifiable {
     public let headline: String
     /// Body copy / instruction.
     public let description: String
-    /// ISO 8601.
+    /// ISO 8601: when the hazard begins.
     public let onset: String?
-    /// ISO 8601.
+    /// ISO 8601: when the hazard ends.
     public let ends: String?
+    /// When the bulletin was issued, took effect and expires (ISO 8601). Nil from older servers.
+    public var sent: String?
+    public var effective: String?
+    public var expires: String?
+    /// The issuing office ("NWS Portland OR"). Nil from older servers.
+    public var senderName: String?
+    /// The affected areas as the provider writes them. Nil from older servers.
+    public var area: String?
+    /// The provider's full text, not shortened. Nil from older servers.
+    public var originalDescription: String?
+    public var originalInstruction: String?
+    /// The provider's page for the alert, when there is one.
+    public var detailsUrl: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, event, severity, headline, description, onset, ends, sent, effective, expires, area
+        case senderName = "sender_name"
+        case originalDescription = "original_description"
+        case originalInstruction = "original_instruction"
+        case detailsUrl = "details_url"
+    }
 }
 
 /// NWS active alerts — an empty `active` list renders "No active alerts".
@@ -386,15 +407,35 @@ public struct PlaceAlertsData: Decodable, Sendable, Hashable {
 
 /// Sunrise / sunset — rides the NOAA / Open-Meteo feed.
 public struct PlaceSunriseSunsetData: Decodable, Sendable, Hashable {
-    /// ISO 8601.
+    /// The place's wall clock, no zone ("2026-11-01T06:50").
     public let sunrise: String
-    /// ISO 8601.
+    /// The place's wall clock, no zone.
     public let sunset: String
     public let daylightMinutes: Int
+    /// The place's date the times belong to ("2026-11-01"). Nil from older servers.
+    public var date: String?
+    /// The same moments as instants ("2026-11-01T14:50:00Z"). Nil from older servers.
+    public var sunriseUtc: String?
+    public var sunsetUtc: String?
+    /// The place's IANA zone. Nil from older servers.
+    public var timeZone: String?
+
+    /// The instant when the server sends one (it reads right on the place's
+    /// clock wherever the phone is), else the wall-clock string as written.
+    public var sunriseClock: String {
+        sunriseUtc ?? sunrise
+    }
+
+    public var sunsetClock: String {
+        sunsetUtc ?? sunset
+    }
 
     private enum CodingKeys: String, CodingKey {
-        case sunrise, sunset
+        case sunrise, sunset, date
         case daylightMinutes = "daylight_minutes"
+        case sunriseUtc = "sunrise_utc"
+        case sunsetUtc = "sunset_utc"
+        case timeZone = "time_zone"
     }
 }
 
@@ -1252,6 +1293,14 @@ public struct PlaceCalendarEvent: Decodable, Sendable, Hashable, Identifiable {
     public var movedFrom: String?
     public var holiday: String?
     public var shiftDays: Int?
+    /// "household" for the household's own schedule, "address" for a general
+    /// date at the address. Nil from older servers (then `scope` says it).
+    public var audience: String?
+
+    /// The household's own date rather than a general one for the address.
+    public var isHousehold: Bool {
+        audience.map { $0 == "household" } ?? (scope == "home")
+    }
 
     public var holidayMoveLine: String? {
         guard movedFrom != nil, let holiday, !holiday.isEmpty, let shiftDays, shiftDays > 0 else { return nil }
@@ -1270,7 +1319,7 @@ public struct PlaceCalendarEvent: Decodable, Sendable, Hashable, Identifiable {
         case leadDays = "lead_days"
         case sourceUrl = "source_url"
         case movedFrom = "moved_from"
-        case holiday
+        case holiday, audience
         case shiftDays = "shift_days"
     }
 }
@@ -1430,6 +1479,9 @@ public struct PlaceHomeSystem: Decodable, Sendable, Hashable {
     public let confidence: String
     public let sourceRef: String?
     public let note: String
+    /// The newest completed maintenance-log entry for this system, for viewers
+    /// who can see the log. Nil when there is none or from older servers.
+    public var lastService: PlaceSystemService?
 
     enum CodingKeys: String, CodingKey {
         case key, label, status, source, confidence, note
@@ -1440,6 +1492,19 @@ public struct PlaceHomeSystem: Decodable, Sendable, Hashable {
         case lifeRemaining = "life_remaining"
         case sourceLabel = "source_label"
         case sourceRef = "source_ref"
+        case lastService = "last_service"
+    }
+}
+
+/// A system's last recorded service: "2026-03-14", "Your maintenance log", "Furnace tune-up".
+public struct PlaceSystemService: Decodable, Sendable, Hashable {
+    public let date: String
+    public let sourceLabel: String
+    public let title: String?
+
+    enum CodingKeys: String, CodingKey {
+        case date, title
+        case sourceLabel = "source_label"
     }
 }
 
@@ -1517,9 +1582,14 @@ public struct PlaceSectionEnvelope: Decodable, Sendable, Hashable {
     /// Why there is no data — a coverage gap or a lock reason.
     public let unavailableReason: String?
     public internal(set) var data: PlaceSectionData?
+    /// Risk and environment: the area the result covers ("Clark County (EPA
+    /// radon zone)") and what kind of evidence it is ("Area classification"),
+    /// worded by the server. Nil when unknown and from older servers.
+    public var scope: PlaceLabeledKind?
+    public var evidence: PlaceLabeledKind?
 
     private enum CodingKeys: String, CodingKey {
-        case id, group, band, access, status, source, coverage, data
+        case id, group, band, access, status, source, coverage, data, scope, evidence
         case asOf = "as_of"
         case unavailableReason = "unavailable_reason"
     }
@@ -1536,6 +1606,9 @@ public struct PlaceSectionEnvelope: Decodable, Sendable, Hashable {
         coverage = try container.decode(PlaceCoverage.self, forKey: .coverage)
         unavailableReason = try container.decodeIfPresent(String.self, forKey: .unavailableReason)
         data = Self.decodePayload(id: id, from: container)
+        // A malformed label never fails the section.
+        scope = try? container.decodeIfPresent(PlaceLabeledKind.self, forKey: .scope)
+        evidence = try? container.decodeIfPresent(PlaceLabeledKind.self, forKey: .evidence)
     }
 
     /// Decode the id-specific payload; a malformed payload degrades this
@@ -1577,6 +1650,12 @@ public struct PlaceSectionEnvelope: Decodable, Sendable, Hashable {
         case .unknown: return nil
         }
     }
+}
+
+/// A server-worded label with its machine kind: `{ kind: "county", label: "Clark County (EPA radon zone)" }`.
+public struct PlaceLabeledKind: Decodable, Sendable, Hashable {
+    public let kind: String
+    public let label: String
 }
 
 // MARK: - Typed payload accessors

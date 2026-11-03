@@ -134,74 +134,21 @@ private struct GaugePosition: ViewModifier, Animatable {
     }
 }
 
-// MARK: - "Good day to…" tile
+// MARK: - Two weeks of the address calendar
 
-/// One verdict: the activity in a tinted bubble, a verdict mark, the
-/// question and the answer in the verdict's colour. Selected shows a ring.
-struct TodayGoodDayTile: View {
-    let tile: PlaceGoodDayTile
-    let open: Bool
-
-    private struct Tone {
-        let fg: Color
-        let bg: Color
-        let mark: PantopusIcon
-    }
-
-    private var tone: Tone {
-        switch tile.verdict {
-        case .yes: Tone(fg: Theme.Color.home, bg: Theme.Color.homeBg, mark: .check)
-        case .caution: Tone(fg: Theme.Color.warning, bg: Theme.Color.warningBg, mark: .info)
-        case .no: Tone(fg: Theme.Color.appTextMuted, bg: Theme.Color.appSurfaceSunken, mark: .x)
-        case .unknown: Tone(fg: Theme.Color.appTextMuted, bg: Theme.Color.appSurfaceSunken, mark: .minus)
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .top, spacing: 0) {
-                Text(tile.glyph)
-                    .font(.system(size: 21))
-                    .frame(width: 40, height: 40)
-                    .background(Circle().fill(tone.bg))
-                Spacer(minLength: 4)
-                Icon(tone.mark, size: 11, strokeWidth: 3.2, color: Theme.Color.appSurface)
-                    .frame(width: 19, height: 19)
-                    .background(Circle().fill(tone.fg))
-            }
-            Text(tile.label)
-                .font(.system(size: 12.5, weight: .semibold))
-                .foregroundStyle(Theme.Color.appTextSecondary)
-            Text(tile.answer)
-                .font(.system(size: 13.5, weight: .semibold))
-                .foregroundStyle(tone.fg)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.Color.appSurface))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(open ? tone.fg : Theme.Color.appBorder, lineWidth: open ? 1.5 : 1)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-}
-
-// MARK: - Two-week strip of the address calendar
-
-/// The next two weeks as fourteen day cells with a coloured dot for each
-/// kind of date: the rhythm of pickups at a glance. The rows below carry
-/// the same dates in words, so the strip is hidden from VoiceOver.
+/// The next two weeks as two rows of seven days, each with a coloured dot per
+/// kind of date. A day is a button: it says its dates to VoiceOver and picks
+/// that day out of the list below (again to show them all).
 struct TodayCalendarStrip: View {
     let today: String
     let windowDays: Int
     let events: [PlaceCalendarEvent]
+    @Binding var selected: String?
 
     private struct Day: Identifiable {
         let id: String
         let weekday: String
+        let spokenDate: String
         let number: String
         let weekend: Bool
         let isToday: Bool
@@ -219,18 +166,19 @@ struct TodayCalendarStrip: View {
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
         guard let start = parse.date(from: today) else { return [] }
         let initials = ["S", "M", "T", "W", "T", "F", "S"]
+        let spoken = Date.FormatStyle(timeZone: calendar.timeZone).weekday(.wide).month(.wide).day()
         return (0..<min(max(windowDays, 7), 14)).compactMap { offset in
             guard let date = calendar.date(byAdding: .day, value: offset, to: start) else { return nil }
             let key = parse.string(from: date)
             let weekday = calendar.component(.weekday, from: date)
-            let kinds = Self.kinds(on: key, in: events)
             return Day(
                 id: key,
                 weekday: initials[(weekday - 1) % 7],
+                spokenDate: date.formatted(spoken),
                 number: "\(calendar.component(.day, from: date))",
                 weekend: weekday == 1 || weekday == 7,
                 isToday: offset == 0,
-                kinds: kinds
+                kinds: Self.kinds(on: key, in: events)
             )
         }
     }
@@ -254,7 +202,7 @@ struct TodayCalendarStrip: View {
         }
     }
 
-    private static func label(_ kind: String) -> String {
+    static func label(_ kind: String) -> String {
         switch kind {
         case "garbage": "Garbage"
         case "recycling": "Recycling"
@@ -269,11 +217,11 @@ struct TodayCalendarStrip: View {
         let days = days
         let present = days.flatMap(\.kinds).reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 3) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 6) {
                 ForEach(days) { day in cell(day) }
             }
             if !present.isEmpty {
-                HStack(spacing: 12) {
+                FilterSheetFlowLayout(spacing: 12) {
                     ForEach(present, id: \.self) { kind in
                         HStack(spacing: 5) {
                             Circle().fill(Self.color(kind)).frame(width: 7, height: 7)
@@ -283,35 +231,57 @@ struct TodayCalendarStrip: View {
                         }
                     }
                 }
+                .accessibilityHidden(true)
             }
         }
-        .accessibilityHidden(true)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("addressCalendarStrip")
     }
 
     private func cell(_ day: Day) -> some View {
-        VStack(spacing: 4) {
-            Text(day.weekday)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(day.isToday ? Theme.Color.primaryInk : Theme.Color.appTextMuted)
-            Text(day.number)
-                .font(.system(size: 12.5, weight: day.isToday ? .bold : .semibold))
-                .monospacedDigit()
-                .foregroundStyle(day.isToday ? Theme.Color.appSurface : Theme.Color.appText)
-                .frame(maxWidth: .infinity)
-                .frame(height: 26)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(day.isToday ? Theme.Color.primaryInk : Theme.Color.appSurfaceSunken.opacity(day.weekend ? 0.55 : 1))
-                )
-            HStack(spacing: 2) {
-                ForEach(day.kinds.prefix(3), id: \.self) { kind in
-                    Circle().fill(Self.color(kind)).frame(width: 5, height: 5)
+        let isSelected = selected == day.id
+        return Button {
+            selected = isSelected ? nil : day.id
+        } label: {
+            VStack(spacing: 4) {
+                Text(day.weekday)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(day.isToday ? Theme.Color.primaryInk : Theme.Color.appTextMuted)
+                Text(day.number)
+                    .font(.system(size: 13, weight: day.isToday ? .bold : .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(day.isToday ? Theme.Color.appSurface : Theme.Color.appText)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 30)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(day.isToday ? Theme.Color.primaryInk : Theme.Color.appSurfaceSunken.opacity(day.weekend ? 0.55 : 1))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(isSelected ? Theme.Color.primaryInk : .clear, lineWidth: 2)
+                            .padding(-3)
+                    )
+                HStack(spacing: 2) {
+                    ForEach(day.kinds.prefix(3), id: \.self) { kind in
+                        Circle().fill(Self.color(kind)).frame(width: 5, height: 5)
+                    }
                 }
+                .frame(height: 5)
             }
-            .frame(height: 5)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity)
+        .buttonStyle(.plain)
+        .accessibilityLabel(spoken(day))
+        .accessibilityHint(isSelected ? "Shows every date again." : "Shows this day's dates.")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// "Today, Tuesday, November 3: Garbage, Recycling" or "…: nothing scheduled".
+    private func spoken(_ day: Day) -> String {
+        let kinds = day.kinds.map(Self.label).joined(separator: ", ")
+        return (day.isToday ? "Today, " : "") + day.spokenDate + ": " + (kinds.isEmpty ? "nothing scheduled" : kinds)
     }
 }
 

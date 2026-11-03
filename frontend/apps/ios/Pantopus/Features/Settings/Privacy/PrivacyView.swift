@@ -13,8 +13,10 @@ import SwiftUI
 
 public struct PrivacyView: View {
     @State private var viewModel: PrivacySettingsViewModel
-    /// How neighbors see you, the card in the list's header slot.
+    /// How neighbors see you, the row in the list's header slot.
     @State private var neighbors = NeighborsSeeYouViewModel()
+    /// Edit profile, opened from that row.
+    @State private var showsEditor = false
     private let onBack: @MainActor () -> Void
 
     public init(
@@ -26,42 +28,51 @@ public struct PrivacyView: View {
     }
 
     public var body: some View {
-        GroupedListView(dataSource: viewModel, onBack: onBack, headerView: AnyView(NeighborsSeeYouCard(viewModel: neighbors)))
-            .accessibilityIdentifier("privacySettings")
-            .task {
-                neighbors.onToast = { [weak viewModel] toast in viewModel?.toast = toast }
-                await neighbors.load()
+        GroupedListView(
+            dataSource: viewModel,
+            onBack: onBack,
+            headerView: AnyView(NeighborsSeeYouCard(viewModel: neighbors) { showsEditor = true })
+        )
+        .accessibilityIdentifier("privacySettings")
+        .task {
+            neighbors.onToast = { [weak viewModel] toast in viewModel?.toast = toast }
+            await neighbors.load()
+        }
+        .sheet(
+            isPresented: $showsEditor,
+            onDismiss: { Task { await neighbors.load() } },
+            content: { EditProfileView() }
+        )
+        .sheet(isPresented: $viewModel.isDeleteSheetPresented) {
+            AccountDeleteSheet(
+                isDeleting: viewModel.isDeletingAccount,
+                errorMessage: viewModel.deleteAccountError,
+                organizedLiveTrainCount: viewModel.organizedLiveTrainCount,
+                onCancel: { viewModel.dismissDeleteSheet() },
+                onConfirm: { await viewModel.confirmDeleteAccount() }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .interactiveDismissDisabled(viewModel.isDeletingAccount)
+        }
+        .overlay(alignment: .bottom) {
+            if let toast = viewModel.toast {
+                ToastView(message: toast)
+                    .padding(.bottom, Spacing.s10)
+                    .accessibilityIdentifier("privacySettingsToast")
+                    .transition(.opacity)
+                    .dismissToast(after: toast, minimum: 2) {
+                        viewModel.toast = nil
+                    }
             }
-            .sheet(isPresented: $viewModel.isDeleteSheetPresented) {
-                AccountDeleteSheet(
-                    isDeleting: viewModel.isDeletingAccount,
-                    errorMessage: viewModel.deleteAccountError,
-                    organizedLiveTrainCount: viewModel.organizedLiveTrainCount,
-                    onCancel: { viewModel.dismissDeleteSheet() },
-                    onConfirm: { await viewModel.confirmDeleteAccount() }
-                )
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .interactiveDismissDisabled(viewModel.isDeletingAccount)
-            }
-            .overlay(alignment: .bottom) {
-                if let toast = viewModel.toast {
-                    ToastView(message: toast)
-                        .padding(.bottom, Spacing.s10)
-                        .accessibilityIdentifier("privacySettingsToast")
-                        .transition(.opacity)
-                        .dismissToast(after: toast, minimum: 2) {
-                            viewModel.toast = nil
-                        }
-                }
-            }
-            .pantopusAnimation(.componentState, value: viewModel.toast?.text)
-            // Your privacy settings changed on another device (`profile:me`), or your account did: an account edit
-            // moves the name and photo neighbors see while they are still the account's.
-            .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.profileMe) }, perform: {
-                await viewModel.refreshFromSignal()
-                await neighbors.load()
-            })
+        }
+        .pantopusAnimation(.componentState, value: viewModel.toast?.text)
+        // Your privacy settings changed on another device (`profile:me`), or your account did: an account edit
+        // moves the name and photo neighbors see while they are still the account's.
+        .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.profileMe) }, perform: {
+            await viewModel.refreshFromSignal()
+            await neighbors.load()
+        })
     }
 }
 

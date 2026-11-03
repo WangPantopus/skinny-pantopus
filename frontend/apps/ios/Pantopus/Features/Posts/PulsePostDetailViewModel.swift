@@ -77,7 +77,7 @@ public struct PulsePostDetailContent: Sendable, Equatable, Hashable {
             resolution: post.resolution,
             state: post.state,
             postType: post.postType,
-            goingCount: reactions.helpful,
+            goingCount: reactions.likeCount,
             expiresAt: post.expiresAt
         )
     }
@@ -183,14 +183,6 @@ public final class PulsePostDetailViewModel {
     /// Viewer's repost state (`POST /:id/share` with `shareType: repost`).
     public private(set) var isReposted: Bool = false
 
-    /// Emoji the viewer picked from the long-press reaction popover.
-    /// Maps onto the binary like server-side (parity with the RN app —
-    /// there is no per-emoji backend yet), so it's session-local flair.
-    public private(set) var selectedReactionEmoji: String?
-
-    /// The popover's emoji palette — mirrors RN `PostReactionPicker`.
-    public static let reactionEmojis = ["👍", "❤️", "🔥", "😂", "💯", "🎉"]
-
     /// The comment a reply is being composed against.
     public struct ReplyTarget: Sendable, Equatable {
         public let commentId: String
@@ -247,6 +239,19 @@ public final class PulsePostDetailViewModel {
         }
         guard case let .loaded(content) = state else { return false }
         return content.post.userId == currentUserId
+    }
+
+    /// A plan's own post (Plans marks it `post_metadata.plan`): the author's
+    /// menu opens the plan, where Change and Cancel tell everyone, instead of
+    /// Edit post and Delete post (the server refuses both for a plan's post).
+    public var isPlanPost: Bool {
+        guard case let .loaded(content) = state else { return false }
+        return content.post.isPlanPost
+    }
+
+    /// Opens this post's plan on the Plans tab (the `/plans/<id>` link path).
+    public func openPlan() {
+        DeepLinkRouter.shared.handle(path: "/plans/\(postId)")
     }
 
     /// The asker's own open Ask (contract §2.12): "Close" is offered. Never
@@ -344,25 +349,15 @@ public final class PulsePostDetailViewModel {
         state = .loaded(rebuildContent(from: content.post))
     }
 
-    /// Tap one of the reaction pills. Only `.helpful` is wired to a
-    /// backend route today; the `ReactionsBar` view renders the other
-    /// kinds as display-only so this method only ever sees `.helpful`,
-    /// but we keep the guard as a safety net.
-    public func tapReaction(_ kind: PostReactionKind) async {
+    /// Tap the post's reaction (Helpful, Going or Celebrate, by its kind):
+    /// the like toggle, optimistic, reconciled with the server's answer.
+    public func tapReaction() async {
         guard case var .loaded(content) = state else { return }
-        guard kind.isBackendWired else { return }
 
-        // Optimistic update on the helpful (likes) bucket.
         var optimistic = content.reactions
-        let wasOn = optimistic.userReaction == .helpful
-        if wasOn {
-            optimistic.helpful = max(0, optimistic.helpful - 1)
-            optimistic.userReaction = nil
-            selectedReactionEmoji = nil
-        } else {
-            optimistic.helpful += 1
-            optimistic.userReaction = .helpful
-        }
+        let wasOn = optimistic.isOn
+        optimistic.likeCount = wasOn ? max(0, optimistic.likeCount - 1) : optimistic.likeCount + 1
+        optimistic.isOn = !wasOn
         content = content.replacing(reactions: optimistic)
         state = .loaded(content)
 
@@ -373,8 +368,8 @@ public final class PulsePostDetailViewModel {
             )
             // Reconcile with server truth.
             var reconciled = optimistic
-            reconciled.helpful = response.likeCount
-            reconciled.userReaction = response.liked ? .helpful : nil
+            reconciled.likeCount = response.likeCount
+            reconciled.isOn = response.liked
             state = .loaded(content.replacing(reactions: reconciled))
             postChanged()
             // Lists showing this post (the Pulse feed) refetch, so their card isn't left stale.
@@ -384,13 +379,8 @@ public final class PulsePostDetailViewModel {
             toastMessage = "Couldn't update your reaction"
             // Rollback.
             var rolled = optimistic
-            if wasOn {
-                rolled.helpful += 1
-                rolled.userReaction = .helpful
-            } else {
-                rolled.helpful = max(0, rolled.helpful - 1)
-                rolled.userReaction = nil
-            }
+            rolled.likeCount = wasOn ? rolled.likeCount + 1 : max(0, rolled.likeCount - 1)
+            rolled.isOn = wasOn
             state = .loaded(content.replacing(reactions: rolled))
         }
     }
@@ -496,16 +486,6 @@ public final class PulsePostDetailViewModel {
         } catch {
             logger.warning("Post report failed: \(error)")
             toastMessage = "Couldn't submit the report"
-        }
-    }
-
-    /// Pick an emoji from the long-press popover. The emoji itself is
-    /// local flair; if the post isn't liked yet, the pick also turns the
-    /// like on (matching the RN behavior of recording the reaction).
-    public func pickReactionEmoji(_ emoji: String) async {
-        selectedReactionEmoji = emoji
-        if case let .loaded(content) = state, content.reactions.userReaction != .helpful {
-            await tapReaction(.helpful)
         }
     }
 
@@ -720,10 +700,9 @@ public final class PulsePostDetailViewModel {
         )
         let intent = PostIntent.from(purpose: post.purpose, postType: post.postType)
         let reactions = PostReactionCounts(
-            helpful: post.likeCount,
-            heart: 0,
-            going: 0,
-            userReaction: post.userHasLiked ? .helpful : nil
+            kind: PostReactionKind(postType: post.postType),
+            likeCount: post.likeCount,
+            isOn: post.userHasLiked
         )
         let (rows, hidden) = buildCommentRows(post.comments)
         return PulsePostDetailContent(
@@ -862,5 +841,26 @@ public final class PulsePostDetailViewModel {
         case .notFound, .forbidden: false
         default: true
         }
+    }
+}
+
+// MARK: - Pin to profile
+
+extension PulsePostDetailViewModel {
+    /// "Pin to profile" / "Unpin from profile" on your own post (PRF SRV-3);
+    /// nil hides it.
+    var profilePinTitle: String? {
+        guard isOwner, case let .loaded(content) = state else { return nil }
+        return ProfilePins.shared.menuTitle(
+            content.post.id,
+            server: content.post.profilePinned,
+            canShowOnProfile: content.post.showOnProfile != false
+        )
+    }
+
+    func toggleProfilePin() async {
+        guard case let .loaded(content) = state else { return }
+        let toast = await ProfilePins.shared.toggle(content.post.id, server: content.post.profilePinned, client: client)
+        showToast(toast.text, kind: toast.kind)
     }
 }

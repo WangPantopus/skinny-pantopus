@@ -23,6 +23,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.core.routing.InstallReferrerLink
 import app.pantopus.android.core.routing.WebLinkFallback
 import app.pantopus.android.core.security.AppLockManager
 import app.pantopus.android.core.security.SecureWindowController
@@ -152,7 +153,15 @@ class MainActivity : FragmentActivity() {
         // the background too (saved state comes back, with the link that started the
         // Activity, which was routed then). A first launch still routes it; a link that
         // arrives while the Activity is restored comes through onNewIntent.
-        if (savedInstanceState == null) forwardDeepLink(intent)
+        if (savedInstanceState == null) {
+            forwardDeepLink(intent)
+            // A link tapped on the web before the install arrives once, through Google Play's install referrer.
+            InstallReferrerLink.openOnce(
+                this,
+                launchedFromLink = intent?.action == Intent.ACTION_VIEW && intent.data != null,
+                debugReferrer = intent?.getStringExtra(DEBUG_INSTALL_REFERRER)?.takeIf { BuildConfig.DEBUG },
+            )
+        }
         setContent {
             PantopusTheme {
                 // A camera cutout can be taller than the status bar (and move to
@@ -334,5 +343,8 @@ class MainActivity : FragmentActivity() {
     companion object {
         /** The manifest's not-exported alias of this activity that notification taps open. */
         const val NOTIFICATION_OPEN = "app.pantopus.android.NotificationOpen"
+
+        /** Debug builds only: a stand-in for Google Play's install referrer, for checks on a fresh install. */
+        private const val DEBUG_INSTALL_REFERRER = "pantopus.debug.install_referrer"
     }
 }

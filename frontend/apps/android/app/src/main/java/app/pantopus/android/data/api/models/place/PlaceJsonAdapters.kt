@@ -54,7 +54,16 @@ class PlaceSectionEnvelopeAdapterFactory : JsonAdapter.Factory {
                 coverage = enumOrFallback(raw["coverage"], PlaceCoverage::class.java, PlaceCoverage.PARTIAL),
                 unavailableReason = raw["unavailable_reason"] as? String,
                 data = decodePayload(id, raw["data"]),
+                scope = scopeOf(raw["scope"]),
+                evidence = scopeOf(raw["evidence"]),
             )
+        }
+
+        /** `{ kind, label }`; anything else (absent, malformed, no label) reads as no scope. */
+        private fun scopeOf(value: Any?): PlaceSectionScope? {
+            val map = value as? Map<*, *> ?: return null
+            val label = (map["label"] as? String)?.takeIf { it.isNotBlank() } ?: return null
+            return PlaceSectionScope(kind = map["kind"] as? String ?: "", label = label)
         }
 
         private fun <E : Enum<E>> enumOrFallback(
@@ -139,6 +148,18 @@ class PlaceSectionEnvelopeAdapterFactory : JsonAdapter.Factory {
             }
         }
 
+        private fun writeScope(
+            writer: JsonWriter,
+            name: String,
+            scope: PlaceSectionScope?,
+        ) {
+            scope ?: return
+            writer.name(name).beginObject()
+            writer.name("kind").value(scope.kind)
+            writer.name("label").value(scope.label)
+            writer.endObject()
+        }
+
         override fun toJson(
             writer: JsonWriter,
             value: PlaceSectionEnvelope?,
@@ -160,6 +181,8 @@ class PlaceSectionEnvelopeAdapterFactory : JsonAdapter.Factory {
                 .name("coverage")
                 .jsonValue(moshi.adapter(PlaceCoverage::class.java).toJsonValue(value.coverage))
             writer.name("unavailable_reason").value(value.unavailableReason)
+            writeScope(writer, "scope", value.scope)
+            writeScope(writer, "evidence", value.evidence)
             writer.name("data")
             when (val payload = value.data) {
                 null -> writer.nullValue()

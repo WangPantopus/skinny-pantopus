@@ -117,6 +117,12 @@ export interface Post {
   save_count?: number;
   is_pinned: boolean;
   is_global_pin?: boolean;
+  /**
+   * Pinned to its author's profile (SRV-3), on your own posts only; missing when the server couldn't tell. Not
+   * `is_pinned`, the feed-wide pin.
+   */
+  profile_pinned?: boolean;
+  profile_pinned_at?: string | null;
   is_edited: boolean;
   is_archived: boolean;
   created_at: string;
@@ -148,6 +154,11 @@ export interface Post {
   event_date?: string | null;
   event_end_date?: string | null;
   event_venue?: string | null;
+  /**
+   * Marks the server keeps on the post. `plan` is set by Plans on a plan's own post, whose event times are real
+   * moments rather than the composer's wall clock labelled UTC.
+   */
+  post_metadata?: { plan?: boolean; [key: string]: unknown } | null;
   // Safety alert fields
   safety_alert_kind?: SafetyAlertKind | null;
   safety_happened_at?: string | null;

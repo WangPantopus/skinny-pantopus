@@ -238,20 +238,21 @@ export default function NotificationBell({
   };
 
   return (
-    <div className="relative" ref={panelRef}>
-      {/* Bell / megaphone button */}
+    // flex: the wrapper is the button's height, not a line of (large) text, so the bell lines up with Messages.
+    <div className="relative flex" ref={panelRef}>
+      {/* Bell / megaphone button. Below the desktop layout it keeps its size whatever the text size (AppShell's top bar). */}
       <button
         onClick={() => setOpen(!open)}
-        className="p-2 hover-bg-app rounded-lg relative"
+        className="p-2 max-lg:p-[8px] hover-bg-app rounded-lg relative"
         aria-label={ariaLabel}
         title={ariaLabel}
         data-testid={`notification-bell-${mode}`}
         data-mode={mode}
       >
         {isAudience ? (
-          <Megaphone className="w-5 h-5 text-teal-600" aria-hidden />
+          <Megaphone className="w-5 h-5 max-lg:w-[20px] max-lg:h-[20px] text-teal-600" aria-hidden />
         ) : (
-          <svg className="w-5 h-5 text-app-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+          <svg className="w-5 h-5 max-lg:w-[20px] max-lg:h-[20px] text-app-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -272,12 +273,14 @@ export default function NotificationBell({
         )}
       </button>
 
-      {/* Dropdown panel */}
+      {/* Dropdown panel. Hung from the bell it ran off a phone's left edge, so on phones it drops from the top bar
+       *  across the screen, no taller than the screen (its list scrolls). Below the desktop layout it stays 384 px
+       *  wide at any text size, so it fits beside the bell. While it's open, AppShell's top bar stacks above the + button. */}
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-surface rounded-xl shadow-2xl border border-app z-[100] overflow-hidden">
+        <div data-notification-panel className="absolute right-0 top-full mt-2 w-96 max-lg:w-[384px] max-sm:fixed max-sm:inset-x-2 max-sm:top-14 max-sm:w-auto max-sm:flex max-sm:flex-col max-sm:max-h-[calc(100dvh-4.5rem)] bg-surface rounded-xl shadow-2xl border border-app z-[100] overflow-hidden">
           {/* Header */}
           <div className="px-4 py-3 border-b border-app">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex flex-wrap items-center justify-between gap-x-2 mb-2">
               <h3 className="text-sm font-semibold text-app">Notifications</h3>
               {unreadCount > 0 && (
                 <button
@@ -293,7 +296,7 @@ export default function NotificationBell({
                 bell represents the combined inbox (non-flagged users). The
                 P2.3 split bells are already scoped to one firewall. */}
             {mode === 'all' ? (
-              <div className="flex gap-1">
+              <div className="flex flex-wrap gap-1">
                 {(['all', 'personal', 'business'] as const).map((ctx) => (
                   <button
                     key={ctx}

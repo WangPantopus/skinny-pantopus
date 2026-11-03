@@ -5,9 +5,10 @@
 //  §1C-b — Context-aware navigation drawer (LAUNCHER variant / Option A).
 //  Design: docs/design/new/Navigation Drawer - Launcher.html
 //
-//  A left side panel (82% width) sliding over a dimmed scrim, opened from the
-//  Hub top-bar menu button. The context pill opens the existing Identity
-//  Center; body rows dispatch semantic destinations the host maps to routes.
+//  A left side panel (82% width, at most 400 pt on a wide screen such as the
+//  iPhone Duo open) sliding over a dimmed scrim, opened from the Hub top-bar
+//  menu button. The context pill opens the existing Identity Center; body
+//  rows dispatch semantic destinations the host maps to routes.
 //
 
 import SwiftUI
@@ -22,13 +23,16 @@ struct NavigationDrawerView: View {
     /// the whole pill opens the Identity Center.
     var onOpenProfile: (@MainActor () -> Void)?
 
+    /// The panel's widest: more than it is on any iPhone (440 × 0.82 = 361 pt), so only a wide screen is capped.
+    private static let maxPanelWidth: CGFloat = 400
+
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 if isPresented {
                     scrim
                     panel(bottomInset: geo.safeAreaInsets.bottom)
-                        .frame(width: geo.size.width * 0.82)
+                        .frame(width: min(geo.size.width * 0.82, Self.maxPanelWidth))
                         .frame(maxHeight: .infinity, alignment: .top)
                         .transition(.move(edge: .leading))
                 }

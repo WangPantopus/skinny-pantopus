@@ -141,6 +141,8 @@ public struct UserProfile: Decodable, Sendable, Hashable, Identifiable {
     public let showPhone: Bool?
     public let createdAt: String
     public let updatedAt: String
+    /// Your "Get to know" answers in saved order (PRF SRV-2); nil from an older server.
+    public let prompts: [ProfilePrompt]?
 
     private enum CodingKeys: String, CodingKey {
         case id, email, username, usernameIsGenerated, firstName, middleName, lastName, name
@@ -155,6 +157,7 @@ public struct UserProfile: Decodable, Sendable, Hashable, Identifiable {
         case gigsPosted = "gigs_posted"
         case gigsCompleted = "gigs_completed"
         case profileVisibility, showEmail, showPhone, createdAt, updatedAt
+        case prompts
     }
 }
 
@@ -200,6 +203,16 @@ public struct ProfileUpdateRequest: Encodable, Sendable, Hashable {
     public var twitter: String?
     public var instagram: String?
     public var facebook: String?
+    /// The whole list of "Get to know" answers, in order (PRF SRV-2): it
+    /// replaces the saved one; `[]` removes them all, nil leaves them.
+    public var profilePrompts: [ProfilePrompt]?
+
+    private enum CodingKeys: String, CodingKey {
+        case username, firstName, middleName, lastName, phoneNumber, address, city, state, zipcode, dateOfBirth
+        case bio, tagline, profileVisibility, showEmail, showPhone
+        case website, linkedin, twitter, instagram, facebook
+        case profilePrompts = "profile_prompts"
+    }
 
     public init(
         username: String? = nil,
@@ -221,7 +234,8 @@ public struct ProfileUpdateRequest: Encodable, Sendable, Hashable {
         linkedin: String? = nil,
         twitter: String? = nil,
         instagram: String? = nil,
-        facebook: String? = nil
+        facebook: String? = nil,
+        profilePrompts: [ProfilePrompt]? = nil
     ) {
         self.username = username
         self.firstName = firstName
@@ -243,6 +257,7 @@ public struct ProfileUpdateRequest: Encodable, Sendable, Hashable {
         self.twitter = twitter
         self.instagram = instagram
         self.facebook = facebook
+        self.profilePrompts = profilePrompts
     }
 }
 

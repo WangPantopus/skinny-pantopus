@@ -87,6 +87,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
@@ -108,6 +109,7 @@ import app.pantopus.android.ui.screens.feed.pulse.PulseSportsMode
 import app.pantopus.android.ui.screens.feed.pulse.PulseSportsStarter
 import app.pantopus.android.ui.screens.feed.pulse.PulseSportsStarterRow
 import app.pantopus.android.ui.screens.feed.pulse.PulseTopicChipRow
+import app.pantopus.android.ui.screens.profile.ProfilePinCopy
 import app.pantopus.android.ui.screens.shared.feed.FeedChipItem
 import app.pantopus.android.ui.screens.shared.feed.FeedChipRow
 import app.pantopus.android.ui.screens.shared.feed.FeedComposeFAB
@@ -594,6 +596,10 @@ fun FeedScreen(
         loadedRows.firstOrNull { it.id == id }?.let { row ->
             PostOverflowSheet(
                 row = row,
+                onToggleProfilePin = {
+                    viewModel.dismissOverflow()
+                    viewModel.toggleProfilePin(row.id)
+                },
                 onDismiss = { viewModel.dismissOverflow() },
                 onToggleSave = {
                     viewModel.dismissOverflow()
@@ -632,6 +638,10 @@ fun FeedScreen(
                 onCloseAsk = { viewModel.beginCloseAsk(row.id) },
                 onReport = { viewModel.beginReport(row.id) },
                 onDelete = { viewModel.beginDelete(row.id) },
+                onOpenPlan = {
+                    viewModel.dismissOverflow()
+                    DeepLinkRouter.handle("/plans/${row.id}")
+                },
             )
         }
     }
@@ -846,6 +856,8 @@ private fun PostOverflowSheet(
     onCloseAsk: () -> Unit,
     onReport: () -> Unit,
     onDelete: () -> Unit,
+    onToggleProfilePin: () -> Unit = {},
+    onOpenPlan: () -> Unit = {},
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val actions = row.actions
@@ -865,6 +877,9 @@ private fun PostOverflowSheet(
                 fontWeight = FontWeight.Bold,
                 color = PantopusColors.appText,
             )
+            if (actions.canOpenPlan) {
+                OverflowAction(label = "Open plan", testTag = "pulseFeedOverflowOpenPlan", onClick = onOpenPlan)
+            }
             OverflowAction(
                 label = if (actions.isSaved) "Remove bookmark" else "Save post",
                 testTag = "pulseFeedOverflowSave",
@@ -927,6 +942,13 @@ private fun PostOverflowSheet(
                     testTag = "pulseFeedOverflowReport",
                     isDestructive = true,
                     onClick = onReport,
+                )
+            }
+            actions.profilePinned?.let { pinned ->
+                OverflowAction(
+                    label = if (pinned) ProfilePinCopy.UNPIN else ProfilePinCopy.PIN,
+                    testTag = "pulseFeedOverflowProfilePin",
+                    onClick = onToggleProfilePin,
                 )
             }
             if (actions.canDelete) {

@@ -3,6 +3,8 @@
 //
 // GET  /api/homes/:id/intelligence   — the Place dashboard contract
 //      (the PlaceIntelligence section envelopes, W0.1) for a claimed home.
+// GET  /api/homes/:id/changes        — what changed since the viewer's last
+//      look at this Home's Place ("Worth a look").
 // PUT  /api/homes/:id/systems/:key   — record what the household knows
 //      about a building system (the Systems Ledger correction path).
 //
@@ -23,6 +25,7 @@ const { recordSystem, SYSTEM_KEYS } = require('../services/homeSystemsService');
 const { PLACE_SECTION_IDS } = require('../serializers/placeIntelligenceSerializer');
 const logger = require('../utils/logger');
 const homeListService = require('../services/homeListService');
+const homeChanges = require('../services/place/homeChanges');
 const { stableEtag } = require('../utils/stableEtag');
 
 const VALID_SECTION_IDS = new Set(PLACE_SECTION_IDS);
@@ -99,6 +102,30 @@ router.get('/:id/intelligence', verifyToken, async (req, res) => {
     logger.error('Place intelligence error', { error: err.message, homeId: id });
     if (['HOME_LIST_UNAVAILABLE', 'HOME_LIST_ACCESS_CHANGED'].includes(err.code)) return homeListService.sendError(res, err);
     return res.status(500).json({ error: 'Failed to load place intelligence' });
+  }
+});
+
+// GET /api/homes/:id/changes?since=<ISO-8601> — what changed at this Home since
+// the viewer last looked at its Place (services/place/homeChanges.js). Anyone
+// who can read this Home's Place may ask; what they get follows their access.
+router.get('/:id/changes', verifyToken, async (req, res) => {
+  const { id } = req.params;
+  if (!isHomeId(id)) return res.status(400).json({ error: 'Invalid Home id' });
+  try {
+    const homeRead = placeIntelligenceService.readHome(id);
+    const reader = await placeIntelligenceService.readAccess(id, req.user.id);
+    if (!reader) {
+      return res.status(403).json({ error: 'You do not have access to this place.' });
+    }
+    const { data: home, error } = await homeRead;
+    if (error || !home) return res.status(404).json({ error: 'Home not found' });
+    const changes = await homeChanges.changesSince({ home, userId: req.user.id, reader, since: req.query.since });
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.json(changes);
+  } catch (err) {
+    logger.error('Place changes error', { error: err.message, homeId: id });
+    if (['HOME_LIST_UNAVAILABLE', 'HOME_LIST_ACCESS_CHANGED'].includes(err.code)) return homeListService.sendError(res, err);
+    return res.status(500).json({ error: 'Failed to load changes' });
   }
 });
 

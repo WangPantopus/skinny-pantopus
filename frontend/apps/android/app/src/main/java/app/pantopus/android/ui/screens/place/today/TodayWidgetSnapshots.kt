@@ -37,7 +37,7 @@ fun PlaceIntelligence.todayWidgetSnapshot(
                     it.windDirection,
                 )
             },
-        sun = sun?.let { TodayWidgetSnapshot.Sun(it.sunrise, it.sunset) },
+        sun = sun?.let { TodayWidgetSnapshot.Sun(it.localSunrise(homeZone), it.localSunset(homeZone)) },
         air =
             airSection?.airQuality?.let {
                 TodayWidgetSnapshot.Air(it.index, it.categoryLabel, airSection.source, smoky = it.dominantPollutant == "pm25")

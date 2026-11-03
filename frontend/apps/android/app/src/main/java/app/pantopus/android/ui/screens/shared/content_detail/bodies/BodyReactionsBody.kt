@@ -8,7 +8,6 @@ package app.pantopus.android.ui.screens.shared.content_detail.bodies
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,15 +29,11 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,6 +46,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -58,12 +54,14 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.data.api.models.posts.PostReactionKind
 import app.pantopus.android.ui.components.AvatarWithIdentityRing
 import app.pantopus.android.ui.components.IdentityPillar
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.feed.pulse.PulseEventDetailRows
 import app.pantopus.android.ui.screens.feed.pulse.PulseEventDetails
+import app.pantopus.android.ui.screens.feed.pulse.icon
 import app.pantopus.android.ui.screens.shared.content_detail.headers.PostIntent
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridStyle
 import app.pantopus.android.ui.screens.shared.media.PostMediaGridWithViewer
@@ -99,12 +97,12 @@ data class PostQuickReplyPrompt(
     val icon: PantopusIcon,
 )
 
-/** Reaction-bar counts + the user's currently-selected reaction (if any). */
+/** The post's one reaction under it: its kind (Helpful, Going, Celebrate), how many people tapped it, and whether the
+ *  signed-in person did. */
 data class PostReactionCounts(
-    val helpful: Int = 0,
-    val heart: Int = 0,
-    val going: Int = 0,
-    val userReaction: app.pantopus.android.data.api.models.posts.PostReactionKind? = null,
+    val kind: PostReactionKind = PostReactionKind.Helpful,
+    val likeCount: Int = 0,
+    val isOn: Boolean = false,
 )
 
 /** The optional line under the post text; selectable, so a phone number can be copied. */
@@ -135,7 +133,7 @@ fun BodyReactionsBody(
     media: List<PostMediaItem>,
     intent: PostIntent = PostIntent.Share,
     reactions: PostReactionCounts,
-    onReactionTap: (app.pantopus.android.data.api.models.posts.PostReactionKind) -> Unit,
+    onReactionTap: () -> Unit,
     composerAvatarUrl: String?,
     composerAvatarName: String,
     composerText: String,
@@ -153,9 +151,6 @@ fun BodyReactionsBody(
     detailLine: String? = null,
     /** An Event's when and where, under the text; null on other posts. */
     eventDetails: PulseEventDetails? = null,
-    selectedReactionEmoji: String? = null,
-    onEmojiSelected: ((String) -> Unit)? = null,
-    reactionEmojis: List<String> = emptyList(),
     replyingToName: String? = null,
     onCancelReply: () -> Unit = {},
     onCommentReply: ((PostCommentRow) -> Unit)? = null,
@@ -219,9 +214,6 @@ fun BodyReactionsBody(
             commentsAreFresh = comments.isEmpty() && !placeholders,
             postedRecently = postedRecently,
             onTap = onReactionTap,
-            selectedEmoji = selectedReactionEmoji,
-            onEmojiSelected = onEmojiSelected,
-            reactionEmojis = reactionEmojis,
             modifier = Modifier.padding(horizontal = Spacing.s4),
         )
         HorizontalDivider(
@@ -348,83 +340,23 @@ private fun ReactionsBar(
     commentCount: Int,
     commentsAreFresh: Boolean,
     postedRecently: Boolean,
-    onTap: (app.pantopus.android.data.api.models.posts.PostReactionKind) -> Unit,
+    onTap: () -> Unit,
     modifier: Modifier = Modifier,
-    selectedEmoji: String? = null,
-    onEmojiSelected: ((String) -> Unit)? = null,
-    reactionEmojis: List<String> = emptyList(),
 ) {
-    var showsEmojiPicker by remember { mutableStateOf(false) }
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box {
-            ReactionPill(
-                id = "heart",
-                icon = PantopusIcon.Heart,
-                count = counts.helpful,
-                isSelected = counts.userReaction == app.pantopus.android.data.api.models.posts.PostReactionKind.Helpful,
-                selectedForeground = PantopusColors.error,
-                selectedBackground = PantopusColors.errorBg,
-                onTap = { onTap(app.pantopus.android.data.api.models.posts.PostReactionKind.Helpful) },
-                onLongPress =
-                    if (onEmojiSelected != null && reactionEmojis.isNotEmpty()) {
-                        { showsEmojiPicker = true }
-                    } else {
-                        null
-                    },
-                emojiGlyph =
-                    selectedEmoji?.takeIf {
-                        counts.userReaction == app.pantopus.android.data.api.models.posts.PostReactionKind.Helpful
-                    },
-                accessibilityLabel = "Heart reaction, ${counts.helpful}",
-            )
-            DropdownMenu(
-                expanded = showsEmojiPicker,
-                onDismissRequest = { showsEmojiPicker = false },
-            ) {
-                Row(
-                    modifier =
-                        Modifier
-                            .padding(horizontal = Spacing.s2)
-                            .testTag("pulsePostDetail-emojiPicker"),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
-                ) {
-                    reactionEmojis.forEach { emoji ->
-                        Text(
-                            text = emoji,
-                            fontSize = 24.sp,
-                            modifier =
-                                Modifier
-                                    .clip(CircleShape)
-                                    .clickable {
-                                        showsEmojiPicker = false
-                                        onEmojiSelected?.invoke(emoji)
-                                    }
-                                    .padding(Spacing.s1)
-                                    .semantics { contentDescription = "React with $emoji" },
-                        )
-                    }
-                }
-            }
-        }
+        // The post's one reaction, named by its kind as on its card ("Helpful 3").
         ReactionPill(
-            id = "hand",
-            icon = PantopusIcon.Hand,
-            count = counts.heart,
-            isSelected = counts.userReaction == app.pantopus.android.data.api.models.posts.PostReactionKind.Heart,
-            onTap = null,
-            accessibilityLabel = "Raised hand reaction, ${counts.heart}",
-        )
-        ReactionPill(
-            id = "eye",
-            icon = PantopusIcon.Eye,
-            count = counts.going,
-            isSelected = counts.userReaction == app.pantopus.android.data.api.models.posts.PostReactionKind.Going,
-            onTap = null,
-            accessibilityLabel = "Watching reaction, ${counts.going}",
+            id = counts.kind.key,
+            icon = counts.kind.icon,
+            label = counts.kind.label,
+            likeCount = counts.likeCount,
+            isSelected = counts.isOn,
+            onTap = onTap,
+            accessibilityLabel = if (counts.likeCount == 0) counts.kind.label else "${counts.kind.label}, ${counts.likeCount}",
         )
         Spacer(Modifier.weight(1f))
         Row(
@@ -451,61 +383,58 @@ private fun ReactionsBar(
 private fun ReactionPill(
     id: String,
     icon: PantopusIcon,
-    count: Int,
+    /** The reaction's word ("Helpful", "Going", "Celebrate"). */
+    label: String,
+    /** Shown after the word once someone tapped it. */
+    likeCount: Int,
     isSelected: Boolean,
     selectedForeground: Color = PantopusColors.primary700,
     selectedBackground: Color = PantopusColors.primary50,
-    /** `null` renders the pill as display-only (no click handler). */
-    onTap: (() -> Unit)?,
-    onLongPress: (() -> Unit)? = null,
-    /** Renders the chosen emoji instead of the icon glyph when set. */
-    emojiGlyph: String? = null,
+    onTap: () -> Unit,
     accessibilityLabel: String,
 ) {
     val background = if (isSelected) selectedBackground else PantopusColors.appSurface
     val foreground = if (isSelected) selectedForeground else PantopusColors.appTextSecondary
     val border = if (isSelected) selectedForeground.copy(alpha = 0.25f) else PantopusColors.appBorder
-    val baseModifier =
-        Modifier
-            .clip(RoundedCornerShape(Radii.pill))
-            .background(background)
-            .drawBehind {
-                drawRoundRect(
-                    color = border,
-                    style = Stroke(width = 1.dp.toPx()),
-                    cornerRadius = CornerRadius(Radii.pill.toPx(), Radii.pill.toPx()),
-                )
-            }
-            .sizeIn(minHeight = 44.dp)
-    val withClick =
-        when {
-            onTap != null && onLongPress != null ->
-                baseModifier.combinedClickable(onClick = onTap, onLongClick = onLongPress)
-            onTap != null -> baseModifier.clickable(onClick = onTap)
-            else -> baseModifier
-        }
     Box(
         modifier =
-            withClick
+            Modifier
+                .clip(RoundedCornerShape(Radii.pill))
+                .background(background)
+                .drawBehind {
+                    drawRoundRect(
+                        color = border,
+                        style = Stroke(width = 1.dp.toPx()),
+                        cornerRadius = CornerRadius(Radii.pill.toPx(), Radii.pill.toPx()),
+                    )
+                }.sizeIn(minHeight = 44.dp)
+                .clickable(onClick = onTap)
                 .padding(horizontal = Spacing.s3, vertical = 6.dp)
                 .testTag("pulsePostDetail-reaction-$id")
-                .semantics { contentDescription = accessibilityLabel },
+                .semantics {
+                    contentDescription = accessibilityLabel
+                    selected = isSelected
+                },
         contentAlignment = Alignment.Center,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
         ) {
-            if (emojiGlyph != null) {
-                Text(text = emojiGlyph, fontSize = 14.sp)
-            } else {
-                PantopusIconImage(icon = icon, contentDescription = null, size = 14.dp, tint = foreground)
-            }
+            PantopusIconImage(icon = icon, contentDescription = null, size = 14.dp, tint = foreground)
             Text(
-                text = "$count",
+                text = label,
                 fontSize = 12.sp,
-                color = foreground.copy(alpha = 0.85f),
+                fontWeight = FontWeight.Medium,
+                color = foreground,
             )
+            if (likeCount != 0) {
+                Text(
+                    text = "$likeCount",
+                    fontSize = 12.sp,
+                    color = foreground.copy(alpha = 0.85f),
+                )
+            }
         }
     }
 }

@@ -10,6 +10,14 @@
 import Foundation
 
 public enum PlaceEndpoints {
+    /// `GET /api/homes/:id/changes?since=<ISO-8601>` — route
+    /// `backend/routes/placeIntelligence.js:111`. What really changed at the
+    /// Home since this account's last visit to its Place (newest first, at
+    /// most 20, `total` counts all). An older server answers 404.
+    public static func changes(homeId: String, since: String) -> Endpoint {
+        Endpoint(method: .get, path: "/api/homes/\(homeId)/changes", query: ["since": since])
+    }
+
     /// `GET /api/homes/:id/intelligence?ballot=1[&sections=a,b,c]` — route
     /// `backend/routes/placeIntelligence.js:37`. The grouped section
     /// envelopes for a saved/claimed/verified place (T1–T4; tier and

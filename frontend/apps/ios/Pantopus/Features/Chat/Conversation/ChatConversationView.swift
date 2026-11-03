@@ -623,6 +623,8 @@ public struct ChatConversationView: View {
         // The emoji panel replaces the keyboard's space instead of stacking above it.
         .ignoresSafeArea(.keyboard, edges: emojiPickerPresented ? .bottom : [])
         .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: emojiPickerPresented)
+        // A `compose` link starts the assistant's composer with the keyboard up.
+        .onChange(of: viewModel.composerFocusRequest) { _, _ in composerFocused = true }
         .onChange(of: composerFocused) { _, focused in
             if focused { emojiPickerPresented = false }
         }
@@ -787,7 +789,10 @@ public struct ChatConversationView: View {
                 Task { await viewModel.deleteAIConversations() }
             }
         } message: {
-            Text("Pantopus AI won\u{2019}t remember it. Any earlier chats with Pantopus AI are deleted too.")
+            Text(
+                "Pantopus AI won\u{2019}t remember it. Any earlier chats with Pantopus AI are deleted too.\n\n"
+                    + "What Pantopus remembers stays until you delete it in Settings."
+            )
         }
         .fullScreenCover(item: $viewerPhotos) { photos in
             MediaViewerView(
@@ -2382,6 +2387,8 @@ private struct FanUpgradeBenefit: View {
 private struct ChatConversationHeader: View {
     /// A Nearby Plan's chat counts "people" (board A4).
     @Environment(\.chatPlanContext) private var planContext
+    /// Beside the chat list on a wide screen the list is the way back, so Back stays out.
+    @Environment(\.chatConversationShowsBack) private var showsBack
     let mode: ChatConversationMode
     let counterparty: ChatCounterparty
     let creatorContext: ChatCreatorThreadContext
@@ -2399,18 +2406,21 @@ private struct ChatConversationHeader: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            Button(action: onBack) {
-                Icon(.chevronLeft, size: 20, color: Theme.Color.appText)
-                    .frame(width: 32, height: 32)
-                    .hitArea(horizontal: 6, vertical: 6)
+            if showsBack {
+                Button(action: onBack) {
+                    Icon(.chevronLeft, size: 20, color: Theme.Color.appText)
+                        .frame(width: 32, height: 32)
+                        .hitArea(horizontal: 6, vertical: 6)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Back")
             identity
             Spacer(minLength: Spacing.s0)
             trailingActions
         }
-        .padding(.horizontal, 10)
+        .padding(.leading, showsBack ? 10 : Spacing.s4)
+        .padding(.trailing, 10)
         .padding(.vertical, 6)
         .frame(height: mode == .creatorThread ? 64 : 56)
         .background(Theme.Color.appSurface)

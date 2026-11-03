@@ -50,18 +50,24 @@ function buildAqiSignal(aqiResult) {
 
   const aqi = aqiResult.aqi;
   const isElevated = aqi.aqi > 100;
+  // 51–100 is EPA's "moderate": acceptable, but not good air, and unusually
+  // sensitive people may feel it. Green is kept for good air only, since the
+  // apps read a green air signal as "Air quality good".
+  const isModerate = !isElevated && aqi.aqi > 50;
 
   return {
     signal_type: 'air_quality',
     priority: isElevated ? 9 : 3,
     title: isElevated
       ? `Air quality alert: AQI ${aqi.aqi} (${aqi.category})`
-      : `Air quality is ${(aqi.category || 'good').toLowerCase()}`,
+      : `Air quality is ${(aqi.category || (isModerate ? 'moderate' : 'good')).toLowerCase()}`,
     detail: isElevated
       ? `AQI ${aqi.aqi} — ${aqi.category}. ${aqi.pollutant} is the primary pollutant. Consider limiting outdoor activity.`
-      : `AQI ${aqi.aqi} — no concerns today.`,
+      : isModerate
+        ? `AQI ${aqi.aqi} — unusually sensitive people should consider limiting prolonged exertion.`
+        : `AQI ${aqi.aqi} — no concerns today.`,
     icon: 'wind',
-    color: isElevated ? 'red' : 'green',
+    color: isElevated ? 'red' : isModerate ? 'gray' : 'green',
   };
 }
 
@@ -89,19 +95,40 @@ function buildWeatherSignals(alertsResult) {
 }
 
 /**
+ * A seasonal tip as a title and the rest, so a card doesn't say its title
+ * twice. The title is the first sentence, or a one-sentence tip's words
+ * before its colon ("Peak summer: water early…"); a one-sentence tip without
+ * one has no title of its own and is all rest.
+ * @param {string|null} tip
+ * @returns {{ title: string, rest: string }}
+ */
+function splitSeasonalTip(tip) {
+  const text = String(tip || '').trim();
+  const sentence = text.match(/^(.+?)\.(?:\s+|$)/);
+  const first = sentence ? sentence[1] : text;
+  const rest = sentence ? text.slice(sentence[0].length).trim() : '';
+  if (rest) return { title: first, rest };
+  const colon = first.indexOf(': ');
+  if (colon > 0) {
+    const after = first.slice(colon + 2).trim();
+    return { title: first.slice(0, colon), rest: `${after.charAt(0).toUpperCase()}${after.slice(1)}.` };
+  }
+  return { title: '', rest: text };
+}
+
+/**
  * Build a seasonal suggestion signal.
  * @param {object} seasonalCtx  From seasonalEngine.getSeasonalContext()
  * @returns {object}
  */
 function buildSeasonalSignal(seasonalCtx) {
   const hasHomeTip = !!seasonalCtx.home_specific_tip;
+  const tip = splitSeasonalTip(seasonalCtx.seasonal_tip);
   return {
     signal_type: 'seasonal_suggestion',
     priority: hasHomeTip ? 7 : 6,
-    title: seasonalCtx.seasonal_tip
-      ? seasonalCtx.seasonal_tip.split('.')[0]
-      : (SEASONS[seasonalCtx.primary_season]?.label || 'This season'),
-    detail: seasonalCtx.home_specific_tip || seasonalCtx.seasonal_tip || '',
+    title: tip.title || SEASONS[seasonalCtx.primary_season]?.label || 'This season',
+    detail: seasonalCtx.home_specific_tip || tip.rest,
     icon: 'leaf',
     color: 'amber',
     // Its one action posts a gig: hidden while open gigs is a launch cut.
@@ -186,14 +213,16 @@ function buildSummary(propertyProfile, aqiSignal, weatherSignals, seasonalCtx, a
   if (weatherSignals.length > 0) {
     parts.push(weatherSignals[0].title);
   } else if (alertsChecked) {
-    parts.push('Your home area is quiet');
+    // Say only what was checked: weather alerts, not everything about the area.
+    parts.push('No active weather alerts');
   } else {
     // No answer from the weather service is not a quiet day.
     parts.push("We couldn't check for weather alerts on your block right now");
   }
 
+  // The air signal's own words: a moderate reading is never summed up as good.
   if (aqiSignal) {
-    parts.push(`AQI is ${(aqiSignal.title.includes('alert') ? 'elevated' : 'good')}`);
+    parts.push(aqiSignal.title);
   }
 
   if (seasonalCtx.primary_season) {

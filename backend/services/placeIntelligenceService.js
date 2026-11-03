@@ -5,7 +5,8 @@
 // a claimed home by REUSING existing data services — it does not
 // re-implement any provider fetching:
 //   Today              providerOrchestrator.getHubToday (weather/AQI/alerts)
-//   Risk & Readiness   neighborhoodProfileService.getProfile (FEMA flood)
+//   Risk & Readiness   neighborhoodProfileService.fetchFloodZone (FEMA flood,
+//                      for the home's own point)
 //   Your Block         neighborhoodProfileService (Census tract context)
 //                      + NeighborhoodPreview table (k-anon density bucket)
 //   Your Home (Band B) propertyIntelligenceService.getProfile (ATTOM) —
@@ -15,7 +16,8 @@
 //
 // Every section degrades INDEPENDENTLY: a thrown/failed source yields
 // that section's `error`/`unavailable` status — it never fails the
-// whole response. Bands are respected: Band B/C/D are gated by tier
+// whole response, and a public-data section that runs past its time
+// budget can't hold it up. Bands are respected: Band B/C/D are gated by tier
 // (derived from the caller's home access), Band A is always visible.
 //
 // See docs/design/place + the product design doc §8.2 / §8.3 / §9.
@@ -244,11 +246,33 @@ const AQI_HEALTH_MESSAGES = {
   hazardous: 'Stay indoors and keep windows closed where possible.',
 };
 
-function mapAlertSeverity(sev) {
+// NWS names every product by its level ("Dense Fog Advisory", "Flood Watch", "Winter Storm Warning"), and
+// that is the level people read; the CAP severity is about the hazard ("Severe" for a thunderstorm watch).
+// The event name decides when it carries a level; the severity only when it doesn't.
+function mapAlertSeverity(sev, event = '') {
+  const name = String(event || '').trim().toLowerCase();
+  if (/\bwarning$/.test(name)) return 'warning';
+  if (/\bwatch$/.test(name)) return 'watch';
+  if (/\b(advisory|statement)$/.test(name)) return 'advisory';
   const s = String(sev || '').toLowerCase();
   if (s.includes('warn') || s.includes('severe') || s.includes('extreme')) return 'warning';
   if (s.includes('watch')) return 'watch';
   return 'advisory';
+}
+
+// The original bulletin's own fields for an alert's full detail (null when the provider doesn't say).
+function alertDetail(a) {
+  const text = (value) => (typeof value === 'string' && value.trim() ? value : null);
+  return {
+    sent: text(a.sent),
+    effective: text(a.effective),
+    expires: text(a.bulletin_expires),
+    sender_name: text(a.sender_name) || text(a.source),
+    area: text(a.area),
+    original_description: text(a.full_description),
+    original_instruction: text(a.full_instruction),
+    details_url: text(a.details_url),
+  };
 }
 
 // FEMA zone → qualitative risk.
@@ -429,7 +453,7 @@ const AQI_STALE_MS = 3 * 60 * 60 * 1000;
 // preview simply does not list it).
 function buildTodayEnvelopes({
   weather, aqi, aqiMissing = null, weatherMissing = null, alerts, alertsMissing = null,
-  weatherProvider, alertsProvider, asOf = null, hub = null, home = null,
+  weatherProvider, alertsProvider, asOf = null, alertsCheckedAt = null, hub = null, home = null,
 }) {
   const out = [];
 
@@ -494,14 +518,16 @@ function buildTodayEnvelopes({
     const active = alerts.map((a) => ({
       id: String(a.id),
       event: a.title,
-      severity: mapAlertSeverity(a.severity),
+      severity: mapAlertSeverity(a.severity, a.title),
       headline: a.headline || a.title,
       description: alertBody(a),
       onset: a.starts_at || null,
       ends: a.ends_at || null,
+      ...alertDetail(a),
     }));
+    // As of when the alert list was read from its provider, so "checked 9:41 AM" is that read.
     out.push(serializePlaceSection('alerts', {
-      access: 'available', asOf, source: todayProviderLabel(alertsProvider), status: 'ready', data: { active },
+      access: 'available', asOf: alertsCheckedAt || asOf, source: todayProviderLabel(alertsProvider), status: 'ready', data: { active },
     }));
   } else {
     out.push(serializePlaceSection('alerts', {
@@ -561,6 +587,7 @@ async function composeToday(userId, home, hub) {
     weatherProvider: hub?.meta?.section_providers?.weather,
     alertsProvider: hub?.meta?.section_providers?.alerts,
     asOf: (hub && hub.fetched_at) || null,
+    alertsCheckedAt: hub?.meta?.alerts_checked_at || null,
     hub,
     home,
   });
@@ -577,6 +604,47 @@ function withinBudget(promise, ms) {
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
+
+// Each public-data section's time budget, on the anonymous preview and on a
+// saved home's Place alike (PLACE_PREVIEW_SECTION_BUDGET_MS, default 3.5 s).
+const DEFAULT_SECTION_BUDGET_MS = 3500;
+
+function sectionBudgetMs() {
+  const n = Number(process.env.PLACE_PREVIEW_SECTION_BUDGET_MS);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_SECTION_BUDGET_MS;
+}
+
+// A lookup a section can ship without (NFIP premiums beside the flood zone)
+// ends a little before the section's budget does, as Ballot's boundary lookup
+// does, so the section still has time to answer with what it has.
+function supportingLookupMs(budgetMs) {
+  return budgetMs > 0 ? Math.max(Math.floor(budgetMs / 2), budgetMs - 500) : null;
+}
+
+// Race a composer against the budget. On timeout OR rejection the
+// fallback envelopes are returned; the composer itself keeps running so
+// its read-through cache still fills.
+function withBudget(run, ms, fallback) {
+  let timer = null;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(fallback()), ms);
+    if (timer && typeof timer.unref === 'function') timer.unref();
+  });
+  const attempt = Promise.resolve()
+    .then(run)
+    .then(
+      (value) => { clearTimeout(timer); return Array.isArray(value) ? value : fallback(); },
+      () => { clearTimeout(timer); return fallback(); },
+    );
+  return Promise.race([attempt, timeout]);
+}
+
+// A section that ran out of time or failed is a retryable error ("Couldn't
+// load this · Try again" on every client), not "not available for your area":
+// the source covers the point, it just didn't answer in time, and its fetch
+// keeps running, so a retry a moment later usually finds it cached.
+const failedSections = (ids) =>
+  () => ids.map((id) => serializePlaceSection(id, { status: 'error' }));
 
 // Today for a POINT (no user, no home) — the anonymous preview's daily
 // snapshot. Calls the same providers the Hub uses, straight from a
@@ -635,8 +703,18 @@ async function composeTodayForPoint(lat, lng, { budgetMs = null } = {}) {
         severity: x.severity,
         headline: x.headline,
         description: x.description,
+        instruction: x.instruction,
         starts_at: x.onset,
         ends_at: x.expires,
+        sent: x.sent,
+        effective: x.effective,
+        bulletin_expires: x.bulletin_expires,
+        sender_name: x.sender_name,
+        area: x.area,
+        full_description: x.full_description,
+        full_instruction: x.full_instruction,
+        details_url: x.details_url,
+        source: x.source,
       }))
     : null;
 
@@ -650,6 +728,7 @@ async function composeTodayForPoint(lat, lng, { budgetMs = null } = {}) {
     weatherProvider: w?.provider,
     alertsProvider: al?.provider,
     asOf: (w && w.fetchedAt) || (a && a.fetchedAt) || new Date().toISOString(),
+    alertsCheckedAt: (alerts && al.fetchedAt) || null,
   });
 
 }
@@ -739,7 +818,79 @@ async function nfipTractId(home, tractId) {
   return legacy ? `${legacy.county_fips}${id.slice(5)}` : null;
 }
 
-async function composeNeighborhood(home) {
+// Flood: FEMA's zone at the home's own map point, asked directly and
+// alongside the Census tract lookup (as Scout does). It used to come from the
+// tract's cached neighborhood profile, so it waited for the Census geocoder
+// before FEMA was even asked, one point's zone stood for every home in the
+// tract for 90 days, and a FEMA timeout read "not available" for a day.
+// FEMA's answer is kept 90 days per point (readResponse).
+async function composeFlood(home, budgetMs = null) {
+  const ll = homeLatLng(home);
+  if (!ll) return [serializePlaceSection('flood', { access: 'available', status: 'unavailable' })];
+  const zoneLookup = neighborhoodProfileService.fetchFloodZone(ll.lat, ll.lng, { throwOnFailure: true });
+  // The NFIP figures also need the tract. They're optional, so a slow Census
+  // geocoder costs the figures, not the zone.
+  const premiums = withinBudget(floodPremiums(home, ll, zoneLookup), supportingLookupMs(budgetMs))
+    .catch(() => null);
+  let zone;
+  try {
+    zone = await zoneLookup;
+  } catch (err) {
+    // FEMA didn't answer: retryable, and asked again on the next load.
+    logger.warn('placeIntelligence: flood zone lookup failed', { homeId: home.id, error: err.message });
+    return [serializePlaceSection('flood', { access: 'available', status: 'error' })];
+  }
+  if (!zone || !zone.flood_zone) {
+    return [serializePlaceSection('flood', { access: 'available', status: 'unavailable' })];
+  }
+  return [serializePlaceSection('flood', {
+    access: 'available',
+    asOf: zone.fetched_at || null,
+    data: {
+      zone: zone.flood_zone,
+      zone_label: `Zone ${zone.flood_zone}`,
+      risk_level: floodRiskLevel(zone.flood_zone),
+      in_sfha: floodInSfha(zone.flood_zone),
+      insurance_required: floodInSfha(zone.flood_zone),
+      plain_meaning: zone.flood_zone_description || '',
+      ...(await premiums),
+    },
+  })];
+}
+
+// Wave 2 — what flood policies here actually COST: the tract's NFIP
+// premium benchmark, cache-only (the nfipTractWarm job owns the slow
+// OpenFEMA fetch; a miss marks the tract pending and ships nothing).
+// Optional field: absent while warming/suppressed, so older clients
+// and thin tracts degrade to today's zone-only card. Read only for a
+// point FEMA placed in a zone.
+async function floodPremiums(home, ll, zoneLookup) {
+  try {
+    const [zone, tract] = await Promise.all([
+      // A failed zone lookup is the flood section's to report.
+      zoneLookup.catch(() => null),
+      neighborhoodProfileService.geocodeToTractCached(ll.lat, ll.lng),
+    ]);
+    if (!zone || !zone.flood_zone || !tract || !tract.tractId) return null;
+    const tractId = await nfipTractId(home, tract.tractId);
+    const nfip = tractId ? await nfipPremiumService.getTractBenchmark(tractId) : { status: 'unavailable' };
+    if (nfip.status === 'ready') return { nfip: nfipPayload(nfip, 'tract') };
+    if (nfip.status === 'suppressed') {
+      // Too few policies in the tract to compare: the county's, labeled
+      // county-wide. A separate field, so builds that call every
+      // benchmark "your census tract" never show a county one.
+      const county = await nfipPremiumService.getCountyBenchmark(tractId.slice(0, 5));
+      if (county.status === 'ready') return { nfip_area: nfipPayload(county, 'county') };
+    }
+  } catch (err) {
+    logger.warn('placeIntelligence: nfip benchmark failed', { homeId: home.id, error: err.message });
+  }
+  return null;
+}
+
+// Homes here: the Census tract's medians, from the tract-keyed neighborhood
+// profile.
+async function composeCensusContext(home) {
   const ll = homeLatLng(home);
   let profile = null;
   if (ll) {
@@ -754,50 +905,9 @@ async function composeNeighborhood(home) {
       logger.warn('placeIntelligence: neighborhoodProfile failed', { homeId: home.id, error: err.message });
     }
   }
-  const out = [];
-
-  if (profile && profile.flood_zone) {
-    const floodData = {
-      zone: profile.flood_zone,
-      zone_label: `Zone ${profile.flood_zone}`,
-      risk_level: floodRiskLevel(profile.flood_zone),
-      in_sfha: floodInSfha(profile.flood_zone),
-      insurance_required: floodInSfha(profile.flood_zone),
-      plain_meaning: profile.flood_zone_description || '',
-    };
-    // Wave 2 — what flood policies here actually COST: the tract's NFIP
-    // premium benchmark, cache-only (the nfipTractWarm job owns the slow
-    // OpenFEMA fetch; a miss marks the tract pending and ships nothing).
-    // Optional field: absent while warming/suppressed, so older clients
-    // and thin tracts degrade to today's zone-only card.
-    if (profile.tract_id) {
-      try {
-        const tractId = await nfipTractId(home, profile.tract_id);
-        const nfip = tractId ? await nfipPremiumService.getTractBenchmark(tractId) : { status: 'unavailable' };
-        if (nfip.status === 'ready') {
-          floodData.nfip = nfipPayload(nfip, 'tract');
-        } else if (nfip.status === 'suppressed') {
-          // Too few policies in the tract to compare: the county's, labeled
-          // county-wide. A separate field, so builds that call every
-          // benchmark "your census tract" never show a county one.
-          const county = await nfipPremiumService.getCountyBenchmark(tractId.slice(0, 5));
-          if (county.status === 'ready') floodData.nfip_area = nfipPayload(county, 'county');
-        }
-      } catch (err) {
-        logger.warn('placeIntelligence: nfip benchmark failed', { homeId: home.id, error: err.message });
-      }
-    }
-    out.push(serializePlaceSection('flood', {
-      access: 'available',
-      asOf: profile.cached_at || null,
-      data: floodData,
-    }));
-  } else {
-    out.push(serializePlaceSection('flood', { access: 'available', status: 'unavailable' }));
-  }
 
   if (profile && (profile.median_year_built != null || profile.median_home_value != null)) {
-    out.push(serializePlaceSection('census_context', {
+    return [serializePlaceSection('census_context', {
       access: 'available',
       asOf: profile.cached_at || null,
       data: {
@@ -806,12 +916,9 @@ async function composeNeighborhood(home) {
         tract_name: profile.tract_id ? `Census tract ${profile.tract_id}` : null,
         summary: censusSummary(profile),
       },
-    }));
-  } else {
-    out.push(serializePlaceSection('census_context', { access: 'available', status: 'unavailable' }));
+    })];
   }
-
-  return out;
+  return [serializePlaceSection('census_context', { access: 'available', status: 'unavailable' })];
 }
 
 async function composeDensity(home) {
@@ -1031,10 +1138,35 @@ async function composeBillBenchmark(home, access, userId) {
 }
 
 // ── home_systems (Band C — the household's own record) ───────
+// A system's last service, from the Home's maintenance log (Home tools → Maintenance): the newest completed
+// entry whose category is that system's. Only these three categories name one system; "plumbing" could be the
+// water heater or the sewer line, so those systems (and windows) have no service record here.
+const SERVICE_CATEGORY_SYSTEMS = { hvac: 'hvac', roof: 'roof', electrical: 'electrical_panel' };
+
+async function lastServiceBySystem(homeId) {
+  const { data, error } = await supabaseAdmin
+    .from('HomeMaintenanceLog')
+    .select('category, task, performed_at')
+    .eq('home_id', homeId)
+    .eq('status', 'completed')
+    .in('category', Object.keys(SERVICE_CATEGORY_SYSTEMS))
+    .order('performed_at', { ascending: false })
+    .limit(50);
+  if (error) throw new Error(error.message);
+  const out = {};
+  for (const row of data || []) {
+    const key = SERVICE_CATEGORY_SYSTEMS[row.category];
+    const date = String(row.performed_at || '').slice(0, 10);
+    if (!key || out[key] || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    out[key] = { date, source_label: 'Your maintenance log', title: row.task || null };
+  }
+  return out;
+}
+
 // The first section in Band C, so it is also the first thing on this
 // endpoint that the trust ladder actually gates: `bandAccess` returns
 // 'locked' below T3, and the client renders the locked card.
-async function composeHomeSystems(home, tier) {
+async function composeHomeSystems(home, tier, viewerAccess = null) {
   const access = bandAccess('C', tier);
   if (access !== 'available') {
     return [serializePlaceSection('home_systems', {
@@ -1048,6 +1180,17 @@ async function composeHomeSystems(home, tier) {
     const ledger = await getSystemsLedger(home);
     if (!ledger) {
       return [serializePlaceSection('home_systems', { access, status: 'unavailable' })];
+    }
+    // Service dates only for someone who may read the maintenance log; for anyone else the field is left out.
+    const seesLog = Boolean(viewerAccess && viewerAccess.hasAccess
+      && (viewerAccess.permissions || []).includes('maintenance.view'));
+    if (seesLog) {
+      try {
+        const service = await lastServiceBySystem(home.id);
+        ledger.systems = ledger.systems.map((system) => ({ ...system, last_service: service[system.key] || null }));
+      } catch (err) {
+        logger.warn('placeIntelligence: maintenance log read failed', { homeId: home.id, error: err.message });
+      }
     }
     return [serializePlaceSection('home_systems', { access, data: ledger })];
   } catch (err) {
@@ -1211,27 +1354,34 @@ async function composeExemptionCheck(home, tier) {
 //
 // Still BUILD_PENDING: `incentives` only (DSIRE's API is license-gated;
 // curated federal copy would rot).
+//
+// `budget`: a public-data section that asks an outside source about the
+// point (Census, FEMA, EPA, USGS, the Forest Service, Open-Meteo), timed like
+// the preview's — see composeHomeIntelligence. Today's weather, air and
+// alerts keep their own 5 s provider limits; the household's sections read
+// our own data.
 const COMPOSER_SECTIONS = [
   { ids: ['weather', 'air_quality', 'alerts', 'good_day_to'], run: async ({ home, userId, hubPromise }) => composeToday(userId, home, await hubPromise) },
-  { ids: ['sunrise_sunset'], run: ({ home }) => placeSectionAdapters.composeSunriseSunset(home) },
+  { ids: ['sunrise_sunset'], budget: true, run: ({ home }) => placeSectionAdapters.composeSunriseSunset(home) },
   // A claimant gets the public calendar: without the Home id, the household's own pickup day isn't loaded.
   { ids: ['address_calendar'], run: ({ home, claimant, countyReads }) => composeAddressCalendar(claimant ? { ...home, id: null } : home, countyReads) },
-  { ids: ['flood', 'census_context'], run: ({ home }) => composeNeighborhood(home) },
+  { ids: ['flood'], budget: true, run: ({ home, budgetMs }) => composeFlood(home, budgetMs) },
+  { ids: ['census_context'], budget: true, run: ({ home }) => composeCensusContext(home) },
   { ids: ['heat_cold'], run: ({ home, hubPromise }) => composeHeatCold(home, hubPromise) },
-  { ids: ['seismic'], run: ({ home }) => placeSectionAdapters.composeSeismic(home) },
-  { ids: ['wildfire'], run: ({ home }) => placeSectionAdapters.composeWildfire(home) },
-  { ids: ['lead_radon'], run: ({ home }) => placeSectionAdapters.composeLeadRadon(home) },
-  { ids: ['drinking_water'], run: ({ home }) => placeSectionAdapters.composeDrinkingWater(home) },
-  { ids: ['environmental_hazards'], run: ({ home }) => placeSectionAdapters.composeEnvironmentalHazards(home) },
+  { ids: ['seismic'], budget: true, run: ({ home }) => placeSectionAdapters.composeSeismic(home) },
+  { ids: ['wildfire'], budget: true, run: ({ home }) => placeSectionAdapters.composeWildfire(home) },
+  { ids: ['lead_radon'], budget: true, run: ({ home }) => placeSectionAdapters.composeLeadRadon(home) },
+  { ids: ['drinking_water'], budget: true, run: ({ home }) => placeSectionAdapters.composeDrinkingWater(home) },
+  { ids: ['environmental_hazards'], budget: true, run: ({ home }) => placeSectionAdapters.composeEnvironmentalHazards(home) },
   { ids: ['block_density'], run: ({ home }) => composeDensity(home) },
   { ids: ['your_home'], run: ({ home, tier }) => composeYourHome(home, tier) },
-  { ids: ['home_systems'], run: ({ home, tier }) => composeHomeSystems(home, tier) },
+  { ids: ['home_systems'], run: ({ home, tier, access }) => composeHomeSystems(home, tier, access) },
   { ids: ['bill_benchmark'], run: ({ home, access, userId }) => composeBillBenchmark(home, access, userId) },
   { ids: ['exemption_check'], run: ({ home, tier }) => composeExemptionCheck(home, tier) },
-  { ids: ['rent_band'], run: ({ home }) => placeSectionAdapters.composeRentBand(home) },
+  { ids: ['rent_band'], budget: true, run: ({ home }) => placeSectionAdapters.composeRentBand(home) },
   { ids: ['real_rent'], run: ({ home, tier, userId, access }) => composeRealRent(home, tier, userId, !nonResidentViewer(access)) },
-  { ids: ['civic_districts'], run: ({ home, ballot }) => placeSectionAdapters.composeCivicDistricts(home, { ballot }) },
-  { ids: ['civic_election'], run: ({ home, ballot }) => placeSectionAdapters.composeCivicElection(home, { ballot }) },
+  { ids: ['civic_districts'], budget: true, run: ({ home, ballot }) => placeSectionAdapters.composeCivicDistricts(home, { ballot }) },
+  { ids: ['civic_election'], budget: true, run: ({ home, ballot }) => placeSectionAdapters.composeCivicElection(home, { ballot }) },
 ];
 
 // ── Per-home privacy → the place address ref (§ homePrivacy) ──
@@ -1360,10 +1510,25 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   // keep the plain election row and districts.
   const ballotOn = Boolean(ballot) && viewer.role !== 'nonresident';
   const subject = claimant ? { ...home, move_in_date: null } : home;
+  // The response waits for every section, so a stalled source (the Census
+  // geocoder, FEMA's flood map) held the whole Place for its 8 s cutoff. The
+  // public-data sections get the preview's per-section budget: one that runs
+  // past it is a retryable error, and its lookup keeps going to fill the
+  // cache for the next look.
+  const budgetMs = sectionBudgetMs();
+  const late = [];
   const [privacy, ...groups] = await Promise.all([
     getHomePrivacy(homeId).catch(() => ({ address_precision: true })),
-    ...runs.map(({ run }) => run({ home: subject, userId, tier, hubPromise, access, ballot: ballotOn, claimant, countyReads })),
+    ...runs.map(({ ids, budget, run }) => {
+      const compose = () => run({ home: subject, userId, tier, hubPromise, access, ballot: ballotOn, claimant, countyReads, budgetMs });
+      if (!budget) return compose();
+      return withBudget(compose, budgetMs, () => {
+        late.push(...ids);
+        return failedSections(ids)();
+      });
+    }),
   ]);
+  if (late.length) logger.warn('placeIntelligence: sections over budget', { homeId, sections: late, budgetMs });
 
   const composed = {};
   for (const env of groups.flat()) composed[env.id] = env;
@@ -1443,6 +1608,11 @@ module.exports = {
   readAccess,
   readHome,
   composeTodayForPoint,
+  // The per-section time budget, shared with the anonymous preview.
+  sectionBudgetMs,
+  withBudget,
+  withinBudget,
+  failedSections,
   // Exported for unit testing.
   resolveTier,
   bandAccess,

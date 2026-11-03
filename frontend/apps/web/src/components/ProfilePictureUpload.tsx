@@ -61,57 +61,48 @@ export default function ProfilePictureUpload({
 
   const displayUrl = previewUrl || currentUrl;
 
+  // Your account's photo (Edit profile → Only you see this): neighbors see the photo above it.
   return (
-    <div className="bg-app-surface rounded-xl border border-app-border p-6">
-      <h2 className="text-lg font-semibold text-app-text mb-4">Profile Picture</h2>
-      <div className="flex items-center gap-6">
-        {/* Avatar preview */}
-        {displayUrl ? (
-          <Image
-            src={displayUrl}
-            alt="Profile"
-            className="w-24 h-24 rounded-full object-cover border-2 border-app-border"
-            width={96}
-            height={96}
-            sizes="96px"
-            quality={75}
-          />
-        ) : (
-          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 flex items-center justify-center text-white text-4xl font-bold">
-            {fallbackInitial}
-          </div>
-        )}
-
-        <div>
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            disabled={uploading}
-            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium disabled:opacity-50"
-          >
-            {uploading ? (
-              <span className="flex items-center gap-2">
-                <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-                Uploading...
-              </span>
-            ) : displayUrl ? (
-              'Change Photo'
-            ) : (
-              'Upload Photo'
-            )}
-          </button>
-          <p className="text-sm text-app-text-secondary mt-2">JPG, PNG, GIF, or WebP. Max 5MB.</p>
-          {error && <p className="text-sm text-red-600 mt-1">{error}</p>}
-        </div>
-
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/gif,image/webp"
-          onChange={handleFileChange}
-          className="hidden"
+    <div className="py-4 flex items-start gap-3.5">
+      {displayUrl ? (
+        <Image
+          src={displayUrl}
+          alt=""
+          className="w-12 h-12 shrink-0 rounded-full object-cover border border-app-border"
+          width={48}
+          height={48}
+          sizes="48px"
+          quality={75}
         />
+      ) : (
+        <div aria-hidden="true" className="w-12 h-12 shrink-0 rounded-full bg-app-surface-sunken text-app-text-secondary flex items-center justify-center text-lg font-semibold">
+          {fallbackInitial}
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="text-[0.9375rem] leading-5 font-semibold text-app-text">Account photo</p>
+        <p className="mt-0.5 text-[0.8125rem] leading-[1.125rem] text-app-text-secondary">
+          For your account. Neighbors see the profile photo above. JPG, PNG, GIF or WebP, up to 5 MB.
+        </p>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          className="mt-2.5 min-h-[2.75rem] px-3.5 rounded-full border border-app-border-strong bg-app-surface text-[0.875rem] font-semibold text-app-text hover:bg-app-hover disabled:opacity-50"
+        >
+          {uploading ? 'Uploading…' : displayUrl ? 'Change account photo' : 'Add account photo'}
+        </button>
+        {error && <p className="text-sm text-red-600 mt-1" role="alert">{error}</p>}
       </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp"
+        onChange={handleFileChange}
+        className="hidden"
+        aria-label="Choose your account photo"
+      />
     </div>
   );
 }

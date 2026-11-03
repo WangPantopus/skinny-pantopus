@@ -1,0 +1,7 @@
+# actionlint (run by ci.yml's deployment safeguards) checks `runs-on` against
+# GitHub's runner labels. `xcode-27` is GitHub's Xcode 27 image, still a preview
+# (actions/runner-images#14404), which actionlint 1.7.12 doesn't list yet; the
+# TestFlight job (ios-beta.yml) runs on it for the iOS 27.1 SDK.
+self-hosted-runner:
+  labels:
+    - xcode-27

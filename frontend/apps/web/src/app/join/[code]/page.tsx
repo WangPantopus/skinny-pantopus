@@ -20,13 +20,15 @@ export async function generateMetadata({ params }: { params: Promise<{ code: str
   const { data } = await fetchPublicJoin(code);
   const base = { robots: { index: false, follow: false } };
   if (!data?.valid) return { ...base, title: 'Pantopus invite', description: DESCRIPTION };
+  // No Safari app banner: the page is for people new to Pantopus, and installing from the banner drops the invite.
+  // The page's own "Get it" link carries it through the install.
   return {
     ...base,
     ...buildShareMetadata({
       title: `${data.referrer_name || 'A neighbor'} invited you to Pantopus`,
       description: DESCRIPTION,
       path: `/join/${encodeURIComponent(code)}`,
-      appArgument: `pantopus:///join/${encodeURIComponent(code)}`,
+      smartBanner: false,
     }),
   };
 }

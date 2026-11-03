@@ -522,10 +522,15 @@ function applyMuteHideFilters(posts, filters, surface, viewerUserId = null) {
 // The viewer's like, save and repost rows for these posts.
 function loadUserStatusRows(posts, userId) {
   const postIds = posts.map(p => p.id);
+  // Which of the viewer's own posts they pinned to their profile (PRF SRV-3), for their Pin / Unpin menu item.
+  const ownIds = userId ? posts.filter(p => p.user_id === userId).map(p => p.id) : [];
   return Promise.all([
     supabaseAdmin.from('PostLike').select('post_id').eq('user_id', userId).in('post_id', postIds),
     supabaseAdmin.from('PostSave').select('post_id').eq('user_id', userId).in('post_id', postIds),
     supabaseAdmin.from('PostShare').select('post_id').eq('user_id', userId).eq('share_type', 'repost').in('post_id', postIds),
+    ownIds.length
+      ? supabaseAdmin.from('Post').select('id').in('id', ownIds).not('profile_pinned_at', 'is', null)
+      : Promise.resolve({ data: [] }),
   ]);
 }
 
@@ -534,13 +539,15 @@ function loadUserStatusRows(posts, userId) {
 async function enrichWithUserStatus(posts, userId) {
   if (!posts.length) return posts;
   // The matched businesses' state and the viewer's likes, saves and reposts don't depend on each other.
-  const [[{ data: likes }, { data: saves }, { data: reposts }]] = await Promise.all([
+  const [[{ data: likes }, { data: saves }, { data: reposts }, { data: pinned }]] = await Promise.all([
     loadUserStatusRows(posts, userId),
     dropUnpublishedMatches(posts),
   ]);
   const likedSet = new Set((likes || []).map(r => r.post_id));
   const savedSet = new Set((saves || []).map(r => r.post_id));
   const repostSet = new Set((reposts || []).map(r => r.post_id));
+  // Left off when the read failed, so a menu never offers Pin for a pinned post.
+  const pinnedSet = Array.isArray(pinned) ? new Set(pinned.map(r => r.id)) : null;
   return posts.map(p => {
     applyPostLocationPrivacy(p, userId);
     return {
@@ -548,6 +555,7 @@ async function enrichWithUserStatus(posts, userId) {
       userHasLiked: likedSet.has(p.id),
       userHasSaved: savedSet.has(p.id),
       userHasReposted: repostSet.has(p.id),
+      ...(userId && p.user_id === userId && pinnedSet ? { profile_pinned: pinnedSet.has(p.id) } : {}),
     };
   });
 }

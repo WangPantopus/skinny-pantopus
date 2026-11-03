@@ -180,11 +180,27 @@ export interface PlaceWeatherAlert {
   onset: string | null;
   /** ISO 8601. */
   ends: string | null;
+  /**
+   * The bulletin's own fields for its full detail; null when the provider doesn't say, omitted by older servers.
+   * `sent` is when it was issued (ISO 8601).
+   */
+  sent?: string | null;
+  effective?: string | null;
+  /** When this bulletin expires or is replaced (ISO 8601), not when the hazard ends. */
+  expires?: string | null;
+  /** The issuer, e.g. "NWS Portland OR". */
+  sender_name?: string | null;
+  /** Affected areas as the provider writes them. */
+  area?: string | null;
+  /** The provider's whole text, unedited (`description` is cut short). */
+  original_description?: string | null;
+  original_instruction?: string | null;
+  details_url?: string | null;
 }
 
 /**
  * NWS active alerts — rides the NOAA feed alongside layer #1.
- * An empty `active` list renders as "No active alerts".
+ * An empty `active` list (status ready) renders as "No active weather alerts": only what was checked.
  */
 export interface PlaceAlertsData {
   active: PlaceWeatherAlert[];
@@ -192,11 +208,18 @@ export interface PlaceAlertsData {
 
 /** Sunrise / sunset — rides the NOAA / Open-Meteo feed alongside layer #1. */
 export interface PlaceSunriseSunsetData {
-  /** ISO 8601. */
+  /** Local wall clock in the place's zone, "YYYY-MM-DDTHH:MM" (no offset). */
   sunrise: string;
-  /** ISO 8601. */
+  /** Local wall clock in the place's zone, "YYYY-MM-DDTHH:MM" (no offset). */
   sunset: string;
   daylight_minutes: number;
+  /** The place's local date these times belong to (YYYY-MM-DD). Omitted by older servers. */
+  date?: string;
+  /** The instants (ISO 8601, UTC); null when the provider gave no offset. Omitted by older servers. */
+  sunrise_utc?: string | null;
+  sunset_utc?: string | null;
+  /** The place's IANA time zone. Omitted by older servers. */
+  time_zone?: string;
 }
 
 /**
@@ -256,6 +279,8 @@ export interface PlaceCalendarEvent {
   lead_days: number;
   /** Which rule scope produced it — a home rule beats a city default. */
   scope: 'home' | 'city' | 'county' | 'state';
+  /** The household's own schedule (`scope` home) or a general date for the address. Omitted by older servers. */
+  audience?: 'household' | 'address';
   source: string | null;
   source_url: string | null;
   /** 'unverified' = seeded by hand; the card says so. */
@@ -992,6 +1017,11 @@ export interface PlaceHomeSystem {
   source_ref: string | null;
   /** What the typical range means for this system. */
   note: string;
+  /**
+   * The newest completed maintenance-log entry for this system (hvac, roof, electrical panel), or null.
+   * Absent for viewers who can't read the maintenance log, and from older servers.
+   */
+  last_service?: { date: string; source_label: string; title: string | null } | null;
 }
 
 export interface PlaceHomeSystemsSummary {
@@ -1136,6 +1166,23 @@ export interface PlaceSectionEnvelope<Id extends PlaceSectionId = PlaceSectionId
   /** Why there is no data — a coverage gap or a lock reason. */
   unavailable_reason: string | null;
   data: PlaceSectionDataMap[Id] | null;
+  /** Risk & environment sections with a reading: the area it covers. Omitted otherwise and by older servers. */
+  scope?: PlaceSectionScope;
+  /** Risk & environment sections with a reading: what kind of evidence it is. */
+  evidence?: PlaceSectionEvidence;
+}
+
+/** The area a risk or environment reading covers, worded by the server. */
+export interface PlaceSectionScope {
+  kind: 'point' | 'forecast_area' | 'grid_cell' | 'radius' | 'county' | 'water_system';
+  label: string;
+}
+
+/** What kind of evidence a risk or environment reading is. */
+export interface PlaceSectionEvidence {
+  kind: 'map_classification' | 'forecast' | 'design_value' | 'land_classification' | 'area_classification'
+    | 'utility_record' | 'registry_count';
+  label: string;
 }
 
 /** Discriminated union over all launch-set section envelopes. */

@@ -13,7 +13,8 @@ import SwiftUI
 struct RouteStack<Route: Hashable> {
     var navigationPath = NavigationPath()
 
-    private var routes: [Route] = []
+    /// The routes, first pushed first.
+    private(set) var routes: [Route] = []
 
     var isEmpty: Bool {
         routes.isEmpty
@@ -34,8 +35,21 @@ struct RouteStack<Route: Hashable> {
         navigationPath.removeLast()
     }
 
+    mutating func removeLast(_ count: Int) {
+        let count = min(count, routes.count)
+        guard count > 0 else { return }
+        routes.removeLast(count)
+        navigationPath.removeLast(count)
+    }
+
     mutating func removeAll(where shouldRemove: (Route) throws -> Bool) rethrows {
         try routes.removeAll(where: shouldRemove)
+        rebuildNavigationPath()
+    }
+
+    /// Puts these routes in place of the ones there.
+    mutating func replace(with newRoutes: [Route]) {
+        routes = newRoutes
         rebuildNavigationPath()
     }
 

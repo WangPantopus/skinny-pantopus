@@ -87,7 +87,8 @@ async function reportState(userId, cardId, report) {
   for (let attempt = 0; attempt < 3; attempt++) {
     const step = await readStep(userId, cardId);
     if (!step) return unknown;
-    const done = doneList(step);
+    // A copy: the change check below compares it with what was read.
+    const done = [...doneList(step)];
     let status = step.status;
     if (report.status === 'done') {
       const ran = findAction(step.payload, itemId, report.action_id);

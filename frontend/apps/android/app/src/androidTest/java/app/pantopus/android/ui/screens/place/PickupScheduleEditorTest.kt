@@ -11,7 +11,6 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performTextInput
 import app.pantopus.android.data.api.models.place.PickupCollection
 import app.pantopus.android.data.api.models.place.PlaceAddressCalendarData
 import app.pantopus.android.data.api.models.place.SetPickupDayRequest
@@ -58,7 +57,7 @@ class PickupScheduleEditorTest {
         compose.onNodeWithText("Save schedule").assertIsNotEnabled()
         compose.onNodeWithContentDescription("Garbage").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Garbage Thursday: Not selected").performScrollTo().performClick()
-        compose.onNodeWithText("Garbage first collection date").performScrollTo().performTextInput("2026-09-03")
+        compose.onNodeWithContentDescription("Garbage: choose the collection date").performScrollTo().performClick()
         assertTrue(requests.isEmpty())
         compose.onNodeWithText("Save schedule").performScrollTo().performClick()
         assertEquals(
@@ -73,13 +72,13 @@ class PickupScheduleEditorTest {
         show()
         compose.onNodeWithContentDescription("Garbage").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Garbage Thursday: Not selected").performScrollTo().performClick()
-        compose.onNodeWithText("Garbage first collection date").performScrollTo().performTextInput("2026-09-03")
+        compose.onNodeWithContentDescription("Garbage: choose the collection date").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Recycling").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Recycling repeats: Every week").performScrollTo().performClick()
         compose.onNodeWithText("Every 2 weeks").performClick()
         compose.onNodeWithContentDescription("Recycling Friday: Not selected").performScrollTo().performClick()
         compose.onNodeWithText("Save schedule").assertIsNotEnabled()
-        compose.onNodeWithText("Recycling first collection date").performScrollTo().performTextInput("2026-09-04")
+        compose.onNodeWithContentDescription("Recycling: choose the collection date").performScrollTo().performClick()
         compose.onNodeWithText("Save schedule").assertIsEnabled().performScrollTo().performClick()
         assertEquals(
             listOf(

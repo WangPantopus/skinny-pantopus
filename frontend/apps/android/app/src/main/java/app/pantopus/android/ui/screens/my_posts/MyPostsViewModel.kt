@@ -14,9 +14,12 @@ package app.pantopus.android.ui.screens.my_posts
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.identity.ProfileChanges
+import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.api.models.feed.FeedCursor
 import app.pantopus.android.data.api.models.posts.MyPostDto
 import app.pantopus.android.data.api.models.posts.MyPostsResponse
+import app.pantopus.android.data.api.models.posts.PostReactionKind
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
@@ -27,6 +30,8 @@ import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.screens.feed.pulse.PostStatus
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
+import app.pantopus.android.ui.screens.feed.pulse.icon
+import app.pantopus.android.ui.screens.profile.ProfilePinCopy
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilter
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivitySortOrder
 import app.pantopus.android.ui.screens.shared.filter_sheet.FilterOption
@@ -74,6 +79,10 @@ object MyPostsTab {
 data class MyPostsKebabTarget(
     val postId: String,
     val isArchived: Boolean,
+    /** PRF step 5: whether it's pinned to your profile; null (unknown, or archived) hides the item. */
+    val profilePinned: Boolean? = null,
+    /** A plan's own post: the sheet offers Open plan instead of Archive and Delete (the server refuses both). */
+    val isPlanPost: Boolean = false,
 )
 
 /** Presentation contract for the destructive delete confirmation alert. */
@@ -558,11 +567,24 @@ class MyPostsViewModel
         // MARK: - Mutations
 
         fun requestKebab(dto: MyPostDto) {
-            _kebabTarget.value = MyPostsKebabTarget(postId = dto.id, isArchived = isArchived(dto))
+            val archived = isArchived(dto)
+            _kebabTarget.value =
+                MyPostsKebabTarget(
+                    postId = dto.id,
+                    isArchived = archived,
+                    profilePinned = dto.profilePinned.takeUnless { archived },
+                    isPlanPost = dto.isPlanPost,
+                )
         }
 
         fun cancelKebab() {
             _kebabTarget.value = null
+        }
+
+        /** A plan's own post opens its plan on the Plans tab, where Change and Cancel tell everyone. */
+        fun openPlan(postId: String) {
+            _kebabTarget.value = null
+            DeepLinkRouter.handle("/plans/$postId")
         }
 
         fun requestDelete(postId: String) {
@@ -572,6 +594,22 @@ class MyPostsViewModel
 
         fun cancelDelete() {
             _deleteTarget.value = null
+        }
+
+        /** "Pin to profile" / "Unpin from profile" (PRF step 5); a 4th pin shows the server's sentence. */
+        fun toggleProfilePin(target: MyPostsKebabTarget) {
+            val pinned = target.profilePinned ?: return
+            _kebabTarget.value = null
+            viewModelScope.launch {
+                when (val result = postsRepo.setProfilePin(target.postId, !pinned)) {
+                    is NetworkResult.Success -> {
+                        _toastMessage.value = if (result.data.profilePinned) ProfilePinCopy.PINNED else ProfilePinCopy.UNPINNED
+                        ProfileChanges.notifyChanged()
+                        postsRefresh.notifyPostsDidChange()
+                    }
+                    is NetworkResult.Failure -> _toastMessage.value = result.error.displayMessage(ProfilePinCopy.FAILED)
+                }
+            }
         }
 
         /**
@@ -675,6 +713,14 @@ class MyPostsViewModel
                         icon = PantopusIcon.ArrowsRepeat,
                         accessibilityLabel = "Restore post",
                         onClick = { unarchive(dto.id) },
+                    )
+                } else if (dto.isPlanPost) {
+                    // A plan's post changes from its plan, which tells everyone.
+                    RowEngagementCta(
+                        label = "Open plan",
+                        icon = PantopusIcon.Calendar,
+                        accessibilityLabel = "Open plan",
+                        onClick = { openPlan(dto.id) },
                     )
                 } else {
                     RowEngagementCta(
@@ -897,6 +943,10 @@ class MyPostsViewModel
                         )
                 }
 
+            /**
+             * Engagement strip items: the replies and the post's reaction, named by its type as on its card ("X going",
+             * "X celebrated", "X helpful"). Events and recommendations lead with the reaction, the rest with replies.
+             */
             fun engagementItems(
                 dto: MyPostDto,
                 intent: PulseIntent,
@@ -907,41 +957,12 @@ class MyPostsViewModel
                         icon = PantopusIcon.MessageCircle,
                         label = "${dto.commentCount} ${if (dto.commentCount == 1) "reply" else "replies"}",
                     )
-                val likes =
-                    RowEngagementItem(
-                        id = "likes",
-                        icon = PantopusIcon.ThumbsUp,
-                        label = "${dto.likeCount} ${if (dto.likeCount == 1) "like" else "likes"}",
-                    )
+                val kind = PostReactionKind.fromPostType(dto.postType)
+                val reaction = RowEngagementItem(id = kind.key, icon = kind.icon, label = kind.countText(dto.likeCount))
                 return when (intent) {
-                    PulseIntent.Event ->
-                        listOf(
-                            RowEngagementItem(
-                                id = "going",
-                                icon = PantopusIcon.CheckCircle,
-                                label = "${dto.likeCount} going",
-                            ),
-                            replies,
-                        )
-                    PulseIntent.Recommend ->
-                        listOf(
-                            RowEngagementItem(
-                                id = "helpful",
-                                icon = PantopusIcon.ThumbsUp,
-                                label = "${dto.likeCount} helpful",
-                            ),
-                            replies,
-                        )
-                    PulseIntent.Lost ->
-                        listOf(
-                            replies,
-                            RowEngagementItem(
-                                id = "seen",
-                                icon = PantopusIcon.Eye,
-                                label = "${dto.likeCount} seen",
-                            ),
-                        )
+                    PulseIntent.Event, PulseIntent.Recommend -> listOf(reaction, replies)
                     PulseIntent.Ask,
+                    PulseIntent.Lost,
                     PulseIntent.Alert,
                     PulseIntent.Deal,
                     PulseIntent.Announce,
@@ -949,8 +970,7 @@ class MyPostsViewModel
                     PulseIntent.VisitorGuide,
                     PulseIntent.All,
                     PulseIntent.Generic,
-                    ->
-                        listOf(replies, likes)
+                    -> listOf(replies, reaction)
                 }
             }
 

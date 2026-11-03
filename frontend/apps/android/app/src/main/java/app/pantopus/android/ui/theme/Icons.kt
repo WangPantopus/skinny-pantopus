@@ -80,11 +80,11 @@ import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DragIndicator
+import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditCalendar
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.EmergencyShare
-import androidx.compose.material.icons.filled.EnergySavingsLeaf
 import androidx.compose.material.icons.filled.Engineering
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.EscalatorWarning
@@ -978,7 +978,7 @@ internal fun PantopusIcon.source(): IconSource =
         // `list-checks`; fall back to the closest visually-similar
         // Material vector. Visual signal is reinforced by the
         // per-category background tint in `HouseholdTaskCategoryPalette`.
-        PantopusIcon.Leaf -> IconSource.Material(Icons.Filled.EnergySavingsLeaf)
+        PantopusIcon.Leaf -> IconSource.Material(Icons.Filled.Eco)
         PantopusIcon.Utensils -> IconSource.Material(Icons.Filled.Restaurant)
         PantopusIcon.Baby -> IconSource.Material(Icons.Filled.ChildCare)
 

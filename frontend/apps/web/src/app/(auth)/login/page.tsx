@@ -9,6 +9,7 @@ import PantopusBadge from '@/components/PantopusBadge';
 import AuthForm from '@/components/auth/AuthForm';
 import { toast } from '@/components/ui/toast-store';
 import { takeSignInHandoff } from '@/lib/email-verified-handoff';
+import { landingAfterSignIn } from '@/lib/invitation-after-sign-in';
 import { OAUTH_ATTEMPT_UNAVAILABLE_ERROR, beginOAuthAttempt } from '@/lib/oauth-attempt';
 import { ACCOUNT_DELETED_NOTICE_KEY, ACCOUNT_DELETED_NOTICE_MAX_AGE_MS, SESSION_ENDED_NOTICE_KEY } from '@/lib/session-refresh';
 import {
@@ -100,7 +101,7 @@ function LoginContent() {
         return;
       }
 
-      router.push(redirectTo);
+      router.push(await landingAfterSignIn(redirectTo));
     } catch (err: unknown) {
       setFieldErrors(extractFieldErrors(err));
       setError(extractApiError(err, 'Login failed. Please try again.'));

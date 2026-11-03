@@ -1,26 +1,32 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import React, { useState, type CSSProperties, type ReactNode } from 'react';
 import {
   MessageCircle, Star, CalendarDays, Search, Megaphone,
   AlertTriangle, PenLine, Pencil, Siren, Tag, Wrench, Newspaper, X,
-  Trophy, Compass, User, Heart, Bookmark, Hand, ThumbsUp,
+  Trophy, Compass, User, Bookmark, Lightbulb, CalendarCheck, PartyPopper,
   MapPin, Store, CheckCircle, Hammer, Plane, Bookmark as BookmarkIcon, Share, Repeat2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import * as api from '@pantopus/api';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
+import { personColor, personInitials } from '@/lib/personColor';
 import { PostMediaPreview, resolvePostMediaSlots } from './PostMediaGrid';
 import { PostLinkContent } from './LinkPreviewCard';
 import LinkPreviewCard from './LinkPreviewCard';
-import { formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, type PostTypeConfig } from '@pantopus/ui-utils';
+import {
+  formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, POST_REACTION_LABEL, postReaction,
+  type PostTypeConfig,
+} from '@pantopus/ui-utils';
 import { chosenUsername } from '@pantopus/utils';
 import { confirmStore } from '@/components/ui/confirm-store';
 import PostMetadata from './PostMetadata';
 import { canSharePost, sharePostLink } from './sharePostLink';
 import type { AudienceProfile, Post } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
+import { canOfferProfilePin } from '@/hooks/useProfilePin';
 
 // ─── Lucide icon lookup (platform-specific JSX — data from shared config) ──
 const LUCIDE_MAP: Record<string, LucideIcon> = {
@@ -34,22 +40,40 @@ const POST_TYPE_THEMED_TEXT = 'text-[color:var(--post-type-text)] dark:text-[col
 const postTypeTextVars = (config: PostTypeConfig) =>
   ({ '--post-type-text': config.textColor, '--post-type-text-dark': config.darkTextColor }) as CSSProperties;
 
-function getTypeIcon(type: string): ReactNode {
+/** The post kind's icon (a pencil for kinds this build doesn't know); a profile's Pinned cards use it too. */
+export function postTypeIcon(type: string): LucideIcon {
   const name = POST_TYPE_ICONS_LUCIDE[type] || 'Pencil';
-  const Icon = LUCIDE_MAP[name] || PenLine;
+  return LUCIDE_MAP[name] || PenLine;
+}
+
+function getTypeIcon(type: string): ReactNode {
+  const Icon = postTypeIcon(type);
   return <Icon className="w-4 h-4" />;
 }
 
+/** The icon of the post's one reaction, named by its kind (Going, Celebrate, Helpful); the post page uses it too. */
+export function postReactionIcon(type: string | null | undefined): LucideIcon {
+  switch (postReaction(type)) {
+    case 'going': return CalendarCheck;
+    case 'celebrate': return PartyPopper;
+    default: return Lightbulb;
+  }
+}
+
 function getTypeCtaIcon(type: string): ReactNode | null {
+  const reply = <MessageCircle className="w-3.5 h-3.5" />;
   const map: Record<string, ReactNode> = {
-    ask_local: <MessageCircle className="w-3.5 h-3.5" />,
+    ask_local: reply,
     recommendation: <Bookmark className="w-3.5 h-3.5" />,
-    event: <Hand className="w-3.5 h-3.5" />,
+    event: reply,
     lost_found: <MapPin className="w-3.5 h-3.5" />,
-    announcement: <ThumbsUp className="w-3.5 h-3.5" />,
+    local_update: reply,
+    announcement: reply,
+    neighborhood_win: reply,
+    progress_wins: reply,
     alert: <AlertTriangle className="w-3.5 h-3.5" />,
     deal: <Tag className="w-3.5 h-3.5" />,
-    service_offer: <MessageCircle className="w-3.5 h-3.5" />,
+    service_offer: reply,
   };
   return map[type] || null;
 }
@@ -75,6 +99,11 @@ interface PostCardProps {
   onDelete?: (postId: string) => void;
   /** Opens the edit form for one of the viewer's own posts. */
   onEdit?: (post: Post) => void;
+  /**
+   * Pin to profile / Unpin from profile for one of the viewer's own posts. Offered only when the post says whether it
+   * is pinned (`profile_pinned`) and can show on the profile; hooks/useProfilePin.ts.
+   */
+  onProfilePin?: (post: Post, pin: boolean) => void;
   onHide?: (postId: string) => void;
   onMute?: (target: Parameters<typeof api.posts.muteEntity>[0]) => void;
   onNotHelpful?: (postId: string) => void;
@@ -87,6 +116,11 @@ interface PostCardProps {
   isSaving?: boolean;
   surface?: string;
   showToast?: (msg: string) => void;
+  /**
+   * On a person's own profile, their account id: the author's initials then sit on the person's own color, as in the
+   * profile header (and on iOS and Android). The feed colors initials by post kind.
+   */
+  authorColorSeed?: string;
 }
 
 function PostCard({
@@ -98,6 +132,7 @@ function PostCard({
   onSave,
   onDelete,
   onEdit,
+  onProfilePin,
   onHide,
   onMute,
   onNotHelpful,
@@ -108,16 +143,22 @@ function PostCard({
   isSaving,
   surface,
   showToast,
+  authorColorSeed,
 }: PostCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [solving, setSolving] = useState(false);
   const config = getPostTypeConfig(post.post_type || 'general');
   const typeIconNode = getTypeIcon(post.post_type || 'general');
   const ctaIconNode = getTypeCtaIcon(post.post_type || 'general');
+  const reactionLabel = POST_REACTION_LABEL[postReaction(post.post_type)];
+  const ReactionIcon = postReactionIcon(post.post_type);
   // A "Save" call to action saves the post, like the bookmark; the others open the replies.
   const ctaSaves = config.ctaIcon === 'bookmark' && Boolean(onSave);
   const authorUserId = post.author_user_id || post.user_id;
   const isOwn = authorUserId === currentUserId;
+  // A plan's own post (made by Plans) is changed or cancelled from the plan, which tells everyone; the server
+  // refuses editing, deleting or archiving it as a post.
+  const isPlanPost = post.post_metadata?.plan === true;
   const publicAuthor = post.author || null;
   const isOwnPersona = publicAuthor?.type === 'persona'
     && (publicAuthor as AudienceProfile).viewer?.isOwner === true;
@@ -216,9 +257,9 @@ function PostCard({
         ) : (
           <div
             className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold ring-2"
-            style={{ background: config.color }}
+            style={{ background: authorColorSeed ? personColor(authorColorSeed) : config.color }}
           >
-            {creatorInitial}
+            {authorColorSeed ? personInitials(creatorName) || creatorInitial : creatorInitial}
           </div>
         )}
         <div className="flex-1 min-w-0">
@@ -281,7 +322,16 @@ function PostCard({
           </button>
           {menuOpen && (
             <div className="absolute right-0 top-full mt-1 w-40 bg-surface rounded-xl shadow-xl border border-app py-1 z-20">
-              {isOwn && onEdit && (
+              {isOwn && isPlanPost && (
+                <Link
+                  href={`/plans/${post.id}`}
+                  onClick={() => setMenuOpen(false)}
+                  className="block w-full text-left px-3 py-2 text-xs text-app-muted hover-bg-app"
+                >
+                  Open plan
+                </Link>
+              )}
+              {isOwn && !isPlanPost && onEdit && (
                 <button
                   onClick={() => { onEdit(post); setMenuOpen(false); }}
                   className="w-full text-left px-3 py-2 text-xs text-app-muted hover-bg-app"
@@ -289,7 +339,15 @@ function PostCard({
                   Edit Post
                 </button>
               )}
-              {isOwn && onDelete && (
+              {isOwn && onProfilePin && canOfferProfilePin(post) && (
+                <button
+                  onClick={() => { onProfilePin(post, !post.profile_pinned); setMenuOpen(false); }}
+                  className="w-full text-left px-3 py-2 text-xs text-app-muted hover-bg-app"
+                >
+                  {post.profile_pinned ? 'Unpin from profile' : 'Pin to profile'}
+                </button>
+              )}
+              {isOwn && !isPlanPost && onDelete && (
                 <button
                   onClick={async () => { const yes = await confirmStore.open({ title: 'Delete this post?', confirmLabel: 'Delete', variant: 'destructive' }); if (yes) { onDelete(post.id); setMenuOpen(false); } }}
                   className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-50"
@@ -428,19 +486,21 @@ function PostCard({
       {/* ─── Action bar (none on a tip) ──────────────── */}
       {!seeded && (
       <div className="flex items-center gap-1 px-3 py-2 border-t border-app">
-        {/* Like */}
+        {/* The post's one reaction, named by its kind: Going (event), Celebrate (win), Helpful (the rest) */}
         <button
           onClick={() => onLike(post.id)}
           disabled={isLiking}
           aria-busy={isLiking || undefined}
-          aria-label={post.userHasLiked ? 'Unlike post' : 'Like post'}
+          aria-pressed={Boolean(post.userHasLiked)}
+          aria-label={post.like_count > 0 ? `${reactionLabel}, ${post.like_count}` : reactionLabel}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${isLiking ? 'opacity-60 ' : ''}${
             post.userHasLiked
-              ? 'text-red-500 bg-red-50 hover:bg-red-100'
-                : 'text-app-muted hover-bg-app'
+              ? 'text-sky-600 bg-sky-50 hover:bg-sky-100 dark:bg-sky-900/30 dark:text-sky-300'
+              : 'text-app-muted hover-bg-app'
           }`}
         >
-          <Heart className={`w-4 h-4 ${post.userHasLiked ? 'fill-current' : ''}`} />
+          <ReactionIcon className="w-4 h-4" aria-hidden="true" />
+          <span>{reactionLabel}</span>
           {post.like_count > 0 && <span>{post.like_count}</span>}
         </button>
 
@@ -575,6 +635,7 @@ export default React.memo(PostCard, (prev, next) => {
     && prev.post.like_count === next.post.like_count
     && prev.post.comment_count === next.post.comment_count
     && prev.post.userHasSaved === next.post.userHasSaved
+    && prev.post.profile_pinned === next.post.profile_pinned
     && repostedByText(prev.post.reposted_by) === repostedByText(next.post.reposted_by)
     && prev.isLiking === next.isLiking
     && prev.isSaving === next.isSaving
@@ -587,6 +648,7 @@ export default React.memo(PostCard, (prev, next) => {
     && prev.onSave === next.onSave
     && prev.onDelete === next.onDelete
     && prev.onEdit === next.onEdit
+    && prev.onProfilePin === next.onProfilePin
     && prev.onHide === next.onHide
     && prev.onMute === next.onMute
     && prev.onDismissSeeded === next.onDismissSeeded;

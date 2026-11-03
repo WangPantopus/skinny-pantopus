@@ -84,9 +84,14 @@ struct SkyMoment: Equatable {
     }
 
     /// "5:38 PM" for minutes past local midnight, in the person's own clock style.
-    static func clockText(_ minutes: Double, calendar: Calendar = .autoupdatingCurrent) -> String {
-        let midnight = calendar.startOfDay(for: Date())
-        return midnight.addingTimeInterval(minutes * 60).formatted(date: .omitted, time: .shortened)
+    /// A wall-clock reading, never midnight plus that many minutes: the day the
+    /// clocks go back has 25 hours, and that sum read an hour early (Today said
+    /// 6:49 AM where Place said 7:49 AM on November 1).
+    static func clockText(_ minutes: Double) -> String {
+        let utc = TimeZone(secondsFromGMT: 0) ?? .current
+        let wrapped = (minutes.rounded().truncatingRemainder(dividingBy: 1440) + 1440).truncatingRemainder(dividingBy: 1440)
+        return Date(timeIntervalSinceReferenceDate: wrapped * 60)
+            .formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: utc))
     }
 
     /// The moon's age as a fraction of the 29.53-day synodic month, from the

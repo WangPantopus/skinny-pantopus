@@ -4,6 +4,11 @@ import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
+import java.time.Instant
+import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 
 /**
  * The Place Intelligence section-envelope contract. Mirrors the web
@@ -299,11 +304,29 @@ data class PlaceWeatherAlert(
     val headline: String,
     /** Body copy / instruction. */
     val description: String,
-    /** ISO 8601. */
+    /** When the hazard begins (ISO 8601). */
     val onset: String? = null,
-    /** ISO 8601. */
+    /** When the hazard ends (ISO 8601). */
     val ends: String? = null,
-)
+    /** When the bulletin was issued (ISO 8601); null from older servers (TPR contract §3, as the fields below). */
+    val sent: String? = null,
+    val effective: String? = null,
+    /** When this bulletin expires or is replaced; not the hazard's end. */
+    val expires: String? = null,
+    /** The issuer, e.g. "NWS Portland OR". */
+    @Json(name = "sender_name") val senderName: String? = null,
+    /** The affected areas as the provider writes them. */
+    val area: String? = null,
+    /** The provider's full text, not cut. */
+    @Json(name = "original_description") val originalDescription: String? = null,
+    @Json(name = "original_instruction") val originalInstruction: String? = null,
+    /** The provider's page for this alert, when there is one. */
+    @Json(name = "details_url") val detailsUrl: String? = null,
+) {
+    /** The official text unedited (description, then instruction), or "" when the server sent only the cut [description]. */
+    val originalText: String
+        get() = listOfNotNull(originalDescription, originalInstruction).map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n\n")
+}
 
 /** NWS active alerts — an empty `active` list renders "No active alerts". */
 @JsonClass(generateAdapter = true)
@@ -314,12 +337,50 @@ data class PlaceAlertsData(
 /** Sunrise / sunset — rides the NOAA / Open-Meteo feed. */
 @JsonClass(generateAdapter = true)
 data class PlaceSunriseSunsetData(
-    /** ISO 8601. */
+    /** The place's wall clock ("2026-11-01T06:50", no zone); older servers wrote it in the fetch day's UTC offset. */
     val sunrise: String,
-    /** ISO 8601. */
+    /** The place's wall clock, as [sunrise]. */
     val sunset: String,
     @Json(name = "daylight_minutes") val daylightMinutes: Int,
-)
+    /** The place's local date these times belong to (YYYY-MM-DD); null from older servers. */
+    val date: String? = null,
+    /** The sunrise instant (ISO 8601, "Z"); null from older servers. */
+    @Json(name = "sunrise_utc") val sunriseUtc: String? = null,
+    /** The sunset instant (ISO 8601, "Z"); null from older servers. */
+    @Json(name = "sunset_utc") val sunsetUtc: String? = null,
+) {
+    /** The sunrise on the place's clock in [zone] ("2026-11-01T06:50"): the instant when sent, else the wall clock as written. */
+    fun localSunrise(zone: ZoneId?): String = localClock(sunriseUtc, sunrise, zone)
+
+    /** The sunset on the place's clock in [zone], as [localSunrise]. */
+    fun localSunset(zone: ZoneId?): String = localClock(sunsetUtc, sunset, zone)
+
+    /** The place's local date of these times: [date] when sent, else the sunrise's own date. */
+    fun localDate(zone: ZoneId?): LocalDate? =
+        date?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+            ?: runCatching { LocalDate.parse(localSunrise(zone).take(DATE_LENGTH)) }.getOrNull()
+
+    private fun localClock(
+        instant: String?,
+        wall: String,
+        zone: ZoneId?,
+    ): String {
+        // A zone-less wall clock is already the place's; an instant (or an offset string) is read in the place's zone.
+        val at =
+            instant?.let(::parseInstant)
+                ?: wall.takeIf { it.length > DATE_TIME_LENGTH && it.drop(DATE_TIME_LENGTH).any { c -> c in "Z+-" } }
+                    ?.let(::parseInstant)
+        if (at == null || zone == null) return wall
+        return at.atZone(zone).toLocalDateTime().truncatedTo(ChronoUnit.MINUTES).toString()
+    }
+
+    private fun parseInstant(raw: String): Instant? = runCatching { OffsetDateTime.parse(raw).toInstant() }.getOrNull()
+
+    private companion object {
+        const val DATE_LENGTH = 10
+        const val DATE_TIME_LENGTH = 16
+    }
+}
 
 // ─── Risk & readiness payloads ───────────────────────────────
 
@@ -1102,6 +1163,7 @@ data class PlaceHomeSystem(
     @Json(name = "source_label") val sourceLabel: String = "",
     val confidence: String = "low",
     @Json(name = "source_ref") val sourceRef: String? = null,
+    @Json(name = "last_service") val lastService: PlaceSystemService? = null,
     val note: String = "",
 )
 
@@ -1113,6 +1175,15 @@ data class PlaceHomeSystemsSummary(
     @Json(name = "confirmed_count") val confirmedCount: Int = 0,
     @Json(name = "total_count") val totalCount: Int = 0,
     val headline: String = "",
+)
+
+/** The newest completed maintenance-log entry for a system (TPR contract §5); only for viewers who see the log. */
+@JsonClass(generateAdapter = true)
+data class PlaceSystemService(
+    /** YYYY-MM-DD. */
+    val date: String = "",
+    @Json(name = "source_label") val sourceLabel: String = "",
+    val title: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -1150,6 +1221,8 @@ data class PlaceCalendarEvent(
     @Json(name = "moved_from") val movedFrom: String? = null,
     val holiday: String? = null,
     @Json(name = "shift_days") val shiftDays: Int? = null,
+    /** "household" (the household's own schedule) or "address" (a general date); null from older servers. */
+    val audience: String? = null,
 ) {
     val holidayMoveLine: String?
         get() {
@@ -1279,6 +1352,10 @@ data class PlaceSectionEnvelope(
     /** Why there is no data — a coverage gap or a lock reason. */
     val unavailableReason: String?,
     val data: PlaceSectionData?,
+    /** The area the reading covers (TPR contract §4); null without a reading and from older servers. */
+    val scope: PlaceSectionScope? = null,
+    /** What kind of evidence the reading is (TPR contract §4): never a home measurement. */
+    val evidence: PlaceSectionScope? = null,
 ) {
     val sectionId: PlaceSectionId get() = PlaceSectionId.from(id)
     val groupId: PlaceGroup get() = PlaceGroup.from(group)
@@ -1333,6 +1410,12 @@ data class PlaceGroupBlock(
     val groupId: PlaceGroup get() = PlaceGroup.from(group)
 }
 
+/** A reading's area covered or kind of evidence (TPR contract §4): a token for logic and the words to show. */
+data class PlaceSectionScope(
+    val kind: String,
+    val label: String,
+)
+
 /**
  * Who is looking at a Home's Place. [role] picks which sections apply:
  * "owner" (value and the exemption check), "renter" (the rent sections),
@@ -1369,7 +1452,10 @@ data class PlaceIntelligence(
     @Json(name = "move_in_date") val moveInDate: String? = null,
     /** The home's IANA time zone (Today turns over at its midnight); null without coordinates and from older servers. */
     @Json(name = "time_zone") val timeZone: String? = null,
-)
+) {
+    /** [timeZone] as a zone: every clock time shown for this place is read in it (TPR contract); null when unknown. */
+    val homeZone: ZoneId? get() = timeZone?.let { runCatching { ZoneId.of(it) }.getOrNull() }
+}
 
 // ─── Anonymous T0 preview (`GET /api/public/place`) ──────────
 

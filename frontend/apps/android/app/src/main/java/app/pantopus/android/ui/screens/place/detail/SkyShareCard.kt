@@ -72,7 +72,7 @@ class SkyShareCard(
     fun render(): Bitmap {
         val scale = 3f
         val bitmap = ImageBitmap((WIDTH * scale).toInt(), (HEIGHT * scale).toInt())
-        val moment = SkyMoment.at(now, sun?.sunrise, sun?.sunset)
+        val moment = SkyMoment.at(now, sun?.localSunrise(now.zone), sun?.localSunset(now.zone))
         val painter =
             TodaySkyPainter(
                 condition = weather.conditionCode,

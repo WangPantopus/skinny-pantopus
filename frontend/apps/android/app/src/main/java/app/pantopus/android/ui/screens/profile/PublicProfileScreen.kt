@@ -2,15 +2,20 @@
 
 package app.pantopus.android.ui.screens.profile
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -23,11 +28,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -36,6 +42,8 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.LaunchFeatures
+import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.ui.components.BeaconIdentity
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.InviteLinks
@@ -48,9 +56,6 @@ import app.pantopus.android.ui.components.rememberShareTextWithCompletion
 import app.pantopus.android.ui.components.shareText
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.feed.pulse.PulsePostCardContent
-import app.pantopus.android.ui.screens.profile.tabs.ProfileGigReviewsSection
-import app.pantopus.android.ui.screens.profile.tabs.ProfileGigsSection
-import app.pantopus.android.ui.screens.profile.tabs.ProfilePortfolioSection
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBar
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailTopBarAction
@@ -92,11 +97,25 @@ fun PublicProfileScreen(
     onOpenProfile: (String) -> Unit = {},
     /** Opens a post from the Posts tab, as a tap on a Pulse card does. */
     onOpenPost: (String) -> Unit = {},
+    /** Your own profile's Edit profile. */
+    onEditProfile: () -> Unit = {},
+    /** "You and …": a plan you're both in, a Support Train you both help on. */
+    onOpenPlan: (String) -> Unit = {},
+    onOpenSupportTrain: (String) -> Unit = {},
+    /** ☰ → Your profile: your page as a cover with ✕ (pushed from your own name, it keeps Back). */
+    ownerCover: Boolean = false,
+    /** Where your own page's rows and buttons go (PRF step 2). */
+    ownerNavigation: OwnerNavigation = OwnerNavigation(),
+    /** The `monthly_receipt` push (`?tab=receipt`): last month opens in full. */
+    expandMonthlyReceipt: Boolean = false,
     viewModel: PublicProfileViewModel = hiltViewModel(),
     usernameShare: UsernameShareViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val refreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
+    val inCommon by viewModel.inCommon.state.collectAsStateWithLifecycle()
+    val pinnedPosts by viewModel.pins.state.collectAsStateWithLifecycle()
+    val pinnedCards = remember(pinnedPosts) { pinnedPosts?.map(::pinnedCard) }
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val usernameShareForm by usernameShare.form.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
@@ -113,11 +132,24 @@ fun PublicProfileScreen(
     val isFollowInFlight by viewModel.isFollowInFlight.collectAsStateWithLifecycle()
     val canFollow by viewModel.canFollow.collectAsStateWithLifecycle()
     val relationshipLoaded by viewModel.relationshipLoaded.collectAsStateWithLifecycle()
+    val relationshipFailed by viewModel.relationshipFailed.collectAsStateWithLifecycle()
     val postsLoadFailed by viewModel.postsLoadFailed.collectAsStateWithLifecycle()
     val postCards by viewModel.postCards.cards.collectAsStateWithLifecycle()
     val postOptionsId by viewModel.postCards.optionsPostId.collectAsStateWithLifecycle()
     val reportingPostId by viewModel.postCards.reportingPostId.collectAsStateWithLifecycle()
     val showUnfollowConfirm by viewModel.showUnfollowConfirm.collectAsStateWithLifecycle()
+    val showConnectSheet by viewModel.showConnectSheet.collectAsStateWithLifecycle()
+    val showWithdrawConfirm by viewModel.showWithdrawConfirm.collectAsStateWithLifecycle()
+    val postsLoading by viewModel.postsLoading.collectAsStateWithLifecycle()
+    val ownerExtras by viewModel.owner.extras.collectAsStateWithLifecycle()
+    val preview by viewModel.preview.state.collectAsStateWithLifecycle()
+    var showPreviewSheet by rememberSaveable { mutableStateOf(false) }
+    var showReceipt by rememberSaveable { mutableStateOf(false) }
+    var showInvite by rememberSaveable { mutableStateOf(false) }
+    var receiptOpened by rememberSaveable { mutableStateOf(false) }
+    var showLogOutConfirm by rememberSaveable { mutableStateOf(false) }
+    var showTrustExplainer by remember { mutableStateOf(false) }
+    val uriHandler = LocalUriHandler.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val shareTextWithCompletion = rememberShareTextWithCompletion()
     val postCardActions =
@@ -152,6 +184,23 @@ fun PublicProfileScreen(
         onPauseOrDispose { }
     }
     RefreshOnStoreChange(viewModel::load)
+    // The `monthly_receipt` push opens last month in full, once its receipt has loaded.
+    LaunchedEffect(expandMonthlyReceipt, ownerExtras?.receipt) {
+        if (expandMonthlyReceipt && !receiptOpened && ownerExtras?.receipt != null) {
+            receiptOpened = true
+            showReceipt = true
+        }
+    }
+    // A preview ends with Done or Back, never by leaving the page.
+    BackHandler(enabled = preview != null) { viewModel.endPreview() }
+    // Your own link on a made-up username offers to pick one first, once (as the ⋯ menu's Share does).
+    val shareOwnProfile: (PublicProfileContent) -> Unit = { loaded ->
+        if (usernameShare.shouldAsk(loaded.profile.id, loaded.profile.chosenUsername == null)) {
+            usernameShare.open(loaded.profile.id, loaded.profile.username)
+        } else {
+            profileShareUrl(state)?.let { context.shareText(it) }
+        }
+    }
 
     LaunchedEffect(toast) {
         if (toast != null) {
@@ -178,33 +227,86 @@ fun PublicProfileScreen(
                     is PublicProfileUiState.Loaded -> {
                         val content = s.content
                         val neighbor = content.neighbor
-                        if (content.kind == PublicProfileKind.Local && neighbor != null) {
-                            LocalProfileLoadedFrame(
-                                content = content,
-                                neighbor = neighbor,
-                                selectedTab = selectedLocalTab,
-                                connectState = connectState,
-                                onBack = onBack,
-                                onSelectTab = { viewModel.selectLocalTab(it) },
-                                onMessage = { onOpenMessages(content.profile) },
-                                onConnect = { viewModel.connect() },
-                                onOverflow = { viewModel.setShowOverflow(true) },
-                                follow =
-                                    ProfileFollowState(
-                                        canFollow = canFollow,
-                                        isFollowing = isFollowing,
-                                        isInFlight = isFollowInFlight,
-                                        relationshipLoaded = relationshipLoaded,
-                                    ),
-                                connection = connection,
-                                onFollow = { viewModel.follow() },
-                                onUnfollow = { viewModel.requestUnfollow() },
+                        val currentPreview = preview
+                        if (currentPreview != null && content.isOwner) {
+                            OwnerPreviewFrame(
+                                preview = currentPreview,
+                                onDone = viewModel::endPreview,
+                                onRetry = { viewModel.startPreview(currentPreview.audience) },
                                 onOpenGig = onOpenGig,
                                 onOpenProfile = onOpenProfile,
+                                onOpenLink = { url -> runCatching { uriHandler.openUri(url) } },
+                            )
+                        } else if (content.kind == PublicProfileKind.Local && neighbor != null) {
+                            LocalProfileLoadedFrame(
+                                content = content,
+                                selectedTab = selectedLocalTab,
+                                actions =
+                                    ProfileActionsState(
+                                        isOwner = content.isOwner,
+                                        connection = connection,
+                                        showsConnection = canFollow && relationshipLoaded,
+                                        inFlight = connectState is PublicProfileActionState.InFlight,
+                                        relationshipPending = !content.isOwner && !relationshipLoaded && !relationshipFailed,
+                                    ),
+                                callbacks =
+                                    ProfileActionCallbacks(
+                                        onConnect = viewModel::openConnectSheet,
+                                        onWithdraw = viewModel::requestWithdraw,
+                                        onAccept = { viewModel.connect() },
+                                        onDecline = viewModel::declineRequest,
+                                        onDisconnect = viewModel::requestDisconnect,
+                                        onMessage = { onOpenMessages(content.profile) },
+                                        onEditProfile = onEditProfile,
+                                    ),
+                                onBack = onBack,
+                                onSelectTab = { viewModel.selectLocalTab(it) },
+                                onOverflow = { viewModel.setShowOverflow(true) },
+                                onTrustClick = { showTrustExplainer = true },
+                                hiddenByBlock = connection == ProfileConnection.Blocked,
+                                onOpenGig = onOpenGig,
+                                onOpenProfile = onOpenProfile,
+                                onOpenLink = { url -> runCatching { uriHandler.openUri(url) } },
                                 postsLoadFailed = postsLoadFailed,
+                                postsLoading = postsLoading,
                                 onRetryPosts = { viewModel.refresh() },
                                 postCards = postCards,
                                 postCardActions = postCardActions,
+                                // Nothing shared shows on your own page or across a block.
+                                inCommon = inCommon.takeIf { !content.isOwner && connection != ProfileConnection.Blocked },
+                                pinned = pinnedCards.takeIf { connection != ProfileConnection.Blocked },
+                                onOpenInCommon = { target ->
+                                    when (target) {
+                                        is InCommonTarget.Plan -> onOpenPlan(target.id)
+                                        is InCommonTarget.SupportTrain -> onOpenSupportTrain(target.id)
+                                    }
+                                },
+                                mode =
+                                    if (content.isOwner) {
+                                        ProfileFrameMode.Owner(
+                                            extras = ownerExtras,
+                                            cover = ownerCover,
+                                            navigation = ownerNavigation,
+                                            actions =
+                                                OwnerPageActions(
+                                                    onShare = { shareOwnProfile(content) },
+                                                    onPreviewAs = { showPreviewSheet = true },
+                                                    onDismissTip = viewModel.owner::dismissTip,
+                                                    onOpenMonth = { showReceipt = true },
+                                                    onShareMonth = { viewModel.owner.receiptShareMessage()?.let { context.shareText(it) } },
+                                                    onOpenInvite = {
+                                                        if (ownerExtras?.invite != null) {
+                                                            showInvite = true
+                                                        } else {
+                                                            viewModel.owner.inviteShareMessage()?.let { context.shareText(it) }
+                                                        }
+                                                    },
+                                                    onLogOut = { showLogOutConfirm = true },
+                                                ),
+                                        )
+                                    } else {
+                                        ProfileFrameMode.Visitor
+                                    },
                             )
                         } else {
                             PublicProfileLoadedFrame(
@@ -265,11 +367,22 @@ fun PublicProfileScreen(
                 sheetState = sheetState,
             ) {
                 val loaded = (state as? PublicProfileUiState.Loaded)?.content
+                val canOfferFollow = canFollow && relationshipLoaded && !isBlockedByViewer
                 OverflowSheetContent(
                     // The header's "Share profile" opens this sheet, so it shares first.
                     shareUrl = profileShareUrl(state),
                     isOwnProfile = loaded?.isOwner == true,
                     isBlockedByViewer = isBlockedByViewer,
+                    // Follow lives here and in the Connect sheet now (no separate Follow row). A failed relationship
+                    // read offers neither, rather than guessing.
+                    follow =
+                        loaded
+                            ?.takeIf { it.kind == PublicProfileKind.Local && canOfferFollow }
+                            ?.let { OverflowFollow(profileFirstName(it.header), isFollowing, enabled = !isFollowInFlight) },
+                    onFollow = {
+                        viewModel.setShowOverflow(false)
+                        if (isFollowing) viewModel.requestUnfollow() else viewModel.follow()
+                    },
                     onShare = { url ->
                         viewModel.setShowOverflow(false)
                         // Your own link still on a made-up username: offer to pick one first, once.
@@ -419,6 +532,8 @@ fun PublicProfileScreen(
                     },
                     onReport = { viewModel.postCards.beginReport(card.id) },
                     onDismiss = { viewModel.postCards.dismissOptions() },
+                    onToggleProfilePin = { viewModel.postCards.toggleProfilePin(card.id) },
+                    onOpenPlan = { viewModel.postCards.openPlan(card.id) },
                 )
             }
         }
@@ -436,14 +551,14 @@ fun PublicProfileScreen(
             val name = (state as? PublicProfileUiState.Loaded)?.content?.header?.displayName?.trim().orEmpty()
             AlertDialog(
                 onDismissRequest = { viewModel.cancelDisconnect() },
-                title = { Text(if (name.isEmpty()) "Disconnect" else "Disconnect from $name") },
-                text = { Text("Remove this connection?") },
+                title = { Text(if (name.isEmpty()) "Disconnect?" else "Disconnect from $name?") },
+                text = { Text("You'll stop seeing each other's connections-only posts.") },
                 confirmButton = {
                     TextButton(
                         onClick = { viewModel.disconnect() },
                         modifier = Modifier.testTag("publicProfileDisconnectConfirm"),
                     ) {
-                        Text("Remove", color = PantopusColors.error)
+                        Text("Disconnect", color = PantopusColors.error)
                     }
                 },
                 dismissButton = {
@@ -456,8 +571,116 @@ fun PublicProfileScreen(
                 },
             )
         }
+        val loadedContent = (state as? PublicProfileUiState.Loaded)?.content
+        // Requested → "Withdraw your request?", so a stray tap never takes it back.
+        if (showWithdrawConfirm) {
+            val firstName = loadedContent?.header?.let(::profileFirstName) ?: "them"
+            AlertDialog(
+                onDismissRequest = { viewModel.cancelWithdraw() },
+                title = { Text("Withdraw your request?") },
+                text = { Text("This takes back your request to $firstName. You can ask again later.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = { viewModel.withdrawRequest() },
+                        modifier = Modifier.testTag("publicProfileWithdrawConfirm"),
+                    ) {
+                        Text("Withdraw", color = PantopusColors.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { viewModel.cancelWithdraw() },
+                        modifier = Modifier.testTag("publicProfileWithdrawCancel"),
+                    ) {
+                        Text("Keep it")
+                    }
+                },
+            )
+        }
+        if (showConnectSheet && loadedContent != null) {
+            ProfileConnectSheet(
+                header = loadedContent.header,
+                firstName = profileFirstName(loadedContent.header),
+                plansOn = DeepLinkRouter.plansEnabled(),
+                isFollowing = isFollowing,
+                canFollow = canFollow && relationshipLoaded,
+                connectState = connectState,
+                onSend = viewModel::sendRequestFromSheet,
+                onJustFollow = viewModel::followFromSheet,
+                onDismiss = viewModel::dismissConnectSheet,
+            )
+        }
+        if (showPreviewSheet) {
+            PreviewAsSheet(
+                onPick = { audience ->
+                    showPreviewSheet = false
+                    viewModel.startPreview(audience)
+                },
+                onDismiss = { showPreviewSheet = false },
+            )
+        }
+        ownerExtras?.receipt?.takeIf { showReceipt }?.let { receipt ->
+            OwnerReceiptSheet(
+                receipt = receipt,
+                onShare = { viewModel.owner.receiptShareMessage()?.let { context.shareText(it) } },
+                onDismiss = { showReceipt = false },
+            )
+        }
+        ownerExtras?.invite?.takeIf { showInvite }?.let { progress ->
+            OwnerInviteSheet(
+                progress = progress,
+                onShare = viewModel.owner.inviteShareMessage()?.let { message -> { context.shareText(message) } },
+                onDismiss = { showInvite = false },
+            )
+        }
+        // Instant Screens contract §7: the sign-out confirmation says the phone's saved copy goes too.
+        if (showLogOutConfirm) {
+            AlertDialog(
+                onDismissRequest = { showLogOutConfirm = false },
+                title = { Text("Sign out of Pantopus?") },
+                text = {
+                    Text("You'll need to sign in again to use your account. Signing out removes what Pantopus saved on this phone.")
+                },
+                modifier = Modifier.testTag("ownerLogOutDialog"),
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showLogOutConfirm = false
+                            ownerNavigation.onLogOut()
+                        },
+                        modifier = Modifier.testTag("ownerLogOutConfirm"),
+                    ) {
+                        Text("Sign out", color = PantopusColors.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showLogOutConfirm = false }) { Text("Cancel") }
+                },
+            )
+        }
+        if (showTrustExplainer && loadedContent != null) {
+            ProfileTrustExplainer(
+                firstName = profileFirstName(loadedContent.header),
+                trust = loadedContent.header.trust,
+                isOwner = loadedContent.isOwner,
+                onDismiss = { showTrustExplainer = false },
+            )
+        }
     }
 }
+
+/** The posts read returns at most [StoreKeys.PROFILE_POSTS_LIMIT]; a full page reads "50+". */
+internal fun postCountLabel(count: Int): String = if (count >= StoreKeys.PROFILE_POSTS_LIMIT) "$count+" else "$count"
+
+/** The name in sentences ("Connect with Rowan?"): the first word of the name neighbors see. */
+internal fun profileFirstName(header: PublicProfileHeader): String =
+    header.displayName
+        .takeIf { header.hasName }
+        ?.trim()
+        ?.removePrefix("@")
+        ?.split(" ")
+        ?.firstOrNull { it.isNotBlank() }
+        ?: "this neighbor"
 
 /**
  * T3 — render state for the plain Follow / Following control. A Beacon
@@ -586,6 +809,7 @@ internal fun PublicProfileLoadedFrame(
                                 connection = connection,
                                 connectState = connectState,
                                 canFollow = follow.canFollow && follow.relationshipLoaded,
+                                isOwnProfile = content.isOwner,
                                 onConnect = onConnect,
                                 onMessage = onMessage,
                             )
@@ -623,6 +847,7 @@ internal fun PublicProfileLoadedFrame(
                                 content.isOwner -> onComposeBroadcast
                                 else -> onFollow
                             },
+                        isOwnProfile = content.isOwner,
                     )
                 }
             }
@@ -630,152 +855,274 @@ internal fun PublicProfileLoadedFrame(
     )
 }
 
+/** How the page shows: someone else's, your own (owner mode), or your own as one audience sees it. */
+internal sealed interface ProfileFrameMode {
+    data object Visitor : ProfileFrameMode
+
+    data class Owner(
+        val extras: OwnerExtras?,
+        val cover: Boolean,
+        val navigation: OwnerNavigation,
+        val actions: OwnerPageActions,
+    ) : ProfileFrameMode
+
+    data class Preview(
+        val audience: PreviewAudience,
+        val onDone: () -> Unit,
+    ) : ProfileFrameMode
+}
+
+/** Your own page's buttons that stay on the page (the rest go through [OwnerNavigation]). */
+internal data class OwnerPageActions(
+    val onShare: () -> Unit = {},
+    val onPreviewAs: () -> Unit = {},
+    val onDismissTip: (OwnerTip) -> Unit = {},
+    val onOpenMonth: () -> Unit = {},
+    val onShareMonth: () -> Unit = {},
+    val onOpenInvite: () -> Unit = {},
+    val onLogOut: () -> Unit = {},
+)
+
 /**
- * A21.2 — the designed Local Beacon profile archetype: green Home banner,
- * overlapping [BeaconIdentityBlock] with Connect + Message, a Posts ·
- * About tab strip, and the local post feed (or the "Quiet for now" empty
- * state) beneath it. `internal` so Paparazzi can render it without Hilt.
- *
- * Mirrors iOS `PublicProfileView.localLayout`.
+ * Someone's profile (PRF, 2026-11-01; `Main.dc.html`): the short header with its trust line and the actions for
+ * this relationship, then Posts · About (· Work when there is work). Your own profile ([ProfileFrameMode.Owner]) is
+ * the same page with the name neighbors see, Edit profile + Preview as, tips only you see, your latest two posts and
+ * "Your account"; a preview ([ProfileFrameMode.Preview]) is the page as that audience gets it. `internal` so Paparazzi
+ * can render it without Hilt.
  */
 @Composable
 internal fun LocalProfileLoadedFrame(
     content: PublicProfileContent,
-    neighbor: NeighborProfileContent,
     selectedTab: LocalProfileTab,
-    connectState: PublicProfileActionState,
+    actions: ProfileActionsState,
+    callbacks: ProfileActionCallbacks,
     onBack: () -> Unit,
     onSelectTab: (LocalProfileTab) -> Unit,
-    onMessage: () -> Unit,
-    onConnect: () -> Unit,
     onOverflow: () -> Unit,
-    follow: ProfileFollowState = ProfileFollowState(),
-    connection: ProfileConnection = ProfileConnection.None,
-    onFollow: () -> Unit = {},
-    onUnfollow: () -> Unit = {},
+    onTrustClick: () -> Unit = {},
+    hiddenByBlock: Boolean = false,
     onOpenGig: (String) -> Unit = {},
     onOpenProfile: (String) -> Unit = {},
+    onOpenLink: (String) -> Unit = {},
     postsLoadFailed: Boolean = false,
+    postsLoading: Boolean = false,
     onRetryPosts: () -> Unit = {},
     postCards: List<PulsePostCardContent> = emptyList(),
     postCardActions: ProfilePostCardActions = ProfilePostCardActions(),
+    mode: ProfileFrameMode = ProfileFrameMode.Visitor,
+    inCommon: ProfileInCommon? = null,
+    onOpenInCommon: (InCommonTarget) -> Unit = {},
+    /** The Pinned row; null until read (then the "Pin a post" tip waits too). */
+    pinned: List<PinnedCard>? = null,
 ) {
-    ContentDetailShell(
-        title = null,
-        onBack = onBack,
-        topBarAction =
-            ContentDetailTopBarAction(
-                icon = PantopusIcon.MoreHorizontal,
-                contentDescription = "More",
-                onClick = onOverflow,
-            ),
-        header = {
-            // Box stacks the 120dp banner with the identity block pulled
-            // down to overlap the banner's lower 40dp (banner − overlap).
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .testTag("publicProfileLocalHeader"),
+    val owner = mode as? ProfileFrameMode.Owner
+    val preview = mode as? ProfileFrameMode.Preview
+    // Your own page shows the name and photo neighbors see, never the account's.
+    val header = owner?.extras?.let { ownerHeader(content.header, it) } ?: content.header
+    val firstName = profileFirstName(header)
+    // Work shows when there is work to show, and always on your own profile, where "Add portfolio item" lives.
+    val tabs =
+        listOfNotNull(
+            LocalProfileTab.Posts,
+            LocalProfileTab.About,
+            LocalProfileTab.Work.takeIf { content.work.hasWork || owner != null },
+        )
+    // Work leaves when its last item goes; the strip falls back to Posts.
+    val tab = selectedTab.takeIf { it in tabs } ?: LocalProfileTab.Posts
+    Column(modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).testTag("publicProfileLocalHeader")) {
+        ProfileFrameTopBar(mode = mode, onBack = onBack, onOverflow = onOverflow)
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            ProfileIdentityHeader(
+                header = header,
+                bio = content.stats.bio,
+                onTrustClick = onTrustClick,
+                accountNameLine = owner?.extras?.accountNameLine,
             ) {
-                PublicProfileBanner(kind = PublicProfileKind.Local)
-                Box(modifier = Modifier.padding(top = 80.dp)) {
-                    BeaconIdentityBlock(
-                        identity = BeaconIdentity.Home,
-                        name = content.header.displayName,
-                        handle = content.header.handle,
-                        tierLabel = null,
-                        isVerifiedNeighbor = content.header.isVerifiedNeighbor,
-                        locality = content.header.locality,
-                        bio = content.stats.bio,
-                        isVerified = content.header.isVerified,
-                        avatarUrl = content.header.avatarUrl,
-                        stats = content.stats.stats,
-                        avatarName = content.header.avatarName,
-                    ) {
-                        NeighborHeaderActions(
-                            connection = connection,
-                            connectState = connectState,
-                            canFollow = follow.canFollow && follow.relationshipLoaded,
-                            onConnect = onConnect,
-                            onMessage = onMessage,
-                        )
-                    }
-                }
+                ProfileFrameHeaderActions(
+                    mode = mode,
+                    content = content,
+                    header = header,
+                    actions = actions,
+                    callbacks = callbacks,
+                    hasNoPins = pinned?.isEmpty() == true,
+                )
             }
-        },
-        body = {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
-                // A blocked profile keeps no Follow control (the server refuses
-                // the follow in both directions).
-                if (connection != ProfileConnection.Blocked) {
-                    ProfileFollowRow(
-                        follow = follow,
-                        onFollow = onFollow,
-                        onUnfollow = onUnfollow,
-                        modifier = Modifier.padding(horizontal = Spacing.s4),
-                    )
-                }
-                Box(modifier = Modifier.padding(horizontal = Spacing.s4)) {
-                    LocalProfileTabStrip(
-                        postCount = content.posts.size.takeIf { it > 0 },
-                        selected = selectedTab,
-                        onSelect = onSelectTab,
-                        reviewCount = content.profile.reviewCount?.takeIf { it > 0 },
-                    )
-                }
-                when (selectedTab) {
+            YouAndCard(firstName = firstName, inCommon = inCommon, onOpen = onOpenInCommon)
+            GetToKnowCard(
+                firstName = firstName,
+                prompts = content.profile.prompts,
+                onEdit = callbacks.onEditProfile.takeIf { owner != null },
+            )
+            PinnedRow(
+                cards = pinned.orEmpty(),
+                onOpen = postCardActions.onOpen.takeIf { preview == null },
+                onEdit = callbacks.onEditProfile.takeIf { owner != null },
+            )
+            Spacer(Modifier.height(28.dp))
+            if (preview?.audience == PreviewAudience.Anyone) {
+                // Signed-out visitors can't read posts: no tabs, no posts, as the drawing's "anyone" frame.
+                PostsForNeighborsCard(firstName = firstName)
+            } else {
+                LocalProfileTabStrip(
+                    tabs = tabs,
+                    postCount = postCountLabel(postCards.size).takeIf { postCards.isNotEmpty() && !hiddenByBlock },
+                    selected = tab,
+                    onSelect = onSelectTab,
+                )
+                Spacer(Modifier.height(Spacing.s3))
+                when (tab) {
                     LocalProfileTab.Posts ->
-                        PublicProfilePostsFeed(
-                            kind = PublicProfileKind.Local,
-                            posts = content.posts,
-                            onUnlock = {},
-                            onEmptyCta = onMessage,
-                            localName = content.header.displayName,
-                            loadFailed = postsLoadFailed,
-                            onRetry = onRetryPosts,
-                            hiddenByBlock = connection == ProfileConnection.Blocked,
-                            pulseCards = postCards,
-                            cardActions = postCardActions,
-                        )
+                        if (owner != null && postCards.isNotEmpty()) {
+                            OwnerLatestPosts(cards = postCards, actions = postCardActions, onSeeAll = owner.navigation.onSeeAllPosts)
+                        } else {
+                            LocalProfilePosts(
+                                cards = postCards,
+                                actions = postCardActions,
+                                firstName = firstName,
+                                joinedRecently = content.header.trust.joinedRecently,
+                                isOwnProfile = content.isOwner || owner != null,
+                                loadFailed = postsLoadFailed,
+                                hiddenByBlock = hiddenByBlock,
+                                onSayHi = callbacks.onMessage,
+                                onRetry = onRetryPosts,
+                                loading = postsLoading,
+                                interactive = preview == null,
+                            )
+                        }
                     LocalProfileTab.About ->
-                        Box(modifier = Modifier.padding(horizontal = Spacing.s4)) {
-                            LocalProfileAboutSection(content = neighbor)
-                        }
-                    LocalProfileTab.Portfolio ->
-                        Box(modifier = Modifier.padding(horizontal = Spacing.s4)) {
-                            ProfilePortfolioSection(
-                                userId = content.profile.id,
-                                isOwnProfile = content.isOwner,
-                            )
-                        }
-                    LocalProfileTab.Gigs ->
-                        Box(modifier = Modifier.padding(horizontal = Spacing.s4)) {
-                            ProfileGigsSection(userId = content.profile.id, onOpenGig = onOpenGig)
-                        }
-                    LocalProfileTab.Reviews ->
-                        Box(modifier = Modifier.padding(horizontal = Spacing.s4)) {
-                            ProfileGigReviewsSection(
-                                userId = content.profile.id,
-                                onOpenReviewer = onOpenProfile,
-                            )
-                        }
+                        LocalProfileAboutSection(
+                            firstName = firstName,
+                            skills = content.stats.skills,
+                            trust = content.header.trust,
+                            emailConfirmed = content.profile.verified == true,
+                            links = content.links,
+                            onOpenLink = onOpenLink,
+                            aroundTheNeighborhood = { AroundTheNeighborhood(firstName, content.profile.contributions) },
+                        )
+                    LocalProfileTab.Work ->
+                        LocalProfileWorkSection(
+                            userId = content.profile.id,
+                            isOwnProfile = content.isOwner,
+                            work = content.work,
+                            onOpenGig = onOpenGig,
+                            onOpenProfile = onOpenProfile,
+                        )
                 }
             }
-        },
-    )
+            if (owner != null) {
+                Spacer(Modifier.height(28.dp))
+                OwnerAccountSection(
+                    extras = owner.extras ?: OwnerExtras(),
+                    navigation = owner.navigation,
+                    onOpenMonth = owner.actions.onOpenMonth,
+                    onShareMonth = owner.actions.onShareMonth,
+                    onOpenInvite = owner.actions.onOpenInvite,
+                    onLogOut = owner.actions.onLogOut,
+                )
+            }
+            Spacer(Modifier.height(Spacing.s10))
+        }
+    }
 }
 
+/** The bar over the page: a preview's banner, your own page's ✕ (or Back) and Share, or a visitor's Back and ⋯. */
+@Composable
+private fun ProfileFrameTopBar(
+    mode: ProfileFrameMode,
+    onBack: () -> Unit,
+    onOverflow: () -> Unit,
+) {
+    when (mode) {
+        is ProfileFrameMode.Preview -> PreviewBanner(audience = mode.audience, onDone = mode.onDone)
+        is ProfileFrameMode.Owner -> OwnerTopBar(cover = mode.cover, onClose = onBack, onShare = mode.actions.onShare)
+        ProfileFrameMode.Visitor -> ProfileTopBar(onBack = onBack, onMore = onOverflow)
+    }
+}
+
+/** Under the name: a preview's note, your Edit profile and Preview as (then your tips), or a visitor's actions. */
+@Composable
+private fun ProfileFrameHeaderActions(
+    mode: ProfileFrameMode,
+    content: PublicProfileContent,
+    header: PublicProfileHeader,
+    actions: ProfileActionsState,
+    callbacks: ProfileActionCallbacks,
+    hasNoPins: Boolean,
+) {
+    val firstName = profileFirstName(header)
+    when (mode) {
+        is ProfileFrameMode.Preview -> PreviewHeaderActions(audience = mode.audience, firstName = firstName)
+        is ProfileFrameMode.Owner -> {
+            OwnerHeaderActions(onEditProfile = callbacks.onEditProfile, onPreviewAs = mode.actions.onPreviewAs)
+            OwnerTips(
+                tips = ownerTips(content, header, mode.extras, hasNoPins),
+                // Pins come from a post's ⋯ menu: "Pin a post" opens My posts; the rest open the editor.
+                onOpen = { tip -> if (tip == OwnerTip.Pin) mode.navigation.onSeeAllPosts() else callbacks.onEditProfile() },
+                onDismiss = mode.actions.onDismissTip,
+            )
+        }
+        ProfileFrameMode.Visitor -> ProfileHeaderActions(state = actions, callbacks = callbacks, firstName = firstName)
+    }
+}
+
+/** Your own Posts tab: your latest two, then "See all N posts" (My posts). */
+@Composable
+private fun OwnerLatestPosts(
+    cards: List<PulsePostCardContent>,
+    actions: ProfilePostCardActions,
+    onSeeAll: () -> Unit,
+) {
+    ProfilePulseCards(cards = cards.take(OWNER_POSTS_SHOWN), actions = actions, showHeading = false)
+    if (cards.size > OWNER_POSTS_SHOWN) {
+        Spacer(Modifier.height(Spacing.s3))
+        SeeAllPostsButton(label = "See all ${postCountLabel(cards.size)} posts", onClick = onSeeAll)
+    }
+}
+
+/** Your own page shows your latest two posts, then "See all N posts". */
+private const val OWNER_POSTS_SHOWN = 2
+
+/** Your own page's header: the name and photo neighbors see (your Local Profile), once read. */
+internal fun ownerHeader(
+    header: PublicProfileHeader,
+    extras: OwnerExtras,
+): PublicProfileHeader =
+    header.copy(
+        displayName = extras.neighborName?.takeIf { it.isNotBlank() } ?: header.displayName,
+        avatarUrl = if (extras.localProfileRead) extras.neighborPhoto else header.avatarUrl,
+        hasName = header.hasName || !extras.neighborName.isNullOrBlank(),
+    )
+
+/** At most two tips only you see, for what your profile is missing, minus the ones you closed on this phone. */
+internal fun ownerTips(
+    content: PublicProfileContent,
+    header: PublicProfileHeader,
+    extras: OwnerExtras?,
+    hasNoPins: Boolean = false,
+): List<OwnerTip> {
+    if (extras == null) return emptyList()
+    return listOfNotNull(
+        OwnerTip.Photo.takeIf { extras.localProfileRead && header.avatarUrl.isNullOrBlank() },
+        OwnerTip.Tagline.takeIf { header.tagline == null },
+        OwnerTip.Skills.takeIf { content.stats.skills.isEmpty() },
+        OwnerTip.Prompt.takeIf { promptAnswers(content.profile.prompts).isEmpty() },
+        OwnerTip.Pin.takeIf { hasNoPins && content.posts.isNotEmpty() },
+    ).filter { it.key !in extras.dismissedTips }.take(OWNER_TIPS_SHOWN)
+}
+
+private const val OWNER_TIPS_SHOWN = 2
+
 /**
- * The Local header's two actions, Connect and Message (`beacon-primitives.jsx:268-272`).
- * Message doesn't show for someone the viewer blocked: the block says you can't message
- * each other, and the overflow's Unblock or Settings → Blocked users lifts it. Mirrors iOS `identityActions`.
+ * The Local header's two actions, Connect and Message (`beacon-primitives.jsx:268-272`), on the persona frame's
+ * Local branch. Message doesn't show for someone the viewer blocked, nor on your own profile (#3092: nobody
+ * messages themselves). Mirrors iOS `identityActions`.
  */
 @Composable
 private fun NeighborHeaderActions(
     connection: ProfileConnection,
     connectState: PublicProfileActionState,
     canFollow: Boolean,
+    isOwnProfile: Boolean,
     onConnect: () -> Unit,
     onMessage: () -> Unit,
 ) {
@@ -785,7 +1132,7 @@ private fun NeighborHeaderActions(
         canFollow = canFollow,
         onConnect = onConnect,
     )
-    if (connection == ProfileConnection.Blocked) return
+    if (isOwnProfile || connection == ProfileConnection.Blocked) return
     BeaconHeaderPrimaryButton(
         title = "Message",
         icon = PantopusIcon.MessageSquare,
@@ -829,54 +1176,18 @@ private fun ConnectHeaderButton(
     }
 }
 
-/**
- * T3 — plain Follow / Following for an ordinary neighbour.
- *
- * The A21.2 Local header is spec'd at exactly two buttons (Connect +
- * Message — `beacon-primitives.jsx:268-272`), so the follow control lives
- * directly beneath the identity block, the same slot RN puts its action
- * row in (`src/app/user/[id].tsx:522-569`). Hidden on your own profile and
- * when signed out. Mirrors iOS `PublicProfileView.followRow`: a compact
- * button like the header's, not a full-width bar a stray tap lands on, and
- * Following asks before it unfollows ([onUnfollow] opens the confirm).
- */
-@Composable
-private fun ProfileFollowRow(
-    follow: ProfileFollowState,
-    onFollow: () -> Unit,
-    onUnfollow: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    if (follow.canFollow && follow.relationshipLoaded) {
-        Box(modifier = modifier.testTag("publicProfileFollowButton")) {
-            if (follow.isFollowing) {
-                BeaconHeaderGhostButton(
-                    icon = PantopusIcon.Check,
-                    actionLabel = "Following. Tap to unfollow",
-                    onClick = onUnfollow,
-                    title = "Following",
-                    enabled = !follow.isInFlight,
-                )
-            } else {
-                Box(modifier = Modifier.alpha(if (follow.isInFlight) DISABLED_FOLLOW_ALPHA else 1f)) {
-                    BeaconHeaderPrimaryButton(
-                        title = "Follow",
-                        icon = PantopusIcon.Plus,
-                        onClick = { if (!follow.isInFlight) onFollow() },
-                    )
-                }
-            }
-        }
-    }
-}
-
-private const val DISABLED_FOLLOW_ALPHA = 0.6f
-
 /** The profile's public link (web `/u/:username`, the link web's own profile Share uses), or null without one. */
 private fun profileShareUrl(state: PublicProfileUiState): String? {
     val username = (state as? PublicProfileUiState.Loaded)?.content?.profile?.username
     return username?.takeIf { it.isNotBlank() }?.let(InviteLinks::profileUrl)
 }
+
+/** The ⋯ menu's Follow / Unfollow row; null leaves it out (your own profile, a block, an unknown relationship). */
+private data class OverflowFollow(
+    val firstName: String,
+    val isFollowing: Boolean,
+    val enabled: Boolean,
+)
 
 @Composable
 private fun OverflowSheetContent(
@@ -888,12 +1199,21 @@ private fun OverflowSheetContent(
     onUnblock: () -> Unit,
     onReport: () -> Unit,
     onCancel: () -> Unit,
+    follow: OverflowFollow? = null,
+    onFollow: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(bottom = Spacing.s5),
         verticalArrangement = Arrangement.spacedBy(Spacing.s1),
     ) {
         shareUrl?.let { url -> OverflowSheetRow(label = "Share profile", onClick = { onShare(url) }) }
+        follow?.let {
+            // Unfollow keeps its confirm (10-30); Follow is one tap, as in the Connect sheet.
+            OverflowSheetRow(
+                label = if (it.isFollowing) "Unfollow ${it.firstName}" else "Follow ${it.firstName}'s public posts",
+                onClick = { if (it.enabled) onFollow() },
+            )
+        }
         // Nobody blocks or reports themselves.
         if (!isOwnProfile) {
             // Someone you blocked can be unblocked here, as in Settings → Blocked users.

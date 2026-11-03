@@ -7,6 +7,7 @@ import app.pantopus.android.core.LaunchFeature
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.feed.FeedPost
 import app.pantopus.android.data.api.models.feed.FeedResponse
+import app.pantopus.android.data.api.models.profile.PortfolioListResponse
 import app.pantopus.android.data.api.models.profile.PublicProfileDto
 import app.pantopus.android.data.api.models.profile.PublicProfileReview
 import app.pantopus.android.data.api.models.relationships.ConnectionRequestResponse
@@ -22,8 +23,12 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.blocks.BlocksRepository
 import app.pantopus.android.data.connections.ConnectionsRepository
+import app.pantopus.android.data.identity.LocalProfileRepository
 import app.pantopus.android.data.posts.PostsRepository
+import app.pantopus.android.data.profile.ProfileInsightsRepository
 import app.pantopus.android.data.profile.ProfileRepository
+import app.pantopus.android.data.profile.ProfileTabsRepository
+import app.pantopus.android.data.profile.ProfileTipsStore
 import app.pantopus.android.data.relationships.RelationshipsRepository
 import app.pantopus.android.data.social.UserSocialRepository
 import app.pantopus.android.data.store.Stored
@@ -58,6 +63,10 @@ class PublicProfileViewModelTest {
     private val blocks: BlocksRepository = mockk()
     private val authRepository: AuthRepository = mockk(relaxed = true)
     private val posts: PostsRepository = mockk()
+    private val profileTabs: ProfileTabsRepository = mockk()
+    private val localProfiles: LocalProfileRepository = mockk()
+    private val insights: ProfileInsightsRepository = mockk()
+    private val tips: ProfileTipsStore = mockk()
 
     /**
      * Nav arg handed to the VM. A UUID by default so resolution takes the
@@ -69,13 +78,28 @@ class PublicProfileViewModelTest {
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         every { repo.publicProfileCopy(any()) } returns Stored()
+        every { repo.forgetPublicProfile(any()) } returns Unit
         every { social.publicProfileCopy(any()) } returns Stored()
         every { posts.profilePostsCopy(any()) } returns Stored()
+        every { posts.forgetProfilePosts(any()) } returns Unit
         // The launch cut hides the persona chip and the Gigs count; these tests pin them.
         LaunchFeatures.overrideForTesting = LaunchFeature.entries.toSet()
         // Local-kind profiles pull `GET /api/posts/user/:id`; default the
         // stub to an empty feed and let individual tests override it.
         coEvery { posts.profilePosts(any(), any()) } returns NetworkResult.Success(FeedResponse(emptyList()))
+        // The portfolio read decides whether the Work tab shows; no portfolio by default.
+        coEvery { profileTabs.portfolio(any(), any()) } returns NetworkResult.Success(PortfolioListResponse())
+        // "You and …" reads nothing here: the section stays hidden.
+        coEvery { repo.inCommon(any()) } returns NetworkResult.Failure(NetworkError.NotFound)
+        // No pinned posts read here either: the Pinned row stays hidden.
+        coEvery { posts.pinnedPosts(any()) } returns NetworkResult.Failure(NetworkError.NotFound)
+        // Your own page's extras: none of them read here.
+        coEvery { localProfiles.me() } returns NetworkResult.Failure(NetworkError.NotFound)
+        coEvery { insights.monthlyReceipt(any(), any()) } returns NetworkResult.Failure(NetworkError.NotFound)
+        coEvery { insights.inviteProgressStored(any()) } returns Stored()
+        coEvery { insights.inviteCodeStored(any()) } returns Stored()
+        coEvery { relationships.list(any(), any(), any(), any()) } returns NetworkResult.Failure(NetworkError.NotFound)
+        every { tips.dismissed(any()) } returns emptySet()
     }
 
     @After fun tearDown() {
@@ -92,6 +116,10 @@ class PublicProfileViewModelTest {
             blocks = blocks,
             authRepository = authRepository,
             posts = posts,
+            profileTabs = profileTabs,
+            localProfiles = localProfiles,
+            insights = insights,
+            tips = tips,
             savedStateHandle = SavedStateHandle(mapOf(PUBLIC_PROFILE_USER_ID_KEY to routeIdentifier)),
         )
 
@@ -252,8 +280,9 @@ class PublicProfileViewModelTest {
             signedInAs("viewer")
             coEvery { repo.publicProfile(ROUTE_ID, any()) } returns NetworkResult.Success(profile())
             coEvery { social.relationship("u1") } returns
-                NetworkResult.Success(UserRelationshipDto(relationship = "pending_received", following = false))
-            coEvery { relationships.pendingRequests() } returns
+                NetworkResult.Success(UserRelationshipDto(relationship = "pending_received", following = false)) andThen
+                NetworkResult.Success(UserRelationshipDto(relationship = "connected", following = false))
+            coEvery { relationships.pendingRequests(any()) } returns
                 NetworkResult.Success(
                     PendingRequestsResponse(
                         listOf(PendingRequestDto(id = "r1", requester = RelationshipUserDto(id = "u1"))),

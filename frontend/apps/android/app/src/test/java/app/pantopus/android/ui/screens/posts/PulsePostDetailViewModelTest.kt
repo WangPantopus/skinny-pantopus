@@ -32,6 +32,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -129,8 +130,9 @@ class PulsePostDetailViewModelTest {
             val loaded = vm.state.value as PulsePostDetailUiState.Loaded
             assertEquals("Alex Rivera", loaded.content.authorDisplayName)
             assertEquals(PostIntent.Ask, loaded.content.intent)
-            assertEquals(3, loaded.content.reactions.helpful)
-            assertNull(loaded.content.reactions.userReaction)
+            assertEquals(PostReactionKind.Helpful, loaded.content.reactions.kind)
+            assertEquals(3, loaded.content.reactions.likeCount)
+            assertFalse(loaded.content.reactions.isOn)
         }
 
     @Test fun beacon_author_decodes_the_public_projection_for_exact_post_return() =
@@ -174,10 +176,10 @@ class PulsePostDetailViewModelTest {
                 NetworkResult.Success(PostLikeResponse(liked = true, likeCount = 4))
             val vm = makeVm()
             vm.load()
-            vm.tapReaction(PostReactionKind.Helpful)
+            vm.tapReaction()
             val loaded = vm.state.value as PulsePostDetailUiState.Loaded
-            assertEquals(4, loaded.content.reactions.helpful)
-            assertEquals(PostReactionKind.Helpful, loaded.content.reactions.userReaction)
+            assertEquals(4, loaded.content.reactions.likeCount)
+            assertTrue(loaded.content.reactions.isOn)
         }
 
     @Test fun reaction_rollback_on_failure() =
@@ -187,24 +189,11 @@ class PulsePostDetailViewModelTest {
                 NetworkResult.Failure(NetworkError.Server(500, "boom"))
             val vm = makeVm()
             vm.load()
-            vm.tapReaction(PostReactionKind.Helpful)
+            vm.tapReaction()
             val loaded = vm.state.value as PulsePostDetailUiState.Loaded
-            assertEquals(3, loaded.content.reactions.helpful)
-            assertNull(loaded.content.reactions.userReaction)
+            assertEquals(3, loaded.content.reactions.likeCount)
+            assertFalse(loaded.content.reactions.isOn)
             assertNotNull(vm.toastMessage.value)
-        }
-
-    @Test fun heart_reaction_is_display_only() =
-        runTest {
-            // The view renders Heart and Going as non-tappable display
-            // chips, so tapReaction should only ever be invoked for
-            // `.Helpful`. The safety guard in the VM returns silently
-            // for the others — no toast, no state change.
-            coEvery { repo.detailStored("p1", any()) } returns stored(sampleResponse())
-            val vm = makeVm()
-            vm.load()
-            vm.tapReaction(PostReactionKind.Heart)
-            assertNull(vm.toastMessage.value)
         }
 
     @Test fun send_comment_refetches_and_clears_composer() =

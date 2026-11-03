@@ -67,6 +67,17 @@ function normaliseFeature(feature) {
     // replaced, often hours earlier: a frost advisory "until 8 AM" read "until 1 AM".
     expires: p.ends || p.expires || '',
     areas: p.areaDesc ? p.areaDesc.split('; ') : [],
+    // The bulletin as NWS issued it, for an alert's full detail: issue, effective and bulletin-expiry times,
+    // the issuing office, the affected areas as written, and the whole text (the fields above are cut short).
+    sent: p.sent || '',
+    effective: p.effective || '',
+    bulletin_expires: p.expires || '',
+    sender_name: p.senderName || '',
+    area: p.areaDesc || '',
+    full_description: p.description || '',
+    full_instruction: p.instruction || '',
+    // "Alert" for a new bulletin, "Update" when NWS re-issues or extends one (CAP msgType).
+    message_type: p.messageType || '',
   };
 }
 
@@ -84,8 +95,10 @@ async function fetchAlerts(lat, lng) {
   // 1. Check cache
   const cached = await getCache(PROVIDER, placeKey);
   if (cached) {
+    // Normalised again from the raw answer, so a row cached by an older build carries today's fields.
+    const raw = cached.payload.raw;
     return {
-      alerts: cached.payload.normalized || [],
+      alerts: raw && Array.isArray(raw.features) ? raw.features.map(normaliseFeature) : cached.payload.normalized || [],
       source: 'cache',
       fetchedAt: cached.fetchedAt,
     };

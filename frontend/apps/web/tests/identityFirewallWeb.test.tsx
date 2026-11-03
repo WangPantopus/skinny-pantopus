@@ -1112,7 +1112,8 @@ describe('Profiles & Privacy web pages', () => {
       path.resolve(__dirname, '../src/app/(app)/app/profile/page.tsx'),
       'utf8',
     );
-    expect(profilePageSource).toContain('buildUserProfilePath(user.username)');
+    // Your profile at /app/profile is the public profile page itself, in owner mode (PRF WEB-2).
+    expect(profilePageSource).toContain('<PublicProfileClient');
   });
 
   test('public routes keep username profile and Beacon pages separate', async () => {

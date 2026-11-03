@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -44,8 +46,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -60,6 +65,8 @@ import app.pantopus.android.ui.theme.SkyPalette
 import kotlinx.coroutines.delay
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.min
@@ -180,6 +187,9 @@ private class VerdictTone(
     val mark: PantopusIcon,
 )
 
+/** A verdict's answer color and its bubble's tint, as the tiles draw them. */
+internal fun goodDayVerdictColors(verdict: GoodDayVerdict): Pair<Color, Color> = verdictTone(verdict).let { it.fg to it.bg }
+
 private fun verdictTone(verdict: GoodDayVerdict) =
     when (verdict) {
         GoodDayVerdict.YES -> VerdictTone(PantopusColors.home, PantopusColors.homeBg, PantopusIcon.Check)
@@ -256,6 +266,7 @@ fun Modifier.popIn(progress: Float): Modifier =
 // ─── Two-week strip of the address calendar ─────────────────
 
 private val KIND_ORDER = listOf("garbage", "recycling", "yard_waste", "bulk_pickup", "street_sweeping")
+private const val DAYS_PER_ROW = 7
 
 fun calendarKindColor(kind: String): Color =
     when (kind) {
@@ -283,8 +294,9 @@ private class StripDay(
 )
 
 /**
- * The next two weeks as fourteen day cells with a coloured dot for each kind of date: the rhythm
- * of pickups at a glance. The rows below carry the same dates in words, so TalkBack skips the strip.
+ * The next two weeks as two rows of seven day cells, each with a coloured dot for each kind of date: the rhythm of
+ * pickups at a glance. Each day is a 48 dp button TalkBack reads with its dates ("Tue, Nov 3: Garbage, Recycling");
+ * with [onSelect], a tap shows only that day's dates ([selected]) and a second tap shows every date again.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -292,6 +304,8 @@ fun TodayCalendarStrip(
     today: String,
     windowDays: Int,
     events: List<PlaceCalendarEvent>,
+    selected: LocalDate? = null,
+    onSelect: ((LocalDate?) -> Unit)? = null,
 ) {
     val start = runCatching { LocalDate.parse(today.take(10)) }.getOrNull() ?: return
     val days =
@@ -308,14 +322,24 @@ fun TodayCalendarStrip(
         }
     val present = days.flatMap { it.kinds }.distinct()
     Column(
-        modifier = Modifier.fillMaxWidth().clearAndSetSemantics { }.testTag("addressCalendarStrip"),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().testTag("addressCalendarStrip"),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            days.forEach { day -> StripCell(day, Modifier.weight(1f)) }
+        days.chunked(DAYS_PER_ROW).forEach { week ->
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                week.forEach { day ->
+                    val chosen = day.date == selected
+                    StripCell(day, chosen, Modifier.weight(1f), onSelect?.let { pick -> { pick(if (chosen) null else day.date) } })
+                }
+                repeat(DAYS_PER_ROW - week.size) { Spacer(modifier = Modifier.weight(1f)) }
+            }
         }
         if (present.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            FlowRow(
+                modifier = Modifier.clearAndSetSemantics { },
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 present.forEach { kind ->
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(calendarKindColor(kind)))
@@ -330,14 +354,33 @@ fun TodayCalendarStrip(
 @Composable
 private fun StripCell(
     day: StripDay,
+    chosen: Boolean,
     modifier: Modifier,
+    onClick: (() -> Unit)?,
 ) {
     val weekend = day.date.dayOfWeek == DayOfWeek.SATURDAY || day.date.dayOfWeek == DayOfWeek.SUNDAY
     val initial = "SMTWTFS"[day.date.dayOfWeek.value % 7].toString()
-    // Fourteen cells share the card's width, so their labels are sized in dp and can't overflow
-    // at large font sizes; the rows below say the same dates in scalable text.
+    // Seven cells share the card's width, so their labels are sized in dp and can't overflow at large font sizes;
+    // TalkBack reads each day in words, and the rows below say the same dates in scalable text.
     val unscaled = 1f / LocalDensity.current.fontScale
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    val spoken =
+        day.date.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US)) + ": " +
+            (day.kinds.takeIf { it.isNotEmpty() }?.joinToString(", ") { kindLabel(it) } ?: "no dates")
+    Column(
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(10.dp))
+                .then(if (chosen) Modifier.border(2.dp, PantopusColors.primary600, RoundedCornerShape(10.dp)) else Modifier)
+                .then(onClick?.let { Modifier.clickable(onClick = it) } ?: Modifier)
+                .heightIn(min = 48.dp)
+                .clearAndSetSemantics {
+                    contentDescription = spoken + if (day.isToday) ", today" else ""
+                    selected = chosen
+                    if (onClick != null) role = Role.Button
+                }.padding(vertical = 3.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
         Text(
             initial,
             fontSize = (10 * unscaled).sp,

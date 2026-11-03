@@ -116,6 +116,7 @@ class ChatConversationViewModelTest {
             mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),
+            mockk(relaxed = true),
         ).also { viewModels.add(it) }
 
     private val counterpartyPerson =

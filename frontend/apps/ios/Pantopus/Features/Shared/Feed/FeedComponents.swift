@@ -38,17 +38,21 @@ public enum FeedAvatarTint: Sendable, Hashable, CaseIterable {
 public struct FeedAvatar: View {
     private let initials: String
     private let tint: FeedAvatarTint
+    private let color: Color?
     private let verified: Bool
     private let size: CGFloat
 
+    /// `color`, when given, replaces the tint's color.
     public init(
         initials: String,
         tint: FeedAvatarTint = .sky,
+        color: Color? = nil,
         verified: Bool = false,
         size: CGFloat = 32
     ) {
         self.initials = initials
         self.tint = tint
+        self.color = color
         self.verified = verified
         self.size = size
     }
@@ -56,7 +60,7 @@ public struct FeedAvatar: View {
     public var body: some View {
         ZStack(alignment: .bottomTrailing) {
             Circle()
-                .fill(tint.color)
+                .fill(color ?? tint.color)
                 .frame(width: size, height: size)
                 .overlay(
                     Text(initials)

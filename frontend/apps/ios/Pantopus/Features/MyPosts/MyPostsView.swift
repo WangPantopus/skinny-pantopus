@@ -25,9 +25,9 @@ public struct MyPostsView: View {
         @Bindable var bindable = viewModel
         return ListOfRowsView(dataSource: viewModel)
             .overlay(alignment: .bottom) {
-                // A failed archive, restore or delete says so (the row is already back).
+                // A failed archive, restore or delete says so (the row is already back); so does a pin.
                 if let toast = viewModel.toastMessage {
-                    ToastView(message: ToastMessage(text: toast, kind: .error))
+                    ToastView(message: ToastMessage(text: toast, kind: viewModel.toastKind))
                         .padding(.bottom, 96)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .dismissToast(after: toast, minimum: 2.5) {
@@ -59,24 +59,45 @@ public struct MyPostsView: View {
                 titleVisibility: .hidden,
                 presenting: bindable.kebabTarget
             ) { target in
-                if target.isArchived {
-                    // A post a moderator removed can't be restored (the backend refuses).
-                    if !target.isRemovedByModerator {
+                if target.isPlanPost {
+                    // A plan's own post changes or is cancelled from its plan, which
+                    // tells everyone; the server refuses archiving or deleting it.
+                    Button("Open plan") {
+                        viewModel.openPlan(postId: target.postId)
+                    }
+                    .accessibilityIdentifier("kebab-open-plan")
+                    if target.isArchived, !target.isRemovedByModerator {
                         Button("Restore post") {
                             restore(postId: target.postId)
                         }
                         .accessibilityIdentifier("kebab-restore")
                     }
                 } else {
-                    Button("Archive post") {
-                        archive(postId: target.postId)
+                    if target.isArchived {
+                        // A post a moderator removed can't be restored (the backend refuses).
+                        if !target.isRemovedByModerator {
+                            Button("Restore post") {
+                                restore(postId: target.postId)
+                            }
+                            .accessibilityIdentifier("kebab-restore")
+                        }
+                    } else {
+                        if let pinTitle = viewModel.profilePinTitle(postId: target.postId) {
+                            Button(pinTitle) {
+                                Task { await viewModel.toggleProfilePin(postId: target.postId) }
+                            }
+                            .accessibilityIdentifier("kebab-profile-pin")
+                        }
+                        Button("Archive post") {
+                            archive(postId: target.postId)
+                        }
+                        .accessibilityIdentifier("kebab-archive")
                     }
-                    .accessibilityIdentifier("kebab-archive")
+                    Button("Delete post", role: .destructive) {
+                        deleteRequest(postId: target.postId)
+                    }
+                    .accessibilityIdentifier("kebab-delete")
                 }
-                Button("Delete post", role: .destructive) {
-                    deleteRequest(postId: target.postId)
-                }
-                .accessibilityIdentifier("kebab-delete")
                 Button("Cancel", role: .cancel) {
                     viewModel.cancelKebab()
                 }

@@ -1,8 +1,6 @@
 package app.pantopus.android.ui.screens.place.today
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,12 +9,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,10 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,11 +37,11 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.perf.ReportContentShown
+import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.api.models.homes.OwnershipClaimDto
 import app.pantopus.android.data.api.models.place.PlaceAddressRef
 import app.pantopus.android.ui.components.ErrorState
-import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.NavigationMenuButton
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.RefreshFailedLine
@@ -60,17 +52,20 @@ import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.homes.waitingLabel
 import app.pantopus.android.ui.screens.place.PlaceVerifyBanner
 import app.pantopus.android.ui.screens.place.components.placeCard
+import app.pantopus.android.ui.screens.place.detail.AgendaActions
 import app.pantopus.android.ui.screens.place.detail.LocalPlaceDetailRetry
 import app.pantopus.android.ui.screens.place.detail.PlaceTodayDetailContent
 import app.pantopus.android.ui.screens.place.detail.TodayAlertsCheck
+import app.pantopus.android.ui.screens.place.detail.TodayTabParts
 import app.pantopus.android.ui.screens.place.detail.placeDetailAddress
 import app.pantopus.android.ui.screens.place.detail.rememberMinuteClock
 import app.pantopus.android.ui.screens.plans.today.PlansTodayActions
 import app.pantopus.android.ui.screens.plans.today.PlansTodayCards
+import app.pantopus.android.ui.screens.plans.today.PlansTodayViewModel
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
-import app.pantopus.android.ui.theme.Radii
+import kotlinx.coroutines.flow.Flow
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -90,6 +85,7 @@ private val TodayTabUiState.showsContent: Boolean
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
 fun TodayTabScreen(
     onClaim: () -> Unit,
     onOpenPlace: ((homeId: String) -> Unit)? = null,
@@ -99,14 +95,54 @@ fun TodayTabScreen(
     onAsk: ((AIScreenContext) -> Unit)? = null,
     /** The side menu, on every tab (founder decision 2026-10-20); null hides the button. */
     onOpenMenu: (() -> Unit)? = null,
+    /** An agenda task's existing detail page, by its Home. */
+    onOpenTask: (homeId: String, taskId: String) -> Unit = { _, _ -> },
+    /** The Today tab tapped again while Today is its root: back to the top. */
+    scrollToTop: Flow<Unit>? = null,
+    /** Place's "Next step: Add radon test information" for this Home: the setup opens on the radon question once. */
+    radonHomeId: String? = null,
+    /** The radon question was opened, or this Today can't open it (another place): the request ends. */
+    onRadonShown: () -> Unit = {},
+    /** A Needs you row's link (AI assistant phase 3), opened with the deep-link router. */
+    onOpenLink: (String) -> Unit = DeepLinkRouter::handle,
     viewModel: TodayTabViewModel = hiltViewModel(),
+    needsYou: NeedsYouViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val agendaTasks by viewModel.agendaTasks.collectAsStateWithLifecycle()
+    val needsYouItems by needsYou.items.collectAsStateWithLifecycle()
+    // One Plans read serves the agenda's plan rows and today's plan cards.
+    val plansViewModel: PlansTodayViewModel? = plans?.let { hiltViewModel() }
+    val plansUi = plansViewModel?.ui?.collectAsStateWithLifecycle()?.value
+    val scroll = rememberScrollState()
+    LaunchedEffect(scrollToTop) { scrollToTop?.collect { scroll.animateScrollTo(0) } }
+    LaunchedEffect(radonHomeId, state) {
+        val shown = state
+        if (radonHomeId != null && shown != TodayTabUiState.Loading &&
+            (shown as? TodayTabUiState.Loaded)?.calendarHomeId != radonHomeId
+        ) {
+            onRadonShown()
+        }
+    }
     ReportContentShown("today", state.showsContent)
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
-    // Coming back keeps what's on screen; the view model reads again only once it is out of date.
-    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
-    RefreshOnStoreChange(viewModel::load)
+    val pullFailed by viewModel.pullFailed.collectAsStateWithLifecycle()
+    // Coming back keeps what's on screen; the view model reads again only once it is out of date. Needs you too.
+    HomeCopyLifecycle(
+        load = {
+            viewModel.load()
+            needsYou.load()
+        },
+        pause = viewModel::suspendContent,
+    )
+    RefreshOnStoreChange {
+        viewModel.load()
+        needsYou.load()
+    }
+    val pullAll = {
+        viewModel.pull()
+        needsYou.pull()
+    }
     // Pull to refresh, like iOS's Today tab (`.refreshable`): it always reads now, with the pull indicator
     // over the content instead of placeholders. The indicator shows only for a pull, not the first load.
     var pulled by remember { mutableStateOf(false) }
@@ -136,31 +172,79 @@ fun TodayTabScreen(
             isRefreshing = pulled && refreshing,
             onRefresh = {
                 pulled = true
-                viewModel.refresh()
+                pullAll()
             },
             modifier = Modifier.fillMaxSize(),
         ) {
+            // With no sky to sit under (no place, a claim in review, Today couldn't load), Needs you comes first.
+            val needsYouFirst: @Composable () -> Unit = {
+                NeedsYouCard(
+                    needsYouItems,
+                    onOpen = onOpenLink,
+                    modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp),
+                    topGap = 0.dp,
+                )
+            }
             when (val current = state) {
                 TodayTabUiState.Loading -> TodayPlaceholders()
-                TodayTabUiState.NoPlace -> NoPlaceCard(onClaim)
-                is TodayTabUiState.ClaimInReview -> ClaimInReviewCard(current.claim) { onCheckClaim(current.claim.homeId) }
-                is TodayTabUiState.Error -> ErrorState(message = current.message, onRetry = viewModel::refresh)
+                TodayTabUiState.NoPlace ->
+                    Column(modifier = Modifier.fillMaxSize().verticalScroll(scroll)) {
+                        needsYouFirst()
+                        NoPlaceCard(onClaim)
+                    }
+                is TodayTabUiState.ClaimInReview ->
+                    Column(modifier = Modifier.fillMaxSize().verticalScroll(scroll)) {
+                        needsYouFirst()
+                        ClaimInReviewCard(current.claim) { onCheckClaim(current.claim.homeId) }
+                    }
+                is TodayTabUiState.Error ->
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        needsYouFirst()
+                        ErrorState(message = current.message, onRetry = pullAll, modifier = Modifier.weight(1f))
+                    }
                 is TodayTabUiState.Loaded ->
                     Column(
-                        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                        modifier = Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 16.dp),
                     ) {
                         val age = nowMs - current.fetchedAt
-                        if (current.refreshFailed && age > TODAY_MAX_SHOWN_AGE_MS) {
-                            RefreshFailedLine(RefreshNotice(current.fetchedAt, viewModel::refresh), Modifier.padding(bottom = 10.dp))
+                        if (current.showsRefreshFailure(pullFailed, age)) {
+                            RefreshFailedLine(RefreshNotice(current.fetchedAt, viewModel::pull), Modifier.padding(bottom = 10.dp))
                         }
                         if (current.savedAnchorMatches) {
                             StatusChip("Saved place · Only you", modifier = Modifier.padding(bottom = 12.dp))
                         }
                         TodayClaimBanner(current.claim, onCheckClaim)
-                        onAsk?.let { ask -> TodayAskBox(onAsk = { ask(AIScreenContext.today(viewModel.shownHomeId)) }) }
-                        // Nearby Plans (A1, A2, A5): today's plan and the day-after card, above the weather.
-                        plans?.let { PlansTodayCards(actions = it, modifier = Modifier.padding(bottom = 16.dp)) }
-                        CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::refresh) {
+                        val homeId = current.calendarHomeId
+                        val tab =
+                            TodayTabParts(
+                                tasks = agendaTasks.takeIf { homeId != null }.orEmpty(),
+                                plans = plansUi?.takeIf { it.on }?.upcoming.orEmpty(),
+                                actions =
+                                    AgendaActions(
+                                        onOpenTask = homeId?.let { home -> { task -> onOpenTask(home, task) } },
+                                        onOpenPlan = plans?.onOpenPlan,
+                                    ),
+                                // Nearby Plans (A1, A2, A5): today's plan and the day-after cards, in "Coming up at home".
+                                plansBlock =
+                                    plans?.let { actions ->
+                                        plansViewModel?.let { vm ->
+                                            {
+                                                PlansTodayCards(
+                                                    actions = actions,
+                                                    title = "Your plans today",
+                                                    modifier = Modifier.padding(top = 12.dp),
+                                                    viewModel = vm,
+                                                )
+                                            }
+                                        }
+                                    },
+                                onAddHome = onClaim.takeIf { current.savedPlace != null },
+                                onAsk = onAsk?.let { ask -> { ask(AIScreenContext.today(viewModel.shownHomeId)) } },
+                                radonRequested = homeId != null && radonHomeId == homeId,
+                                onRadonShown = onRadonShown,
+                                needsYou = { agendaTaskIds -> NeedsYouCard(needsYouItems, onOpenLink, agendaTaskIds = agendaTaskIds) },
+                            )
+                        CompositionLocalProvider(LocalPlaceDetailRetry provides viewModel::pull) {
                             PlaceTodayDetailContent(
                                 current.intelligence,
                                 viewModel.takeIf { current.calendarHomeId != null },
@@ -170,10 +254,8 @@ fun TodayTabScreen(
                                 onOpenBallot = onOpenPlace?.let { open -> { viewModel.shownHomeId?.let(open) } },
                                 alertsCheck = alertsCheck(age, refreshing, current.refreshFailed),
                                 radonMemory = viewModel.radonMemory,
+                                tab = tab,
                             )
-                        }
-                        if (current.savedPlace != null) {
-                            SavedPlaceReminders(onClaim)
                         }
                         Spacer(modifier = Modifier.height(96.dp))
                     }
@@ -196,8 +278,16 @@ private fun TodayAddressLine(place: PlaceAddressRef) {
 }
 
 private fun todayPlaceZone(state: TodayTabUiState): ZoneId =
-    (state as? TodayTabUiState.Loaded)?.intelligence?.timeZone
-        ?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneId.systemDefault()
+    (state as? TodayTabUiState.Loaded)?.intelligence?.homeZone ?: ZoneId.systemDefault()
+
+/**
+ * Contract §3: a failed read shows "Couldn't refresh" once the copy is past its max shown age, and at once when the
+ * read was a pull or Retry ([pullFailed]).
+ */
+private fun TodayTabUiState.Loaded.showsRefreshFailure(
+    pullFailed: Boolean,
+    ageMs: Long,
+): Boolean = refreshFailed && (pullFailed || ageMs > TODAY_MAX_SHOWN_AGE_MS)
 
 /** Contract §4: an alert check past 30 minutes is never shown as "no alerts". */
 private fun alertsCheck(
@@ -210,23 +300,6 @@ private fun alertsCheck(
         refreshing -> TodayAlertsCheck.CHECKING
         else -> TodayAlertsCheck.UNAVAILABLE
     }
-
-@Composable
-private fun SavedPlaceReminders(onAddHome: () -> Unit) {
-    Column(
-        modifier = Modifier.padding(top = 12.dp).fillMaxWidth().placeCard().padding(16.dp).testTag("todaySavedPlaceReminders"),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text("Get reminders for this address", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-        Text(
-            "Pickup and radon reminders need your home on Pantopus.",
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            color = PantopusColors.appTextSecondary,
-        )
-        GhostButton("Add your home", onClick = onAddHome, modifier = Modifier.fillMaxWidth())
-    }
-}
 
 @Composable
 private fun TodayPlaceholders() {
@@ -328,39 +401,4 @@ internal fun claimInReviewMessage(claim: OwnershipClaimDto): String {
     val street = home?.street
     val claimed = if (home != null && street != null) "You claimed ${listOfNotNull(street, home.locality).joinToString(", ")}. " else ""
     return claimed + "Today fills in here once a Pantopus reviewer approves your claim."
-}
-
-/** The box at the top of Today (AI assistant phase 1): it opens the assistant about today, nothing sent yet. */
-@Composable
-private fun TodayAskBox(onAsk: () -> Unit) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp)
-                .clip(RoundedCornerShape(Radii.xl))
-                .background(PantopusColors.appSurface)
-                .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.xl))
-                .clickable(onClick = onAsk)
-                .heightIn(min = 48.dp)
-                .padding(horizontal = 14.dp, vertical = 12.dp)
-                .clearAndSetSemantics {
-                    contentDescription = "Ask Pantopus about your day"
-                    role = Role.Button
-                }.testTag("todayAskPantopus"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(
-            modifier = Modifier.size(32.dp).clip(CircleShape).background(PantopusColors.magicBg),
-            contentAlignment = Alignment.Center,
-        ) {
-            PantopusIconImage(icon = PantopusIcon.Sparkles, contentDescription = null, size = 16.dp, tint = PantopusColors.magic)
-        }
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text("Ask Pantopus", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = PantopusColors.appText)
-            Text("About today at your place", fontSize = 13.sp, color = PantopusColors.appTextSecondary, maxLines = 1)
-        }
-        PantopusIconImage(icon = PantopusIcon.ChevronRight, contentDescription = null, size = 16.dp, tint = PantopusColors.appTextMuted)
-    }
 }

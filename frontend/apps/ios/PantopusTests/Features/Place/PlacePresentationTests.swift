@@ -61,10 +61,11 @@ final class PlacePresentationTests: XCTestCase {
     }
 
     func testSunriseSunsetFormatsLocalWallClock() throws {
-        // Sunrise/sunset arrive as zone-less local times ("…T05:19").
+        // Sunrise/sunset arrive as zone-less local times ("…T05:19"); times
+        // kept from an earlier day say which day they are.
         let intel = try intelligence()
         let reading = try PlacePresentation.reading(for: section(intel, .sunriseSunset))
-        XCTAssertEqual(reading.value, "5:19a · 8:59p")
+        XCTAssertEqual(reading.value, "5:19a · 8:59p · as of Jun 12")
     }
 
     // MARK: - derivePulse off the fixture (it carries an Extreme Heat Warning)

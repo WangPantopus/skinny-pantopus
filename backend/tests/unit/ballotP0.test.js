@@ -550,9 +550,9 @@ describe('governments from the exact point', () => {
     ]);
     expect(a).toBe(b);
     expect(global.fetch).toHaveBeenCalledTimes(1);
-    // Once it has finished the next ask is a new call.
+    // Once it has finished the next ask reads the persisted provider response.
     await governments.sharedGeographies(45.5871, -122.3995);
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
   it('serves an eligible stale row when the geocoder answers without a state and county', async () => {
@@ -629,7 +629,7 @@ describe('readThrough maxStaleMs', () => {
     const fetchedAt = new Date(Date.now() - ageDays * DAY).toISOString();
     seedTable('PlaceSectionCache', [{
       id: 'row-1', cache_key: 'home:h', section_id: '_ballot_governments',
-      payload: { items: [] }, fetched_at: fetchedAt, expires_at: new Date(Date.now() - DAY).toISOString(),
+      payload: { items: [{ level: 'federal', geoid: 'us', name: 'United States' }] }, fetched_at: fetchedAt, expires_at: new Date(Date.now() - DAY).toISOString(),
     }]);
   }
   const failing = () => Promise.reject(new Error('provider down'));

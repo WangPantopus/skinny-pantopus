@@ -49,7 +49,7 @@ fun PlaceLockedCard(
     Column(
         modifier =
             Modifier
-                .placeCard()
+                .placeCardChrome()
                 .let { m -> onTap?.let { m.clickable(onClick = it) } ?: m }
                 .fillMaxWidth()
                 .padding(16.dp)
@@ -122,7 +122,7 @@ fun PlaceDensityCard(
     Column(
         modifier =
             Modifier
-                .placeCard()
+                .placeCardChrome()
                 .let { m -> onTap?.let { m.clickable(onClick = it) } ?: m }
                 .fillMaxWidth()
                 .padding(16.dp)
@@ -194,7 +194,7 @@ fun PlaceHeroCard(
     Column(
         modifier =
             modifier
-                .placeCard()
+                .placeCardChrome()
                 .let { m -> onTap?.let { m.clickable(onClick = it) } ?: m }
                 .fillMaxWidth()
                 .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 14.dp)

@@ -8,6 +8,13 @@
 
 import Foundation
 
+// MARK: - Home invite (GET /api/homes/invitations/next)
+
+/// The household invitation to open after a fresh sign-in, or none.
+public struct HomeNextInviteResponse: Decodable, Sendable {
+    public let token: String?
+}
+
 // MARK: - Home invite (GET /api/homes/invitations/token/:token)
 
 public struct HomeInviteResponse: Decodable, Sendable {

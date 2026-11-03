@@ -68,6 +68,8 @@ data class PlansTodayActions(
 fun PlansTodayCards(
     actions: PlansTodayActions,
     modifier: Modifier = Modifier,
+    /** A heading over the cards (Today's agenda labels them), shown only with cards. */
+    title: String? = null,
     viewModel: PlansTodayViewModel = hiltViewModel(),
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
@@ -83,6 +85,7 @@ fun PlansTodayCards(
     val cards = ui.going.size + ui.hosting.size + ui.howWasIt.size + ui.hostAgain.size
     if (cards == 0) return
     Column(modifier = modifier.fillMaxWidth().testTag("plansToday"), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+        title?.let { PlanOverline(it) }
         ui.hosting.forEach { card -> HostingTodayCard(ui.details[card.id] ?: card, actions) }
         ui.going.forEach { card ->
             val plan = ui.details[card.id] ?: card

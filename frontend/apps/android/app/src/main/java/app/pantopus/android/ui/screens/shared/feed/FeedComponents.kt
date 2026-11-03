@@ -26,17 +26,20 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,6 +59,9 @@ import app.pantopus.android.ui.theme.Spacing
  */
 enum class FeedAvatarTint {
     Sky,
+
+    /** Sky 600: the profile palette's sky (PRF's one initials rule, `profileAvatarTint`). */
+    SkyDeep,
     Green,
     Violet,
     Rose,
@@ -68,6 +74,7 @@ enum class FeedAvatarTint {
         get() =
             when (this) {
                 Sky -> PantopusColors.primary500
+                SkyDeep -> PantopusColors.primary600
                 Green -> PantopusColors.success
                 Violet -> PantopusColors.magic
                 Rose -> PantopusColors.rose
@@ -92,6 +99,9 @@ fun FeedAvatar(
     verified: Boolean = false,
     size: Dp = 32.dp,
 ) {
+    // The initials keep their size in the disc at any text size, as on iOS: the disc doesn't grow with the text,
+    // and at font scale 2.0 two letters overflowed it. The author's name beside the avatar grows freely.
+    val density = LocalDensity.current
     Box(modifier = modifier.size(size), contentAlignment = Alignment.BottomEnd) {
         Box(
             modifier =
@@ -101,12 +111,14 @@ fun FeedAvatar(
                     .background(tint.color),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = initials,
-                fontSize = if (size >= 32.dp) 13.sp else 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.appTextInverse,
-            )
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 1f)) {
+                Text(
+                    text = initials,
+                    fontSize = if (size >= 32.dp) 13.sp else 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = PantopusColors.appTextInverse,
+                )
+            }
         }
         if (verified) {
             VerifiedBadge(

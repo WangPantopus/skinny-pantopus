@@ -35,7 +35,9 @@ const adapters = require('./placeSectionAdapters');
 const placeIntelligenceService = require('./placeIntelligenceService');
 const ballotSummary = require('./ballot/summary');
 
-const DEFAULT_BUDGET_MS = 3500;
+// The per-section budget, the race against it and the retryable error a late
+// section becomes are shared with a saved home's Place.
+const { sectionBudgetMs, withBudget, failedSections: failed } = placeIntelligenceService;
 
 // Curated dashboard order — the same reading order the claimed
 // dashboard uses (Today → Risk → Health → Block → Money → Civic).
@@ -74,41 +76,11 @@ function previewDensityLabel(bucket, foundingOpen = true) {
 // settles by then; the race around it only catches something unexpected.
 const TODAY_RACE_GRACE_MS = 500;
 
-function sectionBudgetMs() {
-  const n = Number(process.env.PLACE_PREVIEW_SECTION_BUDGET_MS);
-  return Number.isFinite(n) && n > 0 ? n : DEFAULT_BUDGET_MS;
-}
-
 // Ballot's boundary lookup ends a little before its section's budget does, so
 // a slow geocoder still leaves time to show the dates without the count.
 function ballotLookupMs(budgetMs = sectionBudgetMs()) {
   return Math.max(Math.floor(budgetMs / 2), budgetMs - 500);
 }
-
-// Race a composer against the budget. On timeout OR rejection the
-// fallback envelopes are returned; the composer itself keeps running so
-// its read-through cache still fills.
-function withBudget(run, ms, fallback) {
-  let timer = null;
-  const timeout = new Promise((resolve) => {
-    timer = setTimeout(() => resolve(fallback()), ms);
-    if (timer && typeof timer.unref === 'function') timer.unref();
-  });
-  const attempt = Promise.resolve()
-    .then(run)
-    .then(
-      (value) => { clearTimeout(timer); return Array.isArray(value) ? value : fallback(); },
-      () => { clearTimeout(timer); return fallback(); },
-    );
-  return Promise.race([attempt, timeout]);
-}
-
-// A section that ran out of time or failed is a retryable error ("Couldn't
-// load this · Try again" on every client), not "not available for your area":
-// the source covers the point, it just didn't answer in time, and its fetch
-// keeps running, so a retry a moment later usually finds it cached.
-const failed = (ids) =>
-  () => ids.map((id) => serializePlaceSection(id, { status: 'error' }));
 
 // The election row. While ballot_p0 is on (`ballot` carries the route's
 // boundary lookup) it is Ballot's: the checked dates and official links for
@@ -232,13 +204,15 @@ function densityEnvelope(bucket, foundingOpen = true) {
 
 // Merge the remote envelopes with the route's local layers into the
 // curated order. Unknown ids are dropped; missing ids are omitted (a
-// section that no composer produced is simply not shown).
-function assemblePreviewSections({ remote = [], flood = null, area = null, bucket = 'none', foundingOpen = true }) {
+// section that no composer produced is simply not shown). `late` names
+// the route's layers that ran out of time: retryable errors.
+function assemblePreviewSections({ remote = [], flood = null, area = null, bucket = 'none', foundingOpen = true, late = [] }) {
   const byId = new Map();
   for (const env of remote) if (env && env.id) byId.set(env.id, env);
   byId.set('flood', floodEnvelope(flood));
   byId.set('census_context', censusEnvelope(area));
   byId.set('block_density', densityEnvelope(bucket, foundingOpen));
+  for (const env of failed(late.filter((id) => byId.has(id)))()) byId.set(env.id, env);
   return PREVIEW_SECTION_ORDER.filter((id) => byId.has(id)).map((id) => byId.get(id));
 }
 
@@ -471,7 +445,7 @@ function calmFacts(byId) {
   const air = ready(byId.get('air_quality'));
   if (air && air.category === 'good') facts.push('good air today');
   const alerts = ready(byId.get('alerts'));
-  if (alerts && Array.isArray(alerts.active) && alerts.active.length === 0) facts.push('no active alerts');
+  if (alerts && Array.isArray(alerts.active) && alerts.active.length === 0) facts.push('no active weather alerts');
   const seismic = ready(byId.get('seismic'));
   if (seismic && /^[AB]$/i.test(String(seismic.design_category))) facts.push('low earthquake demand');
   return facts;

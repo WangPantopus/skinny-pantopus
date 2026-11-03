@@ -56,6 +56,9 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
     public let claimMode: String?
     /// The asker already used "Keep open 7 more days" (`post_metadata.kept_open_at`).
     public let keptOpenAt: String?
+    /// A plan's own post (Plans marks it `post_metadata.plan`): its event
+    /// times are real moments, not the composer's wall clock labelled UTC.
+    public let isPlanPost: Bool
     /// True for cold-start neighborhood facts injected by the feed handler
     /// (`backend/routes/posts.js:84`). Those rows are dismissable, not
     /// reportable.
@@ -77,6 +80,11 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
     /// `media_types[i] == "live_photo"`, empty string otherwise.
     public let mediaLiveURLs: [String]
     public let creator: PostCreatorDTO?
+    /// Your own post only: whether it's pinned to your profile (PRF SRV-3).
+    /// Nil on other people's posts, in previews, and when the server couldn't tell.
+    public let profilePinned: Bool?
+    /// False for a post that never shows on its author's profile (a plan's post).
+    public let showOnProfile: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -112,6 +120,8 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case mediaTypes = "media_types"
         case mediaLiveURLs = "media_live_urls"
         case creator
+        case profilePinned = "profile_pinned"
+        case showOnProfile = "show_on_profile"
     }
 
     /// Tolerant (Pulse S2): only `id` and `created_at` are required; any
@@ -142,7 +152,9 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         resolution = c.lenient(String.self, forKey: .resolution)
         expiresAt = c.lenient(String.self, forKey: .expiresAt)
         claimMode = c.lenient(String.self, forKey: .claimMode)
-        keptOpenAt = c.lenient(PostLifecycleMetadata.self, forKey: .postMetadata)?.keptOpenAt
+        let metadata = c.lenient(PostLifecycleMetadata.self, forKey: .postMetadata)
+        keptOpenAt = metadata?.keptOpenAt
+        isPlanPost = metadata?.plan == true
         isSeeded = c.lenient(Bool.self, forKey: .isSeeded) ?? false
         isVisitorPost = c.lenient(Bool.self, forKey: .isVisitorPost) ?? false
         businessAuthorId = c.lenient(String.self, forKey: .businessAuthorId)
@@ -157,6 +169,8 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         mediaTypes = c.lenient([String].self, forKey: .mediaTypes) ?? []
         mediaLiveURLs = c.lenient([String].self, forKey: .mediaLiveURLs) ?? []
         creator = c.lenient(PostCreatorDTO.self, forKey: .creator)
+        profilePinned = c.lenient(Bool.self, forKey: .profilePinned)
+        showOnProfile = c.lenient(Bool.self, forKey: .showOnProfile)
     }
 }
 
@@ -178,16 +192,21 @@ public struct FeedRepostedBy: Decodable, Sendable, Hashable {
     }
 }
 
-/// The lifecycle marks a post row carries in `post_metadata` (Pulse S7).
+/// The marks a post row carries in `post_metadata`: the lifecycle mark
+/// (Pulse S7), and the mark Plans puts on a plan's own post.
 struct PostLifecycleMetadata: Decodable {
     let keptOpenAt: String?
+    let plan: Bool?
 
     private enum CodingKeys: String, CodingKey {
         case keptOpenAt = "kept_open_at"
+        case plan
     }
 
     init(from decoder: any Decoder) throws {
-        keptOpenAt = (try? decoder.container(keyedBy: CodingKeys.self))?.lenient(String.self, forKey: .keptOpenAt)
+        let c = try? decoder.container(keyedBy: CodingKeys.self)
+        keptOpenAt = c?.lenient(String.self, forKey: .keptOpenAt)
+        plan = c?.lenient(Bool.self, forKey: .plan)
     }
 }
 

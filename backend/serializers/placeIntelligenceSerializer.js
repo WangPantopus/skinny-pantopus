@@ -105,6 +105,68 @@ const COVERAGE_VALUES = ['full', 'partial', 'none'];
 // A section carries data only in these statuses; error/unavailable null it.
 const DATA_BEARING_STATUSES = new Set(['ready', 'partial', 'stale']);
 
+// ─── Area covered and kind of evidence (risk & environment) ──
+// What area a reading covers and what kind of evidence it is, worded once
+// here so every client says the same thing and a county or forecast-area
+// reading never reads as a measurement of the home. Derived from the
+// section's own data, so the Place dashboard, the public preview and any
+// other caller of serializePlaceSection agree.
+const EVIDENCE_LABELS = {
+  map_classification: 'Map classification',
+  forecast: 'Forecast',
+  design_value: 'Building-code design value',
+  land_classification: 'Land classification',
+  area_classification: 'Area classification, not a home test',
+  utility_record: 'Utility compliance record',
+  registry_count: 'Registry count',
+};
+const evidence = (kind) => ({ kind, label: EVIDENCE_LABELS[kind] });
+const AT_THIS_POINT = "This address's map point";
+
+function waterScope(data) {
+  const name = data.utility_name;
+  if (data.match === 'county') return { kind: 'county', label: 'County records, not confirmed for this address' };
+  if (!name) return null;
+  if (data.estimated_area) return { kind: 'water_system', label: `${name} (estimated service area)` };
+  return { kind: 'water_system', label: `${name}, the water system serving this address` };
+}
+
+const SECTION_SCOPES = {
+  flood: () => ({ scope: { kind: 'point', label: AT_THIS_POINT }, evidence: evidence('map_classification') }),
+  heat_cold: () => ({ scope: { kind: 'forecast_area', label: 'Forecast for the area around this address' }, evidence: evidence('forecast') }),
+  seismic: () => ({ scope: { kind: 'point', label: AT_THIS_POINT }, evidence: evidence('design_value') }),
+  wildfire: (data) => ({
+    scope: data.scope === 'nearby'
+      ? { kind: 'radius', label: 'Burnable land within a quarter mile' }
+      : data.scope === 'point'
+        ? { kind: 'grid_cell', label: 'The land at this address (map cell)' }
+        : { kind: 'grid_cell', label: 'This address and the land around it' },
+    evidence: evidence('land_classification'),
+  }),
+  lead_radon: (data) => ({
+    scope: { kind: 'county', label: `${data.county_name || 'County'} radon zone · lead rule by build year` },
+    evidence: evidence('area_classification'),
+  }),
+  drinking_water: (data) => {
+    const scope = waterScope(data);
+    return scope ? { scope, evidence: evidence('utility_record') } : null;
+  },
+  environmental_hazards: (data) => {
+    const miles = Number(data.radius_mi);
+    if (!Number.isFinite(miles) || miles <= 0) return null;
+    return {
+      scope: { kind: 'radius', label: `EPA-registered sites within ${miles} mile${miles === 1 ? '' : 's'}` },
+      evidence: evidence('registry_count'),
+    };
+  },
+};
+
+function sectionScope(id, data) {
+  const build = SECTION_SCOPES[id];
+  if (!build || !data || typeof data !== 'object') return null;
+  return build(data);
+}
+
 function assertOneOf(value, allowed, label) {
   if (!allowed.includes(value)) {
     throw new Error(
@@ -173,6 +235,9 @@ function serializePlaceSection(id, options = {}) {
 
   const resolvedStatus = status || (hasData ? 'ready' : 'unavailable');
   const includeData = hasData && DATA_BEARING_STATUSES.has(resolvedStatus);
+  // Risk & environment sections with a reading also say what area it covers
+  // and what kind of evidence it is (additive; absent without a reading).
+  const scoped = includeData ? sectionScope(id, data) : null;
 
   return {
     id,
@@ -185,6 +250,7 @@ function serializePlaceSection(id, options = {}) {
     coverage,
     unavailable_reason: unavailableReason,
     data: includeData ? data : null,
+    ...(scoped ? { scope: scoped.scope, evidence: scoped.evidence } : {}),
   };
 }
 

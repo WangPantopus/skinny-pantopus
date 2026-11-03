@@ -15,29 +15,42 @@ public struct PostLikeResponse: Decodable, Sendable, Hashable {
     public let likeCount: Int
 }
 
-/// UI-only reaction kinds. The design draws three, but only `helpful`
-/// maps to a backend route today; `heart` and `going` raise a "coming
-/// soon" toast until multi-reaction support lands server-side.
+/// A post's one reaction (the like above, counted in `like_count`), named
+/// for what it means on that kind of post, the same on web, iPhone and
+/// Android and in the author's notice (`backend/utils/postReaction.js`):
+/// Going on an event, Celebrate on a win, Helpful on every other kind.
 public enum PostReactionKind: String, Sendable, CaseIterable, Identifiable {
     case helpful
-    case heart
     case going
+    case celebrate
+
+    public init(postType: String?) {
+        switch postType {
+        case "event": self = .going
+        case "neighborhood_win", "progress_wins": self = .celebrate
+        default: self = .helpful
+        }
+    }
 
     public var id: String {
         rawValue
     }
 
-    /// Spoken label for VoiceOver / TalkBack.
-    public var accessibilityLabel: String {
+    /// The button: "Helpful", "Going", "Celebrate".
+    public var label: String {
         switch self {
         case .helpful: "Helpful"
-        case .heart: "Loved"
         case .going: "Going"
+        case .celebrate: "Celebrate"
         }
     }
 
-    /// Whether the reaction is wired to a real backend route.
-    public var isBackendWired: Bool {
-        self == .helpful
+    /// The count in words: "3 helpful", "2 going", "4 celebrated".
+    public func countText(_ count: Int) -> String {
+        switch self {
+        case .helpful: "\(count) helpful"
+        case .going: "\(count) going"
+        case .celebrate: "\(count) celebrated"
+        }
     }
 }

@@ -4,7 +4,9 @@
  * Fetches and caches rich property data (home value, characteristics,
  * neighborhood stats) from the ATTOM API for the cold-start Pulse.
  *
- * Uses two cache layers:
+ * Database-first storage:
+ * - ExternalFeedCache: full responses shared by endpoint + request, retained
+ *   independently of freshness (property facts do not expire)
  * - PropertyIntelligenceCache: normalized PropertyProfile objects
  * - AttomPropertyCache: exact raw ATTOM endpoint responses per home
  *
@@ -16,6 +18,7 @@ const logger = require('../../utils/logger');
 const { readCappedJson, readCappedText } = require('../../utils/cappedBody');
 const { houseFromAttomProperty } = require('../place/houseShape');
 const placeSectionCache = require('../placeSectionCache');
+const { readResponse, hasData } = require('../external/cacheHelper');
 
 const ATTOM_BASE = 'https://api.gateway.attomdata.com/propertyapi/v1.0.0';
 const ATTOM_RAW_CACHE_TABLE = 'AttomPropertyCache';
@@ -25,10 +28,6 @@ const ATTOM_ENDPOINTS = {
   salestrend_snapshot: '/salestrend/snapshot',
 };
 const CACHE_TTL_DAYS = 30;
-// ATTOM answers HTTP 400 "SuccessWithoutResult" when it has no record for the
-// address. That's an answer, not an outage, and every lookup is billed, so the
-// cache remembers it for a week instead of asking again on each Place view.
-const NO_RESULT_TTL_DAYS = 7;
 const FETCH_TIMEOUT_MS = 10000;
 // One property's detail, AVM or ZIP trend is tens of KB.
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
@@ -49,22 +48,53 @@ function buildAttomAddressLine1(home) {
   return line1 || home?.address || '';
 }
 
-/**
- * Make an authenticated ATTOM API request.
- * @param {string} endpoint  e.g. '/property/detail'
- * @param {object} params    Query parameters
- * @returns {Promise<object|null>}
- */
-async function attomFetch(endpoint, params) {
-  return (await attomRequest(endpoint, params)).json;
+// Validate the record array, not the non-empty status envelope.
+function hasAttomData(endpoint, response) {
+  const records = endpoint === ATTOM_ENDPOINTS.salestrend_snapshot ? response?.salesTrend : response?.property;
+  return Array.isArray(records) && records.some((record) => record && typeof record === 'object'
+    && hasData(endpoint === ATTOM_ENDPOINTS.attomavm_detail ? record.avm : record));
 }
 
-/**
- * attomFetch, plus whether ATTOM said it has no record (noResult) rather than
- * failing.
- * @returns {Promise<{ json: object|null, noResult: boolean }>}
- */
-async function attomRequest(endpoint, params) {
+function attomCacheRequest(endpoint, params) {
+  // Match case/whitespace variants without collapsing apartments or addresses.
+  const canonical = Object.fromEntries(Object.entries(params).map(([key, value]) =>
+    [key, String(value).trim().replace(/\s+/g, ' ').toUpperCase()]));
+  return {
+    provider: 'ATTOM',
+    url: `${ATTOM_BASE}${endpoint}?${new URLSearchParams(canonical)}`,
+    maxAgeMs: endpoint === ATTOM_ENDPOINTS.property_detail ? Infinity : CACHE_TTL_DAYS * 86400000,
+    isUsable: (response) => hasAttomData(endpoint, response),
+  };
+}
+
+// The operator prefill uses exactly the same identity and data validation as
+// interactive requests, without creating Home or ownership records.
+function propertyDetailCacheRequest(p) {
+  const params = attomAddressParams({
+    address: p.line1, address2: p.line2, city: p.city, state: p.state, zipcode: p.zip,
+  });
+  return {
+    ...attomCacheRequest(ATTOM_ENDPOINTS.property_detail, params),
+    requestUrl: `${ATTOM_BASE}${ATTOM_ENDPOINTS.property_detail}?${new URLSearchParams(params)}`,
+  };
+}
+
+async function attomRequest(endpoint, params, options = {}) {
+  let noResult = false;
+  const result = await readResponse({
+    ...attomCacheRequest(endpoint, params),
+    ...options,
+    isUsable: (response) => hasAttomData(endpoint, response),
+    fetch: async () => {
+      const result = await fetchAttomRequest(endpoint, params, options);
+      noResult = result.noResult;
+      return result.json;
+    },
+  });
+  return { json: result.response, noResult, fetchedAt: result.fetchedAt, hit: result.hit };
+}
+
+async function fetchAttomRequest(endpoint, params, { timeoutMs = FETCH_TIMEOUT_MS } = {}) {
   const apiKey = process.env.ATTOM_API_KEY;
   if (!apiKey) return { json: null, noResult: false };
 
@@ -73,7 +103,7 @@ async function attomRequest(endpoint, params) {
 
   // The timeout covers the whole body, not just the headers.
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const res = await fetch(url, {
@@ -93,7 +123,7 @@ async function attomRequest(endpoint, params) {
       if (noResult) {
         logger.info('ATTOM has no record', { endpoint });
       } else {
-        logger.warn('ATTOM API error', { endpoint, status: res.status, body: text.slice(0, 200) });
+        logger.warn('ATTOM API error', { endpoint, status: res.status });
       }
       return { json: null, noResult };
     }
@@ -102,12 +132,9 @@ async function attomRequest(endpoint, params) {
 
     if (process.env.ATTOM_LOG_RESPONSES === '1' && endpoint === ATTOM_ENDPOINTS.property_detail) {
       try {
-        const raw = JSON.stringify(json);
-        const max = 262144;
-        logger.info('ATTOM /property/detail raw response', {
-          requestParams: params,
-          bytes: raw.length,
-          body: raw.length > max ? `${raw.slice(0, max)}…[truncated ${raw.length - max} chars]` : raw,
+        logger.info('ATTOM /property/detail response shape', {
+          keys: Object.keys(json || {}),
+          propertyCount: json?.property?.length || 0,
         });
       } catch (e) {
         logger.warn('ATTOM log stringify failed', { error: e.message });
@@ -179,16 +206,15 @@ function getRawPayloadFetchedAt(rawPayload, key) {
   return getRawPayloadEntry(rawPayload, key)?.fetched_at || null;
 }
 
-// A recent "no record" answer for the same request (an address edit asks again).
-function hasFreshNoResult(rawPayload, home, key) {
+function hasUsableEndpoint(rawPayload, key) {
   const entry = getRawPayloadEntry(rawPayload, key);
-  if (!entry?.no_result) return false;
+  if (!hasAttomData(ATTOM_ENDPOINTS[key], entry?.response)) return false;
+  if (key === 'property_detail') return true;
   const age = Date.now() - Date.parse(entry.fetched_at);
-  return age >= 0 && age < NO_RESULT_TTL_DAYS * 24 * 60 * 60 * 1000
-    && JSON.stringify(entry.request_params) === JSON.stringify(attomEndpointParams(home, key));
+  return age >= 0 && age < CACHE_TTL_DAYS * 86400000;
 }
 
-function buildRawPayload(home, existingRawPayload, endpointResponses, fetchedAtIso, noResultKeys = []) {
+function buildRawPayload(home, existingRawPayload, endpointResponses, fetchedAtIso, fetchedAts = {}) {
   const payload = normalizeRawPayload(existingRawPayload);
   const endpoints = { ...payload.endpoints };
 
@@ -198,15 +224,7 @@ function buildRawPayload(home, existingRawPayload, endpointResponses, fetchedAtI
       endpoint: ATTOM_ENDPOINTS[key] || null,
       request_params: attomEndpointParams(home, key),
       response,
-      fetched_at: fetchedAtIso,
-    };
-  }
-  for (const key of noResultKeys) {
-    endpoints[key] = {
-      endpoint: ATTOM_ENDPOINTS[key] || null,
-      request_params: attomEndpointParams(home, key),
-      no_result: true,
-      fetched_at: fetchedAtIso,
+      fetched_at: fetchedAts[key] || fetchedAtIso,
     };
   }
 
@@ -247,7 +265,7 @@ async function getCachedRawAttom(homeId, { allowExpired = false } = {}) {
   }
 }
 
-async function setCachedRawAttom(homeId, home, endpointResponses, existingRawPayload = null, noResultKeys = []) {
+async function setCachedRawAttom(homeId, home, endpointResponses, existingRawPayload = null, fetchedAts = {}) {
   try {
     let basePayload = existingRawPayload;
     if (!basePayload) {
@@ -258,7 +276,7 @@ async function setCachedRawAttom(homeId, home, endpointResponses, existingRawPay
     const now = new Date();
     const nowIso = now.toISOString();
     const expiresAt = new Date(now.getTime() + CACHE_TTL_DAYS * 24 * 60 * 60 * 1000);
-    const rawPayload = buildRawPayload(home, basePayload, endpointResponses, nowIso, noResultKeys);
+    const rawPayload = buildRawPayload(home, basePayload, endpointResponses, nowIso, fetchedAts);
 
     if (!Object.keys(rawPayload.endpoints || {}).length) {
       return basePayload || rawPayload;
@@ -290,8 +308,8 @@ async function setCachedRawAttom(homeId, home, endpointResponses, existingRawPay
 
 function validAttomPropertyDetail(payload) {
   if (!payload || typeof payload !== 'object') return null;
-  if (payload.property && typeof payload.property === 'object') return payload;
-  if (Array.isArray(payload.full_response?.property) && payload.full_response.property.length > 0) return payload;
+  if (payload.property && typeof payload.property === 'object' && !Array.isArray(payload.property) && hasData(payload.property)) return payload;
+  if (hasAttomData(ATTOM_ENDPOINTS.property_detail, payload.full_response)) return payload;
   return null;
 }
 
@@ -301,7 +319,7 @@ function getStoredAttomPropertyDetail(home) {
 
 function buildDetailResponseFromStoredPayload(attomPayload) {
   if (!attomPayload || typeof attomPayload !== 'object') return null;
-  if (attomPayload.full_response && typeof attomPayload.full_response === 'object') {
+  if (hasAttomData(ATTOM_ENDPOINTS.property_detail, attomPayload.full_response)) {
     return attomPayload.full_response;
   }
   if (attomPayload.property && typeof attomPayload.property === 'object') {
@@ -567,7 +585,7 @@ async function setCachedProfile(homeId, profile, source, ttlDays = CACHE_TTL_DAY
 }
 
 async function getOrFetchAttomResponsesForHome(home, requestedKeys) {
-  let rawCache = await getCachedRawAttom(home.id);
+  let rawCache = await getCachedRawAttom(home.id, { allowExpired: true });
   let rawPayload = rawCache?.rawPayload || null;
 
   const responses = {};
@@ -575,7 +593,11 @@ async function getOrFetchAttomResponsesForHome(home, requestedKeys) {
 
   for (const key of requestedKeys) {
     const cached = getRawPayloadResponse(rawPayload, key);
-    if (cached != null) {
+    const entry = getRawPayloadEntry(rawPayload, key);
+    const sameRequest = entry?.request_params
+      ? JSON.stringify(entry.request_params) === JSON.stringify(attomEndpointParams(home, key))
+      : JSON.stringify(rawPayload?.address_snapshot) === JSON.stringify(buildHomeAddressSnapshot(home));
+    if (sameRequest && hasUsableEndpoint(rawPayload, key)) {
       responses[key] = cached;
       sources[key] = 'cache';
     }
@@ -587,21 +609,13 @@ async function getOrFetchAttomResponsesForHome(home, requestedKeys) {
     if (storedResponse) {
       responses.property_detail = storedResponse;
       sources.property_detail = 'home';
-      rawPayload = await setCachedRawAttom(home.id, home, { property_detail: storedResponse }, rawPayload);
+      rawPayload = await setCachedRawAttom(home.id, home, { property_detail: storedResponse }, rawPayload, { property_detail: storedPayload.fetched_at });
     }
   }
 
-  const noResultKeys = requestedKeys.filter((key) => responses[key] == null && hasFreshNoResult(rawPayload, home, key));
-  for (const key of noResultKeys) {
-    sources[key] = 'unavailable';
-    responses[key] = null;
-  }
-  const missingKeys = requestedKeys.filter((key) => responses[key] == null && !noResultKeys.includes(key));
-  if (!missingKeys.length || !process.env.ATTOM_API_KEY) {
-    for (const key of missingKeys) {
-      sources[key] = sources[key] || 'unavailable';
-      responses[key] = responses[key] ?? null;
-    }
+  const noResultKeys = [];
+  const missingKeys = requestedKeys.filter((key) => responses[key] == null);
+  if (!missingKeys.length) {
     return { responses, sources, rawPayload, noResultKeys };
   }
 
@@ -614,18 +628,20 @@ async function getOrFetchAttomResponsesForHome(home, requestedKeys) {
 
   const fetchedResponses = {};
   const fetchedNoResult = [];
-  for (const [key, { json: response, noResult }] of fetchResults) {
+  const fetchedAts = {};
+  for (const [key, { json: response, noResult, fetchedAt }] of fetchResults) {
     responses[key] = response;
     sources[key] = response != null ? 'attom' : 'unavailable';
     if (response != null) {
       fetchedResponses[key] = response;
+      fetchedAts[key] = fetchedAt;
     } else if (noResult) {
       fetchedNoResult.push(key);
     }
   }
 
-  if (Object.keys(fetchedResponses).length || fetchedNoResult.length) {
-    rawPayload = await setCachedRawAttom(home.id, home, fetchedResponses, rawPayload, fetchedNoResult);
+  if (Object.keys(fetchedResponses).length) {
+    rawPayload = await setCachedRawAttom(home.id, home, fetchedResponses, rawPayload, fetchedAts);
   }
 
   return { responses, sources, rawPayload, noResultKeys: [...noResultKeys, ...fetchedNoResult] };
@@ -793,7 +809,13 @@ async function withHouseShape(homeId, profile) {
 
 async function getProfile(homeId) {
   const cached = await getCachedProfile(homeId);
-  if (cached) {
+  // An aggregate containing building facts can still be missing its AVM or
+  // ZIP trend. It must not hide an empty endpoint for another 30 days, or
+  // renew the freshness of an older provider response on every rebuild.
+  const raw = cached?.source === 'attom' ? await getCachedRawAttom(homeId, { allowExpired: true }) : null;
+  const complete = ['property_detail', 'attomavm_detail', 'salestrend_snapshot']
+    .every((key) => hasUsableEndpoint(raw?.rawPayload, key));
+  if (cached && cached.source === 'attom' && cached.profile?.county_record !== false && complete) {
     logger.info('PropertyIntelligence cache hit', { homeId });
     return { profile: await withHouseShape(homeId, cached.profile), source: 'cache' };
   }
@@ -834,11 +856,11 @@ async function getProfile(homeId) {
 
 /**
  * Full ATTOM /property/detail result + parsed form snapshot (single HTTP call).
- * Used before a Home row exists, so this path does not cache by home_id.
+ * Works before a Home row exists; the full response is stored by request.
  *
  * @returns {{ snapshot: object|null, detailData: object|null, attomPayload: object|null }}
  */
-async function fetchAttomPropertyDetailBundle(p) {
+async function fetchAttomPropertyDetailBundle(p, options = {}) {
   const home = {
     address: p.address,
     address2: p.address2 || p.unit_number || null,
@@ -847,14 +869,12 @@ async function fetchAttomPropertyDetailBundle(p) {
     zipcode: p.zipcode,
   };
   const addrParams = attomAddressParams(home);
-  const detailData = await attomFetch(ATTOM_ENDPOINTS.property_detail, addrParams);
-  const bundle = buildAttomPropertyDetailResult(detailData);
+  const { json: detailData, fetchedAt } = await attomRequest(ATTOM_ENDPOINTS.property_detail, addrParams, options);
+  const bundle = buildAttomPropertyDetailResult(detailData, fetchedAt);
 
   if (!bundle.attomPayload) {
     if (process.env.ATTOM_LOG_RESPONSES === '1') {
       logger.info('ATTOM property/detail: no property[0]', {
-        requestParams: addrParams,
-        status: detailData?.status,
         propertyLen: Array.isArray(detailData?.property) ? detailData.property.length : null,
       });
     }
@@ -863,8 +883,6 @@ async function fetchAttomPropertyDetailBundle(p) {
 
   if (process.env.ATTOM_LOG_RESPONSES === '1') {
     logger.info('ATTOM property/detail parsed snapshot', {
-      requestParams: addrParams,
-      snapshot: bundle.snapshot,
       propertySummaryKeys: bundle.attomPayload.property.summary ? Object.keys(bundle.attomPayload.property.summary) : [],
       buildingKeys: bundle.attomPayload.property.building ? Object.keys(bundle.attomPayload.property.building) : [],
       roomsKeys: bundle.attomPayload.property.building?.rooms ? Object.keys(bundle.attomPayload.property.building.rooms) : [],
@@ -883,7 +901,7 @@ async function fetchAttomPropertyDetailSnapshot(p) {
 // Add Home looks an address up before its Home exists. The server keeps that
 // answer under the validated address (its HomeAddress id), so the new Home
 // stores the server's own copy, never one an app sends back, and a second
-// lookup of the same address within the TTL doesn't pay ATTOM again.
+// lookup of the same address reuses the stored property facts.
 const ADDRESS_DETAIL_SECTION = 'attom_property_detail';
 
 function addressDetailCacheKey(addressId) {
@@ -892,7 +910,7 @@ function addressDetailCacheKey(addressId) {
 
 /**
  * Add Home's lookup for a validated address: the server's copy while it's
- * fresh, else one /property/detail call by the address as validated (never
+ * present, else one /property/detail call by the address as validated (never
  * as typed).
  *
  * @param {object} address HomeAddress row (id, address_line1_norm, address_line2_norm, city_norm, state, postal_code)
@@ -902,6 +920,8 @@ async function fetchAttomPropertyDetailBundleForAddress(address) {
   const { payload } = await placeSectionCache.readThrough({
     cacheKey: addressDetailCacheKey(address.id),
     sectionId: ADDRESS_DETAIL_SECTION,
+    reuseStored: true,
+    isUsable: (payload) => Boolean(validAttomPropertyDetail(payload)),
     ttlMs: CACHE_TTL_DAYS * 24 * 60 * 60 * 1000,
     fetch: async () => (await fetchAttomPropertyDetailBundle({
       address: address.address_line1_norm,
@@ -939,4 +959,5 @@ module.exports = {
   fetchAttomPropertyDetailBundle,
   fetchAttomPropertyDetailBundleForAddress,
   getAddressAttomPropertyDetail,
+  propertyDetailCacheRequest,
 };

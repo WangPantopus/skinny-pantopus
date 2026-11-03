@@ -18,6 +18,8 @@ struct PlaceLockedCard: View {
     let title: String
     let reason: String
     let cta: String
+    /// Its own card surface; off for a row inside a group's surface.
+    var chrome = true
     var onTap: (() -> Void)?
 
     var body: some View {
@@ -42,8 +44,9 @@ struct PlaceLockedCard: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .placeCard()
+        .padding(.vertical, chrome ? 16 : 12)
+        .padding(.horizontal, chrome ? 16 : 0)
+        .placeCard(chrome)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("place.locked.\(title)")
     }
@@ -60,6 +63,8 @@ struct PlaceDensityCard: View {
     /// The sky CTA under the bucket. Pass nil to hide it (dashboard cards
     /// tap through to the Block detail, so they omit the inline CTA).
     var ctaTitle: String? = "Be one of the first to verify on your block"
+    /// Its own card surface; off for a row inside a group's surface.
+    var chrome = true
     var onTap: (() -> Void)?
 
     private var dots: Int {
@@ -108,8 +113,9 @@ struct PlaceDensityCard: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .placeCard()
+        .padding(.vertical, chrome ? 16 : 12)
+        .padding(.horizontal, chrome ? 16 : 0)
+        .placeCard(chrome)
         // The whole card taps through (the chevron says so), as on Android.
         .contentShape(RoundedRectangle(cornerRadius: Radii.xl, style: .continuous))
         .onTapGesture { onTap?() }
@@ -235,9 +241,9 @@ extension PlaceHeroCard {
     static var sampleAllClear: PlaceHeroCard {
         PlaceHeroCard(
             variant: .allClear,
-            chip: PlaceChipModel(tone: .success, text: "All clear", icon: .check),
+            chip: PlaceChipModel(tone: .neutral, text: "No active alerts", icon: .check),
             heroIcon: .shieldCheck,
-            headline: "All clear on your block today. Air is good and there are no active alerts.",
+            headline: "No active weather alerts right now. Air quality is good (32).",
             nudgeIcon: .lightbulb,
             nudgeText: "A heat-pump rebate may apply to your home. Worth a look."
         )

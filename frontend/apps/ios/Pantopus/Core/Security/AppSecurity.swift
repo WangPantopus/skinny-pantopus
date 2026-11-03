@@ -477,18 +477,25 @@ public final class AppLockManager {
 @MainActor
 public final class CapturePrivacyManager {
     public static let shared = CapturePrivacyManager()
-    public private(set) var isCaptured = UIScreen.main.isCaptured
+    public private(set) var isCaptured = false
     public var coversAppSwitcher = false
     private var observer: NSObjectProtocol?
 
     private init() {
+        isCaptured = Self.screenIsCaptured
         observer = NotificationCenter.default.addObserver(
             forName: UIScreen.capturedDidChangeNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.isCaptured = UIScreen.main.isCaptured }
+            Task { @MainActor in self?.isCaptured = Self.screenIsCaptured }
         }
+    }
+
+    /// Whether a screen the app's windows are on is being recorded or mirrored. Read from the window scenes, not
+    /// `UIScreen.main`, which Apple is retiring and which is ambiguous on a phone with two screens (iPhone Duo).
+    private static var screenIsCaptured: Bool {
+        UIApplication.shared.connectedScenes.contains { ($0 as? UIWindowScene)?.screen.isCaptured == true }
     }
 }
 

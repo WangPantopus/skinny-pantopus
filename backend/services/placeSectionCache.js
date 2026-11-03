@@ -25,7 +25,7 @@
  *      steps 2–4 answer at once (stale row, or the error) instead of
  *      waiting out the timeout again on every Place load while it's down.
  *
- * A `null`/`undefined` fetch result is treated as "provider had nothing"
+ * A null or empty fetch result is treated as "provider had nothing"
  * and is NOT cached, so a transient empty answer can't mask data for a
  * full TTL.
  *
@@ -36,6 +36,7 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { hasData } = require('./external/cacheHelper');
 
 const TABLE = 'PlaceSectionCache';
 
@@ -94,14 +95,14 @@ async function readRow(cacheKey, sectionId) {
   return data || null;
 }
 
-async function writeRow(cacheKey, sectionId, payload, ttlMs, fetchedAtIso) {
+async function writeRow(cacheKey, sectionId, payload, ttlMs, fetchedAtIso, retain = false) {
   const { error } = await supabaseAdmin.from(TABLE).upsert(
     {
       cache_key: cacheKey,
       section_id: sectionId,
       payload,
       fetched_at: fetchedAtIso,
-      expires_at: new Date(Date.parse(fetchedAtIso) + ttlMs).toISOString(),
+      expires_at: retain ? 'infinity' : new Date(Date.parse(fetchedAtIso) + ttlMs).toISOString(),
     },
     { onConflict: 'cache_key,section_id' },
   );
@@ -119,6 +120,9 @@ async function writeRow(cacheKey, sectionId, payload, ttlMs, fetchedAtIso) {
  * @param {string} params.sectionId  Launch-set section id.
  * @param {number} params.ttlMs      Freshness budget for this section.
  * @param {function(): Promise<*>} params.fetch  Provider fetch; runs only on miss/expiry.
+ * @param {boolean} [params.reuseStored=false] Stable facts reuse any valid row;
+ *                                              retain it beyond TTL cleanup.
+ * @param {function} [params.isUsable]           Validate both stored and fetched data.
  * @param {boolean} [params.allowStale=true]     Serve an expired row when `fetch` fails.
  * @param {number}  [params.maxStaleMs]          Oldest `fetched_at` age a stale row may
  *                                               have; older rows are not served. Omitted
@@ -126,15 +130,20 @@ async function writeRow(cacheKey, sectionId, payload, ttlMs, fetchedAtIso) {
  * @returns {Promise<{payload: *, fetchedAt: string|null, hit: boolean, stale: boolean}>}
  * @throws When `fetch` fails and no (allowed) cached row exists.
  */
-async function readThrough({ cacheKey, sectionId, ttlMs, fetch, allowStale = true, maxStaleMs }) {
+async function readThrough({ cacheKey, sectionId, ttlMs, fetch, allowStale = true, maxStaleMs,
+  reuseStored = false, isUsable = hasData }) {
   if (!cacheKey || !sectionId || !Number.isFinite(ttlMs) || typeof fetch !== 'function') {
     throw new Error('placeSectionCache.readThrough: cacheKey, sectionId, ttlMs and fetch are required');
   }
 
-  const row = await readRow(cacheKey, sectionId);
+  const storedRow = await readRow(cacheKey, sectionId);
+  const row = storedRow && isUsable(storedRow.payload) ? storedRow : null;
   const now = Date.now();
 
-  if (row && Date.parse(row.expires_at) > now) {
+  if (row && (reuseStored || Date.parse(row.expires_at) > now)) {
+    if (reuseStored && row.expires_at !== 'infinity') {
+      await writeRow(cacheKey, sectionId, row.payload, ttlMs, row.fetched_at, true);
+    }
     return { payload: row.payload, fetchedAt: row.fetched_at, hit: true, stale: false };
   }
 
@@ -153,12 +162,12 @@ async function readThrough({ cacheKey, sectionId, ttlMs, fetch, allowStale = tru
 
   try {
     const payload = await fetch();
-    if (payload == null) {
+    if (!isUsable(payload)) {
       // "Nothing there" is a valid provider answer — surfaced, not cached.
       return { payload: null, fetchedAt: null, hit: false, stale: false };
     }
     const fetchedAtIso = new Date(now).toISOString();
-    await writeRow(cacheKey, sectionId, payload, ttlMs, fetchedAtIso);
+    await writeRow(cacheKey, sectionId, payload, ttlMs, fetchedAtIso, reuseStored);
     return { payload, fetchedAt: fetchedAtIso, hit: false, stale: false };
   } catch (err) {
     if (isTimeout(err)) {

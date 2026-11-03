@@ -40,6 +40,7 @@ import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
+import app.pantopus.android.ui.screens.profile.ProfilePinCopy
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilterSheet
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsTab
@@ -162,6 +163,8 @@ fun MyPostsScreen(
                 onRestore = { viewModel.unarchive(target.postId) },
                 onDelete = { viewModel.requestDelete(target.postId) },
                 onCancel = { viewModel.cancelKebab() },
+                onToggleProfilePin = { viewModel.toggleProfilePin(target) },
+                onOpenPlan = { viewModel.openPlan(target.postId) },
             )
         }
     }
@@ -220,6 +223,8 @@ private fun KebabSheetContent(
     onRestore: () -> Unit,
     onDelete: () -> Unit,
     onCancel: () -> Unit,
+    onToggleProfilePin: () -> Unit = {},
+    onOpenPlan: () -> Unit = {},
 ) {
     Column(
         modifier =
@@ -235,28 +240,45 @@ private fun KebabSheetContent(
             color = PantopusColors.appText,
         )
 
-        if (target.isArchived) {
-            ActionRow(
-                label = "Restore post",
-                icon = PantopusIcon.ArrowsRepeat,
-                testTag = "kebab-restore",
-                onClick = onRestore,
-            )
+        if (target.isPlanPost) {
+            // A plan's own post changes or is cancelled from its plan, which tells everyone; the server refuses
+            // archiving or deleting it.
+            ActionRow(label = "Open plan", icon = PantopusIcon.Calendar, testTag = "kebab-open-plan", onClick = onOpenPlan)
+            if (target.isArchived) {
+                ActionRow(label = "Restore post", icon = PantopusIcon.ArrowsRepeat, testTag = "kebab-restore", onClick = onRestore)
+            }
         } else {
+            if (target.isArchived) {
+                ActionRow(
+                    label = "Restore post",
+                    icon = PantopusIcon.ArrowsRepeat,
+                    testTag = "kebab-restore",
+                    onClick = onRestore,
+                )
+            } else {
+                ActionRow(
+                    label = "Archive post",
+                    icon = PantopusIcon.Archive,
+                    testTag = "kebab-archive",
+                    onClick = onArchive,
+                )
+            }
+            target.profilePinned?.let { pinned ->
+                ActionRow(
+                    label = if (pinned) ProfilePinCopy.UNPIN else ProfilePinCopy.PIN,
+                    icon = PantopusIcon.Pin,
+                    testTag = "kebab-profile-pin",
+                    onClick = onToggleProfilePin,
+                )
+            }
             ActionRow(
-                label = "Archive post",
-                icon = PantopusIcon.Archive,
-                testTag = "kebab-archive",
-                onClick = onArchive,
+                label = "Delete post",
+                icon = PantopusIcon.Trash2,
+                testTag = "kebab-delete",
+                isDestructive = true,
+                onClick = onDelete,
             )
         }
-        ActionRow(
-            label = "Delete post",
-            icon = PantopusIcon.Trash2,
-            testTag = "kebab-delete",
-            isDestructive = true,
-            onClick = onDelete,
-        )
         Spacer(Modifier.height(Spacing.s2))
         Box(
             modifier =

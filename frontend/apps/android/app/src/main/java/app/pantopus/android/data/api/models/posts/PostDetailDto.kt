@@ -99,6 +99,8 @@ data class PostDetailResponse(
 data class PostDetailDto(
     val id: String,
     @Json(name = "user_id") val userId: String,
+    /** PRF SRV-3: on your own post only, whether it's pinned to your profile; missing when unknown. */
+    @Json(name = "profile_pinned") val profilePinned: Boolean? = null,
     val title: String?,
     val content: String = "",
     @Json(name = "post_type") val postType: String?,
@@ -153,6 +155,9 @@ data class PostDetailDto(
 ) {
     /** A moderator removed the post: neighbors can't see it or reply. */
     val isRemovedByModerator: Boolean get() = archiveReason == "moderation"
+
+    /** A plan's own post (Plans marks it `post_metadata.plan`): its event times are real moments. */
+    val isPlanPost: Boolean get() = lifecycleMetadata?.plan == true
 
     val canShareExternally: Boolean
         get() =

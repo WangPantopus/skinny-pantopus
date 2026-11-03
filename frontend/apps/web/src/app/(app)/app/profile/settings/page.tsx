@@ -12,6 +12,7 @@ import StepUpPasswordModal from '@/components/settings/StepUpPasswordModal';
 import StorageDataSection from '@/components/settings/StorageDataSection';
 import ErrorState from '@/components/ui/ErrorState';
 import { ACCOUNT_DELETED_NOTICE_KEY, hardNavigate } from '@/lib/session-refresh';
+import { signOut } from '@/lib/signOut';
 import { setMe, useMe } from '@/lib/me';
 
 type SettingField = 'email_notifications' | 'push_notifications' | 'profile_visibility' | 'show_email' | 'show_phone';
@@ -80,29 +81,7 @@ export default function SettingsPage() {
     });
   };
 
-  const handleLogout = async () => {
-    try {
-      await api.auth.logout();
-    } catch (err) {
-      // Logout's Clear-Site-Data or a concurrent revocation can change the
-      // session marker before its response arrives. Finish navigation if the
-      // server already cleared the session cookie; preserve a newer sign-in.
-      if ((err as { code?: string } | null)?.code === 'AUTH_SESSION_CHANGED') {
-        const hasSessionCookie = document.cookie.split(';').some((cookie) => cookie.trim() === 'pantopus_session=1');
-        if (!hasSessionCookie) {
-          clearPendingPlaces();
-          clearAuthToken();
-          hardNavigate('/login');
-        }
-        return;
-      }
-      toast.error('Could not confirm sign-out. Please try again.');
-      return;
-    }
-    clearPendingPlaces();
-    clearAuthToken();
-    hardNavigate('/login');
-  };
+  const handleLogout = signOut;
 
   const handleDeleteAccount = async () => {
     if (deleteOperation.current) return;

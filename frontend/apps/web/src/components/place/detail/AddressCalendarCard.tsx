@@ -122,6 +122,9 @@ function HouseholdCalendar({ homeId, data }: AddressCalendarCardProps) {
   // saved meanwhile on another device is not silently undone.
   const [openedVersion, setOpenedVersion] = useState(data.pickup_version);
   const [error, setError] = useState<string | null>(null);
+  // A collection's end date when its first date field got focus. Typing a date passes other dates
+  // on the way ("12/10" before "12/01"), so the end date follows the start from there.
+  const untilAtFocus = useRef<{ kind: PickupCollection['kind']; until: string | null } | null>(null);
 
   const upcoming = calendar.upcoming ?? [];
   // A home whose pickups still need a day hears how to start them, as in the apps.
@@ -130,6 +133,11 @@ function HouseholdCalendar({ homeId, data }: AddressCalendarCardProps) {
     : null;
   const update = (kind: PickupCollection['kind'], patch: Partial<PickupCollection>) => {
     setCollections(rows => rows.map(row => row.kind === kind ? { ...row, ...patch } : row));
+  };
+  // The end date can't precede the start: a later start moves it along, as in the apps.
+  const moveStart = (row: PickupCollection, anchor: string) => {
+    const until = untilAtFocus.current?.kind === row.kind ? untilAtFocus.current.until : row.until_date ?? null;
+    update(row.kind, until ? { anchor_date: anchor, until_date: anchor > until ? anchor : until } : { anchor_date: anchor });
   };
   const valid = collections.length > 0 && collections.every(row => row.anchor_date
     && (row.frequency !== 'weekly' || row.weekdays.length > 0));
@@ -225,7 +233,8 @@ function HouseholdCalendar({ homeId, data }: AddressCalendarCardProps) {
                     className="px-3 py-1.5 rounded-lg border border-app-border bg-app-surface text-[13px]">{day.label}{row.weekdays.includes(day.id) ? ' ✓' : ''}</button>)}
                 </div>}
                 <label className="block text-[13px]">{row.frequency === 'once' ? `${label} collection date` : `${label} first collection date`}
-                  <input aria-label={`${label} collection date`} type="date" value={row.anchor_date} onChange={e => update(kind, { anchor_date: e.target.value })}
+                  <input aria-label={`${label} collection date`} type="date" value={row.anchor_date} onChange={e => moveStart(row, e.target.value)}
+                    onFocus={() => { untilAtFocus.current = { kind, until: row.until_date ?? null }; }} onBlur={() => { untilAtFocus.current = null; }}
                     className="mt-1 w-full rounded-lg border border-app-border bg-app-surface p-2" />
                 </label>
                 {row.frequency !== 'once' && <label className="block text-[13px]">{label} end date (optional)

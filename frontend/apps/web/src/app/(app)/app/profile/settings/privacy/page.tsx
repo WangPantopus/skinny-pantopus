@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ChevronRight, Shield, Eye, Search, UserX } from 'lucide-react';
 import * as api from '@pantopus/api';
@@ -48,6 +48,22 @@ export default function PrivacySettingsPage() {
   const showNeighborhood = (draft.show_neighborhood ?? saved?.show_neighborhood ?? 'followers') as ProfileVisibilityLevel;
   const showHomeAffiliation = (draft.show_home_affiliation ?? saved?.show_home_affiliation ?? 'followers') as ProfileVisibilityLevel;
   const edit = (change: Partial<PrivacyForm>) => setDraft((current) => ({ ...current, ...change }));
+
+  // Edit profile's "Who sees your city" opens #neighborhood: the settings appear only after they load, so the page
+  // goes there (and to its choice) then, once.
+  const scrolled = useRef(false);
+  useEffect(() => {
+    if (loading || scrolled.current) return;
+    const id = window.location.hash.slice(1);
+    if (!id) return;
+    const timer = window.setTimeout(() => {
+      scrolled.current = true;
+      const target = document.getElementById(id);
+      target?.scrollIntoView({ block: 'start' });
+      target?.querySelector<HTMLElement>('select')?.focus({ preventScroll: true });
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [loading]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -128,8 +144,8 @@ export default function PrivacySettingsPage() {
         </div>
 
         <div className="space-y-6">
-          {/* How neighbors see you: the name and photo on posts, comments, chats and notices. Saves on its own. */}
-          <NeighborsSeeYouCard enabled={signedIn} username={me?.username} />
+          {/* How neighbors see you: the name and photo on posts, comments, chats and notices, edited in Edit profile. */}
+          <NeighborsSeeYouCard enabled={signedIn} accountId={me?.id ? String(me.id) : null} />
 
           {/* Search & Discoverability */}
           <div className="bg-surface rounded-xl border border-app p-6">
@@ -172,8 +188,9 @@ export default function PrivacySettingsPage() {
                 options={VISIBILITY_OPTIONS}
               />
               <SelectSetting
+                id="neighborhood"
                 label="Neighborhood"
-                description="Who can see your general area"
+                description="Who can see your city (Edit profile's “Who sees your city”)"
                 value={showNeighborhood}
                 onChange={(v) => edit({ show_neighborhood: v as ProfileVisibilityLevel })}
                 options={VISIBILITY_OPTIONS}
@@ -237,12 +254,15 @@ const VISIBILITY_OPTIONS = [
 // ─── Helper Components ────────────────────────────────────────
 
 function SelectSetting({
+  id,
   label,
   description,
   value,
   onChange,
   options,
 }: {
+  /** An anchor other pages link to (Edit profile → Who sees your city links to #neighborhood). */
+  id?: string;
   label: string;
   description?: string;
   value: string;
@@ -250,7 +270,7 @@ function SelectSetting({
   options: { value: string; label: string }[];
 }) {
   return (
-    <div className="flex items-center justify-between py-3 border-b border-app last:border-0">
+    <div id={id} className="flex items-center justify-between py-3 border-b border-app last:border-0 scroll-mt-24">
       <div className="flex-1">
         <p className="font-medium text-app">{label}</p>
         {description && <p className="text-sm text-app-secondary">{description}</p>}

@@ -1174,7 +1174,8 @@ private class PlaceDetailCopy(
         read(force = false)
     }
 
-    fun refresh() = read(force = true)
+    /** Pull to refresh and Retry: read now, and say so if it fails. */
+    fun refresh() = read(force = true, asked = true)
 
     fun pause() {
         if (!visible) return
@@ -1196,7 +1197,10 @@ private class PlaceDetailCopy(
 
     private fun current(version: Long): Boolean = visible && generation == version
 
-    private fun read(force: Boolean) {
+    private fun read(
+        force: Boolean,
+        asked: Boolean = false,
+    ) {
         if (readJob?.isActive == true || !visible) return
         if (state.value !is PlaceDetailUiState.Loaded) {
             val stored =
@@ -1220,10 +1224,12 @@ private class PlaceDetailCopy(
                 val stored = readAuthorized(force, version)
                 if (!current(version)) return@launch
                 refreshing.value = false
+                // A pull or Retry that failed says so (the iPhone shows a toast), as any failed read of a saved place
+                // does; otherwise the line waits until the copy is past its max shown age (contract §3).
                 refreshNotice.value =
                     RefreshNotice(stored.fetchedAt, ::refresh).takeIf {
                         stored.showsRefreshFailure(StoreKind.PLACE) ||
-                            (savedPlaceId != null && stored.data != null && stored.failure != null)
+                            ((asked || savedPlaceId != null) && stored.data != null && stored.failure != null)
                     }
                 publish(stored)
             }

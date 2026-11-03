@@ -77,12 +77,22 @@ public struct MyPostsKebabTarget: Identifiable, Sendable, Equatable {
     public let isArchived: Bool
     /// A moderator removed the post: the sheet offers no Restore.
     public let isRemovedByModerator: Bool
+    /// A plan's own post: the sheet offers Open plan, where the host changes
+    /// or cancels it, instead of Archive and Delete (the server refuses both).
+    public let isPlanPost: Bool
 
-    public init(id: String, postId: String, isArchived: Bool, isRemovedByModerator: Bool = false) {
+    public init(
+        id: String,
+        postId: String,
+        isArchived: Bool,
+        isRemovedByModerator: Bool = false,
+        isPlanPost: Bool = false
+    ) {
         self.id = id
         self.postId = postId
         self.isArchived = isArchived
         self.isRemovedByModerator = isRemovedByModerator
+        self.isPlanPost = isPlanPost
     }
 }
 
@@ -220,7 +230,13 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
 
     /// A failed archive, restore or delete puts the row back and says so,
     /// like the post page.
-    public var toastMessage: String?
+    public var toastMessage: String? {
+        // Every message is an error unless a pin says otherwise.
+        didSet { if toastMessage != nil { toastKind = .error } }
+    }
+
+    /// How the toast reads: an error unless an action went through.
+    public private(set) var toastKind: ToastKind = .error
 
     // MARK: - Dependencies
 
@@ -556,6 +572,10 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
             onRestore: { [weak self] in
                 guard let self else { return }
                 Task { @MainActor in await self.unarchive(dto) }
+            },
+            onOpenPlan: { [weak self] in
+                guard let self else { return }
+                Task { @MainActor in self.openPlan(postId: dto.id) }
             }
         )
     }
@@ -601,13 +621,21 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
             id: dto.id,
             postId: dto.id,
             isArchived: isArchived(dto),
-            isRemovedByModerator: dto.isRemovedByModerator
+            isRemovedByModerator: dto.isRemovedByModerator,
+            isPlanPost: dto.isPlanPost
         )
     }
 
     /// Dismiss the kebab sheet without doing anything.
     public func cancelKebab() {
         kebabTarget = nil
+    }
+
+    /// A plan's own post opens its plan on the Plans tab, where Change and
+    /// Cancel tell everyone (the `/plans/<id>` link path).
+    public func openPlan(postId: String) {
+        kebabTarget = nil
+        DeepLinkRouter.shared.handle(path: "/plans/\(postId)")
     }
 
     /// Open the destructive-delete confirmation alert.
@@ -694,17 +722,20 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         public let onKebab: @Sendable () -> Void
         public let onEdit: @Sendable () -> Void
         public let onRestore: @Sendable () -> Void
+        public let onOpenPlan: @Sendable () -> Void
 
         public init(
             onTap: @escaping @Sendable () -> Void = {},
             onKebab: @escaping @Sendable () -> Void = {},
             onEdit: @escaping @Sendable () -> Void = {},
-            onRestore: @escaping @Sendable () -> Void = {}
+            onRestore: @escaping @Sendable () -> Void = {},
+            onOpenPlan: @escaping @Sendable () -> Void = {}
         ) {
             self.onTap = onTap
             self.onKebab = onKebab
             self.onEdit = onEdit
             self.onRestore = onRestore
+            self.onOpenPlan = onOpenPlan
         }
     }
 
@@ -764,6 +795,13 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
                 icon: .arrowsRepeat,
                 accessibilityLabel: "Restore post"
             ) { callbacks.onRestore() }
+        } else if dto.isPlanPost {
+            // A plan's post changes from its plan, which tells everyone.
+            RowEngagementCTA(
+                label: "Open plan",
+                icon: .calendar,
+                accessibilityLabel: "Open plan"
+            ) { callbacks.onOpenPlan() }
         } else {
             RowEngagementCTA(
                 label: "Edit",
@@ -910,12 +948,9 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
         }
     }
 
-    /// Engagement strip items per intent. Maps the available backend
-    /// counters (`comment_count`, `like_count`) to the closest design
-    /// label for each intent so the strip reads naturally:
-    ///   ask / announce / lost: "X replies" + "X likes"
-    ///   event:                  "X going" (likes) + "X comments"
-    ///   recommend:              "X helpful" (likes) + "X replies"
+    /// Engagement strip items: the replies and the post's reaction, named
+    /// by its type as on its card ("X going", "X celebrated", "X helpful").
+    /// Events and recommendations lead with the reaction, the rest with replies.
     public static func engagementItems(
         for dto: MyPostDTO,
         intent: PulseIntent
@@ -925,41 +960,13 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
             icon: .messageCircle,
             label: "\(dto.commentCount) \(dto.commentCount == 1 ? "reply" : "replies")"
         )
-        let likes = RowEngagementItem(
-            id: "likes",
-            icon: .thumbsUp,
-            label: "\(dto.likeCount) \(dto.likeCount == 1 ? "like" : "likes")"
-        )
+        let kind = PostReactionKind(postType: dto.postType)
+        let reaction = RowEngagementItem(id: kind.rawValue, icon: kind.icon, label: kind.countText(dto.likeCount))
         switch intent {
-        case .event:
-            return [
-                RowEngagementItem(
-                    id: "going",
-                    icon: .checkCircle,
-                    label: "\(dto.likeCount) going"
-                ),
-                replies
-            ]
-        case .recommend:
-            return [
-                RowEngagementItem(
-                    id: "helpful",
-                    icon: .thumbsUp,
-                    label: "\(dto.likeCount) helpful"
-                ),
-                replies
-            ]
-        case .lost:
-            return [
-                replies,
-                RowEngagementItem(
-                    id: "seen",
-                    icon: .eye,
-                    label: "\(dto.likeCount) seen"
-                )
-            ]
-        case .ask, .announce, .all, .alert, .deal, .neighborhoodWin, .visitorGuide, .generic:
-            return [replies, likes]
+        case .event, .recommend:
+            return [reaction, replies]
+        case .ask, .announce, .all, .lost, .alert, .deal, .neighborhoodWin, .visitorGuide, .generic:
+            return [replies, reaction]
         }
     }
 
@@ -1020,6 +1027,24 @@ public final class MyPostsViewModel: ListOfRowsDataSource {
             formatter.dateFormat = "MMM d"
             return formatter.string(from: date)
         }
+    }
+}
+
+// MARK: - Pin to profile
+
+extension MyPostsViewModel {
+    /// "Pin to profile" / "Unpin from profile" for one of your posts that
+    /// isn't archived (PRF SRV-3; nil when the server didn't say).
+    func profilePinTitle(postId: String) -> String? {
+        guard let post = posts.first(where: { $0.id == postId }), post.archivedAt == nil else { return nil }
+        return ProfilePins.shared.menuTitle(postId, server: post.profilePinned, canShowOnProfile: post.showOnProfile != false)
+    }
+
+    func toggleProfilePin(postId: String) async {
+        guard let post = posts.first(where: { $0.id == postId }) else { return }
+        let toast = await ProfilePins.shared.toggle(postId, server: post.profilePinned, client: api)
+        toastMessage = toast.text
+        toastKind = toast.kind
     }
 }
 

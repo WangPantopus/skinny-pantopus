@@ -11,12 +11,20 @@ import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.analytics.AnalyticsResult
 import app.pantopus.android.data.api.models.ai.AIDraftPostRequest
+import app.pantopus.android.data.api.models.identity.LocalProfileUpdateRequest
+import app.pantopus.android.data.api.models.identity.OwnLocalProfileResponse
+import app.pantopus.android.data.api.models.profile.ProfilePromptDto
+import app.pantopus.android.data.api.models.settings.PrivacySettingsUpdate
 import app.pantopus.android.data.api.models.users.ProfileUpdateRequest
 import app.pantopus.android.data.api.models.users.UserProfile
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.auth.AuthRepository
+import app.pantopus.android.data.identity.LocalProfileRepository
 import app.pantopus.android.data.network.NetworkMonitor
+import app.pantopus.android.data.posts.PostsRepository
+import app.pantopus.android.data.privacy.PrivacyRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.data.upload.UploadFile
 import app.pantopus.android.data.upload.UploadRepository
@@ -44,6 +52,12 @@ import javax.inject.Inject
  * `updateProfileSchema` (`backend/routes/users.js:324-351`).
  */
 enum class EditProfileField(val key: String) {
+    /**
+     * The name neighbors see (your Local Profile, `PATCH /api/local-profiles/me`), not part of the profile PATCH.
+     * Only in the form when the server keeps Local Profiles.
+     */
+    NeighborName("neighborName"),
+
     // About. The username is the profile link; empty means keep the current one.
     Username("username"),
     FirstName("firstName"),
@@ -166,6 +180,12 @@ class EditProfileViewModel
         private val authRepository: AuthRepository,
         private val networkMonitor: NetworkMonitor,
         private val aiDraftRepository: AIDraftRepository,
+        /** The name and photo neighbors see (PRF: one editor for both identities). */
+        private val localProfiles: LocalProfileRepository,
+        /** "Who sees your city" (`show_neighborhood`). */
+        private val privacy: PrivacyRepository,
+        /** Your pinned posts (PRF step 5): the editor lists them with Unpin. */
+        private val posts: PostsRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow<EditProfileUiState>(EditProfileUiState.Loading)
         val state: StateFlow<EditProfileUiState> = _state.asStateFlow()
@@ -180,6 +200,36 @@ class EditProfileViewModel
                 },
             )
         val fields: StateFlow<Map<EditProfileField, FormFieldState>> = _fields.asStateFlow()
+
+        /** Your Local Profile (what neighbors see) and your account's name and photo; null until read or when none. */
+        private val _neighbors = MutableStateFlow<OwnLocalProfileResponse?>(null)
+        val neighbors: StateFlow<OwnLocalProfileResponse?> = _neighbors.asStateFlow()
+
+        /** True while the photo neighbors see changes (each change saves at once, as Privacy's card did). */
+        private val _neighborPhotoBusy = MutableStateFlow(false)
+        val neighborPhotoBusy: StateFlow<Boolean> = _neighborPhotoBusy.asStateFlow()
+
+        /** "Who sees your city"; null until read (the row then shows no value). */
+        private val _cityAudience = MutableStateFlow<CityAudience?>(null)
+        internal val cityAudience: StateFlow<CityAudience?> = _cityAudience.asStateFlow()
+
+        /** Your prompt answers (PRF step 5), in order; Save sends them as `profile_prompts` when they changed. */
+        private val _prompts = MutableStateFlow<List<ProfilePromptDto>>(emptyList())
+        internal val prompts: StateFlow<List<ProfilePromptDto>> = _prompts.asStateFlow()
+        private var savedPrompts: List<ProfilePromptDto> = emptyList()
+
+        /** True when the answers differ from the saved ones. */
+        val arePromptsDirty: Boolean get() = _prompts.value != savedPrompts
+
+        /** Your pinned posts; Unpin saves at once. */
+        internal val pins = ProfilePinsLoader(viewModelScope, posts)
+        private val _unpinning = MutableStateFlow<String?>(null)
+        internal val unpinning: StateFlow<String?> = _unpinning.asStateFlow()
+        private var ownId: String? = null
+
+        /** The preview card's color seed and trust line, from your account read. */
+        private val _ownFacts = MutableStateFlow<EditOwnFacts?>(null)
+        internal val ownFacts: StateFlow<EditOwnFacts?> = _ownFacts.asStateFlow()
 
         private val _isSaving = MutableStateFlow(false)
         val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
@@ -290,20 +340,26 @@ class EditProfileViewModel
         }
 
         val aggregate: FormAggregate
-            get() = FormAggregate.from(EditProfileField.entries.mapNotNull { _fields.value[it] })
+            get() = FormAggregate.from(activeFields().mapNotNull { _fields.value[it] })
+
+        private fun activeFields(): List<EditProfileField> =
+            EditProfileField.entries.filter { it != EditProfileField.NeighborName || _neighbors.value != null }
 
         val isValid: Boolean get() = aggregate.isValid && !usernameCheck.blocksSave
 
         /** Skills ride their own PUT, so they widen the form's dirty state
          *  without appearing in [aggregate]. */
-        val isDirty: Boolean get() = aggregate.isDirty || isSkillsDirty
+        val isDirty: Boolean get() = aggregate.isDirty || isSkillsDirty || arePromptsDirty
 
         /** True when the working skill list differs from the last-saved one. */
         val isSkillsDirty: Boolean get() = _skills.value != _savedSkills.value
 
         /** The skill list counts as one dirty field on the sticky pill. */
         val dirtyFieldCount: Int
-            get() = _fields.value.values.count { it.isDirty } + if (isSkillsDirty) 1 else 0
+            get() =
+                activeFields().count { _fields.value[it]?.isDirty == true } +
+                    (if (isSkillsDirty) 1 else 0) +
+                    (if (arePromptsDirty) 1 else 0)
 
         /** Whether the add-skill CTA can fire — an empty input or a full
          *  list would only produce a no-op or a server rejection. */
@@ -321,6 +377,8 @@ class EditProfileViewModel
             if (_state.value is EditProfileUiState.Loaded) return
             repo.ownProfileCopy()?.user?.let(::seedProfile)
             if (_state.value !is EditProfileUiState.Loaded) _state.value = EditProfileUiState.Loading
+            // The name and photo neighbors see load beside the account; neither waits for the other.
+            viewModelScope.launch { loadNeighbors() }
             viewModelScope.launch {
                 when (val result = repo.ownProfile()) {
                     is NetworkResult.Success -> {
@@ -340,6 +398,89 @@ class EditProfileViewModel
             }
         }
 
+        /** Your Local Profile (the name and photo neighbors see) and "Who sees your city"; each simply hides on failure. */
+        private suspend fun loadNeighbors() {
+            (localProfiles.me() as? NetworkResult.Success)?.data?.let { view ->
+                _neighbors.value = view
+                if (_fields.value[EditProfileField.NeighborName]?.isDirty != true) {
+                    seed(EditProfileField.NeighborName, view.profile.displayName)
+                }
+            }
+            (privacy.settings() as? NetworkResult.Success)?.data?.settings?.let { settings ->
+                _cityAudience.value = CityAudience.from(settings.showNeighborhood)
+            }
+        }
+
+        /** "Who sees your city" saves at once (`PATCH /api/privacy/settings`). */
+        internal fun setCityAudience(choice: CityAudience) {
+            val previous = _cityAudience.value
+            if (previous == choice) return
+            _cityAudience.value = choice
+            viewModelScope.launch {
+                when (val result = privacy.updateSettings(PrivacySettingsUpdate(showNeighborhood = choice.apiValue))) {
+                    is NetworkResult.Success -> {
+                        _toast.value = EditProfileToast("Who sees your city: ${choice.label}", isError = false)
+                        ProfileChanges.notifyChanged()
+                    }
+                    is NetworkResult.Failure -> {
+                        _cityAudience.value = previous
+                        val message = result.error.displayMessage("Couldn't change who sees your city.")
+                        _toast.value = EditProfileToast(message, isError = true)
+                    }
+                }
+            }
+        }
+
+        /** A new photo for neighbors (`POST /api/upload/local-profile-picture`), as Privacy's card did. */
+        fun uploadNeighborPhoto(
+            bytes: ByteArray?,
+            filename: String,
+            mimeType: String,
+        ) {
+            if (bytes == null) {
+                _toast.value = EditProfileToast("We couldn't read that photo. Try another one.", isError = true)
+                return
+            }
+            changeNeighborPhoto("Neighbors now see your new photo") {
+                localProfiles.uploadPhoto(UploadFile(filename = filename, mimeType = mimeType, bytes = bytes))
+            }
+        }
+
+        fun useAccountPhotoForNeighbors() {
+            val url = _neighbors.value?.account?.avatarUrl ?: return
+            changeNeighborPhoto("Neighbors now see your account photo") {
+                localProfiles.update(LocalProfileUpdateRequest(photo = LocalProfileUpdateRequest.Photo.Url(url)))
+            }
+        }
+
+        fun removeNeighborPhoto() {
+            changeNeighborPhoto("Neighbors now see your initials") {
+                localProfiles.update(LocalProfileUpdateRequest(photo = LocalProfileUpdateRequest.Photo.None))
+            }
+        }
+
+        private fun changeNeighborPhoto(
+            success: String,
+            change: suspend () -> NetworkResult<OwnLocalProfileResponse>,
+        ) {
+            if (_neighborPhotoBusy.value) return
+            _neighborPhotoBusy.value = true
+            viewModelScope.launch {
+                when (val result = change()) {
+                    is NetworkResult.Success -> {
+                        _neighbors.value = result.data
+                        _toast.value = EditProfileToast(success, isError = false)
+                        ProfileChanges.notifyChanged()
+                    }
+                    is NetworkResult.Failure -> {
+                        val message = result.error.displayMessage("Couldn't change the photo. Please try again.")
+                        _toast.value = EditProfileToast(message, isError = true)
+                    }
+                }
+                _neighborPhotoBusy.value = false
+            }
+        }
+
         /** An access refusal retires the editor's seeded copy as well as the repository's copy. */
         private fun clearRefusedProfile() {
             _fields.value = EditProfileField.entries.associateWith { FormFieldState(id = it.key) }
@@ -355,6 +496,9 @@ class EditProfileViewModel
 
         private fun seedProfile(profile: UserProfile) {
             hydrate(profile)
+            _ownFacts.value = EditOwnFacts(seed = profile.id, trust = profileTrust(profile.residency, profile.createdAt, city = null))
+            if (ownId != profile.id) pins.load(profile.id)
+            ownId = profile.id
             // Skills have their own PUT and are absent from the PATCH echo.
             _skills.value = profile.skills.orEmpty()
             _savedSkills.value = _skills.value
@@ -432,6 +576,7 @@ class EditProfileViewModel
             _fields.value = map
             _skills.value = _savedSkills.value
             _skillDraft.value = ""
+            _prompts.value = savedPrompts
             usernameCheck.reset(usernameCheck.current, usernameCheck.currentIsMadeUp)
         }
 
@@ -443,7 +588,7 @@ class EditProfileViewModel
         fun validateAll(): EditProfileField? {
             var firstInvalid: EditProfileField? = null
             val map = _fields.value.toMutableMap()
-            for (field in EditProfileField.entries) {
+            for (field in activeFields()) {
                 val snapshot = map[field] ?: FormFieldState(id = field.key)
                 val message = validator(field).validate(snapshot.value)
                 map[field] = snapshot.copy(error = message, touched = true)
@@ -462,9 +607,13 @@ class EditProfileViewModel
                 Analytics.track(AnalyticsEvent.FormEditProfileValidationError(field = invalid.key))
                 return
             }
-            val fieldsDirty = aggregate.isDirty
+            val neighborNameDirty = _neighbors.value != null && _fields.value[EditProfileField.NeighborName]?.isDirty == true
+            val accountFieldsDirty =
+                EditProfileField.entries.any { it != EditProfileField.NeighborName && _fields.value[it]?.isDirty == true }
+            // Prompts ride the same profile PATCH as the account fields.
+            val fieldsDirty = arePromptsDirty || accountFieldsDirty
             val skillsDirty = isSkillsDirty
-            if (!fieldsDirty && !skillsDirty) return
+            if (!fieldsDirty && !skillsDirty && !neighborNameDirty) return
             if (!networkMonitor.isOnline.value) {
                 // P15: don't silently queue. Surface the error inline.
                 _toast.value =
@@ -477,34 +626,18 @@ class EditProfileViewModel
             }
             _isSaving.value = true
             viewModelScope.launch {
-                // The two legs are independent on the wire, so each
-                // re-baselines itself the moment it lands: a failure on one
-                // never discards the other's edits, and a retry re-sends
-                // only what is still dirty.
-                var failure: String? = null
-                if (fieldsDirty) {
-                    when (val result = repo.updateProfile(buildRequest())) {
-                        is NetworkResult.Success -> hydrate(result.data.user)
-                        is NetworkResult.Failure -> {
-                            failure = result.error.message.ifBlank { "Couldn't save profile." }
-                            markUsernameError(result.error.code, result.error.message)
-                        }
-                    }
-                }
-                if (skillsDirty) {
-                    when (val result = repo.updateSkills(_skills.value)) {
-                        is NetworkResult.Success -> {
-                            // The route trims, dedupes and caps the list,
-                            // then echoes the cleaned array — so the echo,
-                            // not the local list, becomes the new baseline.
-                            _skills.value = result.data.skills
-                            _savedSkills.value = result.data.skills
-                        }
-                        is NetworkResult.Failure ->
-                            failure = failure ?: result.error.message.ifBlank { "Couldn't save skills." }
-                    }
-                }
-                val message = failure
+                // The legs are independent on the wire, so each re-baselines
+                // itself the moment it lands: a failure on one never discards
+                // the others' edits, and a retry re-sends only what is still
+                // dirty. The name neighbors see goes last: an account name
+                // change moves it only while it still follows the account, so
+                // the name typed here wins.
+                val message =
+                    listOfNotNull(
+                        if (fieldsDirty) saveFields() else null,
+                        if (skillsDirty) saveSkills() else null,
+                        if (neighborNameDirty) saveNeighborName() else null,
+                    ).firstOrNull()
                 if (message != null) {
                     _toast.value = EditProfileToast(message, isError = true)
                     Analytics.track(AnalyticsEvent.FormEditProfileSubmit(result = AnalyticsResult.ERROR))
@@ -517,6 +650,84 @@ class EditProfileViewModel
                     Analytics.track(AnalyticsEvent.FormEditProfileSubmit(result = AnalyticsResult.SUCCESS))
                 }
                 _isSaving.value = false
+            }
+        }
+
+        /** Puts [answer] for [prompt] in the form (a new prompt goes last); Save sends the list. A blank answer removes it. */
+        internal fun setPromptAnswer(
+            prompt: ProfilePrompt,
+            answer: String,
+        ) {
+            // The server's rule: plain text, runs of spaces and line breaks become one space.
+            val text = answer.trim().replace(Regex("\\s+"), " ").take(ProfilePrompt.ANSWER_LIMIT)
+            val list = _prompts.value.filterNot { it.key == prompt.key && text.isEmpty() }
+            _prompts.value =
+                when {
+                    text.isEmpty() -> list
+                    list.any { it.key == prompt.key } -> list.map { if (it.key == prompt.key) it.copy(answer = text) else it }
+                    else -> (list + ProfilePromptDto(prompt.key, text)).take(ProfilePrompt.MAX)
+                }
+        }
+
+        internal fun removePrompt(prompt: ProfilePrompt) {
+            _prompts.value = _prompts.value.filterNot { it.key == prompt.key }
+        }
+
+        /** Unpins one of your posts at once (PRF step 5); the profile's Pinned row reads again. */
+        internal fun unpin(postId: String) {
+            if (_unpinning.value != null) return
+            _unpinning.value = postId
+            viewModelScope.launch {
+                when (val result = posts.setProfilePin(postId, pinned = false)) {
+                    is NetworkResult.Success -> {
+                        _toast.value = EditProfileToast(ProfilePinCopy.UNPINNED, isError = false)
+                        ProfileChanges.notifyChanged()
+                        ownId?.let(pins::load)
+                    }
+                    is NetworkResult.Failure ->
+                        _toast.value = EditProfileToast(result.error.displayMessage(ProfilePinCopy.FAILED), isError = true)
+                }
+                _unpinning.value = null
+            }
+        }
+
+        /** The profile PATCH; null when it saved. */
+        private suspend fun saveFields(): String? =
+            when (val result = repo.updateProfile(buildRequest())) {
+                is NetworkResult.Success -> {
+                    hydrate(result.data.user)
+                    null
+                }
+                is NetworkResult.Failure -> {
+                    markUsernameError(result.error.code, result.error.message)
+                    result.error.message.ifBlank { "Couldn't save profile." }
+                }
+            }
+
+        /** Skills ride their own PUT (`backend/routes/users.js:2246`); null when they saved. */
+        private suspend fun saveSkills(): String? =
+            when (val result = repo.updateSkills(_skills.value)) {
+                is NetworkResult.Success -> {
+                    // The route trims, dedupes and caps the list,
+                    // then echoes the cleaned array — so the echo,
+                    // not the local list, becomes the new baseline.
+                    _skills.value = result.data.skills
+                    _savedSkills.value = result.data.skills
+                    null
+                }
+                is NetworkResult.Failure -> result.error.message.ifBlank { "Couldn't save skills." }
+            }
+
+        /** The name neighbors see (`PATCH /api/local-profiles/me`); null when it saved. */
+        private suspend fun saveNeighborName(): String? {
+            val name = normalizedNeighborName(_fields.value[EditProfileField.NeighborName]?.value.orEmpty())
+            return when (val result = localProfiles.update(LocalProfileUpdateRequest(displayName = name))) {
+                is NetworkResult.Success -> {
+                    _neighbors.value = result.data
+                    seed(EditProfileField.NeighborName, result.data.profile.displayName)
+                    null
+                }
+                is NetworkResult.Failure -> result.error.displayMessage("Couldn't save the name neighbors see.")
             }
         }
 
@@ -598,6 +809,9 @@ class EditProfileViewModel
         private fun hydrate(profile: UserProfile) {
             _email.value = profile.email
             _emailVerified.value = profile.verified
+            // Answers for prompts this app doesn't know (a newer catalog) are left out, as on the profile.
+            savedPrompts = profile.prompts.orEmpty().filter { ProfilePrompt.of(it.key) != null }
+            _prompts.value = savedPrompts
             // A just-uploaded avatar wins over the PATCH echo: `PATCH
             // /api/users/profile` never touches `profile_picture_url`, so a
             // stale row would otherwise flip the block back to initials.
@@ -707,6 +921,7 @@ class EditProfileViewModel
                 twitter = trimmed(EditProfileField.Twitter),
                 instagram = trimmed(EditProfileField.Instagram),
                 facebook = trimmed(EditProfileField.Facebook),
+                profilePrompts = _prompts.value.takeIf { arePromptsDirty },
             )
         }
 
@@ -752,6 +967,15 @@ class EditProfileViewModel
             /** Validators keyed by field — mirrors iOS exactly. */
             private val VALIDATORS: Map<EditProfileField, FormValidator> =
                 mapOf(
+                    EditProfileField.NeighborName to
+                        FormValidator { value ->
+                            val name = normalizedNeighborName(value)
+                            when {
+                                name.isEmpty() -> "Enter the name neighbors should see."
+                                name.length > NEIGHBOR_NAME_LIMIT -> "Use 255 characters or fewer."
+                                else -> null
+                            }
+                        },
                     // Checked again by the server; empty keeps the current username.
                     EditProfileField.Username to
                         FormValidator { value ->

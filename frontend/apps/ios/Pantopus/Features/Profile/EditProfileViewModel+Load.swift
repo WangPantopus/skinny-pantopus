@@ -39,6 +39,7 @@ extension EditProfileViewModel {
 
     private func fill(from response: ProfileResponse) {
         hydrate(from: response.user)
+        setPreviewFacts(from: response.user)
         // Seeded here rather than in `hydrate(from:)`: the PATCH echo
         // carries no `skills` key (`backend/routes/users.js:2194`), so
         // hydrating skills there would blank the list after every save.

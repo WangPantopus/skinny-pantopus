@@ -11,6 +11,8 @@ interface BottomSheetProps {
   children: ReactNode;
   footer?: ReactNode;
   className?: string;
+  /** Id of a heading inside the children that names the sheet, for sheets drawn without `title`. */
+  labelledBy?: string;
 }
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -40,6 +42,7 @@ export default function BottomSheet({
   children,
   footer,
   className = '',
+  labelledBy,
 }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -130,7 +133,7 @@ export default function BottomSheet({
         ref={sheetRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby={title ? titleId : undefined}
+        aria-labelledby={title ? titleId : labelledBy}
         tabIndex={-1}
         className={`relative w-full max-w-md sm:max-w-lg bg-surface rounded-t-2xl sm:rounded-2xl border border-app shadow-2xl overflow-hidden outline-none animate-[slideUp_0.25s_ease-out] ${className}`}
         onClick={(e) => e.stopPropagation()}

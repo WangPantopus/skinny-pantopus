@@ -796,6 +796,12 @@ public final class PulseFeedViewModel {
         }
     }
 
+    /// The host's own plan post opens its plan on the Plans tab, where Change
+    /// and Cancel tell everyone (the `/plans/<id>` link path).
+    public func openPlan(postId: String) {
+        DeepLinkRouter.shared.handle(path: "/plans/\(postId)")
+    }
+
     /// `DELETE /api/posts/:id` — author-only, optimistic removal with
     /// rollback (RN `useFeedData.ts:209`).
     public func deletePost(postId: String) async {
@@ -1216,15 +1222,12 @@ public final class PulseFeedViewModel {
                 postType: post.postType,
                 startsAt: post.eventDate,
                 endsAt: post.eventEndDate,
-                venue: post.eventVenue
+                venue: post.eventVenue,
+                isPlanPost: post.isPlanPost
             ),
-            // The backend persists a single like counter; the secondary
-            // verb is display-only and has no count source, so it stays 0
-            // (comment count lives on the Reply affordance instead).
-            reactions: intent.reactionTemplate(
-                helpfulCount: likeCount,
-                secondaryCount: 0
-            ),
+            // The post's one reaction (the backend's single like counter),
+            // named by its type: Going, Celebrate or Helpful.
+            reaction: PulseReaction(postType: post.postType, likeCount: likeCount),
             attendees: attendees,
             userHasReacted: hasReacted,
             // Image tiles render the full-size stills (thumbnails are
@@ -1254,7 +1257,8 @@ public final class PulseFeedViewModel {
                 topicLabel: intent.cardChipLabel,
                 pending: live.pending,
                 canCloseAsk: askIsOpen,
-                canKeepAskOpen: askIsOpen && !keptOpen
+                canKeepAskOpen: askIsOpen && !keptOpen,
+                isPlanPost: post.isPlanPost
             ),
             chipLabel: intent.chipLabel(lostFoundType: post.lostFoundType),
             isVisitor: post.isVisitorPost,
@@ -1338,4 +1342,24 @@ private struct FeedQuery: Equatable {
     let topic: String?
     let sportsMode: String?
     let eventKey: String?
+}
+
+// MARK: - Pin to profile
+
+extension PulseFeedViewModel {
+    /// "Pin to profile" / "Unpin from profile" on your own posts (PRF SRV-3;
+    /// the server marks only those); nil hides it.
+    func profilePinTitle(postId: String) -> String? {
+        guard let post = loadedItems.first(where: { $0.id == postId }) else { return nil }
+        return ProfilePins.shared.menuTitle(
+            postId,
+            server: post.profilePinned,
+            canShowOnProfile: post.showOnProfile != false && post.businessAuthorId == nil
+        )
+    }
+
+    func toggleProfilePin(postId: String) async {
+        guard let post = loadedItems.first(where: { $0.id == postId }) else { return }
+        toastMessage = await ProfilePins.shared.toggle(postId, server: post.profilePinned, client: api).text
+    }
 }

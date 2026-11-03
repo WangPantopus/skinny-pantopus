@@ -207,6 +207,39 @@ android {
     }
 }
 
+// The launcher shortcuts (AI assistant phase 3 contract §8.4) open this build's own MainActivity. The launcher reads the
+// package of an intent in res/xml/shortcuts.xml literally (an @string there is never resolved, so the shortcut can't
+// start), so each variant gets its own res/xml/shortcuts.xml, written from src/main/shortcuts/shortcuts.xml with the
+// variant's final application id (`.debug` included).
+abstract class LauncherShortcutsTask : DefaultTask() {
+    @get:InputFile
+    abstract val template: RegularFileProperty
+
+    @get:Input
+    abstract val applicationId: Property<String>
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction
+    fun write() {
+        val xml = outputDirectory.get().dir("xml").asFile.apply { mkdirs() }.resolve("shortcuts.xml")
+        xml.writeText(template.get().asFile.readText().replace("APPLICATION_ID", applicationId.get()))
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        val shortcuts =
+            tasks.register<LauncherShortcutsTask>("${variant.name}LauncherShortcuts") {
+                template.set(layout.projectDirectory.file("src/main/shortcuts/shortcuts.xml"))
+                applicationId.set(variant.applicationId)
+                outputDirectory.set(layout.buildDirectory.dir("generated/launcherShortcuts/${variant.name}"))
+            }
+        variant.sources.res?.addGeneratedSourceDirectory(shortcuts, LauncherShortcutsTask::outputDirectory)
+    }
+}
+
 // kotlinx-coroutines' "fast" Main-dispatcher service loader has a lazy-init
 // race that intermittently throws "Module with the Main dispatcher had failed
 // to initialize" in large JVM unit-test runs — it flaked
@@ -350,6 +383,10 @@ dependencies {
     // + single-use resume grant; see data/auth/AccountHintStore.kt). No-op
     // on GMS-less devices.
     implementation(libs.play.services.auth.blockstore)
+
+    // Google Play install referrer — a link tapped on the web before the
+    // install, opened on the first launch (core/routing/InstallReferrerLink.kt).
+    implementation(libs.android.installreferrer)
 
     // Firebase Cloud Messaging — declared via BoM so the messaging
     // artifact picks up a compatible version automatically. Adding more

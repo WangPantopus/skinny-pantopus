@@ -64,6 +64,7 @@ struct PlanComposerRoot: View {
                             )
                         }
                     }
+                    .readableColumn()
                     .toolbar(.hidden, for: .navigationBar)
                     .swipesBackFromEdge()
                     .navigationDestination(for: PlanComposerStep.self) { step in
@@ -75,9 +76,11 @@ struct PlanComposerRoot: View {
                                 onBack: { path.removeLast() },
                                 onPreview: { openPreview() }
                             )
+                            .readableColumn()
                             .toolbar(.hidden, for: .navigationBar)
                         case .preview:
                             PlanPreviewScreen(model: model, step: "3 of 3") { path.removeLast() }
+                                .readableColumn()
                                 .toolbar(.hidden, for: .navigationBar)
                         }
                     }

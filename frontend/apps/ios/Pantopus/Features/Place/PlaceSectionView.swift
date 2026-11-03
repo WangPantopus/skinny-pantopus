@@ -25,6 +25,10 @@ struct PlaceSectionView: View {
     var retrying = false
     /// The viewer set this Home up and hasn't verified it: every lock is the verify step.
     var verifiesFirst = false
+    /// The place's time zone: its clocks (sun times, the weather's time) read on it.
+    var timeZone: TimeZone?
+    /// Its own card surface; off for a row inside a glance group's surface.
+    var chrome = true
 
     private var cardState: PlaceSectionCardState {
         let state = PlacePresentation.cardState(env)
@@ -44,6 +48,7 @@ struct PlaceSectionView: View {
                 title: PlacePresentation.config(for: env.id).title,
                 reason: PlacePresentation.lockReason(env),
                 cta: PlacePresentation.lockCta(env.band, verifiesFirst: verifiesFirst),
+                chrome: chrome,
                 onTap: lockHandler
             )
         } else {
@@ -59,11 +64,12 @@ struct PlaceSectionView: View {
                 title: "Verified homes nearby",
                 reason: PlacePresentation.lockReason(env),
                 cta: PlacePresentation.lockCta(env.band, verifiesFirst: verifiesFirst),
+                chrome: chrome,
                 onTap: lockHandler
             )
         } else if let density = env.blockDensity,
                   env.status == .ready || env.status == .partial || env.status == .stale {
-            PlaceDensityCard(bucket: density.bucket, label: density.label, ctaTitle: nil, onTap: onOpen)
+            PlaceDensityCard(bucket: density.bucket, label: density.label, ctaTitle: nil, chrome: chrome, onTap: onOpen)
         } else {
             PlaceSectionCard(
                 icon: .users,
@@ -71,7 +77,8 @@ struct PlaceSectionView: View {
                 state: cardState,
                 caption: env.unavailableReason,
                 onTap: onOpen,
-                onRetry: onRetry
+                onRetry: onRetry,
+                chrome: chrome
             )
         }
     }
@@ -80,12 +87,12 @@ struct PlaceSectionView: View {
         let cfg = PlacePresentation.config(for: env.id)
         let state = cardState
         let isLive = state == .loaded || state == .stale
-        let reading = isLive ? PlacePresentation.reading(for: env) : PlaceSectionReading()
+        let reading = isLive ? PlacePresentation.reading(for: env, timeZone: timeZone) : PlaceSectionReading()
         let wording = PlacePresentation.errorWording(for: env.id)
         return PlaceSectionCard(
             icon: cfg.icon,
             title: cfg.title,
-            asOf: isLive ? PlacePresentation.asOf(for: env) : nil,
+            asOf: isLive ? PlacePresentation.asOf(for: env, timeZone: timeZone) : nil,
             state: state,
             value: reading.value,
             caption: state == .unavailable ? env.unavailableReason : reading.caption,
@@ -97,7 +104,8 @@ struct PlaceSectionView: View {
             onTap: onOpen,
             onRetry: onRetry,
             errorTitle: wording.title,
-            retryTitle: wording.retry
+            retryTitle: wording.retry,
+            chrome: chrome
         )
     }
 }

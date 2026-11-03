@@ -1,6 +1,7 @@
 package app.pantopus.android.ui.screens.place
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import app.pantopus.android.data.api.models.place.PlaceSectionAccess
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
 import app.pantopus.android.data.api.models.place.PlaceSectionId
@@ -10,6 +11,13 @@ import app.pantopus.android.ui.screens.place.components.PlaceLockedCard
 import app.pantopus.android.ui.screens.place.components.PlaceSectionCard
 import app.pantopus.android.ui.screens.place.components.PlaceSectionCardState
 import app.pantopus.android.ui.theme.PantopusIcon
+import java.time.ZoneId
+
+/**
+ * The place on screen's time zone (`PlaceIntelligence.homeZone`): section rows and detail pages show its clock,
+ * never the phone's (TPR contract). Each Place screen provides it; null when the place's zone is unknown.
+ */
+val LocalPlaceZone = staticCompositionLocalOf<ZoneId?> { ZoneId.systemDefault() }
 
 /**
  * Renders one PlaceIntelligence section envelope as the right card —
@@ -87,11 +95,12 @@ fun PlaceSectionView(
             val cfg = PlacePresentation.config(env.sectionId)
             val state = cardState
             val isLive = state == PlaceSectionCardState.LOADED || state == PlaceSectionCardState.STALE
-            val reading = if (isLive) PlacePresentation.reading(env) else PlaceSectionReading()
+            val zone = LocalPlaceZone.current
+            val reading = if (isLive) PlacePresentation.reading(env, zone) else PlaceSectionReading()
             PlaceSectionCard(
                 title = cfg.title,
                 icon = cfg.icon,
-                asOf = if (isLive) PlacePresentation.asOf(env) else null,
+                asOf = if (isLive) PlacePresentation.asOf(env, zone) else null,
                 state = state,
                 value = reading.value,
                 caption = if (state == PlaceSectionCardState.UNAVAILABLE) env.unavailableReason else reading.caption,

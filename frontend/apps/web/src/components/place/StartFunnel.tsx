@@ -52,7 +52,8 @@ import { Group, SectionCard, LockedCard, DensityCard, PlaceHeader, TextButton, A
 import { PantopusLockup } from '@/components/brand/PantopusMark';
 import { renderSection } from '@/components/place/presentation';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
-import { absoluteMediaUrl, getStoreDownloadCta } from '@/lib/publicShare';
+import { absoluteMediaUrl, getStoreDownloadCta, type StoreDownloadCta } from '@/lib/publicShare';
+import StoreLink from '@/components/public-share/StoreLink';
 import { clearPendingPlaces, stashPendingPlace } from './pendingPlace';
 import { authPageHref } from '@/lib/auth-utils';
 import { launchFeatures } from '@/lib/featureFlags';
@@ -169,6 +170,12 @@ function HeroStep({
               See your place
               <ArrowRight size={17} strokeWidth={2.5} />
             </button>
+            {/* From a friend's invite, the app is one tap away and keeps the invite through the install. */}
+            {invite ? (
+              <div className="flex justify-center pt-0.5">
+                <AppDownloadLink invite={invite} />
+              </div>
+            ) : null}
           </div>
 
           <PrivacyProof />
@@ -521,19 +528,24 @@ export function PreviewBody({ preview, onWall, onRetry, retrying, stack = false 
 // ── App-download link (platform-aware; the QR-scanner's other path) ──
 // The store URLs ship with real fallbacks, so this is never a dead link;
 // computed on the client from the user agent to point at the right store.
-function AppDownloadLink() {
-  const [cta, setCta] = useState<{ href: string; label: string } | null>(null);
+// From a friend's invite it carries the invite through the install (Google
+// Play's referrer on Android, copied for the app's Paste button on an iPhone),
+// so the app still credits the friend.
+function AppDownloadLink({ invite }: { invite?: StartInvite }) {
+  const [cta, setCta] = useState<StoreDownloadCta | null>(null);
+  const code = invite?.code;
   useEffect(() => {
     try {
-      setCta(getStoreDownloadCta(navigator.userAgent));
+      setCta(getStoreDownloadCta(navigator.userAgent, code ? `/join/${encodeURIComponent(code)}` : null));
     } catch {
       setCta(null);
     }
-  }, []);
+  }, [code]);
   if (!cta) return null;
   return (
-    <a
+    <StoreLink
       href={cta.href}
+      copyPath={cta.copyPath}
       target="_blank"
       rel="noopener noreferrer"
       className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-primary-600 hover:text-primary-700"
@@ -541,7 +553,7 @@ function AppDownloadLink() {
       <Smartphone size={14} strokeWidth={2} />
       Prefer the app? Get it
       <ArrowRight size={13} strokeWidth={2.25} />
-    </a>
+    </StoreLink>
   );
 }
 
@@ -579,7 +591,7 @@ function ShareAddressLink({ address }: { address: string }) {
 }
 
 // ── Sticky wall bar ─────────────────────────────────────────
-function WallBar({ onWall, shareAddress }: { onWall: () => void; shareAddress: string }) {
+function WallBar({ onWall, shareAddress, invite }: { onWall: () => void; shareAddress: string; invite?: StartInvite }) {
   return (
     <div className="sticky bottom-[var(--fab-lift,0px)] left-0 right-0 -mx-5 px-5 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] bg-app-surface/95 backdrop-blur border-t border-app-border sm:rounded-t-2xl sm:border-x sm:shadow-[0_-8px_24px_rgba(15,23,42,0.06)]">
       <div className="flex items-center gap-3.5">
@@ -599,7 +611,7 @@ function WallBar({ onWall, shareAddress }: { onWall: () => void; shareAddress: s
       </div>
       <div className="mt-2 flex items-center justify-center gap-4">
         <ShareAddressLink address={shareAddress} />
-        <AppDownloadLink />
+        <AppDownloadLink invite={invite} />
       </div>
     </div>
   );
@@ -905,7 +917,7 @@ export default function StartFunnel({ invite }: { invite?: StartInvite } = {}) {
               />
               <div className="h-4" />
             </div>
-            <WallBar onWall={goWall} shareAddress={selected?.label ?? submitted ?? ''} />
+            <WallBar onWall={goWall} shareAddress={selected?.label ?? submitted ?? ''} invite={invite} />
           </>
         ) : null}
       </div>

@@ -102,7 +102,7 @@ const readToolDefinitions = [
   },
   {
     name: 'find_posts',
-    description: "Recent posts on the person's Nearby feed (questions, recommendations, events, lost and found, heads-ups, deals, local updates), newest first, within about 10 miles, as the feed shows them.",
+    description: "Recent posts on the person's Nearby feed (questions, recommendations, events, lost and found, heads-ups, deals, local updates), newest first, within about 10 miles, as the feed shows them. A post the person wrote has `yours: true`: use it for \"my question\" or \"my post\".",
     input_schema: {
       type: 'object',
       properties: {
@@ -349,9 +349,12 @@ function postForModel(post, zone) {
     state: post.state || null,
     event_date: post.event_date || null,
     // An event's time and venue as its page shows them to everyone who reads it: composers post the
-    // poster's wall clock labelled UTC, so it reads in UTC.
+    // poster's wall clock labelled UTC, so it reads in UTC; a plan's own post (post_metadata.plan, set
+    // by Plans) holds the real moment, so it reads in the person's zone, as the apps show it.
     ...(post.post_type === 'event' ? {
-      event_when: post.event_date ? whenLabel(post.event_date, post.event_end_date, 'UTC') : null,
+      event_when: post.event_date
+        ? whenLabel(post.event_date, post.event_end_date, post.post_metadata?.plan === true ? zone : 'UTC')
+        : null,
       event_venue_text: clip(post.event_venue, 120),
     } : {}),
   };
@@ -384,7 +387,12 @@ async function findPosts(args, ctx) {
       return words.every((word) => text.includes(word));
     })
     .slice(0, 15);
-  return { note: OTHERS_WORDS, area: location.label || null, posts: posts.map((post) => postForModel(post, ctx.timeZone)) };
+  // Like get_post: the person's own posts say so, since neighbors' first names and wording can match theirs.
+  return {
+    note: OTHERS_WORDS,
+    area: location.label || null,
+    posts: posts.map((post) => ({ ...postForModel(post, ctx.timeZone), yours: String(post.user_id) === String(ctx.userId) })),
+  };
 }
 
 async function getPost(args, ctx) {
@@ -580,7 +588,7 @@ const BRIEFS = {
   // The strongest first, by their short names.
   alerts: (data) => {
     const active = Array.isArray(data.active) ? [...data.active] : [];
-    if (!active.length) return 'No active alerts';
+    if (!active.length) return 'No active weather alerts';
     return active.sort((a, b) => (ALERT_RANK[a.severity] ?? 3) - (ALERT_RANK[b.severity] ?? 3))
       .map((alert) => alert.event || alert.headline).join('; ');
   },

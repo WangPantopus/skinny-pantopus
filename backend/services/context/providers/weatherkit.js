@@ -390,6 +390,14 @@ function normaliseWkAlert(a) {
     areas: a.areaName ? [a.areaName] : [],
     details_url: a.detailsUrl || '',
     source: a.source || '',
+    // The same detail fields NOAA alerts carry (WeatherKit has no separate bulletin expiry or instruction).
+    sent: a.issuedTime || '',
+    effective: a.effectiveTime || '',
+    bulletin_expires: a.expireTime || '',
+    sender_name: a.source || '',
+    area: a.areaName || '',
+    full_description: a.description || '',
+    full_instruction: '',
   };
 }
 

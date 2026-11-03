@@ -10,7 +10,7 @@ import type { Post, MatchedBusiness } from '@pantopus/api';
 import type { User } from '@pantopus/types';
 import {
   MessageCircle, Star, CalendarDays, Search as SearchIcon, Megaphone, AlertTriangle,
-  Pencil, Siren, Tag, Wrench, Newspaper, Trophy, Compass, User as UserIcon, ShieldAlert,
+  Pencil, Siren, Tag, Wrench, Newspaper, Trophy, Compass, User as UserIcon, ShieldAlert, Pin, PinOff,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { CommentThread, EditPostDialog } from '@/components/feed';
@@ -18,15 +18,20 @@ import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { PostMediaPreview, resolvePostMediaSlots } from '@/components/feed/PostMediaGrid';
 import PostMediaLightbox from '@/components/feed/PostMediaLightbox';
 import { PostLinkContent } from '@/components/feed/LinkPreviewCard';
-import { formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE } from '@pantopus/ui-utils';
+import {
+  formatDistance, formatTimeAgo as timeAgo, getPostTypeConfig, POST_TYPE_ICONS_LUCIDE, POST_REACTION_LABEL, postReaction,
+} from '@pantopus/ui-utils';
+import { postReactionIcon } from '@/components/feed/PostCard';
 import { getErrorMessage, chosenUsername } from '@pantopus/utils';
 import Image from 'next/image';
+import Link from 'next/link';
 import { confirmStore } from '@/components/ui/confirm-store';
 import ReportModal from '@/components/ui/ReportModal';
 import ErrorState from '@/components/ui/ErrorState';
 import PostMetadata from '@/components/feed/PostMetadata';
 import { canSharePost, sharePostLink } from '@/components/feed/sharePostLink';
 import { patchPostInFeedCaches, removePostFromFeedCaches } from '@/hooks/useFeedData';
+import { canOfferProfilePin, useProfilePin } from '@/hooks/useProfilePin';
 import { launchFeatures } from '@/lib/featureFlags';
 import { fetchMe } from '@/lib/me';
 import { usePostDetail } from '@/hooks/usePostDetail';
@@ -56,6 +61,8 @@ export default function PostDetailPage() {
   const postId = params.id as string;
 
   const queryClient = useQueryClient();
+  // Pin to profile / Unpin from profile for your own post (the kept copy updates with the server's answer).
+  const profilePin = useProfilePin();
   const [user, setUser] = useState<User | null>(null);
   const [commentPosting, setCommentPosting] = useState(false);
   const [toast, setToast] = useState('');
@@ -141,7 +148,7 @@ export default function PostDetailPage() {
     },
     onError: () => {
       // Revert, and say so — a silent revert looks like the tap did nothing.
-      showToast("Couldn't update your like. Please try again.");
+      showToast("Couldn't update your reaction. Please try again.");
       setPost((p) =>
         p
           ? { ...p, userHasLiked: !p.userHasLiked, like_count: p.userHasLiked ? Math.max(0, p.like_count - 1) : p.like_count + 1 }
@@ -334,7 +341,11 @@ export default function PostDetailPage() {
   // ─── Derived ───────────────────────────────────────────────
   const config = getPostTypeConfig(post?.post_type || 'general');
   const TypeIcon = getTypeIcon(post?.post_type || 'general');
+  const reactionLabel = POST_REACTION_LABEL[postReaction(post?.post_type)];
+  const ReactionIcon = postReactionIcon(post?.post_type);
   const isOwn = post?.user_id === user?.id;
+  // A plan's own post is changed or cancelled from the plan, which tells everyone (the server refuses it here).
+  const isPlanPost = post?.post_metadata?.plan === true;
   // A moderator removed it: only its author still sees it, so nothing offers to spread it or reply.
   const isRemovedByModerator = post?.archive_reason === 'moderation';
   // P0.4 audit follow-up: prefer post.author (typed identity).
@@ -547,7 +558,15 @@ export default function PostDetailPage() {
                   Mark Resolved
                 </button>
               )}
-              {isOwn && (
+              {isOwn && isPlanPost && (
+                <Link
+                  href={`/plans/${post.id}`}
+                  className="px-3 py-1.5 text-xs font-medium text-app-muted hover-bg-app rounded-lg transition"
+                >
+                  Open plan
+                </Link>
+              )}
+              {isOwn && !isPlanPost && (
                 <button
                   onClick={() => setEditing(true)}
                   className="p-2 text-app-text-muted hover:text-app hover-bg-app rounded-lg transition"
@@ -559,7 +578,19 @@ export default function PostDetailPage() {
                   </svg>
                 </button>
               )}
-              {isOwn && (
+              {isOwn && canOfferProfilePin(post) && (
+                <button
+                  onClick={() => { void profilePin(post, !post.profile_pinned); }}
+                  className="p-2 text-app-text-muted hover:text-app hover-bg-app rounded-lg transition"
+                  title={post.profile_pinned ? 'Unpin from profile' : 'Pin to profile'}
+                  aria-label={post.profile_pinned ? 'Unpin from profile' : 'Pin to profile'}
+                >
+                  {post.profile_pinned
+                    ? <PinOff className="w-4 h-4" aria-hidden="true" />
+                    : <Pin className="w-4 h-4" aria-hidden="true" />}
+                </button>
+              )}
+              {isOwn && !isPlanPost && (
                 <button
                   onClick={handleDelete}
                   className="p-2 text-app-text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition"
@@ -671,18 +702,19 @@ export default function PostDetailPage() {
           {/* Action bar: on a phone, icons and counts as on the feed cards; the words show from sm up
               and are always read to screen readers. */}
           <div className="flex items-center gap-1 px-4 py-3 border-t border-app whitespace-nowrap">
-            {/* Like */}
+            {/* The post's one reaction, named by its kind (Going, Celebrate, Helpful), as on its card */}
             <button
               onClick={handleLike}
               aria-pressed={!!post.userHasLiked}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
                 post.userHasLiked
-                  ? 'text-red-500 bg-red-50 hover:bg-red-100'
+                  ? 'text-sky-600 bg-sky-50 hover:bg-sky-100 dark:bg-sky-900/30 dark:text-sky-300'
                   : 'text-app-muted hover-bg-app'
               }`}
             >
-              <span className="text-sm" aria-hidden="true">{post.userHasLiked ? '❤️' : '🤍'}</span>
-              <span>{post.like_count || 0}<span className="sr-only sm:not-sr-only"> {post.like_count === 1 ? 'like' : 'likes'}</span></span>
+              <ReactionIcon className="w-4 h-4" aria-hidden="true" />
+              <span>{reactionLabel}</span>
+              {post.like_count > 0 && <span>{post.like_count}</span>}
             </button>
 
             {/* Comment count */}

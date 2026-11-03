@@ -405,11 +405,13 @@ describe('Identity Firewall backend hardening', () => {
   test('persona media upload is owner-scoped and updates only persona media fields', async () => {
     const app = createApp();
     seedPersona();
+    // A real image: the upload refuses one it can't clean of its metadata.
+    const png = await require('sharp')({ create: { width: 2, height: 2, channels: 3, background: '#888888' } }).png().toBuffer();
 
     const res = await request(app)
       .post(`/api/upload/persona-media/${PERSONA_A}?type=avatar`)
       .set('x-test-user-id', USER_A)
-      .attach('file', Buffer.from('avatar-image'), {
+      .attach('file', png, {
         filename: 'avatar.png',
         contentType: 'image/png',
       });
@@ -433,7 +435,7 @@ describe('Identity Firewall backend hardening', () => {
     const forbidden = await request(app)
       .post(`/api/upload/persona-media/${PERSONA_A}?type=banner`)
       .set('x-test-user-id', USER_B)
-      .attach('file', Buffer.from('banner-image'), {
+      .attach('file', png, {
         filename: 'banner.png',
         contentType: 'image/png',
       });

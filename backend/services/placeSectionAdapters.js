@@ -30,6 +30,8 @@ const logger = require('../utils/logger');
 const { encodeGeohash } = require('../utils/geohash');
 const { serializePlaceSection } = require('../serializers/placeIntelligenceSerializer');
 const { readThrough, writeRow } = require('./placeSectionCache');
+const { readResponse, hasData } = require('./external/cacheHelper');
+const { resolveHomeTimezone } = require('../utils/timezone');
 const { geocodeToTract } = require('./ai/neighborhoodProfileService');
 const { fetchHeatRisk } = require('./external/heatRisk');
 const { fetchHeatIndexDays } = require('./external/nwsHeatIndex');
@@ -54,7 +56,30 @@ function homeLatLng(home) {
   return null;
 }
 
-async function fetchJson(url, { headers } = {}) {
+async function fetchJson(url, options = {}) {
+  const host = new URL(url).hostname;
+  let policy;
+  if (host === 'geocoding.geo.census.gov') {
+    policy = { provider: 'CENSUS_GEOGRAPHIES', isUsable: (data) => {
+      const town = data?.result?.geographies?.['County Subdivisions']?.[0];
+      return town?.STATE === '09' && /^\d{5}$/.test(String(town.COUSUB || ''));
+    } };
+  } else if (host === 'earthquake.usgs.gov') {
+    policy = { provider: 'USGS_DESIGN', isUsable: (data) => Boolean(SDC_PHRASES[String(data?.response?.data?.sdc || '').toUpperCase()]) };
+  } else if (host === 'imagery.geoplatform.gov') {
+    policy = { provider: 'USFS_WHP', isUsable: (data) => !data?.error && hasData(data?.value) && data.value !== 'NoData' };
+  } else if (host === 'services.arcgis.com') {
+    policy = { provider: 'EPA_SERVICE_AREA', maxAgeMs: 90 * DAY_MS,
+      isUsable: (data) => !data?.error && hasData(data?.features) };
+  } else if (host === 'data.epa.gov') {
+    policy = { provider: 'EPA_SDWIS', maxAgeMs: 90 * DAY_MS, isUsable: (data) => Array.isArray(data) && hasData(data) };
+  }
+  if (!policy) return fetchJsonLive(url, options);
+  const { response } = await readResponse({ ...policy, url, fetch: () => fetchJsonLive(url, options) });
+  return response;
+}
+
+async function fetchJsonLive(url, { headers } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -120,8 +145,8 @@ async function lookupCountyFips(home, ll, pointKey) {
     const { payload } = await readThrough({
       cacheKey: pointKey,
       sectionId: '_county_fips',
-      // County assignment changes only at the decennial census —
-      // effectively permanent, refreshed yearly as a safety valve.
+      reuseStored: true,
+      // Preserve this stable assignment; reuseStored controls retention.
       ttlMs: 365 * DAY_MS,
       fetch: async () => {
         const tract = await geocodeToTract(ll.lat, ll.lng);
@@ -149,6 +174,7 @@ async function connecticutLegacyCounty(home) {
     const { payload } = await readThrough({
       cacheKey: `geo:${encodeGeohash(ll.lat, ll.lng, 7)}`,
       sectionId: '_ct_legacy_county',
+      reuseStored: true,
       ttlMs: 365 * DAY_MS,
       fetch: async () => {
         const data = await fetchJson(
@@ -206,6 +232,43 @@ async function hudFmrRow(countyFips) {
 // ════════════════════════════════════════════════════════════
 // sunrise_sunset — Open-Meteo daily, keyless
 // ════════════════════════════════════════════════════════════
+// Open-Meteo writes every time in ONE fixed offset for the whole reply (the
+// zone's offset when asked), so across a DST change its "local" times are an
+// hour off on the other side of it: asked at 01:52 PDT on November 1, it gave
+// that day's 6:50 AM PST sunrise as "07:50". The section therefore keeps the
+// instants, rebuilt with the reply's own offset, and writes the wall clock
+// from them in the place's zone. The cache is per local date: keyed by the
+// cell alone, it served October 31's times as today's for hours into
+// November 1.
+const SUN_TTL_MS = 6 * 60 * 60 * 1000;
+
+function localDate(timeZone, at = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(at);
+}
+
+// "YYYY-MM-DDTHH:MM" for an instant on the place's wall clock.
+function wallClock(iso, timeZone) {
+  const at = Date.parse(iso || '');
+  if (!Number.isFinite(at)) return null;
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(at)).map((p) => [p.type, p.value]));
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+// The cached payload as the section ships it: the wall clock is rebuilt from
+// the instants at read time, so it's right whenever the row was fetched.
+function sunData(payload, timeZone) {
+  const sunrise = payload.sunrise_utc ? wallClock(payload.sunrise_utc, timeZone) : null;
+  const sunset = payload.sunset_utc ? wallClock(payload.sunset_utc, timeZone) : null;
+  return {
+    ...payload,
+    sunrise: sunrise || payload.sunrise,
+    sunset: sunset || payload.sunset,
+    time_zone: timeZone,
+  };
+}
+
 async function composeSunriseSunset(home) {
   const ll = homeLatLng(home);
   if (!ll) return [serializePlaceSection('sunrise_sunset', { status: 'unavailable' })];
@@ -214,29 +277,47 @@ async function composeSunriseSunset(home) {
     // geohash-5 (~5 km): sun times don't move within a cell; 6 h budget
     // keeps the day fresh without a per-minute fetch.
     const gh5 = encodeGeohash(ll.lat, ll.lng, 5);
-    const { payload, fetchedAt, stale } = await readThrough({
-      cacheKey: `geo:${gh5}`,
-      sectionId: 'sunrise_sunset',
-      ttlMs: 6 * 60 * 60 * 1000,
-      fetch: async () => {
+    const timeZone = resolveHomeTimezone(home);
+    const today = localDate(timeZone);
+    const read = (date, fetch) => readThrough({ cacheKey: `geo:${gh5}:${date}`, sectionId: 'sunrise_sunset', ttlMs: SUN_TTL_MS, fetch });
+    let result;
+    try {
+      result = await read(today, async () => {
         const data = await fetchJson(
           `https://api.open-meteo.com/v1/forecast?latitude=${ll.lat}&longitude=${ll.lng}` +
-          '&daily=sunrise,sunset,daylight_duration&timezone=auto&forecast_days=1',
+          `&daily=sunrise,sunset,daylight_duration&timezone=auto&start_date=${today}&end_date=${today}`,
         );
         const d = data && data.daily;
         if (!d || !d.sunrise || !d.sunrise[0]) return null;
+        // Instants only when the reply states its offset; without it the
+        // provider's wall clock is all there is. Required here, as the Today
+        // providers are elsewhere: the context cache chain loads on first use.
+        const { localToUtcIso } = require('./context/providers/openMeteo');
+        const offset = Number(data.utc_offset_seconds);
+        const instant = (local) => (data.utc_offset_seconds != null && Number.isFinite(offset)
+          ? localToUtcIso(local, offset) || null : null);
         return {
+          date: (d.time && d.time[0]) || today,
           sunrise: d.sunrise[0],
           sunset: d.sunset[0],
+          sunrise_utc: instant(d.sunrise[0]),
+          sunset_utc: instant(d.sunset[0]),
           daylight_minutes: Math.round((Number(d.daylight_duration && d.daylight_duration[0]) || 0) / 60),
         };
-      },
-    });
+      });
+    } catch (err) {
+      // Today's times couldn't be read: yesterday's, if cached, labeled stale
+      // with their own date, never as today's.
+      const yesterday = localDate(timeZone, new Date(Date.now() - DAY_MS));
+      result = await read(yesterday, () => { throw err; });
+      result = { ...result, stale: true };
+    }
+    const { payload, fetchedAt, stale } = result;
     if (!payload) return [serializePlaceSection('sunrise_sunset', { status: 'unavailable' })];
     return [serializePlaceSection('sunrise_sunset', {
       asOf: fetchedAt,
       status: stale ? 'stale' : 'ready',
-      data: payload,
+      data: sunData(payload, timeZone),
     })];
   } catch (err) {
     logger.warn('placeSections: sunrise failed', { homeId: home.id, error: err.message });
@@ -545,6 +626,47 @@ async function recentHealthViolations(pwsid) {
   }).length;
 }
 
+// EPA writes system names in capitals, many inverted for sorting ("VANCOUVER
+// CITY OF", "RIDGEFIELD, CITY OF"). They read in title case with the city or
+// town first; acronyms (PUD, MHP, WD) keep their capitals, and a name that
+// already has lower case stays as EPA wrote it.
+const NAME_SMALL_WORDS = new Set(['of', 'and', 'the', 'at', 'in', 'on', 'for', 'to']);
+const NAME_ACRONYMS = new Set(['pud', 'mud', 'sud', 'ud', 'mua', 'hoa', 'usa', 'us', 'afb', 'koa', 'ymca', 'wcid',
+  'ii', 'iii', 'iv', 'vi', 'vii', 'viii', 'ix']);
+// Vowel-less abbreviations that are words, not acronyms.
+const NAME_ABBREVIATIONS = new Set(['st', 'mt', 'ft', 'pt', 'nd', 'rd', 'th', 'dr', 'ln', 'ct', 'hwy', 'blvd', 'pkwy',
+  'ltd', 'twp', 'bd', 'wtr', 'svc', 'svcs', 'mgmt', 'cnty']);
+
+function titleCaseNameWord(word, first) {
+  const lower = word.toLowerCase();
+  const letters = lower.replace(/[^a-z]/g, '');
+  if (!letters) return word;
+  if (NAME_ACRONYMS.has(letters)) return word;
+  if (letters.length > 1 && !/[aeiouy]/.test(letters) && !NAME_ABBREVIATIONS.has(letters)) return word;
+  if (!first && NAME_SMALL_WORDS.has(lower)) return lower;
+  return lower
+    .replace(/(^|[-/(])([a-z])/g, (_, before, letter) => before + letter.toUpperCase())
+    .replace(/^([od])'([a-z])/i, (_, before, letter) => `${before.toUpperCase()}'${letter.toUpperCase()}`)
+    .replace(/^Mc([a-z])/, (_, letter) => `Mc${letter.toUpperCase()}`);
+}
+
+function waterSystemName(raw) {
+  const name = String(raw || '').trim();
+  if (!name || /[a-z]/.test(name)) return name;
+  const inverted = name.match(/^(.+?),?\s+(CITY|TOWN|VILLAGE|BOROUGH|TOWNSHIP|COUNTY)\s+OF\.?$/);
+  const ordered = inverted ? `${inverted[2]} OF ${inverted[1]}` : name;
+  return ordered.split(' ').map((word, i) => titleCaseNameWord(word, i === 0)).join(' ');
+}
+
+// Renamed on read, not on fetch, so answers cached before the rename read the
+// same way.
+function withWaterSystemName(payload) {
+  const raw = payload.utility_name;
+  const name = waterSystemName(raw);
+  if (!raw || name === raw) return payload;
+  return { ...payload, utility_name: name, summary: String(payload.summary || '').split(raw).join(name) };
+}
+
 // The section's data. The summary names the system and how sure the match
 // is, because the apps show only the summary on most surfaces.
 function waterData({ name, pwsId, count, match, estimated = false, county = null }) {
@@ -684,7 +806,7 @@ async function composeDrinkingWater(home) {
       // a county guess is partial.
       coverage: payload.match === 'service_area' && !payload.estimated_area ? 'full' : 'partial',
       source: payload.match === 'service_area' ? 'EPA water service areas · EPA SDWIS' : 'EPA SDWIS county records',
-      data: payload,
+      data: withWaterSystemName(payload),
     })];
   } catch (err) {
     logger.warn('placeSections: drinking_water failed', { homeId: home.id, error: err.message });
@@ -785,22 +907,30 @@ function mapEchoFacilities(rows, lat, lng) {
 // no resolvable rows THROWS rather than caching a half-payload — the
 // envelope serves stale/error and a later request completes the pair.
 async function fetchEchoFacilities(lat, lng) {
-  const search = echoResults(await fetchJson(
-    `${ECHO_URL}?output=JSON&p_lat=${lat}&p_long=${lng}&p_radius=1&responseset=20`,
-  ));
-  const count = Number(search.QueryRows) || 0;
-
-  let rows = Array.isArray(search.Facilities) ? search.Facilities : [];
-  if (count > 0 && rows.length === 0 && search.QueryID) {
-    const page = echoResults(await fetchJson(
-      `https://echodata.epa.gov/echo/echo_rest_services.get_qid?output=JSON&qid=${encodeURIComponent(search.QueryID)}&pageno=1`
-        + `&qcolumns=${Object.values(ECHO_COLUMN_IDS).join(',')}`,
-    ));
-    rows = Array.isArray(page.Facilities) ? page.Facilities : [];
-  }
-  if (count > 0 && rows.length === 0) {
-    throw new Error('ECHO returned a count but no facility rows');
-  }
+  const url = `${ECHO_URL}?output=JSON&p_lat=${lat}&p_long=${lng}&p_radius=1&responseset=20`;
+  const { response } = await readResponse({
+    provider: 'EPA_ECHO', url, maxAgeMs: 90 * DAY_MS,
+    isUsable: (data) => hasData(data?.rows),
+    fetch: async () => {
+      const searchResponse = await fetchJson(url);
+      const search = echoResults(searchResponse);
+      const count = Number(search.QueryRows) || 0;
+      let rows = Array.isArray(search.Facilities) ? search.Facilities : [];
+      let pageResponse = null;
+      if (count > 0 && rows.length === 0 && search.QueryID) {
+        pageResponse = await fetchJson(
+          `https://echodata.epa.gov/echo/echo_rest_services.get_qid?output=JSON&qid=${encodeURIComponent(search.QueryID)}&pageno=1`
+            + `&qcolumns=${Object.values(ECHO_COLUMN_IDS).join(',')}`,
+        );
+        const page = echoResults(pageResponse);
+        rows = Array.isArray(page.Facilities) ? page.Facilities : [];
+      }
+      if (count > 0 && rows.length === 0) throw new Error('ECHO returned a count but no facility rows');
+      return { searchResponse, pageResponse, rows, count };
+    },
+  });
+  const rows = response?.rows || [];
+  const count = response?.count || 0;
 
   const all = mapEchoFacilities(rows, lat, lng);
   const snc = all.filter((f) => f.significant_noncompliance).length;
@@ -1323,6 +1453,7 @@ async function composeSeismic(home) {
     const { payload, fetchedAt, stale } = await readThrough({
       cacheKey: `geo:${gh5}`,
       sectionId: 'seismic',
+      reuseStored: true,
       ttlMs: 180 * DAY_MS, // hazard model updates on a multi-year cycle
       fetch: async () => {
         // Call the current endpoint directly: the old ws/designmaps/asce7-22.json
@@ -1401,6 +1532,7 @@ async function composeWildfire(home) {
     const { payload, fetchedAt, stale } = await readThrough({
       cacheKey: `geo:${gh6}`,
       sectionId: 'wildfire',
+      reuseStored: true,
       ttlMs: 180 * DAY_MS, // WHP is a vintage raster (2023)
       fetch: async () => {
         const cls = await whpClassAt(ll.lat, ll.lng);

@@ -2,15 +2,11 @@
 //  ProfileInsightCards.swift
 //  Pantopus
 //
-//  Two profile-tab cards RN ships and native was missing:
-//
-//  * Monthly Receipt — earnings / spending / neighbors helped / posts, an
-//    expandable detail block, and a share sheet. Auto-expands when the
-//    profile is opened from the `monthly_receipt` push.
-//    Mirrors RN `components/profile/MonthlyReceiptCard.tsx`.
-//  * Invite progress — confirmed referral joins and a share CTA carrying
-//    the invite code. No feature-access promises from the legacy reward ladder.
-//    Mirrors RN `components/profile/InviteProgressCard.tsx`.
+//  The Monthly Receipt — earnings / spending / neighbors helped / posts, an
+//  expandable detail block, and a share sheet. Your profile opens it from its
+//  "Your <month>" line, expanded, and at once from the `monthly_receipt` push.
+//  Mirrors RN `components/profile/MonthlyReceiptCard.tsx`. (The invite card
+//  became your profile's "Invite neighbors" row.)
 //
 
 // swiftlint:disable function_parameter_count
@@ -238,72 +234,5 @@ public struct MonthlyReceiptCard: View {
         let highlight = receipt.highlight.map { "\($0) " } ?? ""
         return "My \(receipt.period.label) on Pantopus: \(highlight)"
             + "I earned $\(earned) and helped \(receipt.community.neighborsHelped) neighbors."
-    }
-}
-
-// MARK: - Invite progress card
-
-public struct InviteProgressCard: View {
-    private let progress: InviteProgressDTO
-    /// Nil hides "Invite a neighbor" (no invite code to share yet).
-    private let onShare: (@MainActor () -> Void)?
-
-    public init(progress: InviteProgressDTO, onShare: (@MainActor () -> Void)? = {}) {
-        self.progress = progress
-        self.onShare = onShare
-    }
-
-    public var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text("Invite neighbors")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(Theme.Color.appText)
-            Text(joinedText)
-                .pantopusTextStyle(.small)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .accessibilityIdentifier("inviteProgress.joined")
-            Text("Share your invite link to help neighbors find each other.")
-                .pantopusTextStyle(.small)
-                .foregroundStyle(Theme.Color.appTextMuted)
-            if let onShare {
-                shareButton(onShare)
-            }
-        }
-        .padding(Spacing.s4)
-        .background(
-            RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
-                .fill(Theme.Color.appSurface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
-                .stroke(Theme.Color.appBorder, lineWidth: 1)
-        )
-        .accessibilityIdentifier("inviteProgressCard")
-    }
-
-    private var joinedText: String {
-        let joined = max(0, progress.totalConverted)
-        if joined == 0 { return "No neighbors have joined through your invites yet." }
-        return "\(joined) neighbor\(joined == 1 ? " has" : "s have") joined through your invites."
-    }
-
-    private func shareButton(_ onShare: @escaping @MainActor () -> Void) -> some View {
-        Button(action: onShare) {
-            HStack(spacing: Spacing.s2) {
-                Icon(.send, size: 16, color: Theme.Color.appTextInverse)
-                Text("Invite a neighbor")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Theme.Color.appTextInverse)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, Spacing.s3)
-            .background(
-                RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                    .fill(Theme.Color.primarySolid)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("inviteProgress.share")
     }
 }

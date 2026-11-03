@@ -43,6 +43,24 @@ final class PlaceDashboardViewModel {
     /// The person's claim in review on a Home they can't open yet: the server
     /// sends its public view, and its status leads the dashboard (`refreshClaim`).
     private(set) var claim: OwnershipClaimDTO?
+    /// The household's tasks this viewer may read, for "Worth a look"'s overdue
+    /// ones. Household roles only; a refusal leaves none and shows no error.
+    private(set) var tasks: [HomeTaskDTO] = []
+    /// The tasks list answered and this viewer may add a task (Today's radon
+    /// question needs both); a refusal or a guest leaves it false.
+    private(set) var canAddTasks = false
+    /// This Home is the person's default Home, the one the Today tab shows.
+    private(set) var isTodayHome = false
+    private var taskAccess: HomeTaskAccess?
+    /// What changed since the last visit, newest first, and how many in all.
+    private(set) var changes: [PlaceChange] = []
+    private(set) var changesTotal = 0
+    /// A source couldn't be read for this answer, so the list may be missing changes.
+    private(set) var changesIncomplete = false
+    /// This visit's `since` and when it began: changes are read once a visit
+    /// (a pull to refresh reads them again from the same time).
+    private var visitSince: String?
+    private var visitStartedAt: Date?
 
     private let api: APIClient
     private var reloadPending = false
@@ -128,6 +146,8 @@ final class PlaceDashboardViewModel {
         await fetch(force: force)
         await claimRead
         await shortcuts
+        await refreshTasks()
+        await refreshChanges(again: false)
     }
 
     /// Home tools can change the privacy projection while this view is
@@ -146,6 +166,87 @@ final class PlaceDashboardViewModel {
         await unread
         await claimRead
         await shortcuts
+        await refreshTasks()
+        await refreshChanges(again: true)
+    }
+
+    /// A visit is this dashboard showing loaded data, coming back within the
+    /// hour included. The first visit only remembers its time; later ones ask
+    /// what changed since the last, and remember the server's `until` once it
+    /// answers. An error or an older server (404) shows nothing and keeps the
+    /// last visit's time for the next one.
+    private func refreshChanges(again: Bool) async {
+        guard case let .loaded(intel) = state else { return }
+        let fresh = visitStartedAt.map { Date().timeIntervalSince($0) < 3600 } ?? false
+        if fresh, !again { return }
+        if !fresh {
+            visitStartedAt = Date()
+            visitSince = PlaceLastVisit.read(homeId: homeId)
+        }
+        guard let since = visitSince else {
+            changes = []
+            changesTotal = 0
+            changesIncomplete = false
+            if !fresh { PlaceLastVisit.write(intel.generatedAt, homeId: homeId) }
+            return
+        }
+        do {
+            let response: PlaceChangesResponse = try await api.request(PlaceEndpoints.changes(homeId: homeId, since: since))
+            guard !Task.isCancelled else { return }
+            changes = response.items
+            changesTotal = max(response.total ?? 0, response.items.count)
+            changesIncomplete = response.incomplete
+            PlaceLastVisit.write(response.until ?? intel.generatedAt, homeId: homeId)
+        } catch {
+            if !again {
+                changes = []
+                changesTotal = 0
+                changesIncomplete = false
+            }
+        }
+    }
+
+    /// The tasks list, as Home tools reads it (`GET /api/homes/:id/tasks`).
+    private func refreshTasks() async {
+        guard case let .loaded(intel) = state, claim == nil,
+              ["owner", "renter", "member"].contains(intel.viewer?.role ?? "owner") else {
+            tasks = []
+            canAddTasks = false
+            return
+        }
+        if taskAccess?.isCurrent != true { taskAccess = HomeTaskAccess(homeId: homeId, api: api) }
+        guard let taskAccess else { return }
+        do {
+            let response = try await taskAccess.list()
+            tasks = response.tasks
+            canAddTasks = response.collectionCapabilities?.canCreate == true
+        } catch is CancellationError {
+            return
+        } catch {
+            if case .forbidden = error as? APIError {
+                tasks = []
+                canAddTasks = false
+            }
+        }
+    }
+
+    /// Open tasks due before today at the home, soonest first.
+    func overdueTasks(calendar: Calendar, now: Date = Date()) -> [HomeTaskDTO] {
+        let today = calendar.startOfDay(for: now)
+        let due = { (task: HomeTaskDTO) in PlacePresentation.parseISO(task.dueAt) ?? RadonToday.date(task.dueAt) }
+        return tasks
+            .filter { ["open", "in_progress"].contains($0.status) && (due($0).map { $0 < today } ?? false) }
+            .sorted { (due($0) ?? .distantPast) < (due($1) ?? .distantPast) }
+    }
+
+    /// Open tasks due today at the home, soonest first.
+    func tasksDueToday(calendar: Calendar, now: Date = Date()) -> [HomeTaskDTO] {
+        let today = calendar.startOfDay(for: now)
+        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) else { return [] }
+        let due = { (task: HomeTaskDTO) in PlacePresentation.parseISO(task.dueAt) ?? RadonToday.date(task.dueAt) }
+        return tasks
+            .filter { ["open", "in_progress"].contains($0.status) && (due($0).map { $0 >= today && $0 < tomorrow } ?? false) }
+            .sorted { (due($0) ?? .distantPast) < (due($1) ?? .distantPast) }
     }
 
     /// The claim in review on this Home while the person can't open it (My
@@ -153,6 +254,7 @@ final class PlaceDashboardViewModel {
     /// failed read keeps what shows.
     private func refreshClaim(force: Bool = false) async {
         guard let homes = try? await HomesStoreReads.myHomes(force: force).value, !Task.isCancelled else { return }
+        isTodayHome = homes.defaultHomeId == homeId
         guard !PlaceRootResolver.isOpenable(homeId, in: homes) else {
             claim = nil
             return

@@ -35,7 +35,8 @@ data class TodayWidgetLine(
                     TodayWidgetLine(names(pickups.filter { it.date == next.date }), dayWords(next.date, today))
                 }
                 ?: snapshot.air?.let { TodayWidgetLine("Air is ${it.label.lowercase()}", "AQI ${it.aqi}") }
-                ?: TodayWidgetLine("All clear on ${snapshot.placeLabel}", null)
+                // Nothing to show: say only that (the widget never checks alerts), never "All clear".
+                ?: TodayWidgetLine("Nothing on the calendar", snapshot.placeLabel.takeIf { it.isNotBlank() })
         }
 
         /** Pickup today until noon; tomorrow's becomes "Bins out tonight" from 5 pm. */

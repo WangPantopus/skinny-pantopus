@@ -13,6 +13,8 @@
  */
 
 const logger = require('../utils/logger');
+const { fetchAttomPropertyDetailBundle } = require('./ai/propertyIntelligenceService');
+const { readResponse, hasData } = require('./external/cacheHelper');
 
 const PROVIDER = (process.env.PROPERTY_DATA_PROVIDER || 'none').toLowerCase();
 
@@ -22,28 +24,11 @@ const PROVIDER = (process.env.PROPERTY_DATA_PROVIDER || 'none').toLowerCase();
 const PROVIDER_TIMEOUT_MS = 8000;
 
 async function lookupAttom(address, city, state, zip) {
-  const apiKey = process.env.ATTOM_API_KEY;
-  if (!apiKey) throw new Error('ATTOM_API_KEY not configured');
-
-  const params = new URLSearchParams({
-    address1: address,
-    address2: `${city}, ${state} ${zip}`,
-  });
-
-  const url = `https://api.gateway.attomdata.com/propertyapi/v1.0.0/property/detail?${params}`;
-
-  const res = await fetch(url, {
-    headers: { apikey: apiKey, Accept: 'application/json' },
-    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    logger.warn('ATTOM API error', { status: res.status, body: text });
-    return null;
-  }
-
-  const data = await res.json();
+  // Ownership is a verification decision, not a stable building fact. Reuse
+  // only a recent record and fail closed when a refresh cannot be obtained.
+  const { detailData: data } = await fetchAttomPropertyDetailBundle({
+    address, city, state, zipcode: zip,
+  }, { maxAgeMs: 24 * 60 * 60 * 1000, timeoutMs: PROVIDER_TIMEOUT_MS });
   const property = data?.property?.[0];
   if (!property) return null;
 
@@ -80,7 +65,6 @@ async function lookupAttom(address, city, state, zip) {
 async function lookupCoreLogic(address, city, state, zip) {
   const apiKey = process.env.CORELOGIC_API_KEY;
   const clientId = process.env.CORELOGIC_CLIENT_ID;
-  if (!apiKey || !clientId) throw new Error('CoreLogic credentials not configured');
 
   const params = new URLSearchParams({
     streetAddress: address,
@@ -91,22 +75,19 @@ async function lookupCoreLogic(address, city, state, zip) {
 
   const url = `https://api.corelogic.com/property/v2/search?${params}`;
 
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'X-Client-Id': clientId,
-      Accept: 'application/json',
+  const { response: data } = await readResponse({
+    provider: 'CORELOGIC', url, maxAgeMs: 24 * 60 * 60 * 1000,
+    isUsable: (value) => hasData(value?.properties?.[0] || value?.results?.[0]),
+    fetch: async () => {
+      if (!apiKey || !clientId) throw new Error('CoreLogic credentials not configured');
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${apiKey}`, 'X-Client-Id': clientId, Accept: 'application/json' },
+        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+      });
+      if (!res.ok) throw new Error(`CoreLogic HTTP ${res.status}`);
+      return res.json();
     },
-    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
   });
-
-  if (!res.ok) {
-    const text = await res.text();
-    logger.warn('CoreLogic API error', { status: res.status, body: text });
-    return null;
-  }
-
-  const data = await res.json();
   const property = data?.properties?.[0] || data?.results?.[0];
   if (!property) return null;
 

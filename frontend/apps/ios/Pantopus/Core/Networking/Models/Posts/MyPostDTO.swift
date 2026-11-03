@@ -43,6 +43,14 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
     public let resolution: String?
     /// When the post ends (ISO 8601), when it names a time.
     public let expiresAt: String?
+    /// Whether it's pinned to your profile (PRF SRV-3); nil when the server
+    /// didn't say (the Saved tab's posts by others, an older server).
+    public let profilePinned: Bool?
+    /// False for a post that never shows on your profile (a plan's post).
+    public let showOnProfile: Bool?
+    /// A plan's own post (Plans marks it `post_metadata.plan`): it's changed
+    /// or cancelled from the plan, never edited, archived or deleted as a post.
+    public let isPlanPost: Bool
 
     public init(
         id: String,
@@ -63,7 +71,10 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         authorName: String? = nil,
         state: String? = nil,
         resolution: String? = nil,
-        expiresAt: String? = nil
+        expiresAt: String? = nil,
+        profilePinned: Bool? = nil,
+        showOnProfile: Bool? = nil,
+        isPlanPost: Bool = false
     ) {
         self.id = id
         self.userId = userId
@@ -84,6 +95,9 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         self.state = state
         self.resolution = resolution
         self.expiresAt = expiresAt
+        self.profilePinned = profilePinned
+        self.showOnProfile = showOnProfile
+        self.isPlanPost = isPlanPost
     }
 
     /// A moderator removed the post, so it can't be restored.
@@ -109,6 +123,9 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case author
         case state, resolution
         case expiresAt = "expires_at"
+        case profilePinned = "profile_pinned"
+        case showOnProfile = "show_on_profile"
+        case postMetadata = "post_metadata"
     }
 
     private struct AuthorBrief: Decodable {
@@ -138,6 +155,9 @@ public struct MyPostDTO: Decodable, Sendable, Hashable, Identifiable {
         state = c.lenient(String.self, forKey: .state)
         resolution = c.lenient(String.self, forKey: .resolution)
         expiresAt = c.lenient(String.self, forKey: .expiresAt)
+        profilePinned = c.lenient(Bool.self, forKey: .profilePinned)
+        showOnProfile = c.lenient(Bool.self, forKey: .showOnProfile)
+        isPlanPost = c.lenient(PostLifecycleMetadata.self, forKey: .postMetadata)?.plan == true
     }
 }
 

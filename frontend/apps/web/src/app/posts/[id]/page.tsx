@@ -7,6 +7,7 @@ import {
   buildCanonicalPathForPost,
   buildCanonicalShareUrlForPost,
   buildPostAppUrl,
+  buildPostPath,
   buildPostShareUrl,
 } from '@pantopus/utils';
 import {
@@ -16,10 +17,12 @@ import {
   formatLocationLine,
   getStoreDownloadCta,
   pickPreviewImage,
+  storePlatform,
   summarizeText,
 } from '@/lib/publicShare';
 import OpenInAppButton from '@/components/public-share/OpenInAppButton';
 import JustInstalledHint from '@/components/public-share/JustInstalledHint';
+import StoreLink from '@/components/public-share/StoreLink';
 import { authPageHref } from '@/lib/auth-utils';
 
 export async function generateMetadata({
@@ -70,8 +73,10 @@ export default async function PublicPostPage({
   const result = await fetchPublicPost(id);
   const post = result.data;
   const userAgent = (await headers()).get('user-agent') || '';
-  const storeCta = getStoreDownloadCta(userAgent);
+  // Getting the app from this page carries the post's link through the install.
+  const storeCta = getStoreDownloadCta(userAgent, buildPostPath(id));
   const fallbackUrl = storeCta?.href ?? null;
+  const copyPath = storeCta?.copyPath ?? null;
 
   if (!post && result.status === 404) {
     notFound();
@@ -107,17 +112,19 @@ export default async function PublicPostPage({
               appUrl={buildPostAppUrl(id)}
               linkHref={buildPostShareUrl(id)}
               fallbackUrl={fallbackUrl}
+              copyPath={copyPath}
               className="rounded-full bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-700"
             >
               Open In Pantopus
             </OpenInAppButton>
             {storeCta ? (
-              <a
+              <StoreLink
                 href={storeCta.href}
+                copyPath={copyPath}
                 className="rounded-full border border-app px-5 py-2.5 text-sm font-semibold text-app hover:bg-surface-muted"
               >
                 {storeCta.label}
-              </a>
+              </StoreLink>
             ) : null}
             {accessRestricted ? (
               // Signed-in visitors never see this page (the middleware opens the post in the app),
@@ -165,6 +172,7 @@ export default async function PublicPostPage({
               appUrl={buildCanonicalAppUrlForPost(shareRef)}
               linkHref={buildCanonicalShareUrlForPost(shareRef)}
               fallbackUrl={fallbackUrl}
+              copyPath={copyPath}
               className="rounded-full bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700"
             >
               Open In App
@@ -229,17 +237,19 @@ export default async function PublicPostPage({
               appUrl={buildCanonicalAppUrlForPost(shareRef)}
               linkHref={buildCanonicalShareUrlForPost(shareRef)}
               fallbackUrl={fallbackUrl}
+              copyPath={copyPath}
               className="rounded-full bg-primary-600 px-5 py-2.5 text-center text-sm font-semibold text-white hover:bg-primary-700"
             >
               Open In Pantopus
             </OpenInAppButton>
             {storeCta ? (
-              <a
+              <StoreLink
                 href={storeCta.href}
+                copyPath={copyPath}
                 className="rounded-full border border-app px-5 py-2.5 text-center text-sm font-semibold text-app hover:bg-surface-muted"
               >
                 {storeCta.label}
-              </a>
+              </StoreLink>
             ) : null}
             <Link
               href="/"
@@ -248,7 +258,7 @@ export default async function PublicPostPage({
               Back To Pantopus
             </Link>
           </div>
-          {storeCta ? <div className="mt-4"><JustInstalledHint what="this post" /></div> : null}
+          {storeCta ? <div className="mt-4"><JustInstalledHint what="this post" platform={storePlatform(userAgent)} /></div> : null}
         </div>
       </div>
     </main>
