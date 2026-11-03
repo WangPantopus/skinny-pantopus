@@ -331,3 +331,41 @@ simulator and Android API 34 emulator, not physical phones.
    flows, or every screen size.
 
 Hosted launch-cut flags and configuration remain unchanged by this work.
+
+## November 3 review of #3194–#3198
+
+A review pass rebuilt the stack with master `7c9469dd8b` folded in and ran it
+against an isolated local backend, database, private storage and mail
+capture, with synthetic accounts, in headless Chrome, an iOS 27 simulator and
+an Android API 34 emulator. It added three repairs to the stack:
+
+- [#3194](https://github.com/WangPantopus/skinny-pantopus/pull/3194): the
+  iPhone and Android composers send a person's letter with that person's Home
+  (`recipient_home_id` with a `user` delivery target), so the block rule
+  skipped it and the letter still arrived after the recipient blocked the
+  sender. The migration now treats every letter or card addressed to a person
+  or contact as personal correspondence, whatever Home is on it; mail
+  addressed to a Home itself and household package notices keep their rules.
+- [#3198](https://github.com/WangPantopus/skinny-pantopus/pull/3198): the
+  mailbox flag said "1 card waits" for a letter, and a letter to a Home read
+  "In their’s Mailbox". Drawers now report `waiting_letters` and Sent marks
+  `to_household`; all three apps name cards, letters or pieces, and say the
+  household whole ("your household" for the sender's own Home).
+- iPhone: a Sent notice opened while another Sent page was showing in Mail
+  showed the earlier piece. The Sent route now gets a fresh page per piece.
+
+### Observed app checks
+
+| Flow | Observed result |
+| --- | --- |
+| Block withdraws waiting mail | The recipient tapped Block on the sender's profile in the iPhone app; the sender's waiting app-composed letter was withdrawn and its text cleared, never reached the recipient's lists, details or phone after its round, and left the sender's Sent. Through the block API, a web letter, an email letter and a card were withdrawn too, a household letter stayed, and an unblock brought nothing back. |
+| Android booklet | A stored three-page booklet showed each page's image and its own text, Copy text worked, and the booklet filed into a Vault folder reopened readable after relaunch. |
+| Native Save and Archive | On both phones Save showed Saved and the Vault toast, left Incoming and reopened as Saved after relaunch; Archive closed the reader and the letter was on the Archived shelf. Web's Vault listed the letters saved on both phones and the booklet filed on Android. |
+| Web booklet | Pages, matching page text, arrow keys and Scroll mode (kept after reload) worked; Stream is hidden. |
+| Sent | Regular letters listed with their text and trail on all three apps, with no take-back. A letter composed on iPhone appeared in its Sent at once. A claimed email letter's notice opened its Sent page from the notification list on iPhone and Android; web opened Sent pages by the same link. |
+| Flag and household wording | After the repairs the flag read "1 letter waits" and "2 letters wait", and a household letter read "Your letter to your household" and "Delivered with your household’s 7 a.m. mail" on all three apps. |
+
+Not changed here: Android's booklet "PDF" tile answers "Download not
+available" when there is no PDF and only reports "Download started" when there
+is one, and both composers' success screens still offer "Back to Hub", which
+does the same as Done. The production gates above are unchanged.

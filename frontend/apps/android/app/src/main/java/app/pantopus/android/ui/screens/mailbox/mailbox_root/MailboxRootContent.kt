@@ -73,7 +73,12 @@ fun MailboxHeroCard(
     val flag = count > 0
     val title = if (flag) "Your flag is up" else hero.title
     // What waits, by what it is: cards, letters, or pieces for both.
-    val what = if (waitingLetters == 0) "card" else if (waiting == 0) "letter" else "piece"
+    val what =
+        when {
+            waitingLetters == 0 -> "card"
+            waiting == 0 -> "letter"
+            else -> "piece"
+        }
     val detail =
         when {
             !flag -> hero.detail
