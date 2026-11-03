@@ -308,6 +308,10 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
                     continue
                 }
                 guard revision == saveRevision else { continue }
+                // A failed re-fetch must not leave the unsaved optimistic value on screen.
+                // The existing account-scoped store holds the last confirmed server reply.
+                preferences = storedPreferences()
+                state = preferences == nil ? .loading : .loaded(groups())
                 toast = ToastMessage(text: "Failed to save", kind: .error)
                 await fetch(force: true)
             }
