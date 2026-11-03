@@ -1162,7 +1162,6 @@ final class AddHomeWizardViewModel: WizardModel {
             isOwner: role == .owner,
             role: role.claimedRole,
             moveInDate: details.justMoved ? Self.isoToday() : nil,
-            attomPropertyDetail: propertySuggestions?.attomPropertyDetail.map { JSONEncodable($0) },
             addressId: validatedAddressId
         )
         do {

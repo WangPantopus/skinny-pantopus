@@ -1,6 +1,5 @@
 package app.pantopus.android.data.api.models.homes
 
-import app.pantopus.android.data.api.models.common.JsonValue
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -315,8 +314,8 @@ data class HomePublicProfile(
 
 /**
  * `POST /api/homes` request. Route: `backend/routes/home.js:677`. Supports
- * the commonly-used fields; callers pass any ATTOM payload through
- * [attomPropertyDetail] — its schema is provider-defined.
+ * the commonly-used fields. The server stores its own county record for
+ * the address, so none is sent.
  */
 @JsonClass(generateAdapter = true)
 data class CreateHomeRequest(
@@ -350,7 +349,6 @@ data class CreateHomeRequest(
      * guest` (`backend/routes/home.js:102`).
      */
     val role: String? = null,
-    @Json(name = "attom_property_detail") val attomPropertyDetail: JsonValue? = null,
     @Json(name = "address_id") val addressId: String? = null,
     @Json(name = "request_id") val requestId: String? = null,
     @Json(name = "access_secrets") val accessSecrets: List<CreateAccessSecretRequest>? = null,
@@ -412,9 +410,8 @@ data class PropertySuggestionsFields(
 
 /**
  * `POST /api/homes/property-suggestions` response envelope —
- * `backend/services/ai/propertySuggestionsService.js:261-267`. The
- * `attom_property_detail` bundle is provider-defined, so it stays an
- * untyped [JsonValue] that we hand straight back to `POST /api/homes`.
+ * `backend/services/ai/propertySuggestionsService.js:272-277`. The county
+ * record itself stays on the server; only the basics come back.
  */
 @JsonClass(generateAdapter = true)
 data class PropertySuggestionsResponse(
@@ -423,15 +420,14 @@ data class PropertySuggestionsResponse(
     @Json(name = "field_sources") val fieldSources: Map<String, String>? = null,
     @Json(name = "tiers_used") val tiersUsed: List<String>? = null,
     @Json(name = "llm_enabled") val llmEnabled: Boolean? = null,
-    @Json(name = "attom_property_detail") val attomPropertyDetail: JsonValue? = null,
 ) {
     /**
      * True when ATTOM actually returned a public record for the address —
-     * drives the "Public records (ATTOM)" card. RN keys off the same
-     * field (`DetailsStep.tsx:53`).
+     * drives the "Public records (ATTOM)" card. The server lists `attom`
+     * in `tiers_used` only when it found one.
      */
     val hasAttomRecord: Boolean
-        get() = !attomPropertyDetail.isNullOrEmpty()
+        get() = tiersUsed?.contains("attom") == true
 }
 
 /**
