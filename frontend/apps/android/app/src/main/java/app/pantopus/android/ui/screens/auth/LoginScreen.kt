@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -118,6 +119,9 @@ object LoginScreenTags {
     /** Persistent login — remembered-account header ("Welcome back, Ying · y•••@…") + "Not you?". */
     const val REMEMBERED_ACCOUNT = "loginRememberedAccount"
     const val REMEMBERED_ACCOUNT_FORGET = "loginRememberedAccountForget"
+
+    /** Over the Place funnel, the X back to the address preview (the same identifier as iPhone's). */
+    const val DISMISS_LOGIN = "place.launch.dismissLogin"
 }
 
 /**
@@ -646,6 +650,34 @@ private fun BrandLockup() {
             text = "Your neighborhood, verified.",
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextSecondary,
+        )
+    }
+}
+
+/**
+ * Over the Place funnel, the X in Log in's top corner goes back to the address
+ * preview, as on iPhone. [AuthNavHost] draws it over Log in only.
+ */
+@Composable
+internal fun BackToPreviewButton(
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .padding(end = Spacing.s4)
+                .size(Spacing.s12)
+                .clickable(role = Role.Button, onClick = onClose)
+                .testTag(LoginScreenTags.DISMISS_LOGIN)
+                .semantics { contentDescription = "Back to address preview" },
+        contentAlignment = Alignment.Center,
+    ) {
+        PantopusIconImage(
+            icon = PantopusIcon.X,
+            contentDescription = null,
+            size = 20.dp,
+            tint = PantopusColors.appTextSecondary,
         )
     }
 }

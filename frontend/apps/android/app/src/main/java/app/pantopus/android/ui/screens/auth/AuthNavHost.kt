@@ -2,13 +2,16 @@
 
 package app.pantopus.android.ui.screens.auth
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -16,6 +19,7 @@ import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.pantopus.android.core.routing.DeepLinkRouter
@@ -43,18 +47,27 @@ import app.pantopus.android.ui.theme.PantopusColors
  * see `docs/mobile/auth-backend-contracts.md`). P5 wires the Verify /
  * Reset deep links and the inline AuthError destination.
  *
- * The address preview's Continue opens Create account first ([startOnSignUp]):
- * its X goes back to the preview ([onCloseSignUp]), and Log in is put under
- * any screen it leads to, as when Create account is reached from Log in.
+ * The address preview's Continue opens Create account first ([startOnSignUp]),
+ * and Log in is put under any screen it leads to, as when Create account is
+ * reached from Log in. Over the Place funnel ([onClose]) the graph's first
+ * screen goes back to the preview: Log in's X, Create account's X when
+ * Continue opened it, and system Back on either. Screens pushed from them
+ * keep their own close or back.
  */
 @Composable
 fun AuthNavHost(
     startOnSignUp: Boolean = false,
-    onCloseSignUp: () -> Unit = {},
+    onClose: (() -> Unit)? = null,
 ) {
     val navController = rememberNavController()
     ClosesKeyboardOnNavigation(navController)
     val pendingDeepLink by DeepLinkRouter.pending.collectAsStateWithLifecycle()
+    val currentEntry by navController.currentBackStackEntryAsState()
+
+    // Without this, Back on the first screen closes the app. NavHost's own Back still pops the screens above it.
+    BackHandler(enabled = onClose != null && currentEntry != null && navController.previousBackStackEntry == null) {
+        onClose?.invoke()
+    }
 
     // Pull auth deep links (reset / verify / join-invite) off DeepLinkRouter
     // and push them onto the nav stack. Anything else stays pending for the
@@ -114,16 +127,19 @@ fun AuthNavHost(
             )
         }
         composable(AuthRoutes.LOGIN) {
-            LoginScreen(
-                onOpenLegal = { document -> navController.navigate(AuthRoutes.legal(document.rowId)) },
-                onNavigateToSignUp = { navController.navigate(AuthRoutes.signUp()) },
-                onNavigateToForgotPassword = { navController.navigate(AuthRoutes.FORGOT_PASSWORD) },
-                onNavigateToVerifyEmail = { navController.navigate(AuthRoutes.verifyEmail()) },
-                onNavigateToResetPassword = { token ->
-                    navController.navigate(AuthRoutes.resetPassword(token))
-                },
-                onNavigateToAuthError = { navController.navigate(AuthRoutes.AUTH_ERROR) },
-            )
+            Box(modifier = Modifier.fillMaxSize()) {
+                LoginScreen(
+                    onOpenLegal = { document -> navController.navigate(AuthRoutes.legal(document.rowId)) },
+                    onNavigateToSignUp = { navController.navigate(AuthRoutes.signUp()) },
+                    onNavigateToForgotPassword = { navController.navigate(AuthRoutes.FORGOT_PASSWORD) },
+                    onNavigateToVerifyEmail = { navController.navigate(AuthRoutes.verifyEmail()) },
+                    onNavigateToResetPassword = { token ->
+                        navController.navigate(AuthRoutes.resetPassword(token))
+                    },
+                    onNavigateToAuthError = { navController.navigate(AuthRoutes.AUTH_ERROR) },
+                )
+                onClose?.let { BackToPreviewButton(onClose = it, modifier = Modifier.align(Alignment.TopEnd)) }
+            }
         }
         composable(
             route = AuthRoutes.SIGN_UP_PATTERN,
@@ -138,7 +154,7 @@ fun AuthNavHost(
         ) {
             SignUpScreen(
                 onClose = {
-                    if (navController.previousBackStackEntry == null) onCloseSignUp() else navController.popBackStack()
+                    if (navController.previousBackStackEntry == null) onClose?.invoke() else navController.popBackStack()
                 },
                 onOpenLegal = { document -> navController.navigate(AuthRoutes.legal(document.rowId)) },
                 onLogIn = {
