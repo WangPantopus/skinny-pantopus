@@ -38,6 +38,9 @@ struct LoginView: View {
     /// (Create account from a friend's link, Forgot password, Terms) keeps
     /// just its own close or back.
     var onClose: (() -> Void)?
+    /// The address preview's Continue opens Create account first, with Log in under it. Its X closes back
+    /// to the preview until Log in has shown; after that it goes back to Log in, as on Android.
+    @State private var signUpIsFirst: Bool
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -324,6 +327,7 @@ struct LoginView: View {
                 consumeAuthDeepLinkIfNeeded()
             }
             .onChange(of: deepLink.pending) { _, _ in consumeAuthDeepLinkIfNeeded() }
+            .onChange(of: path) { _, newPath in if newPath.isEmpty { signUpIsFirst = false } }
         }
     }
 
@@ -394,8 +398,9 @@ private extension LoginView {
     func signUpScreen(inviteCode: String?) -> some View {
         SignUpView(
             inviteCode: inviteCode,
-            onClose: { if !path.isEmpty { path.removeLast() } },
+            onClose: closeSignUp,
             onOpenLegal: { document in path.append(.legal(document)) },
+            onLogIn: { path = [] },
             onSuccess: { email in
                 // Backend hard-gates login on email_confirmed_at
                 // today (see docs/mobile/auth-backend-contracts.md
@@ -408,9 +413,25 @@ private extension LoginView {
         )
         .id(inviteCode)
     }
+
+    /// Create account opened by the address preview's Continue closes back to
+    /// the preview, like Log in's own X; reached from Log in, it goes back there.
+    func closeSignUp() {
+        if signUpIsFirst, path.count == 1, let onClose {
+            onClose()
+        } else if !path.isEmpty {
+            path.removeLast()
+        }
+    }
 }
 
 extension LoginView {
+    init(startsOnSignUp: Bool = false, onClose: (() -> Void)? = nil) {
+        _signUpIsFirst = State(initialValue: startsOnSignUp)
+        self.onClose = onClose
+        _path = State(initialValue: startsOnSignUp ? [.signUp(inviteCode: nil)] : [])
+    }
+
     /// A shared link opened before signing in waits in `PendingDeepLinkStore`
     /// and opens once the person is in. Say what it is, so someone new who
     /// tapped a neighbor's plan doesn't meet a bare "Welcome back".
