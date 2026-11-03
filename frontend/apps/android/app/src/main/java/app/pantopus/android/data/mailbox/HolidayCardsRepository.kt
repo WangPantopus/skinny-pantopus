@@ -67,8 +67,10 @@ class HolidayCardsRepository
             arrival: String,
             toUserId: String?,
             toEmail: String?,
+            requestId: String? = null,
         ): CardLook {
-            val body = SendHolidayCardBody(design, message, arrival, HolidayCardRecipient(userId = toUserId, email = toEmail))
+            val body =
+                SendHolidayCardBody(design, message, arrival, HolidayCardRecipient(userId = toUserId, email = toEmail), requestId)
             val response =
                 when (val result = safeApiCall { api.preview(body) }) {
                     is NetworkResult.Success -> result.data
@@ -94,8 +96,10 @@ class HolidayCardsRepository
             arrival: String,
             toUserId: String?,
             toEmail: String?,
+            requestId: String? = null,
         ): NetworkResult<SentHolidayCard> {
-            val body = SendHolidayCardBody(design, message, arrival, HolidayCardRecipient(userId = toUserId, email = toEmail))
+            val body =
+                SendHolidayCardBody(design, message, arrival, HolidayCardRecipient(userId = toUserId, email = toEmail), requestId)
             return when (val result = safeApiCall { api.send(body) }) {
                 is NetworkResult.Success -> {
                     latestFlow.update { it?.copy(today = result.data.card) }
