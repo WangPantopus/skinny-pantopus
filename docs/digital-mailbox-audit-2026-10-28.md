@@ -313,9 +313,13 @@ simulator and Android API 34 emulator, not physical phones.
 
 1. Review and integrate the unmerged repair stack, apply the additive migration
    through the normal release process, and ship compatible native builds
-   before enabling Mail. The separate iOS stored-booklet repair
-   [#3186](https://github.com/WangPantopus/skinny-pantopus/pull/3186) was still
-   open at this check; its own recorded device evidence belongs to that PR.
+   before enabling Mail. During the audit, another session's merge of
+   [#3188](https://github.com/WangPantopus/skinny-pantopus/pull/3188) brought the
+   separate iOS stored-booklet repair
+   [#3186](https://github.com/WangPantopus/skinny-pantopus/pull/3186) into master
+   `f95394b48c7931738ce82ec06b2a4c6e87da573f`. Its device evidence belongs to
+   that PR. The audit stack applies cleanly to that revision; the combined
+   release build still needs verification before rollout.
 2. Verify hosted private storage, provider email/SMS claims and native claim
    deep links with approved test recipients. Local storage/SMTP evidence does
    not establish hosted provider delivery.
