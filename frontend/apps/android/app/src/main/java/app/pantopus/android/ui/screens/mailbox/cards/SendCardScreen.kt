@@ -178,9 +178,10 @@ private fun Steps(
     onTakeBack: () -> Unit,
     onSeeInSent: (String) -> Unit,
 ) {
-    if (form.tookBack && form.step == SendCardStep.To) {
+    val backNote = form.backNote
+    if (backNote != null && form.step == SendCardStep.To) {
         DeskNote(
-            "You took your card back. You can send a card again today.",
+            backNote,
             modifier = Modifier.padding(start = Spacing.s4, end = Spacing.s4, top = Spacing.s2),
         )
     }
