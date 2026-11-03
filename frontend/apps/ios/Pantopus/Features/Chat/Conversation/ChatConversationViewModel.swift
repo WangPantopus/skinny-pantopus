@@ -816,6 +816,8 @@ public final class ChatConversationViewModel {
     private var hasRestoredDraft = false
     private var isRestoringDraft = false
     private var draftSaveTask: Task<Void, Never>?
+    /// The screens showing this thread (`presentationDidAppear()`).
+    private var presentationCount = 0
 
     private enum ChatSendError: Error {
         case noRoom
@@ -920,9 +922,10 @@ public final class ChatConversationViewModel {
 
     // No `deinit { cancel }` — Swift 6's strict concurrency disallows
     // touching `@MainActor`-isolated stored properties from the
-    // nonisolated `deinit`. The view calls `teardown()` from
-    // `.onDisappear`, and each task captures `[weak self]` so it
-    // exits cleanly once the VM is deallocated.
+    // nonisolated `deinit`. The view's `.onDisappear` calls `teardown()`
+    // once no screen shows the thread (`presentationDidDisappear()`), and
+    // each task captures `[weak self]` so it exits cleanly once the VM is
+    // deallocated.
 
     /// The copies of photos sent to the assistant go with the view-model (their folder is a constant).
     deinit {
@@ -2329,6 +2332,19 @@ public final class ChatConversationViewModel {
                 if boundaries.allSatisfy({ lastReadBoundaries[$0.key] == $0.value }) { scheduleMarkRead() }
             }
         }
+    }
+
+    /// A fold or a turn swaps the open thread's screen for a new one on the
+    /// same model (`InboxTabRoot` keeps it), and the old screen can leave
+    /// after the new one appeared and loaded. The thread stops listening only
+    /// when the last screen showing it leaves.
+    func presentationDidAppear() {
+        presentationCount += 1
+    }
+
+    func presentationDidDisappear() {
+        presentationCount = max(presentationCount - 1, 0)
+        if presentationCount == 0 { teardown() }
     }
 
     public func teardown() {
