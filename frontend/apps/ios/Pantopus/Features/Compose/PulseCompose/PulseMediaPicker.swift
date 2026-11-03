@@ -57,7 +57,10 @@ struct PulseMediaPicker: UIViewControllerRepresentable {
 @MainActor
 private enum PulsePickedMedia {
     static func load(_ provider: NSItemProvider) async throws -> PulseComposePhoto {
-        if provider.canLoadObject(ofClass: PHLivePhoto.self) {
+        // Only request Live Photo objects when the selected item advertises
+        // that representation. Probing PHLivePhoto for an ordinary still can
+        // raise an Objective-C exception on the current simulator runtime.
+        if provider.hasItemConformingToTypeIdentifier(UTType.livePhoto.identifier) {
             let live: PHLivePhoto = try await withCheckedThrowingContinuation { continuation in
                 provider.loadObject(ofClass: PHLivePhoto.self) { object, error in
                     if let live = object as? PHLivePhoto {
