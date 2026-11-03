@@ -5,6 +5,8 @@ package app.pantopus.android.ui.screens.mailbox.mail_detail
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Intent
+import android.net.Uri
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -127,6 +129,7 @@ fun MailDetailScreen(
     val recordsFileInFlight by viewModel.recordsFileInFlight.collectAsStateWithLifecycle()
     val saveToVaultInFlight by viewModel.saveToVaultInFlight.collectAsStateWithLifecycle()
     val bookletDownloadInFlight by viewModel.bookletDownloadInFlight.collectAsStateWithLifecycle()
+    val bookletPdfLink by viewModel.bookletPdfLink.collectAsStateWithLifecycle()
     val certifiedProofInFlight by viewModel.certifiedProofInFlight.collectAsStateWithLifecycle()
     val certifiedProofSaved by viewModel.certifiedProofSaved.collectAsStateWithLifecycle()
     val showsSaveToVault by viewModel.showsSaveToVaultPicker.collectAsStateWithLifecycle()
@@ -176,6 +179,16 @@ fun MailDetailScreen(
             context.startActivity(intent)
         } catch (_: ActivityNotFoundException) {
             viewModel.say("No app on this phone can open this file.")
+        }
+    }
+    // A booklet's PDF opens in a browser tab, as the web's Download link opens it in a new one.
+    LaunchedEffect(bookletPdfLink) {
+        val link = bookletPdfLink ?: return@LaunchedEffect
+        viewModel.bookletPdfOpened()
+        try {
+            CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(context, Uri.parse(link))
+        } catch (_: ActivityNotFoundException) {
+            viewModel.say("No app on this phone can open this PDF.")
         }
     }
     GigBidCheckoutHost(viewModel.bidCheckout)
