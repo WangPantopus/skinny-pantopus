@@ -56,6 +56,17 @@ Parameters:
     Default: 'false'
     AllowedValues: ['true', 'false']
     Description: Independently probe API and database health every minute; does not enable any business jobs.
+  CapacityMonitoringEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Add API/database probe latency and EC2 capacity alarms using existing metrics. Requires HealthMonitoringEnabled; does not resize compute or enable business jobs.
+  BackendInstanceId:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^i-[0-9a-f]{8}([0-9a-f]{9})?$'
+    ConstraintDescription: Leave empty to omit EC2 alarms, or specify the environment's existing EC2 instance ID.
+    Description: Existing backend host in this region. Empty omits host alarms; CPU credit and attached EBS alarms target the current T3/Nitro hosts.
   SecretName:
     Type: String
     Default: ''
@@ -70,8 +81,21 @@ Parameters:
       the Lambda also checks open gigs created before this timestamp. Clear it
       after the backfill is complete.
 
+Rules:
+  CapacityMonitoringRequiresHealth:
+    RuleCondition: !Equals [!Ref CapacityMonitoringEnabled, 'true']
+    Assertions:
+      - Assert: !Equals [!Ref HealthMonitoringEnabled, 'true']
+        AssertDescription: Enable HealthMonitoringEnabled before capacity monitoring so probe metrics and missing-probe alarms exist.
+
 Conditions:
   RunHealthMonitoring: !Equals [!Ref HealthMonitoringEnabled, 'true']
+  RunCapacityMonitoring: !And
+    - !Condition RunHealthMonitoring
+    - !Equals [!Ref CapacityMonitoringEnabled, 'true']
+  RunHostMonitoring: !And
+    - !Condition RunCapacityMonitoring
+    - !Not [!Equals [!Ref BackendInstanceId, '']]
   RunSchedules: !Equals [!Ref SchedulesEnabled, 'true']
   RunBriefings: !Or
     - !Equals [!Ref SchedulesEnabled, 'true']
@@ -240,6 +264,128 @@ Resources:
       Threshold: 25
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
+      AlarmActions: [!Ref JobAlarmTopic]
+      OKActions: [!Ref JobAlarmTopic]
+
+  # Opt-in alarms reuse the existing probes and EC2 basic monitoring. No extra
+  # collectors, custom metrics, IAM permissions or detailed monitoring charges.
+  # These are probe latency alarms, not authenticated application-route p95.
+  ApiLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: RunCapacityMonitoring
+    Properties:
+      AlarmName: !Sub pantopus-api-latency-${Environment}
+      AlarmDescription: 'API readiness probe took over 1 second in three of five minutes. Compare the direct database probe; this is not user-request p95. Availability and missing probes have separate health alarms.'
+      Namespace: !Sub Pantopus/Backend/${Environment}
+      MetricName: ApiLatencyMs
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 5
+      DatapointsToAlarm: 3
+      Threshold: 1000
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref JobAlarmTopic]
+      OKActions: [!Ref JobAlarmTopic]
+
+  DatabaseLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: RunCapacityMonitoring
+    Properties:
+      AlarmName: !Sub pantopus-database-latency-${Environment}
+      AlarmDescription: 'Direct database HEAD probe took over 1 second in three of five minutes. Review repeated queries, connections, memory and I/O before resizing. Availability and missing probes have separate health alarms.'
+      Namespace: !Sub Pantopus/Backend/${Environment}
+      MetricName: DatabaseLatencyMs
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 5
+      DatapointsToAlarm: 3
+      Threshold: 1000
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref JobAlarmTopic]
+      OKActions: [!Ref JobAlarmTopic]
+
+  BackendCpuAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: RunHostMonitoring
+    Properties:
+      AlarmName: !Sub pantopus-backend-cpu-${Environment}
+      AlarmDescription: 'Backend host CPU averaged over 80 percent in three of four five-minute periods. Compare API latency and worker activity before changing capacity.'
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref BackendInstanceId
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 4
+      DatapointsToAlarm: 3
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: missing
+      AlarmActions: [!Ref JobAlarmTopic]
+      OKActions: [!Ref JobAlarmTopic]
+
+  BackendCpuCreditsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: RunHostMonitoring
+    Properties:
+      AlarmName: !Sub pantopus-backend-cpu-credits-${Environment}
+      AlarmDescription: 'Burstable backend host has fewer than 24 CPU credits for three five-minute periods. Check credit mode and surplus-credit charges; a low balance alone does not establish throttling.'
+      Namespace: AWS/EC2
+      MetricName: CPUCreditBalance
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref BackendInstanceId
+      Statistic: Minimum
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 24
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: missing
+      AlarmActions: [!Ref JobAlarmTopic]
+      OKActions: [!Ref JobAlarmTopic]
+
+  BackendStatusAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: RunHostMonitoring
+    Properties:
+      AlarmName: !Sub pantopus-backend-status-${Environment}
+      AlarmDescription: 'Backend EC2 instance or system status check failed in two of three minutes. Notification only: no automatic reboot, recovery or replacement. API health separately detects missing service.'
+      Namespace: AWS/EC2
+      MetricName: StatusCheckFailed
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref BackendInstanceId
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 2
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: missing
+      AlarmActions: [!Ref JobAlarmTopic]
+      OKActions: [!Ref JobAlarmTopic]
+
+  BackendAttachedEbsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: RunHostMonitoring
+    Properties:
+      AlarmName: !Sub pantopus-backend-attached-ebs-${Environment}
+      AlarmDescription: 'Backend attached EBS reachability/I/O status check failed in two of three minutes. This does not measure filesystem free space. Notification only; no automatic host or volume changes.'
+      Namespace: AWS/EC2
+      MetricName: StatusCheckFailed_AttachedEBS
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref BackendInstanceId
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 2
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: missing
       AlarmActions: [!Ref JobAlarmTopic]
       OKActions: [!Ref JobAlarmTopic]
 
