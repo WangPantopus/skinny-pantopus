@@ -57,6 +57,7 @@ import { FEED_COMPOSER_OPEN_EVENT, MAGIC_TASK_OPEN_EVENT, notifyFeedPostCreated 
 import { launchFeatures, webFeatureFlags } from '@/lib/featureFlags';
 import { useFeatureFlagState } from '@/hooks/useFeatureFlag';
 import { useShellReadsReleased } from '@/lib/shellReads';
+import { hubTodayQuery } from '@/lib/hubToday';
 import type { CSSProperties } from 'react';
 import { Search, MessageCircle, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, UserRound, type LucideIcon } from 'lucide-react';
 import { useOnlineStatus } from '@/components/map/OfflineIndicator';
@@ -762,7 +763,8 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, ma
   //  1. router.prefetch() → warms the Next.js route bundle + RSC payload
   //  2. queryClient.prefetchQuery() → warms the React Query cache (where
   //     the destination page's query key is known ahead of time)
-  // staleTime 5s means rapid re-hovers within 5s are no-ops (RQ dedupes).
+  // Reuse each screen's freshness window, so revisiting a navigation item
+  // cannot re-fetch data that the destination still considers fresh.
   const PREFETCH_STALE = 5_000;
 
   // Place — warm the route bundle + the primary-home query (the
@@ -775,11 +777,7 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, ma
   // Today — the briefing tab; the query key is known ahead of time.
   const prefetchToday = useCallback(() => {
     router.prefetch('/app/today');
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.hubToday(),
-      queryFn: () => api.hub.getHubToday({ retries: 1, retryDelayMs: 800 }),
-      staleTime: PREFETCH_STALE,
-    });
+    queryClient.prefetchQuery(hubTodayQuery());
   }, [router, queryClient]);
 
   const prefetchNearby = useCallback(() => {
