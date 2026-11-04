@@ -14,12 +14,16 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
@@ -52,9 +56,16 @@ import org.junit.Test
 class EditAccessCodeFormViewModelTest {
     private val homes: HomesRepository = mockk()
     private val members: HomeMembersRepository = mockk()
+    private val sessionScopes: HomeClaimSessionScopeFactory = mockk()
+    private val session: HomeClaimSessionScope = mockk()
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        every { sessionScopes.create(any()) } returns session
+        every { session.isCurrent } returns true
+        every { session.actorId } returns "u_owner"
+        every { session.invalidated } returns MutableStateFlow(false)
+        coEvery { session.confirmCurrent() } returns true
         coEvery { homes.getHomeAccessSecrets("home_1") } returns
             NetworkResult.Success(
                 HomeAccessSecretsResponse(
@@ -76,6 +87,7 @@ class EditAccessCodeFormViewModelTest {
         EditAccessCodeFormViewModel(
             homes = homes,
             members = members,
+            sessionScopes = sessionScopes,
             savedStateHandle =
                 SavedStateHandle(
                     buildMap<String, Any?> {
