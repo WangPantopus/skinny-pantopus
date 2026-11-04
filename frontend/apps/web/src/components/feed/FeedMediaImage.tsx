@@ -10,10 +10,16 @@ import { isPantopusMediaUrl } from '@/lib/media-hosts';
 
 interface FeedMediaImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> {
   src?: string | null;
-  /** Layout hint for Next/Image (defaults 800×600). Use larger values for lightbox. */
+  /** Layout hint for Next/Image (defaults 800×600). */
   width?: number;
   height?: number;
   priority?: boolean;
+  /**
+   * Load the file itself, never a resized copy. For a full-size viewer: the
+   * browser takes a resized copy to be as wide as the width it asked for, so a
+   * photo narrower than that width would show smaller than it really is.
+   */
+  unoptimized?: boolean;
   /** Optional recovery UI once every source has failed. */
   errorFallback?: ReactNode;
 }
@@ -113,6 +119,7 @@ export default function FeedMediaImage({
   width = 800,
   height = 600,
   priority,
+  unoptimized = false,
   errorFallback,
   sizes = '(max-width: 768px) calc(100vw - 32px), 640px',
   ...props
@@ -133,10 +140,12 @@ export default function FeedMediaImage({
     return errorFallback ?? <div className={`${className ?? ''} flex items-center justify-center text-xs text-app-muted`} role="img" aria-label="Image unavailable">Image unavailable</div>;
   }
 
+  const optimized = !unoptimized && !bypassOptimizer && canUseNextImage(currentSrc);
+
   const handleError = () => {
     // The source may still be healthy when an optimizer request fails. Try
     // it directly once before giving up or moving to a legacy URL.
-    if (canUseNextImage(currentSrc) && !bypassOptimizer) {
+    if (optimized) {
       setBypassOptimizer(true);
       return;
     }
@@ -148,7 +157,7 @@ export default function FeedMediaImage({
     }
   };
 
-  if (!canUseNextImage(currentSrc) || bypassOptimizer) {
+  if (!optimized) {
     return (
       <img
         alt=""

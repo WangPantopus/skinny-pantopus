@@ -77,6 +77,8 @@ export default function PostMediaLightbox({
 
   const slot = resolvePostMediaSlots(urls, mediaTypes, liveUrls)[index];
 
+  // Rendered into document.body: inside the app's <main> (its own stacking
+  // context) the viewer stayed under the header and sidebar.
   return createPortal(
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
@@ -153,11 +155,9 @@ export default function PostMediaLightbox({
             key={`${index}:${imageAttempt}`}
             src={urls[index]}
             alt=""
-            width={1920}
-            height={1080}
-            sizes="96vw"
+            // Full size is the photo itself at its own size, capped by the screen.
+            unoptimized
             className="max-h-[min(92vh,1080px)] w-auto max-w-full object-contain"
-            priority
             errorFallback={
               <div role="alert" className="rounded-lg bg-white/10 p-6 text-center text-white">
                 <p>This image couldn&apos;t load.</p>
