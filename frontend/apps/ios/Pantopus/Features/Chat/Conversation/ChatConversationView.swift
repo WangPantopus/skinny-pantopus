@@ -417,6 +417,9 @@ public struct ChatConversationView: View {
     /// rebuilt the conversation, which goes back to that row (`returnToReadingPlace`). Read once, as the screen is
     /// made.
     @State private var returnPlace: ChatReadingPlace?
+    /// The composer had the keyboard as the last screen for this view model left (a fold or a turn), so this one gives
+    /// it back. Read once, as the screen is made.
+    @State private var returnsToComposer = false
     /// For one pass after the view model's rows changed both above and below
     /// the rows on screen, the rows the timeline shows instead: the change
     /// below only (`takeRows`). Empty otherwise.
@@ -461,6 +464,7 @@ public struct ChatConversationView: View {
     ) {
         _viewModel = State(initialValue: viewModel)
         _returnPlace = State(initialValue: viewModel.isReadingLatest ? nil : viewModel.readingPlace)
+        _returnsToComposer = State(initialValue: viewModel.isComposing)
         self.mode = mode
         self.creatorContext = creatorContext
         self.onOpenAudienceProfile = onOpenAudienceProfile
@@ -640,7 +644,9 @@ public struct ChatConversationView: View {
         .onChange(of: viewModel.composerFocusRequest) { _, _ in composerFocused = true }
         .onChange(of: composerFocused) { _, focused in
             if focused { emojiPickerPresented = false }
+            viewModel.isComposing = focused
         }
+        .task { await returnToComposer() }
         .onChange(of: isSelecting) { _, selecting in
             if selecting { dismissComposerInput() }
         }
@@ -1081,6 +1087,18 @@ public struct ChatConversationView: View {
         composerFocused = false
         emojiPickerPresented = false
         emojiDragOffset = 0
+    }
+
+    /// A fold or a turn rebuilt the screen while the composer had the keyboard: it gets it back, once the composer is
+    /// in the window.
+    private func returnToComposer() async {
+        guard returnsToComposer else { return }
+        returnsToComposer = false
+        for delayMs: UInt64 in [80, 250] {
+            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+            guard !Task.isCancelled, !composerFocused else { return }
+            composerFocused = true
+        }
     }
 
     private var emojiDismissGesture: some Gesture {

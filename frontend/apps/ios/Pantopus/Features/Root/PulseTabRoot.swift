@@ -345,6 +345,7 @@ public struct PulseTabRoot: View {
         case let .publicProfile(userId):
             PublicProfileView(
                 userId: userId,
+                viewModel: detailModels.profileModel(for: route, profileId: userId, userId: currentUserId),
                 onBack: pop,
                 onOpenMessages: { profile in
                     Task { @MainActor in path.append(.chatConversation(.directMessage(with: profile))) }
@@ -384,8 +385,8 @@ public struct PulseTabRoot: View {
 }
 
 /// A fold replaces the detail view, but must not replace an unfinished reply,
-/// a post being written (the composer's step and draft) or where a
-/// conversation was being read. Models leave this account-scoped cache when
+/// a post being written (the composer's step and draft), or where a
+/// conversation, a post or a profile was being read. Models leave this account-scoped cache when
 /// their routes actually close.
 @MainActor
 private final class PulseDetailModels {
@@ -393,6 +394,7 @@ private final class PulseDetailModels {
     private var models: [String: PulsePostDetailViewModel] = [:]
     private var composeSessions: [PulseRoute: PulseComposeSession] = [:]
     private var conversations: [InboxConversationDestination: ChatConversationViewModel] = [:]
+    private var profiles: [PulseRoute: PublicProfileViewModel] = [:]
 
     func model(postId: String, userId: String) -> PulsePostDetailViewModel {
         if self.userId != userId { retain(routes: [], userId: userId) }
@@ -425,6 +427,15 @@ private final class PulseDetailModels {
         return model
     }
 
+    /// A profile opened from a post, a reply or another profile: what is loaded, its tab and where it was read.
+    func profileModel(for route: PulseRoute, profileId: String, userId: String) -> PublicProfileViewModel {
+        if self.userId != userId { retain(routes: [], userId: userId) }
+        if let model = profiles[route] { return model }
+        let model = PublicProfileViewModel(userId: profileId)
+        profiles[route] = model
+        return model
+    }
+
     func retain(routes: [PulseRoute], userId: String) {
         let postIds = Set(routes.compactMap { route -> String? in
             guard case let .post(postId) = route else { return nil }
@@ -435,6 +446,7 @@ private final class PulseDetailModels {
         conversations = self.userId == userId
             ? conversations.filter { routes.contains(.chatConversation($0.key)) }
             : [:]
+        profiles = self.userId == userId ? profiles.filter { routes.contains($0.key) } : [:]
         self.userId = userId
     }
 }

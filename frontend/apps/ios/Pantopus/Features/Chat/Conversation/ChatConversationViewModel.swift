@@ -406,6 +406,8 @@ public final class ChatConversationViewModel {
     @ObservationIgnored var readingPlace: ChatReadingPlace?
     /// The reader is at (or near) the latest message, where a new screen for this model opens anyway.
     @ObservationIgnored var isReadingLatest = true
+    /// The composer has the keyboard. A new screen for this model after a fold or a turn gives it back. Not observed.
+    @ObservationIgnored var isComposing = false
     /// The details drawer open over the thread, and the report form in it with what was chosen and typed. They
     /// belong to the thread, not to one screen of it: a fold or a turn rebuilds the screen, which shows them again.
     public var isShowingDetails = false

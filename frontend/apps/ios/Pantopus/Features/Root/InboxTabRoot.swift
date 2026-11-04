@@ -249,11 +249,16 @@ public struct InboxTabRoot: View {
         case let .startSupportTrain(story):
             supportTrainStart(story: story, route: route)
         case let .publicProfile(userId):
-            profileDestination(userId: userId)
+            profileDestination(userId: userId, route: route)
         case let .businessProfile(businessId):
             businessProfileDestination(businessId: businessId)
         case let .post(postId):
-            PostPageDestination(postId: postId, currentUserId: currentUserId, onBack: { if !path.isEmpty { path.removeLast() } }) {
+            PostPageDestination(
+                postId: postId,
+                currentUserId: currentUserId,
+                viewModel: conversationModels.post(for: route, postId: postId, userId: currentUserId),
+                onBack: { if !path.isEmpty { path.removeLast() } }
+            ) {
                 path.append(.publicProfile(userId: $0))
             } onEdit: { path.append(.editPost(postId: $0)) }
         case let .editPost(postId):
@@ -267,9 +272,10 @@ public struct InboxTabRoot: View {
         }
     }
 
-    private func profileDestination(userId: String) -> some View {
+    private func profileDestination(userId: String, route: InboxRoute) -> some View {
         PublicProfileView(
             userId: userId,
+            viewModel: conversationModels.profile(for: route, profileId: userId, userId: currentUserId),
             onBack: { if !path.isEmpty { path.removeLast() } },
             onOpenMessages: { profile in
                 Task { @MainActor in
