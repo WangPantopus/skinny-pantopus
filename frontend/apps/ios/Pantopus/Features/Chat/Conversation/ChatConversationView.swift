@@ -4467,6 +4467,9 @@ private struct AttachmentTile: View {
                         .stroke(Theme.Color.appBorder, lineWidth: 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+                // The photo placeholder is wider than the tile; clipped, it still took the touches over the tile
+                // before it, whose Remove button then did nothing. Only the last tile's worked.
+                .contentShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             Button { onRemove(attachment.id) } label: {
                 ZStack {
                     Circle()
