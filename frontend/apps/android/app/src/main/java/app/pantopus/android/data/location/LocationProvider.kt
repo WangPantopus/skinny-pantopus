@@ -7,6 +7,9 @@ import dagger.hilt.components.SingletonComponent
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Automatic feed loads have a saved-area fallback and should not wait for a full GPS acquisition. */
+const val PASSIVE_LOCATION_TIMEOUT_MILLIS = 400L
+
 /**
  * Best-known coordinate hint. `accuracyMeters` lets callers decide
  * whether to render a "you are here" disc or just a neighborhood-level
