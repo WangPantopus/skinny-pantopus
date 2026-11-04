@@ -83,6 +83,13 @@ private final class ChatTimelinePlace: NSObject {
         scrollView?.isTracking ?? false
     }
 
+    /// The reader is scrolling the timeline: a finger on it, or a fling it started. Layouts move the rows too (a
+    /// fold or a turn re-wraps them before the screen is rebuilt); only this moves the reader's place.
+    var isScrolledByReader: Bool {
+        guard let scrollView else { return false }
+        return scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating
+    }
+
     /// Returns once the timeline is at rest: no finger on it, no fling or
     /// bounce, the content not pulled past its top, and the viewport the same
     /// height for 0.2 s; after a second at most. Cancelling the calling task
@@ -373,7 +380,6 @@ public struct ChatConversationView: View {
     /// A15.4 — "Not now" on the upgrade-fan card hides it for the rest of
     /// this visit. There is no server-side dismissal to persist to yet.
     @State private var upgradeCardDismissed = false
-    @State private var detailsPresented = false
     @State private var emojiPickerPresented = false
     @State private var emojiDragOffset: CGFloat = 0
     @FocusState private var composerFocused: Bool
@@ -407,6 +413,10 @@ public struct ChatConversationView: View {
     /// The thread opened at its latest message once; coming back (a pushed
     /// profile, a tab switch) keeps the reading position (Instant Screens).
     @State private var hasLandedAtLatest = false
+    /// Where the last screen for this view model left the reader, away from the latest message: a fold or a turn
+    /// rebuilt the conversation, which goes back to that row (`returnToReadingPlace`). Read once, as the screen is
+    /// made.
+    @State private var returnPlace: ChatReadingPlace?
     /// For one pass after the view model's rows changed both above and below
     /// the rows on screen, the rows the timeline shows instead: the change
     /// below only (`takeRows`). Empty otherwise.
@@ -450,6 +460,7 @@ public struct ChatConversationView: View {
         onBack: @escaping @MainActor () -> Void = {}
     ) {
         _viewModel = State(initialValue: viewModel)
+        _returnPlace = State(initialValue: viewModel.isReadingLatest ? nil : viewModel.readingPlace)
         self.mode = mode
         self.creatorContext = creatorContext
         self.onOpenAudienceProfile = onOpenAudienceProfile
@@ -482,7 +493,7 @@ public struct ChatConversationView: View {
                 counterparty: viewModel.headerCounterparty,
                 creatorContext: resolvedCreatorContext,
                 onBack: onBack,
-                onOpenDetails: { detailsPresented = true },
+                onOpenDetails: { viewModel.isShowingDetails = true },
                 onNewAIChat: { viewModel.startNewAIConversation() },
                 onDeleteAIChat: { aiDeleteConfirmPresented = true },
                 isDeletingAIChat: viewModel.isDeletingAIConversation,
@@ -746,10 +757,10 @@ public struct ChatConversationView: View {
                     .presentationDetents([.medium])
             }
         }
-        .sheet(isPresented: $detailsPresented) {
+        .sheet(isPresented: $viewModel.isShowingDetails) {
             ChatConversationDetailsSheet(viewModel: viewModel) {
                 // Blocked — close the drawer and pop the thread.
-                detailsPresented = false
+                viewModel.isShowingDetails = false
                 onBack()
             }
             .presentationDetents([.medium, .large])
@@ -1604,7 +1615,7 @@ extension ChatConversationView {
                         loadOlderPreservingPosition()
                     }
                 }
-                .task { await landAtLatestMessage(proxy) }
+                .task { await landAtLatestMessage(proxy, rows: rows) }
                 .onChange(of: rows, initial: true) { oldRows, newRows in
                     timelinePlace.rowsChanged()
                     takeRows(from: oldRows, to: newRows)
@@ -1644,6 +1655,9 @@ extension ChatConversationView {
                     proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
                     timelinePlace.holdEnd()
                 }
+                .onChange(of: geo.size.width) { oldWidth, newWidth in
+                    if abs(oldWidth - newWidth) > 0.5 { keepReadingPlace(rows: rows, proxy: proxy) }
+                }
                 // `initial`: a target published before this frame appeared
                 // (a slow first layout) still scrolls.
                 .onChange(of: viewModel.pendingScrollTargetId, initial: true) { _, target in
@@ -1667,6 +1681,9 @@ extension ChatConversationView {
         let nearBottom = toEnd < 120
         if isAtBottom != nearBottom {
             isAtBottom = nearBottom
+        }
+        if timelinePlace.isScrolledByReader, viewModel.isReadingLatest != nearBottom {
+            viewModel.isReadingLatest = nearBottom
         }
         if scrollMetrics.isLanding, timelinePlace.isTracking {
             scrollMetrics.isLanding = false
@@ -1774,6 +1791,16 @@ extension ChatConversationView {
         // lay out twice and snap from the fallback width while scrolling.
         timelineRowView(row, rowWidth: max(0, geo.size.width - 24))
             .background { readBoundaryTracker(row: row, acceptedIds: readBoundaryIds, viewportHeight: geo.size.height) }
+            // The row the reader scrolls to the top of the viewport is where they are, for a screen a fold or a turn
+            // puts up next (`readingPlace`). Only a row crossing the top changes it, not every scrolled frame.
+            .onGeometryChange(for: Bool.self) { proxy in
+                let frame = proxy.frame(in: .named(Self.scrollSpaceName))
+                return frame.minY <= 0 && frame.maxY > 0
+            } action: { isAtTop in
+                if isAtTop, timelinePlace.isScrolledByReader {
+                    viewModel.readingPlace = ChatReadingPlace(rowId: row.id, isCentered: false)
+                }
+            }
     }
 
     private static func isBubble(_ row: ChatTimelineRow) -> Bool {
@@ -1835,6 +1862,7 @@ extension ChatConversationView {
         if target == Self.bottomAnchorId {
             // Back at the latest message: the bottom, once its rows have laid out.
             landingTargetId = nil
+            viewModel.isReadingLatest = true
             Task {
                 await scrollToBottomAfterLayout(proxy)
                 viewModel.consumePendingScroll()
@@ -1844,6 +1872,9 @@ extension ChatConversationView {
         // A brief or nudge opens at its start, its cards below it;
         // a searched message sits in the middle.
         let anchor: UnitPoint = mode == .aiAssistant ? .top : .center
+        // Where the reader is now, for a screen a fold or a turn puts up next.
+        viewModel.readingPlace = ChatReadingPlace(rowId: target, isCentered: anchor == .center)
+        viewModel.isReadingLatest = false
         // The target joins the lazy stack on the next layout (`tailStart`).
         // The rows between here and the target sit at estimated heights until
         // they come near: the first scroll brings the target's rows in, and the
@@ -1908,7 +1939,18 @@ extension ChatConversationView {
     /// positions the first frame, but row content that resolves a beat
     /// later (remote images, link previews) can still nudge the layout —
     /// re-pin across a few passes.
-    private func landAtLatestMessage(_ proxy: ScrollViewProxy) async {
+    private func landAtLatestMessage(_ proxy: ScrollViewProxy, rows: [ChatTimelineRow]) async {
+        // A fold or a turn rebuilt the screen with the reader away from the
+        // latest message (at a search match or in earlier messages too): back
+        // to their row instead.
+        if let place = returnPlace {
+            returnPlace = nil
+            if !viewModel.hasPendingSearchTarget, rows.contains(where: { $0.id == place.rowId }) {
+                await returnToReadingPlace(place, proxy: proxy)
+                hasLandedAtLatest = true
+                return
+            }
+        }
         // Opened from Chat Search → the pendingScrollTargetId path
         // positions on the matched message instead.
         guard !viewModel.hasPendingSearchTarget, !viewModel.isViewingEarlierHistory, !hasLandedAtLatest else { return }
@@ -1920,6 +1962,35 @@ extension ChatConversationView {
         }
         timelinePlace.followEnd(animated: false)
         hasLandedAtLatest = true
+        viewModel.isReadingLatest = true
+    }
+
+    /// Puts the reader's row back where it was: at the top of the viewport, or
+    /// in its middle for a search match. Rows far from the viewport sit at
+    /// estimated heights until they come near: the first scroll brings the
+    /// row's neighbors in, and the later ones, once they have laid out, put it
+    /// exactly in place. Older pages wait (`isLanding`) until the reader
+    /// scrolls, as after a search match.
+    private func returnToReadingPlace(_ place: ChatReadingPlace, proxy: ScrollViewProxy) async {
+        // The newest rows laid out together start below the row, where a
+        // `ScrollViewProxy` scroll finds it on iOS 17 (`tailStart`).
+        landingTargetId = place.rowId
+        scrollMetrics.isLanding = true
+        let anchor: UnitPoint = place.isCentered ? .center : .top
+        for delayMs: UInt64 in [16, 80, 250] {
+            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+            guard !Task.isCancelled else { return }
+            proxy.scrollTo(place.rowId, anchor: anchor)
+        }
+    }
+
+    /// The timeline changed width (a fold or a turn of the iPhone Duo, the split
+    /// view settling its columns): the rows re-wrap while the offset stays, so a
+    /// reader away from the latest message would drift. Back to their row.
+    private func keepReadingPlace(rows: [ChatTimelineRow], proxy: ScrollViewProxy) {
+        guard !viewModel.isReadingLatest, !viewModel.hasPendingSearchTarget, let place = viewModel.readingPlace,
+              rows.contains(where: { $0.id == place.rowId }) else { return }
+        Task { await returnToReadingPlace(place, proxy: proxy) }
     }
 
     /// Keep the viewport pinned to the newest message: always follow the
@@ -1933,6 +2004,7 @@ extension ChatConversationView {
             return bubble.side == .outgoing
         }()
         guard isAtBottom || isOwnSend else { return }
+        viewModel.isReadingLatest = true
         // Reading far back, an animated scroll would lay out every row on the
         // way: go straight to the bottom, and again once its rows have laid out.
         if scrollMetrics.contentMaxY - scrollMetrics.viewportHeight > scrollMetrics.viewportHeight * 2 {

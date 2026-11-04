@@ -331,12 +331,14 @@ public struct PulseTabRoot: View {
         case let .compose(intent):
             PulseComposeFlowView(
                 prefillFeedIntent: PulseIntent(rawValue: intent),
+                session: detailModels.composeSession(for: route, userId: currentUserId),
                 onCancel: { pop() },
                 onPosted: { _ in pop() }
             )
         case let .editPost(postId):
             PulseComposeFlowView(
                 editingPostId: postId,
+                session: detailModels.composeSession(for: route, userId: currentUserId),
                 onCancel: { pop() },
                 onPosted: { _ in pop() }
             )
@@ -363,12 +365,14 @@ public struct PulseTabRoot: View {
             )
         case let .chatConversation(dest):
             ChatConversationView(
-                viewModel: ChatConversationViewModel(
-                    mode: dest.threadMode,
-                    counterparty: dest.counterparty,
-                    currentUserId: currentUserId,
-                    initialTopic: dest.initialTopic
-                ),
+                viewModel: detailModels.conversationModel(for: dest, userId: currentUserId) {
+                    ChatConversationViewModel(
+                        mode: dest.threadMode,
+                        counterparty: dest.counterparty,
+                        currentUserId: currentUserId,
+                        initialTopic: dest.initialTopic
+                    )
+                },
                 mode: dest.kind,
                 onOpenProfile: { userId in
                     Task { @MainActor in path.append(.publicProfile(userId: userId)) }
@@ -379,12 +383,16 @@ public struct PulseTabRoot: View {
     }
 }
 
-/// A fold replaces the detail view, but must not replace an unfinished reply.
-/// Models leave this account-scoped cache when their routes actually close.
+/// A fold replaces the detail view, but must not replace an unfinished reply,
+/// a post being written (the composer's step and draft) or where a
+/// conversation was being read. Models leave this account-scoped cache when
+/// their routes actually close.
 @MainActor
 private final class PulseDetailModels {
     private var userId = ""
     private var models: [String: PulsePostDetailViewModel] = [:]
+    private var composeSessions: [PulseRoute: PulseComposeSession] = [:]
+    private var conversations: [InboxConversationDestination: ChatConversationViewModel] = [:]
 
     func model(postId: String, userId: String) -> PulsePostDetailViewModel {
         if self.userId != userId { retain(routes: [], userId: userId) }
@@ -394,12 +402,39 @@ private final class PulseDetailModels {
         return model
     }
 
+    /// The composer open at this route (`.compose` or `.editPost`).
+    func composeSession(for route: PulseRoute, userId: String) -> PulseComposeSession {
+        if self.userId != userId { retain(routes: [], userId: userId) }
+        if let session = composeSessions[route] { return session }
+        let isEditing = if case .editPost = route { true } else { false }
+        let session = PulseComposeSession(editing: isEditing)
+        composeSessions[route] = session
+        return session
+    }
+
+    /// A conversation opened from a profile's Message button.
+    func conversationModel(
+        for destination: InboxConversationDestination,
+        userId: String,
+        make: () -> ChatConversationViewModel
+    ) -> ChatConversationViewModel {
+        if self.userId != userId { retain(routes: [], userId: userId) }
+        if let model = conversations[destination] { return model }
+        let model = make()
+        conversations[destination] = model
+        return model
+    }
+
     func retain(routes: [PulseRoute], userId: String) {
         let postIds = Set(routes.compactMap { route -> String? in
             guard case let .post(postId) = route else { return nil }
             return postId
         })
         models = self.userId == userId ? models.filter { postIds.contains($0.key) } : [:]
+        composeSessions = self.userId == userId ? composeSessions.filter { routes.contains($0.key) } : [:]
+        conversations = self.userId == userId
+            ? conversations.filter { routes.contains(.chatConversation($0.key)) }
+            : [:]
         self.userId = userId
     }
 }

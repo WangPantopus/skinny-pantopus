@@ -223,26 +223,7 @@ public struct InboxTabRoot: View {
                 // view and its view model, and the new nudge would never load.
                 .id(dest)
         case .compose:
-            NewMessageView(
-                viewModel: NewMessageViewModel(
-                    onSelect: { destination in
-                        // Swap the picker for the chat conversation —
-                        // pop the picker first so back-button on the
-                        // conversation returns to the chat list, not
-                        // the picker.
-                        if !path.isEmpty { path.removeLast() }
-                        path.append(.conversation(InboxConversationDestination(
-                            mode: .person(otherUserId: destination.userId),
-                            displayName: destination.displayName,
-                            initials: destination.initials,
-                            identityKind: destination.identity == .business ? "business" : nil,
-                            verified: destination.verified
-                        )))
-                    },
-                    onCancel: { if !path.isEmpty { path.removeLast() } },
-                    onInvite: { systemSheet = .share(items: InviteLinks.shareItems) }
-                )
-            )
+            newMessage()
         case .search:
             ChatSearchView(
                 viewModel: conversationModels.search(userId: currentUserId),
@@ -262,11 +243,11 @@ public struct InboxTabRoot: View {
                 if !path.isEmpty { path.removeLast() }
             }
         case let .composePost(intent):
-            postComposer(intent: intent, draft: nil)
+            postComposer(intent: intent, draft: nil, route: route)
         case let .composePostDraft(draft):
-            postComposer(intent: PulseIntent.from(postType: draft.postType).rawValue, draft: draft)
+            postComposer(intent: PulseIntent.from(postType: draft.postType).rawValue, draft: draft, route: route)
         case let .startSupportTrain(story):
-            supportTrainStart(story: story)
+            supportTrainStart(story: story, route: route)
         case let .publicProfile(userId):
             profileDestination(userId: userId)
         case let .businessProfile(businessId):
@@ -276,7 +257,11 @@ public struct InboxTabRoot: View {
                 path.append(.publicProfile(userId: $0))
             } onEdit: { path.append(.editPost(postId: $0)) }
         case let .editPost(postId):
-            PulseComposeFlowView(editingPostId: postId, onCancel: { if !path.isEmpty { path.removeLast() } }) { _ in
+            PulseComposeFlowView(
+                editingPostId: postId,
+                session: conversationModels.composeSession(for: route, userId: currentUserId),
+                onCancel: { if !path.isEmpty { path.removeLast() } }
+            ) { _ in
                 if !path.isEmpty { path.removeLast() }
             }
         }
@@ -333,53 +318,35 @@ public struct InboxTabRoot: View {
     }
 }
 
-/// Owned above both navigation branches. Only routes still on this account's
-/// stack keep their models; leaving a thread releases its in-memory content.
-@MainActor
-private final class InboxConversationModels {
-    private var userId = ""
-    private var models: [InboxConversationDestination: ChatConversationViewModel] = [:]
-    private var searchModel: ChatSearchViewModel?
-
-    func model(
-        for destination: InboxConversationDestination,
-        userId: String,
-        make: () -> ChatConversationViewModel
-    ) -> ChatConversationViewModel {
-        if self.userId != userId {
-            retain(routes: [], userId: userId)
-        }
-        if let model = models[destination] { return model }
-        let model = make()
-        models[destination] = model
-        return model
-    }
-
-    func search(userId: String) -> ChatSearchViewModel {
-        if self.userId != userId { retain(routes: [], userId: userId) }
-        if let searchModel { return searchModel }
-        let model = ChatSearchViewModel()
-        searchModel = model
-        return model
-    }
-
-    func retain(routes: [InboxRoute], userId: String) {
-        let destinations = Set(routes.compactMap { route -> InboxConversationDestination? in
-            guard case let .conversation(destination) = route else { return nil }
-            return destination
-        })
-        models = self.userId == userId ? models.filter { destinations.contains($0.key) } : [:]
-        if self.userId != userId || !routes.contains(.search) {
-            searchModel?.teardown()
-            searchModel = nil
-        }
-        self.userId = userId
-    }
-}
-
 // MARK: - Chat list
 
 private extension InboxTabRoot {
+    /// New message's picker, kept above both layouts with what was typed into its search.
+    func newMessage() -> some View {
+        NewMessageView(
+            viewModel: conversationModels.newMessage(userId: currentUserId) {
+                NewMessageViewModel(
+                    onSelect: { destination in
+                        // Swap the picker for the chat conversation —
+                        // pop the picker first so back-button on the
+                        // conversation returns to the chat list, not
+                        // the picker.
+                        if !path.isEmpty { path.removeLast() }
+                        path.append(.conversation(InboxConversationDestination(
+                            mode: .person(otherUserId: destination.userId),
+                            displayName: destination.displayName,
+                            initials: destination.initials,
+                            identityKind: destination.identity == .business ? "business" : nil,
+                            verified: destination.verified
+                        )))
+                    },
+                    onCancel: { if !path.isEmpty { path.removeLast() } },
+                    onInvite: { systemSheet = .share(items: InviteLinks.shareItems) }
+                )
+            }
+        )
+    }
+
     func businessProfileDestination(businessId: String) -> some View {
         BusinessProfileDestination(
             businessId: businessId,
@@ -461,19 +428,22 @@ private extension InboxTabRoot {
         path.append(.conversation(destination))
     }
 
-    func postComposer(intent: String, draft: PulseComposeDraft?) -> some View {
+    func postComposer(intent: String, draft: PulseComposeDraft?, route: InboxRoute) -> some View {
         PulseComposeFlowView(
             prefillFeedIntent: PulseIntent(rawValue: intent),
             prefillDraft: draft,
+            session: conversationModels.composeSession(for: route, userId: currentUserId),
             onCancel: { if !path.isEmpty { path.removeLast() } },
             onPosted: { _ in if !path.isEmpty { path.removeLast() } }
         )
     }
 
     /// The start-a-Support-Train wizard, opened from a Pantopus AI card with its story.
-    func supportTrainStart(story: String) -> some View {
+    func supportTrainStart(story: String, route: InboxRoute) -> some View {
         StartSupportTrainWizardView(
-            viewModel: StartSupportTrainWizardViewModel(prefillReason: story),
+            viewModel: conversationModels.supportTrainStart(for: route, userId: currentUserId) {
+                StartSupportTrainWizardViewModel(prefillReason: story)
+            },
             onDismiss: {
                 Task { @MainActor in if !path.isEmpty { path.removeLast() } }
             },
