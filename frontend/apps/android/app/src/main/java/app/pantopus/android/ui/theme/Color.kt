@@ -367,6 +367,12 @@ object PantopusColors {
     /** A measure's No (or Against) side in the live count — `#94A3B8`. */
     val ballotCountNo = Color(0xFF94A3B8)
 
+    /** A Democratic candidate's bar and dot in the live count — `#2563EB`. */
+    val ballotCountDemocratic = Color(0xFF2563EB)
+
+    /** A Republican candidate's bar and dot in the live count — `#DC2626`. */
+    val ballotCountRepublican = Color(0xFFDC2626)
+
     // Category accents
     val handyman = Color(0xFFF97316)
     val cleaning = Color(0xFF27AE60)
