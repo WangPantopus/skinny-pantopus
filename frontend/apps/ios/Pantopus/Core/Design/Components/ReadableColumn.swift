@@ -52,20 +52,26 @@ private struct ReadableColumn: ViewModifier {
     /// Apple's readable content width at the default text size (UIKit's `readableContentGuide`); it grows with
     /// larger text, so the lines keep about the same number of words.
     @ScaledMetric(relativeTo: .body) private var readableWidth: CGFloat = 672
-    @State private var width: CGFloat = 0
     @State private var widensFrom: CGFloat?
 
     func body(content: Content) -> some View {
-        content
-            .safeAreaPadding(.horizontal, sideInset)
-            .onPreferenceChange(ReadableColumnWidensKey.self) { widensFrom = $0 }
-            // Measured outside the padding, so the inset never feeds back into the width it comes from. The screen
-            // sits inside the safe area already (the Duo's side controls are outside it), so its width is the room
-            // the column centers in.
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        // The width is read in the layout pass that uses it. Kept in @State from `onGeometryChange`, it arrived a pass
+        // late: unfolding the Duo laid the screen out once at the whole new width first, which clamped a horizontal
+        // scroller's offset (Today's hourly strip lost five hours) and could move a page near its end. Measured
+        // outside the padding, so the inset never feeds back into the width it comes from. The screen sits inside the
+        // safe area already (the Duo's side controls are outside it), so its width is the room the column centers in.
+        GeometryReader { proxy in
+            content
+                .safeAreaPadding(.horizontal, sideInset(in: proxy.size.width))
+                // Centered, as the screen is without the reader.
+                .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .onPreferenceChange(ReadableColumnWidensKey.self) { widensFrom = $0 }
     }
 
-    private var sideInset: CGFloat {
+    /// The room on each side of the reading width in a screen this wide; none where the screen lays out its own
+    /// columns.
+    private func sideInset(in width: CGFloat) -> CGFloat {
         if let widensFrom, width >= widensFrom { return 0 }
         return max(0, ((width - readableWidth) / 2).rounded(.down))
     }
