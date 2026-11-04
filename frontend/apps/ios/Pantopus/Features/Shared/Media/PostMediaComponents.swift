@@ -75,6 +75,7 @@ struct MediaStillImage: View {
 private struct PostVideoPoster: View {
     let item: PostMediaItem
     @State private var frame: UIImage?
+    @State private var frameURL: URL?
 
     var body: some View {
         Color.clear
@@ -89,6 +90,9 @@ private struct PostVideoPoster: View {
             }
             .clipped()
             .task(id: item.url) {
+                // Tab switches restart this task even when the tile survives.
+                // Keep its completed poster instead of reading the video again.
+                guard frame == nil || frameURL != item.url else { return }
                 frame = nil
                 let generator = AVAssetImageGenerator(asset: AVURLAsset(url: item.url))
                 generator.appliesPreferredTrackTransform = true
@@ -100,6 +104,7 @@ private struct PostVideoPoster: View {
                 }
                 guard !Task.isCancelled, let result else { return }
                 frame = UIImage(cgImage: result.image)
+                frameURL = item.url
             }
     }
 }
