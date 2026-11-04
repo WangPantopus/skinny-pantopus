@@ -97,19 +97,20 @@ class AccessCodesSearchViewModel
             _results.value = emptyList()
             _isLoading.value = true
             _error.value = null
-            readJob = viewModelScope.launch {
-                val result = repo.getHomeAccessSecrets(homeId)
-                if (!active || generation != request) return@launch
-                when (result) {
-                    is NetworkResult.Success -> {
-                        corpus = result.data.secrets
-                        loadedOnce = true
+            readJob =
+                viewModelScope.launch {
+                    val result = repo.getHomeAccessSecrets(homeId)
+                    if (!active || generation != request) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            corpus = result.data.secrets
+                            loadedOnce = true
+                        }
+                        is NetworkResult.Failure -> _error.value = "Couldn't load access codes. Try again."
                     }
-                    is NetworkResult.Failure -> _error.value = "Couldn't load access codes. Try again."
+                    _isLoading.value = false
+                    recompute()
                 }
-                _isLoading.value = false
-                recompute()
-            }
         }
 
         private fun recompute() {

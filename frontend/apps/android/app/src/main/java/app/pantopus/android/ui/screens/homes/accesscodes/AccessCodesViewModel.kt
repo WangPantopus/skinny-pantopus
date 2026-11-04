@@ -186,23 +186,24 @@ class AccessCodesViewModel
             val request = ++generation
             readJob?.cancel()
             clearSecrets()
-            readJob = viewModelScope.launch {
-                val result = repo.getHomeAccessSecrets(homeId)
-                if (!active || generation != request) return@launch
-                when (result) {
-                    is NetworkResult.Success -> {
-                        secrets = result.data.secrets
-                        hasCurrentSecrets = true
-                        loadedOnce = true
-                        rebuildChipStrip()
-                        applyState()
-                    }
-                    is NetworkResult.Failure -> {
-                        _state.value =
-                            ListOfRowsUiState.Error("Couldn't load access codes. Try again.")
+            readJob =
+                viewModelScope.launch {
+                    val result = repo.getHomeAccessSecrets(homeId)
+                    if (!active || generation != request) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            secrets = result.data.secrets
+                            hasCurrentSecrets = true
+                            loadedOnce = true
+                            rebuildChipStrip()
+                            applyState()
+                        }
+                        is NetworkResult.Failure -> {
+                            _state.value =
+                                ListOfRowsUiState.Error("Couldn't load access codes. Try again.")
+                        }
                     }
                 }
-            }
         }
 
         private fun clearSecrets() {

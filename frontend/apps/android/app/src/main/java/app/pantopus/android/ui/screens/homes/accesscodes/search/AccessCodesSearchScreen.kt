@@ -77,14 +77,15 @@ fun AccessCodesSearchScreen(
                 }
             },
             onCancel = onCancel,
-            errorContent = error?.let { message ->
-                {
-                    Column(Modifier.padding(Spacing.s4)) {
-                        Text(message)
-                        TextButton(onClick = viewModel::retry) { Text("Try again") }
+            errorContent =
+                error?.let { message ->
+                    {
+                        Column(Modifier.padding(Spacing.s4)) {
+                            Text(message)
+                            TextButton(onClick = viewModel::retry) { Text("Try again") }
+                        }
                     }
-                }
-            },
+                },
         )
     }
 }
