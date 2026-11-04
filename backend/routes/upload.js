@@ -1219,11 +1219,12 @@ router.post('/post-media/:postId', uploadLimiter, verifyToken, postMediaUpload.a
       uploadedTypes.push(type);
       liveUrls.push(clip ? (await s3.uploadToS3(clip.buffer, clipKey, clip.mimetype)).url : '');
 
-      // Generate resized variants (non-blocking on failure)
+      // Posts only store/use the thumb. Avoid encoding and uploading the
+      // marketplace card/detail/full variants on every foreground post upload.
       let thumbnailUrl = '';
       if (category === 'image') {
         try {
-          const variants = await imageResizeService.processListingImage(file.buffer, key);
+          const variants = await imageResizeService.processListingImage(file.buffer, key, { thumbnailOnly: true });
           if (variants && variants.thumb) {
             thumbnailUrl = variants.thumb;
           }

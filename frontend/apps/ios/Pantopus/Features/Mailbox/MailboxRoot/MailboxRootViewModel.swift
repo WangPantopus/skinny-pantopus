@@ -205,6 +205,9 @@ public final class MailboxRootViewModel: ListOfRowsDataSource {
     private var didCheckBusinesses = false
     /// Set when a letter changed where it stands while the Mailbox was covered.
     private var listIsStale = false
+    /// How far the Mailbox is scrolled, for the Mailbox a new layout draws
+    /// (folding, unfolding or turning the open Duo). Not drawn from here.
+    @ObservationIgnored var keptScrollOffset: CGFloat = 0
 
     /// The vacation hold in effect or coming (the banner on the Mailbox).
     private(set) var vacationHold: DrawerListResponse.MailVacationHold?

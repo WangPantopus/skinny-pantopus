@@ -173,6 +173,7 @@ private struct MailSentRow: View {
                 Button(action: onOpen) {
                     VStack(alignment: .leading, spacing: Spacing.s2) {
                         MailPieceView(model: .sent(piece))
+                            .mailOpenOutline(id: piece.id)
                         HStack(spacing: 10) {
                             if !piece.isLetter {
                                 HolidayCardPictureView(
@@ -201,6 +202,7 @@ private struct MailSentRow: View {
                 .accessibilityLabel("\(MailSentWords.toLine(piece)). \(MailSentWords.statusLine(piece)).")
                 .accessibilityHint("Shows the mail and its trail.")
                 .accessibilityAddTraits(.isButton)
+                .mailOpenSelection(id: piece.id)
                 .accessibilityIdentifier("mailSentRow.\(piece.id)")
                 if piece.canTakeBack {
                     Button(action: onTakeBack) {

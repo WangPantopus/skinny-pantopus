@@ -29,6 +29,8 @@ import SwiftUI
 
 @MainActor
 struct CommunityDetailLayout: View {
+    /// Beside the Mailbox the list is the way back (`mailPieceShowsBack`).
+    @Environment(\.mailPieceShowsBack) private var showsBack
     let content: MailDetailContent
     let community: CommunityDetailDTO
     let rsvpInFlight: Bool
@@ -41,7 +43,7 @@ struct CommunityDetailLayout: View {
 
     var body: some View {
         MailItemDetailShell(
-            topBar: makeTopBar(),
+            topBar: makeTopBar().showingBack(showsBack),
             aiElf: makeAIElf(),
             attachments: makeAttachments(),
             hero: { CommunityHeroCard(content: content, community: community) },
