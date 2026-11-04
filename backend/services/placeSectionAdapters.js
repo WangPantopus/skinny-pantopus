@@ -1365,10 +1365,10 @@ function ballotElectionSection(data) {
 // gains the "Your ballot" card fields from person-checked reference data.
 // Not opted in, or no election in the card's window: the pre-Ballot behavior
 // below, unchanged.
-async function composeBallotElection(home, ballot) {
+async function composeBallotElection(home, ballot, deadline) {
   if (!ballot) return null;
   try {
-    const data = await ballotSummary.summaryForHome(home);
+    const data = await ballotSummary.summaryForHome(home, { deadline });
     if (!data) return null;
     return [ballotElectionSection(data)];
   } catch (err) {
@@ -1377,8 +1377,11 @@ async function composeBallotElection(home, ballot) {
   }
 }
 
-async function composeCivicElection(home, { ballot = false } = {}) {
-  const ballotSection = await composeBallotElection(home, ballot);
+// `budgetMs`: the section's time budget on a Place, which the card's live
+// count must not run past (see ballot/summary.js withLiveResults).
+async function composeCivicElection(home, { ballot = false, budgetMs = null } = {}) {
+  const deadline = budgetMs > 0 ? Date.now() + budgetMs : null;
+  const ballotSection = await composeBallotElection(home, ballot, deadline);
   if (ballotSection) return ballotSection;
   const apiKey = process.env.GOOGLE_CIVIC_API_KEY;
   if (!apiKey) {
