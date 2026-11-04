@@ -290,6 +290,13 @@ public extension Theme.Color {
     static let ballotStackBase = SwiftUI.Color("Ballot/StackBase", bundle: Theme.bundle)
     /// The Ballot timeline's "waiting for ballots" segment — `#9ca3af`.
     static let ballotWait = SwiftUI.Color("Ballot/Wait", bundle: Theme.bundle)
+    /// A candidate's bar in the live count, one slate for every choice —
+    /// `#64748b`, `#94a3b8` in dark.
+    static let ballotCountFill = SwiftUI.Color("Ballot/CountFill", bundle: Theme.bundle)
+    /// A measure's Yes (or For) side — `#475569`, `#cbd5e1` in dark.
+    static let ballotCountYes = SwiftUI.Color("Ballot/CountYes", bundle: Theme.bundle)
+    /// A measure's No (or Against) side — `#94a3b8`, `#64748b` in dark.
+    static let ballotCountNo = SwiftUI.Color("Ballot/CountNo", bundle: Theme.bundle)
 
     // MARK: - Category accents
 

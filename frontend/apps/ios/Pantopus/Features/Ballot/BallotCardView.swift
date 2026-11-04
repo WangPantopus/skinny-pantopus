@@ -10,7 +10,10 @@
 //  (radius 12); the sunken links well (radius 14); the 12pt source line.
 //
 //  Every sentence comes from the server (`civic_election`, `ballot_p0`).
-//  This view lays it out and draws nothing it wasn't given.
+//  This view lays it out and draws nothing it wasn't given. While ballots
+//  are counted, `BallotLiveCountView` draws the official count
+//  (`live_count`) over its own note; the plain `note` repeats the count as
+//  text for apps that don't draw it.
 //
 
 import SwiftUI
@@ -70,7 +73,10 @@ struct BallotCardView: View {
             if let text = card.howItWorks {
                 BallotBodyText(text: text)
             }
-            if let note = card.note {
+            if let count = card.liveCount {
+                BallotLiveCountView(count: count)
+            }
+            if let note = card.liveCount.map(\.note) ?? card.note {
                 BallotBodyText(text: note)
             }
             if let action = card.primaryAction, action.kind == "governments", let onOpenGovernments {
