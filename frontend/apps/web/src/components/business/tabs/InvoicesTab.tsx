@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { FileText, Plus, X, Trash2 } from 'lucide-react';
 import Image from 'next/image';
 import * as api from '@pantopus/api';
@@ -66,6 +67,10 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
   const [failedPage, setFailedPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [showCreate, setShowCreate] = useState(false);
+  // The New Invoice dialog renders on document.body: AppShell's <main> is its own stacking context, so from
+  // inside it the header and the floating + button stayed above the dialog (the + covered Send on phones).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const listGeneration = useRef(0);
   const listBusy = useRef(false);
   const listScope = useRef<string | null>(null);
@@ -321,8 +326,8 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
       </>}
 
       {/* Create Invoice Modal */}
-      {canManage && showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      {canManage && showCreate && mounted && createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
           <div className="w-full max-w-lg mx-4 bg-app-surface rounded-xl shadow-2xl border border-app-border max-h-[90vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-app-border-subtle">
               <h3 className="text-base font-semibold text-app-text">New Invoice</h3>
@@ -416,7 +421,8 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
