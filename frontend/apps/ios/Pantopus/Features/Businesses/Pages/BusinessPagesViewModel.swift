@@ -86,6 +86,7 @@ public final class BusinessPagesViewModel {
     public private(set) var isCreating = false
     public private(set) var isLoadingRevisions = false
     public private(set) var revisions: [BusinessPageRevisionRow] = []
+    public private(set) var revisionsErrorMessage: String?
     /// Page id whose revision history is expanded, nil when collapsed.
     public private(set) var expandedRevisionsPageId: String?
     public private(set) var restoringRevision: Int?
@@ -100,6 +101,8 @@ public final class BusinessPagesViewModel {
 
     private let businessId: String
     private let api: APIClient
+    private var pagesRequestId: UUID?
+    private var revisionsRequestId: UUID?
 
     init(businessId: String, api: APIClient = .shared) {
         self.businessId = businessId
@@ -109,8 +112,11 @@ public final class BusinessPagesViewModel {
     // MARK: - Load
 
     public func load() async {
-        if case .loaded = state { return }
-        await fetch(showLoading: true)
+        if case .loaded = state {
+            await refresh()
+        } else {
+            await fetch(showLoading: true)
+        }
     }
 
     public func refresh() async {
@@ -118,15 +124,32 @@ public final class BusinessPagesViewModel {
     }
 
     private func fetch(showLoading: Bool) async {
+        let requestId = UUID()
+        pagesRequestId = requestId
         if showLoading { state = .loading }
         do {
             let response: BusinessPagesResponse = try await api.request(
                 BusinessPagesEndpoints.pages(businessId: businessId)
             )
+            guard !Task.isCancelled, pagesRequestId == requestId else { return }
             let rows = response.pages.map(BusinessPageRow.init(dto:))
             state = rows.isEmpty ? .empty : .loaded(rows: rows)
+            if let pageId = expandedRevisionsPageId {
+                if rows.contains(where: { $0.id == pageId }) {
+                    await loadRevisions(pageId: pageId)
+                } else {
+                    collapseRevisions()
+                }
+            }
         } catch {
-            state = .error(message: message(for: error, fallback: "Failed to load pages"))
+            guard !Task.isCancelled, pagesRequestId == requestId else { return }
+            let message = message(for: error, fallback: "Failed to load pages")
+            if case .loaded = state, (error as? APIError)?.isTransient == true {
+                toastMessage = message
+            } else {
+                collapseRevisions()
+                state = .error(message: message)
+            }
         }
     }
 
@@ -189,20 +212,41 @@ public final class BusinessPagesViewModel {
         }
         expandedRevisionsPageId = row.id
         revisions = []
+        await loadRevisions(pageId: row.id)
+    }
+
+    public func retryRevisions() async {
+        guard let pageId = expandedRevisionsPageId else { return }
+        await loadRevisions(pageId: pageId)
+    }
+
+    private func loadRevisions(pageId: String) async {
+        let requestId = UUID()
+        revisionsRequestId = requestId
+        revisionsErrorMessage = nil
         isLoadingRevisions = true
-        defer { isLoadingRevisions = false }
+        defer {
+            if revisionsRequestId == requestId { isLoadingRevisions = false }
+        }
         do {
             let response: BusinessPageRevisionsResponse = try await api.request(
-                BusinessPagesEndpoints.revisions(businessId: businessId, pageId: row.id)
+                BusinessPagesEndpoints.revisions(businessId: businessId, pageId: pageId)
             )
+            guard !Task.isCancelled, revisionsRequestId == requestId,
+                  expandedRevisionsPageId == pageId else { return }
             revisions = response.revisions.map(BusinessPageRevisionRow.init(dto:))
         } catch {
-            revisions = []
-            toastMessage = message(for: error, fallback: "Failed to load revisions")
+            guard !Task.isCancelled, revisionsRequestId == requestId,
+                  expandedRevisionsPageId == pageId else { return }
+            if (error as? APIError)?.isTransient != true { revisions = [] }
+            revisionsErrorMessage = message(for: error, fallback: "Failed to load revisions")
         }
     }
 
     public func collapseRevisions() {
+        revisionsRequestId = nil
+        isLoadingRevisions = false
+        revisionsErrorMessage = nil
         expandedRevisionsPageId = nil
         revisions = []
     }

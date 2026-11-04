@@ -4014,7 +4014,7 @@ extension HubRoute: Identifiable {
 /// Business Profile screen so the "Visit" button can punch out to Safari
 /// without the navigation host having to depend on `UIApplication`.
 @MainActor
-private struct BusinessProfileDestination: View {
+struct BusinessProfileDestination: View {
     let businessId: String
     /// C4 — non-nil when the `pantopus://b/:username/:slug` link named a
     /// custom page; the profile then loads that page's published blocks.

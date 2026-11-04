@@ -30,6 +30,11 @@ public final class BusinessPageBlocksViewModel {
     public private(set) var hasChanges = false
     public private(set) var isSaving = false
     public private(set) var isPublishing = false
+    public private(set) var isRefreshing = false
+
+    public var isBusy: Bool {
+        isSaving || isPublishing || isRefreshing
+    }
 
     /// Preview toggle — renders the blocks the way visitors will see them.
     public var isPreviewing = false
@@ -59,15 +64,22 @@ public final class BusinessPageBlocksViewModel {
     // MARK: - Load
 
     public func load() async {
-        if case .loaded = state, !blocks.isEmpty { return }
+        if case .loaded = state { return }
         await fetch(showLoading: true)
     }
 
     public func refresh() async {
+        guard !hasChanges, editingIndex == nil, !showsPicker, pendingDeleteIndex == nil else {
+            toastMessage = "Finish editing and save your draft before refreshing."
+            return
+        }
         await fetch(showLoading: false)
     }
 
     private func fetch(showLoading: Bool) async {
+        guard !isBusy else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
         if showLoading { state = .loading }
         do {
             let response: BusinessPageBlocksResponse = try await api.request(
@@ -81,7 +93,12 @@ public final class BusinessPageBlocksViewModel {
             hasChanges = false
             state = .loaded(blocks: blocks)
         } catch {
-            state = .error(message: message(for: error, fallback: "Failed to load blocks"))
+            let message = message(for: error, fallback: "Failed to load blocks")
+            if case .loaded = state {
+                toastMessage = message
+            } else {
+                state = .error(message: message)
+            }
         }
     }
 
@@ -90,6 +107,7 @@ public final class BusinessPageBlocksViewModel {
     /// Appends a block seeded from the registry defaults and opens its editor,
     /// matching RN's auto-open-on-add.
     public func addBlock(kind: BusinessPageBlockKind) {
+        guard !isBusy else { return }
         let block = BusinessPageBlock.newBlock(kind: kind, sortOrder: blocks.count)
         blocks.append(block)
         hasChanges = true
@@ -98,7 +116,7 @@ public final class BusinessPageBlocksViewModel {
     }
 
     public func update(at index: Int, to block: BusinessPageBlock) {
-        guard blocks.indices.contains(index) else { return }
+        guard !isBusy, blocks.indices.contains(index) else { return }
         blocks[index] = block
         hasChanges = true
         state = .loaded(blocks: blocks)
@@ -106,7 +124,7 @@ public final class BusinessPageBlocksViewModel {
 
     /// Confirmed delete — RN asks "Remove this block?" first.
     public func deleteBlock(at index: Int) {
-        guard blocks.indices.contains(index) else { return }
+        guard !isBusy, blocks.indices.contains(index) else { return }
         blocks.remove(at: index)
         renumber()
         hasChanges = true
@@ -114,7 +132,7 @@ public final class BusinessPageBlocksViewModel {
     }
 
     public func move(from index: Int, to target: Int) {
-        guard blocks.indices.contains(index), target >= 0, target < blocks.count else { return }
+        guard !isBusy, blocks.indices.contains(index), target >= 0, target < blocks.count else { return }
         let moved = blocks.remove(at: index)
         blocks.insert(moved, at: target)
         renumber()
@@ -139,12 +157,11 @@ public final class BusinessPageBlocksViewModel {
     // MARK: - Save / publish
 
     public func saveDraft() async {
-        guard !isSaving else { return }
+        guard !isBusy else { return }
         isSaving = true
         defer { isSaving = false }
         do {
             try await pushDraft()
-            hasChanges = false
             toastMessage = "Draft saved"
         } catch {
             toastMessage = message(for: error, fallback: "Failed to save")
@@ -154,7 +171,7 @@ public final class BusinessPageBlocksViewModel {
     /// RN auto-saves any pending edits before publishing so the snapshot is
     /// never a revision behind what the editor shows.
     public func publish() async {
-        guard !isPublishing else { return }
+        guard !isBusy else { return }
         guard !blocks.isEmpty else {
             toastMessage = "Add a block before publishing."
             return
@@ -167,7 +184,6 @@ public final class BusinessPageBlocksViewModel {
                 BusinessPagesEndpoints.publishPage(businessId: businessId, pageId: pageId)
             )
             if let revision = response.publishedRevision { publishedRevision = revision }
-            hasChanges = false
             toastMessage = "Page published as v\(publishedRevision)"
         } catch {
             toastMessage = message(for: error, fallback: "Failed to publish")
@@ -192,6 +208,8 @@ public final class BusinessPageBlocksViewModel {
         blocks = response.blocks.enumerated().map { index, dto in
             BusinessPageBlock(dto: dto, index: index)
         }
+        // A failed publish still leaves this successfully saved draft intact.
+        hasChanges = false
         state = .loaded(blocks: blocks)
     }
 

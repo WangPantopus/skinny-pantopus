@@ -128,7 +128,8 @@ public final class NewMessageViewModel {
             displayName: row.name,
             initials: row.initials,
             verified: row.verified,
-            locality: row.locality
+            locality: row.locality,
+            identity: row.identity
         )
         onSelect(destination)
     }

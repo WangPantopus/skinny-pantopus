@@ -457,19 +457,19 @@ public struct BusinessPageBlock: Sendable, Hashable, Identifiable {
         case .text:
             if !heading.isEmpty { heading } else if !body.isEmpty { String(body.prefix(40)) } else { "No content" }
         case .gallery:
-            heading.isEmpty ? "\(imageCount) images" : heading
+            heading.isEmpty ? Self.count(imageCount, "image") : heading
         case .catalogGrid:
-            heading.isEmpty ? "\(maxItems) items" : heading
+            heading.isEmpty ? Self.count(maxItems, "item") : heading
         case .cta:
             heading.isEmpty ? "No heading" : heading
         case .faq:
-            "\(faqItems.count) questions"
+            Self.count(faqItems.count, "question")
         case .stats:
-            "\(stats.count) stats"
+            Self.count(stats.count, "stat")
         case .embed:
             url.isEmpty ? "No URL" : url
         case .postsFeed:
-            heading.isEmpty ? "\(int("max_items") ?? 5) posts" : heading
+            heading.isEmpty ? Self.count(int("max_items") ?? 5, "post") : heading
         case .divider:
             "Separator"
         case .hours, .locationsMap, .reviews, .team, .contactForm:
@@ -477,6 +477,11 @@ public struct BusinessPageBlock: Sendable, Hashable, Identifiable {
         case let .unknown(raw):
             heading.isEmpty ? raw : heading
         }
+    }
+
+    /// "1 question", "3 questions".
+    private static func count(_ value: Int, _ noun: String) -> String {
+        value == 1 ? "1 \(noun)" : "\(value) \(noun)s"
     }
 
     private func string(_ key: String) -> String {
