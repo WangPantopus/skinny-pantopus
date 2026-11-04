@@ -357,6 +357,20 @@ extension HubRoute {
         default: nil
         }
     }
+
+    /// Whether the Mailbox beside these screens reads again, as on coming back to it: what it opened beside it
+    /// closed, or a screen other than a piece (the card flow, Hold my mail) gave way. Beside the open piece the
+    /// Mailbox never goes off screen, so it can't read again when it's next shown. A piece giving way to another
+    /// doesn't count: what changes on a piece reaches the list as it happens.
+    static func mailboxReadsAgain(from old: [HubRoute], to new: [HubRoute]) -> Bool {
+        guard let was = besideMailbox(old), was != besideMailbox(new) else { return false }
+        return besideMailbox(new) == nil || was.mailId == nil
+    }
+
+    /// The first screen right of the Mailbox: a search in its place skipped.
+    private static func besideMailbox(_ routes: [HubRoute]) -> HubRoute? {
+        routes.first == .mailboxSearch ? routes.dropFirst().first : routes.first
+    }
 }
 
 extension RouteStack where Route == HubRoute {

@@ -781,10 +781,14 @@ public struct HubTabRoot: View {
         Group {
             tabStacks
         }
-        .onChange(of: path.routes) { _, routes in
+        .onChange(of: path.routes) { old, routes in
             mailScreenModels.retain(routes)
             // Laid open, a booklet stays so while it's the piece open beside the Mailbox.
             if laidOpenBookletId != nil, laidOpenBookletId != path.openMailPieceId { laidOpenBookletId = nil }
+            // Beside what it opened the Mailbox stays on screen: a card sent or a hold set shows on it now.
+            if mode == .mailbox, mailSideBySide, HubRoute.mailboxReadsAgain(from: old, to: routes) {
+                Task { await mailTabMailboxModel.load() }
+            }
         }
         .onChange(of: router.pending) { _, pending in
             consumeDeepLinkIfNeeded(pending: pending)

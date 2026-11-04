@@ -100,6 +100,8 @@ public struct MailboxRootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .mailboxMailChanged)) { _ in
             viewModel.markListStale()
+            // Beside the open piece the list stays on screen: it reads again now, not when it's next shown.
+            if openPieceId != nil { Task { await viewModel.load() } }
         }
         // "See it in Sent" after sending: Sent, then that card.
         .onReceive(NotificationCenter.default.publisher(for: .mailboxOpenSent)) { note in
