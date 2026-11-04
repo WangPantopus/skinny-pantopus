@@ -1069,7 +1069,8 @@ private class RadonTodayState(
     fun draftForResume(): RadonTodayDraft? {
         if (busy) return null
         val kind = sheet ?: return suspendedDraft
-        return RadonTodayDraft(coordinator.access.actorId, kind, task?.id, selectedDate, hasDate, result, reportTestKind)
+        val actorId = coordinator.access.actorId ?: return null
+        return RadonTodayDraft(actorId, kind, task?.id, selectedDate, hasDate, result, reportTestKind)
     }
 
     private suspend fun restoreDraft() {
