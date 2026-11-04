@@ -397,20 +397,22 @@ struct TimeRangePickerSheet: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)
                 .padding(.top, Spacing.s4)
-            HStack(spacing: Spacing.s2) {
+            VStack(spacing: Spacing.s2) {
                 VStack(spacing: Spacing.s1) {
                     AvailabilityFieldLabel(text: "Starts")
                     DatePicker("Start time", selection: $start, displayedComponents: .hourAndMinute)
                         .labelsHidden()
                         .datePickerStyle(.wheel)
-                        .accessibilityLabel("Start time")
+                        .frame(height: 150)
+                        .clipped()
                 }
                 VStack(spacing: Spacing.s1) {
                     AvailabilityFieldLabel(text: "Ends")
                     DatePicker("End time", selection: $end, displayedComponents: .hourAndMinute)
                         .labelsHidden()
                         .datePickerStyle(.wheel)
-                        .accessibilityLabel("End time")
+                        .frame(height: 150)
+                        .clipped()
                 }
             }
             if let error {
@@ -427,7 +429,7 @@ struct TimeRangePickerSheet: View {
             Spacer(minLength: 0)
         }
         .background(Theme.Color.appBg)
-        .presentationDetents([.height(error == nil ? 360 : 400)])
+        .presentationDetents([.height(error == nil ? 500 : 540)])
         .presentationDragIndicator(.visible)
         .accessibilityIdentifier("scheduling.weeklyHours.timeRangeSheet")
     }
