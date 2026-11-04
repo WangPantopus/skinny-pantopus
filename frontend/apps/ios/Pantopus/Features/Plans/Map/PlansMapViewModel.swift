@@ -110,14 +110,21 @@ final class PlansMapViewModel {
             return
         }
         homeCenter = await Self.homeCoordinate(store: store)
-        if location.canLocateWithoutAsking, let fix = await location.requestCurrent(timeoutSeconds: 4) {
+        // Opening Plans takes a fix only when it needs no prompt, and waits for one only briefly, as Pulse does: a
+        // first fix (indoors, after a cold start) kept the map and list empty for up to four seconds. With location
+        // allowed but no fix yet, Plans opens around the home instead of asking for a permission already given, as
+        // on Android; "Show my location" still waits for a real fix.
+        if location.canLocateWithoutAsking, let fix = await location.requestCurrent(timeoutSeconds: Self.openingFixSeconds) {
             await use(fix, source: .gps)
-        } else if prefersHome, let homeCenter {
+        } else if prefersHome || location.canLocateWithoutAsking, let homeCenter {
             await use(homeCenter, source: .home)
         } else {
             phase = .needsLocation
         }
     }
+
+    /// How long opening Plans waits for a fix it doesn't have yet (Pulse's passive wait).
+    static let openingFixSeconds: TimeInterval = 0.4
 
     /// F5 "Use my location": asks for permission when it hasn't been asked.
     func useMyLocation() async {
