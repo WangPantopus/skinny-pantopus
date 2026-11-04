@@ -15,12 +15,11 @@ import type { ReactNode } from 'react';
 import type { FeedSurface, Post, PostType } from '@pantopus/api';
 import { getPostTypeConfig } from '@pantopus/ui-utils';
 import {
-  PostComposer, EditPostDialog, PostCard, PostDetailPanel, FeedFilters, NearbyProvidersCard,
+  PostComposer, PostCard, FeedFilters, NearbyProvidersCard,
   NeighborhoodPulse, EmptyFeed, SparseFeedSummary, PostSkeleton,
   TopicChipRow, SportsEventModule,
 } from '@/components/feed';
 import type { SportsStarter } from '@/components/feed/EmptyFeed';
-import ReportModal from '@/components/ui/ReportModal';
 import ErrorState from '@/components/ui/ErrorState';
 import { useAreaPicker } from '@/hooks/useAreaPicker';
 import { useFeedPreferences } from '@/hooks/useFeedPreferences';
@@ -42,6 +41,11 @@ import './pulse.css';
 
 const FeedMap = dynamic(() => import('./FeedMap'), { ssr: false });
 const InquiryChatDrawer = dynamic(() => import('@/components/discover/InquiryChatDrawer'), { ssr: false });
+// Closed until someone opens a post, edits one or reports one: each loads when first needed,
+// so the feed's first screen does not download the comment thread, editor or report form.
+const PostDetailPanel = dynamic(() => import('@/components/feed/PostDetailPanel'), { ssr: false });
+const EditPostDialog = dynamic(() => import('@/components/feed/EditPostDialog'), { ssr: false });
+const ReportModal = dynamic(() => import('@/components/ui/ReportModal'), { ssr: false });
 
 /** Map mode: the reveal capsule's bottom edge (top-2 + h-8), where the map's top pills start while the header is away. */
 const REVEAL_CAPSULE_BOTTOM_PX = 40;
