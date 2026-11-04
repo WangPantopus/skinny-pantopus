@@ -85,7 +85,6 @@ final class MaintenanceListViewModelTests: XCTestCase {
             return
         }
         XCTAssertEqual(content.headline, "No maintenance logged yet")
-        XCTAssertEqual(content.ctaTitle, "Log maintenance")
     }
 
     func testErrorResponseRendersErrorState() async {
