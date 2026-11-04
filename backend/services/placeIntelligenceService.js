@@ -31,6 +31,7 @@ const claimsConfig = require('../config/householdClaims');
 const claimsPolicy = require('./homeClaimRoutingService');
 const { checkHomePermission } = require('../utils/homePermissions');
 const homeListService = require('./homeListService');
+const mailVendorService = require('./addressValidation/mailVendorService');
 const {
   PLACE_SECTION_IDS,
   PLACE_SECTION_META,
@@ -103,6 +104,9 @@ const VERIFY_BY_MAIL_REASONS = {
   exemption_check: 'Verify your address by mail to check for property-tax exemptions.',
   real_rent: 'Verify your address by mail to see what your block actually pays.',
 };
+// While postcards can't go out (a hosted server without Lob), the locks don't promise mail.
+const NOT_BY_MAIL_REASON = 'Available once your address is verified.';
+const verifyReason = (id) => (mailVendorService.canSendPostcards() ? VERIFY_BY_MAIL_REASONS[id] : NOT_BY_MAIL_REASON);
 const OWNERSHIP_PENDING_REASON = 'Available once your ownership is confirmed.';
 const CLAIM_REVIEW_REASON = 'Available once your claim is approved.';
 const VALUE_FIELDS = ['estimated_value', 'value_low', 'value_high', 'assessed_value'];
@@ -1232,9 +1236,7 @@ async function composeRealRent(home, tier, userId, canVerify = true) {
   if (access === 'locked') {
     return [serializePlaceSection('real_rent', {
       access: 'locked',
-      unavailableReason: canVerify
-        ? 'Verify your address by mail to see what your block actually pays.'
-        : 'Shared with the verified residents of this block.',
+      unavailableReason: canVerify ? verifyReason('real_rent') : 'Shared with the verified residents of this block.',
     })];
   }
   try {
@@ -1534,7 +1536,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   for (const env of groups.flat()) composed[env.id] = env;
   for (const id of setupLocked) {
     composed[id] = serializePlaceSection(id, {
-      access: 'locked', unavailableReason: claimant ? CLAIM_REVIEW_REASON : VERIFY_BY_MAIL_REASONS[id],
+      access: 'locked', unavailableReason: claimant ? CLAIM_REVIEW_REASON : verifyReason(id),
     });
   }
   if (viewer.ownership === 'pending' && composed.exemption_check && !setupLocked.includes('exemption_check')) {

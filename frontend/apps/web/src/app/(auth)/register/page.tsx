@@ -28,6 +28,7 @@ import {
 } from '@/lib/auth-utils';
 import { launchFeatures } from '@/lib/featureFlags';
 import { OAUTH_ATTEMPT_UNAVAILABLE_ERROR, beginOAuthAttempt } from '@/lib/oauth-attempt';
+import { rememberPendingSignIn } from '@/lib/pending-sign-in';
 
 const PASSWORD_MIN_LENGTH = 12;
 
@@ -149,6 +150,8 @@ function RegisterContent() {
         // Backend sets httpOnly cookies via same-origin proxy.
         router.push(safeRedirectPath(redirectTo, '/app/place'));
       } else {
+        // This tab signs itself in once the email is confirmed (lib/pending-sign-in).
+        rememberPendingSignIn(normalizeEmail(formData.email), formData.password);
         router.push(authPageHref('/verify-email-sent', redirectTo, { email: normalizeEmail(formData.email) }));
       }
     } catch (err: unknown) {

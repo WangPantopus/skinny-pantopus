@@ -158,12 +158,23 @@ private fun PlaceLaunchHost(openAuth: Boolean = false) {
     // Saveable: rotating or switching dark mode recreates the activity, and the
     // person stays on the sign-in or sign-up screen they were using.
     var showAuth by rememberSaveable { mutableStateOf(openAuth) }
+    // Continue after the address preview opens Create account; Sign in opens Log in.
+    var startOnSignUp by rememberSaveable { mutableStateOf(false) }
+    // Log in opened because a session ended stands alone, as on iPhone: no X and no Back to the funnel.
+    var overFunnel by rememberSaveable { mutableStateOf(!openAuth) }
     val prefersLogin by DeepLinkRouter.prefersLoginPresentation.collectAsStateWithLifecycle()
+    val backToPreview = {
+        showAuth = false
+        startOnSignUp = false
+    }
 
     // Persistent login: a session-end banner is pending → show the login
     // screen (which renders + consumes it) instead of the Place funnel.
     LaunchedEffect(openAuth) {
-        if (openAuth) showAuth = true
+        if (openAuth) {
+            showAuth = true
+            overFunnel = false
+        }
     }
 
     // Workstream 1.4 — RN AuthGate parity: a deferred protected (or
@@ -185,11 +196,20 @@ private fun PlaceLaunchHost(openAuth: Boolean = false) {
     }
 
     if (showAuth) {
-        AuthNavHost()
+        AuthNavHost(
+            startOnSignUp = startOnSignUp,
+            onClose = if (overFunnel) backToPreview else null,
+        )
     } else {
         app.pantopus.android.ui.screens.place.launch.PlaceLaunchScreen(
-            onSignIn = { showAuth = true },
-            onCreateAccount = { showAuth = true },
+            onSignIn = {
+                startOnSignUp = false
+                showAuth = true
+            },
+            onCreateAccount = {
+                startOnSignUp = true
+                showAuth = true
+            },
         )
     }
 }

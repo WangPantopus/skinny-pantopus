@@ -168,6 +168,19 @@ function readableDelivered(select, options, userId, homeIds, now) {
 }
 
 /**
+ * When the latest round that brought this person a piece they can read came (by `now`), or null. A special delivery
+ * lands on its own, so it never makes a round.
+ */
+async function lastRoundAt({ userId, homeIds, now = new Date() }) {
+  const { data: latest, error } = await readableDelivered('delivered_at', undefined, userId, homeIds, now)
+    .eq('special_delivery', false)
+    .order('delivered_at', { ascending: false })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return latest?.length ? new Date(latest[0].delivered_at) : null;
+}
+
+/**
  * The mailbox's delivery line for GET /api/mailbox/v2/drawers: the latest morning round that brought this person a
  * piece they can read, how many came in the 24 hours up to it (special deliveries included) and how many of those are
  * unopened, and the next round of their own mailbox.
@@ -176,13 +189,8 @@ function readableDelivered(select, options, userId, homeIds, now) {
 async function deliverySummary({ userId, homeIds, now = new Date() }) {
   const timeZone = (await personTimeZone(userId)) || FALLBACK_TIME_ZONE;
   const summary = { last_at: null, last_count: 0, last_unopened: 0, next_at: nextRound(timeZone, now).toISOString(), time_zone: timeZone };
-  const { data: latest, error } = await readableDelivered('delivered_at', undefined, userId, homeIds, now)
-    .eq('special_delivery', false)
-    .order('delivered_at', { ascending: false })
-    .limit(1);
-  if (error) throw new Error(error.message);
-  if (!latest?.length) return summary;
-  const lastAt = new Date(latest[0].delivered_at);
+  const lastAt = await lastRoundAt({ userId, homeIds, now });
+  if (!lastAt) return summary;
   const windowStart = new Date(lastAt.getTime() - 24 * 60 * 60 * 1000).toISOString();
   const inWindow = (select, options) => readableDelivered(select, options, userId, homeIds, lastAt)
     .gt('delivered_at', windowStart);
@@ -247,5 +255,6 @@ async function announceSpecialDeliveries(pieces, { excludeUserId = null } = {}) 
 
 module.exports = {
   MORNING_HOUR, FALLBACK_TIME_ZONE, nextRound, localDate, isSpecialDelivery, homeTimeZone, personTimeZone,
-  mailboxTimeZone, deliveryFor, withDelivery, deliverySummary, announceSpecialDeliveries, afterStored, countPieces, todaySummary,
+  mailboxTimeZone, deliveryFor, withDelivery, lastRoundAt, deliverySummary, announceSpecialDeliveries, afterStored, countPieces,
+  todaySummary,
 };

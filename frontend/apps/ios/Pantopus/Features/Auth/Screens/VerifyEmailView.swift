@@ -23,6 +23,7 @@ import UIKit
 
 struct VerifyEmailView: View {
     @Environment(AuthManager.self) private var auth
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: VerifyEmailViewModel
     @State private var showChangeEmailSheet: Bool = false
     /// Heartbeat for the wall-clock resend countdown.
@@ -81,6 +82,12 @@ struct VerifyEmailView: View {
         .accessibilityIdentifier("verifyEmailScreen")
         .task {
             await viewModel.verifyOnAppearIfNeeded(using: auth)
+        }
+        // Back from Mail or Safari with the link opened: sign in with the
+        // password typed at sign-up, so it isn't asked for again.
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { _ = await viewModel.signInIfConfirmed(using: auth) }
         }
         .onReceive(ticker) { tick in
             // The resend cooldown is wall-clock based, so the disabled
@@ -156,7 +163,14 @@ struct VerifyEmailView: View {
         case "change_email":
             showChangeEmailSheet = true
         case "confirmed_log_in":
-            if let onConfirmed { onConfirmed(viewModel.email) } else { onDone() }
+            Task {
+                switch await viewModel.signInIfConfirmed(using: auth, asked: true) {
+                case .signedIn, .notConfirmedYet:
+                    break
+                case .unavailable:
+                    if let onConfirmed { onConfirmed(viewModel.email) } else { onDone() }
+                }
+            }
         default:
             break
         }
@@ -195,6 +209,13 @@ struct VerifyEmailView: View {
                 text: "Email verified. You can now sign in.",
                 color: Theme.Color.success,
                 background: Theme.Color.successBg
+            )
+        }
+        if viewModel.notConfirmedYet {
+            return BannerCopy(
+                text: "Not confirmed yet. Open the link in the email, then come back here.",
+                color: Theme.Color.primaryInkStrong,
+                background: Theme.Color.primary50
             )
         }
         if let error = viewModel.errorMessage {
@@ -329,6 +350,22 @@ final class VerifyEmailViewModel {
             errorMessage = .unknown
             Observability.shared.capture(error)
         }
+    }
+
+    /// True after "Already confirmed? Log in" found the email not confirmed yet.
+    private(set) var notConfirmedYet: Bool = false
+    private var isSigningIn: Bool = false
+
+    /// Signs in with the password typed at sign-up once the email is
+    /// confirmed. `asked` (the "Already confirmed?" tap) says "not confirmed
+    /// yet" when it isn't; a return to the app stays quiet.
+    func signInIfConfirmed(using auth: AuthManager, asked: Bool = false) async -> AuthManager.ConfirmedSignIn {
+        guard !isSigningIn else { return .notConfirmedYet }
+        isSigningIn = true
+        defer { isSigningIn = false }
+        let outcome = await auth.signInAfterConfirmation(email: email)
+        if asked { notConfirmedYet = outcome == .notConfirmedYet }
+        return outcome
     }
 
     /// Re-sends the verification email. Honours the local cooldown so

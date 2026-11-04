@@ -374,6 +374,12 @@ function phaseFor(daysUntil, afterDays = AFTER_DAYS) {
   return null;
 }
 
+// A state's own results page, checked by a person, shown from Election Day.
+function hasResultsLink(state) {
+  return Boolean(state && Array.isArray(state.official_links)
+    && state.official_links.some((l) => l.key === 'results' && Array.isArray(l.phases) && l.phases.includes('after')));
+}
+
 function electionAppliesTo(election, code) {
   if (election.applies_to === 'all_states') return true;
   return Array.isArray(election.applies_to) && election.applies_to.includes(code);
@@ -407,12 +413,16 @@ function currentElection(value, { now = new Date(), timezone = null } = {}) {
     .filter((e) => electionAppliesTo(e, state.code))
     .map((e) => ({ election: e, daysUntil: daysBetween(today, e.date), afterDays: afterDaysFor(e, state) }))
     .filter(({ daysUntil, afterDays }) => phaseFor(daysUntil, afterDays) !== null)
-    // A links-only card is gone once its election passes, so the week after
-    // one must not hide the next (Louisiana: Oct 9 primary, Nov 20 general).
-    .filter(({ daysUntil, afterDays }) => state.coverage === 'supported' || phaseFor(daysUntil, afterDays) !== 'after')
+    // A links-only card stays the week after its election only to point at
+    // the state's checked results page, and never hides the next election
+    // (Louisiana: Oct 9 primary, Nov 20 general).
+    .filter(({ daysUntil, afterDays }) => state.coverage === 'supported' || phaseFor(daysUntil, afterDays) !== 'after' || hasResultsLink(state))
     .sort((a, b) => a.election.date.localeCompare(b.election.date));
   if (!candidates.length) return null;
-  const { election, daysUntil, afterDays } = candidates[0];
+  const upcoming = state.coverage === 'supported'
+    ? null
+    : candidates.find(({ daysUntil, afterDays }) => phaseFor(daysUntil, afterDays) !== 'after');
+  const { election, daysUntil, afterDays } = upcoming || candidates[0];
   const block = (election.states && election.states[state.code]) || null;
   return {
     state,
@@ -438,6 +448,7 @@ module.exports = {
   daysBetween,
   monthDay,
   phaseFor,
+  hasResultsLink,
   currentElection,
   PHASES,
   WINDOW_DAYS,

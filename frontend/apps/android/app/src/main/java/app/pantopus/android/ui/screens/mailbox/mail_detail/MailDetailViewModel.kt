@@ -122,6 +122,8 @@ data class MailDetailContent(
     val isAcknowledged: Boolean,
     val isArchived: Boolean = false,
     val bookletDetail: BookletDetailDto? = null,
+    /** The booklet came with a PDF (`Mail.download_url`); its PDF tile and menu entry show only then, as on the web. */
+    val bookletHasPdf: Boolean = false,
     val certifiedDetail: CertifiedDetailDto? = null,
     val communityDetail: CommunityDetailDto? = null,
     val couponDetail: CouponDetailDto? = null,
@@ -245,6 +247,11 @@ class MailDetailViewModel
         /** A17.2 — booklet PDF download in flight; disables the "PDF" tile. */
         private val _bookletDownloadInFlight = MutableStateFlow(false)
         val bookletDownloadInFlight: StateFlow<Boolean> = _bookletDownloadInFlight.asStateFlow()
+
+        private val _bookletPdfLink = MutableStateFlow<String?>(null)
+
+        /** The booklet's PDF address from the download route; the screen opens it once, in a browser tab. */
+        val bookletPdfLink: StateFlow<String?> = _bookletPdfLink.asStateFlow()
 
         /** A17.3 — certified legal-proof fetch in flight. */
         private val _certifiedProofInFlight = MutableStateFlow(false)
@@ -529,7 +536,8 @@ class MailDetailViewModel
         private fun reloadLetter() {
             if (_state.value !is MailDetailUiState.Loaded) return
             viewModelScope.launch {
-                val result = repo.detail(mailId)
+                // A stored booklet's pages are read again too, or coming back (from its PDF, say) drops them.
+                val result = loadBookletPayload(repo.detail(mailId))
                 if (result is NetworkResult.Success) {
                     lastDetail = result.data.mail
                     noteCardFirstOpen(result.data.mail)
@@ -1005,11 +1013,10 @@ class MailDetailViewModel
 
         /**
          * A17.2 — `POST api/mailbox/v2/p2/booklet/:mailId/download`
-         * (`backend/routes/mailboxV2Phase2.js:447`). Mirrors RN's
-         * "Download Started · Downloading X.X MB" confirmation
-         * (`src/app/mailbox/booklet.tsx:43`). The backend answers 404 when
-         * the booklet has no rendered PDF, which surfaces as RN's
-         * "Download not available".
+         * (`backend/routes/mailboxV2Phase2.js:355`) records the download and
+         * answers the PDF's address, which the screen opens, as the web's
+         * Download link does. The tile only shows for a booklet with a PDF
+         * ([MailDetailContent.bookletHasPdf]), so a 404 means it has gone since.
          */
         fun downloadBookletPdf() {
             if (_bookletDownloadInFlight.value) return
@@ -1017,17 +1024,26 @@ class MailDetailViewModel
             viewModelScope.launch {
                 try {
                     when (val result = documentRepo.bookletDownload(mailId)) {
-                        is NetworkResult.Success -> {
-                            val label = megabytesLabel(result.data.sizeBytes)
+                        is NetworkResult.Success ->
+                            when (val link = result.data.downloadUrl?.trim()?.takeIf { isWebLink(it) }) {
+                                null -> _toast.value = BOOKLET_PDF_GONE
+                                else -> _bookletPdfLink.value = link
+                            }
+                        is NetworkResult.Failure ->
                             _toast.value =
-                                if (label != null) "Download started · $label" else "Download started"
-                        }
-                        is NetworkResult.Failure -> _toast.value = "Download not available"
+                                when (result.error) {
+                                    is NetworkError.NotFound -> BOOKLET_PDF_GONE
+                                    else -> result.error.mailMessage(online = true, doing = "open this PDF")
+                                }
                     }
                 } finally {
                     _bookletDownloadInFlight.value = false
                 }
             }
+        }
+
+        fun bookletPdfOpened() {
+            _bookletPdfLink.value = null
         }
 
         /**
@@ -1056,13 +1072,6 @@ class MailDetailViewModel
                     _certifiedProofInFlight.value = false
                 }
             }
-        }
-
-        /** "2.4 MB" — the label RN puts in its "Download Started" alert. */
-        private fun megabytesLabel(sizeBytes: Long?): String? {
-            if (sizeBytes == null || sizeBytes <= 0L) return null
-            val megabytes = sizeBytes.toDouble() / (1024 * 1024)
-            return String.format(Locale.US, "%.1f MB", megabytes)
         }
 
         // ── Ceremonial variant mutations (A17.5–A17.8) ───────────
@@ -1320,6 +1329,12 @@ class MailDetailViewModel
             /** Characters of the letter id in a Pantopus certified mail reference. */
             private const val PANTOPUS_REFERENCE_LENGTH = 8
 
+            private const val BOOKLET_PDF_GONE = "This booklet's PDF isn't available any more."
+
+            /** Only a web address opens in the browser tab (never a file, intent or script link). */
+            private fun isWebLink(link: String): Boolean =
+                link.startsWith("https://", ignoreCase = true) || link.startsWith("http://", ignoreCase = true)
+
             private fun categoryFor(detail: MailDetail): MailItemCategory =
                 when {
                     detail.certified -> MailItemCategory.Certified
@@ -1392,6 +1407,7 @@ class MailDetailViewModel
                     isAcknowledged = resolvedAck,
                     isArchived = detail.archived,
                     bookletDetail = variants.booklet,
+                    bookletHasPdf = !detail.downloadUrl.isNullOrBlank(),
                     certifiedDetail = certifiedDetail,
                     communityDetail = variants.community,
                     couponDetail = variants.coupon,

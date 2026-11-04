@@ -2,6 +2,12 @@
 
 package app.pantopus.android.ui.screens.settings
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -12,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -26,6 +33,7 @@ import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScope
 import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -36,9 +44,15 @@ import kotlinx.coroutines.launch
 import java.time.ZoneId
 import javax.inject.Inject
 
+/**
+ * The daily briefings notice. It is also where the phone's notification question is asked ("Allow notifications"),
+ * not at launch, so it shows again on a phone that hasn't answered, for an account that has seen it elsewhere.
+ * [mayShow] is false while something else is asking (RootTabScreen): it waits. As on iPhone (`BriefingNoticeView`).
+ */
 @Composable
 fun BriefingNotice(
     onManage: () -> Unit,
+    mayShow: Boolean = true,
     viewModel: BriefingNoticeViewModel = hiltViewModel(),
 ) {
     val locked by viewModel.locked.collectAsStateWithLifecycle()
@@ -46,9 +60,16 @@ fun BriefingNotice(
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val saving by viewModel.saving.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    val needsPermission by viewModel.needsPermission.collectAsStateWithLifecycle()
     HomeCopyLifecycle(viewModel::enter, viewModel::leave)
+    // Registered while the notice may come: the system's question pauses the activity, which hides the notice.
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { viewModel.finish() }
     val prefs = preferences ?: return
-    LaunchedEffect(Unit) { viewModel.record() }
+    if (!mayShow) return
+    LaunchedEffect(Unit) {
+        viewModel.markShown()
+        viewModel.record()
+    }
     val morning = if (prefs.dailyBriefingEnabled) "On at ${prefs.dailyBriefingTimeLocal}" else "Off"
     val evening = if (prefs.eveningBriefingEnabled) "On at ${prefs.eveningBriefingTimeLocal}" else "Off"
     AlertDialog(
@@ -65,11 +86,24 @@ fun BriefingNotice(
             )
         },
         confirmButton = {
-            TextButton(onClick = { viewModel.finish(onManage) }, enabled = !saving) { Text("Manage notifications") }
+            if (needsPermission) {
+                TextButton(
+                    onClick = { permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+                    enabled = !saving,
+                    modifier = Modifier.testTag("briefingNoticeAllowNotifications"),
+                ) { Text("Allow notifications") }
+            } else {
+                TextButton(onClick = { viewModel.finish(onManage) }, enabled = !saving) { Text("Manage notifications") }
+            }
         },
         dismissButton = { TextButton(onClick = { viewModel.finish() }, enabled = !saving) { Text("Got it") } },
         modifier = Modifier.testTag("briefingDefaultsNotice"),
     )
+}
+
+/** The briefing notice showed during this launch: the Suggestions notice waits for the next one (as on iPhone). */
+internal object BriefingNoticeLaunch {
+    @Volatile var shown = false
 }
 
 @HiltViewModel
@@ -79,8 +113,14 @@ class BriefingNoticeViewModel
         private val repository: NotificationPreferencesRepository,
         private val scopes: HomeClaimSessionScopeFactory,
         appLock: AppLockManager,
+        @ApplicationContext private val context: Context,
     ) : ViewModel() {
         val locked = appLock.isLocked
+        private val devicePrefs by lazy { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
+        private val _needsPermission = MutableStateFlow(false)
+
+        /** Android 13+ hasn't been allowed to show notifications here: the notice asks. */
+        val needsPermission = _needsPermission.asStateFlow()
         private var entryScope: CoroutineScope? = null
         private var session: HomeClaimSessionScope? = null
         private var active = false
@@ -107,7 +147,14 @@ class BriefingNoticeViewModel
                 if (!scope.confirmCurrent()) return@launch
                 val response = repository.preferences()
                 if (!active || !scope.confirmCurrent()) return@launch
-                if (response is NetworkResult.Success && response.data.dailyBriefingPromptedAt == null) {
+                val undecided =
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                        PackageManager.PERMISSION_GRANTED
+                _needsPermission.value = undecided
+                // Once per phone for an account that saw the notice elsewhere ("Got it" is an answer too).
+                val askHere = undecided && !devicePrefs.getBoolean(KEY_ASKED_HERE, false)
+                if (response is NetworkResult.Success && (response.data.dailyBriefingPromptedAt == null || askHere)) {
                     _preferences.value = response.data
                 }
             }
@@ -118,6 +165,12 @@ class BriefingNoticeViewModel
             entryScope?.cancel()
             _preferences.value = null
             _saving.value = false
+        }
+
+        /** On screen: Suggestions waits for a later launch, and this phone's question counts as offered. */
+        fun markShown() {
+            BriefingNoticeLaunch.shown = true
+            if (_needsPermission.value) devicePrefs.edit().putBoolean(KEY_ASKED_HERE, true).apply()
         }
 
         fun finish(onFinished: () -> Unit = {}) {
@@ -163,5 +216,12 @@ class BriefingNoticeViewModel
                     if (entryScope === entry) _saving.value = false
                 }
             }
+        }
+
+        private companion object {
+            const val PREFS = "pantopus_briefing_notice"
+
+            /** The notice offered "Allow notifications" on this phone. */
+            const val KEY_ASKED_HERE = "asked_for_notifications"
         }
     }

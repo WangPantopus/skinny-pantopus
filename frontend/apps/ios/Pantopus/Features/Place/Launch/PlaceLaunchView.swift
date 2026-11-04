@@ -15,18 +15,28 @@ import SwiftUI
 /// session flips to signed-in, `RootView` swaps in `RootTabView` and the
 /// stashed place is offered for a private save by `HubTabRoot`.
 struct PlaceLaunchHost: View {
-    @State private var showAuth = false
+    /// Continue after the preview opens Create account; Sign in opens Log in.
+    /// The cover gets it as its item: a separate flag read only inside the
+    /// cover's content was still false on the first open.
+    private enum AuthEntry: Identifiable {
+        case logIn, signUp
+        var id: Self {
+            self
+        }
+    }
+
+    @State private var authEntry: AuthEntry?
     @State private var deepLink = DeepLinkRouter.shared
 
     var body: some View {
         PlaceLaunchView(
-            onSignIn: { showAuth = true },
-            onCreateAccount: { showAuth = true }
+            onSignIn: { openAuth(.logIn) },
+            onCreateAccount: { openAuth(.signUp) }
         )
-        .fullScreenCover(isPresented: $showAuth) {
+        .fullScreenCover(item: $authEntry) { entry in
             // Log in's own X closes back to the address preview; screens pushed
             // from Log in keep only theirs.
-            LoginView { showAuth = false }
+            LoginView(startsOnSignUp: entry == .signUp) { authEntry = nil }
         }
         // Workstream 1.4 — RN AuthGate parity: a deferred protected (or
         // auth-owned) deep link auto-presents the existing Sign-in cover
@@ -54,8 +64,13 @@ struct PlaceLaunchHost: View {
 
     private func presentLoginIfRequested() {
         guard deepLink.prefersLoginPresentation else { return }
-        showAuth = true
+        openAuth(.logIn)
         deepLink.acknowledgeLoginPresentation()
+    }
+
+    /// An open cover stays as it is.
+    private func openAuth(_ entry: AuthEntry) {
+        if authEntry == nil { authEntry = entry }
     }
 }
 

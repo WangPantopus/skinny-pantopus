@@ -43,6 +43,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -96,6 +97,7 @@ object SignUpScreenTags {
     const val GOOGLE_BUTTON = "signUpGoogleButton"
     const val APPLE_BUTTON = "signUpAppleButton"
     const val LEGAL_TERMS_LINE = "signUpLegalTermsLine"
+    const val LOG_IN_LINK = "signUpLogInLink"
     const val TERMS_TOGGLE = "signUpTermsCheckboxToggle"
     const val TERMS_LINKS = "signUpTermsLinks"
 }
@@ -105,6 +107,8 @@ object SignUpScreenTags {
 fun SignUpScreen(
     onClose: () -> Unit = {},
     onOpenLegal: (LegalDocument) -> Unit = {},
+    // "Already have an account? Log in" — back to Log in.
+    onLogIn: (() -> Unit)? = null,
     onSuccess: (String) -> Unit = {},
     viewModel: SignUpViewModel = hiltViewModel(),
 ) {
@@ -195,6 +199,26 @@ fun SignUpScreen(
                 onOpenLegal = onOpenLegal,
                 modifier = Modifier.padding(horizontal = Spacing.s4),
             )
+
+            onLogIn?.let { logIn ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.s1, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Already have an account?",
+                        style = PantopusTextStyle.small,
+                        color = PantopusColors.appTextSecondary,
+                    )
+                    Text(
+                        text = "Log in",
+                        style = PantopusTextStyle.small.copy(fontWeight = FontWeight.SemiBold),
+                        color = PantopusColors.primary600,
+                        modifier = Modifier.clickable(onClick = logIn).testTag(SignUpScreenTags.LOG_IN_LINK),
+                    )
+                }
+            }
 
             // First and last name are required (middle is optional), as on web:
             // they are how the household, neighbors and helpers know the person.

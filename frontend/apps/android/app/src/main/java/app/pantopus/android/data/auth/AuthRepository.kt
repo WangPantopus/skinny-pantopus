@@ -309,6 +309,22 @@ class AuthRepository
         val lastInteractiveSignInAt: StateFlow<Long?> = _lastInteractiveSignInAt.asStateFlow()
 
         /**
+         * The password typed at sign-up, in memory only (never stored), so the
+         * phone that signed up signs itself in once the email is confirmed
+         * instead of asking for it again. Cleared by any sign-in.
+         */
+        @Volatile private var pendingSignIn: PendingSignIn? = null
+
+        /** Not a data class: its toString must never print the password. */
+        private class PendingSignIn(
+            val email: String,
+            val password: String,
+            val untilMillis: Long,
+        )
+
+        enum class ConfirmedSignIn { SignedIn, NotConfirmedYet, Unavailable }
+
+        /**
          * Set when the session ended without the user asking (refresh
          * refused, `SESSION_REVOKED`, …). The login / continue-as screen shows
          * [SessionEndReason.message] once and calls [consumeSessionEndReason].
@@ -720,6 +736,7 @@ class AuthRepository
             // exchanges) funnels through here; `restore()` and `resume()`
             // deliberately do not stamp the interactive marker.
             if (interactive) _lastInteractiveSignInAt.value = System.currentTimeMillis()
+            pendingSignIn = null
             _sessionEndReason.value = null
             finishSignedIn(user, access)
             observability.track("auth.signed_in", mapOf("context" to context))
@@ -1019,6 +1036,12 @@ class AuthRepository
                         ),
                     )
                 PlacePendingStore.bind(response.user.id)
+                pendingSignIn =
+                    PendingSignIn(
+                        email = normalizedEmail(email),
+                        password = password,
+                        untilMillis = System.currentTimeMillis() + PENDING_SIGN_IN_MILLIS,
+                    )
                 observability.track("auth.signed_up")
                 return SignUpResult(
                     user = response.user,
@@ -1028,6 +1051,33 @@ class AuthRepository
                 throw AuthErrorMapper.register(t)
             }
         }
+
+        /**
+         * Signs in with the password typed at sign-up, once the email is
+         * confirmed (`/login` answers 403 until then: `backend/routes/users.js`).
+         * [ConfirmedSignIn.Unavailable] when nothing is remembered for [email],
+         * it expired, or the sign-in failed some other way: the person then
+         * logs in as usual. Mirrors iOS `AuthManager.signInAfterConfirmation`.
+         */
+        suspend fun signInAfterConfirmation(email: String?): ConfirmedSignIn {
+            val pending =
+                pendingSignIn?.takeIf { System.currentTimeMillis() < it.untilMillis }
+                    ?: return ConfirmedSignIn.Unavailable
+            if (email != null && normalizedEmail(email) != pending.email) return ConfirmedSignIn.Unavailable
+            return runCatching {
+                val (device, proof) = issuanceProof(PATH_LOGIN)
+                val response = authApi.login(LoginRequest(email = pending.email, password = pending.password, device = device), proof)
+                persistLoginResponse(response, method = AccountHint.METHOD_PASSWORD)
+            }.fold(
+                onSuccess = { ConfirmedSignIn.SignedIn },
+                onFailure = { t ->
+                    if (t is CancellationException) throw t
+                    if ((t as? HttpException)?.code() == HTTP_FORBIDDEN) ConfirmedSignIn.NotConfirmedYet else ConfirmedSignIn.Unavailable
+                },
+            )
+        }
+
+        private fun normalizedEmail(email: String): String = email.trim().lowercase()
 
         /**
          * `POST /api/users/forgot-password` (route `backend/routes/users.js:3197`).
@@ -1380,6 +1430,10 @@ class AuthRepository
             const val LOGOUT_TIMEOUT_MS = 5_000L
 
             const val PATH_LOGIN = "/api/users/login"
+
+            /** How long a sign-up keeps its password to sign in after the email is confirmed. */
+            const val PENDING_SIGN_IN_MILLIS = 30 * 60 * 1000L
+            const val HTTP_FORBIDDEN = 403
             const val PATH_OAUTH_CALLBACK = "/api/users/oauth/callback"
             const val PATH_OAUTH_TOKEN = "/api/users/oauth/token"
             const val PATH_OAUTH_NATIVE = "/api/users/oauth/native"

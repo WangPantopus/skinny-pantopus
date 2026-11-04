@@ -45,8 +45,8 @@ const val SUGGESTIONS_CAPTION = "A morning brief with buttons, and at most two n
 /**
  * The one-time Suggestions notice (AI assistant phase 2 contract §3.4), built like [BriefingNotice]: it asks while the
  * server holds no answer, on a server that has Suggestions. Turn on and Not now each save their answer, so it never
- * comes back; it can't be closed without one. While the briefing notice shows ([waiting]) it waits, then follows it,
- * unless Settings (reached from "Manage notifications") answered meanwhile.
+ * comes back; it can't be closed without one. While the briefing notice shows, or something else is asking
+ * ([waiting]), it waits; and after the briefing notice it waits for the next launch, never right behind it.
  */
 @Composable
 fun SuggestionsNotice(
@@ -60,7 +60,7 @@ fun SuggestionsNotice(
     val error by viewModel.error.collectAsStateWithLifecycle()
     HomeCopyLifecycle(viewModel::enter, viewModel::leave)
     LaunchedEffect(waiting) { if (!waiting) viewModel.recheck() }
-    if (waiting || preferences == null) return
+    if (waiting || preferences == null || BriefingNoticeLaunch.shown) return
     AlertDialog(
         onDismissRequest = {},
         title = { Text(SUGGESTIONS_TITLE) },
