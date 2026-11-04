@@ -358,6 +358,15 @@ object PantopusColors {
     /** The Ballot timeline's "waiting for ballots" segment — `#9CA3AF`. */
     val ballotWait = Color(0xFF9CA3AF)
 
+    /** A candidate's bar in the live count, one slate for every choice — `#64748B`. */
+    val ballotCountFill = Color(0xFF64748B)
+
+    /** A measure's Yes (or For) side in the live count — `#475569`. */
+    val ballotCountYes = Color(0xFF475569)
+
+    /** A measure's No (or Against) side in the live count — `#94A3B8`. */
+    val ballotCountNo = Color(0xFF94A3B8)
+
     // Category accents
     val handyman = Color(0xFFF97316)
     val cleaning = Color(0xFF27AE60)
