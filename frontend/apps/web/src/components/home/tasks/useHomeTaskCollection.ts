@@ -44,15 +44,19 @@ export function useHomeTaskCollection(homeId: string) {
         ctx.loadedRevision = revision; setTasks(result.tasks); setScope(result.task_session);
         setCanCreate(result.collection_capabilities.can_create); setError('');
         // Showing tasks and reloading them must not wait for optional member names.
-        // A superseded roster must not repopulate a newer collection or draft.
-        setMembers([]);
+        // Names already shown (a background re-check keeps them) stay until this
+        // roster answers; only the newest answer for this collection and session
+        // replaces them, and a failed one clears them. Task access is verified
+        // separately by the task endpoint.
+        const showRoster = (names: TaskMember[]) => {
+          if (current(revision) && rosterRequest === rosterGeneration) setMembers(names);
+        };
         void api.homes.getHomeOccupants(homeId).then(response => {
-          if (!current(revision) || rosterRequest !== rosterGeneration) return;
           const occupants: unknown = response.occupants;
           // Guests can't see household tasks, so the server refuses them as assignees.
-          if (Array.isArray(occupants)) setMembers(occupants.filter((value): value is TaskMember =>
-            value && typeof value.user_id === 'string' && TASK_UUID.test(value.user_id) && value.role !== 'guest'));
-        }).catch(() => { /* Task access remains independently verified. */ });
+          showRoster(Array.isArray(occupants) ? occupants.filter((value): value is TaskMember =>
+            value && typeof value.user_id === 'string' && TASK_UUID.test(value.user_id) && value.role !== 'guest') : []);
+        }).catch(() => showRoster([]));
       } catch (failure) {
         if (ctx.active && context.current === ctx) {
           try { ctx.client.requireCurrent(); } catch { retire(); return; }
