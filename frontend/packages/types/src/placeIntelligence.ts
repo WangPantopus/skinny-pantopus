@@ -897,6 +897,10 @@ export interface BallotCountOption {
   percent_label: string;
   /** Its share of the race's votes, write-ins included (0–1), for the bar. */
   share: number;
+  /** The candidate's party as the state words it ("Prefers Democratic Party"); none for nonpartisan races and measures. */
+  party_label?: string | null;
+  /** The bar's color: only the two major parties have one; anything else is the neutral bar. */
+  party_tone?: 'democratic' | 'republican' | null;
 }
 
 export interface BallotCountRace {
