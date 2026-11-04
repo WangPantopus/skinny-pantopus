@@ -15,11 +15,16 @@ import EmergencyCard, { EmergencyCardPreview } from '../src/components/home/card
 jest.mock('@pantopus/api', () => ({
   homeProfile: { getHomeEmergencies: jest.fn(), createHomeEmergency: jest.fn(), deleteHomeEmergency: jest.fn() },
   getAuthToken: () => '__session__',
+  authSessionMarker: () => 'emergency-test-session',
+  onTokenChange: () => () => {},
+  AUTH_SESSION_CHANGE_KEY: 'pantopus_auth_session_change',
 }));
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), prefetch: jest.fn() };
 jest.mock('next/navigation', () => ({ useParams: () => ({ id: 'home' }), useRouter: () => mockRouter }));
 jest.mock('../src/components/ui/toast-store', () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() } }));
-jest.mock('../src/components/ui/confirm-store', () => ({ confirmStore: { open: jest.fn(async () => true) } }));
+jest.mock('../src/components/ui/confirm-store', () => ({ confirmStore: {
+  open: jest.fn(async () => true), getSnapshot: () => null, close: jest.fn(),
+} }));
 jest.mock('next/image', () => ({ __esModule: true, default: (props: Record<string, unknown>) => <img alt="" {...props} /> }));
 
 const rows = [
@@ -38,7 +43,7 @@ const rows = [
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.mocked(api.homeProfile.getHomeEmergencies).mockResolvedValue({ emergencies: JSON.parse(JSON.stringify(rows)) });
+  jest.mocked(api.homeProfile.getHomeEmergencies).mockResolvedValue({ emergencies: JSON.parse(JSON.stringify(rows)), canManage: true });
 });
 
 test('real HomeEmergency rows render under their type\'s category with label, location, phone and notes', async () => {
