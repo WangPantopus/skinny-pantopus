@@ -281,7 +281,7 @@ The comprehensive infrastructure proposal is in [#3253](https://github.com/WangP
 | `/app/businesses` | Entry/redirect/state probe | 390 px |
 | `/app/businesses/[id]/chat` | Valid business-owner entry | 390 px |
 | `/app/businesses/[id]/chat/[roomId]` | Valid business-owner entry | 390 px |
-| `/app/businesses/[id]/dashboard` | Valid business-owner entry | 390 px |
+| `/app/businesses/[id]/dashboard` | Owner invoice pagination, failures/retry, filter races, create/void and recipient reload | 320/390/768/1440 px |
 | `/app/businesses/[id]/pages/[pageId]/edit` | Create/edit/save/publish, save failure/retry, public view and reload | 320/390/768/1440 px |
 | `/app/businesses/new` | Entry/redirect/state probe | 390 px |
 | `/app/chat` | Entry/redirect/state probe | 390 px |
@@ -306,7 +306,7 @@ The comprehensive infrastructure proposal is in [#3253](https://github.com/WangP
 | `/app/gigs/saved` | Launch-cut redirect | — |
 | `/app/homes` | Entry/redirect/state probe | 390 px |
 | `/app/homes/[id]` | Entry/redirect/state probe | 390 px |
-| `/app/homes/[id]/access` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/access` | Owner/member notes, reveal/hide, current permission, failure/retry, delayed response and reload | 320/390/768/1440 px |
 | `/app/homes/[id]/bills` | Launch-cut redirect | — |
 | `/app/homes/[id]/calendar` | Launch-cut redirect | — |
 | `/app/homes/[id]/claim-owner/evidence` | Entry/redirect/state probe | 390 px |
@@ -368,8 +368,8 @@ The comprehensive infrastructure proposal is in [#3253](https://github.com/WangP
 | `/app/hub/today` | Entry/redirect/state probe | 390 px |
 | `/app/identity` | Launch-cut redirect | — |
 | `/app/identity/preview` | Launch-cut redirect | — |
-| `/app/invoice/[id]` | Missing-resource/refusal probe only | — |
-| `/app/invoices` | Entry/redirect/state probe | 390 px |
+| `/app/invoice/[id]` | Real synthetic recipient detail, saved date/total, voided state and reload; no payment | 390 px |
+| `/app/invoices` | Received synthetic invoice, saved date/total, void removal and reload | 390 px |
 | `/app/landlord/properties` | Entry/redirect/state probe | 390 px |
 | `/app/landlord/properties/[homeId]` | Entry/redirect/state probe | — |
 | `/app/listing-offers` | Launch-cut redirect | — |
@@ -639,3 +639,23 @@ The current web page exposed Add/Delete to a read-only household member. After `
 Chrome with the real local backend/database verified owner/member reloads, current edit grants/revocations, sensitive-read refusal, failed-read Retry, and missing-capability behavior. A committed save with an injected lost response retained the draft; retry produced exactly one row and the second account saw it after reload. A delayed authorized read could not restore rows after a newer 403. A successful save arriving after departure neither exposed rows nor started another read until return. Departure canceled an open delete confirmation; a delete 503 kept the row, then retry and reload removed it for both people. Paired focus/visibility events made one read. The phone link and 390px layout were checked with no horizontal overflow or JavaScript errors. Held-read checks confirmed the heading and Call 911 link are available before the private response and remain through failure/retry; 320px, 390px and 1440px layouts have no horizontal overflow.
 
 These web lifecycle checks dispatched focus/blur/visibility events in Chrome; they do not certify OS backgrounding, bfcache, Safari or Firefox. All 123 existing web suites / 2,383 tests, zero-error TypeScript and targeted lint pass. Existing mocks were updated, with no new unit tests. The Android owner separately reported real emulator background/revocation and delayed-response checks for [#3290](https://github.com/WangPantopus/skinny-pantopus/pull/3290); iOS verification is tracked by its owner. A local combined receipt/emergency backend is available to the native audits; the shared runtimes and all production infrastructure remain unchanged. Both repair PRs remain unmerged.
+
+### Invoice list recovery and narrow-screen entry — November 4
+
+A local business with 51 synthetic invoices demonstrated that the owner list stopped at its first 50 records with no way to reach older ones. A failed list read instead said “No invoices yet”; a failed recipient search said “No one found.” [#3296](https://github.com/WangPantopus/skinny-pantopus/pull/3296), source `13bcb1e1c7c3aa7ba13056f44d770f49df4d3d99`, uses the existing pagination endpoint on demand, distinguishes failures from empty results, and retries the failed page while retaining previously loaded rows. Scope/generation checks prevent old filter responses from replacing the current list. Recipient lookup failures now offer Retry without discarding the draft.
+
+Chrome with the real local backend/database verified initial and next-page failures, Retry, all 51 records without duplicates, filter resets, and a held Sent response arriving after Paid was selected. A real UI-created invoice persisted in both the owner and recipient views. The existing web date and quantity validation were already correct: November 10 stayed November 10 in the America/Los_Angeles browser, and zero, fractional, excessive and empty quantities made no create request. A valid quantity of two produced the same 2,650-cent total in both views. Canceling Void kept the invoice; confirming it persisted after reload, removed the recipient's Pay action and removed it from the received list. No payment or hosted notification was attempted.
+
+[#3297](https://github.com/WangPantopus/skinny-pantopus/pull/3297), source `b3f247f526fe3b9bafa4c888dab0c1e5050aed6c`, is a separate presentation repair stacked on #3296. Amount and quantity fields previously extended beyond the modal at 320 and 390 px; the dashboard identity/public-link header also widened the page. The existing controls now wrap within the phone layout. At 320, 390, 768 and 1440 px, fields, remove controls and the public-page link fit the viewport with no horizontal page overflow. Add/remove lines, validation, cancel and a real mobile-width create/reload passed.
+
+The functional change passed all 123 existing web suites / 2,383 tests; both changes passed TypeScript and targeted lint with only four pre-existing any warnings. Both PRs have green CI and remain unmerged. All 53 invoices created for these checks, plus only their related local notification/mail fixtures, were removed. External delivery, actual payment and payment-provider failures remain unverified.
+
+### Access & Codes current reads and value wrapping — November 4
+
+A revealed Wi-Fi value stayed visible after permission was revoked and the web page regained focus without making a new read. Reload correctly returned 403. Saved notes were also missing because the page read a different field. [#3298](https://github.com/WangPantopus/skinny-pantopus/pull/3298), source `910634935f10ea2a0667cefd2bd8c73c96524b36`, clears private rows and reveal state on departure, cancels old reads, and rechecks on return or Home/session changes. Only the current successful read enables Reveal/Copy; a late authorized response cannot replace a newer refusal. The existing notes field now renders, and heading/Back/security notice remain available while loading. The shared API helper accepts an optional abort signal without changing the endpoint contract.
+
+Owner and read-only member Chrome sessions against the real local API/database verified notes, masked entry, Reveal/Hide, an actual 30-second auto-hide interval, denied clipboard permission, injected 503 and Retry, scoped read revocation/restoration, and a held authorized response released after a newer 403. An actual second-tab session-marker change, history Back and reload all remasked the value. Paired focus/visibility events made one read. Background/focus checks used dispatched lifecycle events; actual OS backgrounding and bfcache eligibility were not established. Successful OS clipboard writes were not tested.
+
+A separate presentation-only [#3300](https://github.com/WangPantopus/skinny-pantopus/pull/3300), source `cfdc3cb93941351a9bfa18f670f478520ae40ac5`, is stacked on #3298. A long revealed value previously overflowed its card at 320 px. The value now wraps without altering its contents; value and controls fit at 320, 390, 768 and 1440 px. Reveal/Hide and masked reload passed with no JavaScript errors.
+
+The functional repair passed all 123 existing web suites / 2,383 tests. Both changes passed zero-error TypeScript and targeted lint with only three pre-existing any warnings; no new unit tests were added. The synthetic access value was deleted through the API, and only this check's temporary membership/permission rows were removed. These checks establish the tested local flows, not completion of the entire route matrix or a production startup result. All PRs remain unmerged and no production infrastructure was changed.
