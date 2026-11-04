@@ -108,6 +108,8 @@ public struct FilterSheetShell: View {
                 label: {
                     Icon(.x, size: 20, color: Theme.Color.appTextSecondary)
                         .frame(width: 44, height: 44)
+                        // A plain button only takes taps on what it draws; the whole square is the target.
+                        .contentShape(Rectangle())
                 }
             )
             .buttonStyle(.plain)
@@ -170,15 +172,21 @@ public struct FilterSheetShell: View {
 
 @MainActor
 struct FilterSectionRow: View {
+    @ScaledMetric(relativeTo: .caption2) private var titleSize = PantopusTextStyle.overline.size
     let section: FilterSection
     let onUpdate: @MainActor (FilterSection) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text(section.title, style: .overline)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("filterSection_\(section.id)_title")
+            Text(
+                section.title,
+                style: .overline,
+                font: .system(size: titleSize, weight: PantopusTextStyle.overline.weight)
+            )
+            .fixedSize(horizontal: false, vertical: true)
+            .foregroundStyle(Theme.Color.appTextSecondary)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityIdentifier("filterSection_\(section.id)_title")
             control
         }
         .accessibilityIdentifier("filterSection_\(section.id)")

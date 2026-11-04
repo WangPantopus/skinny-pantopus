@@ -23,6 +23,7 @@ public struct WizardShell<Content: View>: View {
     private let content: Content
     private let scrollResetID: AnyHashable?
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showsDiscard = false
 
     public init(
@@ -105,7 +106,7 @@ public struct WizardShell<Content: View>: View {
                 HStack(spacing: Spacing.s1) {
                     Icon(.hourglass, size: 12, color: Theme.Color.appTextSecondary)
                     Text(hint)
-                        .font(.system(size: 11.5))
+                        .scaledFont(11.5)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 .frame(maxWidth: .infinity)
@@ -114,7 +115,7 @@ public struct WizardShell<Content: View>: View {
                 .background(Theme.Color.appSurface)
                 .accessibilityIdentifier("wizardFooterHint")
             }
-            HStack(spacing: Spacing.s3) {
+            ctaLayout {
                 if let secondary = chrome.secondaryCTA {
                     if let icon = secondary.icon {
                         // Iconed ghost (A12.8 "Pick category") hugs its
@@ -149,6 +150,12 @@ public struct WizardShell<Content: View>: View {
         }
     }
 
+    private var ctaLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: Spacing.s3))
+            : AnyLayout(HStackLayout(spacing: Spacing.s3))
+    }
+
     private func handleLeading() {
         dismissKeyboard()
         switch model.chrome.leading {
@@ -173,7 +180,8 @@ public struct WizardShell<Content: View>: View {
     }
 }
 
-/// 56pt top bar: X/back leading, centered title, "N/M" trailing.
+/// Top bar: X/back leading, centered title, "N/M" trailing. Like a system bar's, its text stops growing at the
+/// largest standard size, so the step keeps the screen at the accessibility sizes; a long press shows it large.
 private struct WizardTopBar: View {
     let title: String
     let leading: WizardLeadingControl
@@ -181,34 +189,41 @@ private struct WizardTopBar: View {
     let onLeading: () -> Void
 
     var body: some View {
-        ZStack {
-            Text(title)
-                .pantopusTextStyle(.body)
-                .foregroundStyle(Theme.Color.appText)
-                .accessibilityAddTraits(.isHeader)
-            HStack {
-                Button(action: onLeading) {
-                    Icon(leadingIcon, size: 22, color: Theme.Color.appText)
-                        .frame(width: 44, height: 44)
-                }
-                .accessibilityLabel(leadingA11y)
-                .accessibilityIdentifier("wizardLeadingButton")
-                Spacer()
-                Group {
-                    if case let .stepOf(current, total) = progressLabel {
-                        Text("\(current)/\(total)")
-                            .pantopusTextStyle(.caption)
-                            .foregroundStyle(Theme.Color.appTextSecondary)
-                            .padding(.horizontal, Spacing.s3)
-                            .accessibilityIdentifier("wizardStepReadout")
-                    } else {
-                        Color.clear.frame(width: 44, height: 44)
-                    }
-                }
+        HStack(spacing: Spacing.s2) {
+            Button(action: onLeading) {
+                Icon(leadingIcon, size: 22, color: Theme.Color.appText)
+                    .frame(width: 44, height: 44)
             }
-            .padding(.horizontal, Spacing.s3)
+            .accessibilityLabel(leadingA11y)
+            .accessibilityIdentifier("wizardLeadingButton")
+            .accessibilityShowsLargeContentViewer {
+                Icon(leadingIcon, size: 22)
+                Text(leadingA11y)
+            }
+            Text(title)
+                .scaledFont(PantopusTextStyle.body.size)
+                .foregroundStyle(Theme.Color.appText)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                .accessibilityShowsLargeContentViewer()
+                .accessibilityAddTraits(.isHeader)
+            if case let .stepOf(current, total) = progressLabel {
+                Text("\(current)/\(total)")
+                    .scaledFont(PantopusTextStyle.caption.size)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .fixedSize()
+                    .frame(minWidth: 44)
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                    .accessibilityIdentifier("wizardStepReadout")
+            } else {
+                Color.clear.frame(width: 44, height: 44)
+            }
         }
-        .frame(height: 56)
+        .padding(.horizontal, Spacing.s3)
+        .padding(.vertical, Spacing.s1)
+        .frame(minHeight: 56)
         .background(Theme.Color.appSurface)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
@@ -243,7 +258,7 @@ private struct WizardIconGhostCTA: View {
             HStack(spacing: Spacing.s2) {
                 Icon(icon, size: 16, strokeWidth: 2.2, color: Theme.Color.appTextSecondary)
                 Text(title)
-                    .pantopusTextStyle(.body)
+                    .scaledFont(PantopusTextStyle.body.size)
                     .foregroundStyle(Theme.Color.appText)
             }
             .padding(.horizontal, Spacing.s4)
@@ -280,15 +295,19 @@ private struct WizardPrimaryCTA: View {
         } label: {
             ZStack {
                 Text(title)
-                    .pantopusTextStyle(.body)
+                    .scaledFont(PantopusTextStyle.body.size)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .opacity(isLoading ? 0 : 1)
                 if isLoading {
                     ProgressView().tint(Theme.Color.appTextInverse)
                 }
             }
             .foregroundStyle(Theme.Color.appTextInverse)
-            .frame(maxWidth: .infinity, minHeight: 44)
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, Spacing.s4)
+            .padding(.vertical, Spacing.s2)
+            .frame(minHeight: 44)
             .background(tint)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             .pantopusShadow(shadow)

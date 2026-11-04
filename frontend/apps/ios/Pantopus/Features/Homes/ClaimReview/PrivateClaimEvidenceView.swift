@@ -6,16 +6,37 @@ import UniformTypeIdentifiers
 
 /// Bytes remain in memory and are rendered without a public URL or a browser.
 struct PrivateClaimEvidenceView: View {
+    @Environment(\.dismiss) private var dismiss
     @State var model: PrivateClaimEvidenceViewModel
+    /// Reviewers open a sheet; the claimant's document route already has navigation.
+    var showsDismissButton = true
     @State private var removal: PrivateClaimEvidenceDTO?
     @State private var showFilePicker = false
     @State private var pickerError: String?
 
     var body: some View {
+        if showsDismissButton {
+            NavigationStack {
+                content
+                    .navigationTitle("Private claim documents")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Close", systemImage: "xmark") { dismiss() }
+                                .accessibilityIdentifier("claimEvidence.close")
+                        }
+                    }
+            }
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if !model.isCurrent { Text("Your session changed. Reopen the claim to continue.") } else {
-                    Text("Private claim documents").font(.headline)
+                    if !showsDismissButton { Text("Private claim documents").font(.headline) }
                     Text("Saving a file does not verify it or approve the claim.").font(.subheadline)
                     if model.busy { ProgressView() }
                     if let error = model.error { Text(error).foregroundStyle(Theme.Color.error) }
@@ -34,7 +55,9 @@ struct PrivateClaimEvidenceView: View {
                             Button("Save or retry this document") { Task { await model.upload() } }
                         } else { Button("Choose private document") { showFilePicker = true } }
                     }
-                    if model.evidence.isEmpty, !model.busy { Text("No documents on this claim yet.") }
+                    if model.evidence.isEmpty, !model.busy, model.error == nil, !model.pendingVerification {
+                        Text("No documents on this claim yet.")
+                    }
                     ForEach(model.evidence) { record in
                         VStack(alignment: .leading, spacing: 8) {
                             Text(record.fileName).font(.headline)

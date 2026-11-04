@@ -9,7 +9,7 @@ struct ClaimEvidenceDestinationView: View {
 
     var body: some View {
         Group {
-            if let evidence { PrivateClaimEvidenceView(model: evidence) } else if let error {
+            if let evidence { PrivateClaimEvidenceView(model: evidence, showsDismissButton: false) } else if let error {
                 VStack(spacing: 16) {
                     Text(error)
                     Button("Retry") { Task { await load() } }
