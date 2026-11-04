@@ -59,16 +59,17 @@ class PlanLocationResolver
 
         /**
          * The point to browse from now, or null when there is none yet (board F5). [waitForFix] false is opening the
-         * map: a fix it doesn't have yet gets only a brief wait, as Pulse's does, so a first fix (indoors, after a
-         * cold start) no longer keeps Plans empty for up to six seconds before the home stands in.
+         * map. While the home or a saved place can stand in, a fix the provider doesn't have yet gets only a brief
+         * wait, as Pulse's does, so a first fix (indoors, after a cold start) no longer keeps Plans empty for up to six
+         * seconds. With nothing to stand in, it waits the rest of the time for a real fix, as before.
          */
         suspend fun resolve(waitForFix: Boolean = true): PlanLocation? {
-            val timeoutMs = if (waitForFix) FIX_TIMEOUT_MS else OPENING_FIX_TIMEOUT_MS
-            if (prefersHome) return home() ?: if (hasLocationPermission()) fromGps(timeoutMs) else null
+            if (prefersHome) return home() ?: if (hasLocationPermission()) fromGps() else null
             if (!hasLocationPermission()) return null
             // Location is allowed but no fix came in time (indoors, a cold start): browse from the home or a saved
             // place meanwhile instead of asking again for a permission the person already gave.
-            return fromGps(timeoutMs) ?: home()
+            if (waitForFix) return fromGps() ?: home()
+            return fromGps(OPENING_FIX_TIMEOUT_MS) ?: home() ?: fromGps(FIX_TIMEOUT_MS - OPENING_FIX_TIMEOUT_MS)
         }
 
         /** The person's home or, without one, their first saved place. */
