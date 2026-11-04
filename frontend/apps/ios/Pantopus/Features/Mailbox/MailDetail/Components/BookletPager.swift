@@ -124,9 +124,9 @@ public struct BookletPager: View {
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
         .frame(width: layout.areaWidth, height: layout.pageHeight)
-        // Into the side margins, while the reader keeps its own width: a wider reader would widen the screen's
-        // column, and the column the reader again.
-        .frame(minWidth: 0, maxWidth: .infinity)
+        // From the reader's leading edge into the trailing margin, while the reader keeps its own width: a wider
+        // reader would widen the screen's column, and the column the reader again.
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
     }
 
     private func spreadPages(_ left: Int, layout: BookletReaderLayout) -> some View {
@@ -158,9 +158,6 @@ public struct BookletPager: View {
         }
         .padding(.leading, layout.leftPageX)
         .frame(width: layout.areaWidth, alignment: .leading)
-        // Each spread is its own page of the pager; reaching into the reading column's side margins, it would
-        // otherwise sit inside them and slide off the hinge.
-        .ignoresSafeArea(.container, edges: .horizontal)
     }
 
     /// The spread on screen as a page: swiping to a spread opens its left page.

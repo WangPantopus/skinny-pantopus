@@ -50,9 +50,11 @@ struct BookletReaderLayout: Equatable {
     let pageHeight: CGFloat
     /// Two pages side by side.
     let isSpread: Bool
-    /// The width pages are laid out in: the reader's, or wider when a spread uses the side margins.
+    /// The reader's own width, and the width pages are laid out in from its leading edge: wider when a spread
+    /// uses the trailing side margin.
+    let readerWidth: CGFloat
     let areaWidth: CGFloat
-    /// The spine's distance from the area's leading edge, and the fold to keep clear (half folded).
+    /// The spine's distance from the reader's leading edge, and the fold to keep clear (half folded).
     let spine: CGFloat
     let foldGap: CGFloat
 
@@ -72,12 +74,18 @@ struct BookletReaderLayout: Equatable {
         let chrome = Spacing.s3 + Spacing.s2 + controlsHeight + Spacing.s2
         let fit = reading.readingHeight > 0 ? max(200, reading.readingHeight - chrome) : Self.fallbackHeight
         let single = min(max(0, width - Self.edge) * 4 / 3, fit)
-        // A spread may use the screen's side margins, keeping a margin from its edges.
-        let room = max(0, screenMargin - Spacing.s4)
-        let area = width + 2 * room
-        let spreadHeight = min(max(0, area - Self.edge) / 2 * 4 / 3, fit)
+        // Two facing pages have the spine on the hinge (the reader's middle where there's none), and half folded
+        // they keep clear of the fold. They may use the screen's trailing side margin, keeping a margin from its
+        // edge, but not the leading one: spreads page in a UIKit paging view, which keeps its pages clear of the
+        // reading column's leading margin (safe area) wherever it reaches into it, off the hinge.
+        let area = width + max(0, screenMargin - Spacing.s4)
+        let gap = hinge?.foldGap ?? 0
+        let center = min(max(hinge?.midX ?? width / 2, area * 0.3), area * 0.7)
+        let side = max(0, min(center - gap / 2, area - center - gap / 2 - Self.edge))
+        let spreadHeight = min(side * 4 / 3, fit)
         // Not before the reader knows its width.
         isSpread = pageCount > 1 && width > 0 && spreadHeight >= single * 0.85
+        readerWidth = width
         guard isSpread else {
             pageHeight = single
             pageWidth = single * 3 / 4
@@ -86,19 +94,14 @@ struct BookletReaderLayout: Equatable {
             foldGap = 0
             return
         }
-        // The spine is on the hinge (the middle of the reader where there's none); half folded, the pages keep
-        // clear of the fold.
-        let center = hinge.map { $0.midX + room } ?? area / 2
-        let gap = hinge?.foldGap ?? 0
-        spine = min(max(center, area * 0.3), area * 0.7)
-        let side = max(0, min(spine - gap / 2, area - spine - gap / 2 - Self.edge))
-        pageHeight = min(side * 4 / 3, fit)
+        pageHeight = spreadHeight
         pageWidth = pageHeight * 3 / 4
         areaWidth = area
+        spine = center
         foldGap = gap
     }
 
-    /// Where the left page starts in the area, so the spine sits where it should.
+    /// Where the left page starts, so the spine sits where it should.
     var leftPageX: CGFloat {
         spine - foldGap / 2 - pageWidth
     }
@@ -110,7 +113,7 @@ struct BookletReaderLayout: Equatable {
 
     /// How far the spread's middle sits from the reader's middle (the hinge isn't the column's middle).
     var spreadShift: CGFloat {
-        leftPageX + spreadWidth / 2 - areaWidth / 2
+        leftPageX + spreadWidth / 2 - readerWidth / 2
     }
 }
 
