@@ -256,6 +256,8 @@ const createCategorySchema = Joi.object({
   sort_order: Joi.number().integer().min(0).optional(),
 });
 
+const updateCategorySchema = createCategorySchema.fork(['name'], (field) => field.optional());
+
 const createCatalogItemSchema = Joi.object({
   category_id: Joi.string().uuid().optional().allow(null),
   name: Joi.string().min(1).max(200).required(),
@@ -2524,7 +2526,7 @@ router.get('/:businessId/catalog/categories', verifyToken, async (req, res) => {
 });
 
 
-router.patch('/:businessId/catalog/categories/:catId', verifyToken, async (req, res) => {
+router.patch('/:businessId/catalog/categories/:catId', verifyToken, validate(updateCategorySchema), async (req, res) => {
   try {
     const { businessId, catId } = req.params;
     const userId = req.user.id;
@@ -2565,7 +2567,8 @@ router.delete('/:businessId/catalog/categories/:catId', verifyToken, async (req,
       return res.status(403).json({ error: 'No permission to manage catalog' });
     }
 
-    // Soft-delete
+    // The database clears item assignments in the same transaction. Retain
+    // this category row so replaying its original create cannot resurrect it.
     const { error } = await supabaseAdmin
       .from('BusinessCatalogCategory')
       .update({ is_active: false, updated_at: new Date().toISOString() })
@@ -2614,6 +2617,9 @@ router.post('/:businessId/catalog/items', verifyToken, validate(createCatalogIte
       created = await createCatalogRowOnce('BusinessCatalogItem', id, { business_user_id: businessId, ...fields });
       if (!created.row) throw new Error('Catalog item create returned no row');
     } catch (error) {
+      if (error.code === '23514' && error.message === 'CATALOG_CATEGORY_UNAVAILABLE') {
+        return res.status(400).json({ error: 'Choose an active category from this business.', code: 'CATALOG_CATEGORY_UNAVAILABLE' });
+      }
       logger.error('Error creating catalog item', { error: error.message });
       return res.status(500).json({ error: 'Failed to create item' });
     }
@@ -2621,7 +2627,21 @@ router.post('/:businessId/catalog/items', verifyToken, validate(createCatalogIte
     if (created.replay) {
       // Fields the request left out took the table's defaults, so only the ones it sent are compared.
       const same = (key) => fields[key] === undefined || (item[key] ?? null) === (fields[key] ?? null);
-      if (item.name !== fields.name || !['kind', 'price_cents', 'category_id'].every(same)) {
+      let sameCategory = same('category_id');
+      // A removed category clears the item's group. A retry of the original
+      // create still recovers that item, without restoring the deleted group.
+      if (!sameCategory && item.category_id == null && fields.category_id) {
+        const { data: removedCategory, error: categoryError } = await supabaseAdmin
+          .from('BusinessCatalogCategory')
+          .select('id')
+          .eq('id', fields.category_id)
+          .eq('business_user_id', businessId)
+          .eq('is_active', false)
+          .maybeSingle();
+        if (categoryError) return res.status(503).json({ error: 'Could not check the original item. Please try again.' });
+        sameCategory = Boolean(removedCategory);
+      }
+      if (item.name !== fields.name || !['kind', 'price_cents'].every(same) || !sameCategory) {
         return res.status(409).json({ error: 'This request was already used for a different item.', code: 'CATALOG_REQUEST_REUSED' });
       }
       return res.status(201).json({ item });
@@ -2720,6 +2740,9 @@ router.patch('/:businessId/catalog/items/:itemId', verifyToken, validate(updateC
       .single();
 
     if (error) {
+      if (error.code === '23514' && error.message === 'CATALOG_CATEGORY_UNAVAILABLE') {
+        return res.status(400).json({ error: 'Choose an active category from this business.', code: 'CATALOG_CATEGORY_UNAVAILABLE' });
+      }
       logger.error('Error updating catalog item', { error: error.message });
       return res.status(500).json({ error: 'Failed to update item' });
     }
