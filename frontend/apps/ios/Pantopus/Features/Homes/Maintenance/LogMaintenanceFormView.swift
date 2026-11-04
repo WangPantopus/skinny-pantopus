@@ -93,6 +93,8 @@ struct LogMaintenanceFormView: View {
             }
         }
         .accessibilityIdentifier("logMaintenanceForm")
+        .disabled(viewModel.isSubmitting)
+        .interactiveDismissDisabled(viewModel.isSubmitting || viewModel.isDirty)
         .onAppear { Analytics.track(.screenLogMaintenanceViewed) }
         .task { await viewModel.loadIfNeeded() }
     }
@@ -119,17 +121,7 @@ struct LogMaintenanceFormView: View {
         switch result {
         case let .success(urls):
             guard let url = urls.first else { return }
-            let didStart = url.startAccessingSecurityScopedResource()
-            defer { if didStart { url.stopAccessingSecurityScopedResource() } }
-            guard let data = try? Data(contentsOf: url) else { return }
-            let mime = url.pathExtension.lowercased() == "pdf" ? "application/pdf" : "image/jpeg"
-            viewModel.pickReceipt(
-                MaintenanceDraftFile(
-                    filename: url.lastPathComponent,
-                    mimeType: mime,
-                    data: data
-                )
-            )
+            Task { await viewModel.readReceipt(url) }
         case .failure:
             // User cancelled — no-op.
             break
@@ -430,7 +422,7 @@ private struct PhotosGroup: View {
     var body: some View {
         FormFieldGroup("Photos") {
             VStack(alignment: .leading, spacing: Spacing.s2) {
-                Text("Up to 4 photos.")
+                Text("Photos aren't saved here yet. To keep an image with this entry, attach it as the receipt below.")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 LazyVGrid(columns: [
@@ -445,6 +437,7 @@ private struct PhotosGroup: View {
                     }
                 }
                 .accessibilityIdentifier("logMaintenance_photos")
+                .disabled(true)
             }
         }
     }
@@ -553,6 +546,19 @@ private struct ReceiptGroup: View {
                             .stroke(Theme.Color.appBorderSubtle, lineWidth: 1)
                     )
                     .accessibilityIdentifier("logMaintenance_receipt")
+                } else if viewModel.isReadingReceipt {
+                    ProgressView("Opening receipt…")
+                } else if viewModel.existingReceiptId != nil, !viewModel.receiptChanged {
+                    HStack {
+                        Icon(.fileText, size: 18, color: Theme.Color.appTextSecondary)
+                        Text("Saved receipt")
+                        Spacer()
+                        Button("Replace", action: onPick)
+                            .accessibilityIdentifier("logMaintenance_receipt_replace")
+                        Button("Remove") { viewModel.pickReceipt(nil) }
+                            .accessibilityIdentifier("logMaintenance_receipt_remove")
+                    }
+                    .padding(Spacing.s3)
                 } else {
                     Button(action: onPick) {
                         HStack(spacing: Spacing.s2) {

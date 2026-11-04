@@ -10,9 +10,8 @@
 //
 //  Field encoding notes
 //  --------------------
-//  Notes use the existing HomeMaintenanceLog.notes API field. Photos,
-//  receipt remain local draft extras. Category/contact use the log API. The server
-//  value is authoritative when reopening detail or editing an entry.
+//  Receipts use private Home Documents and the log's existing document_id.
+//  The server value is authoritative when reopening detail or editing an entry.
 //
 
 // swiftlint:disable file_length
@@ -51,6 +50,9 @@ final class LogMaintenanceFormViewModel {
     var notes: String
     var photos: [MaintenanceDraftFile]
     var receipt: MaintenanceDraftFile?
+    private(set) var existingReceiptId: String?
+    private(set) var receiptChanged = false
+    private(set) var isReadingReceipt = false
     var nextDueEnabled: Bool
     var nextDueDate: Date
     var recurrence: MaintenanceRecurrence
@@ -75,6 +77,7 @@ final class LogMaintenanceFormViewModel {
     private let mode: LogMaintenanceFormMode
     private let api: APIClient
     private let draftStore: MaintenanceDraftStore
+    private let uploader: MultipartUploader
     private let now: @Sendable () -> Date
     private var initial: Snapshot
     private var pendingCreate: (draft: CreateMaintenanceRequest, id: String)?
@@ -98,7 +101,7 @@ final class LogMaintenanceFormViewModel {
     /// Title is required; an optional cost must be a complete valid amount.
     var canSubmit: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && costError == nil && !isSubmitting && !isLoadingExisting && hasLoadedExisting
+            && costError == nil && !isSubmitting && !isLoadingExisting && !isReadingReceipt && hasLoadedExisting
     }
 
     var costError: String? {
@@ -144,12 +147,14 @@ final class LogMaintenanceFormViewModel {
         existing: MaintenanceTaskDTO? = nil,
         api: APIClient = .shared,
         draftStore: MaintenanceDraftStore = .shared,
+        uploader: MultipartUploader = .shared,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.homeId = homeId
         self.mode = mode
         self.api = api
         self.draftStore = draftStore
+        self.uploader = uploader
         self.now = now
 
         // Compute the initial pose into a Snapshot first so the
@@ -172,6 +177,7 @@ final class LogMaintenanceFormViewModel {
         notes = snapshot.notes
         photos = snapshot.photos
         receipt = snapshot.receipt
+        existingReceiptId = existing?.documentId
         nextDueEnabled = snapshot.nextDueEnabled
         nextDueDate = snapshot.nextDueDate
         recurrence = snapshot.recurrence
@@ -207,8 +213,8 @@ final class LogMaintenanceFormViewModel {
                 performerContact: dto?.performerContact ?? "",
                 costText: Self.format(cost: dto?.cost),
                 notes: dto?.notes ?? "",
-                photos: stored?.photos ?? [],
-                receipt: stored?.receipt,
+                photos: [],
+                receipt: nil,
                 nextDueEnabled: dueParsed != nil,
                 nextDueDate: dueParsed ?? nextWeek,
                 recurrence: MaintenanceRecurrence(raw: dto?.recurrence) ?? .none
@@ -271,8 +277,10 @@ final class LogMaintenanceFormViewModel {
         performerContact = dto.performerContact ?? ""
         costText = Self.format(cost: dto.cost)
         notes = dto.notes ?? ""
-        photos = stored?.photos ?? []
-        receipt = stored?.receipt
+        photos = []
+        receipt = nil
+        existingReceiptId = dto.documentId
+        receiptChanged = false
         recurrence = MaintenanceRecurrence(raw: dto.recurrence) ?? .none
         if let dueIso = dto.dueDate, let parsedDue = MaintenanceListViewModel.parseDate(dueIso) {
             nextDueEnabled = true
@@ -287,7 +295,7 @@ final class LogMaintenanceFormViewModel {
     // MARK: - Mutations
 
     func recomputeDirty() {
-        isDirty = currentSnapshot() != initial
+        isDirty = currentSnapshot() != initial || receiptChanged
     }
 
     func addPhoto(_ file: MaintenanceDraftFile) {
@@ -303,7 +311,28 @@ final class LogMaintenanceFormViewModel {
 
     func pickReceipt(_ file: MaintenanceDraftFile?) {
         receipt = file
+        receiptChanged = true
         recomputeDirty()
+    }
+
+    func readReceipt(_ url: URL) async {
+        guard !isReadingReceipt, !isSubmitting else { return }
+        isReadingReceipt = true
+        submitError = nil
+        defer { isReadingReceipt = false }
+        let generation = AuthManager.shared.requestSessionGeneration
+        do {
+            let file = try await Task.detached(priority: .userInitiated) { try DocumentFileReader.read(url) }.value
+            guard !Task.isCancelled, AuthManager.shared.requestSessionGeneration == generation else { return }
+            guard let bytes = file.data, let mime = file.mimeType,
+                  mime == "application/pdf" || mime.hasPrefix("image/") else {
+                throw APIError.clientError(status: 400, message: "Choose a PDF or image for the receipt.")
+            }
+            pickReceipt(MaintenanceDraftFile(filename: file.filename, mimeType: mime, data: bytes))
+        } catch {
+            guard AuthManager.shared.requestSessionGeneration == generation else { return }
+            submitError = (error as? APIError)?.errorDescription ?? "Couldn't open this receipt. Try choosing it again."
+        }
     }
 
     func consumeEvent() {
@@ -330,6 +359,9 @@ final class LogMaintenanceFormViewModel {
         let dueIso = nextDueEnabled ? Self.isoDayString(from: nextDueDate) : nil
 
         do {
+            let generation = AuthManager.shared.requestSessionGeneration
+            let documentId = try await uploadReceiptIfNeeded()
+            guard !Task.isCancelled, AuthManager.shared.requestSessionGeneration == generation else { return }
             let response: HomeMaintenanceResponse
             switch mode {
             case .create:
@@ -345,13 +377,14 @@ final class LogMaintenanceFormViewModel {
                     performedAt: Self.isoTimestampString(from: dateCompleted),
                     status: "completed"
                 )
+                req.documentId = documentId
                 if pendingCreate?.draft != req { pendingCreate = (req, UUID().uuidString) }
                 req.clientRequestId = pendingCreate?.id
                 response = try await api.request(
                     HomesEndpoints.createMaintenance(homeId: homeId, request: req)
                 )
             case let .edit(taskId):
-                let req = UpdateMaintenanceRequest(
+                var req = UpdateMaintenanceRequest(
                     task: trimmedTitle == initial.title.trimmingCharacters(in: .whitespaces) ? nil : trimmedTitle,
                     notes: notes == initial.notes ? nil : notes,
                     category: category == initial.category && hasPersistedCategory ? nil : category.rawValue,
@@ -367,10 +400,14 @@ final class LogMaintenanceFormViewModel {
                     clearCost: costText.trimmingCharacters(in: .whitespaces).isEmpty
                         && Self.parseCost(initial.costText) != nil
                 )
+                req.documentId = receiptChanged ? documentId : nil
+                req.clearDocument = receiptChanged && receipt == nil
                 response = try await api.request(
                     HomesEndpoints.updateMaintenance(homeId: homeId, taskId: taskId, request: req)
                 )
             }
+
+            if receiptChanged, response.task.documentId != documentId { throw APIError.invalidResponse }
 
             pendingCreate = nil
             let taskId = response.task.id
@@ -399,6 +436,23 @@ final class LogMaintenanceFormViewModel {
             submitError = (error as? APIError)?.errorDescription
                 ?? "Couldn't save this maintenance entry."
         }
+    }
+
+    /// The picked file's ID and metadata stay fixed across retries, including a
+    /// successful upload followed by an unconfirmed maintenance write.
+    private func uploadReceiptIfNeeded() async throws -> String? {
+        guard receiptChanged, let receipt else { return nil }
+        let uploadId = receipt.id.uuidString.lowercased()
+        let response = try await uploader.uploadHomeDocument(
+            homeId: homeId,
+            uploadId: uploadId,
+            file: MultipartFile(fieldName: "file", filename: receipt.filename, mimeType: receipt.mimeType, data: receipt.data),
+            metadata: CreateDocumentRequest(docType: "receipt", title: receipt.filename, visibility: "members")
+        )
+        guard response.document.id.lowercased() == uploadId,
+              response.document.fileId == response.document.id,
+              response.document.contentURL != nil else { throw APIError.invalidResponse }
+        return response.document.id
     }
 
     /// Calendar reminder for the next-due date. Reuses the existing
@@ -435,8 +489,8 @@ final class LogMaintenanceFormViewModel {
             performerName: performerName.trimmingCharacters(in: .whitespaces),
             performerContact: performerContact.trimmingCharacters(in: .whitespaces),
             notes: notes.trimmingCharacters(in: .whitespaces),
-            photos: photos,
-            receipt: receipt
+            photos: [],
+            receipt: nil
         )
         draftStore.upsert(draft, for: taskId)
     }
