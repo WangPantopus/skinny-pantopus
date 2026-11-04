@@ -28,11 +28,18 @@ struct AccessCodesSearchView: View {
             query: $viewModel.query,
             results: viewModel.results,
             isLoading: viewModel.isLoading,
-            emptyState: EmptyStateContent(
-                icon: .search,
-                headline: "No matching codes",
-                subcopy: "Try a different label or category, or check the spelling."
-            ),
+            // A failed read is not "no matches": say so above the Try again bar.
+            emptyState: viewModel.errorMessage == nil
+                ? EmptyStateContent(
+                    icon: .search,
+                    headline: "No matching codes",
+                    subcopy: "Try a different label or category, or check the spelling."
+                )
+                : EmptyStateContent(
+                    icon: .alertCircle,
+                    headline: "Couldn't load access codes",
+                    subcopy: "Your search is kept. Try again to check current codes."
+                ),
             row: { secret in
                 ListRowCard(row: viewModel.rowModel(for: secret))
                     .padding(.horizontal, Spacing.s4)
