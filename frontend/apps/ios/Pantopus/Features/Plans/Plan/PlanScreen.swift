@@ -24,6 +24,9 @@ struct PlanScreen: View {
     @State private var confirmation: PlanConfirmation?
     @State private var showsCancel = false
     @State private var showsInvite = false
+    /// The public card an open ask or invite sheet was opened with. Leaving the app clears
+    /// the plan until it is read again; the sheet and what was typed in it stay.
+    @State private var sheetCard: PlanCardDTO?
     @State private var showsReport = false
     @State private var chatRoute: PlanChatRoute?
     @State private var toast: String?
@@ -76,7 +79,7 @@ struct PlanScreen: View {
         .onDisappear { viewModel.suspend() }
         .onChange(of: scenePhase) { _, phase in sceneChanged(phase) }
         .sheet(isPresented: $showsAsk) {
-            if let card = viewModel.card {
+            if let card = viewModel.card ?? sheetCard {
                 PlanAskSheet(
                     card: card,
                     previous: askIsChange ? viewModel.askPrefill : nil,
@@ -92,8 +95,9 @@ struct PlanScreen: View {
         .sheet(
             isPresented: $showsInvite,
             onDismiss: { Task { await viewModel.load() } },
-            content: { if let card = viewModel.card { PlanInviteSheet(card: card) } }
+            content: { if let card = viewModel.card ?? sheetCard { PlanInviteSheet(card: card) } }
         )
+        .onChange(of: showsAsk || showsInvite) { _, shows in sheetCard = shows ? viewModel.card : nil }
         .askPantopus($pantopusTopic)
         .confirmationDialog("Report this plan", isPresented: $showsReport, titleVisibility: .visible) {
             ForEach(PlanReportReason.all, id: \.token) { reason in
