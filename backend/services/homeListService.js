@@ -226,7 +226,12 @@ async function read(actorId, { primary = false, legacy = false } = {}) {
   const choices = entries.filter(openable);
   const pick = choices.find(entry => entry.homeId === chosen) || [...choices].sort(landingOrder)[0] || null;
   for (const entry of entries) entry.card.is_default = entry === pick;
-  return { homes: entries.map(entry => entry.card) };
+  // Place and the shell need both this list and the automatic primary Home
+  // on startup. Return the same fully rechecked card /primary would choose,
+  // so clients needn't repeat the whole authority pipeline. A chosen default
+  // or a private setup is not necessarily a primary residence.
+  const primaryHome = entries.filter(entry => entry.opening.mode === 'shared').sort(landingOrder)[0];
+  return { homes: entries.map(entry => entry.card), primary_home: primaryHome?.card || null };
 }
 // Every failed list request leaves one log line with its cause; an unexpected
 // exception (a bug) is logged as itself rather than hidden behind the 503.
