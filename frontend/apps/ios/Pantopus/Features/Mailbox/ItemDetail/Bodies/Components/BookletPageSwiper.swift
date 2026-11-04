@@ -169,7 +169,14 @@ struct BookletPaperPageChrome<Content: View>: View {
         ZStack(alignment: .trailing) {
             ZStack {
                 Theme.Color.appSurfaceRaised
-                BookletPaperPageScaffold()
+                    // The page's faint lines never size the page, so a thumbnail fits its
+                    // grid column; they show only where they fit.
+                    .overlay {
+                        ViewThatFits {
+                            BookletPaperPageScaffold()
+                            Color.clear
+                        }
+                    }
                 content
                 fold
             }

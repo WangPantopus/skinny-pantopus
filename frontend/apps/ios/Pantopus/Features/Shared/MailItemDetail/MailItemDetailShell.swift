@@ -59,6 +59,8 @@ public struct MailItemDetailShell<
     /// Measured height of the sticky actions shelf; the scroll content leaves at least this much room below the last
     /// card so it can scroll clear of the shelf.
     @State private var actionsShelfHeight: CGFloat = 0
+    /// The scroll view's size: a booklet sizes its pages to the part above the shelf.
+    @State private var scrollSize: CGSize = .zero
 
     public init(
         topBar: MailTopBarConfig,
@@ -108,6 +110,15 @@ public struct MailItemDetailShell<
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .background(Theme.Color.appBg)
+                .onGeometryChange(for: CGSize.self) { proxy in
+                    proxy.size
+                } action: { size in
+                    scrollSize = size
+                }
+                .environment(
+                    \.mailItemReadingArea,
+                    MailItemReadingArea(size: scrollSize, coveredBottom: actionsShelfHeight)
+                )
             }
             actionsShelf
                 .onGeometryChange(for: CGFloat.self) { proxy in

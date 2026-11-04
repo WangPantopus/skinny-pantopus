@@ -105,6 +105,7 @@ public struct UniversalSearchView: View {
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
             .focused($fieldFocused)
+            .onSubmit { fieldFocused = false }
             .accessibilityIdentifier("universalSearchField")
 
             if !viewModel.query.isEmpty {
@@ -278,7 +279,10 @@ public struct UniversalSearchView: View {
                     if viewModel.showsSectionHeaders {
                         UniversalSearchSectionHeader(section: section)
                     }
-                    UniversalSearchResultsCard(section: section, onOpen: onOpen)
+                    UniversalSearchResultsCard(section: section) { destination in
+                        fieldFocused = false
+                        onOpen(destination)
+                    }
                 }
             }
             .padding(.horizontal, Spacing.s4)

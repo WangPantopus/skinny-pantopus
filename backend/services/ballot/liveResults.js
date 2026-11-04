@@ -113,6 +113,13 @@ function measureLabel(name) {
   return name.replace(/^Initiative Measure No\.?\s*/i, 'Initiative ');
 }
 
+// A race the card can show. `label` names it in a text line ("U.S. House,
+// District 3"); `title` and `qualifier` are the same name in two parts for
+// apps that draw the count ("U.S. House" · "District 3").
+function race(kind, district, title, qualifier, label = qualifier ? `${title}, ${qualifier}` : title) {
+  return { kind, district, title, qualifier, label };
+}
+
 // Washington groups its contests: "State Measures", "U.S. Congressional
 // Representative" ("Congressional District 3 - U.S. Representative"),
 // "Legislative" ("Legislative District 17 - State Representative Pos. 1")
@@ -120,27 +127,25 @@ function measureLabel(name) {
 // seats are statewide; the other courts' districts aren't known here, so
 // they stay on the official page.
 function classifyByGroup(name, heading) {
-  if (/^State Measures$/i.test(heading)) return { kind: 'measure', district: null, label: measureLabel(name) };
+  if (/^State Measures$/i.test(heading)) return race('measure', null, measureLabel(name), null);
   if (/^Judicial$/i.test(heading)) {
     const seat = /^Supreme Court\b.*\bPosition\s*#?\s*(\d+)/i.exec(name);
-    return seat ? { kind: 'supreme_court', district: null, label: `State Supreme Court, Position ${Number(seat[1])}` } : null;
+    if (!seat) return null;
+    const position = `Position ${Number(seat[1])}`;
+    return race('supreme_court', null, 'Supreme Court', position, `State Supreme Court, ${position}`);
   }
   if (/^U\.S\. Congressional Representative$/i.test(heading)) {
     const district = /Congressional District (\d+)/i.exec(name);
-    return district ? { kind: 'house', district: String(Number(district[1])), label: `U.S. House, District ${Number(district[1])}` } : null;
+    return district ? race('house', String(Number(district[1])), 'U.S. House', `District ${Number(district[1])}`) : null;
   }
   if (/^Legislative$/i.test(heading)) {
     const district = /Legislative District (\d+)/i.exec(name);
     const position = /State Representative,?\s*Pos(?:ition|\.)?\s*(\d+)/i.exec(name);
     if (district && /State Senator/i.test(name)) {
-      return { kind: 'state_senate', district: String(Number(district[1])), label: `State Senate, District ${Number(district[1])}` };
+      return race('state_senate', String(Number(district[1])), 'State Senate', `District ${Number(district[1])}`);
     }
     if (district && position) {
-      return {
-        kind: 'state_house',
-        district: String(Number(district[1])),
-        label: `State House, District ${Number(district[1])}, Position ${Number(position[1])}`,
-      };
+      return race('state_house', String(Number(district[1])), 'State House', `District ${Number(district[1])}, Position ${Number(position[1])}`);
     }
   }
   return null;
@@ -151,12 +156,12 @@ function classifyByGroup(name, heading) {
 // Judicial retention and school board races stay on the official page.
 function classifyByName(name) {
   const house = /^U\.S\. House District (\d+)\b/i.exec(name);
-  if (house) return { kind: 'house', district: String(Number(house[1])), label: `U.S. House, District ${Number(house[1])}` };
+  if (house) return race('house', String(Number(house[1])), 'U.S. House', `District ${Number(house[1])}`);
   const senate = /^State Senate District (\d+)\b/i.exec(name);
-  if (senate) return { kind: 'state_senate', district: String(Number(senate[1])), label: `State Senate, District ${Number(senate[1])}` };
+  if (senate) return race('state_senate', String(Number(senate[1])), 'State Senate', `District ${Number(senate[1])}`);
   const stateHouse = /^State House District (\d+)\b/i.exec(name);
-  if (stateHouse) return { kind: 'state_house', district: String(Number(stateHouse[1])), label: `State House, District ${Number(stateHouse[1])}` };
-  if (/^Constitutional Amendment [A-Z]{1,2}$/i.test(name)) return { kind: 'measure', district: null, label: name };
+  if (stateHouse) return race('state_house', String(Number(stateHouse[1])), 'State House', `District ${Number(stateHouse[1])}`);
+  if (/^Constitutional Amendment [A-Z]{1,2}$/i.test(name)) return race('measure', null, name, null);
   return null;
 }
 
@@ -296,10 +301,55 @@ function postedLabel(iso, zone, today) {
 
 const KIND_ORDER = { house: 0, state_senate: 1, state_house: 2, supreme_court: 3, measure: 4 };
 const STATEWIDE = new Set(['supreme_court', 'measure']);
+// Statewide races fold behind one row when there are more than this and the
+// address has races of its own to show first.
+const FOLD_OVER = 3;
+
+// A measure reads Yes (or For) then No (or Against) on every card, whatever
+// order the state lists them in; candidates keep the state's own order.
+const MEASURE_ORDER = [/^(yes|for)\b/i, /^(no|against)\b/i];
+function measureOrder(options) {
+  const rank = (o) => {
+    const i = MEASURE_ORDER.findIndex((re) => re.test(o.name));
+    return i < 0 ? MEASURE_ORDER.length : i;
+  };
+  return [...options].sort((a, b) => rank(a) - rank(b));
+}
+
+// One race as apps draw it: every word and number already written, and each
+// choice's share of the race's votes (write-ins included) for its bar.
+function drawnRace(race) {
+  const measure = race.kind === 'measure' && race.options.length === 2;
+  return {
+    key: `${race.kind}:${race.district || ''}:${race.order}`,
+    kind: measure ? 'measure' : 'candidates',
+    title: race.title,
+    qualifier: race.qualifier,
+    options: (measure ? measureOrder(race.options) : race.options).map((o) => ({
+      name: o.name,
+      votes_label: o.votes.toLocaleString('en-US'),
+      percent_label: percent(o.votes, race.total),
+      share: Math.round((o.votes / race.total) * 10000) / 10000,
+    })),
+  };
+}
+
+// The folded statewide row: "8 statewide races" over "Supreme Court and 3
+// initiatives".
+function foldFor(races) {
+  const courts = races.some((r) => r.kind === 'supreme_court');
+  const measures = races.filter((r) => r.kind === 'measure');
+  let noun = ['measure', 'measures'];
+  if (measures.every((r) => /^Initiative\b/i.test(r.title))) noun = ['initiative', 'initiatives'];
+  else if (measures.every((r) => /^Constitutional Amendment\b/i.test(r.title))) noun = ['amendment', 'amendments'];
+  const parts = [courts ? 'Supreme Court' : null, measures.length ? `${measures.length} ${noun[measures.length === 1 ? 0 : 1]}` : null];
+  return { label: `${races.length} statewide races`, detail: parts.filter(Boolean).join(' and ') };
+}
 
 /**
- * The card's lines for one address from one count: `{ header, lines }`,
- * `{ pending: true }` when no votes are counted yet, or null.
+ * The card's lines for one address from one count: `{ header, lines, count }`
+ * (`count` is the same count for apps that draw it), `{ pending: true }`
+ * when no votes are counted yet, or null.
  */
 function cardLines(snapshot, { districts, fips, zone, today }) {
   const own = districts && districts.state_fips === fips ? districts : {};
@@ -316,10 +366,23 @@ function cardLines(snapshot, { districts, fips, zone, today }) {
   if (!counted.length) return { pending: true };
   const posted = snapshot.postedAt ? postedLabel(snapshot.postedAt, zone, today) : null;
   if (!posted) return null;
+  const local = counted.filter((race) => !STATEWIDE.has(race.kind));
+  const statewide = counted.filter((race) => STATEWIDE.has(race.kind));
+  const groups = [];
+  if (local.length) groups.push({ key: 'districts', title: 'Your districts', races: local.map(drawnRace), fold: null });
+  if (statewide.length) {
+    groups.push({
+      key: 'statewide',
+      title: 'Statewide',
+      races: statewide.map(drawnRace),
+      fold: local.length && statewide.length > FOLD_OVER ? foldFor(statewide) : null,
+    });
+  }
   return {
     // The clock already ends in "a.m." or "p.m.".
     header: `Unofficial count, posted ${posted}`,
     lines: counted.map((race) => `${race.label}: ${race.options.map((o) => `${o.name} ${percent(o.votes, race.total)}`).join(', ')}`),
+    count: { status: 'Unofficial count', posted: `posted ${posted}`, groups },
   };
 }
 

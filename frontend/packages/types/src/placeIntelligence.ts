@@ -890,6 +890,41 @@ export interface BallotMoverPrompt {
   url: string | null;
 }
 
+/** One choice in the drawn live count; every word and number comes written. */
+export interface BallotCountOption {
+  name: string;
+  votes_label: string;
+  percent_label: string;
+  /** Its share of the race's votes, write-ins included (0–1), for the bar. */
+  share: number;
+}
+
+export interface BallotCountRace {
+  key: string;
+  /** 'measure': one Yes/No bar over two options; 'candidates': a bar per choice. */
+  kind: 'candidates' | 'measure';
+  title: string;
+  qualifier?: string | null;
+  options: BallotCountOption[];
+}
+
+export interface BallotCountGroup {
+  key: string;
+  title: string;
+  races: BallotCountRace[];
+  /** Set when the group starts folded behind one row. */
+  fold?: { label: string; detail: string } | null;
+}
+
+/** The official count drawn on the card while ballots are counted (backend ballot/liveResults.js). */
+export interface BallotLiveCount {
+  status: string;
+  posted: string;
+  groups: BallotCountGroup[];
+  /** The card's note to show with the count (the top-level `note` repeats the count as text for older apps). */
+  note?: string | null;
+}
+
 export interface BallotSummaryFields {
   election_id?: string;
   coverage?: BallotCoverage;
@@ -905,6 +940,8 @@ export interface BallotSummaryFields {
   chip?: string | null;
   line?: string | null;
   note?: string | null;
+  /** While ballots are counted in a state with live results; when present, draw it and its note instead of `note`. */
+  live_count?: BallotLiveCount | null;
   how_it_works?: string | null;
   voting_method?: string | null;
   deadlines?: BallotDeadline[];

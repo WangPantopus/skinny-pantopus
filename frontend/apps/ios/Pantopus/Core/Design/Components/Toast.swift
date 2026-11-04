@@ -61,16 +61,23 @@ public struct ToastView: View {
             .pantopusTextStyle(.small)
             .pantopusLineHeight(.small)
             .multilineTextAlignment(.center)
-            .foregroundStyle(Theme.Color.appTextInverse)
+            .foregroundStyle(foreground)
             .padding(.horizontal, Spacing.s4)
             .padding(.vertical, Spacing.s2)
             .background(background)
     }
 
+    private var foreground: Color {
+        switch message.kind {
+        case .neutral: Theme.Color.appSurface
+        case .success, .error: Theme.Color.appTextInverse
+        }
+    }
+
     private var background: Color {
         switch message.kind {
-        case .success: Theme.Color.success.opacity(0.95)
-        case .error: Theme.Color.error.opacity(0.95)
+        case .success: Theme.Color.successSolid.opacity(0.95)
+        case .error: Theme.Color.errorSolid.opacity(0.95)
         case .neutral: Theme.Color.appText.opacity(0.9)
         }
     }
