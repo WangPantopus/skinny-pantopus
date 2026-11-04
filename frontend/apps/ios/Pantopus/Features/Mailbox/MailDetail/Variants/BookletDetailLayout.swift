@@ -21,6 +21,8 @@ import SwiftUI
 /// Standalone variant layout. Exposed to `MailDetailView`'s dispatcher.
 @MainActor
 struct BookletDetailLayout: View {
+    /// Beside the Mailbox the list is the way back (`mailPieceShowsBack`).
+    @Environment(\.mailPieceShowsBack) private var showsBack
     let content: MailDetailContent
     let booklet: BookletDetailDTO
     let ackInFlight: Bool
@@ -43,7 +45,7 @@ struct BookletDetailLayout: View {
     var body: some View {
         ScrollViewReader { scroll in
             MailItemDetailShell(
-                topBar: makeTopBar(),
+                topBar: makeTopBar().showingBack(showsBack),
                 aiElf: makeAIElf(),
                 attachments: makeAttachments(),
                 hero: { HeroCard(content: content) },

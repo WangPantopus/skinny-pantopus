@@ -17,6 +17,8 @@ import SwiftUI
 
 @MainActor
 struct PartyDetailLayout: View {
+    /// Beside the Mailbox the list is the way back (`mailPieceShowsBack`).
+    @Environment(\.mailPieceShowsBack) private var showsBack
     let content: MailDetailContent
     let party: PartyDetailDTO
     let rsvpInFlight: Bool
@@ -30,7 +32,7 @@ struct PartyDetailLayout: View {
 
     var body: some View {
         MailItemDetailShell(
-            topBar: makeTopBar(),
+            topBar: makeTopBar().showingBack(showsBack),
             aiElf: makeAIElf(),
             hero: { PartyHero(party: party) },
             keyFacts: { EventDetailsCard(party: party) },

@@ -20,6 +20,8 @@ public struct MailboxRootView: View {
     private let showsMenuButton: Bool
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The piece open beside the Mailbox on the open Duo.
+    @Environment(\.openMailPieceId) private var openPieceId
     private static let heroAnchor = "mailboxHero"
 
     /// Split init (see GigsFeedView): avoids a Swift 6.1.2 / Xcode 16.4 SILGen
@@ -70,6 +72,9 @@ public struct MailboxRootView: View {
                         proxy.scrollTo(Self.heroAnchor, anchor: .top)
                     }
                 }
+                // A new layout of the Mail tab (folding, turning the open Duo) draws a new Mailbox: at the piece
+                // open beside it, or where the last one was.
+                .modifier(MailboxPlaceKeeper(model: viewModel, openPieceId: openPieceId, proxy: proxy))
             }
         }
         .overlay(alignment: .bottomTrailing) {
@@ -362,6 +367,7 @@ struct MailPieceRow: View {
         Button(action: onOpen) {
             VStack(alignment: .leading, spacing: 6) {
                 MailPieceView(model: piece)
+                    .mailOpenOutline(id: piece.id)
                 MailPieceMetaLine(meta: piece.meta)
             }
             .contentShape(Rectangle())
@@ -370,6 +376,7 @@ struct MailPieceRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(piece.spokenWithArrival)
         .accessibilityAddTraits(.isButton)
+        .mailOpenSelection(id: piece.id)
         .accessibilityIdentifier("mailPiece.\(piece.id)")
         // The letter opens out of this piece and goes back into it.
         .itemZoomSource(.mailPiece, id: piece.id)

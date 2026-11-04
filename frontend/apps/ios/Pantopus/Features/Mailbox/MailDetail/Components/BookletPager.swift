@@ -19,6 +19,12 @@ public enum BookletPagerMode: Sendable, Hashable {
     case grid
 }
 
+/// Where a booklet's reader is: the page (a spread's left page) and whether all pages show.
+struct BookletPlace: Equatable {
+    var page = 0
+    var mode = BookletPagerMode.page
+}
+
 @MainActor
 public struct BookletPager: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -27,6 +33,8 @@ public struct BookletPager: View {
     private let pageCount: Int
     private let ocrTexts: [String]
     private let onShowPage: () -> Void
+    /// Tells the page's model where the reader is, so a new layout (folding, turning) opens it there.
+    private let onPlaceChange: (BookletPlace) -> Void
     @State private var currentIndex: Int
     @State private var mode: BookletPagerMode
     /// The reader's width, the screen's side margins beside it, its controls' height, and the Duo's hinge: what
@@ -42,12 +50,14 @@ public struct BookletPager: View {
         ocrTexts: [String] = [],
         initialPage: Int = 0,
         initialMode: BookletPagerMode = .page,
-        onShowPage: @escaping () -> Void = {}
+        onShowPage: @escaping () -> Void = {},
+        onPlaceChange: @escaping (BookletPlace) -> Void = { _ in }
     ) {
         self.pages = pages
         self.pageCount = max(pageCount ?? pages.count, pages.count)
         self.ocrTexts = ocrTexts
         self.onShowPage = onShowPage
+        self.onPlaceChange = onPlaceChange
         _currentIndex = State(initialValue: max(0, min(initialPage, max(0, pages.count - 1))))
         _mode = State(initialValue: initialMode)
     }
@@ -74,6 +84,7 @@ public struct BookletPager: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { readerWidth = $0 }
         .readsBookletHinge($hinge)
         .readsBookletScreenMargin($screenMargin)
+        .onChange(of: BookletPlace(page: currentIndex, mode: mode)) { _, place in onPlaceChange(place) }
         .accessibilityIdentifier("bookletPager")
     }
 

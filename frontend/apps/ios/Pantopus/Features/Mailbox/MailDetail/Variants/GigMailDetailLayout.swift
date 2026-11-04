@@ -18,6 +18,8 @@ import SwiftUI
 
 @MainActor
 struct GigMailDetailLayout: View {
+    /// Beside the Mailbox the list is the way back (`mailPieceShowsBack`).
+    @Environment(\.mailPieceShowsBack) private var showsBack
     let content: MailDetailContent
     let gig: GigDetailDTO
     let bidInFlight: Bool
@@ -32,7 +34,7 @@ struct GigMailDetailLayout: View {
 
     var body: some View {
         MailItemDetailShell(
-            topBar: makeTopBar(),
+            topBar: makeTopBar().showingBack(showsBack),
             aiElf: makeAIElf(),
             attachments: makeAttachments(),
             hero: { GigHeroCard(content: content, gig: gig) },
