@@ -56,6 +56,8 @@ extension BusinessPageBlock {
 /// One block rendered the way a visitor sees it.
 @MainActor
 public struct BusinessPageBlockPreview: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     private let block: BusinessPageBlock
     private let forVisitors: Bool
 
@@ -90,11 +92,12 @@ public struct BusinessPageBlockPreview: View {
     private var hero: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text(block.headline.isEmpty ? "Welcome" : block.headline)
-                .pantopusTextStyle(.h2)
+                .scaledFont(24, weight: .semibold)
+                .tracking(-0.36)
                 .foregroundStyle(Theme.Color.appTextInverse)
             if !block.subhead.isEmpty {
                 Text(block.subhead)
-                    .pantopusTextStyle(.small)
+                    .scaledFont(14)
                     .foregroundStyle(Theme.Color.appTextInverse.opacity(0.85))
             }
             buttonRow(block.buttonList(key: "cta"), onDark: true)
@@ -109,12 +112,12 @@ public struct BusinessPageBlockPreview: View {
         VStack(alignment: .leading, spacing: Spacing.s1) {
             if !block.heading.isEmpty {
                 Text(block.heading)
-                    .pantopusTextStyle(.h3)
+                    .scaledFont(20, weight: .semibold)
                     .foregroundStyle(Theme.Color.appTextStrong)
             }
             if !block.body.isEmpty {
                 Text(block.body)
-                    .pantopusTextStyle(.small)
+                    .scaledFont(14)
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
         }
@@ -140,11 +143,11 @@ public struct BusinessPageBlockPreview: View {
     private var cta: some View {
         VStack(spacing: Spacing.s2) {
             Text(block.heading.isEmpty ? "Get in touch" : block.heading)
-                .pantopusTextStyle(.h3)
+                .scaledFont(20, weight: .semibold)
                 .foregroundStyle(Theme.Color.appTextStrong)
             if !block.subhead.isEmpty {
                 Text(block.subhead)
-                    .pantopusTextStyle(.small)
+                    .scaledFont(14)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .multilineTextAlignment(.center)
             }
@@ -162,11 +165,11 @@ public struct BusinessPageBlockPreview: View {
             ForEach(Array(block.faqItems.enumerated()), id: \.offset) { _, item in
                 VStack(alignment: .leading, spacing: Spacing.s1) {
                     Text(item.question.isEmpty ? "Question" : item.question)
-                        .pantopusTextStyle(.body)
+                        .scaledFont(16)
                         .foregroundStyle(Theme.Color.appTextStrong)
                     if !item.answer.isEmpty {
                         Text(item.answer)
-                            .pantopusTextStyle(.small)
+                            .scaledFont(14)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     }
                 }
@@ -183,14 +186,18 @@ public struct BusinessPageBlockPreview: View {
     }
 
     private var stats: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(spacing: Spacing.s2), count: 2), spacing: Spacing.s2) {
+        LazyVGrid(
+            columns: Array(repeating: GridItem(spacing: Spacing.s2), count: usesVerticalActions ? 1 : 2),
+            spacing: Spacing.s2
+        ) {
             ForEach(Array(block.stats.enumerated()), id: \.offset) { _, stat in
                 VStack(spacing: Spacing.s1) {
                     Text(stat.value)
-                        .pantopusTextStyle(.h2)
+                        .scaledFont(24, weight: .semibold)
+                        .tracking(-0.36)
                         .foregroundStyle(Theme.Color.appTextStrong)
                     Text(stat.label)
-                        .pantopusTextStyle(.caption)
+                        .scaledFont(12)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 .frame(maxWidth: .infinity)
@@ -207,7 +214,7 @@ public struct BusinessPageBlockPreview: View {
             Link(destination: address) {
                 HStack(spacing: Spacing.s2) {
                     Text((address.host ?? "") + (address.path == "/" ? "" : address.path))
-                        .pantopusTextStyle(.small)
+                        .scaledFont(14)
                         .multilineTextAlignment(.leading)
                     Spacer()
                     Icon(.externalLink, size: 16, color: Theme.Color.primaryInk)
@@ -226,7 +233,7 @@ public struct BusinessPageBlockPreview: View {
             VStack(spacing: Spacing.s1) {
                 Icon(.globe, size: 24, color: Theme.Color.appTextMuted)
                 Text(block.url.isEmpty ? "No embed URL" : "Embedded: \(block.url)")
-                    .pantopusTextStyle(.caption)
+                    .scaledFont(12)
                     .foregroundStyle(Theme.Color.appTextMuted)
                     .multilineTextAlignment(.center)
             }
@@ -248,7 +255,7 @@ public struct BusinessPageBlockPreview: View {
         HStack(spacing: Spacing.s2) {
             Icon(.package, size: 16, color: Theme.Color.appTextMuted)
             Text("Unsupported block “\(raw)” — update the app to see it.")
-                .pantopusTextStyle(.caption)
+                .scaledFont(12)
                 .foregroundStyle(Theme.Color.appTextMuted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -262,7 +269,7 @@ public struct BusinessPageBlockPreview: View {
     @ViewBuilder private var headingText: some View {
         if !block.heading.isEmpty {
             Text(block.heading)
-                .pantopusTextStyle(.h3)
+                .scaledFont(20, weight: .semibold)
                 .foregroundStyle(Theme.Color.appTextStrong)
         }
     }
@@ -271,7 +278,7 @@ public struct BusinessPageBlockPreview: View {
         VStack(alignment: .leading, spacing: Spacing.s1) {
             headingText
             Text(note)
-                .pantopusTextStyle(.caption)
+                .scaledFont(12)
                 .foregroundStyle(Theme.Color.appTextMuted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -285,7 +292,7 @@ public struct BusinessPageBlockPreview: View {
     ) -> some View {
         let shown = forVisitors ? buttons.filter(\.opensWebAddress) : buttons
         if !shown.isEmpty {
-            HStack(spacing: Spacing.s2) {
+            buttonLayout {
                 ForEach(Array(shown.enumerated()), id: \.offset) { index, button in
                     if forVisitors, let address = BusinessPageBlockButton.webAddress(button.url) {
                         Link(destination: address) { pill(button, index: index, onDark: onDark) }
@@ -298,9 +305,19 @@ public struct BusinessPageBlockPreview: View {
         }
     }
 
+    private var usesVerticalActions: Bool {
+        dynamicTypeSize.isAccessibilitySize && horizontalSizeClass != .regular
+    }
+
+    private var buttonLayout: AnyLayout {
+        usesVerticalActions
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.s2))
+            : AnyLayout(HStackLayout(spacing: Spacing.s2))
+    }
+
     private func pill(_ button: BusinessPageBlockButton, index: Int, onDark: Bool) -> some View {
         Text(button.label.isEmpty ? "Learn More" : button.label)
-            .pantopusTextStyle(.caption)
+            .scaledFont(12)
             .foregroundStyle(pillForeground(index: index, onDark: onDark))
             .padding(.horizontal, Spacing.s4)
             .padding(.vertical, Spacing.s2)
