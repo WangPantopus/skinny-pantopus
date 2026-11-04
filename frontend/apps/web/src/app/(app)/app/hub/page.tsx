@@ -26,6 +26,7 @@ import type { HubPayload } from '@/components/hub';
 import type { HubToday } from '@pantopus/types';
 import { activeQueryClient } from '@/lib/active-query-client';
 import { myHomesQuery } from '@/lib/myHomes';
+import { hubTodayQuery } from '@/lib/hubToday';
 
 const HUB_STALE_TIME = 120_000; // 2 minutes
 
@@ -112,11 +113,9 @@ export default function HubPage() {
     enabled: hasToken,
   });
 
-  // ── Hub Today (staleTime 120s, retry 1x with 800ms delay) ──
+  // ── Hub Today: the Today screen's own query (lib/hubToday) ──
   const todayQuery = useQuery<HubToday | null>({
-    queryKey: queryKeys.hubToday(),
-    queryFn: () => api.hub.getHubToday({ retries: 1, retryDelayMs: 800 }),
-    staleTime: HUB_STALE_TIME,
+    ...hubTodayQuery(),
     enabled: hasToken,
   });
 

@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.shared.media
 
+import android.os.Bundle
 import android.view.ViewGroup
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
@@ -20,8 +21,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -29,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,7 +51,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -266,7 +269,7 @@ private val CLOSE_FLING = 1000.dp
 private const val CLOSE_MS = 180
 private const val MIN_BACKDROP_ALPHA = 0.25f
 
-/** Video page — ExoPlayer with controls; plays while its page is active. */
+/** Video page — keeps position and the user's play/pause choice while releasing hidden decoders. */
 // media3 PlayerView / AspectRatioFrameLayout are @UnstableApi; the opt-in is
 // consumed here so it doesn't propagate to callers. Behaviour is unchanged.
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -276,24 +279,36 @@ private fun ViewerVideoSlide(
     isActive: Boolean,
 ) {
     val context = LocalContext.current
-    var player by remember { mutableStateOf<ExoPlayer?>(null) }
+    var player by remember(url) { mutableStateOf<ExoPlayer?>(null) }
+    var position by rememberSaveable(url) { mutableStateOf(0L) }
+    var resumePlayback by rememberSaveable(url) { mutableStateOf(true) }
+    var speed by rememberSaveable(url) { mutableFloatStateOf(1f) }
+    var pitch by rememberSaveable(url) { mutableFloatStateOf(1f) }
+    var tracks by rememberSaveable(url) { mutableStateOf<Bundle?>(null) }
 
-    LaunchedEffect(isActive) {
-        if (isActive) {
-            val target =
-                player ?: ExoPlayer.Builder(context).build().apply {
+    LifecycleStartEffect(url, isActive) {
+        val activePlayer =
+            if (isActive) {
+                ExoPlayer.Builder(context).build().apply {
                     setMediaItem(MediaItem.fromUri(url))
+                    seekTo(position)
+                    playWhenReady = resumePlayback
+                    playbackParameters = PlaybackParameters(speed, pitch)
+                    tracks?.let { trackSelectionParameters = TrackSelectionParameters.fromBundle(it) }
                     prepare()
                 }.also { player = it }
-            target.playWhenReady = true
-        } else {
-            player?.playWhenReady = false
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            player?.release()
+            } else {
+                null
+            }
+        onStopOrDispose {
+            activePlayer?.let {
+                position = it.currentPosition
+                resumePlayback = it.playWhenReady
+                speed = it.playbackParameters.speed
+                pitch = it.playbackParameters.pitch
+                tracks = it.trackSelectionParameters.toBundle()
+                it.release()
+            }
             player = null
         }
     }

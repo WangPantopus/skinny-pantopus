@@ -512,10 +512,57 @@ const apiClient: AxiosInstance = axios.create({
   },
 });
 
+// ============ STARTUP SESSION RECOVERY (web) ============
+// An app document loaded after the 1-hour access cookie expired starts
+// POST /api/users/refresh from its first inline script, before this bundle
+// arrives (apps/web src/lib/session-refresh.ts). Requests wait for that
+// refresh instead of being refused, and a 401 retry shares it as the
+// single-flight refresh. When it fails the document is already leaving for
+// /session/refresh, which signs out, retries or explains.
+
+type StartupRecovery = { promise?: Promise<AuthRefreshResult>; handedOff?: boolean };
+let _startupRecovery: Promise<AuthRefreshResult> | null = null;
+
+function startupRecoveryHandle(): StartupRecovery | undefined {
+  if (!_isWeb || typeof window === 'undefined') return undefined;
+  return (window as unknown as { __pantopusRecovery?: StartupRecovery }).__pantopusRecovery;
+}
+
+function sessionRecoveringError() {
+  // No status code: screens keep loading (queries retry) while the page leaves.
+  return new ApiRequestError({ message: 'Restoring your session…', code: 'AUTH_SESSION_RECOVERING' });
+}
+
+/** Resolves once this page's startup session recovery (if any) has settled. */
+async function awaitStartupRecovery(): Promise<void> {
+  const pending = _startupRecovery;
+  if (!pending) return;
+  const result = await pending;
+  if (result.status === 'success') return;
+  // The document is navigating to the refresh page; keep requests out of its way.
+  if (startupRecoveryHandle()?.handedOff) throw sessionRecoveringError();
+}
+
+(function adoptStartupRecovery() {
+  const early = startupRecoveryHandle()?.promise;
+  if (!early) return;
+  const pending = early.then(
+    (result): AuthRefreshResult => result,
+    (): AuthRefreshResult => ({ status: 'transient', message: 'Could not reach the server' }),
+  );
+  _startupRecovery = pending;
+  void pending.then((result) => {
+    if (result.status === 'success' || !startupRecoveryHandle()?.handedOff) {
+      if (_startupRecovery === pending) _startupRecovery = null;
+    }
+  });
+})();
+
 // ============ REQUEST INTERCEPTOR ============
 
 apiClient.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
+  async (config: InternalAxiosRequestConfig) => {
+    await awaitStartupRecovery();
     if (requestSessionChanged(config)) return Promise.reject(sessionChangedError());
     if (_isWeb) (config as SessionBoundRequest)._authSessionMarker = currentRequestSession();
     if (_isWeb) {
@@ -649,6 +696,8 @@ async function doTokenRefresh(): Promise<AuthRefreshResult> {
 
 export async function refreshAuthSession(options?: { trigger?: string }): Promise<AuthRefreshResult> {
   const trigger = options?.trigger ?? 'manual';
+  // The page's startup recovery is this page's refresh while it runs.
+  if (_startupRecovery) return _startupRecovery;
 
   if (!_refreshPromise) {
     const sessionMarker = _isWeb ? currentRequestSession() : null;

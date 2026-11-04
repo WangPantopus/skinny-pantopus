@@ -62,6 +62,7 @@ struct ChatOutboxAttachment: Codable, Identifiable, Equatable {
 enum ChatLocalStorageError: LocalizedError {
     case quota
     case attachmentLimit(megabytes: Int)
+    case unsupportedAttachment
     case damagedAttachment
     case unavailable
 
@@ -69,6 +70,7 @@ enum ChatLocalStorageError: LocalizedError {
         switch self {
         case .quota: "Unsent messages are using 100 MB. Let uploads finish or discard a failed message, then try again."
         case let .attachmentLimit(megabytes): "This attachment exceeds the \(megabytes) MB file limit. Choose a smaller file."
+        case .unsupportedAttachment: "Choose a photo, video, PDF, Word, Excel, or text file. Other file types aren't supported in chat."
         case .damagedAttachment: "That queued file could not be restored. Attach it again to send it."
         case .unavailable: "Couldn't save this message on your device. Reopen the app and try again."
         }

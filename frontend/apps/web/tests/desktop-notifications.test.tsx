@@ -35,7 +35,9 @@ class BrowserAlert {
 }
 const originalNotification = Object.getOwnPropertyDescriptor(window, 'Notification');
 function Probe() { useDesktopNotifications(); return null; }
-function show() { return render(<SocketProvider><Probe /></SocketProvider>); }
+// SocketProvider imports socket.io-client after the shell renders; let it connect.
+const connected = () => act(async () => { await new Promise((resolve) => jest.requireActual('timers').setImmediate(resolve)); });
+async function show() { const view = render(<SocketProvider><Probe /></SocketProvider>); await connected(); return view; }
 const note = { id: 'note-1', user_id: 'user-1', title: 'Beacon update', body: 'Exact post', link: '/post/post-1' };
 function publish(event = 'notification:alert', value = note) {
   act(() => sockets[sockets.length - 1].listeners.get(event)?.(value));
@@ -54,30 +56,31 @@ afterEach(() => {
   else Reflect.deleteProperty(window, 'Notification');
 });
 
-test('in-app events never become browser alerts; an eligible alert opens the exact post', () => {
-  show(); publish('notification:new'); expect(BrowserAlert.created).toHaveLength(0);
+test('in-app events never become browser alerts; an eligible alert opens the exact post', async () => {
+  await show(); publish('notification:new'); expect(BrowserAlert.created).toHaveLength(0);
   publish(); expect(BrowserAlert.created).toHaveLength(1);
   expect(BrowserAlert.created[0].options.body).toBe('Exact post');
   act(() => BrowserAlert.created[0].onclick?.());
   expect(push).toHaveBeenCalledWith('/app/feed/post/post-1');
 });
-test('duplicate relay events cannot alert again after the browser popup closes', () => {
-  show(); publish(); act(() => jest.advanceTimersByTime(5001)); publish();
+test('duplicate relay events cannot alert again after the browser popup closes', async () => {
+  await show(); publish(); act(() => jest.advanceTimersByTime(5001)); publish();
   expect(BrowserAlert.created).toHaveLength(1); expect(BrowserAlert.created[0].close).toHaveBeenCalled();
 });
-test('focused or denied browser does not alert', () => {
-  show(); jest.mocked(document.hasFocus).mockReturnValue(true); publish();
+test('focused or denied browser does not alert', async () => {
+  await show(); jest.mocked(document.hasFocus).mockReturnValue(true); publish();
   jest.mocked(document.hasFocus).mockReturnValue(false); publish();
   BrowserAlert.permission = 'denied'; publish('notification:alert', { ...note, id: 'note-2' });
   expect(BrowserAlert.created).toHaveLength(0);
 });
-test.each(['same-tab', 'cross-tab'])('%s cookie session replacement retires socket, alerts and callbacks even with the same marker', (source) => {
-  show(); publish(); const oldSocket = sockets[0];
+test.each(['same-tab', 'cross-tab'])('%s cookie session replacement retires socket, alerts and callbacks even with the same marker', async (source) => {
+  await show(); publish(); const oldSocket = sockets[0];
   const retained = oldSocket.listeners.get('notification:alert'); const alert = BrowserAlert.created[0];
   act(() => {
     if (source === 'same-tab') [...authListeners].forEach((listener) => listener());
     else window.dispatchEvent(new StorageEvent('storage', { key: 'pantopus_auth_session_change', newValue: 'replacement' }));
   });
+  await connected();
   expect(oldSocket.disconnect).toHaveBeenCalled(); expect(sockets).toHaveLength(2);
   expect(alert.close).toHaveBeenCalled();
   act(() => { alert.onclick?.(); retained?.({ ...note, id: 'old-late' }); });
@@ -85,19 +88,19 @@ test.each(['same-tab', 'cross-tab'])('%s cookie session replacement retires sock
   publish('notification:alert', { ...note, id: 'current', user_id: 'user-2' });
   expect(BrowserAlert.created).toHaveLength(2);
 });
-test('logout closes the old connection without starting a replacement', () => {
-  show(); publish(); token = null;
+test('logout closes the old connection without starting a replacement', async () => {
+  await show(); publish(); token = null;
   act(() => [...authListeners].forEach((listener) => listener()));
   expect(sockets).toHaveLength(1); expect(sockets[0].disconnect).toHaveBeenCalled();
   expect(BrowserAlert.created[0].close).toHaveBeenCalled();
 });
-test('malformed navigation cannot execute an arbitrary browser location', () => {
-  show(); publish('notification:alert', { ...note, link: 'javascript:alert(1)' });
+test('malformed navigation cannot execute an arbitrary browser location', async () => {
+  await show(); publish('notification:alert', { ...note, link: 'javascript:alert(1)' });
   expect(BrowserAlert.created[0].onclick).toBeNull(); expect(push).not.toHaveBeenCalled();
 });
 
-test('exact task metadata overrides a dashboard link on the browser alert', () => {
-  show();
+test('exact task metadata overrides a dashboard link on the browser alert', async () => {
+  await show();
   const home = 'ddf18400-0000-4000-8000-000000000100';
   const task = 'ddf18400-0000-4000-8000-000000000200';
   act(() => sockets[0].listeners.get('notification:alert')?.({ ...note, type: 'task_assigned',
@@ -105,8 +108,8 @@ test('exact task metadata overrides a dashboard link on the browser alert', () =
   act(() => BrowserAlert.created[0].onclick?.());
   expect(push).toHaveBeenCalledWith(`/app/homes/${home}/tasks/${task}`);
 });
-test('a changed cookie session marker blocks an old alert and click before the storage event is delivered', () => {
-  show(); publish();
+test('a changed cookie session marker blocks an old alert and click before the storage event is delivered', async () => {
+  await show(); publish();
   localStorage.setItem('pantopus_auth_session_change', 'replacement');
   act(() => BrowserAlert.created[0].onclick?.());
   publish('notification:alert', { ...note, id: 'late' });

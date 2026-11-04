@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-// Same-origin client route that attempts POST /api/users/refresh (through the
-// single-flight mutex in @pantopus/api) BEFORE anyone clears cookies. The
-// refresh cookie is path-scoped to /api/users/refresh, so this middleware
+// The refresh cookie is path-scoped to /api/users/refresh, so this middleware
 // cannot see it and must never treat "access cookie missing" as "signed out".
-// See docs/01-authentication-authorization.md §1.5 (web session recovery).
-import { SESSION_REFRESH_PATH } from './lib/session-refresh';
+// An app document in that state renders with a recovery hint: its first script
+// refreshes the session in place (lib/session-refresh.ts) before anyone clears
+// cookies, and only a refused or failed refresh goes to the same-origin client
+// route SESSION_REFRESH_PATH. See docs/01-authentication-authorization.md §1.5.
+import { SESSION_RECOVER_COOKIE, SESSION_RECOVER_MAX_AGE_S, SESSION_REFRESH_PATH } from './lib/session-refresh';
 import { readAuthRedirectQuery, safeRedirectPath } from '@pantopus/ui-utils';
 import { isLaunchCutPath, launchFeatures } from './lib/featureFlags';
 
@@ -56,11 +57,48 @@ function appAliasFor(pathname: string): string | null {
   return null;
 }
 
-function buildRefreshRedirect(req: NextRequest, redirectTo: string, onFail?: string) {
-  const url = new URL(SESSION_REFRESH_PATH, req.url);
-  url.searchParams.set('redirectTo', redirectTo);
-  if (onFail) url.searchParams.set('onFail', onFail);
-  return NextResponse.redirect(url);
+// A document request (not a client navigation's RSC fetch or a prefetch): only
+// a document runs the recovery script, so only it gets the hint. The chat
+// service worker forwards Messages navigations itself, which Chrome sends
+// with Sec-Fetch-Dest "empty" and Sec-Fetch-Mode "navigate".
+function isDocumentRequest(req: NextRequest): boolean {
+  const headers = req.headers;
+  if (!headers) return true;
+  if (headers.get('rsc') || headers.get('next-router-prefetch') || headers.get('purpose') === 'prefetch') return false;
+  const dest = headers.get('sec-fetch-dest');
+  return dest === null || dest === 'document' || headers.get('sec-fetch-mode') === 'navigate';
+}
+
+// Marks a response for a stale session so the app document recovers in place.
+// The hint names the public fallback for a refresh the server refuses. A hint
+// the previous hop just set (`/` → /app/place, a shared link → its app page)
+// keeps its fallback when this page has none of its own.
+function withRecoveryHint(req: NextRequest, res: NextResponse, onFail: string | null): NextResponse {
+  if (!isDocumentRequest(req)) return res;
+  const carried = req.cookies.get(SESSION_RECOVER_COOKIE)?.value;
+  res.cookies.set(SESSION_RECOVER_COOKIE, onFail ?? (carried || '1'), {
+    path: '/',
+    maxAge: SESSION_RECOVER_MAX_AGE_S,
+    sameSite: 'lax',
+    httpOnly: false,
+    secure: new URL(req.url).protocol === 'https:',
+  });
+  return res;
+}
+
+// Where signed-in traffic to an /app path goes: hidden features and the
+// Mailbox entry redirect, everything else renders.
+function appRoute(req: NextRequest, pathname: string): NextResponse {
+  // Launch cut #10 (Mailbox): the mailbox itself, with any scope or drawer in
+  // its query, opens Messages, which took its tab. Its other pages land on Place.
+  if (!launchFeatures.mailbox && /^\/app\/mailbox\/?$/.test(pathname)) {
+    return NextResponse.redirect(new URL('/app/chat', req.url));
+  }
+  // Launch cut: app pages of a hidden feature send signed-in users to Place.
+  if (isLaunchCutPath(pathname)) {
+    return NextResponse.redirect(new URL('/app/place', req.url));
+  }
+  return NextResponse.next();
 }
 
 export function middleware(req: NextRequest) {
@@ -121,22 +159,27 @@ export function middleware(req: NextRequest) {
   }
 
   if (hasStaleSession) {
-    // Recovery hand-off: try to refresh before deciding anything. Cookies are
-    // NOT cleared here — the client route clears them (via /api/users/logout)
-    // only when the refresh endpoint says the session is truly invalid.
+    // Recovery in place: route as for a signed-in visitor and let the app
+    // document refresh before its first API request (lib/session-refresh.ts).
+    // Cookies are NOT cleared here — /session/refresh clears them (via
+    // /api/users/logout) only when the refresh endpoint says the session is
+    // truly invalid. App pages are prerendered for everyone and carry no
+    // account data, so rendering one before the refresh exposes nothing.
     if (pathname.startsWith('/app')) {
       const alias = publicAliasFor(pathname);
-      return buildRefreshRedirect(req, `${pathname}${search || ''}`, alias ? `${alias}${search || ''}` : undefined);
+      return withRecoveryHint(req, appRoute(req, pathname), alias ? `${alias}${search || ''}` : null);
     }
     // A shared link opens in the app once refreshed; the public page is the fallback.
     const appPath = appAliasFor(pathname);
     if (appPath) {
-      return buildRefreshRedirect(req, `${appPath}${search || ''}`, `${pathname}${search || ''}`);
+      const redirectUrl = new URL(appPath, req.url);
+      redirectUrl.search = search || '';
+      return withRecoveryHint(req, NextResponse.redirect(redirectUrl), `${pathname}${search || ''}`);
     }
     if (pathname === '/') {
       // Returning users land on their Place once refreshed; the landing page
       // stays the fallback when the refresh cookie is gone.
-      return buildRefreshRedirect(req, '/app/place', '/');
+      return withRecoveryHint(req, NextResponse.redirect(new URL('/app/place', req.url)), '/');
     }
     // /login, /register and the auth-flow pages render normally. A fresh
     // login simply overwrites the cookies; nothing to clear up front.
@@ -181,16 +224,7 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Launch cut #10 (Mailbox): the mailbox itself, with any scope or drawer in
-  // its query, opens Messages, which took its tab. Its other pages land on Place.
-  if (!launchFeatures.mailbox && /^\/app\/mailbox\/?$/.test(pathname)) {
-    return NextResponse.redirect(new URL('/app/chat', req.url));
-  }
-
-  // Launch cut: app pages of a hidden feature send signed-in users to Place.
-  if (pathname.startsWith('/app') && isLaunchCutPath(pathname)) {
-    return NextResponse.redirect(new URL('/app/place', req.url));
-  }
+  if (pathname.startsWith('/app')) return appRoute(req, pathname);
 
   return NextResponse.next();
 }

@@ -5,11 +5,11 @@ import { QueryCache, QueryClient, QueryClientProvider, onlineManager } from '@ta
 import { purgeExpiredPlacePreviews } from '@/components/place/pendingPlace';
 import { subscribeConnectivity } from '@/lib/connectivity';
 import { clearCachedMapTiles } from '@/utils/tilePrefetch';
-import { AUTH_SESSION_CHANGE_KEY, getAuthToken, onTokenChange } from '@pantopus/api';
+import { AUTH_SESSION_CHANGE_KEY, getAuthToken, onTokenChange } from '@pantopus/api/client';
 import { setActiveQueryClient } from '@/lib/active-query-client';
 import { chatHistoryMessageIds, chatHistoryRooms, clearChatStorage, onChatHistoryRetired } from '@/components/chat/chatStorage';
 import { suspendChatOutbox } from '@/components/chat/chatOutbox';
-import { retainInboxAfterRetirement, type ConversationsReply } from '@/lib/conversations';
+import { retainInboxAfterRetirement, type ConversationsReply } from '@/lib/conversation-storage';
 import { queryKeys } from '@/lib/query-keys';
 
 // Queries pause while offline. React Query's own detection believes the

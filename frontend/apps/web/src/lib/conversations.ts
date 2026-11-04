@@ -7,49 +7,24 @@
 
 import * as api from '@pantopus/api';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useQueryClient, type QueryClient, type QueryFunctionContext } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type QueryFunctionContext } from '@tanstack/react-query';
 import type { UnifiedConversationItem } from '@pantopus/types';
 import { queryKeys } from '@/lib/query-keys';
 import { fetchMe } from '@/lib/me';
 import { useSocket } from '@/hooks/useSocket';
-import { activateChatStorage, captureChatHistoryFence, deleteChatRecords, isChatStorageActiveFor, readCachedChatAccountId,
-  readChatRecord, writeChatRecords } from '@/components/chat/chatStorage';
+import { activateChatStorage, captureChatHistoryFence, deleteChatRecords, readCachedChatAccountId,
+  readChatRecord } from '@/components/chat/chatStorage';
 
-type ConversationTail = { generation?: string; rows: UnifiedConversationItem[]; nextCursor: string | null; hasMore: boolean };
-export type ConversationsReply = Awaited<ReturnType<typeof api.chat.getUnifiedConversations>> & { refreshId?: string; keptTail?: ConversationTail };
+import { CONVERSATIONS_LIMIT, INBOX_KEY, retainInbox as saveInbox, type ConversationsReply, type SavedInbox } from '@/lib/conversation-storage';
+export { CONVERSATIONS_LIMIT, type ConversationsReply } from '@/lib/conversation-storage';
 
-export const CONVERSATIONS_LIMIT = 50;
 export const CONVERSATIONS_FRESH_MS = 30 * 1000;
-const INBOX_KEY = 'personal-inbox-v1';
-type SavedInbox = { inbox: ConversationsReply; roomIds: string[]; historyGeneration: number };
 
 async function retainInbox(reply: ConversationsReply, accountId: string | undefined, marker: string,
-  fence: Awaited<ReturnType<typeof captureChatHistoryFence>> | undefined, current?: () => boolean) {
+  fence: Awaited<ReturnType<typeof captureChatHistoryFence>> | undefined) {
   if (fence === undefined) return;
   const actor = accountId || await readCachedChatAccountId() || (await fetchMe()).id;
-  if (!actor || marker !== api.authSessionMarker()) return;
-  const scope = await activateChatStorage(actor);
-  if (marker !== api.authSessionMarker() || current?.() === false) return;
-  const inbox = { ...reply, conversations: reply.conversations.slice(0, CONVERSATIONS_LIMIT), keptTail: undefined };
-  const rooms = inbox.conversations.flatMap((row) => row._type === 'room' ? [row.id] : row.room_ids);
-  const value: SavedInbox = { inbox, roomIds: [...new Set(rooms)], historyGeneration: fence?.account === scope.account ? fence.generation : 0 };
-  await writeChatRecords(scope, [{ kind: 'history', key: INBOX_KEY, value }]);
-}
-
-/** A deletion or access retirement removes the saved inbox with every other
- * snapshot of those rooms. Save the inbox already patched in memory (denied
- * rooms dropped, previews of rooms with a deleted message cleared) under the
- * new fence, so an offline reload before the next inbox read still has the
- * rest of it. A newer read replaces it and saves itself. */
-export async function retainInboxAfterRetirement(client: QueryClient, event: { account: string; generation: number; cleared?: boolean }): Promise<void> {
-  if (event.cleared) return;
-  const reply = client.getQueryData<ConversationsReply>(queryKeys.conversations());
-  if (!reply || !Array.isArray(reply.conversations)) return;
-  let accountId: unknown;
-  try { accountId = (JSON.parse(event.account) as unknown[])[1]; } catch { return; }
-  if (typeof accountId !== 'string' || !isChatStorageActiveFor(accountId)) return;
-  await retainInbox(reply, accountId, api.authSessionMarker(), { account: event.account, generation: event.generation },
-    () => client.getQueryData(queryKeys.conversations()) === reply);
+  await saveInbox(reply, actor, marker, fence);
 }
 
 export function conversationsQuery(search = '') {
