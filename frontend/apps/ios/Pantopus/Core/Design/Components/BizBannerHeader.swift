@@ -70,6 +70,8 @@ public struct BizStatusBadge: Hashable, Sendable {
 ///   - verified: Shows the logo verified disc + "· Verified" chip suffix.
 ///   - chipIcon: Icon on the identity chip; `nil` shows the label alone.
 ///   - status: Optional Open / Closed chip.
+///   - topInset: Height of the status bar the banner runs under; the banner grows by it so the logo stays below
+///     controls floating over the banner.
 @MainActor
 public struct BizBannerHeader: View {
     private let identity: IdentityPillar
@@ -85,6 +87,7 @@ public struct BizBannerHeader: View {
     /// Icon on the identity chip. Callers showing an unverified business
     /// pass `nil`: the shield reads as a verification mark.
     private let chipIcon: PantopusIcon?
+    private let topInset: CGFloat
 
     public init(
         identity: IdentityPillar = .business,
@@ -97,7 +100,8 @@ public struct BizBannerHeader: View {
         bannerImageURL: URL? = nil,
         verified: Bool = true,
         status: BizStatusBadge? = nil,
-        chipIcon: PantopusIcon? = .shieldCheck
+        chipIcon: PantopusIcon? = .shieldCheck,
+        topInset: CGFloat = 0
     ) {
         self.identity = identity
         self.name = name
@@ -110,6 +114,7 @@ public struct BizBannerHeader: View {
         self.verified = verified
         self.status = status
         self.chipIcon = chipIcon
+        self.topInset = topInset
     }
 
     public var body: some View {
@@ -134,7 +139,7 @@ public struct BizBannerHeader: View {
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
-        .frame(height: 116)
+        .frame(height: 116 + topInset)
         .overlay { BusinessHeaderImage(url: bannerImageURL) }
         .overlay(
             LinearGradient(

@@ -270,6 +270,9 @@ struct BusinessProfileLoadedView: View {
     let onCall: @MainActor () -> Void
     /// Opens the report sheet from the footer. The owner preview leaves it inert.
     var onReport: @MainActor () -> Void = {}
+    /// The status bar's height. The banner runs under it, so the floating Back, Share and More buttons sit on the
+    /// banner instead of on the logo (no status bar above the screen, as on the iPhone Duo's side strip: 0).
+    @State private var topInset: CGFloat = 0
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -286,7 +289,8 @@ struct BusinessProfileLoadedView: View {
                         verified: content.header.isVerified,
                         status: bannerStatus,
                         // No shield on the chip for an unverified business.
-                        chipIcon: content.header.isVerified ? .shieldCheck : nil
+                        chipIcon: content.header.isVerified ? .shieldCheck : nil,
+                        topInset: topInset
                     )
                     StatStrip(stats: content.stats)
                     BusinessProfileNamedPageSection(state: namedPage)
@@ -303,6 +307,7 @@ struct BusinessProfileLoadedView: View {
                 }
             }
             .ignoresSafeArea(edges: .top)
+            .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { topInset = $0 }
 
             FloatingControls(
                 onBack: onBack,
