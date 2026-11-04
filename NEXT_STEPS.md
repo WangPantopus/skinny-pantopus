@@ -541,8 +541,14 @@ Plan: [docs/ballot-implementation-plan-2026-09-24.md](docs/ballot-implementation
   Secretary of State's results site every 5 seconds on election night (15 seconds after). It's server text every app
   already shows, so no app update is needed. The switch is `ballot_results`, on at release. See the
   [plan](docs/product/ballot-live-results-plan-2026-11-03.md).
+- [x] November 3, results links for every state (your go-ahead that evening). Outside the 8 checked states the card
+  used to end with Election Day. Now 42 states carry their official results page, each opened on November 3. It's one
+  of the card's three links on Election Day, and for the week after the card stays to point there ("Results are
+  published by the Texas Secretary of State. They stay unofficial until they're certified."). New Hampshire's results
+  page couldn't be confirmed, so its card is unchanged.
 - [ ] Live results, Step 2 (results section, every race on your ballot, 30-second refresh, opt-in "new count"
-  notification) and Step 3 (Utah and Nevada, then others) wait for your go-ahead.
+  notification) waits for your go-ahead. Step 3: Utah and Nevada live numbers are being built (your go-ahead on
+  November 3); other states and a national data contract wait.
 - [ ] Release checks: a person opens every source and link, now for eight states (plan §5.1.1 lists what to confirm first, and §10.6 lists the two Mountain-time assumptions and Vermont's date); real addresses in each supported state and one links-only state through the real API; device passes.
 - [ ] Next states, if wanted: the largest in-person states (Texas, Florida, New York, Pennsylvania and others). They need one more wording pattern ("polls close at 7 p.m.") but no app changes.
 - [ ] P0.5: one reminder opt-in (at most three per election) and the share card, once the push copy is approved.

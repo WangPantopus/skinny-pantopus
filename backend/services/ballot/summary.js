@@ -244,14 +244,17 @@ function composeSummary({ stateValue, countyGeoid = null, governmentsResult = nu
 
   if (!supported) {
     // Links only: the election date and the state's official pages. No
-    // count, no deadlines, and no card at all once the election has passed.
-    if (phase === 'after') return null;
+    // count and no deadlines. After the election the card stays a week only
+    // where the state has a checked results page, and points there.
     const defaults = referenceData.linksOnlyDefaults();
     const own = hasOwnLinks(state);
+    if (phase === 'after' && !(own && referenceData.hasResultsLink(state))) return null;
+    // In a sentence a state office takes "the" ("the Texas Secretary of State").
+    const phrase = state.election_office_phrase || `the ${state.election_office}`;
     return {
       ...base,
       line: null,
-      note: defaults.note,
+      note: phase === 'after' ? `Results are published by ${phrase}. They stay unofficial until they’re certified.` : defaults.note,
       how_it_works: null,
       voting_method: null,
       deadlines: [],
@@ -313,10 +316,11 @@ function composeSummary({ stateValue, countyGeoid = null, governmentsResult = nu
 }
 
 function pickLinksOnly(phase, links) {
-  return (links || [])
-    .filter((l) => l.phases.includes(phase))
-    .slice(0, MAX_LINKS)
-    .map((l) => ({ key: l.key, label: l.label, owner: l.owner, url: l.url }));
+  const inPhase = (links || []).filter((l) => l.phases.includes(phase));
+  // Once results can appear, the state's results page always makes the cut.
+  const results = inPhase.find((l) => l.key === 'results');
+  const rest = inPhase.filter((l) => l !== results).slice(0, results ? MAX_LINKS - 1 : MAX_LINKS);
+  return (results ? [...rest, results] : rest).map((l) => ({ key: l.key, label: l.label, owner: l.owner, url: l.url }));
 }
 
 // A links-only state that carries its own election office's pages
