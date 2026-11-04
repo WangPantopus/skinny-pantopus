@@ -544,6 +544,10 @@ Plan: [docs/ballot-implementation-plan-2026-09-24.md](docs/ballot-implementation
   night both sites handed out older copies beside the newest for minutes at a time, so the card could fall back to "no
   votes yet"; since your go-ahead that night it never shows a count posted before the one it already shows. Also
   that night (your go-ahead): Washington's five Supreme Court seats, on every Washington ballot, joined the card.
+- [ ] November 3, the count's own design (your go-ahead on the sample that night): each race with a bar per candidate,
+  all one neutral gray with no party colors or leader marks; measures as one Yes/No bar; your districts first and the
+  statewide races folded behind one row. The server sends the count as data (`live_count`) beside the old text, so
+  older apps keep the text. Web: done. iPhone and Android: next, reaching phones with the next store builds.
 - [x] November 3, results links for every state (your go-ahead that evening). Outside the 8 checked states the card
   used to end with Election Day. Now 42 states carry their official results page, each opened on November 3. It's one
   of the card's three links on Election Day, and for the week after the card stays to point there ("Results are

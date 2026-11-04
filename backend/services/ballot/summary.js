@@ -285,9 +285,15 @@ function composeSummary({ stateValue, countyGeoid = null, governmentsResult = nu
     if (block.far_note) note = block.far_note;
     else if (registration) note = `Registration deadline: ${registration.month_day}, online or by mail.`;
   }
+  // Apps that draw the count read live_count, with its own note; older apps
+  // read the same count as text at the top of the card's note.
+  let liveCount = null;
   if (afterStage) {
     note = afterNote(afterStage, cert, county);
-    if (afterStage === 'counting' && results) note = [...countLines(results, { county, cert, block }), note].join('\n');
+    if (afterStage === 'counting' && results) {
+      if (results.count) liveCount = { ...results.count, note };
+      note = [...countLines(results, { county, cert, block }), note].join('\n');
+    }
   } else if (phase === 'after') {
     // In a sentence a state office takes "the" ("the Oregon Secretary of
     // State"); a county office's own name reads as it is.
@@ -301,6 +307,7 @@ function composeSummary({ stateValue, countyGeoid = null, governmentsResult = nu
     after_stage: afterStage,
     line: phase === 'in_season' ? countLine(govBlock, 'This address') : null,
     note,
+    ...(liveCount ? { live_count: liveCount } : {}),
     how_it_works: phase === 'in_season' ? (late && block.how_it_works_late) || block.how_it_works : null,
     voting_method: state.voting_method,
     deadlines: phase === 'after' ? [] : deadlines,
