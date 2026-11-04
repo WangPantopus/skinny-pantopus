@@ -1,6 +1,6 @@
 # Web and API performance plan
 
-Updated November 4, 2026. This replaces the April audit in this file: React Query, feed virtualization, local JWT verification, private chat persistence and cross-process change notifications already exist. Reuse them. The founder requested web/backend fixes as unmerged PRs and an infrastructure plan for later; this document does not authorize deployment, purchases, hosted database changes or enabling launch-cut features.
+Updated November 4, 2026. This replaces the April audit in this file: React Query, feed virtualization, local JWT verification, private chat persistence and cross-process change notifications already exist. Reuse them. The founder asked for the web/backend fixes as separate PRs, each reviewed before it merges, and for an infrastructure plan for later; this document does not authorize deployment, purchases, hosted database changes or enabling launch-cut features.
 
 ## Recommendation
 
@@ -23,7 +23,7 @@ Production-mode Next.js, a real local Express backend, freshly migrated local Su
 | Comment URLs were not clickable | Comments now reuse the existing post/chat URL renderer. |
 | Post attachments required a pointer | The standalone post page now gives ordinary media tiles keyboard controls. |
 | Header/menu exceeded narrow screens | [PR #3252](https://github.com/WangPantopus/skinny-pantopus/pull/3252) keeps controls inside the viewport and limits the enlarged menu: 576 px before, 304 px after on a 320 px viewport at 32 px root text. Header checks passed at 320/390/768/1440 px and 16/32 px root text. |
-| Post uploads created unused derivatives | The real upload produced original + thumb + card + detail + full. [PR #3251](https://github.com/WangPantopus/skinny-pantopus/pull/3251) keeps original + thumb for posts, avoiding three encodes and three object writes. Listing defaults and legacy cleanup stay intact. |
+| Post uploads created unused derivatives | The real upload produced original + thumb + card + detail + full. [PR #3251](https://github.com/WangPantopus/skinny-pantopus/pull/3251) keeps original + thumb for posts, avoiding three encodes and three object writes. Listing defaults and legacy cleanup stay intact. Deleting a post still removes older photos' card/detail/full keys, and Supabase Storage answers “not found” for the keys a new photo never had, so this change depends on the post-delete fix that treats an absent key as already removed. |
 
 The local checks include posting a photo and mixed photo/PDF/video attachments, opening media, replies, likes, saves, reloads and a second person's view. Chat photo/PDF/video send and recipient PDF rendering passed. An intentionally failed feed image showed a visible error and recovered through the retry control. Feed PDF rendering was checked in development: the production CSP correctly excludes loopback storage.
 
@@ -37,7 +37,7 @@ Two anonymous hosted browser probes returned HTML quickly (roughly 15–108 ms T
 
 An expired-access-cookie diagnostic followed the real local refresh endpoint back to Feed: one ordinary run took 1,038 ms and one throttled run (100 ms / 1.5 Mbps / 4× CPU) took 4,245 ms. In the throttled run the refresh POST started at 2,197 ms, and navigation back to Feed began at 2,331 ms. Loading and hydrating the recovery page therefore consumed much more of this sample than the refresh request itself. These single runs identify another path to profile, not a speedup comparison. Any reduction of that route's initial code must preserve token single-flight, invalid-session cleanup, private-cache retirement and the redirect-loop guard. Local recovery probes use one consistent hostname: Next normalizes loopback redirects to `localhost`, so mixing it with `127.0.0.1` loses host-scoped cookies and does not test the intended flow.
 
-These application PRs remain unmerged; none of these findings asserts a production deployment. The web changes passed all 123 existing web suites (2,383 tests); the backend upload change passed 342 runnable suites (6,632 tests) and privacy gates, with the existing skips retained. The PRs carry their exact verification and limitations. The April numbers and promised cumulative speedups have been removed because they no longer describe this code.
+Each PR records its own verification, limits and merge state; none of these findings asserts a production deployment. The web changes passed all 123 existing web suites (2,383 tests); the backend upload change passed 342 runnable suites (6,632 tests) and privacy gates, with the existing skips retained. The PRs carry their exact verification and limitations. The April numbers and promised cumulative speedups have been removed because they no longer describe this code.
 
 ## Measure the delay before buying capacity
 
@@ -125,7 +125,7 @@ Then provision two API tasks across availability zones, an independently sized w
 
 | Stage | Concrete work | Evidence required before moving on |
 | --- | --- | --- |
-| Application PR review | Review the independent startup, media, upload and narrow-screen fixes. Keep them unmerged until the founder chooses. | Existing checks green, local browser results, measured bytes/work saved and known limits in each PR. |
+| Application PR review | Review the independent startup, media, upload and narrow-screen fixes; merge only the ones the founder approves. | Existing checks green, local browser results, measured bytes/work saved and known limits in each PR. |
 | Hosted baseline | Founder/operator verifies regions, instance type/credits, container resource usage, Supabase plan and current origin/CDN headers. Collect the route and browser timings above for 24–48 hours of representative usage. | A waterfall plus API/database breakdown identifying the dominant delay. No synthetic load against production without approval. |
 | Existing-host tuning | Remove measured duplicate calls/queries, tune existing caches, isolate the worker if needed, and adjust EC2/database capacity only when saturation is observed. | Repeat cohort improves p75/p95; authorization, upload and socket checks still pass. |
 | Shared cache decision | Compare repeated expensive public/provider work across processes with cache memory and operating cost. | Cache hit/miss benefit exceeds extra connection/serialization time; outage fallback and invalidation rehearsal pass. |
