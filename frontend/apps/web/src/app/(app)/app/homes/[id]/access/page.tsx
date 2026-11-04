@@ -83,8 +83,15 @@ function AccessContent() {
   useEffect(() => {
     // A return must authorize the codes again; never retain a revealed value
     // through a background, session change, failed read or superseded reply.
+    // Leaving means the page was hidden or stored (another tab or app, a locked
+    // screen, the back/forward cache). A window that only loses focus is still
+    // on screen: reloading on its return would hide a code mid-read and swallow
+    // the click that brought focus back.
     const depart = () => { away.current = true; retire(); };
-    const resume = () => { if (document.visibilityState !== 'hidden') { away.current = false; void fetchSecrets(); } };
+    const resume = () => {
+      if (!away.current || document.visibilityState === 'hidden') return;
+      away.current = false; void fetchSecrets();
+    };
     const visibility = () => { if (document.visibilityState === 'hidden') depart(); else resume(); };
     const changed = () => { retire(); void fetchSecrets(); };
     const storage = (event: StorageEvent) => { if (event.key === null || event.key === api.AUTH_SESSION_CHANGE_KEY) changed(); };
@@ -92,13 +99,11 @@ function AccessContent() {
     const unsubscribeSync = onSyncTopic((topic) => {
       if (topic === 'homes' || touchesHome(topic, homeId)) changed();
     });
-    window.addEventListener('focus', resume); window.addEventListener('blur', depart);
     window.addEventListener('pageshow', resume); window.addEventListener('pagehide', depart);
     window.addEventListener('storage', storage); document.addEventListener('visibilitychange', visibility);
-    retire(); resume();
+    away.current = document.visibilityState === 'hidden'; retire(); void fetchSecrets();
     return () => {
       away.current = true; cancelRead(); clearTimers(); unsubscribe(); unsubscribeSync();
-      window.removeEventListener('focus', resume); window.removeEventListener('blur', depart);
       window.removeEventListener('pageshow', resume); window.removeEventListener('pagehide', depart);
       window.removeEventListener('storage', storage); document.removeEventListener('visibilitychange', visibility);
     };
