@@ -53,12 +53,14 @@ public struct PlansTabRoot: View {
             HStack(spacing: 0) {
                 NavigationStack(path: $plansPath) {
                     plansRoot(beside: beside)
+                        .ignoresSafeArea(.container, edges: columnIgnores(beside: beside))
                         .toolbar(.hidden, for: .navigationBar)
                         .swipesBackFromEdge()
                         .navigationDestination(for: PlansRoute.self) { route in
                             // The map fills a wide screen; the plan pages keep a readable column.
                             PlansDestination(route: route, path: $plansPath) { hostRequest = PlansHostRequest(start: $0) }
                                 .readableColumn()
+                                .ignoresSafeArea(.container, edges: columnIgnores(beside: beside))
                         }
                 }
                 .frame(width: beside ? SideBySideColumnWidth.nearby.ideal : nil)
@@ -121,6 +123,13 @@ public struct PlansTabRoot: View {
     /// the Nearby tab decides). Upright, the open iPhone Duo (669 pt) keeps the map and its sheet.
     private func isSideBySide(width: CGFloat) -> Bool {
         horizontalSizeClass == .regular && SideBySideColumnWidth.nearby.fitsBeside(in: width)
+    }
+
+    /// Beside the map the column is in the screen's middle, so the side tab bar's inset on the screen's trailing
+    /// edge isn't its own. Under the system tab bar (Mail off) it reached the column's screens anyway and left them
+    /// 84 pt short of the column's edge.
+    private func columnIgnores(beside: Bool) -> Edge.Set {
+        beside ? .trailing : []
     }
 
     /// The plan shown selected on the map beside the list: the one open in the column, else the pin tapped.
