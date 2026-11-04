@@ -591,6 +591,8 @@ public struct ChatConversationView: View {
                             dismissComposerInput()
                             attachmentsPresented = true
                         },
+                        isAttachMenuPresented: $attachmentsPresented,
+                        attachActions: { attachActions },
                         onEmoji: toggleEmojiPicker,
                         isEmojiPickerPresented: emojiPickerPresented,
                         composerFocused: $composerFocused,
@@ -666,31 +668,6 @@ public struct ChatConversationView: View {
                 ChatPerformance.signposter.emitEvent("Foreground")
                 Task { await viewModel.refresh() }
             }
-        }
-        // RN attach-grid parity: Camera / Photos / Document / Location /
-        // Task / Marketplace. Camera hides itself where no capture device
-        // exists (simulator).
-        .confirmationDialog(
-            "Attach",
-            isPresented: $attachmentsPresented,
-            titleVisibility: .visible
-        ) {
-            if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                Button("Camera") { cameraPresented = true }
-            }
-            Button("Photos and videos") {
-                if mode == .aiAssistant { photosPickerPresented = true } else { chatMediaPickerPresented = true }
-            }
-            Button("Document") { documentImporterPresented = true }
-            Button("Location") { Task { await viewModel.sendCurrentLocation() } }
-            // Launch cuts #4 (Open gigs) / #3 (Marketplace): no task or listing shares.
-            if LaunchFeatures.openGigs {
-                Button("Task") { gigPickerPresented = true }
-            }
-            if LaunchFeatures.marketplace {
-                Button("Marketplace") { listingPickerPresented = true }
-            }
-            Button("Cancel", role: .cancel) {}
         }
         .fullScreenCover(isPresented: $cameraPresented) {
             SystemCameraPicker(isPresented: $cameraPresented) { image in
@@ -2089,6 +2066,28 @@ extension ChatConversationView {
         .padding(.horizontal, Spacing.s6)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("chatConversationError")
+    }
+
+    /// RN attach-grid parity: Camera / Photos / Document / Location / Task /
+    /// Marketplace, in the + button's menu (`ChatComposer`). Camera hides
+    /// itself where no capture device exists (simulator).
+    @ViewBuilder private var attachActions: some View {
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            Button("Camera") { cameraPresented = true }
+        }
+        Button("Photos and videos") {
+            if mode == .aiAssistant { photosPickerPresented = true } else { chatMediaPickerPresented = true }
+        }
+        Button("Document") { documentImporterPresented = true }
+        Button("Location") { Task { await viewModel.sendCurrentLocation() } }
+        // Launch cuts #4 (Open gigs) / #3 (Marketplace): no task or listing shares.
+        if LaunchFeatures.openGigs {
+            Button("Task") { gigPickerPresented = true }
+        }
+        if LaunchFeatures.marketplace {
+            Button("Marketplace") { listingPickerPresented = true }
+        }
+        Button("Cancel", role: .cancel) {}
     }
 
     private func initials(of name: String) -> String {
@@ -4527,7 +4526,7 @@ private struct ChatComposerReader<Content: View>: View {
     }
 }
 
-private struct ChatComposer: View {
+private struct ChatComposer<AttachActions: View>: View {
     @Binding var text: String
     let placeholder: String
     let canSend: Bool
@@ -4537,6 +4536,10 @@ private struct ChatComposer: View {
     /// becomes a stop button wired to `onStop`.
     var isStreaming = false
     let onAttach: @MainActor () -> Void
+    /// The attach choices, shown from the + button: on iOS 26 and later a
+    /// popover, which points at the view it's shown from.
+    @Binding var isAttachMenuPresented: Bool
+    @ViewBuilder let attachActions: () -> AttachActions
     let onEmoji: @MainActor () -> Void
     var isEmojiPickerPresented = false
     var composerFocused: FocusState<Bool>.Binding
@@ -4559,6 +4562,7 @@ private struct ChatComposer: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Attach")
             .accessibilityIdentifier("chatComposerAttach")
+            .confirmationDialog("Attach", isPresented: $isAttachMenuPresented, titleVisibility: .visible, actions: attachActions)
 
             // Input pill — smile lives INSIDE the pill on the right.
             HStack(alignment: .bottom, spacing: Spacing.s2) {
