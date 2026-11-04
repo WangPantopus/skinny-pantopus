@@ -158,6 +158,9 @@ public struct BookletPager: View {
         }
         .padding(.leading, layout.leftPageX)
         .frame(width: layout.areaWidth, alignment: .leading)
+        // Each spread is its own page of the pager; reaching into the reading column's side margins, it would
+        // otherwise sit inside them and slide off the hinge.
+        .ignoresSafeArea(.container, edges: .horizontal)
     }
 
     /// The spread on screen as a page: swiping to a spread opens its left page.
