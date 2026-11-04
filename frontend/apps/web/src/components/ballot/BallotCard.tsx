@@ -238,7 +238,7 @@ export default function BallotCard({ data, asOf = null, onOpenGovernments, class
         <div className="text-[13.5px] leading-[19px] text-app-text-strong">{data.how_it_works}</div>
       ) : null}
 
-      {data.note ? <div className="text-[13.5px] leading-[19px] text-app-text-strong">{data.note}</div> : null}
+      {data.note ? <div className="whitespace-pre-line text-[13.5px] leading-[19px] text-app-text-strong">{data.note}</div> : null}
 
       {data.primary_action && data.primary_action.kind === 'governments' && onOpenGovernments ? (
         <button

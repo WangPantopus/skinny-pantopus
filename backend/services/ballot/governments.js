@@ -234,7 +234,7 @@ async function governmentsForHome(home, { budgetMs = HOME_BUDGET_MS } = {}) {
         // A thrown error (not a null) is what lets readThrough serve an
         // eligible stale row when the geocoder answers without a state/county.
         if (!found) throw new Error('the boundary lookup placed no state and county');
-        return found;
+        return { ...found, districts: districtCodes(geo) };
       },
     })
       .then(({ payload, stale }) => (payload ? { ...payload, stale: Boolean(stale) } : null))
@@ -274,9 +274,61 @@ async function governmentsForPoint(lat, lng, options = {}) {
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
   try {
     const geo = await fetchGeographies(lat, lng, options);
-    return geo ? governmentsFromGeographies(geo) : null;
+    const found = geo ? governmentsFromGeographies(geo) : null;
+    return found ? { ...found, districts: districtCodes(geo) } : null;
   } catch (err) {
     logger.warn('ballot: point governments lookup failed', { error: err.message });
+    return null;
+  }
+}
+
+// The point's congressional and state legislative district numbers, from
+// the Census layers districtsFromGeographies (placeSectionAdapters.js) reads,
+// with the state's FIPS code so a number is never matched in another state.
+// Live results (liveResults.js) pick an address's races by these numbers.
+function districtCodes(geo) {
+  const number = (row) => {
+    const raw = String((row && row.BASENAME) || '').trim();
+    return /^\d+$/.test(raw) ? String(Number(raw)) : null;
+  };
+  const state = firstRow(geo, /^States$/);
+  const fips = String((state && state.STATE) || '').trim();
+  return {
+    state_fips: /^\d+$/.test(fips) ? fips : null,
+    congressional: number(firstRow(geo, /Congressional Districts$/)),
+    state_upper: number(firstRow(geo, /State Legislative Districts - Upper/)),
+    state_lower: number(firstRow(geo, /State Legislative Districts - Lower/)),
+  };
+}
+
+/**
+ * A home's district numbers from its cached Census answer, for a governments
+ * row cached before districts were kept. Null past the budget.
+ */
+async function districtsForHome(home, { budgetMs = HOME_BUDGET_MS } = {}) {
+  const point = pointOf(home);
+  if (!point) return null;
+  let timer = null;
+  const budget = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(null), budgetMs);
+    if (typeof timer.unref === 'function') timer.unref();
+  });
+  try {
+    const geo = await Promise.race([sharedGeographies(point.lat, point.lng).catch(() => null), budget]);
+    return geo ? districtCodes(geo) : null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** An anonymous point's district numbers: the same lookup, nothing written. */
+async function districtsForPoint(lat, lng, options = {}) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  try {
+    const geo = await fetchGeographies(lat, lng, options);
+    return geo ? districtCodes(geo) : null;
+  } catch (err) {
+    logger.warn('ballot: point districts lookup failed', { error: err.message });
     return null;
   }
 }
@@ -286,6 +338,9 @@ module.exports = {
   countedGovernments,
   governmentsForHome,
   governmentsForPoint,
+  districtCodes,
+  districtsForHome,
+  districtsForPoint,
   sharedGeographies,
   pointCacheKey,
   placeName,
