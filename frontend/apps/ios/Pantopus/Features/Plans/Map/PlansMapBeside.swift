@@ -8,9 +8,10 @@
 //  "Show my location" in its corner. A tapped pin opens its plan in the
 //  column. The plan open there shows selected and the others dim; the
 //  camera keeps its zoom, and moves only to bring that plan into sight.
-//  The map reads Plans again when they change, since it stays on screen
-//  while a plan covers the column's list: a request sent or answered there
-//  shows on its pin at once.
+//  The map starts Plans, and reads them again when they change, since it
+//  stays on screen while a plan covers the column's list (a plan link opens
+//  the column on the plan): a request sent or answered there shows on its
+//  pin at once.
 //
 
 import MapKit
@@ -22,6 +23,8 @@ struct PlansMapBeside: View {
     let selectedId: String?
     let onOpen: @MainActor (PlanPinDTO) -> Void
     @State private var camera: MapCameraPosition = .automatic
+    /// The map has had its first look, or the last map's place: from then on a plan open in the column keeps it where it is.
+    @State private var placed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -54,15 +57,12 @@ struct PlansMapBeside: View {
                 if abs(viewModel.mapPoints - mapHeight) > 1 { viewModel.mapPoints = mapHeight }
             }
             .onChange(of: viewModel.fitRequest) { _, _ in fitPlans(window: window, mapSize: mapSize) }
-            .onChange(of: viewModel.pins.isEmpty) { _, isEmpty in
-                // Plans read for a map never placed (a plan link opened the column first): the first look.
-                if !isEmpty, camera == .automatic { fitPlans(window: window, mapSize: mapSize) }
-            }
             .onChange(of: viewModel.widenRequest) { _, _ in widen(window: window, mapSize: mapSize) }
             .onChange(of: viewModel.recenterRequest) { _, _ in recenter(window: window, mapSize: mapSize) }
             .onChange(of: selectedId) { _, id in bringIntoSight(id, window: window, mapSize: mapSize) }
             .onAppear { restoreCamera(window: window, mapSize: mapSize) }
         }
+        .task { await viewModel.start() }
         .refreshesOnStoreChange(affects: { PlansStoreReads.affects($0) }, perform: { await viewModel.start() })
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plansMapBeside")
@@ -81,22 +81,25 @@ struct PlansMapBeside: View {
         guard camera == .automatic else { return }
         if let id = selectedId, let pin = viewModel.pin(for: id), let span = viewModel.lastRegion?.span {
             camera = .region(centered(on: pin, span: span, window: window, mapSize: mapSize))
+            placed = true
         } else if let last = viewModel.lastCamera {
             camera = .camera(last)
+            placed = true
         } else if !viewModel.pins.isEmpty {
             fitPlans(window: window, mapSize: mapSize)
         }
     }
 
-    /// F1's first look: you and the plans around you, inside the open map. A plan open in the column keeps the map
-    /// where it is, unless the map was never placed (the plan came from a link): then the first look takes it in too.
+    /// F1's first look: you and the plans around you, inside the open map. Once the map is placed, a plan open in the
+    /// column keeps it where it is; a plan link opens the column before the first look, which takes that plan in too.
     private func fitPlans(window: CGRect, mapSize: CGSize) {
-        guard let center = viewModel.center, selectedId == nil || camera == .automatic else { return }
+        guard let center = viewModel.center, selectedId == nil || !placed else { return }
         let plans = viewModel.pins.filter { viewModel.kindFilter == nil || $0.kind == viewModel.kindFilter || $0.id == selectedId }
         guard !plans.isEmpty else { return }
         let points = plans.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
             + [CLLocationCoordinate2D(latitude: center.latitude, longitude: center.longitude)]
         guard let region = PlansCameraFit.region(showing: points, in: window, mapSize: mapSize) else { return }
+        placed = true
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) { camera = .region(region) }
     }
 

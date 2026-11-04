@@ -44,9 +44,8 @@ struct PlansListColumn: View {
                     .transition(.opacity)
             }
         }
-        .task { await viewModel.start() }
-        // Plans read again on a change from the map beside this list (`PlansMapBeside`), which stays on screen while
-        // a plan covers the list.
+        // The map beside this list (`PlansMapBeside`) starts Plans and reads them again on a change: it stays on
+        // screen while a plan covers the list.
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plansListColumn")
