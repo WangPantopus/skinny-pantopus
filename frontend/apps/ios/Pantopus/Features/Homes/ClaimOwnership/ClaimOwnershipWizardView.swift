@@ -41,7 +41,7 @@ public struct ClaimOwnershipWizardView: View {
     }
 
     public var body: some View {
-        WizardShell(model: viewModel) {
+        WizardShell(model: viewModel, scrollResetID: viewModel.currentStep) {
             stepContent
         }
         .onChange(of: viewModel.pendingEvent) { _, event in
