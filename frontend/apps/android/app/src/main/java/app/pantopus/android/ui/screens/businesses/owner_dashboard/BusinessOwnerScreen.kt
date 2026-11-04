@@ -36,8 +36,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -128,12 +130,13 @@ fun BusinessOwnerScreen(
     val toast by viewModel.toast.collectAsStateWithLifecycle()
     // Saved, so returning from a customer conversation lands back in the inbox it was opened from.
     var mode by rememberSaveable { mutableStateOf(OwnerViewMode.Owner) }
+    val ownerState = rememberSaveableStateHolder()
     // System Back leaves the inbox or preview for the dashboard, like their top-bar Back.
     BackHandler(enabled = mode != OwnerViewMode.Owner) { mode = OwnerViewMode.Owner }
 
     LifecycleResumeEffect(Unit) {
         viewModel.refresh()
-        onPauseOrDispose { }
+        onPauseOrDispose { viewModel.pause() }
     }
 
     Box(
@@ -162,45 +165,47 @@ fun BusinessOwnerScreen(
                     onRetry = viewModel::refresh,
                 )
             is BusinessOwnerUiState.Loaded ->
-                Crossfade(targetState = mode, animationSpec = tween(180), label = "ownerMode") { m ->
-                    when (m) {
-                        OwnerViewMode.Owner ->
-                            OwnerEditFrame(
-                                content = current.content,
-                                onBack = onBack,
-                                onEditPage = onEditPage,
-                                onOpenInsights = onOpenInsights,
-                                onOpenSettings = onOpenSettings,
-                                onOpenTeam = onOpenTeam,
-                                onOpenPages = onOpenPages,
-                                onOpenPayments = onOpenPayments,
-                                onOpenInvoices = onOpenInvoices,
-                                onOpenLegal = onOpenLegal,
-                                onPreview = { mode = OwnerViewMode.Preview },
-                                onManageCatalog = { mode = OwnerViewMode.Catalog },
-                                onOpenInbox = { mode = OwnerViewMode.Inbox },
-                                onSubmitReply = { id, text -> viewModel.submitReply(id, text) },
-                                onClaimFounding = viewModel::claimFoundingOffer,
-                                onDismissFounding = viewModel::dismissFoundingBanner,
-                            )
-                        OwnerViewMode.Preview ->
-                            OwnerPreviewFrame(
-                                content = current.content.publicProfile,
-                                onExit = { mode = OwnerViewMode.Owner },
-                            )
-                        OwnerViewMode.Catalog ->
-                            BusinessCatalogScreen(
-                                onBack = {
-                                    mode = OwnerViewMode.Owner
-                                    viewModel.refresh()
-                                },
-                            )
-                        OwnerViewMode.Inbox ->
-                            BusinessInboxScreen(
-                                onBack = { mode = OwnerViewMode.Owner },
-                                onOpenRoom = onOpenChatRoom,
-                                onOpenPost = onOpenPost,
-                            )
+                ownerState.SaveableStateProvider(current.content.businessId) {
+                    Crossfade(targetState = mode, animationSpec = tween(180), label = "ownerMode") { m ->
+                        when (m) {
+                            OwnerViewMode.Owner ->
+                                OwnerEditFrame(
+                                    content = current.content,
+                                    onBack = onBack,
+                                    onEditPage = onEditPage,
+                                    onOpenInsights = onOpenInsights,
+                                    onOpenSettings = onOpenSettings,
+                                    onOpenTeam = onOpenTeam,
+                                    onOpenPages = onOpenPages,
+                                    onOpenPayments = onOpenPayments,
+                                    onOpenInvoices = onOpenInvoices,
+                                    onOpenLegal = onOpenLegal,
+                                    onPreview = { mode = OwnerViewMode.Preview },
+                                    onManageCatalog = { mode = OwnerViewMode.Catalog },
+                                    onOpenInbox = { mode = OwnerViewMode.Inbox },
+                                    onSubmitReply = { id, text -> viewModel.submitReply(id, text) },
+                                    onClaimFounding = viewModel::claimFoundingOffer,
+                                    onDismissFounding = viewModel::dismissFoundingBanner,
+                                )
+                            OwnerViewMode.Preview ->
+                                OwnerPreviewFrame(
+                                    content = current.content.publicProfile,
+                                    onExit = { mode = OwnerViewMode.Owner },
+                                )
+                            OwnerViewMode.Catalog ->
+                                BusinessCatalogScreen(
+                                    onBack = {
+                                        mode = OwnerViewMode.Owner
+                                        viewModel.refresh()
+                                    },
+                                )
+                            OwnerViewMode.Inbox ->
+                                BusinessInboxScreen(
+                                    onBack = { mode = OwnerViewMode.Owner },
+                                    onOpenRoom = onOpenChatRoom,
+                                    onOpenPost = onOpenPost,
+                                )
+                        }
                     }
                 }
         }
@@ -504,12 +509,14 @@ private fun OwnerSections(
         )
     }
     content.reviews.forEach { review ->
-        ReviewReplyComposer(
-            review = review,
-            businessName = shortBusinessName(profile.header.displayName),
-            onSubmit = { text -> onSubmitReply(review.id, text) },
-            modifier = Modifier.padding(top = Spacing.s2),
-        )
+        key(review.id) {
+            ReviewReplyComposer(
+                review = review,
+                businessName = shortBusinessName(profile.header.displayName),
+                onSubmit = { text -> onSubmitReply(review.id, text) },
+                modifier = Modifier.padding(top = Spacing.s2),
+            )
+        }
     }
 }
 
