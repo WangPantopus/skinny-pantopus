@@ -162,7 +162,7 @@ public struct BusinessPageBlockEditorSheet: View {
             buttonListEditor(title: "Call-to-Action Buttons", key: "cta")
         case .text:
             stringField("Heading", key: "heading", placeholder: "Section heading")
-            stringField("Body", key: "body", placeholder: "Body text…", axis: .vertical)
+            stringField("Body", key: "body", placeholder: "Body text…")
         case .gallery:
             stringField("Heading", key: "heading", placeholder: "Gallery")
             hint("Photos can't be added to a gallery yet, so visitors don't see this block")
@@ -184,7 +184,7 @@ public struct BusinessPageBlockEditorSheet: View {
         case .stats:
             statsEditor
         case .embed:
-            stringField("URL", key: "url", placeholder: "https://youtube.com/…")
+            stringField("URL", key: "url", placeholder: "https://youtube.com/…", axis: .horizontal)
             hint("YouTube and Vimeo videos play on your page. Any other web address shows as a link")
         case .postsFeed:
             stringField("Heading", key: "heading", placeholder: "Latest Updates")
@@ -239,7 +239,8 @@ public struct BusinessPageBlockEditorSheet: View {
 
     // MARK: - Field builders
 
-    private func stringField(_ label: String, key: String, placeholder: String, axis: Axis = .horizontal) -> some View {
+    /// Text wraps onto more lines instead of cutting off at large text sizes; a web address stays on one line.
+    private func stringField(_ label: String, key: String, placeholder: String, axis: Axis = .vertical) -> some View {
         PantopusTextField(
             label,
             text: Binding(
@@ -413,7 +414,8 @@ public struct BusinessPageBlockEditorSheet: View {
                                     setFaq(next)
                                 }
                             ),
-                            placeholder: "Question"
+                            placeholder: "Question",
+                            axis: .vertical
                         )
                         removeButton(identifier: "businessPageBlocks.removeFaq.\(index)") {
                             var next = items
