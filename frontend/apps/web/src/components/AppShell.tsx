@@ -456,7 +456,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             <button onClick={() => sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: !mobileOpen })} className="shrink-0 p-[8px] hover-bg-app rounded-lg transition mr-[8px]" aria-label="Toggle menu" aria-expanded={mobileOpen} aria-controls="mobile-navigation">
               {mobileOpen ? <X className="w-[20px] h-[20px] text-app-muted" /> : <Menu className="w-[20px] h-[20px] text-app-muted" />}
             </button>
-            <button onClick={() => router.push('/app/hub')} className="flex min-w-0 flex-1 items-center gap-[8px]" aria-label="Pantopus Hub">
+            {/* min-w-0 lets the wordmark truncate before the buttons move; mr-auto, not flex-1, keeps its tap
+             *  target to the logo and name, so a tap on the empty bar does not open the Hub. */}
+            <button onClick={() => router.push('/app/hub')} className="mr-auto flex min-w-0 items-center gap-[8px]" aria-label="Pantopus Hub">
               <PantopusMark size={24} className="shrink-0" />
               <span className="truncate text-[18px] leading-[28px] font-semibold text-app">Pantopus</span>
             </button>
