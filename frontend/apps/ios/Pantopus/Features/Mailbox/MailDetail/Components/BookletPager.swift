@@ -20,9 +20,14 @@ public enum BookletPagerMode: Sendable, Hashable {
 }
 
 /// Where a booklet's reader is: the page (a spread's left page) and whether all pages show.
-struct BookletPlace: Equatable {
-    var page = 0
-    var mode = BookletPagerMode.page
+public struct BookletPlace: Equatable {
+    public var page: Int
+    public var mode: BookletPagerMode
+
+    public init(page: Int = 0, mode: BookletPagerMode = .page) {
+        self.page = page
+        self.mode = mode
+    }
 }
 
 @MainActor
