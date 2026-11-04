@@ -144,6 +144,8 @@ internal fun EditAccessCodeFormContent(
     onDelete: (() -> Unit)? = null,
     onRetry: () -> Unit = {},
 ) {
+    val canManage = state.isLoaded && state.canManage
+    val fieldsEnabled = state.canEditFields && !state.isSaving
     Box(
         modifier =
             Modifier
@@ -153,9 +155,9 @@ internal fun EditAccessCodeFormContent(
     ) {
         FormShell(
             title = state.title,
-            rightActionLabel = "Save".takeIf { state.isLoaded && state.canManage },
+            rightActionLabel = "Save".takeIf { canManage },
             isValid = state.isValid,
-            isDirty = state.isLoaded && state.canManage && state.isDirty,
+            isDirty = canManage && state.isDirty,
             isSaving = state.isSaving,
             onClose = onClose,
             onCommit = onCommit,
@@ -175,7 +177,7 @@ internal fun EditAccessCodeFormContent(
                         CategoryGrid(
                             selected = state.category,
                             onSelect = onSelectCategory,
-                            enabled = state.canEditFields && !state.isSaving,
+                            enabled = fieldsEnabled,
                         )
                     } else {
                         Text(state.category.label, style = PantopusTextStyle.body)
@@ -191,7 +193,7 @@ internal fun EditAccessCodeFormContent(
                         onChange = { onUpdate(EditAccessCodeField.Value, it) },
                         onToggleReveal = onToggleReveal,
                         onCopy = onCopy,
-                        readOnly = !state.canEditFields || state.isSaving,
+                        readOnly = !fieldsEnabled,
                     )
                 }
                 FormFieldGroup("Notes (optional)") {
@@ -199,7 +201,7 @@ internal fun EditAccessCodeFormContent(
                         value = state.fields[EditAccessCodeField.Notes]?.value.orEmpty(),
                         error = state.fields[EditAccessCodeField.Notes]?.error,
                         onChange = { onUpdate(EditAccessCodeField.Notes, it) },
-                        readOnly = !state.canEditFields || state.isSaving,
+                        readOnly = !fieldsEnabled,
                     )
                 }
                 FormFieldGroup("Shared with") {
@@ -211,7 +213,7 @@ internal fun EditAccessCodeFormContent(
                                     isSelected = state.visibility == scope,
                                     summary = rosterSummary(scope),
                                     onSelect = { onSelectVisibility(scope) },
-                                    enabled = state.canEditFields && !state.isSaving,
+                                    enabled = fieldsEnabled,
                                 )
                             }
                             if (state.visibility !in state.allowedVisibilities) {
