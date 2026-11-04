@@ -467,8 +467,21 @@ describe('outside the pilot: official links only', () => {
     ]);
   });
 
-  it('hides after the election and for territories', () => {
-    expect(summary.composeSummary({ stateValue: 'TX', now: pacificNoon('2026-11-05') })).toBeNull();
+  it('stays the week after the election only to point at a checked results page, and hides for territories', () => {
+    const after = summary.composeSummary({ stateValue: 'TX', now: pacificNoon('2026-11-05') });
+    expect(after).toMatchObject({
+      coverage: 'links_only',
+      phase: 'after',
+      chip: null,
+      deadlines: [],
+      note: 'Results are published by the Texas Secretary of State. They stay unofficial until they’re certified.',
+    });
+    expect(after.official_links).toEqual([
+      { key: 'results', label: 'Election results', owner: 'Texas Secretary of State', url: 'https://results.texas-election.com/races' },
+    ]);
+    expect(summary.composeSummary({ stateValue: 'TX', now: pacificNoon('2026-11-11') })).toBeNull();
+    // No results page could be confirmed for New Hampshire: its card still ends with the election.
+    expect(summary.composeSummary({ stateValue: 'NH', now: pacificNoon('2026-11-05') })).toBeNull();
     expect(summary.composeSummary({ stateValue: 'PR', now: pacificNoon('2026-09-24') })).toBeNull();
   });
 });
