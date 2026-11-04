@@ -226,7 +226,7 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
 
     // MARK: - Networking
 
-    private func fetch(force: Bool) async {
+    private func fetch(force: Bool, keepsFailureToast: Bool = false) async {
         guard preferencesScopeIsCurrent else { return }
         // A change made here while the read is out is newer than its reply
         // (the change's own save answers it), so that reply is dropped.
@@ -249,7 +249,9 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
             }
             // We already have something on screen — keep it and surface
             // the failure as a toast, exactly like RN.
-            toast = ToastMessage(text: "Failed to load preferences", kind: .error)
+            if !keepsFailureToast {
+                toast = ToastMessage(text: "Failed to load preferences", kind: .error)
+            }
             state = .loaded(groups())
         }
     }
@@ -308,8 +310,13 @@ public final class NotificationSettingsViewModel: GroupedListDataSource {
                     continue
                 }
                 guard revision == saveRevision else { continue }
+                // A failed re-fetch must not leave the unsaved optimistic value on screen.
+                // The existing account-scoped store holds the last confirmed server reply.
+                preferences = storedPreferences()
+                state = preferences == nil ? .loading : .loaded(groups())
                 toast = ToastMessage(text: "Failed to save", kind: .error)
-                await fetch(force: true)
+                // The save's failure is the news: a re-read that fails too keeps it.
+                await fetch(force: true, keepsFailureToast: true)
             }
         }
     }

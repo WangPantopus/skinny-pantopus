@@ -41,7 +41,8 @@ public struct SaveBookmarkButton: View {
                 )
             }
             .frame(width: size, height: size)
-            .contentShape(Circle())
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isSaved ? "Saved" : "Save")
@@ -86,16 +87,19 @@ public struct PendingSavePlace: Identifiable, Sendable, Hashable {
 
 public struct SavePlaceSheet: View {
     private let pending: PendingSavePlace
-    private let onSave: @MainActor (_ label: String, _ choice: SavePlaceTypeChoice) -> Void
+    private let onSave: @MainActor (_ label: String, _ choice: SavePlaceTypeChoice) async throws -> Void
     private let onClose: @MainActor () -> Void
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var name: String
     @State private var choice: SavePlaceTypeChoice = .other
+    @State private var isSaving = false
+    @State private var saveError: String?
     @FocusState private var nameFocused: Bool
 
     public init(
         pending: PendingSavePlace,
-        onSave: @escaping @MainActor (String, SavePlaceTypeChoice) -> Void,
+        onSave: @escaping @MainActor (String, SavePlaceTypeChoice) async throws -> Void,
         onClose: @escaping @MainActor () -> Void
     ) {
         self.pending = pending
@@ -109,7 +113,15 @@ public struct SavePlaceSheet: View {
             VStack(alignment: .leading, spacing: Spacing.s4) {
                 header
                 nameField
+                    .disabled(isSaving)
                 typePicker
+                    .disabled(isSaving)
+                if let saveError {
+                    Text(saveError)
+                        .scaledFont(14)
+                        .foregroundStyle(Theme.Color.error)
+                        .accessibilityIdentifier("savePlace.error")
+                }
                 saveButton
                 Spacer(minLength: 0)
             }
@@ -119,36 +131,38 @@ public struct SavePlaceSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Theme.Color.appSurface)
-        .presentationDetents([.height(420), .large])
+        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(420), .large])
         .presentationDragIndicator(.visible)
+        .interactiveDismissDisabled(isSaving)
         .accessibilityIdentifier("savePlace.sheet")
     }
 
     private var header: some View {
         HStack {
             Text("Save place")
-                .font(.system(size: 18, weight: .bold))
+                .scaledFont(18, weight: .bold)
                 .foregroundStyle(Theme.Color.appText)
             Spacer()
             Button(action: onClose) {
                 Icon(.x, size: 18, color: Theme.Color.appTextSecondary)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Close")
             .accessibilityIdentifier("savePlace.close")
+            .disabled(isSaving)
         }
     }
 
     private var nameField: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text("Name")
-                .font(.system(size: 12, weight: .semibold))
+                .scaledFont(12, weight: .semibold)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             HStack(spacing: Spacing.s2) {
                 TextField("Name this place", text: $name)
-                    .font(.system(size: 15, weight: .medium))
+                    .scaledFont(15, weight: .medium)
                     .foregroundStyle(Theme.Color.appText)
                     .focused($nameFocused)
                     .submitLabel(.done)
@@ -156,7 +170,8 @@ public struct SavePlaceSheet: View {
                 Icon(.pencil, size: 15, color: Theme.Color.appTextMuted)
             }
             .padding(.horizontal, Spacing.s3)
-            .frame(height: 46)
+            .padding(.vertical, Spacing.s2)
+            .frame(minHeight: 46)
             .background(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).fill(Theme.Color.appSurfaceSunken))
             .overlay(
                 RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
@@ -168,13 +183,22 @@ public struct SavePlaceSheet: View {
     private var typePicker: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Text("Type")
-                .font(.system(size: 12, weight: .semibold))
+                .scaledFont(12, weight: .semibold)
                 .foregroundStyle(Theme.Color.appTextSecondary)
-            HStack(spacing: Spacing.s3) {
-                ForEach(SavePlaceTypeChoice.allCases) { option in
-                    typeOption(option)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Spacing.s3) {
+                    typeOptions
+                }
+                VStack(spacing: Spacing.s3) {
+                    typeOptions
                 }
             }
+        }
+    }
+
+    private var typeOptions: some View {
+        ForEach(SavePlaceTypeChoice.allCases) { option in
+            typeOption(option)
         }
     }
 
@@ -189,7 +213,8 @@ public struct SavePlaceSheet: View {
                 }
                 .frame(width: 44, height: 44)
                 Text(option.label)
-                    .font(.system(size: 12.5, weight: .semibold))
+                    .scaledFont(12.5, weight: .semibold)
+                    .fixedSize(horizontal: true, vertical: false)
                     .foregroundStyle(active ? Theme.Color.appText : Theme.Color.appTextSecondary)
             }
             .frame(maxWidth: .infinity)
@@ -204,27 +229,43 @@ public struct SavePlaceSheet: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(option.label)
+        .accessibilityValue(active ? "Selected" : "Not selected")
+        .accessibilityAddTraits(active ? [.isSelected] : [])
         .accessibilityIdentifier(option.accessibilityID)
     }
 
     private var saveButton: some View {
         Button {
+            guard !isSaving else { return }
             let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-            onSave(trimmed.isEmpty ? pending.label : trimmed, choice)
+            nameFocused = false
+            isSaving = true
+            saveError = nil
+            Task {
+                defer { isSaving = false }
+                do {
+                    try await onSave(trimmed.isEmpty ? pending.label : trimmed, choice)
+                } catch {
+                    saveError = "Couldn’t save this place. Please try again."
+                }
+            }
         } label: {
             HStack(spacing: Spacing.s2) {
                 Icon(.bookmark, size: 17, strokeWidth: 2.4, color: Theme.Color.appTextInverse)
-                Text("Save")
-                    .font(.system(size: 15, weight: .bold))
+                Text(isSaving ? "Saving…" : "Save")
+                    .scaledFont(15, weight: .bold)
                     .foregroundStyle(Theme.Color.appTextInverse)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 50)
+            .padding(.vertical, Spacing.s2)
+            .frame(minHeight: 50)
             .background(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).fill(Theme.Color.primarySolid))
         }
         .buttonStyle(.plain)
         .padding(.top, Spacing.s1)
         .accessibilityIdentifier("savePlace.saveBtn")
+        .disabled(isSaving)
     }
 }
 
@@ -310,10 +351,9 @@ public final class SavedPlacesStore {
         }
     }
 
-    /// Commit the Save sheet — POST then optimistically insert the echo.
-    public func commitSave(label: String, choice: SavePlaceTypeChoice) async {
+    /// Keep the editor draft until the server confirms; failures leave it available for retry.
+    public func commitSave(label: String, choice: SavePlaceTypeChoice) async throws {
         guard let pending = pendingSave else { return }
-        pendingSave = nil
         let body = SavePlaceBody(
             label: label,
             placeType: choice.wire,
@@ -347,9 +387,10 @@ public final class SavedPlacesStore {
                 saved[i] = response.savedPlace
             }
             HomesStoreReads.savedPlacesChanged(store: ScreenStore.store(for: api))
+            if pendingSave?.id == pending.id { pendingSave = nil }
         } catch {
             saved.removeAll { $0.id == optimistic.id }
-            toast = ToastMessage(text: "Couldn\u{2019}t save \(label).", kind: .error)
+            throw error
         }
     }
 
