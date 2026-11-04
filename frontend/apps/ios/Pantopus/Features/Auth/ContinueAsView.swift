@@ -77,10 +77,9 @@ struct ContinueAsView: View {
                 .frame(maxWidth: .infinity)
             }
         }
-        .confirmationDialog(
+        .alert(
             "Remove this account from this device?",
-            isPresented: $isRemoveConfirmPresented,
-            titleVisibility: .visible
+            isPresented: $isRemoveConfirmPresented
         ) {
             Button("Remove account", role: .destructive) {
                 Task { await viewModel.removeAccount(using: auth) }
