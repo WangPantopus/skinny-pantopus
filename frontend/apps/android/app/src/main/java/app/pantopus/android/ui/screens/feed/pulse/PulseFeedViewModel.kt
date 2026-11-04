@@ -287,6 +287,9 @@ class PulseFeedViewModel
         private var resolvedLatitude: Double? = null
         private var resolvedLongitude: Double? = null
 
+        /** The last chosen-area read listed a Home, which Pulse falls back to when the feed sends no coordinates. */
+        private var homeFallback = false
+
         /** The area the last first-page fetch used; later pages reuse it. */
         private var lastArea: FeedArea? = null
 
@@ -1383,7 +1386,10 @@ class PulseFeedViewModel
             if (_surface.value != FeedSurface.Pulse) return null
             val chosen =
                 when (val result = viewingLocation.current(force)) {
-                    is NetworkResult.Success -> result.data.viewingLocation
+                    is NetworkResult.Success -> {
+                        homeFallback = result.data.homes.any { it.latitude != null && it.longitude != null }
+                        result.data.viewingLocation
+                    }
                     is NetworkResult.Failure -> throw result.error
                 } ?: return null
             return FeedArea(chosen.latitude, chosen.longitude, chosen.radiusMiles, chosen)
@@ -1403,7 +1409,13 @@ class PulseFeedViewModel
 
         private suspend fun awaitFreshCoordinates(): Pair<Double, Double>? {
             val cached = locationProvider.cachedCoordinate()
-            val fresh = cached ?: locationProvider.requestCurrent(timeoutMillis = PASSIVE_LOCATION_TIMEOUT_MILLIS)
+            // Only a Home to fall back to makes a short wait safe; without one, a slow fix is the only area there is.
+            val fresh =
+                cached ?: if (homeFallback && _surface.value == FeedSurface.Pulse) {
+                    locationProvider.requestCurrent(timeoutMillis = PASSIVE_LOCATION_TIMEOUT_MILLIS)
+                } else {
+                    locationProvider.requestCurrent()
+                }
             val coordinate = fresh ?: return null
             resolvedLatitude = coordinate.latitude
             resolvedLongitude = coordinate.longitude

@@ -7,7 +7,11 @@ import dagger.hilt.components.SingletonComponent
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Automatic feed loads have a saved-area fallback and should not wait for a full GPS acquisition. */
+/**
+ * How long automatic feed and map loads wait for a device fix when the person's Home (or, on the map, a saved place)
+ * can stand in, so they don't wait for a full GPS acquisition. With nothing to fall back to, the device location is
+ * the only area there is, and they keep the usual window.
+ */
 const val PASSIVE_LOCATION_TIMEOUT_MILLIS = 400L
 
 /**

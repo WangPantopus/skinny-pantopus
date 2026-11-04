@@ -314,12 +314,16 @@ class FeedMapViewModel
             if (userCoordinate == null) {
                 userCoordinate = locationProvider.cachedCoordinate()
                 if (selectedArea == null && userCoordinate == null) {
-                    userCoordinate = locationProvider.requestCurrent(timeoutMillis = PASSIVE_LOCATION_TIMEOUT_MILLIS)
+                    // Only a Home or saved place to fall back to makes a short wait safe.
+                    userCoordinate =
+                        if (fallbackArea() != null) {
+                            locationProvider.requestCurrent(timeoutMillis = PASSIVE_LOCATION_TIMEOUT_MILLIS)
+                        } else {
+                            locationProvider.requestCurrent()
+                        }
                 }
             }
-            val center =
-                selectedArea ?: userCoordinate?.let { it.latitude to it.longitude } ?: defaultArea
-                    ?: savedPlaces.listStored().data?.savedPlaces?.firstOrNull()?.let { it.latitude to it.longitude }
+            val center = selectedArea ?: userCoordinate?.let { it.latitude to it.longitude } ?: fallbackArea()
             if (center == null) {
                 _refreshNotice.value = null
                 _state.value = FeedMapUiState.Error("Choose an area or turn on location to explore nearby.")
@@ -329,6 +333,10 @@ class FeedMapViewModel
             fetchMarkers(_region.value)
             isReady = true
         }
+
+        /** Where the map opens without a chosen area or a device fix: the first Home, else the newest saved place. */
+        private suspend fun fallbackArea(): Pair<Double, Double>? =
+            defaultArea ?: savedPlaces.listStored().data?.savedPlaces?.firstOrNull()?.let { it.latitude to it.longitude }
 
         /**
          * Camera settled on a new viewport. Marks the viewport dirty (so the
