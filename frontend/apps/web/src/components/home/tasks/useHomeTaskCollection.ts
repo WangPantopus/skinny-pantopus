@@ -24,7 +24,7 @@ export function useHomeTaskCollection(homeId: string) {
   useEffect(() => {
     const ctx: Context = { client: new HomeTaskClient(homeId), active: true };
     context.current = ctx; hide(); setError(''); setRetired(false);
-    let working = false; let queued = false; let lastAttempt = 0;
+    let working = false; let queued = false; let lastAttempt = 0; let rosterGeneration = 0;
     const current = (revision: number) => {
       try { ctx.client.requireCurrent(revision); return ctx.active && context.current === ctx; }
       catch { return false; }
@@ -36,21 +36,27 @@ export function useHomeTaskCollection(homeId: string) {
       if (!ctx.active) return;
       if (working) { if (!background) queued = true; return; }
       working = true; lastAttempt = Date.now(); const revision = ctx.client.revision;
+      const rosterRequest = ++rosterGeneration;
       if (!background) { ctx.loadedRevision = undefined; hide(); setLoading(true); setError(''); }
       try {
         const result = await ctx.client.list(revision);
         if (!current(revision)) return;
         ctx.loadedRevision = revision; setTasks(result.tasks); setScope(result.task_session);
         setCanCreate(result.collection_capabilities.can_create); setError('');
-        // Membership names are optional; their failure must not hide a readable task.
-        try {
-          const response = await api.homes.getHomeOccupants(homeId);
-          if (!current(revision)) return;
+        // Showing tasks and reloading them must not wait for optional member names.
+        // Names already shown (a background re-check keeps them) stay until this
+        // roster answers; only the newest answer for this collection and session
+        // replaces them, and a failed one clears them. Task access is verified
+        // separately by the task endpoint.
+        const showRoster = (names: TaskMember[]) => {
+          if (current(revision) && rosterRequest === rosterGeneration) setMembers(names);
+        };
+        void api.homes.getHomeOccupants(homeId).then(response => {
           const occupants: unknown = response.occupants;
           // Guests can't see household tasks, so the server refuses them as assignees.
-          if (Array.isArray(occupants)) setMembers(occupants.filter((value): value is TaskMember =>
-            value && typeof value.user_id === 'string' && TASK_UUID.test(value.user_id) && value.role !== 'guest'));
-        } catch { /* Task access remains independently verified. */ }
+          showRoster(Array.isArray(occupants) ? occupants.filter((value): value is TaskMember =>
+            value && typeof value.user_id === 'string' && TASK_UUID.test(value.user_id) && value.role !== 'guest') : []);
+        }).catch(() => showRoster([]));
       } catch (failure) {
         if (ctx.active && context.current === ctx) {
           try { ctx.client.requireCurrent(); } catch { retire(); return; }
