@@ -8,13 +8,16 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.homes.CreateAccessSecretRequest
 import app.pantopus.android.data.api.models.homes.HomeAccessSecretDto
+import app.pantopus.android.data.api.models.homes.HomeAccessSecretResponse
 import app.pantopus.android.data.api.models.homes.HomeAccessSecretsResponse
 import app.pantopus.android.data.api.models.homes.UpdateAccessSecretRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.ui.components.toastDurationMillis
+import app.pantopus.android.ui.screens.homes.claim_review.HomeClaimSessionScopeFactory
 import app.pantopus.android.ui.screens.shared.form.FormAggregate
 import app.pantopus.android.ui.screens.shared.form.FormFieldState
 import app.pantopus.android.ui.screens.shared.form.FormValidator
@@ -129,6 +132,7 @@ data class EditAccessCodeUiState(
     val visibility: AccessVisibility = AccessVisibility.Default,
     val isRevealed: Boolean = false,
     val isSaving: Boolean = false,
+    val awaitingCreateConfirmation: Boolean = false,
     val isEditing: Boolean = false,
     val isLoaded: Boolean = false,
     val canManage: Boolean = false,
@@ -151,6 +155,7 @@ data class EditAccessCodeUiState(
         }
 
     val isDirty: Boolean get() = aggregate.isDirty
+    val canEditFields: Boolean get() = canManage && !awaitingCreateConfirmation
 
     /** Form title — different for add vs edit. */
     val title: String get() =
@@ -176,6 +181,7 @@ class EditAccessCodeFormViewModel
         private val homes: HomesRepository,
         private val members: HomeMembersRepository,
         savedStateHandle: SavedStateHandle,
+        sessionScopes: HomeClaimSessionScopeFactory,
     ) : ViewModel() {
         val homeId: String =
             requireNotNull(savedStateHandle[EDIT_ACCESS_CODE_HOME_ID_KEY]) {
@@ -213,9 +219,14 @@ class EditAccessCodeFormViewModel
         private var active = true
         private var retainedDraft: EditAccessCodeUiState? = null
         private var savedSuccessfully = false
+        private val session = sessionScopes.create(viewModelScope)
+        private var pendingCreate: PendingAccessCreate? = null
 
         init {
             seedDefaultFields()
+            viewModelScope.launch {
+                session.invalidated.collect { if (it) invalidateSession() }
+            }
         }
 
         /** Bound by the screen before the first render. */
@@ -225,6 +236,10 @@ class EditAccessCodeFormViewModel
 
         /** The secret read also supplies current write permissions, including private setup homes. */
         fun load() {
+            if (!session.isCurrent) {
+                invalidateSession()
+                return
+            }
             active = true
             if (savedSuccessfully) {
                 _state.update { it.copy(shouldDismiss = true) }
@@ -237,11 +252,18 @@ class EditAccessCodeFormViewModel
             readJob =
                 viewModelScope.launch {
                     val result = homes.getHomeAccessSecrets(homeId)
+                    if (!session.confirmCurrent()) {
+                        invalidateSession()
+                        return@launch
+                    }
                     if (!active || request != generation) return@launch
                     when (result) {
                         is NetworkResult.Success -> applyRead(result.data, request)
                         is NetworkResult.Failure -> {
-                            if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound) retainedDraft = null
+                            if (result.error.refusesStoredCopy) {
+                                retainedDraft = null
+                                pendingCreate = null
+                            }
                             _state.update { it.copy(loadError = "Couldn't load access code. Try again.") }
                         }
                     }
@@ -254,6 +276,21 @@ class EditAccessCodeFormViewModel
             readJob?.cancel()
             rosterJob?.cancel()
             clearPresentation()
+        }
+
+        private fun invalidateSession() {
+            pause()
+            retainedDraft = null
+            pendingCreate = null
+            savedSuccessfully = false
+            _state.update {
+                it.copy(
+                    isSaving = false,
+                    awaitingCreateConfirmation = false,
+                    shouldDismiss = false,
+                    loadError = "Your session changed. Reopen this form to continue.",
+                )
+            }
         }
 
         private fun clearPresentation() {
@@ -284,6 +321,7 @@ class EditAccessCodeFormViewModel
             val cannotCreate = secretId == null && !canManage
             if (missingSecret || cannotCreate) {
                 retainedDraft = null
+                pendingCreate = null
                 _state.update {
                     it.copy(
                         loadError =
@@ -297,8 +335,9 @@ class EditAccessCodeFormViewModel
                 return
             }
             if (secret != null) hydrate(secret) else seedDefaultFields()
-            val draft = retainedDraft.takeIf { canManage }
+            val draft = retainedDraft?.takeIf { canManage && it.visibility in scopes }
             retainedDraft = draft
+            if (pendingCreate?.request?.visibility !in response.allowedVisibilities) pendingCreate = null
             _state.update { current ->
                 current.copy(
                     fields = draft?.fields ?: current.fields,
@@ -306,6 +345,7 @@ class EditAccessCodeFormViewModel
                     visibility = draft?.visibility ?: current.visibility,
                     isLoaded = true, isRevealed = false, canManage = canManage, allowedVisibilities = scopes,
                     isSaving = mutationJob?.isActive == true, loadError = null,
+                    awaitingCreateConfirmation = pendingCreate != null,
                 )
             }
             // The optional roster must never delay the usable form or its permission check.
@@ -366,13 +406,13 @@ class EditAccessCodeFormViewModel
 
         /** Flip the masked / revealed pose of the value field. */
         fun toggleReveal() {
-            if (!active || !_state.value.isLoaded) return
+            if (!active || !session.isCurrent || !_state.value.isLoaded) return
             _state.update { it.copy(isRevealed = !it.isRevealed) }
         }
 
         /** Copy the current value field through the bound clipboard handler. */
         fun copyValue() {
-            if (!active || !_state.value.isLoaded) return
+            if (!active || !session.isCurrent || !_state.value.isLoaded) return
             val raw = (_state.value.fields[EditAccessCodeField.Value]?.value ?: "").trim()
             if (raw.isEmpty()) return
             clipboardHandler(raw)
@@ -413,15 +453,19 @@ class EditAccessCodeFormViewModel
         // ─── Submit ────────────────────────────────────────────────
 
         fun submit() {
-            if (!canEdit() || _state.value.visibility !in _state.value.allowedVisibilities) return
+            if (!canSubmit() || _state.value.visibility !in _state.value.allowedVisibilities) return
             if (validateAll() != null) {
                 showToast("Fix the highlighted field.", isError = true)
                 return
             }
-            _state.update { it.copy(isSaving = true) }
+            _state.update { it.copy(isSaving = true, toast = null) }
             val current = _state.value
             mutationJob =
                 viewModelScope.launch {
+                    if (!session.confirmCurrent()) {
+                        invalidateSession()
+                        return@launch
+                    }
                     val label = current.fields[EditAccessCodeField.Label]?.value.orEmpty().trim()
                     val value = current.fields[EditAccessCodeField.Value]?.value.orEmpty().trim()
                     val notesRaw = current.fields[EditAccessCodeField.Notes]?.value.orEmpty().trim()
@@ -444,25 +488,29 @@ class EditAccessCodeFormViewModel
                                     ),
                             )
                         } else {
-                            homes.createHomeAccessSecret(
-                                homeId = homeId,
-                                request =
-                                    CreateAccessSecretRequest(
-                                        accessType = accessType,
-                                        label = label,
-                                        secretValue = value,
-                                        notes = notes,
-                                        visibility = visibilityWire,
-                                    ),
+                            createOrReconcile(
+                                CreateAccessSecretRequest(
+                                    accessType = accessType,
+                                    label = label,
+                                    secretValue = value,
+                                    notes = notes,
+                                    visibility = visibilityWire,
+                                ),
                             )
                         }
+                    if (!session.confirmCurrent()) {
+                        invalidateSession()
+                        return@launch
+                    }
                     when (result) {
                         is NetworkResult.Success -> {
                             savedSuccessfully = true
                             retainedDraft = null
+                            pendingCreate = null
                             _state.update {
                                 it.copy(
                                     isSaving = false,
+                                    awaitingCreateConfirmation = false,
                                     toast =
                                         EditAccessCodeToast(
                                             text = if (secretId != null) "Code updated." else "Code added.",
@@ -479,6 +527,7 @@ class EditAccessCodeFormViewModel
                             _state.update {
                                 it.copy(
                                     isSaving = false,
+                                    awaitingCreateConfirmation = pendingCreate != null,
                                     toast =
                                         EditAccessCodeToast(
                                             text = result.error.message,
@@ -486,10 +535,34 @@ class EditAccessCodeFormViewModel
                                         ),
                                 )
                             }
-                            if (active && result.error is NetworkError.Forbidden) load()
+                            if (active && result.error.refusesStoredCopy) load()
                         }
                     }
                 }
+        }
+
+        /** A lost create response is recoverable only from this session's exact, previously unseen intent. */
+        @Suppress("ReturnCount")
+        private suspend fun createOrReconcile(request: CreateAccessSecretRequest): NetworkResult<HomeAccessSecretResponse> {
+            val actorId = session.actorId ?: return NetworkResult.Failure(NetworkError.Unauthorized)
+            val read = homes.getHomeAccessSecrets(homeId)
+            if (!session.confirmCurrent()) return NetworkResult.Failure(NetworkError.Unauthorized)
+            if (read is NetworkResult.Failure) return read
+            val response = (read as NetworkResult.Success).data
+            if (!response.canManage || request.visibility !in response.allowedVisibilities) {
+                pendingCreate = null
+                return NetworkResult.Failure(NetworkError.Forbidden)
+            }
+            val previous = pendingCreate
+            if (previous != null) {
+                val saved = response.secrets.singleOrNull { previous.matches(it, homeId, actorId) }
+                if (saved != null) return NetworkResult.Success(HomeAccessSecretResponse(saved))
+            }
+            val intent = previous ?: PendingAccessCreate(actorId, request, response.secrets.map { it.id }.toSet())
+            pendingCreate = intent
+            val result = homes.createHomeAccessSecret(homeId = homeId, request = intent.request)
+            if (result is NetworkResult.Failure && !result.error.creationMayHaveSucceeded()) pendingCreate = null
+            return result
         }
 
         /** Removes this code for everyone it was shared with, guest pass pages included. */
@@ -499,7 +572,10 @@ class EditAccessCodeFormViewModel
             _state.update { it.copy(isSaving = true) }
             mutationJob =
                 viewModelScope.launch {
-                    when (val result = homes.deleteHomeAccessSecret(homeId = homeId, secretId = id)) {
+                    if (!session.confirmCurrent()) return@launch invalidateSession()
+                    val result = homes.deleteHomeAccessSecret(homeId = homeId, secretId = id)
+                    if (!session.confirmCurrent()) return@launch invalidateSession()
+                    when (result) {
                         is NetworkResult.Success -> {
                             savedSuccessfully = true
                             retainedDraft = null
@@ -510,10 +586,12 @@ class EditAccessCodeFormViewModel
                             delay(800)
                             if (active) _state.update { it.copy(shouldDismiss = true) }
                         }
-                        is NetworkResult.Failure ->
+                        is NetworkResult.Failure -> {
                             _state.update {
                                 it.copy(isSaving = false, toast = EditAccessCodeToast(text = result.error.message, isError = true))
                             }
+                            if (active && result.error.refusesStoredCopy) load()
+                        }
                     }
                 }
         }
@@ -552,7 +630,7 @@ class EditAccessCodeFormViewModel
 
         private suspend fun loadRoster(request: Int) {
             val result = members.listOccupants(homeId)
-            if (!active || request != generation) return
+            if (!active || request != generation || !session.confirmCurrent()) return
             when (result) {
                 is NetworkResult.Success -> {
                     val roster =
@@ -603,7 +681,10 @@ class EditAccessCodeFormViewModel
 
         // ─── Helpers ───────────────────────────────────────────────
 
-        private fun canEdit(): Boolean = active && _state.value.isLoaded && _state.value.canManage && !_state.value.isSaving
+        private fun canSubmit(): Boolean =
+            active && session.isCurrent && _state.value.isLoaded && _state.value.canManage && !_state.value.isSaving
+
+        private fun canEdit(): Boolean = canSubmit() && !_state.value.awaitingCreateConfirmation
 
         private fun seedDefaultFields() {
             _state.update { current ->
@@ -650,6 +731,32 @@ class EditAccessCodeFormViewModel
         companion object {
             private const val TOAST_DURATION_MS = 1_800L
         }
+    }
+
+private data class PendingAccessCreate(
+    val actorId: String,
+    val request: CreateAccessSecretRequest,
+    val baselineIds: Set<String>,
+) {
+    fun matches(
+        secret: HomeAccessSecretDto,
+        homeId: String,
+        currentActor: String,
+    ): Boolean {
+        val identityMatches =
+            currentActor == actorId && secret.createdBy == actorId && secret.homeId == homeId && secret.id !in baselineIds
+        val scopeMatches = secret.accessType == request.accessType && secret.visibility == request.visibility
+        val fieldsMatch =
+            secret.label == request.label && secret.secretValue == request.secretValue &&
+                secret.notes.orEmpty().trim() == request.notes.orEmpty()
+        return identityMatches && scopeMatches && fieldsMatch
+    }
+}
+
+private fun NetworkError.creationMayHaveSucceeded(): Boolean =
+    when (this) {
+        is NetworkError.Transport, is NetworkError.Server, is NetworkError.Decoding, NetworkError.RetriesExhausted -> true
+        else -> code == 408
     }
 
 /** Per-field validation for the access code form (no view-model state involved). */

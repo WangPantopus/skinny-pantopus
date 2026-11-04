@@ -168,11 +168,19 @@ internal fun EditAccessCodeFormContent(
                     CircularProgressIndicator()
                 }
             } else {
+                if (state.awaitingCreateConfirmation) {
+                    Text(
+                        "The code may already be saved. Your details are kept. Tap Save to check.",
+                        style = PantopusTextStyle.caption,
+                        color = PantopusColors.appTextSecondary,
+                    )
+                }
                 FormFieldGroup("Category") {
                     if (state.canManage) {
                         CategoryGrid(
                             selected = state.category,
                             onSelect = onSelectCategory,
+                            enabled = state.canEditFields && !state.isSaving,
                         )
                     } else {
                         Text(state.category.label, style = PantopusTextStyle.body)
@@ -188,7 +196,7 @@ internal fun EditAccessCodeFormContent(
                         onChange = { onUpdate(EditAccessCodeField.Value, it) },
                         onToggleReveal = onToggleReveal,
                         onCopy = onCopy,
-                        readOnly = !state.canManage,
+                        readOnly = !state.canEditFields || state.isSaving,
                     )
                 }
                 FormFieldGroup("Notes (optional)") {
@@ -196,7 +204,7 @@ internal fun EditAccessCodeFormContent(
                         value = state.fields[EditAccessCodeField.Notes]?.value.orEmpty(),
                         error = state.fields[EditAccessCodeField.Notes]?.error,
                         onChange = { onUpdate(EditAccessCodeField.Notes, it) },
-                        readOnly = !state.canManage,
+                        readOnly = !state.canEditFields || state.isSaving,
                     )
                 }
                 FormFieldGroup("Shared with") {
@@ -208,6 +216,7 @@ internal fun EditAccessCodeFormContent(
                                     isSelected = state.visibility == scope,
                                     summary = rosterSummary(scope),
                                     onSelect = { onSelectVisibility(scope) },
+                                    enabled = state.canEditFields && !state.isSaving,
                                 )
                             }
                             if (state.visibility !in state.allowedVisibilities) {
@@ -308,7 +317,7 @@ private fun LabelField(
         placeholder = "Main network",
         state = fieldState,
         fieldTestTag = EditAccessCodeA11y.LABEL_FIELD,
-        enabled = state.canManage && !state.isSaving,
+        enabled = state.canEditFields && !state.isSaving,
     )
 }
 
@@ -317,6 +326,7 @@ private fun LabelField(
 private fun CategoryGrid(
     selected: AccessCategory,
     onSelect: (AccessCategory) -> Unit,
+    enabled: Boolean,
 ) {
     val categories = AccessCategory.displayOrder
     // Use a non-lazy fixed-height grid since the list is small (6 items)
@@ -338,6 +348,7 @@ private fun CategoryGrid(
                 category = category,
                 isSelected = category == selected,
                 onSelect = { onSelect(category) },
+                enabled = enabled,
             )
         }
     }
@@ -348,6 +359,7 @@ private fun CategoryTile(
     category: AccessCategory,
     isSelected: Boolean,
     onSelect: () -> Unit,
+    enabled: Boolean,
 ) {
     val tag = "${EditAccessCodeA11y.CATEGORY_OPTION}_${category.wire}"
     Column(
@@ -362,7 +374,7 @@ private fun CategoryTile(
                     width = if (isSelected) 2.dp else 1.dp,
                     color = if (isSelected) PantopusColors.primary600 else PantopusColors.appBorder,
                     shape = RoundedCornerShape(Radii.md),
-                ).clickable(onClick = onSelect)
+                ).clickable(enabled = enabled, onClick = onSelect)
                 .padding(vertical = Spacing.s2)
                 .testTag(tag)
                 .semantics { contentDescription = category.label },
@@ -557,6 +569,7 @@ private fun VisibilityRow(
     isSelected: Boolean,
     summary: String,
     onSelect: () -> Unit,
+    enabled: Boolean,
 ) {
     val tag = "${EditAccessCodeA11y.SHARED_WITH_OPTION}_${scope.wire}"
     Row(
@@ -572,7 +585,7 @@ private fun VisibilityRow(
                     width = if (isSelected) 2.dp else 1.dp,
                     color = if (isSelected) PantopusColors.primary600 else PantopusColors.appBorder,
                     shape = RoundedCornerShape(Radii.md),
-                ).clickable(onClick = onSelect)
+                ).clickable(enabled = enabled, onClick = onSelect)
                 .padding(Spacing.s3)
                 .testTag(tag)
                 .semantics { contentDescription = "${scope.headline}. ${scope.subcopy}" },
