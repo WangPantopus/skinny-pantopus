@@ -10,13 +10,9 @@
 //    POST   `/api/homes/:id/access`            (`backend/routes/home.js:5735`)
 //    PUT    `/api/homes/:id/access/:secretId`  (`backend/routes/home.js:5794`)
 //    GET    `/api/homes/:id/access`            (`backend/routes/home.js:5695`)
-//    GET    `/api/homes/:id/occupants`         (`backend/routes/home.js:3705`)
 //
-//  Shared-with — the backend's `visibility` column is the coarse
-//  `home_record_visibility` enum (`public / members / managers /
-//  sensitive`). The form renders household-member-aware copy ("All 4
-//  members") so the picker reads as a roster scope chooser rather than
-//  a 4-way generic enum.
+//  Sharing scopes follow current Home permissions. The occupant list does not
+//  describe effective per-person access, so it is not an authorization preview.
 //
 
 import Foundation
@@ -33,21 +29,10 @@ public enum EditAccessCodeField: String, CaseIterable, Sendable {
 }
 
 /// The four scopes the backend persists on `HomeAccessSecret.visibility`.
-///
-/// Rendered as a "Shared with" picker on the form. Labels intentionally
-/// reference the household-member roster so the picker reads as a roster
-/// scope chooser rather than a generic enum (`members` becomes "All
-/// household members (N)" once the roster loads).
 public enum AccessVisibility: String, CaseIterable, Sendable, Hashable {
-    /// `members` — every active household member can read the value.
     case members
-    /// `managers` — owners + managers (the IAM role bundle that owns
-    /// `members.manage`).
     case managers
-    /// `sensitive` — owners only.
     case sensitive
-    /// `public` — visible to anyone with viewing access to the home
-    /// (members + guests-with-passes etc.).
     case everyone = "public"
 
     /// Default scope mirrors the backend default
@@ -63,22 +48,22 @@ public enum AccessVisibility: String, CaseIterable, Sendable, Hashable {
     public var headline: String {
         switch self {
         case .everyone: "Everyone with access"
-        case .members: "All household members"
+        case .members: "Household members"
         case .managers: "Owners & managers"
-        case .sensitive: "Owners only (sensitive)"
+        case .sensitive: "Sensitive access"
         }
     }
 
     public var subcopy: String {
         switch self {
         case .everyone:
-            "Members, guests, and anyone given a visitor pass."
+            "People with Home access and permission to view this type of code."
         case .members:
-            "Every active member of this household."
+            "Household members with permission to view this type of code."
         case .managers:
-            "Roles with access management — owners, admins, and managers."
+            "Owners, admins, and managers with permission to view this type of code."
         case .sensitive:
-            "Visible only to verified owners."
+            "People with sensitive-access permission and permission to view this type of code."
         }
     }
 }
@@ -89,40 +74,7 @@ public enum EditAccessCodeFormState: Sendable, Equatable {
     case error(String)
 }
 
-/// Lightweight household-member summary projected from the
-/// `/occupants` payload. We keep only the fields the picker actually
-/// renders so the form stays decoupled from the Members screen DTO.
-public struct AccessRosterMember: Sendable, Hashable, Identifiable {
-    public let id: String
-    public let displayName: String
-    public let role: String?
-    public let canManageAccess: Bool
-    public let canViewSensitive: Bool
-
-    public init(
-        id: String,
-        displayName: String,
-        role: String?,
-        canManageAccess: Bool,
-        canViewSensitive: Bool
-    ) {
-        self.id = id
-        self.displayName = displayName
-        self.role = role
-        self.canManageAccess = canManageAccess
-        self.canViewSensitive = canViewSensitive
-    }
-}
-
-/// ViewModel backing `EditAccessCodeFormView`.
-///
-/// Holds two pieces of state besides the field map:
-/// 1. `isRevealed` — flipped by the eye toggle on the value field.
-///    The clipboard copy works in either pose (you can copy a masked
-///    code without revealing it).
-/// 2. `roster` — the active household members, projected from
-///    `/api/homes/:id/occupants`. Drives the "Shared with" picker copy
-///    ("All 4 members" etc.) so the scope picker is roster-aware.
+/// Add/edit state, with fresh Home authority and separate confirmation of the current secret.
 @Observable
 @MainActor
 final class EditAccessCodeFormViewModel {
@@ -139,7 +91,6 @@ final class EditAccessCodeFormViewModel {
     private(set) var visibility: AccessVisibility = .default
     private(set) var isRevealed: Bool = false
     private(set) var isSaving: Bool = false
-    private(set) var roster: [AccessRosterMember] = []
     var toast: ToastMessage?
     private(set) var shakeTrigger: Int = 0
     private(set) var shouldDismiss: Bool = false
@@ -147,6 +98,7 @@ final class EditAccessCodeFormViewModel {
     private(set) var isConfirmingAccess = true
     private(set) var hasCurrentAccess = false
     private(set) var canManage = false
+    private(set) var availableVisibilities: Set<AccessVisibility> = []
     private(set) var accessError: String?
 
     /// `true` when this VM is editing an existing code.
@@ -191,18 +143,12 @@ final class EditAccessCodeFormViewModel {
         seedDefaultFields()
     }
 
-    /// Load the existing secret (when editing) plus the household
-    /// roster. Idempotent: re-running re-fetches both.
+    /// Confirm the existing secret against current server visibility without waiting for a roster.
     func load() async {
         readGeneration &+= 1
         let generation = readGeneration
         isLoading = true
         defer { if generation == readGeneration { isLoading = false } }
-        // Always pull the roster — it powers the "Shared with" copy
-        // even in the create flow.
-        await loadRoster(generation: generation)
-        guard generation == readGeneration, !Task.isCancelled else { return }
-        // Then hydrate from the existing secret, if any.
         if let secretId {
             await loadSecret(secretId: secretId, generation: generation)
         } else {
@@ -215,10 +161,10 @@ final class EditAccessCodeFormViewModel {
         accessGeneration &+= 1
         hasCurrentAccess = false
         canManage = false
+        availableVisibilities = []
         isLoading = true
         isConfirmingAccess = true
         isRevealed = false
-        roster = []
         toastTask?.cancel()
         toast = nil
     }
@@ -231,6 +177,7 @@ final class EditAccessCodeFormViewModel {
         let generation = accessGeneration
         hasCurrentAccess = false
         canManage = false
+        availableVisibilities = []
         isConfirmingAccess = true
         accessError = nil
         defer { if generation == accessGeneration { isConfirmingAccess = false } }
@@ -239,6 +186,13 @@ final class EditAccessCodeFormViewModel {
             guard generation == accessGeneration, !Task.isCancelled else { return false }
             let permissions = current.access?.permissions ?? []
             canManage = permissions.contains("access.manage")
+            if canManage {
+                availableVisibilities = [.everyone, .members]
+                if ["owner", "admin", "manager"].contains(current.access?.roleBase ?? "") {
+                    availableVisibilities.insert(.managers)
+                }
+                if permissions.contains("sensitive.view") { availableVisibilities.insert(.sensitive) }
+            }
             hasCurrentAccess = canManage || (isEditing && permissions.contains {
                 $0 == "access.view_wifi" || $0 == "access.view_codes"
             })
@@ -424,30 +378,6 @@ final class EditAccessCodeFormViewModel {
         } catch {
             guard generation == readGeneration, !Task.isCancelled else { return }
             state = .error("Couldn't load access code. Try again.")
-        }
-    }
-
-    private func loadRoster(generation: Int) async {
-        let endpoint = HomesEndpoints.listOccupants(homeId: homeId)
-        do {
-            let response: OccupantsResponse = try await api.request(endpoint)
-            guard generation == readGeneration, !Task.isCancelled else { return }
-            roster = response.occupants
-                .filter(\.isActive)
-                .map { occupant in
-                    AccessRosterMember(
-                        id: occupant.userId,
-                        displayName: occupant.displayName ?? MadeUpUsername.chosen(occupant.username) ?? "Member",
-                        role: occupant.role,
-                        canManageAccess: occupant.canManageAccess ?? false,
-                        canViewSensitive: occupant.canViewSensitive ?? false
-                    )
-                }
-        } catch {
-            guard generation == readGeneration, !Task.isCancelled else { return }
-            // Non-fatal — the picker still works with the bare scope
-            // labels, the roster strip just stays empty.
-            roster = []
         }
     }
 

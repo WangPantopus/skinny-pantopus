@@ -57,7 +57,7 @@ public struct EditAccessCodeFormView: View {
         FormShell(
             title: viewModel.isEditing && !viewModel.canManage ? "Access code" : viewModel.title,
             rightActionLabel: viewModel.commitLabel,
-            isValid: viewModel.isValid && viewModel.canManage && canShowContent,
+            isValid: viewModel.isValid && canSaveScope && canShowContent,
             isDirty: viewModel.isDirty,
             isSaving: viewModel.isSaving,
             onClose: onClose,
@@ -107,6 +107,10 @@ public struct EditAccessCodeFormView: View {
         return false
     }
 
+    private var canSaveScope: Bool {
+        viewModel.canManage && viewModel.availableVisibilities.contains(viewModel.visibility)
+    }
+
     @ViewBuilder private var formContent: some View {
         if viewModel.isLoading || viewModel.isConfirmingAccess {
             ProgressView("Checking access…")
@@ -119,6 +123,10 @@ public struct EditAccessCodeFormView: View {
             detailsSection
             notesSection.disabled(!viewModel.canManage)
             sharedWithSection.disabled(!viewModel.canManage)
+            if viewModel.canManage, !canSaveScope {
+                Text("Choose a sharing option allowed by your current access.")
+                    .pantopusTextStyle(.caption)
+            }
             if viewModel.isEditing, viewModel.canManage { deleteButton }
         } else {
             if let message = viewModel.accessError {
@@ -139,6 +147,7 @@ public struct EditAccessCodeFormView: View {
     private func commit(deleting: Bool = false) {
         Task {
             guard await viewModel.confirmAccess(), canShowContent, isVisible, scenePhase == .active else { return }
+            guard deleting || canSaveScope else { return }
             if deleting { await viewModel.delete() } else { await viewModel.submit() }
         }
     }
@@ -202,15 +211,15 @@ public struct EditAccessCodeFormView: View {
                 ForEach(AccessVisibility.displayOrder, id: \.self) { scope in
                     VisibilityRow(
                         scope: scope,
-                        isSelected: viewModel.visibility == scope,
-                        rosterSummary: viewModel.rosterSummary(for: scope)
+                        isSelected: viewModel.visibility == scope
                     ) {
                         viewModel.selectVisibility(scope)
                     }
+                    .disabled(!viewModel.availableVisibilities.contains(scope))
                 }
-                if !viewModel.sharedWithNames().isEmpty {
-                    MemberPreviewStrip(names: viewModel.sharedWithNames())
-                }
+                Text("These choices do not grant new Home permissions. Access follows each person’s current permissions.")
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
             }
         }
     }
@@ -381,7 +390,6 @@ private struct NotesField: View {
 private struct VisibilityRow: View {
     let scope: AccessVisibility
     let isSelected: Bool
-    let rosterSummary: String
     let onSelect: () -> Void
 
     var body: some View {
@@ -389,7 +397,7 @@ private struct VisibilityRow: View {
             HStack(alignment: .top, spacing: Spacing.s3) {
                 radio
                 VStack(alignment: .leading, spacing: Spacing.s1) {
-                    Text(rosterSummary)
+                    Text(scope.headline)
                         .pantopusTextStyle(.body)
                         .foregroundStyle(Theme.Color.appText)
                     Text(scope.subcopy)
@@ -432,34 +440,6 @@ private struct VisibilityRow: View {
                     .frame(width: 12, height: 12)
             }
         }
-    }
-}
-
-// MARK: - Member preview strip
-
-@MainActor
-private struct MemberPreviewStrip: View {
-    let names: [String]
-
-    var body: some View {
-        HStack(spacing: Spacing.s1) {
-            Icon(.users, size: 12, color: Theme.Color.appTextSecondary)
-            Text(displayText)
-                .pantopusTextStyle(.caption)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .lineLimit(2)
-            Spacer(minLength: Spacing.s0)
-        }
-        .padding(.top, Spacing.s1)
-    }
-
-    private var displayText: String {
-        if names.count <= 3 {
-            return names.joined(separator: ", ")
-        }
-        let head = names.prefix(3).joined(separator: ", ")
-        let extra = names.count - 3
-        return "\(head) +\(extra) more"
     }
 }
 

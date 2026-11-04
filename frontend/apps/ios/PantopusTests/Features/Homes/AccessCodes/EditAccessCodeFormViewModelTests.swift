@@ -4,14 +4,13 @@
 //
 //  P3.1 — Add / Edit Access Code form. Covers:
 //    - default add pose (no secretId, no initialCategory) → wifi seed
-//    - hydration of the edit pose from the roster + list payloads
+//    - hydration of the edit pose from the list payload
 //    - per-category projection (each of the six AccessCategory cases)
 //    - masked vs revealed value-field state via `toggleReveal`
 //    - copy-to-clipboard emits the "Copied" toast
 //    - validation: empty label / value blocks submit
 //    - submit POST happy path → `Code added` toast
 //    - submit PUT happy path → `Code updated` toast
-//    - roster-aware visibility scope summaries
 //
 //  Network calls are mocked via `SequencedURLProtocol`.
 //
@@ -48,19 +47,6 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
         )
     }
 
-    private static let occupantsJSON = """
-    {"occupants":[
-      {"id":"occ_1","user_id":"u_owner","role":"owner","is_active":true,
-       "display_name":"Maria","can_manage_access":true,"can_view_sensitive":true},
-      {"id":"occ_2","user_id":"u_manager","role":"manager","is_active":true,
-       "display_name":"Jose","can_manage_access":true,"can_view_sensitive":false},
-      {"id":"occ_3","user_id":"u_member","role":"member","is_active":true,
-       "display_name":"Sam","can_manage_access":false,"can_view_sensitive":false},
-      {"id":"occ_4","user_id":"u_inactive","role":"member","is_active":false,
-       "display_name":"Inactive","can_manage_access":false,"can_view_sensitive":false}
-    ],"pendingInvites":[]}
-    """
-
     private static let editSecretsJSON = """
     {"secrets":[
       {"id":"s1","home_id":"home_1","access_type":"wifi","label":"Main network",
@@ -72,8 +58,6 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
     // MARK: - Defaults
 
     func testAddPoseSeedsWifiCategoryAndMembersVisibility() async {
-        // Loading the roster fires GET /occupants — sequence one ok response.
-        SequencedURLProtocol.sequence = [.status(200, body: Self.occupantsJSON)]
         let vm = makeVM()
         await vm.load()
 
@@ -86,7 +70,6 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
     }
 
     func testAddPoseRespectsInitialCategory() async {
-        SequencedURLProtocol.sequence = [.status(200, body: Self.occupantsJSON)]
         let vm = makeVM(initialCategory: .alarm)
         await vm.load()
 
@@ -98,7 +81,6 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
 
     func testEditPoseHydratesFromSecretsList() async {
         SequencedURLProtocol.sequence = [
-            .status(200, body: Self.occupantsJSON),
             .status(200, body: Self.editSecretsJSON)
         ]
         let vm = makeVM(secretId: "s1")
@@ -118,7 +100,6 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
 
     func testEditPoseMissingSecretSurfacesError() async {
         SequencedURLProtocol.sequence = [
-            .status(200, body: Self.occupantsJSON),
             .status(200, body: "{\"secrets\":[]}")
         ]
         let vm = makeVM(secretId: "does-not-exist")
@@ -132,7 +113,6 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
     // MARK: - Category projection
 
     func testEachCategorySelectsCleanly() async {
-        SequencedURLProtocol.sequence = [.status(200, body: Self.occupantsJSON)]
         let vm = makeVM()
         await vm.load()
 
@@ -146,7 +126,6 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
     // MARK: - Reveal toggle
 
     func testToggleRevealFlipsRevealState() async {
-        SequencedURLProtocol.sequence = [.status(200, body: Self.occupantsJSON)]
         let vm = makeVM()
         await vm.load()
 
@@ -160,7 +139,6 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
     // MARK: - Copy
 
     func testCopyValueWritesClipboardAndShowsCopiedToast() async {
-        SequencedURLProtocol.sequence = [.status(200, body: Self.occupantsJSON)]
         var copied: String?
         let vm = makeVM { value in copied = value }
         await vm.load()
@@ -175,7 +153,6 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
     }
 
     func testCopyValueWithEmptyValueIsNoop() async {
-        SequencedURLProtocol.sequence = [.status(200, body: Self.occupantsJSON)]
         var copied: String?
         let vm = makeVM { value in copied = value }
         await vm.load()
@@ -188,7 +165,6 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
     // MARK: - Validation
 
     func testValidationBlocksSubmitOnEmptyLabel() async {
-        SequencedURLProtocol.sequence = [.status(200, body: Self.occupantsJSON)]
         let vm = makeVM()
         await vm.load()
 
@@ -201,7 +177,6 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
     }
 
     func testValidationBlocksSubmitOnEmptyValue() async {
-        SequencedURLProtocol.sequence = [.status(200, body: Self.occupantsJSON)]
         let vm = makeVM()
         await vm.load()
 
@@ -217,7 +192,6 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
          "label":"Main","secret_value":"Hunter2!","visibility":"members"}}
         """
         SequencedURLProtocol.sequence = [
-            .status(200, body: Self.occupantsJSON),
             .status(201, body: createResponse)
         ]
         let vm = makeVM()
@@ -237,7 +211,6 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
          "label":"Main network","secret_value":"Different!","visibility":"members"}}
         """
         SequencedURLProtocol.sequence = [
-            .status(200, body: Self.occupantsJSON),
             .status(200, body: Self.editSecretsJSON),
             .status(200, body: updateResponse)
         ]
@@ -253,7 +226,6 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
 
     func testSubmitFailureSurfacesErrorToast() async {
         SequencedURLProtocol.sequence = [
-            .status(200, body: Self.occupantsJSON),
             .status(500, body: "{\"error\":\"Failed to create access secret\"}")
         ]
         let vm = makeVM()
@@ -264,38 +236,6 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
         let ok = await vm.submit()
         XCTAssertFalse(ok)
         XCTAssertEqual(vm.toast?.kind, .error)
-    }
-
-    // MARK: - Roster-aware visibility
-
-    func testRosterSummariesReflectMemberCounts() async {
-        SequencedURLProtocol.sequence = [.status(200, body: Self.occupantsJSON)]
-        let vm = makeVM()
-        await vm.load()
-
-        // Three active occupants (Maria, Jose, Sam).
-        XCTAssertEqual(vm.rosterSummary(for: .members), "All household members (3)")
-        // Two have can_manage_access set true (Maria, Jose).
-        XCTAssertEqual(vm.rosterSummary(for: .managers), "Owners & managers (2)")
-        // One owner (Maria).
-        XCTAssertEqual(vm.rosterSummary(for: .sensitive), "Owners only (1)")
-        // Everyone uses member count.
-        XCTAssertEqual(vm.rosterSummary(for: .everyone), "Everyone (3 members + guests)")
-    }
-
-    func testSharedWithNamesNarrowsByScope() async {
-        SequencedURLProtocol.sequence = [.status(200, body: Self.occupantsJSON)]
-        let vm = makeVM()
-        await vm.load()
-
-        vm.selectVisibility(.members)
-        XCTAssertEqual(vm.sharedWithNames(), ["Maria", "Jose", "Sam"])
-
-        vm.selectVisibility(.managers)
-        XCTAssertEqual(vm.sharedWithNames(), ["Maria", "Jose"])
-
-        vm.selectVisibility(.sensitive)
-        XCTAssertEqual(vm.sharedWithNames(), ["Maria"])
     }
 
     // MARK: - Backend wire format
@@ -309,17 +249,5 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
         XCTAssertEqual(AccessCategory.lockbox.backendAccessType, "lockbox")
         XCTAssertEqual(AccessCategory.garage.backendAccessType, "garage")
         XCTAssertEqual(AccessCategory.smartLock.backendAccessType, "other")
-    }
-
-    // MARK: - Roster fetch resilience
-
-    func testRosterFetchFailureFallsBackToScopeOnlyLabels() async {
-        SequencedURLProtocol.sequence = [.status(500, body: "{}")]
-        let vm = makeVM()
-        await vm.load()
-
-        XCTAssertEqual(vm.roster.count, 0)
-        XCTAssertEqual(vm.rosterSummary(for: .members), "All household members")
-        XCTAssertEqual(vm.sharedWithNames(), [])
     }
 }
