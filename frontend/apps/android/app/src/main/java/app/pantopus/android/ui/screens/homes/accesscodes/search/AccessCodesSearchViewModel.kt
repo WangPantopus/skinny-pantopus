@@ -15,6 +15,7 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.RowModel
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowTemplate
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowTrailing
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,11 +47,17 @@ class AccessCodesSearchViewModel
         private val _isLoading = MutableStateFlow(false)
         val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+        private val _error = MutableStateFlow<String?>(null)
+        val error: StateFlow<String?> = _error.asStateFlow()
+
         private val _results = MutableStateFlow<List<HomeAccessSecretDto>>(emptyList())
         val results: StateFlow<List<HomeAccessSecretDto>> = _results.asStateFlow()
 
         private var corpus: List<HomeAccessSecretDto> = emptyList()
         private var loadedOnce = false
+        private var active = true
+        private var generation = 0
+        private var readJob: Job? = null
 
         /** Routing callback wired by the screen before [load]. */
         var onOpenCode: (String) -> Unit = {}
@@ -60,21 +67,45 @@ class AccessCodesSearchViewModel
             reload()
         }
 
+        fun resume() {
+            active = true
+            reload()
+        }
+
+        fun pause() {
+            active = false
+            generation++
+            readJob?.cancel()
+            corpus = emptyList()
+            _results.value = emptyList()
+            _isLoading.value = false
+            _error.value = null
+        }
+
+        fun retry() = reload()
+
         fun setQuery(value: String) {
             _query.value = value
             recompute()
         }
 
         private fun reload() {
+            if (!active) return
+            val request = ++generation
+            readJob?.cancel()
+            corpus = emptyList()
+            _results.value = emptyList()
             _isLoading.value = true
-            viewModelScope.launch {
-                when (val result = repo.getHomeAccessSecrets(homeId)) {
+            _error.value = null
+            readJob = viewModelScope.launch {
+                val result = repo.getHomeAccessSecrets(homeId)
+                if (!active || generation != request) return@launch
+                when (result) {
                     is NetworkResult.Success -> {
                         corpus = result.data.secrets
                         loadedOnce = true
                     }
-                    // Degrade to "no matches"; the list screen owns error/retry.
-                    is NetworkResult.Failure -> corpus = emptyList()
+                    is NetworkResult.Failure -> _error.value = "Couldn't load access codes. Try again."
                 }
                 _isLoading.value = false
                 recompute()
@@ -122,7 +153,7 @@ class AccessCodesSearchViewModel
                         foreground = category.foreground,
                     ),
                 trailing = RowTrailing.Chevron,
-                onTap = { onOpenCode(secret.id) },
+                onTap = { if (active && corpus.any { it.id == secret.id }) onOpenCode(secret.id) },
                 body = secret.notes,
             )
         }
