@@ -221,7 +221,7 @@ struct LivePhotoTileView: View {
             MediaStillImage(
                 url: contentMode == .fill && !usesSharpPreview ? (thumbnailURL ?? stillURL) : stillURL,
                 contentMode: contentMode,
-                keepsOnDisk: !usesSharpPreview && !showsReplayButton,
+                keepsOnDisk: !showsReplayButton,
                 maxPixelSize: usesSharpPreview && contentMode == .fill ? 2400 : nil,
                 fallbackURL: thumbnailURL
             )
@@ -340,7 +340,7 @@ struct PostMediaTileView: View {
         case .image:
             MediaStillImage(
                 url: usesSharpPreview ? item.url : (item.thumbnailURL ?? item.url),
-                keepsOnDisk: !usesSharpPreview,
+                keepsOnDisk: true,
                 maxPixelSize: usesSharpPreview ? 2400 : nil,
                 fallbackURL: item.thumbnailURL
             )
