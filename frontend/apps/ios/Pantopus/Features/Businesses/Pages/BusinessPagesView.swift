@@ -76,10 +76,10 @@ public struct BusinessPagesView: View {
         }
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
-        .confirmationDialog(
+        // An alert keeps Cancel; iOS 27 shows a confirmation dialog as a popover with only the destructive choice.
+        .alert(
             viewModel.pendingDelete.map { "Delete “\($0.title)”?" } ?? "",
             isPresented: deleteBinding,
-            titleVisibility: .visible,
             presenting: viewModel.pendingDelete
         ) { row in
             Button("Delete \(row.title)", role: .destructive) {
@@ -233,6 +233,8 @@ public struct BusinessPagesView: View {
                                 .pantopusTextStyle(.caption)
                                 .foregroundStyle(Theme.Color.primaryInk)
                         }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("businessPages.history.\(row.slug)")
@@ -241,6 +243,8 @@ public struct BusinessPagesView: View {
                 if !row.isDefault {
                     Button { viewModel.pendingDelete = row } label: {
                         Icon(.trash2, size: 16, color: Theme.Color.error)
+                            .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Delete page")
@@ -248,7 +252,6 @@ public struct BusinessPagesView: View {
                 }
             }
             .padding(.horizontal, Spacing.s3)
-            .padding(.bottom, Spacing.s3)
 
             if viewModel.expandedRevisionsPageId == row.id {
                 BusinessPageRevisionsPanel(viewModel: viewModel, pageId: row.id)
@@ -298,7 +301,7 @@ private struct BusinessPageRevisionsPanel: View {
                     Text("Retry")
                         .font(.caption)
                         .foregroundStyle(Theme.Color.primaryInk)
-                        .frame(minWidth: 44, minHeight: 44)
+                        .frame(minWidth: 44, minHeight: 44, alignment: .leading)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -340,6 +343,7 @@ private struct BusinessPageRevisionsPanel: View {
                             .padding(.vertical, Spacing.s1)
                             .background(Theme.Color.primarySolid)
                             .clipShape(Capsule())
+                            .hitArea(vertical: 11)
                         }
                         .buttonStyle(.plain)
                         .disabled(viewModel.restoringRevision != nil)
