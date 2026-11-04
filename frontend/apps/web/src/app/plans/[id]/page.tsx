@@ -50,6 +50,9 @@ async function fetchPlanViewer(id: string): Promise<PlanViewer | null> {
   try {
     const response = await fetch(`${API_BASE_URL.replace(/\/+$/, '')}/api/plans/${encodeURIComponent(id)}`, {
       cache: 'no-store',
+      // This lookup only personalizes copy. A slow session/API must not hold
+      // the public preview open indefinitely, including while reading its body.
+      signal: AbortSignal.timeout(1500),
       headers: { Accept: 'application/json', Cookie: `pantopus_access=${access}` },
     });
     if (!response.ok) return null;
@@ -336,8 +339,9 @@ export default async function PublicPlanPage({ params, searchParams }: PageProps
   const plan = result.data;
   const userAgent = (await headers()).get('user-agent') || '';
   const invite = plan?.invite ?? null;
-  // The app opens the invitation from the same link; one taken back opens the plan as any share does.
-  const query = inviteQuery(token, invite);
+  // Preserve the original invitation through a failed read. Once loaded, an
+  // invitation taken back opens the plan as any ordinary share does.
+  const query = token && !plan ? `?invite=${encodeURIComponent(token)}` : inviteQuery(token, invite);
   const appUrl = `${buildPlanAppUrl(id)}${query}`;
   const linkHref = `${buildPlanShareUrl(id)}${query}`;
   // Getting the app from this page carries the same link through the install.
@@ -353,11 +357,11 @@ export default async function PublicPlanPage({ params, searchParams }: PageProps
     return (
       <main className="min-h-screen bg-app text-app-text">
         <div className="mx-auto w-full max-w-md">
-          <TopBar id={id} fallbackUrl={fallbackUrl} copyPath={copyPath} />
+          <TopBar id={id} fallbackUrl={fallbackUrl} copyPath={copyPath} query={query} />
           <div className="flex flex-col gap-4 px-4 pt-10 text-center">
             <h1 className="text-xl font-semibold">Couldn&apos;t load this plan</h1>
             <p className="text-sm text-app-text-secondary">Something went wrong. Please try again.</p>
-            <a href={buildPlanPath(id)} className={PRIMARY_BUTTON}>
+            <a href={path} className={PRIMARY_BUTTON}>
               Try again
             </a>
           </div>
