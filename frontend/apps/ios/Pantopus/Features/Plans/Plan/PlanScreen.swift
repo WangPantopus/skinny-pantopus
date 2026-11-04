@@ -17,6 +17,8 @@ struct PlanScreen: View {
     let onHost: (PlansHostStart?) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var needsForegroundRead = false
     @State private var showsAsk = false
     @State private var askIsChange = false
     @State private var confirmation: PlanConfirmation?
@@ -58,7 +60,7 @@ struct PlanScreen: View {
         .task {
             // An email or text invitation becomes this account's before the plan is read.
             if case let .invite(token) = intent, !askedOnOpen { await viewModel.claimInvite(token: token) }
-            await viewModel.load()
+            await viewModel.resume()
             if let notice = PlansNavigator.shared.notice {
                 PlansNavigator.shared.notice = nil
                 viewModel.actionError = notice
@@ -71,6 +73,8 @@ struct PlanScreen: View {
             if intent == .chat { openChat() }
         }
         .refreshesOnStoreChange(affects: { PlansStoreReads.affects($0) }, perform: { await viewModel.load() })
+        .onDisappear { viewModel.suspend() }
+        .onChange(of: scenePhase) { _, phase in sceneChanged(phase) }
         .sheet(isPresented: $showsAsk) {
             if let card = viewModel.card {
                 PlanAskSheet(
@@ -331,6 +335,18 @@ struct PlanScreen: View {
 }
 
 // MARK: - Small shared pieces
+
+private extension PlanScreen {
+    func sceneChanged(_ phase: ScenePhase) {
+        if phase == .background {
+            needsForegroundRead = true
+            viewModel.suspend()
+        } else if phase == .active, needsForegroundRead {
+            needsForegroundRead = false
+            Task { await viewModel.resume() }
+        }
+    }
+}
 
 /// A 44 pt round glass button over a map.
 struct PlanGlassButton: View {
