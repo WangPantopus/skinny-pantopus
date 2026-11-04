@@ -22,6 +22,7 @@ struct LogMaintenanceFormView: View {
     @State private var photoPickerSelection: [PhotosPickerItem] = []
     @State private var photoPickerShown: Bool = false
     @State private var receiptPickerShown: Bool = false
+    @State private var errorToast: ToastMessage?
     private let onClose: @Sendable () -> Void
     private let onSubmitted: @Sendable (String) -> Void
 
@@ -93,6 +94,18 @@ struct LogMaintenanceFormView: View {
             }
         }
         .accessibilityIdentifier("logMaintenanceForm")
+        .onChange(of: viewModel.submitError) { _, error in
+            errorToast = error.map { ToastMessage(text: $0, kind: .error) }
+        }
+        .overlay(alignment: .bottom) {
+            if let errorToast {
+                ToastView(message: errorToast)
+                    .padding(.bottom, Spacing.s12)
+                    .dismissToast(after: errorToast, minimum: 5) {
+                        self.errorToast = nil
+                    }
+            }
+        }
         .disabled(viewModel.isSubmitting)
         .interactiveDismissDisabled(viewModel.isSubmitting || viewModel.isDirty)
         .onAppear { Analytics.track(.screenLogMaintenanceViewed) }
