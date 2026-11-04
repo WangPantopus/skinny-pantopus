@@ -63,9 +63,8 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
     }
 
     public func load() async {
-        // Coming back from a sub-screen keeps the rows on screen; only the
-        // first load shows the skeleton. The four reads run at once.
-        if case .loaded = state {} else { state = .loading }
+        // The destinations are already known. Keep them usable while their
+        // optional status labels load, including when a provider is slow.
         // Identity + footer from auth state. The session `UserDTO` carries
         // no verification flag, so the chip is fetched below rather than
         // guessed from the email.
@@ -73,6 +72,7 @@ public final class SettingsIndexViewModel: GroupedListDataSource {
             footer = "\(user.email) · ID \(String(user.id.prefix(8)))"
             isAdmin = user.isAdmin
         }
+        rebuild()
         // Block count (best-effort) — both lists the Blocked users screen
         // shows: Identity Firewall profile blocks and personal blocks
         // (`GET /api/users/blocked`).
