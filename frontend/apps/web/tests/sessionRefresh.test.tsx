@@ -19,6 +19,8 @@ import '@testing-library/jest-dom';
 
 const apiMock = require('@pantopus/api');
 
+jest.mock('@pantopus/api/endpoints/auth', () => jest.requireActual('@pantopus/api').auth);
+
 jest.mock('next/server', () => {
   const buildResponse = (headers: Record<string, string> = {}) => {
     const cookieSet = jest.fn();

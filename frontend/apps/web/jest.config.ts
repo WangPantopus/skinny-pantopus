@@ -18,7 +18,7 @@ const config: Config = {
   },
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
-    '^@pantopus/api$': '<rootDir>/tests/__mocks__/@pantopus/api.ts',
+    '^@pantopus/api(?:/client)?$': '<rootDir>/tests/__mocks__/@pantopus/api.ts',
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   // Ignore Playwright spec files (E2E)
