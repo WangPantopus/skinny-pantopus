@@ -101,8 +101,11 @@ function EmergencyContent() {
   useEffect(() => {
     pageScope.current = {};
     clearDraft(); saveAttempt.current = null; setCreating(false);
-    // Emergency rows are sensitive: discard them on departure and show only a
-    // fresh authorized read on return, including when that read fails.
+    // Emergency rows are sensitive: discard them when the page is hidden (another
+    // tab, a minimized window, the back-forward cache) and show only a fresh
+    // authorized read when it is visible again, including when that read fails.
+    // A window that only loses focus keeps them: a phone link hands the call to
+    // another app while these details are still needed on screen.
     const depart = () => { away.current = true; invalidate(); };
     const resume = () => { if (document.visibilityState !== 'hidden') { away.current = false; void fetchItems(); } };
     const visibility = () => { if (document.visibilityState === 'hidden') depart(); else resume(); };
@@ -112,7 +115,6 @@ function EmergencyContent() {
     const unsubscribeSync = onSyncTopic((topic) => {
       if (topic === 'homes' || touchesHome(topic, homeId)) { invalidate(); void fetchItems(); }
     });
-    window.addEventListener('focus', resume); window.addEventListener('blur', depart);
     window.addEventListener('pageshow', resume); window.addEventListener('pagehide', depart);
     window.addEventListener('storage', storage);
     document.addEventListener('visibilitychange', visibility);
@@ -122,7 +124,6 @@ function EmergencyContent() {
       saveAttempt.current = null; pageScope.current = null;
       if (deletePrompt.current && confirmStore.getSnapshot() === deletePrompt.current) confirmStore.close(false);
       unsubscribe(); unsubscribeSync();
-      window.removeEventListener('focus', resume); window.removeEventListener('blur', depart);
       window.removeEventListener('pageshow', resume); window.removeEventListener('pagehide', depart);
       window.removeEventListener('storage', storage);
       document.removeEventListener('visibilitychange', visibility);
