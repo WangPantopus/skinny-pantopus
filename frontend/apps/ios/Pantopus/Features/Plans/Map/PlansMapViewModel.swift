@@ -297,8 +297,9 @@ final class PlansMapViewModel {
 
     // MARK: - What shows
 
-    /// Pins after the type filter, clustered at this zoom (board P1).
-    var markers: [PlansMarker] {
+    /// Pins after the type filter, clustered at this zoom (board P1), `selectedId` (the plan shown selected) never
+    /// in a cluster.
+    func markers(selectedId: String?) -> [PlansMarker] {
         PlansClustering.markers(
             pins.filter { kindFilter == nil || $0.kind == kindFilter },
             span: span,
