@@ -23,6 +23,8 @@ public enum InboxRoute: Hashable {
     case startSupportTrain(story: String)
     /// A person's public profile, opened from a DM header.
     case publicProfile(userId: String)
+    /// A business's existing public page, opened from its conversation header.
+    case businessProfile(businessId: String)
     /// A post opened from a profile's Posts tab.
     case post(postId: String)
     /// One of your own posts, edited from its page.

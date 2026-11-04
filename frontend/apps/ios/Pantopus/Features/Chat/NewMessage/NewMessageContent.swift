@@ -98,18 +98,21 @@ public struct NewMessageDestination: Hashable, Sendable {
     public let initials: String
     public let verified: Bool
     public let locality: String?
+    public let identity: NewMessageIdentityBadge
 
     public init(
         userId: String,
         displayName: String,
         initials: String,
         verified: Bool,
-        locality: String?
+        locality: String?,
+        identity: NewMessageIdentityBadge = .personal
     ) {
         self.userId = userId
         self.displayName = displayName
         self.initials = initials
         self.verified = verified
         self.locality = locality
+        self.identity = identity
     }
 }

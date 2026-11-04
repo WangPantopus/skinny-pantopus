@@ -24,6 +24,7 @@ public struct InboxTabRoot: View {
     /// P6.6 — "Invite to Pantopus" opens the system share sheet with the
     /// store link prefilled.
     @State private var systemSheet: SystemSheetRequest?
+    @State private var profileUnavailable = false
 
     public init() {}
 
@@ -59,6 +60,7 @@ public struct InboxTabRoot: View {
             consumeDeepLinkIfNeeded(pending: router.pending)
         }
         .sheet(item: $systemSheet) { request in request.makeView() }
+        .alert("Couldn't open profile. Please try again.", isPresented: $profileUnavailable) {}
         .onChange(of: path.routes) { _, routes in
             conversationModels.retain(routes: routes, userId: currentUserId)
         }
@@ -204,7 +206,15 @@ public struct InboxTabRoot: View {
                 },
                 onContentLoaded: { completeConversationArrival(dest) },
                 onOpenProfile: { userId in
-                    Task { @MainActor in path.append(.publicProfile(userId: userId)) }
+                    Task { @MainActor in
+                        do {
+                            guard let route = try await dest.profileRoute(userId: userId),
+                                  path.last == .conversation(dest) else { return }
+                            path.append(route)
+                        } catch {
+                            if path.last == .conversation(dest) { profileUnavailable = true }
+                        }
+                    }
                 }
             ) { if !path.isEmpty { path.removeLast() } }
                 .onDisappear { completeConversationArrival(dest) }
@@ -225,7 +235,7 @@ public struct InboxTabRoot: View {
                             mode: .person(otherUserId: destination.userId),
                             displayName: destination.displayName,
                             initials: destination.initials,
-                            identityKind: nil,
+                            identityKind: destination.identity == .business ? "business" : nil,
                             verified: destination.verified
                         )))
                     },
@@ -259,6 +269,8 @@ public struct InboxTabRoot: View {
             supportTrainStart(story: story)
         case let .publicProfile(userId):
             profileDestination(userId: userId)
+        case let .businessProfile(businessId):
+            businessProfileDestination(businessId: businessId)
         case let .post(postId):
             PostPageDestination(postId: postId, currentUserId: currentUserId, onBack: { if !path.isEmpty { path.removeLast() } }) {
                 path.append(.publicProfile(userId: $0))
@@ -319,31 +331,6 @@ public struct InboxTabRoot: View {
             .composePost(intent: PulseIntent.ask.rawValue)
         }
     }
-
-    private static func viewModelMode(for mode: InboxConversationDestination.Mode) -> ChatThreadMode {
-        switch mode {
-        case .ai: .ai
-        case let .room(id): .room(id: id)
-        case let .person(otherUserId): .person(otherUserId: otherUserId)
-        }
-    }
-
-    private static func counterparty(for dest: InboxConversationDestination) -> ChatCounterparty {
-        switch dest.mode {
-        case .ai:
-            .ai(name: dest.displayName)
-        case .room:
-            .group(name: dest.displayName, memberCount: nil)
-        case .person:
-            .person(
-                name: dest.displayName,
-                initials: dest.initials,
-                locality: nil,
-                verified: dest.verified,
-                online: false
-            )
-        }
-    }
 }
 
 /// Owned above both navigation branches. Only routes still on this account's
@@ -393,11 +380,32 @@ private final class InboxConversationModels {
 // MARK: - Chat list
 
 private extension InboxTabRoot {
+    func businessProfileDestination(businessId: String) -> some View {
+        BusinessProfileDestination(
+            businessId: businessId,
+            onBack: { if !path.isEmpty { path.removeLast() } },
+            onOpenMessages: { destination in
+                // Contact from the header returns to the existing thread and its draft.
+                var previousPath = path
+                previousPath.removeLast()
+                if let previous = previousPath.last,
+                   case let .conversation(conversation) = previous,
+                   conversation.mode == .person(otherUserId: businessId) {
+                    path = previousPath
+                } else {
+                    path.append(.conversation(destination))
+                }
+            },
+            onShare: { systemSheet = .share(items: [$0]) },
+            onEdit: { router.handle(path: "/businesses/\(businessId)/page-editor") }
+        )
+    }
+
     func conversationModel(for destination: InboxConversationDestination) -> ChatConversationViewModel {
         conversationModels.model(for: destination, userId: currentUserId) {
             ChatConversationViewModel(
-                mode: Self.viewModelMode(for: destination.mode),
-                counterparty: Self.counterparty(for: destination),
+                mode: destination.threadMode,
+                counterparty: destination.counterparty,
                 currentUserId: currentUserId,
                 scrollToMessageId: destination.scrollToMessageId,
                 initialTopic: destination.initialTopic,
