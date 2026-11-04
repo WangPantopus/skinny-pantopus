@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { io, type Socket } from 'socket.io-client';
+import type { Socket, io as connectSocketIo } from 'socket.io-client';
 import { clearAuthSession, getAuthToken, onTokenChange, refreshAuthSession } from '@pantopus/api';
 import { API_BASE_URL } from '@pantopus/utils';
 import { SESSION_ENDED_NOTICE_KEY, hardNavigate } from '@/lib/session-refresh';
@@ -140,66 +140,78 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       socketRef.current = null;
     }
 
-    const nextSocket = io(getSocketBaseUrl(), {
-      // Next redirects /socket.io/ to /socket.io before its rewrite runs, so
-      // ask for /socket.io directly (the server accepts both).
-      addTrailingSlash: false,
-      auth: { token: authToken },
-      transports: ['websocket', 'polling'],
-      tryAllTransports: true,
-      withCredentials: true, // Send cookies for httpOnly cookie auth fallback
-      reconnectionAttempts: Infinity,
-      // The first retry after a drop waits 0.25–0.75 s; connect_error below sets the later waits.
-      reconnectionDelay: 500,
-      reconnectionDelayMax: 1000,
-    });
+    // Socket.IO is fetched once the shell has rendered, not with the startup
+    // scripts: the first screen reads over HTTP, and live updates follow.
+    let retired = false;
+    let opened: Socket | null = null;
+    const open = (io: typeof connectSocketIo): Socket => {
+      const nextSocket = io(getSocketBaseUrl(), {
+        // Next redirects /socket.io/ to /socket.io before its rewrite runs, so
+        // ask for /socket.io directly (the server accepts both).
+        addTrailingSlash: false,
+        auth: { token: authToken },
+        transports: ['websocket', 'polling'],
+        tryAllTransports: true,
+        withCredentials: true, // Send cookies for httpOnly cookie auth fallback
+        reconnectionAttempts: Infinity,
+        // The first retry after a drop waits 0.25–0.75 s; connect_error below sets the later waits.
+        reconnectionDelay: 500,
+        reconnectionDelayMax: 1000,
+      });
 
-    // While the server has been unreachable only briefly (a restart or a deploy),
-    // retry about once a second, so chat is live again within about a second of
-    // it answering. As an outage lasts, wait a twentieth of its length so far.
-    // Each wait is randomized (0.5–1.5×, at most 30 s) so clients spread out.
-    let unreachableSince = 0;
-    const nextRetryWait = () => {
-      unreachableSince ||= Date.now();
-      const wait = Math.min(20_000, Math.max(1_000, (Date.now() - unreachableSince) / 20));
-      return Math.round(wait * (0.5 + Math.random()));
+      // While the server has been unreachable only briefly (a restart or a deploy),
+      // retry about once a second, so chat is live again within about a second of
+      // it answering. As an outage lasts, wait a twentieth of its length so far.
+      // Each wait is randomized (0.5–1.5×, at most 30 s) so clients spread out.
+      let unreachableSince = 0;
+      const nextRetryWait = () => {
+        unreachableSince ||= Date.now();
+        const wait = Math.min(20_000, Math.max(1_000, (Date.now() - unreachableSince) / 20));
+        return Math.round(wait * (0.5 + Math.random()));
+      };
+
+      socketRef.current = nextSocket;
+      socketTokenRef.current = authToken;
+      setSocket(nextSocket);
+
+      nextSocket.on('connect', () => {
+        unreachableSince = 0;
+        if (socketRef.current !== nextSocket) return;
+        console.log('[Socket] Connected:', nextSocket.id);
+        setConnected(true);
+      });
+
+      nextSocket.on('disconnect', (reason) => {
+        if (socketRef.current !== nextSocket) return;
+        console.log('[Socket] Disconnected:', reason);
+        setConnected(false);
+      });
+
+      nextSocket.on('connect_error', (err) => {
+        if (socketRef.current !== nextSocket) return;
+        console.warn('[Socket] Connection retry:', err.message);
+        setConnected(false);
+        // socket.io schedules the next attempt right after this event.
+        nextSocket.io.reconnectionDelayMax(nextRetryWait());
+      });
+
+      nextSocket.on('auth:session_revoked', (payload?: { reason?: string }) => {
+        // A sign-out in this browser revokes its own session too; the tab that
+        // signed out navigates and the other tabs retire on the storage event.
+        if (socketRef.current !== nextSocket || payload?.reason === 'logout') return;
+        void confirmRevokedSession(payload?.reason, replaceSession);
+      });
+
+      return nextSocket;
     };
-
-    socketRef.current = nextSocket;
-    socketTokenRef.current = authToken;
-    setSocket(nextSocket);
-
-    nextSocket.on('connect', () => {
-      unreachableSince = 0;
-      if (socketRef.current !== nextSocket) return;
-      console.log('[Socket] Connected:', nextSocket.id);
-      setConnected(true);
-    });
-
-    nextSocket.on('disconnect', (reason) => {
-      if (socketRef.current !== nextSocket) return;
-      console.log('[Socket] Disconnected:', reason);
-      setConnected(false);
-    });
-
-    nextSocket.on('connect_error', (err) => {
-      if (socketRef.current !== nextSocket) return;
-      console.warn('[Socket] Connection retry:', err.message);
-      setConnected(false);
-      // socket.io schedules the next attempt right after this event.
-      nextSocket.io.reconnectionDelayMax(nextRetryWait());
-    });
-
-    nextSocket.on('auth:session_revoked', (payload?: { reason?: string }) => {
-      // A sign-out in this browser revokes its own session too; the tab that
-      // signed out navigates and the other tabs retire on the storage event.
-      if (socketRef.current !== nextSocket || payload?.reason === 'logout') return;
-      void confirmRevokedSession(payload?.reason, replaceSession);
-    });
+    void import('socket.io-client').then(({ io }) => {
+      if (!retired) opened = open(io);
+    }, () => { /* the next session change or reload tries again */ });
 
     return () => {
-      nextSocket.disconnect();
-      if (socketRef.current === nextSocket) {
+      retired = true;
+      opened?.disconnect();
+      if (opened && socketRef.current === opened) {
         socketRef.current = null;
         socketTokenRef.current = null;
         setSocket(null);
