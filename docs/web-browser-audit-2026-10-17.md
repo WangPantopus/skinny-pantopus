@@ -313,7 +313,7 @@ The comprehensive infrastructure proposal is in [#3253](https://github.com/WangP
 | `/app/homes/[id]/claim-owner/submitted` | Entry/redirect/state probe | 390 px |
 | `/app/homes/[id]/dashboard` | Entry/redirect/state probe | 390 px |
 | `/app/homes/[id]/dispute` | Entry/redirect/state probe | 390 px |
-| `/app/homes/[id]/docs` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/docs` | Owner/member document category, permissions, download, reload and failed-delete/retry flows | 390 px entry; desktop flows |
 | `/app/homes/[id]/edit` | Entry/redirect/state probe | 390 px |
 | `/app/homes/[id]/emergency` | Entry/redirect/state probe | 390 px |
 | `/app/homes/[id]/invitations` | Entry/redirect/state probe | 390 px |
@@ -607,3 +607,15 @@ Every run sent one refresh request and had no JavaScript errors. Recovery still 
 The existing web suite passed again: 123 suites / 2,383 tests. Relevant lint and zero-error typecheck gates passed; the startup repair was measured in production builds, and the layout/flow repairs were exercised in Chrome with the real local backend and database. No new unit tests were added. Screenshots and raw runtime records remain outside Git.
 
 This pass closes additional positive-fixture business profile/page-editor coverage. It does not turn the earlier route-entry matrix into full flow certification. Authorized household guest/invite/landlord/admin paths, business location/address-provider flows, payment/provider integrations, Safari/Firefox, accessibility and sustained load checks remain separate gaps. Remaining startup investigation needs a production waterfall after reviewed code changes, plus cold/warm and expired-session timings under the real API/database network path. The infrastructure options and staged rollout remain in `docs/09-web-performance-optimization-plan.md`; no infrastructure change was executed here.
+
+### Maintenance receipts and the web Documents flow — November 4
+
+The parallel native audits found that maintenance receipt/photo selections lived only in client memory. The backend also ignored the existing `HomeMaintenanceLog.document_id` on create/edit. [#3277](https://github.com/WangPantopus/skinny-pantopus/pull/3277), source `6eba8da676e25a7fff7c9c923a690710f397f39f`, adds the optional existing HomeDocument link, validates same-home document visibility/permission, distinguishes omitted versus explicit-null edits, includes the document in create retry matching, and hides inaccessible document references on maintenance reads and unrelated edits. No table, migration, storage bypass or multi-photo contract was added. Client receipt wiring belongs to the native audits; their relaunch evidence is separate from these backend checks.
+
+The reported native Documents upload 503 was `DOCUMENT_STORAGE_UNAVAILABLE`: the shared local backend had no `HOME_DOCUMENTS_BUCKET` configured. An isolated local backend with a verified private QA bucket was used for this follow-up. The shared backend and all hosted infrastructure/configuration stayed unchanged. This local setup does not establish production storage behavior.
+
+Real API/database/storage checks passed PDF upload, maintenance create, identical retry, changed-receipt conflict, omission preservation, explicit detach without deleting bytes, exact-byte household-reader download, invalid/missing/cross-home reference refusal, restricted-link refusal, visibility changes, `docs.view` revocation and hidden-link preservation during unrelated edits. Deleting the document through the web UI also cleared the maintenance foreign key. The existing 82 maintenance/document tests and identity-select guards passed; the complete backend CI passed.
+
+The browser check uncovered two additional web defects repaired in [#3281](https://github.com/WangPantopus/skinny-pantopus/pull/3281), source `6c7ed89822761d45c657c6538cea0d5b850e5176`: receipts were grouped under Other using a nonexistent `folder` field, and read-only household members saw Delete controls the backend would refuse. The page now uses `doc_type` and the existing document permissions. Separate owner/member Chrome sessions verified the Receipt category, correct Delete availability, restricted-document hiding, exact PDF download and reload. An injected delete 503 kept the document visible; retry removed it, and reload removed it from both viewers. Uploaded test documents were deleted through the UI and the temporary membership/permission fixtures were removed. The private QA runtime remains available to the Android audit using its separate fixtures.
+
+The web repair passed all 123 existing suites / 2,383 tests, zero-error TypeScript and targeted lint (only pre-existing any-type warnings). No new unit tests were added. Both code PRs remain unmerged; native receipt UI completion, hosted storage and the previously listed role/provider/browser gaps remain separately tracked.
