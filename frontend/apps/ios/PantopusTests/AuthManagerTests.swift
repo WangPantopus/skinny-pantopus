@@ -249,7 +249,7 @@ final class AuthManagerTests: XCTestCase {
         // (`backend/routes/users.js:1526`). `APIClient` turns 403 into
         // `.forbidden` before the generic 4xx case, discarding the body, so the
         // mapping has to supply the copy. `LoginView.canResendVerification`
-        // reveals the resend link on any sign-in error mentioning "verify" —
+        // reveals the resend link for this specific email-verification refusal —
         // this asserts the link can actually appear.
         stub(
             "/api/users/login",
