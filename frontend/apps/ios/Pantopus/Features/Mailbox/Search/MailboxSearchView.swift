@@ -31,6 +31,7 @@ struct MailboxSearchView: View {
                 Button { viewModel.open(mail) } label: {
                     VStack(alignment: .leading, spacing: 6) {
                         MailPieceView(model: piece)
+                            .mailOpenOutline(id: mail.id)
                         Text(piece.meta.line)
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.Color.appTextMuted)
@@ -41,6 +42,7 @@ struct MailboxSearchView: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(piece.spokenWithArrival)
                 .accessibilityAddTraits(.isButton)
+                .mailOpenSelection(id: mail.id)
                 .accessibilityIdentifier("mailboxSearchResult.\(mail.id)")
                 .padding(.horizontal, Spacing.s4)
                 .padding(.vertical, Spacing.s2)

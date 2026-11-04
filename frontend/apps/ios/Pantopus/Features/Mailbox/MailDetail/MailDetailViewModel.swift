@@ -120,6 +120,11 @@ public final class MailDetailViewModel {
     /// its envelope. Decided on the first load that can open it, then kept
     /// for the visit (opening it here marks it opened).
     private(set) var cardFirstOpen: Bool?
+    /// Where the booklet's reader is, and how far the page is scrolled, for
+    /// the page a fold's new layout draws (the Mail tab keeps this model
+    /// across folds). Not drawn from here.
+    @ObservationIgnored var bookletPlace = BookletPlace()
+    @ObservationIgnored var keptScrollOffset: CGFloat = 0
 
     let mailId: String
     let api: APIClient

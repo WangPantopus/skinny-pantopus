@@ -13,6 +13,8 @@ import SwiftUI
 
 struct MailSentPieceView: View {
     @State private var viewModel: MailSentPieceViewModel
+    /// Beside Sent on the open Duo, Sent itself is the way back (`mailPieceShowsBack`).
+    @Environment(\.mailPieceShowsBack) private var showsBack
     /// Back to Sent.
     private let onBack: () -> Void
     @State private var showBack = false
@@ -52,24 +54,13 @@ struct MailSentPieceView: View {
         }
     }
 
+    @ViewBuilder
     private var header: some View {
-        Button(action: onBack) {
-            HStack(spacing: 2) {
-                Icon(.chevronLeft, size: 24, color: Theme.Color.primary600)
-                Text("Sent")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(Theme.Color.primary600)
-            }
-            .padding(.leading, Spacing.s1)
-            .padding(.trailing, Spacing.s2)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
+        if showsBack {
+            MailSentBackButton(onBack: onBack)
+        } else {
+            Color.clear.frame(height: Spacing.s4)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Back to Sent")
-        .accessibilityIdentifier("mailSentPieceBack")
-        .padding(.horizontal, Spacing.s1)
-        .padding(.top, Spacing.s2)
     }
 
     @ViewBuilder
@@ -341,6 +332,31 @@ private extension MailSentPieceView {
             .foregroundStyle(Theme.Color.error)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("mailSentPieceError")
+    }
+}
+
+/// "‹ Sent" at the top of the page.
+private struct MailSentBackButton: View {
+    let onBack: () -> Void
+
+    var body: some View {
+        Button(action: onBack) {
+            HStack(spacing: 2) {
+                Icon(.chevronLeft, size: 24, color: Theme.Color.primary600)
+                Text("Sent")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Theme.Color.primary600)
+            }
+            .padding(.leading, Spacing.s1)
+            .padding(.trailing, Spacing.s2)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Back to Sent")
+        .accessibilityIdentifier("mailSentPieceBack")
+        .padding(.horizontal, Spacing.s1)
+        .padding(.top, Spacing.s2)
     }
 }
 
