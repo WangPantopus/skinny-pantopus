@@ -76,10 +76,10 @@ public struct BusinessPagesView: View {
         }
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
-        .confirmationDialog(
+        // An alert keeps Cancel; iOS 27 shows a confirmation dialog as a popover with only the destructive choice.
+        .alert(
             viewModel.pendingDelete.map { "Delete “\($0.title)”?" } ?? "",
             isPresented: deleteBinding,
-            titleVisibility: .visible,
             presenting: viewModel.pendingDelete
         ) { row in
             Button("Delete \(row.title)", role: .destructive) {
@@ -233,6 +233,8 @@ public struct BusinessPagesView: View {
                                 .pantopusTextStyle(.caption)
                                 .foregroundStyle(Theme.Color.primaryInk)
                         }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("businessPages.history.\(row.slug)")
@@ -241,6 +243,8 @@ public struct BusinessPagesView: View {
                 if !row.isDefault {
                     Button { viewModel.pendingDelete = row } label: {
                         Icon(.trash2, size: 16, color: Theme.Color.error)
+                            .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Delete page")
@@ -248,10 +252,9 @@ public struct BusinessPagesView: View {
                 }
             }
             .padding(.horizontal, Spacing.s3)
-            .padding(.bottom, Spacing.s3)
 
             if viewModel.expandedRevisionsPageId == row.id {
-                revisionPanel(pageId: row.id)
+                BusinessPageRevisionsPanel(viewModel: viewModel, pageId: row.id)
             }
         }
         .background(Theme.Color.appSurface)
@@ -262,16 +265,59 @@ public struct BusinessPagesView: View {
         }
     }
 
-    private func revisionPanel(pageId: String) -> some View {
+    private func pill(_ text: String, tint: Color, bg: Color) -> some View {
+        Text(text)
+            .pantopusTextStyle(.caption)
+            .foregroundStyle(tint)
+            .padding(.horizontal, Spacing.s2)
+            .padding(.vertical, 2)
+            .background(bg)
+            .clipShape(Capsule())
+    }
+
+    private var deleteBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.pendingDelete != nil },
+            set: { if !$0 { viewModel.pendingDelete = nil } }
+        )
+    }
+}
+
+@MainActor
+private struct BusinessPageRevisionsPanel: View {
+    let viewModel: BusinessPagesViewModel
+    let pageId: String
+
+    var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
+            if let message = viewModel.revisionsErrorMessage {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    Task { await viewModel.retryRevisions() }
+                } label: {
+                    Text("Retry")
+                        .font(.caption)
+                        .foregroundStyle(Theme.Color.primaryInk)
+                        .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Retry revision history")
+                .accessibilityIdentifier("businessPages.retryRevisions")
+            }
             if viewModel.isLoadingRevisions {
                 Shimmer(height: 40, cornerRadius: Radii.sm)
                 Shimmer(height: 40, cornerRadius: Radii.sm)
             } else if viewModel.revisions.isEmpty {
-                Text("No revision history")
-                    .pantopusTextStyle(.caption)
-                    .foregroundStyle(Theme.Color.appTextMuted)
-                    .frame(maxWidth: .infinity, alignment: .center)
+                if viewModel.revisionsErrorMessage == nil {
+                    Text("No revision history")
+                        .pantopusTextStyle(.caption)
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
             } else {
                 ForEach(viewModel.revisions) { revision in
                     HStack(spacing: Spacing.s2) {
@@ -297,6 +343,7 @@ public struct BusinessPagesView: View {
                             .padding(.vertical, Spacing.s1)
                             .background(Theme.Color.primarySolid)
                             .clipShape(Capsule())
+                            .hitArea(vertical: 11)
                         }
                         .buttonStyle(.plain)
                         .disabled(viewModel.restoringRevision != nil)
@@ -309,22 +356,5 @@ public struct BusinessPagesView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.Color.appSurfaceSunken)
         .accessibilityIdentifier("businessPages.revisions")
-    }
-
-    private func pill(_ text: String, tint: Color, bg: Color) -> some View {
-        Text(text)
-            .pantopusTextStyle(.caption)
-            .foregroundStyle(tint)
-            .padding(.horizontal, Spacing.s2)
-            .padding(.vertical, 2)
-            .background(bg)
-            .clipShape(Capsule())
-    }
-
-    private var deleteBinding: Binding<Bool> {
-        Binding(
-            get: { viewModel.pendingDelete != nil },
-            set: { if !$0 { viewModel.pendingDelete = nil } }
-        )
     }
 }

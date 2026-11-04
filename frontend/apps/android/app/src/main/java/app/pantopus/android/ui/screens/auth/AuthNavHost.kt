@@ -2,19 +2,24 @@
 
 package app.pantopus.android.ui.screens.auth
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.pantopus.android.core.routing.DeepLinkRouter
@@ -41,12 +46,28 @@ import app.pantopus.android.ui.theme.PantopusColors
  * (since the backend currently hard-gates `/login` until verified —
  * see `docs/mobile/auth-backend-contracts.md`). P5 wires the Verify /
  * Reset deep links and the inline AuthError destination.
+ *
+ * The address preview's Continue opens Create account first ([startOnSignUp]),
+ * and Log in is put under any screen it leads to, as when Create account is
+ * reached from Log in. Over the Place funnel ([onClose]) the graph's first
+ * screen goes back to the preview: Log in's X, Create account's X when
+ * Continue opened it, and system Back on either. Screens pushed from them
+ * keep their own close or back.
  */
 @Composable
-fun AuthNavHost() {
+fun AuthNavHost(
+    startOnSignUp: Boolean = false,
+    onClose: (() -> Unit)? = null,
+) {
     val navController = rememberNavController()
     ClosesKeyboardOnNavigation(navController)
     val pendingDeepLink by DeepLinkRouter.pending.collectAsStateWithLifecycle()
+    val currentEntry by navController.currentBackStackEntryAsState()
+
+    // Without this, Back on the first screen closes the app. NavHost's own Back still pops the screens above it.
+    BackHandler(enabled = onClose != null && currentEntry != null && navController.previousBackStackEntry == null) {
+        onClose?.invoke()
+    }
 
     // Pull auth deep links (reset / verify / join-invite) off DeepLinkRouter
     // and push them onto the nav stack. Anything else stays pending for the
@@ -55,6 +76,7 @@ fun AuthNavHost() {
         when (val pending = pendingDeepLink) {
             is DeepLinkRouter.Destination.ResetPassword -> {
                 DeepLinkRouter.consume()
+                navController.putLogInFirst()
                 navController.navigate(AuthRoutes.resetPassword(pending.token)) {
                     popUpTo(AuthRoutes.LOGIN)
                 }
@@ -64,6 +86,7 @@ fun AuthNavHost() {
                 // §1B-2 post-tap landing, not the pre-tap "we sent you a link"
                 // surface (which sign-up reaches with no token).
                 DeepLinkRouter.consume()
+                navController.putLogInFirst()
                 navController.navigate(
                     AuthRoutes.verifyEmailLanding(email = pending.email, token = pending.token),
                 ) {
@@ -76,6 +99,7 @@ fun AuthNavHost() {
                 // (`src/app/_layout.tsx:76`), so land straight on Create
                 // account with the code carried into the form.
                 DeepLinkRouter.consume()
+                navController.putLogInFirst()
                 navController.navigate(AuthRoutes.signUp(pending.code)) {
                     popUpTo(AuthRoutes.LOGIN)
                 }
@@ -89,7 +113,7 @@ fun AuthNavHost() {
     // screens get them here, so no top bar or bottom button sits under a bar.
     NavHost(
         navController = navController,
-        startDestination = AuthRoutes.LOGIN,
+        startDestination = if (startOnSignUp) AuthRoutes.SIGN_UP_PATTERN else AuthRoutes.LOGIN,
         modifier = Modifier.fillMaxSize().background(PantopusColors.appBg).systemBarsPadding(),
     ) {
         composable(
@@ -103,16 +127,19 @@ fun AuthNavHost() {
             )
         }
         composable(AuthRoutes.LOGIN) {
-            LoginScreen(
-                onOpenLegal = { document -> navController.navigate(AuthRoutes.legal(document.rowId)) },
-                onNavigateToSignUp = { navController.navigate(AuthRoutes.signUp()) },
-                onNavigateToForgotPassword = { navController.navigate(AuthRoutes.FORGOT_PASSWORD) },
-                onNavigateToVerifyEmail = { navController.navigate(AuthRoutes.verifyEmail()) },
-                onNavigateToResetPassword = { token ->
-                    navController.navigate(AuthRoutes.resetPassword(token))
-                },
-                onNavigateToAuthError = { navController.navigate(AuthRoutes.AUTH_ERROR) },
-            )
+            Box(modifier = Modifier.fillMaxSize()) {
+                LoginScreen(
+                    onOpenLegal = { document -> navController.navigate(AuthRoutes.legal(document.rowId)) },
+                    onNavigateToSignUp = { navController.navigate(AuthRoutes.signUp()) },
+                    onNavigateToForgotPassword = { navController.navigate(AuthRoutes.FORGOT_PASSWORD) },
+                    onNavigateToVerifyEmail = { navController.navigate(AuthRoutes.verifyEmail()) },
+                    onNavigateToResetPassword = { token ->
+                        navController.navigate(AuthRoutes.resetPassword(token))
+                    },
+                    onNavigateToAuthError = { navController.navigate(AuthRoutes.AUTH_ERROR) },
+                )
+                onClose?.let { BackToPreviewButton(onClose = it, modifier = Modifier.align(Alignment.TopEnd)) }
+            }
         }
         composable(
             route = AuthRoutes.SIGN_UP_PATTERN,
@@ -126,14 +153,21 @@ fun AuthNavHost() {
                 ),
         ) {
             SignUpScreen(
-                onClose = { navController.popBackStack() },
+                onClose = {
+                    if (navController.previousBackStackEntry == null) onClose?.invoke() else navController.popBackStack()
+                },
                 onOpenLegal = { document -> navController.navigate(AuthRoutes.legal(document.rowId)) },
+                onLogIn = {
+                    navController.putLogInFirst()
+                    navController.popBackStack(AuthRoutes.LOGIN, inclusive = false)
+                },
                 onSuccess = { email ->
                     // Backend hard-gates login on email_confirmed_at today
                     // (see docs/mobile/auth-backend-contracts.md
                     // §"Backend gap"). Route the user to verify-email so
                     // they can finish onboarding. We hand it the email so
                     // the body copy + resend CTA render correctly.
+                    navController.putLogInFirst()
                     navController.navigate(AuthRoutes.verifyEmail(email = email)) {
                         popUpTo(AuthRoutes.LOGIN)
                     }
@@ -186,7 +220,7 @@ fun AuthNavHost() {
                     }
                 },
                 onConfirmed = { email ->
-                    email?.let(loginViewModel::onEmailChange)
+                    loginViewModel.onEmailConfirmed(email)
                     navController.popBackStack(AuthRoutes.LOGIN, inclusive = false)
                 },
             )
@@ -211,12 +245,17 @@ fun AuthNavHost() {
             val loginEntry = remember(entry) { navController.getBackStackEntry(AuthRoutes.LOGIN) }
             val loginViewModel: LoginViewModel = hiltViewModel(loginEntry)
             val confirmedEmail = entry.arguments?.getString(VerifyEmailLandingViewModel.EMAIL_KEY)
+            val landingViewModel: VerifyEmailLandingViewModel = hiltViewModel()
             VerifyEmailLandingScreen(
-                // No session after verification (backend revokes it), so
-                // Continue drops back to login to sign in.
+                viewModel = landingViewModel,
+                // No session after verification (backend revokes it). The phone
+                // that signed up signs in with the password it was given;
+                // otherwise Continue drops back to login to sign in.
                 onContinue = {
-                    confirmedEmail?.takeIf { it.isNotBlank() }?.let(loginViewModel::onEmailChange)
-                    navController.popBackStack(AuthRoutes.LOGIN, inclusive = false)
+                    landingViewModel.continueAfterConfirmation {
+                        loginViewModel.onEmailConfirmed(confirmedEmail)
+                        navController.popBackStack(AuthRoutes.LOGIN, inclusive = false)
+                    }
                 },
                 onUseDifferentEmail = {
                     navController.navigate(AuthRoutes.signUp()) {
@@ -229,6 +268,19 @@ fun AuthNavHost() {
             AuthErrorScreen(
                 onBack = { navController.popBackStack() },
             )
+        }
+    }
+}
+
+/**
+ * Create account opened by the address preview's Continue is the graph's
+ * first screen. The screens after it look up Log in's entry (the confirmed
+ * email is handed to its view-model), so put Log in in its place first.
+ */
+private fun NavController.putLogInFirst() {
+    if (runCatching { getBackStackEntry(AuthRoutes.LOGIN) }.isFailure) {
+        navigate(AuthRoutes.LOGIN) {
+            popUpTo(AuthRoutes.SIGN_UP_PATTERN) { inclusive = true }
         }
     }
 }

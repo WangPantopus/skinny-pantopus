@@ -1,11 +1,19 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
+import { bindPlaceArrival } from '@/components/place/pendingPlace';
 import PantopusBadge from '@/components/PantopusBadge';
 import { authPageHref, readAuthRedirectQuery, safeRedirectPath, extractApiError } from '@/lib/auth-utils';
+import { landingAfterSignIn } from '@/lib/invitation-after-sign-in';
+import {
+  announceSignedIn,
+  forgetPendingSignIn,
+  listenForEmailConfirmed,
+  pendingSignInFor,
+} from '@/lib/pending-sign-in';
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
@@ -19,6 +27,44 @@ function VerifyEmailSentPageContent() {
   const [status, setStatus] = useState('');
   const [resending, setResending] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const router = useRouter();
+  const signingIn = useRef(false);
+
+  // The link opens in another tab or app. Back here, or told by that tab, this tab signs in with the password
+  // typed at sign-up, so it isn't asked for again (lib/pending-sign-in).
+  useEffect(() => {
+    if (!email) return;
+    let active = true;
+    const trySignIn = async () => {
+      const pending = pendingSignInFor(email);
+      if (!pending || signingIn.current) return;
+      signingIn.current = true;
+      try {
+        const response = await api.auth.login({ email: pending.email, password: pending.password });
+        if (!active || response.requiresEmailVerification) return;
+        forgetPendingSignIn();
+        announceSignedIn(email);
+        bindPlaceArrival(redirectTo, response.user?.id);
+        router.push(await landingAfterSignIn(redirectTo));
+      } catch {
+        // Not confirmed yet (403) or offline: the next return tries again.
+      } finally {
+        signingIn.current = false;
+      }
+    };
+    const onReturn = () => {
+      if (document.visibilityState === 'visible') void trySignIn();
+    };
+    document.addEventListener('visibilitychange', onReturn);
+    window.addEventListener('focus', onReturn);
+    const stopListening = listenForEmailConfirmed(email, () => void trySignIn());
+    return () => {
+      active = false;
+      document.removeEventListener('visibilitychange', onReturn);
+      window.removeEventListener('focus', onReturn);
+      stopListening();
+    };
+  }, [email, redirectTo, router]);
 
   useEffect(() => {
     if (cooldown <= 0) return;

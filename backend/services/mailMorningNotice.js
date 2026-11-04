@@ -5,8 +5,9 @@
  *
  * The mail notification Lambda (pantopus-seeder mail_notifications.py) calls POST /api/internal/briefing/mail-morning
  * every five minutes; each call decides who is owed a notice now: people whose own clock reads 7:00 to 9:00 a.m. and
- * who have unopened pieces that came in the last 24 hours. The day is claimed in AlertNotificationHistory (unique per
- * person and local date) before the push and released if it doesn't go out, so the next run tries again.
+ * whose round came today with pieces they haven't opened, counted the way the Mail tab counts the round. The day is
+ * claimed in AlertNotificationHistory (unique per person and local date) before the push and released if it doesn't go
+ * out, so the next run tries again.
  *
  * Christmas cards sealed until Christmas morning were in the box already; the morning they open, the notice counts them
  * too ("2 sealed cards can be opened now"), so someone with only those still hears.
@@ -14,7 +15,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { getAccessibleHomeIds, mailReaderIdsOrThrow, visibleMailFilter } = require('../utils/homeMailAccess');
-const { personTimeZone, localDate, FALLBACK_TIME_ZONE, countPieces } = require('./mailDelivery');
+const { personTimeZone, localDate, FALLBACK_TIME_ZONE, countPieces, lastRoundAt } = require('./mailDelivery');
 
 const LOOKBACK_MS = 24 * 60 * 60 * 1000;
 const NOTICE_START_HOUR = 7;
@@ -72,18 +73,30 @@ async function candidates(since, now) {
   return [...people];
 }
 
-/** What this person can read that came in the window: how many, and how many of them were special deliveries. */
-async function countFor(userId, since, now) {
+/**
+ * What this person can read from today's round, and how many of those pieces were special deliveries, counted the way
+ * the Mail tab counts the round (mailDelivery.deliverySummary): what came in the 24 hours up to it. No round today, no
+ * pieces: a special delivery or welcome letter that landed after yesterday's round would otherwise make a "came this
+ * morning" notice that opens on "No mail today". Christmas cards count on the morning their seal lifts, round or not.
+ */
+async function countFor(userId, timeZone, now) {
   const homeIds = await getAccessibleHomeIds(userId);
-  const scoped = (select, options) => newMail(select, options, since, now).or(visibleMailFilter(userId, homeIds));
-  // A bundle is one piece, as the box shows it (SRV-5).
-  const [total, special, opening] = await Promise.all([
-    countPieces(scoped),
-    countPieces((select, options) => scoped(select, options).eq('special_delivery', true)),
+  const since = new Date(now.getTime() - LOOKBACK_MS);
+  const [roundAt, opening] = await Promise.all([
+    lastRoundAt({ userId, homeIds, now }),
     cardsOpening('id', { count: 'exact', head: true }, since, now).eq('recipient_user_id', userId),
   ]);
   if (opening.error) throw new Error(opening.error.message);
-  return { total, special, cards: opening.count || 0 };
+  const cards = opening.count || 0;
+  if (!roundAt || localDate(roundAt, timeZone) !== localDate(now, timeZone)) return { total: 0, special: 0, cards };
+  const scoped = (select, options) => newMail(select, options, new Date(roundAt.getTime() - LOOKBACK_MS), roundAt)
+    .or(visibleMailFilter(userId, homeIds));
+  // A bundle is one piece, as the box shows it (SRV-5).
+  const [total, special] = await Promise.all([
+    countPieces(scoped),
+    countPieces((select, options) => scoped(select, options).eq('special_delivery', true)),
+  ]);
+  return { total, special, cards };
 }
 
 /** The notice's words: plain, no emoji. */
@@ -131,7 +144,7 @@ async function runMorningNotices({ now = new Date(), send }) {
       const timeZone = (await personTimeZone(userId)) || FALLBACK_TIME_ZONE;
       const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hourCycle: 'h23' }).format(now));
       if (hour < NOTICE_START_HOUR || hour >= NOTICE_END_HOUR) { stats.not_morning += 1; continue; }
-      const counts = await countFor(userId, since, now);
+      const counts = await countFor(userId, timeZone, now);
       if (counts.total === 0 && counts.cards === 0) { stats.nothing_new += 1; continue; }
       const date = localDate(now, timeZone);
       if (!(await claimDay(userId, date))) { stats.already_sent += 1; continue; }

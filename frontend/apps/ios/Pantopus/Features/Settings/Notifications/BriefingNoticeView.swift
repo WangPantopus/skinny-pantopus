@@ -1,12 +1,28 @@
 import SwiftUI
+import UIKit
+import UserNotifications
 
 /// Shares the existing preferences and acknowledgement with notification settings.
 /// It also asks once about Suggestions from Pantopus (AI assistant phase 2
-/// contract §3.4) while the server holds no answer, after the briefing notice
-/// when both are due.
+/// contract §3.4) while the server holds no answer: on a later launch than the
+/// briefing notice, never right behind it.
+///
+/// The briefing notice is also where the phone's notification question is
+/// asked ("Allow notifications"), not at launch; so it shows again on a phone
+/// that hasn't answered, for an account that has seen it elsewhere.
 struct BriefingNoticeView: View {
+    /// False while something else is asking (RootTabView: the "Keep this
+    /// address handy" step, a plan or post opened by a link): the notice waits.
+    var mayShow = true
+
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var model = NotificationSettingsViewModel()
+    /// This phone hasn't answered the notification question yet.
+    @State private var needsPermission = false
+    /// The briefing notice showed during this launch: Suggestions waits for the next one.
+    @MainActor private static var briefingShownThisLaunch = false
+    /// The notice offered "Allow notifications" on this phone.
+    private static let askedHereKey = "pantopus.briefingNotice.askedForNotifications"
     private var scope: HomeClaimSessionScope {
         model.sessionScope
     }
@@ -23,14 +39,12 @@ struct BriefingNoticeView: View {
     @State private var saving = false
     @State private var acknowledged = false
     @State private var error: String?
-    /// The Suggestions notice waits for the briefing notice to close.
-    @State private var suggestionsDue = false
     @State private var suggestionsError: String?
 
     var body: some View {
         Color.clear.frame(width: 0, height: 0)
             .task { await load() }
-            .sheet(item: $notice, onDismiss: presentSuggestionsIfDue) { shown in
+            .sheet(item: Binding(get: { mayShow ? notice : nil }, set: { notice = $0 })) { shown in
                 if shown.kind == .suggestions {
                     suggestionsNotice
                 } else if managing {
@@ -50,8 +64,15 @@ struct BriefingNoticeView: View {
                             )
                             .foregroundStyle(Theme.Color.appTextSecondary)
                             if let error { Text(error).foregroundStyle(Theme.Color.error) }
-                            PrimaryButton(title: "Manage notifications", isLoading: saving) {
-                                managing = true
+                            if needsPermission {
+                                PrimaryButton(title: "Allow notifications", isLoading: saving) {
+                                    await allowNotifications()
+                                }
+                                .accessibilityIdentifier("briefingNoticeAllowNotifications")
+                            } else {
+                                PrimaryButton(title: "Manage notifications", isLoading: saving) {
+                                    managing = true
+                                }
                             }
                             GhostButton(title: "Got it", isEnabled: !saving) {
                                 notice = nil
@@ -64,7 +85,10 @@ struct BriefingNoticeView: View {
                     .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
                     .interactiveDismissDisabled(saving)
                     .accessibilityIdentifier("briefingDefaultsNotice")
-                    .task { _ = await recordNotice() }
+                    .task {
+                        if needsPermission { UserDefaults.standard.set(true, forKey: Self.askedHereKey) }
+                        _ = await recordNotice()
+                    }
                 }
             }
     }
@@ -120,23 +144,26 @@ struct BriefingNoticeView: View {
             try Task.checkCancellation()
             try scope.requireCurrent()
             let prefs = response.preferences
-            if prefs.dailyBriefingPromptedAt == nil {
-                suggestionsDue = Self.asksAboutSuggestions(prefs)
+            needsPermission = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .notDetermined
+            try scope.requireCurrent()
+            // Once per phone for an account that saw the notice elsewhere ("Got it" is an answer too).
+            let askHere = needsPermission && !UserDefaults.standard.bool(forKey: Self.askedHereKey)
+            if prefs.dailyBriefingPromptedAt == nil || askHere {
+                Self.briefingShownThisLaunch = true
                 notice = Notice(kind: .briefing, preferences: prefs)
-            } else if Self.asksAboutSuggestions(prefs) {
+            } else if Self.asksAboutSuggestions(prefs), !Self.briefingShownThisLaunch {
                 notice = Notice(kind: .suggestions, preferences: prefs)
             }
         } catch { /* Try again on the next app entry; never block sign-in. */ }
     }
 
-    /// After the briefing notice: the Suggestions notice, unless Settings
-    /// (reached from "Manage notifications") answered it meanwhile.
-    private func presentSuggestionsIfDue() {
-        guard suggestionsDue else { return }
-        suggestionsDue = false
-        guard scope.isCurrent, let prefs = model.storedPreferences(), Self.asksAboutSuggestions(prefs) else { return }
-        managing = false
-        notice = Notice(kind: .suggestions, preferences: prefs)
+    /// The phone's notification question, with the reason on screen.
+    @MainActor
+    private func allowNotifications() async {
+        let granted = await (try? UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])) ?? false
+        if granted { UIApplication.shared.registerForRemoteNotifications() }
+        needsPermission = false
+        notice = nil
     }
 
     @MainActor

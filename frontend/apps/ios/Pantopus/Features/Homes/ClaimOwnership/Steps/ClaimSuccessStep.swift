@@ -32,7 +32,7 @@ struct ClaimSuccessStep: View {
             Text("Your claim is pending. You can reopen its documents from My claims. Uploading does not change household access.")
             if let outcomeNote {
                 Text(outcomeNote)
-                    .pantopusTextStyle(.caption)
+                    .scaledFont(12, weight: .regular)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .padding(Spacing.s3)
                     .frame(maxWidth: .infinity, alignment: .leading)

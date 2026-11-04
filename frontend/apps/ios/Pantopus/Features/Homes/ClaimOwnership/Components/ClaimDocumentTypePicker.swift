@@ -46,10 +46,10 @@ struct ClaimDocumentTypePicker: View {
                     }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(option.label)
-                        .font(.system(size: 14, weight: .medium))
+                        .scaledFont(14, weight: .medium)
                         .foregroundStyle(isSelected ? Theme.Color.primaryInk : Theme.Color.appText)
                     Text(option.detail)
-                        .font(.system(size: 11.5))
+                        .scaledFont(11.5)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

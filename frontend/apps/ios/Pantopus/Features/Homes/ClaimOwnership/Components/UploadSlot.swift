@@ -60,6 +60,12 @@ enum UploadSlotState: Equatable {
 /// A single evidence upload slot. Tapping the empty tile fires `onPick`; the
 /// trailing control (X while uploading, trash once populated) fires `onRemove`.
 struct UploadSlot: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .footnote) private var labelSize = 13.5
+    @ScaledMetric(relativeTo: .caption) private var requiredSize = 12.0
+    @ScaledMetric(relativeTo: .caption2) private var progressSize = 11.0
+    @ScaledMetric(relativeTo: .caption) private var detailSize = 11.5
+
     let id: String
     let label: String
     var required: Bool = false
@@ -97,7 +103,7 @@ struct UploadSlot: View {
                 VStack(alignment: .leading, spacing: Spacing.s1) {
                     requiredLabelText
                     Text(hint)
-                        .font(.system(size: 11.5))
+                        .scaledFont(11.5)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 Spacer(minLength: Spacing.s0)
@@ -122,18 +128,12 @@ struct UploadSlot: View {
 
     private func uploadingTile(file: UploadSlotFile, progress: Double) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            HStack(spacing: Spacing.s3) {
-                iconDisc(.image)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(file.name)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.Color.appText)
-                        .lineLimit(1)
-                    uploadProgressText(file: file, progress: progress)
-                }
-                Spacer(minLength: Spacing.s0)
-                removeButton(icon: .x, background: Theme.Color.appSurfaceSunken)
-            }
+            fileRow(
+                badge: iconDisc(.image),
+                name: file.name,
+                meta: uploadProgressText(file: file, progress: progress),
+                remove: removeButton(icon: .x, background: Theme.Color.appSurfaceSunken)
+            )
             progressBar(progress: progress)
         }
         .padding(Spacing.s3)
@@ -149,22 +149,14 @@ struct UploadSlot: View {
 
     private func pendingTile(file: UploadSlotFile, detail: String) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            HStack(spacing: Spacing.s3) {
-                thumbnail(file: file)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(file.name)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.Color.appText)
-                        .lineLimit(1)
-                    Text(sizeAndPages(file))
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                }
-                Spacer(minLength: Spacing.s0)
-                removeButton(icon: .trash2, background: .clear)
-            }
+            fileRow(
+                badge: thumbnail(file: file),
+                name: file.name,
+                meta: Text(sizeAndPages(file)).scaledFont(11).foregroundStyle(Theme.Color.appTextSecondary),
+                remove: removeButton(icon: .trash2, background: .clear)
+            )
             Text(detail)
-                .font(.system(size: 11.5))
+                .scaledFont(11.5)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -181,20 +173,12 @@ struct UploadSlot: View {
 
     private func uploadedTile(file: UploadSlotFile, detail: String, isWarn: Bool) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            HStack(spacing: Spacing.s3) {
-                thumbnail(file: file)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(file.name)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.Color.appText)
-                        .lineLimit(1)
-                    Text(sizeAndPages(file))
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                }
-                Spacer(minLength: Spacing.s0)
-                removeButton(icon: .trash2, background: .clear)
-            }
+            fileRow(
+                badge: thumbnail(file: file),
+                name: file.name,
+                meta: Text(sizeAndPages(file)).scaledFont(11).foregroundStyle(Theme.Color.appTextSecondary),
+                remove: removeButton(icon: .trash2, background: .clear)
+            )
             ocrRow(detail: detail, isWarn: isWarn)
         }
         .padding(Spacing.s3)
@@ -229,31 +213,61 @@ struct UploadSlot: View {
 
     // MARK: - Shared bits
 
+    /// A file's badge, name and remove control. At the accessibility sizes the name moves under the badge and
+    /// the control, so it gets the tile's width instead of the narrow column between them.
+    @ViewBuilder
+    private func fileRow(badge: some View, name: String, meta: some View, remove: some View) -> some View {
+        let details = VStack(alignment: .leading, spacing: 2) {
+            Text(name)
+                .scaledFont(13, weight: .semibold)
+                .foregroundStyle(Theme.Color.appText)
+                .fixedSize(horizontal: false, vertical: true)
+            meta
+        }
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                HStack(spacing: Spacing.s3) {
+                    badge
+                    Spacer(minLength: Spacing.s0)
+                    remove
+                }
+                details
+            }
+        } else {
+            HStack(spacing: Spacing.s3) {
+                badge
+                details
+                Spacer(minLength: Spacing.s0)
+                remove
+            }
+        }
+    }
+
     private var requiredLabelText: Text {
         let base = Text(label)
-            .font(.system(size: 13.5, weight: .semibold))
+            .font(.system(size: labelSize, weight: .semibold))
             .foregroundStyle(Theme.Color.appText)
         guard required else { return base }
         return base
             + Text("  *")
-            .font(.system(size: 12, weight: .bold))
+            .font(.system(size: requiredSize, weight: .bold))
             .foregroundStyle(Theme.Color.error)
     }
 
     private func uploadProgressText(file: UploadSlotFile, progress: Double) -> Text {
         Text("Uploading · \(file.sizeLabel) · ")
-            .font(.system(size: 11))
+            .font(.system(size: progressSize))
             .foregroundStyle(Theme.Color.appTextSecondary)
             + Text("\(Int((progress * 100).rounded()))%")
-            .font(.system(size: 11, weight: .semibold))
+            .font(.system(size: progressSize, weight: .semibold))
             .foregroundStyle(Theme.Color.primaryInk)
     }
 
     private func ocrDetailText(detail: String, isWarn: Bool) -> Text {
         Text(isWarn ? UploadSlotState.differLead : UploadSlotState.matchLead)
-            .font(.system(size: 11.5, weight: .semibold))
+            .font(.system(size: detailSize, weight: .semibold))
             + Text(" \(detail)")
-            .font(.system(size: 11.5))
+            .font(.system(size: detailSize))
     }
 
     private func iconDisc(_ icon: PantopusIcon) -> some View {
@@ -289,6 +303,8 @@ struct UploadSlot: View {
                 .frame(width: 28, height: 28)
                 .background(background)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Remove \(label)")

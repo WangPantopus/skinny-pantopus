@@ -28,6 +28,8 @@ function LoginContent() {
   const redirectTo = safeRedirectPath(readAuthRedirectQuery(searchParams), '/app/place');
   // Kept for "Sign up": someone who came from a friend's invite link still credits them.
   const inviteCode = (searchParams?.get('invite_code') || '').trim();
+  // Right after confirming an email (verify-email): someone new, not a return.
+  const arrivedConfirmed = searchParams?.get('confirmed') === '1';
   type FieldErrors = Record<string, string>;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -77,7 +79,7 @@ function LoginContent() {
     setEmail(handoff.email);
     setInfo(handoff.reason === 'password-updated'
       ? 'Your password was updated. Sign in with your new password.'
-      : 'Your email is confirmed. Sign in to continue.');
+      : 'Use the password you chose when you signed up.');
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -170,11 +172,11 @@ function LoginContent() {
         </div>
 
         <h2 className="mt-6 text-center text-3xl font-bold text-app-text dark:text-white">
-          Welcome back
+          {arrivedConfirmed ? 'Email confirmed' : 'Welcome back'}
         </h2>
 
         <p className="mt-2 text-center text-sm text-app-text-secondary">
-          Sign in to Pantopus
+          {arrivedConfirmed ? 'Log in to finish' : 'Sign in to Pantopus'}
         </p>
       </div>
 

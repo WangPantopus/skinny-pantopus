@@ -655,8 +655,19 @@ server.listen(PORT, HOST, async () => {
 
 // ============ GRACEFUL SHUTDOWN ============
 
+// A release stops this process after its proxy sends new requests to the next
+// one (scripts/deploy/backend.sh), so requests already running may finish: an
+// agent turn takes up to 45 s, a storage upload up to 60 s.
+const SHUTDOWN_GRACE_MS = 60_000;
+
 const gracefulShutdown = async (signal) => {
   logger.info(`${signal} received, starting graceful shutdown`);
+
+  // Force shutdown if requests are still running after the grace period
+  setTimeout(() => {
+    logger.error('Forced shutdown due to timeout');
+    process.exit(1);
+  }, SHUTDOWN_GRACE_MS);
 
   // Stop pg-boss workers first (allows in-flight jobs to complete)
   await stopPgBoss().catch((err) => {
@@ -665,23 +676,14 @@ const gracefulShutdown = async (signal) => {
   require('./services/chatPushDelivery').stop();
   await require('./services/syncChangedService').stop();
 
-  server.close(() => {
-    logger.info('HTTP server closed');
-
-    // Close Socket.io connections
-    io.close(() => {
-      logger.info('Socket.io connections closed');
-
-      // Exit process
-      process.exit(0);
-    });
+  // Disconnect Socket.io clients first: an open socket would keep the HTTP
+  // server from closing until the timeout. They reconnect, to the new process
+  // during a release. io.close() then closes the HTTP server, which stops
+  // accepting connections and lets running requests finish.
+  io.close(() => {
+    logger.info('Socket.io and HTTP server closed');
+    process.exit(0);
   });
-
-  // Force shutdown after 10 seconds
-  setTimeout(() => {
-    logger.error('Forced shutdown due to timeout');
-    process.exit(1);
-  }, 10000);
 };
 
 // Listen for termination signals

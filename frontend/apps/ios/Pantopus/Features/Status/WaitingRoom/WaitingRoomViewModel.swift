@@ -178,8 +178,20 @@ public final class WaitingRoomViewModel {
             phase = .loaded
         } catch {
             logger.warning("waitingRoom.load failed: \(error.localizedDescription)")
+            // The room re-checks on return, on foreground and on the claim's change signal; a failed re-check
+            // (coming back offline) keeps the status it showed rather than swapping it for an error.
+            guard !showsStatus else { return }
             leavesToMyHomes = false
             phase = .notice(.loadFailed)
+        }
+    }
+
+    /// Whether the room shows a claim status that a failed re-check leaves in place.
+    private var showsStatus: Bool {
+        switch phase {
+        case .loading: false
+        case let .notice(notice): notice != .loadFailed
+        case .loaded, .verification, .approved: true
         }
     }
 

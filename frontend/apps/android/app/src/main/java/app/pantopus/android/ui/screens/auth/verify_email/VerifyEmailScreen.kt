@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -33,6 +34,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.auth.AuthError
 import app.pantopus.android.ui.screens.status.StatusActionButton
@@ -88,6 +92,23 @@ fun VerifyEmailScreen(
     LaunchedEffect(state.didComplete) {
         if (state.didComplete) onDone()
     }
+    // Back from the mail app or the browser with the link opened: sign in with
+    // the password typed at sign-up, so it isn't asked for again. Only after
+    // the app was away: adding the observer replays ON_RESUME at once.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        var wasAway = false
+        val observer =
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_STOP -> wasAway = true
+                    Lifecycle.Event.ON_RESUME -> if (wasAway) viewModel.signInIfConfirmed()
+                    else -> Unit
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     // The cooldown is wall-clock based, so the disabled button's
     // "Resend in m:ss" label needs a heartbeat to redraw.
     LaunchedEffect(state.resendCooldownUntilEpochMs) {
@@ -122,7 +143,7 @@ fun VerifyEmailScreen(
                     onOpenMail = { openMailApp(context) },
                     onResend = viewModel::resend,
                     onChangeEmail = { onChangeEmail(state.email.orEmpty()) },
-                    onConfirmed = { onConfirmed(state.email) },
+                    onConfirmed = { viewModel.signInIfConfirmed(asked = true, onUnavailable = onConfirmed) },
                 )
             },
             modifier = Modifier.weight(1f),
@@ -229,28 +250,34 @@ private fun BannerLine(state: VerifyEmailViewModel.UiState) {
  * progress and any error. "Resent" is covered by the status pill.
  */
 private fun bannerCopyFor(state: VerifyEmailViewModel.UiState): BannerCopy? {
-    if (state.isVerifying) {
-        return BannerCopy(
-            text = "Verifying your email…",
-            color = PantopusColors.primary700,
-            background = PantopusColors.primary50,
-        )
+    val error = state.errorMessage
+    return when {
+        state.isVerifying ->
+            BannerCopy(
+                text = "Verifying your email…",
+                color = PantopusColors.primary700,
+                background = PantopusColors.primary50,
+            )
+        state.didVerify ->
+            BannerCopy(
+                text = "Email verified. You can now sign in.",
+                color = PantopusColors.success,
+                background = PantopusColors.successBg,
+            )
+        state.notConfirmedYet ->
+            BannerCopy(
+                text = "Not confirmed yet. Open the link in the email, then come back here.",
+                color = PantopusColors.primary700,
+                background = PantopusColors.primary50,
+            )
+        error != null ->
+            BannerCopy(
+                text = errorBlurb(error),
+                color = PantopusColors.error,
+                background = PantopusColors.errorBg,
+            )
+        else -> null
     }
-    if (state.didVerify) {
-        return BannerCopy(
-            text = "Email verified. You can now sign in.",
-            color = PantopusColors.success,
-            background = PantopusColors.successBg,
-        )
-    }
-    state.errorMessage?.let { error ->
-        return BannerCopy(
-            text = errorBlurb(error),
-            color = PantopusColors.error,
-            background = PantopusColors.errorBg,
-        )
-    }
-    return null
 }
 
 private fun errorBlurb(error: AuthError): String = error.message

@@ -65,6 +65,8 @@ class LoginViewModel
              * consumed on dismiss or successful sign-in.
              */
             val sessionEndReason: SessionEndReason? = null,
+            /** A confirmed email led here: the header says "Email confirmed" instead of "Welcome back". */
+            val arrivedConfirmed: Boolean = false,
         ) {
             val canSubmit: Boolean
                 get() = !isLoading && AuthValidation.email(email) == null && password.length >= 6
@@ -177,6 +179,17 @@ class LoginViewModel
         }
 
         fun onEmailChange(value: String) = _uiState.update { it.copy(email = value, errorMessage = null, infoMessage = null) }
+
+        /** A confirmed email led here: sign-in starts from it, and the header says so instead of "Welcome back". */
+        fun onEmailConfirmed(email: String?) =
+            _uiState.update { state ->
+                state.copy(
+                    email = email?.takeIf { it.isNotBlank() } ?: state.email,
+                    arrivedConfirmed = true,
+                    errorMessage = null,
+                    infoMessage = null,
+                )
+            }
 
         fun onPasswordChange(value: String) = _uiState.update { it.copy(password = value, errorMessage = null, infoMessage = null) }
 

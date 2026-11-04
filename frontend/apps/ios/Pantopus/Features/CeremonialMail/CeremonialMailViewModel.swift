@@ -189,9 +189,6 @@ public final class CeremonialMailViewModel: WizardModel {
             leading: step == .decide ? .close : .back,
             primaryCTALabel: primaryCtaLabel,
             primaryCTAEnabled: primaryCtaEnabled,
-            secondaryCTA: step == .success
-                ? WizardSecondaryCTA(label: "Back to Hub", identifier: "ceremonialBackToHub")
-                : nil,
             isSubmitting: isSubmitting,
             dirty: stepDirty,
             showsProgressBar: step != .success
@@ -231,12 +228,6 @@ public final class CeremonialMailViewModel: WizardModel {
             guard !isSubmitting else { return }
             Task { await submit() }
         case .success:
-            pendingEvent = .dismiss
-        }
-    }
-
-    public func secondaryTapped() {
-        if step == .success {
             pendingEvent = .dismiss
         }
     }

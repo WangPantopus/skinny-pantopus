@@ -15,7 +15,10 @@ import SwiftUI
 /// Block builder for one custom business page.
 @MainActor
 public struct BusinessPageBlocksView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var viewModel: BusinessPageBlocksViewModel
+    @State private var showsDiscardConfirm = false
     private let pageTitle: String
     private let onBack: @MainActor () -> Void
 
@@ -56,12 +59,14 @@ public struct BusinessPageBlocksView: View {
         }
         .background(Theme.Color.appBg)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        // Back asks before unsaved edits are dropped; the edge swipe would leave without asking.
+        .swipeBackDisabled(viewModel.hasChanges || viewModel.isSaving || viewModel.isPublishing)
         .navigationTitle(pageTitle.isEmpty ? "Page editor" : pageTitle)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button { onBack() } label: {
+                Button { requestBack() } label: {
                     Icon(.arrowLeft, size: 20, color: Theme.Color.appText)
                 }
                 .accessibilityLabel("Back")
@@ -81,6 +86,10 @@ public struct BusinessPageBlocksView: View {
         }
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
+        .alert("Discard unsaved edits?", isPresented: $showsDiscardConfirm) {
+            Button("Discard edits", role: .destructive) { requestBack(discardingChanges: true) }
+            Button("Keep editing", role: .cancel) {}
+        }
         .sheet(isPresented: pickerBinding) {
             BusinessPageBlockTypePicker(
                 onSelect: { kind in
@@ -100,11 +109,8 @@ public struct BusinessPageBlocksView: View {
                 onClose: { viewModel.editingIndex = nil }
             )
         }
-        .confirmationDialog(
-            "Delete block",
-            isPresented: deleteBinding,
-            titleVisibility: .visible
-        ) {
+        // An alert keeps Cancel; iOS 27 shows a confirmation dialog as a popover with only the destructive choice.
+        .alert("Delete block", isPresented: deleteBinding) {
             Button("Delete block", role: .destructive) {
                 if let index = viewModel.pendingDeleteIndex {
                     viewModel.deleteBlock(at: index)
@@ -157,8 +163,8 @@ public struct BusinessPageBlocksView: View {
         VStack(spacing: Spacing.s0) {
             HStack(spacing: Spacing.s2) {
                 Icon(.eye, size: 16, color: Theme.Color.warning)
-                Text("Preview mode — changes not saved")
-                    .pantopusTextStyle(.small)
+                Text(viewModel.hasChanges ? "Preview mode — changes not saved" : "Preview mode — saved draft")
+                    .scaledFont(14)
                     .foregroundStyle(Theme.Color.warning)
                 Spacer()
             }
@@ -208,31 +214,47 @@ public struct BusinessPageBlocksView: View {
             }
             bottomBar
         }
+        .disabled(viewModel.isBusy)
+    }
+
+    private func requestBack(discardingChanges: Bool = false) {
+        guard !viewModel.isSaving, !viewModel.isPublishing else {
+            viewModel.toastMessage = "Wait for the current update to finish, then try again."
+            return
+        }
+        if viewModel.hasChanges, !discardingChanges {
+            showsDiscardConfirm = true
+        } else {
+            onBack()
+        }
     }
 
     private var revisionStrip: some View {
-        HStack(spacing: Spacing.s2) {
+        actionLayout {
             if viewModel.publishedRevision > 0 {
                 Text("v\(viewModel.publishedRevision)")
-                    .pantopusTextStyle(.caption)
+                    .scaledFont(12)
                     .foregroundStyle(Theme.Color.success)
                     .accessibilityIdentifier("businessPageBlocks.publishedRevision")
             } else {
                 Text("Unpublished")
-                    .pantopusTextStyle(.caption)
+                    .scaledFont(12)
                     .foregroundStyle(Theme.Color.appTextMuted)
             }
             if viewModel.hasChanges {
-                Circle()
-                    .fill(Theme.Color.warningSolid)
-                    .frame(width: 6, height: 6)
-                Text("Unsaved")
-                    .pantopusTextStyle(.caption)
-                    .foregroundStyle(Theme.Color.warning)
-                    .accessibilityIdentifier("businessPageBlocks.unsaved")
+                HStack(spacing: Spacing.s2) {
+                    Circle()
+                        .fill(Theme.Color.warningSolid)
+                        .frame(width: 6, height: 6)
+                        .accessibilityHidden(true)
+                    Text("Unsaved")
+                        .scaledFont(12)
+                        .foregroundStyle(Theme.Color.warning)
+                        .accessibilityIdentifier("businessPageBlocks.unsaved")
+                }
             }
-            Spacer()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Spacing.s4)
         .padding(.vertical, Spacing.s2)
     }
@@ -252,12 +274,13 @@ public struct BusinessPageBlocksView: View {
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(entry.label)
-                            .pantopusTextStyle(.body)
+                            .scaledFont(16)
                             .foregroundStyle(Theme.Color.appTextStrong)
                         Text(block.summaryLine)
-                            .pantopusTextStyle(.caption)
+                            .scaledFont(12)
                             .foregroundStyle(Theme.Color.appTextSecondary)
-                            .lineLimit(1)
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
                     if !block.isVisible {
@@ -275,44 +298,7 @@ public struct BusinessPageBlocksView: View {
 
             Divider().overlay(Theme.Color.appBorderSubtle)
 
-            HStack(spacing: Spacing.s2) {
-                Button { viewModel.moveUp(index) } label: {
-                    Icon(
-                        .arrowUp,
-                        size: 16,
-                        color: index == 0 ? Theme.Color.appBorderStrong : Theme.Color.appTextSecondary
-                    )
-                }
-                .buttonStyle(.plain)
-                .disabled(index == 0)
-                .accessibilityLabel("Move up")
-                .accessibilityIdentifier("businessPageBlocks.moveUp.\(index)")
-
-                Button { viewModel.moveDown(index) } label: {
-                    Icon(
-                        .arrowDown,
-                        size: 16,
-                        color: index == viewModel.blocks.count - 1
-                            ? Theme.Color.appBorderStrong
-                            : Theme.Color.appTextSecondary
-                    )
-                }
-                .buttonStyle(.plain)
-                .disabled(index == viewModel.blocks.count - 1)
-                .accessibilityLabel("Move down")
-                .accessibilityIdentifier("businessPageBlocks.moveDown.\(index)")
-
-                Spacer()
-
-                Button { viewModel.pendingDeleteIndex = index } label: {
-                    Icon(.trash2, size: 16, color: Theme.Color.error)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Delete block")
-                .accessibilityIdentifier("businessPageBlocks.delete.\(index)")
-            }
-            .padding(.horizontal, Spacing.s3)
-            .padding(.vertical, Spacing.s2)
+            blockActions(index: index)
         }
         .background(Theme.Color.appSurface)
         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
@@ -323,6 +309,52 @@ public struct BusinessPageBlocksView: View {
                     lineWidth: 1
                 )
         }
+    }
+
+    private func blockActions(index: Int) -> some View {
+        HStack(spacing: Spacing.s2) {
+            Button { viewModel.moveUp(index) } label: {
+                Icon(
+                    .arrowUp,
+                    size: 16,
+                    color: index == 0 ? Theme.Color.appBorderStrong : Theme.Color.appTextSecondary
+                )
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(index == 0)
+            .accessibilityLabel("Move up")
+            .accessibilityIdentifier("businessPageBlocks.moveUp.\(index)")
+
+            Button { viewModel.moveDown(index) } label: {
+                Icon(
+                    .arrowDown,
+                    size: 16,
+                    color: index == viewModel.blocks.count - 1
+                        ? Theme.Color.appBorderStrong
+                        : Theme.Color.appTextSecondary
+                )
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(index == viewModel.blocks.count - 1)
+            .accessibilityLabel("Move down")
+            .accessibilityIdentifier("businessPageBlocks.moveDown.\(index)")
+
+            Spacer()
+
+            Button { viewModel.pendingDeleteIndex = index } label: {
+                Icon(.trash2, size: 16, color: Theme.Color.error)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Delete block")
+            .accessibilityIdentifier("businessPageBlocks.delete.\(index)")
+        }
+        .padding(.horizontal, Spacing.s3)
     }
 
     private var bottomBar: some View {
@@ -340,11 +372,24 @@ public struct BusinessPageBlocksView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Add block")
             .accessibilityIdentifier("businessPageBlocks.addBlock")
+            saveActions
+        }
+        .padding(Spacing.s4)
+        .background(Theme.Color.appSurface)
+    }
 
+    private var actionLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize && horizontalSizeClass != .regular
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.s2))
+            : AnyLayout(HStackLayout(spacing: Spacing.s2))
+    }
+
+    private var saveActions: some View {
+        actionLayout {
             GhostButton(
                 title: "Save draft",
                 isLoading: viewModel.isSaving,
-                isEnabled: viewModel.hasChanges
+                isEnabled: viewModel.hasChanges && !viewModel.isBusy
             ) {
                 await viewModel.saveDraft()
             }
@@ -353,14 +398,12 @@ public struct BusinessPageBlocksView: View {
             PrimaryButton(
                 title: "Publish",
                 isLoading: viewModel.isPublishing,
-                isEnabled: !viewModel.blocks.isEmpty
+                isEnabled: !viewModel.blocks.isEmpty && !viewModel.isBusy
             ) {
                 await viewModel.publish()
             }
             .accessibilityIdentifier("businessPageBlocks.publish")
         }
-        .padding(Spacing.s4)
-        .background(Theme.Color.appSurface)
     }
 
     // MARK: - Bindings
