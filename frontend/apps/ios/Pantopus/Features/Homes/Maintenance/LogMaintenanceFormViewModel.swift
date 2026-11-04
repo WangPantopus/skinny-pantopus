@@ -265,15 +265,16 @@ final class LogMaintenanceFormViewModel {
         }
     }
 
-    /// The form checks current authority before enabling or committing a write.
-    func confirmPermission() async -> Bool {
+    /// The form checks current authority before enabling or committing a write. `nil` means the
+    /// check couldn't complete: the draft stays and the next Save checks again before writing.
+    func confirmPermission() async -> Bool? {
         do {
             let canManage = try await authority.read().access?.can("home.edit") == true
             if !canManage { submitError = "You don't have permission to manage maintenance." }
             return canManage
         } catch {
-            submitError = "Couldn't confirm your permission to manage maintenance. Close and reopen this form to try again."
-            return false
+            submitError = "Couldn't confirm your permission to manage maintenance. Check your connection and try again."
+            return nil
         }
     }
 
