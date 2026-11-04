@@ -18,6 +18,7 @@ public struct BusinessPageBlocksView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var viewModel: BusinessPageBlocksViewModel
+    @State private var showsDiscardConfirm = false
     private let pageTitle: String
     private let onBack: @MainActor () -> Void
 
@@ -58,12 +59,14 @@ public struct BusinessPageBlocksView: View {
         }
         .background(Theme.Color.appBg)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        // Back asks before unsaved edits are dropped; the edge swipe would leave without asking.
+        .swipeBackDisabled(viewModel.hasChanges || viewModel.isSaving || viewModel.isPublishing)
         .navigationTitle(pageTitle.isEmpty ? "Page editor" : pageTitle)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button { onBack() } label: {
+                Button { requestBack() } label: {
                     Icon(.arrowLeft, size: 20, color: Theme.Color.appText)
                 }
                 .accessibilityLabel("Back")
@@ -83,6 +86,10 @@ public struct BusinessPageBlocksView: View {
         }
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
+        .alert("Discard unsaved edits?", isPresented: $showsDiscardConfirm) {
+            Button("Discard edits", role: .destructive) { requestBack(discardingChanges: true) }
+            Button("Keep editing", role: .cancel) {}
+        }
         .sheet(isPresented: pickerBinding) {
             BusinessPageBlockTypePicker(
                 onSelect: { kind in
@@ -102,11 +109,8 @@ public struct BusinessPageBlocksView: View {
                 onClose: { viewModel.editingIndex = nil }
             )
         }
-        .confirmationDialog(
-            "Delete block",
-            isPresented: deleteBinding,
-            titleVisibility: .visible
-        ) {
+        // An alert keeps Cancel; iOS 27 shows a confirmation dialog as a popover with only the destructive choice.
+        .alert("Delete block", isPresented: deleteBinding) {
             Button("Delete block", role: .destructive) {
                 if let index = viewModel.pendingDeleteIndex {
                     viewModel.deleteBlock(at: index)
@@ -159,7 +163,7 @@ public struct BusinessPageBlocksView: View {
         VStack(spacing: Spacing.s0) {
             HStack(spacing: Spacing.s2) {
                 Icon(.eye, size: 16, color: Theme.Color.warning)
-                Text("Preview mode — changes not saved")
+                Text(viewModel.hasChanges ? "Preview mode — changes not saved" : "Preview mode — saved draft")
                     .scaledFont(14)
                     .foregroundStyle(Theme.Color.warning)
                 Spacer()
@@ -209,6 +213,19 @@ public struct BusinessPageBlocksView: View {
                 }
             }
             bottomBar
+        }
+        .disabled(viewModel.isBusy)
+    }
+
+    private func requestBack(discardingChanges: Bool = false) {
+        guard !viewModel.isSaving, !viewModel.isPublishing else {
+            viewModel.toastMessage = "Wait for the current update to finish, then try again."
+            return
+        }
+        if viewModel.hasChanges, !discardingChanges {
+            showsDiscardConfirm = true
+        } else {
+            onBack()
         }
     }
 
@@ -372,7 +389,7 @@ public struct BusinessPageBlocksView: View {
             GhostButton(
                 title: "Save draft",
                 isLoading: viewModel.isSaving,
-                isEnabled: viewModel.hasChanges
+                isEnabled: viewModel.hasChanges && !viewModel.isBusy
             ) {
                 await viewModel.saveDraft()
             }
@@ -381,7 +398,7 @@ public struct BusinessPageBlocksView: View {
             PrimaryButton(
                 title: "Publish",
                 isLoading: viewModel.isPublishing,
-                isEnabled: !viewModel.blocks.isEmpty
+                isEnabled: !viewModel.blocks.isEmpty && !viewModel.isBusy
             ) {
                 await viewModel.publish()
             }
