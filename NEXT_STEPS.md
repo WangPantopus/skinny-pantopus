@@ -542,7 +542,8 @@ Plan: [docs/ballot-implementation-plan-2026-09-24.md](docs/ballot-implementation
   already shows, so no app update is needed. The switch is `ballot_results`, on at release. See the
   [plan](docs/product/ballot-live-results-plan-2026-11-03.md). Utah's count joined at 5:25 p.m. that day. On election
   night both sites handed out older copies beside the newest for minutes at a time, so the card could fall back to "no
-  votes yet"; since your go-ahead that night it never shows a count posted before the one it already shows.
+  votes yet"; since your go-ahead that night it never shows a count posted before the one it already shows. Also
+  that night (your go-ahead): Washington's five Supreme Court seats, on every Washington ballot, joined the card.
 - [x] November 3, results links for every state (your go-ahead that evening). Outside the 8 checked states the card
   used to end with Election Day. Now 42 states carry their official results page, each opened on November 3. It's one
   of the card's three links on Election Day, and for the week after the card stays to point there ("Results are
