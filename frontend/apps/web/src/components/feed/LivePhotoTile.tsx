@@ -191,8 +191,10 @@ export default function LivePhotoTile({
   };
 
   const objectFit = fit === 'cover' ? 'object-cover' : 'object-contain';
-  // iOS renders the thumbnail in fill mode and the full still in fit mode.
-  const stillSrc = fit === 'cover' ? thumbnailUrl || stillUrl : stillUrl;
+  // Public feed tiles can fill a wide card. Their 200px square thumbnail is
+  // too small; let FeedMediaImage resize the still. Private chat media keeps
+  // its authorization-checked preview and bypasses the public optimizer.
+  const stillSrc = privateMedia && fit === 'cover' ? thumbnailUrl || stillUrl : stillUrl;
 
   const mediaLayers = (
     <>
@@ -205,7 +207,7 @@ export default function LivePhotoTile({
           // eslint-disable-next-line @next/next/no-img-element -- Private chat media needs browser cookies.
           <img src={stillSrc} alt="" className={`h-full w-full ${objectFit}`} loading="lazy" />
         ) : (
-          <FeedMediaImage src={stillSrc} alt="" className={`h-full w-full ${objectFit}`} loading="lazy" />
+          <FeedMediaImage src={stillSrc} alt="" sizes={fit === 'contain' ? '96vw' : undefined} className={`h-full w-full ${objectFit}`} loading="lazy" />
         )}
         {mounted && (
           <video
