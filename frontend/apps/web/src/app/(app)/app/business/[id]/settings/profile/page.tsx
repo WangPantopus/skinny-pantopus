@@ -104,12 +104,12 @@ export default function BusinessSettingsProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+        <div className="min-w-0 max-w-full">
           <h1 className="text-xl font-semibold text-app-text">Business Profile Settings</h1>
-          <p className="text-sm text-app-text-secondary mt-1">@{business?.username || 'business'}</p>
+          <p className="text-sm text-app-text-secondary mt-1 break-all">@{business?.username || 'business'}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <button
             onClick={togglePublish}
             disabled={saving}
