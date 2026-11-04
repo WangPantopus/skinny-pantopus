@@ -136,7 +136,6 @@ object EditBusinessPageSampleData {
                             current = "412 Elm St, Elm Park, NY 10013",
                         ),
                     mapVerified = true,
-                    hideExactAddress = false,
                 ),
         )
 
@@ -231,7 +230,6 @@ object EditBusinessPageSampleData {
                     error = "ZIP code missing — needed to verify",
                     mapVerified = false,
                     pinDirty = true,
-                    hideExactAddress = false,
                 ),
         )
 

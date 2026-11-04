@@ -112,8 +112,7 @@ export default function EventTypesPage() {
     // the edit permission up front so the catalog renders read-only instead of erroring on
     // first touch. Personal/business owners are edit-capable whenever the list loads.
     if (owner.ownerType === "home" && owner.homeId) {
-      import("@pantopus/api")
-        .then(({ get }) => get(`/api/homes/${owner.homeId}/me`))
+      api.get(`/api/homes/${owner.homeId}/me`)
         .then((me) => {
           if (!alive) return;
           const perms = (me as { permissions?: string[] })?.permissions ?? [];

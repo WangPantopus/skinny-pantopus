@@ -17,11 +17,16 @@ struct PlanScreen: View {
     let onHost: (PlansHostStart?) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var needsForegroundRead = false
     @State private var showsAsk = false
     @State private var askIsChange = false
     @State private var confirmation: PlanConfirmation?
     @State private var showsCancel = false
     @State private var showsInvite = false
+    /// The public card an open ask or invite sheet was opened with. Leaving the app clears
+    /// the plan until it is read again; the sheet and what was typed in it stay.
+    @State private var sheetCard: PlanCardDTO?
     @State private var showsReport = false
     @State private var chatRoute: PlanChatRoute?
     @State private var toast: String?
@@ -58,7 +63,7 @@ struct PlanScreen: View {
         .task {
             // An email or text invitation becomes this account's before the plan is read.
             if case let .invite(token) = intent, !askedOnOpen { await viewModel.claimInvite(token: token) }
-            await viewModel.load()
+            await viewModel.resume()
             if let notice = PlansNavigator.shared.notice {
                 PlansNavigator.shared.notice = nil
                 viewModel.actionError = notice
@@ -71,8 +76,10 @@ struct PlanScreen: View {
             if intent == .chat { openChat() }
         }
         .refreshesOnStoreChange(affects: { PlansStoreReads.affects($0) }, perform: { await viewModel.load() })
+        .onDisappear { viewModel.suspend() }
+        .onChange(of: scenePhase) { _, phase in sceneChanged(phase) }
         .sheet(isPresented: $showsAsk) {
-            if let card = viewModel.card {
+            if let card = viewModel.card ?? sheetCard {
                 PlanAskSheet(
                     card: card,
                     previous: askIsChange ? viewModel.askPrefill : nil,
@@ -88,8 +95,9 @@ struct PlanScreen: View {
         .sheet(
             isPresented: $showsInvite,
             onDismiss: { Task { await viewModel.load() } },
-            content: { if let card = viewModel.card { PlanInviteSheet(card: card) } }
+            content: { if let card = viewModel.card ?? sheetCard { PlanInviteSheet(card: card) } }
         )
+        .onChange(of: showsAsk || showsInvite) { _, shows in sheetCard = shows ? viewModel.card : nil }
         .askPantopus($pantopusTopic)
         .confirmationDialog("Report this plan", isPresented: $showsReport, titleVisibility: .visible) {
             ForEach(PlanReportReason.all, id: \.token) { reason in
@@ -331,6 +339,18 @@ struct PlanScreen: View {
 }
 
 // MARK: - Small shared pieces
+
+private extension PlanScreen {
+    func sceneChanged(_ phase: ScenePhase) {
+        if phase == .background {
+            needsForegroundRead = true
+            viewModel.suspend()
+        } else if phase == .active, needsForegroundRead {
+            needsForegroundRead = false
+            Task { await viewModel.resume() }
+        }
+    }
+}
 
 /// A 44 pt round glass button over a map.
 struct PlanGlassButton: View {

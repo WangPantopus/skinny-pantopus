@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
@@ -59,19 +59,24 @@ export function useBusinessData(businessId: string): UseBusinessDataReturn {
   const [access, setAccess] = useState<BusinessAccess>({ hasAccess: false, isOwner: false, role_base: null, permissions: [] });
   const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
   const [foundingOffer, setFoundingOffer] = useState<FoundingOfferStatus | null>(null);
+  const reads = useRef({ generation: 0 }).current;
 
   const refresh = useCallback(async () => {
+    const generation = ++reads.generation;
+    const marker = api.authSessionMarker();
+    const current = () => generation === reads.generation && marker === api.authSessionMarker();
     setLoading(true);
     setError('');
+    setFoundingOffer(null);
     try {
       const token = getAuthToken();
       if (!token) { router.push('/login'); return; }
 
-      const [res, foundingRes, currentAccess] = await Promise.all([
+      const [res, currentAccess] = await Promise.all([
         api.businesses.getBusinessDashboard(businessId) as Promise<BusinessDashboardResponse>,
-        api.businesses.getFoundingOfferStatus().catch(() => null),
         queryClient.fetchQuery(businessAccessQuery(businessId)),
       ]);
+      if (!current()) return;
       setBusiness(res.business);
       setProfile(res.profile);
       setLocations(res.locations || []);
@@ -80,16 +85,26 @@ export function useBusinessData(businessId: string): UseBusinessDataReturn {
       setPages(res.pages || []);
       setAccess(currentAccess);
       setOnboarding(res.onboarding || null);
-      if (foundingRes) setFoundingOffer(foundingRes);
+      // This owner-only banner must not hold up the dashboard or any of its tabs.
+      // A reply from before another refresh, business or account cannot restore it.
+      if (currentAccess.isOwner) {
+        void api.businesses.getFoundingOfferStatus().then((offer) => {
+          if (current()) setFoundingOffer(offer);
+        }).catch(() => { /* The dashboard remains available without the offer. */ });
+      }
     } catch (e: unknown) {
+      if (!current()) return;
       const msg = e instanceof Error ? e.message : 'Failed to load dashboard';
       setError(msg);
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
-  }, [businessId, queryClient, router]);
+  }, [businessId, queryClient, router, reads]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    void refresh();
+    return () => { reads.generation++; };
+  }, [refresh, reads]);
 
   return {
     business,
