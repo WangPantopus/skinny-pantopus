@@ -55,11 +55,12 @@ public struct EditAccessCodeFormView: View {
 
     public var body: some View {
         FormShell(
-            title: viewModel.isEditing && !viewModel.canManage ? "Access code" : viewModel.title,
-            rightActionLabel: viewModel.commitLabel,
+            title: viewModel.isEditing && canShowContent && !viewModel.canManage ? "Access code" : viewModel.title,
+            // Save appears only once the current read allows changes, as on Android.
+            rightActionLabel: viewModel.canManage ? viewModel.commitLabel : nil,
             isValid: viewModel.isValid && canSaveScope && canShowContent,
             isDirty: viewModel.isDirty,
-            isSaving: viewModel.isSaving,
+            isSaving: viewModel.isSaving || viewModel.isRechecking,
             onClose: onClose,
             onCommit: { commit() },
             content: { formContent }
@@ -68,7 +69,7 @@ public struct EditAccessCodeFormView: View {
         .sensitiveScreen()
         .formShakeOnChange(of: viewModel.shakeTrigger)
         .overlay(alignment: .bottom) { toastOverlay }
-        .disabled(viewModel.isSaving)
+        .disabled(viewModel.isSaving || viewModel.isRechecking)
         .interactiveDismissDisabled(viewModel.isSaving || viewModel.isDirty)
         .task { await refresh() }
         .onAppear {
@@ -113,7 +114,7 @@ public struct EditAccessCodeFormView: View {
 
     @ViewBuilder private var formContent: some View {
         if viewModel.isLoading || viewModel.isConfirmingAccess {
-            ProgressView("Checking access…")
+            EditAccessCodeFormSkeleton()
         } else if canShowContent {
             if !viewModel.canManage {
                 Text("You can view and copy this code. Editing is unavailable with your current access.")
@@ -144,7 +145,7 @@ public struct EditAccessCodeFormView: View {
 
     private func commit(deleting: Bool = false) {
         Task {
-            guard !viewModel.isSaving else { return }
+            guard !viewModel.isSaving, !viewModel.isRechecking else { return }
             guard await viewModel.confirmAccess(), !viewModel.isSaving, canShowContent, isVisible, scenePhase == .active else { return }
             guard deleting || canSaveScope else { return }
             if deleting { await viewModel.delete() } else { await viewModel.submit() }

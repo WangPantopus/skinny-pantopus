@@ -100,6 +100,8 @@ final class EditAccessCodeFormViewModel {
     private(set) var canManage = false
     private(set) var availableVisibilities: Set<AccessVisibility> = []
     private(set) var accessError: String?
+    /// The pre-save check of current access is running; the form stays visible but disabled.
+    private(set) var isRechecking = false
 
     /// `true` when this VM is editing an existing code.
     var isEditing: Bool {
@@ -142,13 +144,45 @@ final class EditAccessCodeFormViewModel {
 
     /// Data and current write capabilities share one server-side secret scope and one request.
     func load() async {
+        await read(keepingForm: false)
+    }
+
+    func suspend() {
         readGeneration &+= 1
-        let generation = readGeneration
-        isLoading = true
-        isConfirmingAccess = true
         hasCurrentAccess = false
         canManage = false
         availableVisibilities = []
+        isLoading = true
+        isConfirmingAccess = true
+        isRechecking = false
+        isRevealed = false
+        toastTask?.cancel()
+        toast = nil
+    }
+
+    /// Reconfirm this record and its capabilities before a write without replacing a dirty draft. The form stays on
+    /// screen, disabled, while the check runs; a refusal or failure still takes it down.
+    @discardableResult
+    func confirmAccess() async -> Bool {
+        let generation = readGeneration &+ 1
+        isRechecking = true
+        await read(keepingForm: true)
+        guard generation == readGeneration else { return false }
+        isRechecking = false
+        return !Task.isCancelled && hasCurrentAccess && canManage
+    }
+
+    private func read(keepingForm: Bool) async {
+        readGeneration &+= 1
+        let generation = readGeneration
+        if !keepingForm {
+            isLoading = true
+            isConfirmingAccess = true
+            isRechecking = false
+            hasCurrentAccess = false
+            canManage = false
+            availableVisibilities = []
+        }
         accessError = nil
         defer {
             if generation == readGeneration {
@@ -159,12 +193,13 @@ final class EditAccessCodeFormViewModel {
         do {
             let response: HomeAccessSecretsResponse = try await api.request(HomesEndpoints.accessSecrets(homeId: homeId))
             guard generation == readGeneration, !Task.isCancelled else { return }
-            if response.canManage == true {
-                availableVisibilities = Set((response.allowedVisibilities ?? []).compactMap(AccessVisibility.init(rawValue:)))
-            }
+            availableVisibilities = response.canManage == true
+                ? Set((response.allowedVisibilities ?? []).compactMap(AccessVisibility.init(rawValue:)))
+                : []
             canManage = !availableVisibilities.isEmpty
             if let secretId {
                 guard let secret = response.secrets.first(where: { $0.id == secretId }) else {
+                    hasCurrentAccess = false
                     state = .error("Couldn't find that access code.")
                     return
                 }
@@ -178,28 +213,11 @@ final class EditAccessCodeFormViewModel {
             state = .editing
         } catch {
             guard generation == readGeneration, !Task.isCancelled else { return }
+            hasCurrentAccess = false
+            canManage = false
+            availableVisibilities = []
             state = .error("Couldn't load access code. Try again.")
         }
-    }
-
-    func suspend() {
-        readGeneration &+= 1
-        hasCurrentAccess = false
-        canManage = false
-        availableVisibilities = []
-        isLoading = true
-        isConfirmingAccess = true
-        isRevealed = false
-        toastTask?.cancel()
-        toast = nil
-    }
-
-    /// Reconfirm this record and its capabilities before a write without replacing a dirty draft.
-    @discardableResult
-    func confirmAccess() async -> Bool {
-        let generation = readGeneration &+ 1
-        await load()
-        return generation == readGeneration && !Task.isCancelled && hasCurrentAccess && canManage
     }
 
     // MARK: - Field updates
