@@ -56,7 +56,8 @@ struct GenericMailDetailLayout: View {
         }
     }
 
-    /// The envelope, Pantopus's note, the letter (or a bundle's pieces) and the actions.
+    /// The envelope, Pantopus's note, the letter (or a bundle's pieces) and the actions. A booklet opens to its
+    /// pages; its note and cover follow them.
     private func letterPage(_ letter: MailLetter, hooks: MailLetterPageHooks, onShowPage: @escaping () -> Void) -> some View {
         MailItemDetailShell(
             topBar: letterTopBar,
@@ -64,17 +65,16 @@ struct GenericMailDetailLayout: View {
                 if let card = letter.card {
                     // A Christmas card opens as a card, from its envelope.
                     HolidayCardView(letter: letter, card: card, firstOpen: hooks.cardFirstOpen, onEnvelope: hooks.onEnvelope)
+                } else if let booklet = content.bookletDetail {
+                    BookletPager(pages: booklet.pages, pageCount: booklet.pageCount, ocrTexts: booklet.ocrTexts, onShowPage: onShowPage)
+                        .id(content.mailId)
                 } else {
-                    MailEnvelopeButton(
-                        piece: letter.piece,
-                        onTap: hooks.onEnvelope,
-                        compactBooklet: content.bookletDetail != nil
-                    )
+                    MailEnvelopeButton(piece: letter.piece, onTap: hooks.onEnvelope)
                 }
             },
             body: {
                 if letter.card == nil {
-                    letterBody(letter, hooks: hooks, onShowPage: onShowPage)
+                    letterBody(letter, hooks: hooks)
                 }
             },
             actions: {
@@ -91,9 +91,24 @@ struct GenericMailDetailLayout: View {
         .accessibilityIdentifier("mailDetail_letter")
     }
 
-    /// Pantopus's note clipped to the letter, and the letter (or a booklet's
-    /// pages, or a bundle's pieces).
-    private func letterBody(_ letter: MailLetter, hooks: MailLetterPageHooks, onShowPage: @escaping () -> Void) -> some View {
+    /// Pantopus's note clipped to the letter, and the letter (or a bundle's
+    /// pieces); after a booklet's pages, its note and its cover.
+    @ViewBuilder
+    private func letterBody(_ letter: MailLetter, hooks: MailLetterPageHooks) -> some View {
+        if content.bookletDetail != nil {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                if let summary = letter.summary {
+                    MailReadForYouNote(summary: summary, isBill: false)
+                }
+                MailEnvelopeButton(piece: letter.piece, onTap: hooks.onEnvelope, compactBooklet: true)
+            }
+            .padding(.top, Spacing.s2)
+        } else {
+            letterPaper(letter, hooks: hooks)
+        }
+    }
+
+    private func letterPaper(_ letter: MailLetter, hooks: MailLetterPageHooks) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
             if let summary = letter.summary {
                 // Clipped to the top of the letter, over its edge.
@@ -103,12 +118,7 @@ struct GenericMailDetailLayout: View {
                     .padding(.bottom, -18)
                     .zIndex(1)
             }
-            if let booklet = content.bookletDetail {
-                // A booklet pages through.
-                BookletPager(pages: booklet.pages, pageCount: booklet.pageCount, ocrTexts: booklet.ocrTexts, onShowPage: onShowPage)
-                    .id(content.mailId)
-                    .padding(.top, Spacing.s2)
-            } else if letter.kind == .bundle {
+            if letter.kind == .bundle {
                 MailBundleContents(
                     pieces: hooks.bundlePieces,
                     failure: hooks.bundleFailure,
