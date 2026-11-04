@@ -17,7 +17,7 @@ struct FilterSheetFlowLayout: Layout {
         var maxRowWidth: CGFloat = 0
 
         for view in subviews {
-            let size = view.sizeThatFits(ProposedViewSize(width: maxWidth.isFinite ? maxWidth : nil, height: nil))
+            let size = Self.size(of: view, within: maxWidth)
             if x + size.width > maxWidth, x > 0 {
                 totalHeight += rowHeight + spacing
                 maxRowWidth = max(maxRowWidth, x - spacing)
@@ -40,7 +40,7 @@ struct FilterSheetFlowLayout: Layout {
         var rowHeight: CGFloat = 0
 
         for view in subviews {
-            let size = view.sizeThatFits(ProposedViewSize(width: maxWidth.isFinite ? maxWidth : nil, height: nil))
+            let size = Self.size(of: view, within: maxWidth)
             if x + size.width > bounds.minX + maxWidth, x > bounds.minX {
                 x = bounds.minX
                 y += rowHeight + spacing
@@ -50,5 +50,13 @@ struct FilterSheetFlowLayout: Layout {
             x += size.width + spacing
             rowHeight = max(rowHeight, size.height)
         }
+    }
+
+    /// An item's natural size, or its size at the row's width when it is wider than the row, so a long label
+    /// wraps. Offering every item the whole row would stretch a flexible one, such as a tag field, across it.
+    private static func size(of view: LayoutSubview, within maxWidth: CGFloat) -> CGSize {
+        let natural = view.sizeThatFits(.unspecified)
+        guard maxWidth.isFinite, natural.width > maxWidth else { return natural }
+        return view.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
     }
 }

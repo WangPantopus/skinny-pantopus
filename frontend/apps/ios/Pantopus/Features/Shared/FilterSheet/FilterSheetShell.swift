@@ -108,6 +108,8 @@ public struct FilterSheetShell: View {
                 label: {
                     Icon(.x, size: 20, color: Theme.Color.appTextSecondary)
                         .frame(width: 44, height: 44)
+                        // A plain button only takes taps on what it draws; the whole square is the target.
+                        .contentShape(Rectangle())
                 }
             )
             .buttonStyle(.plain)
