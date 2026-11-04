@@ -22,6 +22,10 @@ import SwiftUI
 
 @MainActor
 struct GenericMailDetailLayout: View {
+    /// Beside the Mailbox the list is the way back (`mailPieceShowsBack`).
+    @Environment(\.mailPieceShowsBack) private var showsBack
+    /// A booklet beside the Mailbox can lie open as two pages (`mailBookletLayOpen`).
+    @Environment(\.mailBookletLayOpen) private var bookletLayOpen
     let content: MailDetailContent
     let ackInFlight: Bool
     let onBack: @MainActor () -> Void
@@ -60,14 +64,22 @@ struct GenericMailDetailLayout: View {
     /// pages; its note and cover follow them.
     private func letterPage(_ letter: MailLetter, hooks: MailLetterPageHooks, onShowPage: @escaping () -> Void) -> some View {
         MailItemDetailShell(
-            topBar: letterTopBar,
+            topBar: letterTopBar.showingBack(showsBack),
             hero: {
                 if let card = letter.card {
                     // A Christmas card opens as a card, from its envelope.
                     HolidayCardView(letter: letter, card: card, firstOpen: hooks.cardFirstOpen, onEnvelope: hooks.onEnvelope)
                 } else if let booklet = content.bookletDetail {
-                    BookletPager(pages: booklet.pages, pageCount: booklet.pageCount, ocrTexts: booklet.ocrTexts, onShowPage: onShowPage)
-                        .id(content.mailId)
+                    BookletPager(
+                        pages: booklet.pages,
+                        pageCount: booklet.pageCount,
+                        ocrTexts: booklet.ocrTexts,
+                        initialPage: hooks.bookletPlace.page,
+                        initialMode: hooks.bookletPlace.mode,
+                        onShowPage: onShowPage,
+                        onPlaceChange: hooks.onBookletPlace
+                    )
+                    .id(content.mailId)
                 } else {
                     MailEnvelopeButton(piece: letter.piece, onTap: hooks.onEnvelope)
                 }
@@ -88,6 +100,7 @@ struct GenericMailDetailLayout: View {
                 )
             }
         )
+        .modifier(MailPageScrollPlace(offset: hooks.keptScrollOffset, onChange: hooks.onScrollOffset))
         .accessibilityIdentifier("mailDetail_letter")
     }
 
@@ -139,7 +152,8 @@ struct GenericMailDetailLayout: View {
     }
 
     /// Back to the Mail tab, and the "…" menu: Translate and Create task
-    /// when they're open to this person.
+    /// when they're open to this person. A booklet beside the Mailbox on the
+    /// open Duo also has "Lay it open as two pages".
     private var letterTopBar: MailTopBarConfig {
         var items: [MailOverflowItem] = []
         if let onTranslate {
@@ -152,17 +166,24 @@ struct GenericMailDetailLayout: View {
                 Task { @MainActor in onCreateTask() }
             })
         }
+        // An open book (Lucide `book-open`, the Plans study group's glyph).
+        let layOpen = content.bookletDetail == nil ? nil : bookletLayOpen.map { layOpen in
+            MailTopBarTrailingAction(icon: .planStudy, accessibilityLabel: "Lay it open as two pages") { @Sendable in
+                Task { @MainActor in layOpen.layOpen() }
+            }
+        }
         return MailTopBarConfig(
             eyebrow: nil,
             trust: content.detailTrust,
             onBack: { @Sendable in Task { @MainActor in onBack() } },
+            trailingAction: layOpen,
             overflowItems: items
         )
     }
 
     private var cards: some View {
         MailItemDetailShell(
-            topBar: topBar,
+            topBar: topBar.showingBack(showsBack),
             aiElf: aiElf,
             attachments: attachments,
             hero: {
@@ -845,4 +866,10 @@ struct MailLetterPageHooks {
     let onOpenPiece: (String) -> Void
     let onRetryBundle: () -> Void
     let onRestore: () -> Void
+    /// Where a booklet's reader is, kept with the page's model so a fold's new layout opens it there.
+    var bookletPlace = BookletPlace()
+    var onBookletPlace: (BookletPlace) -> Void = { _ in }
+    /// How far the page is scrolled, kept the same way.
+    var keptScrollOffset: CGFloat = 0
+    var onScrollOffset: (CGFloat) -> Void = { _ in }
 }

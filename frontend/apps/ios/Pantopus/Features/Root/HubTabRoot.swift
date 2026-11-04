@@ -534,6 +534,10 @@ public struct HubTabRoot: View {
     @Environment(AuthManager.self) private var auth
     @Environment(RootTabModel.self) private var rootTabs
     @Environment(\.scenePhase) private var scenePhase
+    /// Regular width (the iPhone Duo open) puts the Mail tab's Mailbox and the piece it opens side by side, where
+    /// the hinge runs down the screen (`MailSideBySideLayout`).
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var path = RouteStack<HubRoute>()
     @State private var navigationReady = false
     @Binding private var addHomeRequest: UUID?
@@ -568,6 +572,13 @@ public struct HubTabRoot: View {
     @State private var opensAudienceProfileAfterIdentityCenter = false
     /// The Mail tab's Mailbox model, once made (`mailTabMailboxModel`).
     @State private var mailboxModelBox = MailboxRootModelBox()
+    /// The mail screens' models while their routes are on the stack: a fold replaces the Mail tab's presentation,
+    /// not its letters, searches and drafts.
+    @State private var mailScreenModels = MailScreenModels()
+    /// The Mail tab shows two halves (the open Duo held sideways): what the Mailbox opens goes beside it.
+    @State private var mailSideBySide = false
+    /// The booklet beside the Mailbox laid open as two pages, the Mailbox stepping aside.
+    @State private var laidOpenBookletId: String?
     /// "Verify your home" from a Home letter that waits for proof of address.
     @State private var mailVerifyHome: MailVerifyHome?
     #if DEBUG
@@ -767,20 +778,17 @@ public struct HubTabRoot: View {
     }
 
     public var body: some View {
-        NavigationStack(path: navigationPathBinding) {
-            stackRoot
-                .readableColumn()
-                .swipesBackFromEdge()
-                .navigationDestination(for: HubRoute.self) { route in
-                    launchScopedDestination(for: route) { path.append($0) }
-                        .readableColumn()
-                        .modifier(OwnHeaderBar(drawsOwnHeader: route.isAvailableAtLaunch && Self.drawsOwnHeader(route)))
-                }
-            #if DEBUG
-                .sheet(item: $debugSheet) { route in
-                    destination(for: route) { _ in }
-                }
-            #endif
+        Group {
+            tabStacks
+        }
+        .onChange(of: path.routes) { old, routes in
+            mailScreenModels.retain(routes)
+            // Laid open, a booklet stays so while it's the piece open beside the Mailbox.
+            if laidOpenBookletId != nil, laidOpenBookletId != path.openMailPieceId { laidOpenBookletId = nil }
+            // Beside what it opened the Mailbox stays on screen: a card sent or a hold set shows on it now.
+            if mode == .mailbox, mailSideBySide, HubRoute.mailboxReadsAgain(from: old, to: routes) {
+                Task { await mailTabMailboxModel.load() }
+            }
         }
         .onChange(of: router.pending) { _, pending in
             consumeDeepLinkIfNeeded(pending: pending)
@@ -859,6 +867,89 @@ public struct HubTabRoot: View {
                 )
             }
         )
+    }
+
+    /// One stack, its root this tab's surface. The Mail tab on the open Duo held sideways shows the same routes in
+    /// two halves instead (`MailSideBySide`).
+    @ViewBuilder
+    private var tabStacks: some View {
+        if mode == .mailbox {
+            // Read in layout, so the first pass already picks one column or two.
+            GeometryReader { proxy in
+                let layout = MailSideBySideLayout(
+                    proxy: proxy,
+                    isRegular: horizontalSizeClass == .regular,
+                    isAccessibilitySize: dynamicTypeSize.isAccessibilitySize
+                )
+                mailTab(layout)
+                    .onChange(of: layout != nil, initial: true) { _, sideBySide in mailSideBySide = sideBySide }
+            }
+        } else {
+            oneColumn
+        }
+    }
+
+    private var oneColumn: some View {
+        NavigationStack(path: navigationPathBinding) {
+            stackRoot
+                .readableColumn()
+                .swipesBackFromEdge()
+                .navigationDestination(for: HubRoute.self) { route in
+                    launchScopedDestination(for: route) { path.append($0) }
+                        .readableColumn()
+                        .modifier(OwnHeaderBar(drawsOwnHeader: route.isAvailableAtLaunch && Self.drawsOwnHeader(route)))
+                }
+            #if DEBUG
+                .sheet(item: $debugSheet) { route in
+                    destination(for: route) { _ in }
+                }
+            #endif
+        }
+    }
+
+    /// The Mail tab: the Mailbox and the piece it opens side by side, a booklet laid open across both halves, or
+    /// one stack.
+    @ViewBuilder
+    private func mailTab(_ layout: MailSideBySideLayout?) -> some View {
+        if let layout, laidOpenBookletId == nil || laidOpenBookletId != path.openMailPieceId {
+            MailSplitView(path: $path, layout: layout) {
+                stackRoot
+            } placeholder: {
+                MailPiecePlaceholder(mailbox: mailTabMailboxModel)
+            } destination: { route in
+                launchScopedDestination(for: route) { path.append($0) }
+            } onLayOpen: { id in
+                laidOpenBookletId = id
+            }
+        } else if layout != nil {
+            laidOpenBooklet
+        } else {
+            oneColumn
+        }
+    }
+
+    /// The booklet beside the Mailbox laid open: across both halves, its spine on the hinge, as the reader lays a
+    /// booklet on the open Duo. Its Back puts the Mailbox back beside it, on the same page.
+    private var laidOpenBooklet: some View {
+        RouteColumn(path: $path, skipping: path.searchingMail ? 1 : 0) { first in
+            if let first {
+                launchScopedDestination(for: first) { path.append($0) }
+                    .readableColumn()
+                    .environment(\.mailPieceBack, MailPieceBack { laidOpenBookletId = nil })
+            }
+        } destination: { route in
+            launchScopedDestination(for: route) { path.append($0) }
+        }
+    }
+
+    /// A screen the Mail tab's Mailbox opens: on top of the stack, or beside the Mailbox on the open Duo (a search
+    /// in its place).
+    private func openFromMailbox(_ route: HubRoute) {
+        if route == .mailboxSearch {
+            path.openMailSearch(sideBySide: mailSideBySide)
+        } else {
+            path.openBesideMailbox(route, sideBySide: mailSideBySide)
+        }
     }
 
     /// The drawer's Identity Center is a sheet: close it, then open the
@@ -959,7 +1050,7 @@ public struct HubTabRoot: View {
     /// draws and kept, so no pass of this body builds another.
     private var mailTabMailboxModel: MailboxRootViewModel {
         if let model = mailboxModelBox.model { return model }
-        let model = makeMailboxRootModel { path.append($0) }
+        let model = makeMailboxRootModel { openFromMailbox($0) }
         mailboxModelBox.model = model
         return model
     }
@@ -2372,6 +2463,7 @@ public struct HubTabRoot: View {
             // variants that compose the same shell with their own slots.
             MailDetailView(
                 mailId: mailId,
+                viewModel: mailScreenModels.model(for: route) { MailDetailViewModel(mailId: mailId) },
                 onBack: {
                     if !path.isEmpty { path.removeLast() }
                 },
@@ -3267,16 +3359,29 @@ public struct HubTabRoot: View {
             ) { Task { @MainActor in pop() } }
         case .mailboxSearch:
             MailboxSearchView(
-                viewModel: MailboxSearchViewModel(
-                    onOpenMail: { mailId in
-                        Task { @MainActor in push(.mailItemDetail(mailId: mailId)) }
-                    },
-                    onCancel: {
-                        Task { @MainActor in
-                            if !path.isEmpty { path.removeLast() }
+                viewModel: mailScreenModels.model(for: route) {
+                    MailboxSearchViewModel(
+                        onOpenMail: { mailId in
+                            Task { @MainActor in
+                                // In the Mail tab, beside the search on the open Duo.
+                                if mode == .mailbox {
+                                    path.openBesideMailbox(.mailItemDetail(mailId: mailId), sideBySide: mailSideBySide)
+                                } else {
+                                    push(.mailItemDetail(mailId: mailId))
+                                }
+                            }
+                        },
+                        onCancel: {
+                            Task { @MainActor in
+                                if mode == .mailbox {
+                                    path.closeMailSearch(sideBySide: mailSideBySide)
+                                } else if !path.isEmpty {
+                                    path.removeLast()
+                                }
+                            }
                         }
-                    }
-                )
+                    )
+                }
             )
         case let .placeholder(label):
             NotYetAvailableView(tabName: label, icon: .info)
@@ -3410,12 +3515,14 @@ public struct HubTabRoot: View {
             CommunityMailView(viewModel: CommunityMailViewModel { pop() })
         case .homeRecords:
             HomeRecordsView(
-                viewModel: HomeRecordsViewModel(
-                    onBack: { pop() },
-                    onOpenMail: { mailId in
-                        Task { @MainActor in push(.mailItemDetail(mailId: mailId)) }
-                    }
-                )
+                viewModel: mailScreenModels.model(for: route) {
+                    HomeRecordsViewModel(
+                        onBack: { pop() },
+                        onOpenMail: { mailId in
+                            Task { @MainActor in push(.mailItemDetail(mailId: mailId)) }
+                        }
+                    )
+                }
             )
         case .ceremonialMail:
             CeremonialMailWizardView(
@@ -3424,13 +3531,13 @@ public struct HubTabRoot: View {
             )
         case let .ceremonialMailOpen(mailId):
             CeremonialMailOpenView(
-                viewModel: CeremonialMailOpenViewModel(mailId: mailId),
+                viewModel: mailScreenModels.model(for: route) { CeremonialMailOpenViewModel(mailId: mailId) },
                 onBack: { Task { @MainActor in pop() } },
                 onWriteBack: { _ in Task { @MainActor in push(.ceremonialMail) } }
             )
         case let .mailWelcome(mail):
             CeremonialMailOpenView(
-                viewModel: CeremonialMailOpenViewModel(sealed: mail),
+                viewModel: mailScreenModels.model(for: route) { CeremonialMailOpenViewModel(sealed: mail) },
                 onBack: { Task { @MainActor in pop() } },
                 onWriteBack: { _ in },
                 onLetterOpened: {
@@ -3448,7 +3555,7 @@ public struct HubTabRoot: View {
             MailRoutingQueueView { Task { @MainActor in pop() } }
         case .christmasCards:
             HolidayCardFlowView(
-                viewModel: HolidayCardFlowViewModel(fromName: MailPieceRecipient.personName),
+                viewModel: mailScreenModels.model(for: route) { HolidayCardFlowViewModel(fromName: MailPieceRecipient.personName) },
                 onSeeInSent: { cardId in
                     // Back to the Mailbox, which shows Sent and the card.
                     Task { @MainActor in
@@ -3459,7 +3566,7 @@ public struct HubTabRoot: View {
                 onClose: { Task { @MainActor in pop() } }
             )
         case let .mailSentCard(id):
-            MailSentPieceView(viewModel: MailSentPieceViewModel(id: id)) {
+            MailSentPieceView(viewModel: mailScreenModels.model(for: route) { MailSentPieceViewModel(id: id) }) {
                 Task { @MainActor in pop() }
             }
             // A notice that swaps one open Sent page for another gets a fresh page,
@@ -3479,13 +3586,13 @@ public struct HubTabRoot: View {
                 // Keep the `onBack:` label: as a trailing closure it binds to
                 // the last closure (`onPickToDate`) and Back does nothing.
                 // swiftlint:disable:next trailing_closure
-                viewModel: VacationHoldViewModel(onBack: { pop() })
+                viewModel: mailScreenModels.model(for: route) { VacationHoldViewModel(onBack: { pop() }) }
             )
         case let .mailDay(variant):
             // Keep the `onClose:` label: as a trailing closure it binds to
             // `onSeeHistory` and Back does nothing.
             // swiftlint:disable:next trailing_closure
-            MailDayView(viewModel: MailDayViewModel(variant: variant), onClose: { pop() })
+            MailDayView(viewModel: mailScreenModels.model(for: route) { MailDayViewModel(variant: variant) }, onClose: { pop() })
         case .wallet:
             // Withdraw + payout setup (Block 3C) are handled inside WalletView
             // via the WalletViewModel (Stripe Connect onboarding / dashboard /
@@ -3511,40 +3618,44 @@ public struct HubTabRoot: View {
         // Placeholder destinations. Each screen prompt (B2–B5) swaps the one
         // line below for its real view without editing the route declarations.
         case .stamps:
-            StampsView(viewModel: StampsViewModel { pop() })
+            StampsView(viewModel: mailScreenModels.model(for: route) { StampsViewModel { pop() } })
         case let .mailTask(taskId):
             // A17.12 — Mail-derived task detail. Source-mail + next-up
             // taps push the originating mail item onto this same stack.
             MailTaskView(
-                viewModel: MailTaskViewModel(
-                    taskId: taskId,
-                    onOpenMail: { mailId in
-                        Task { @MainActor in push(.mailItemDetail(mailId: mailId)) }
-                    },
-                    onBack: { if !path.isEmpty { path.removeLast() } }
-                )
+                viewModel: mailScreenModels.model(for: route) {
+                    MailTaskViewModel(
+                        taskId: taskId,
+                        onOpenMail: { mailId in
+                            Task { @MainActor in push(.mailItemDetail(mailId: mailId)) }
+                        },
+                        onBack: { if !path.isEmpty { path.removeLast() } }
+                    )
+                }
             )
         case let .mailTaskList(mailId, mailSubject, mailSender):
             // A17.12 (list) — every mail-linked task, plus the
             // create-from-mail form when the route carries a mail id.
             MailTaskListView(
-                viewModel: MailTaskListViewModel(
-                    mailId: mailId,
-                    mailSubject: mailSubject,
-                    mailSender: mailSender,
-                    onOpenTask: { taskId in
-                        Task { @MainActor in push(.mailTask(taskId: taskId)) }
-                    },
-                    onBack: { if !path.isEmpty { path.removeLast() } },
-                    onPostAsNeighborTask: { sourceMailId in
-                        // A17.8 — RN's "Post as Neighbor Task Instead"
-                        // (`mailbox/tasks.tsx:236`) always escalates in
-                        // post-delivery mode.
-                        Task { @MainActor in
-                            push(.packageGig(mailId: sourceMailId, isPreDelivery: false))
+                viewModel: mailScreenModels.model(for: route) {
+                    MailTaskListViewModel(
+                        mailId: mailId,
+                        mailSubject: mailSubject,
+                        mailSender: mailSender,
+                        onOpenTask: { taskId in
+                            Task { @MainActor in push(.mailTask(taskId: taskId)) }
+                        },
+                        onBack: { if !path.isEmpty { path.removeLast() } },
+                        onPostAsNeighborTask: { sourceMailId in
+                            // A17.8 — RN's "Post as Neighbor Task Instead"
+                            // (`mailbox/tasks.tsx:236`) always escalates in
+                            // post-delivery mode.
+                            Task { @MainActor in
+                                push(.packageGig(mailId: sourceMailId, isPreDelivery: false))
+                            }
                         }
-                    }
-                )
+                    )
+                }
             )
         case let .mailTranslation(mailId):
             MailTranslationView(
