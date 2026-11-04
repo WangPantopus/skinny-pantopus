@@ -96,6 +96,8 @@ public final class BusinessOwnerViewModel {
         guard case let .loaded(content) = state else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        let original = content.reviews.first { $0.id == reviewId }
+        let generation = readGeneration
 
         // Optimistic update.
         state = .loaded(content.applyingReply(trimmed, to: reviewId))
@@ -110,11 +112,16 @@ public final class BusinessOwnerViewModel {
                         response: trimmed
                     )
                 )
+                // A read that started meanwhile may have missed the reply.
+                if generation != readGeneration, case .loaded = state { await refresh() }
             } catch {
                 logger.warning("Review reply failed for \(reviewId): \(error)")
-                // Roll back to the pre-optimistic content.
-                if case .loaded = state {
-                    state = .loaded(content)
+                // Undo only this reply, keeping sections that finished loading meanwhile. A newer
+                // read already shows the server's reviews.
+                if generation == readGeneration, case let .loaded(latest) = state {
+                    state = .loaded(latest.withAdditionalContent(
+                        reviews: latest.reviews.map { $0.id == reviewId ? original ?? $0 : $0 }
+                    ))
                 }
                 let reason = (error as? APIError)?.errorDescription ?? "Please try again."
                 toast = "Your reply wasn't posted. \(reason)"
@@ -242,15 +249,21 @@ public final class BusinessOwnerViewModel {
             return
         }
         guard generation == readGeneration, !Task.isCancelled else { return }
-        state = .loaded(
-            makeContent(
-                publicProfile: publicProfile,
-                dashboard: dashboard,
-                insights: nil,
-                reviews: []
-            )
+        var content = makeContent(
+            publicProfile: publicProfile,
+            dashboard: dashboard,
+            insights: nil,
+            reviews: []
         )
-        await loadAdditionalContent(generation: generation)
+        let isOwner = content.access.isOwner == true
+        // A refresh keeps the sections already on screen until their new reads finish.
+        if case let .loaded(previous) = state {
+            content = content
+                .withAdditionalContent(insights: previous.insights, reviews: previous.reviews)
+                .withFoundingOffer(isOwner ? previous.foundingOffer : nil)
+        }
+        state = .loaded(content)
+        await loadAdditionalContent(generation: generation, includesFoundingOffer: isOwner)
     }
 
     private enum AdditionalContent {
@@ -259,7 +272,7 @@ public final class BusinessOwnerViewModel {
         case founding(OwnerFoundingOffer?)
     }
 
-    private func loadAdditionalContent(generation: Int) async {
+    private func loadAdditionalContent(generation: Int, includesFoundingOffer: Bool) async {
         await withTaskGroup(of: AdditionalContent.self) { group in
             group.addTask { [client, businessId] in
                 await .insights(try? client.request(BusinessesEndpoints.insights(businessId: businessId)))
@@ -270,7 +283,10 @@ public final class BusinessOwnerViewModel {
                 )
                 return .reviews(response?.reviews ?? [])
             }
-            group.addTask { await .founding(self.loadFoundingOffer()) }
+            // Only the owner sees and can claim the banner (the claim route refuses everyone else).
+            if includesFoundingOffer {
+                group.addTask { await .founding(self.loadFoundingOffer()) }
+            }
             for await result in group {
                 guard generation == readGeneration, !Task.isCancelled,
                       case let .loaded(current) = state else {
