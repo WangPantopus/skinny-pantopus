@@ -763,8 +763,10 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, ma
   //  1. router.prefetch() → warms the Next.js route bundle + RSC payload
   //  2. queryClient.prefetchQuery() → warms the React Query cache (where
   //     the destination page's query key is known ahead of time)
-  // Reuse each screen's freshness window, so revisiting a navigation item
-  // cannot re-fetch data that the destination still considers fresh.
+  // Place, Today and Messages warm their screen's own query definition, so
+  // revisiting a navigation item cannot re-fetch data that the destination
+  // still considers fresh. PREFETCH_STALE covers queries defined only here
+  // (rapid re-hovers within 5s are no-ops).
   const PREFETCH_STALE = 5_000;
 
   // Place — warm the route bundle + the primary-home query (the
