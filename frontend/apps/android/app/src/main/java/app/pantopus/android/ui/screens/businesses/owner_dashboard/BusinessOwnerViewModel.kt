@@ -131,6 +131,7 @@ class BusinessOwnerViewModel
             val current = _state.value as? BusinessOwnerUiState.Loaded ?: return
             val trimmed = text.trim()
             if (trimmed.isEmpty()) return
+            _toast.value = null
 
             // Optimistic update.
             _state.value = BusinessOwnerUiState.Loaded(current.content.applyingReply(trimmed, reviewId))
@@ -138,6 +139,7 @@ class BusinessOwnerViewModel
 
             viewModelScope.launch {
                 val result = businesses.respondToReview(businessId, reviewId, trimmed)
+                if (result is NetworkResult.Success && active && !isCurrent(request)) refresh()
                 if (result is NetworkResult.Failure && isCurrent(request)) {
                     updateContent(request) { latest ->
                         val original = current.content.reviews.firstOrNull { it.id == reviewId }
@@ -173,6 +175,7 @@ class BusinessOwnerViewModel
             val current = _state.value as? BusinessOwnerUiState.Loaded ?: return
             val offer = current.content.foundingOffer ?: return
             if (offer.isClaiming) return
+            _toast.value = null
             val request = generation
             _state.value =
                 BusinessOwnerUiState.Loaded(
@@ -182,7 +185,10 @@ class BusinessOwnerViewModel
                 when (val result = founding.claim(businessId)) {
                     is NetworkResult.Success -> {
                         prefs.edit().putBoolean(foundingDismissedKey, true).apply()
-                        if (!isCurrent(request)) return@launch
+                        if (!isCurrent(request)) {
+                            if (active) refresh()
+                            return@launch
+                        }
                         val number = result.data.slotNumber
                         _toast.value =
                             if (number != null) {
