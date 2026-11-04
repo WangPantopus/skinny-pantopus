@@ -398,6 +398,12 @@ async function deleteFromS3(key) {
     logger.info('S3 delete success', { key });
     return true;
   } catch (err) {
+    // A key that is already gone is deleted: AWS answers success, Supabase Storage answers NoSuchKey. Callers retry a
+    // cleanup that stopped partway, and the keys it removed before stopping must not fail the retry.
+    if (err.$metadata?.httpStatusCode === 404 && err.name === 'NoSuchKey') {
+      logger.info('S3 delete: already absent', { key });
+      return true;
+    }
     logger.error('S3 delete error', { key, error: err.message });
     return false;
   }
