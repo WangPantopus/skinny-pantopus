@@ -64,16 +64,18 @@ export default function BusinessSettingsProfilePage() {
     try {
       await api.businesses.updateBusiness(businessId, {
         name: form.name.trim(),
-        tagline: form.tagline.trim() || undefined,
-        description: form.description.trim() || undefined,
+        // PATCH omits undefined fields. Send an explicit empty value when the
+        // owner removes public information, so a successful save removes it.
+        tagline: form.tagline.trim(),
+        description: form.description.trim(),
         // Only a known entity key is sent; a legacy value the select can't show is left as is.
         business_type: (ENTITY_TYPES as string[]).includes(form.business_type) ? form.business_type : undefined,
         categories: form.categories.split(',').map((s) => s.trim()).filter(Boolean),
-        public_email: form.public_email.trim() || undefined,
-        public_phone: form.public_phone.trim() || undefined,
-        website: form.website.trim() || undefined,
-        founded_year: form.founded_year ? Number(form.founded_year) : undefined,
-        employee_count: form.employee_count.trim() || undefined,
+        public_email: form.public_email.trim(),
+        public_phone: form.public_phone.trim(),
+        website: form.website.trim(),
+        founded_year: form.founded_year.trim() ? Number(form.founded_year) : null,
+        employee_count: form.employee_count.trim(),
       });
       await load();
     } catch (e: unknown) {
