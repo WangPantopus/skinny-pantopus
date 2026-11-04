@@ -125,15 +125,6 @@ export default function PostDetailPanel({
     return () => document.removeEventListener('keydown', handler);
   }, [open, onClose, lightboxIndex, post?.media_urls]);
 
-  useEffect(() => {
-    if (lightboxIndex === null || typeof document === 'undefined') return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [lightboxIndex]);
-
   const handleAddComment = async ({ text, parentId, files = [], clientRequestId }: { text: string; parentId?: string; files?: File[]; clientRequestId: string }) => {
     if (!postId) return false;
     const target = targetVersion.current;
