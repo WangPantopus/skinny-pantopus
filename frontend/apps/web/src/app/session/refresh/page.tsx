@@ -82,8 +82,11 @@ async function signOutLocally(): Promise<void> {
     // set, the middleware sends the next visit (e.g. `/`) straight back to this
     // page, which refreshes and fails to sign out again, page after page.
     clearSessionFlag();
+    clearAuthToken();
   }
-  clearAuthToken();
+  // logout() already clears the API session on success. Emitting another
+  // token change remounts this page again after its sign-out owner unmounted,
+  // starting a second refresh/logout before navigation can finish.
 }
 
 /** Expire the JS-readable `pantopus_session` flag (set host-only on path `/`). */
