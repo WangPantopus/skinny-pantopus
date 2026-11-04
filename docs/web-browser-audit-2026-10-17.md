@@ -197,3 +197,373 @@ The final browser pass reproduced two further comment issues: a zero-byte image 
 Blocking the comment-media request saved the text and displayed the partial-upload warning while retaining all four images. Restoring the connection and pressing Send attached the four distinct images without creating another comment. The total stayed at three comments after reload, and the second household account saw the same text and four attachments. A separate threaded reply with an emoji and PNG also persisted; opening that attachment displayed the expected image.
 
 An unavailable comment avatar now falls back to the author's initial. The observed failure came from intentionally blocked loopback image optimization in the local production harness; the production optimizer's host restrictions remain unchanged. This confirms graceful failure, not hosted avatar-delivery availability. The production build and ESLint passed after these changes (zero lint errors, 1,032 existing warnings); no local unit tests were run. Browser network blocking was removed, and the synthetic services remain running for inspection.
+
+
+## Startup, navigation and route follow-through — November 4
+
+This pass focused on opening/refreshing the web app and navigating between pages, using Chrome with a real local backend, database and synthetic accounts. It produced five separate code PRs. This session did not merge or change production infrastructure. Other review sessions merged some earlier performance PRs during the audit; the measurements below identify their own baseline and do not claim production results.
+
+### Measured repairs
+
+| Repair | Before | After | PR |
+| --- | --- | --- | --- |
+| Dependencies before session recovery | 258,389 bytes of JavaScript transferred before the refresh request; median request start 2,221 ms | 211,294 bytes (18% less); median request start 1,964 ms | [#3261](https://github.com/WangPantopus/skinny-pantopus/pull/3261) |
+| Today navigation warm-up | Initial load plus two hovers six seconds apart made three briefing reads while the page still considered its data fresh | One briefing read; manual Refresh still makes another immediate read | [#3262](https://github.com/WangPantopus/skinny-pantopus/pull/3262) |
+| Explicit business chat identity | A business request could fall back to the caller's personal room/history, then fail on subsequent sync/read calls | Missing business authority/membership gives a consistent refusal; personal and authorized business conversations still work | [#3263](https://github.com/WangPantopus/skinny-pantopus/pull/3263) |
+| Business profile settings on narrow screens | A 390 px viewport had a 402 px document and a clipped Dashboard action | Header actions fit at 320, 390, 768 and 1,440 px, with document width equal to viewport width | [#3267](https://github.com/WangPantopus/skinny-pantopus/pull/3267) |
+| Invalid session recovery | Two refresh/logout pairs normally; seven pairs with sign-in navigation delayed by one second | One refresh and one logout, including when the logout request fails | [#3269](https://github.com/WangPantopus/skinny-pantopus/pull/3269) |
+
+The import comparison used production builds from `ec29d0419` and `29b09cfbb`, three alternating runs per build, Chrome at 100 ms latency / 1.5 Mbps download / 4× CPU throttling, and a cold HTTP cache. Each run had its own real login, the same browser origin for login and reload, and only its access cookie removed. Median inbox visibility was 5,432 ms before and 5,228 ms after. This demonstrates an incremental startup gain; it does **not** demonstrate that the reported production 5–10 second delay is resolved. No elapsed-time claim from the earlier cross-origin session benchmark is reused here.
+
+The Today change shares the screen's existing two-minute freshness policy with the sidebar. It does not add a longer cache window. The session-failure check delayed only the final sign-in document, and used the real backend's refusal of a synthetic invalid session. A separate injected temporary 503 preserved the session; removing the fault and pressing Try again recovered Messages without logging out. Blocking logout still cleared the browser's session flag and reached sign-in.
+
+### Coverage and verified flows
+
+- Inventoried all **321** page files at the audit baseline: **177** production routes outside the launch cut, **137** launch-cut routes, and **7** development routes.
+- Ran **319 browser entry probes** at desktop width. Session recovery was exercised separately; the OAuth callback requires its provider handoff. The probe set included redirects, missing-resource cases, refusals, empty states and ordinary content. There were no JavaScript page errors or document-level horizontal overflow in that pass. A successful probe is not a completed flow.
+- Repeated **94** core app route probes at 390 px. Then used a real synthetic business owner for **18** additional business routes at 390 px. That second pass found the profile settings overflow repaired in #3267. Large map tiles/SVGs clipped inside their map viewport did not produce document overflow.
+- Confirmed HTTP redirects for all **137** launch-cut route patterns with a signed-in browser context: 136 reached Place and the Mailbox entry reached Messages. Representative Mailbox, Marketplace, Scheduling, Audience and Professional entries were also opened in the browser. Flags stayed off. Development routes returned production 404s. `/app/plans` has no page in this inventory and correctly showed the not-found screen.
+- Verified chat send, recipient view, reload persistence, opening the floating inbox/conversation, sign-out and switching accounts after the dependency change. For the business repair, a customer opened an inquiry from a published synthetic business profile, the owner replied as the business, and both views survived reload. The customer could still open their own conversation but could not assume the business identity. A named business could no longer open the owner's unrelated personal room.
+- Completed the business onboarding wizard, optional location/hours/media skips, publish, and dashboard reload. Created a catalog item, edited it, and checked its saved name after reload. Saved a business tagline and reloaded; unpublish/publish and Dashboard navigation worked after the layout repair.
+- Created a household task, reloaded, completed it, reloaded the Done list, and reopened it. These actions used existing authorized Home data and the real backend.
+
+The initial generic sweep had **49 dynamic route patterns without a matching positive fixture**. The subsequent owner pass supplied valid fixtures for 18 of those business routes. The matrix below preserves which remaining entries were only missing-resource/refusal probes. A route with a valid fixture can still have untested roles, buttons and edge cases. Older October results above remain historical context, not fresh verification of every flow.
+
+The external link-preview failure seen on a synthetic feed link returned a handled fallback with the link still usable. It was not counted as a successful provider fetch. The suspected idle map-prefetch/sign-out race did not reproduce through the real app's sign-out navigation, so no speculative code change was made for it.
+
+### Checks and remaining work
+
+The startup and Today changes each passed a production build, the zero-error typecheck gate and all 123 existing web suites / 2,383 tests. The business membership change passed 342 existing backend suites / 6,632 tests (the existing one suite / 16 tests remained skipped) and all privacy gates. The invalid-session repair passed its production build, typecheck gate and two relevant existing suites / 23 tests. The CSS-only repair used the local development app for browser verification and passed targeted ESLint and typecheck. No unit-test files were added; existing assertions were adjusted for changed behavior.
+
+Remaining release verification includes authorized admin workflows; the other household/landlord/guest/invitation/ownership roles and valid tokenized links; business location and page-editor fixtures; support-train participation and lifecycle combinations; native apps; Safari/Firefox; assistive technology; long histories and large-media stress; and provider-backed address, identity, OAuth, payment and delivery behavior. This pass does not certify those flows. Production cold/warm traces, API/DB timing distributions, saturation and regional latency are still needed to decide which infrastructure change addresses the reported delay.
+
+The comprehensive infrastructure proposal is in [#3253](https://github.com/WangPantopus/skinny-pantopus/pull/3253). Infrastructure diagnosis can proceed alongside the remaining code checks. The route inventory and the newly reproduced defects do not support calling the web/backend work finished or assuming an infrastructure migration alone will solve startup latency.
+
+<details>
+<summary>Route-by-route entry coverage (not full-flow certification)</summary>
+
+| Route pattern | Entry check | Narrow viewport |
+| --- | --- | --- |
+| `/` | Entry/redirect/state probe | — |
+| `/[username]` | Entry/redirect/state probe | — |
+| `/about` | Entry/redirect/state probe | — |
+| `/app` | Entry/redirect/state probe | 390 px |
+| `/app/address-verify` | Entry/redirect/state probe | 390 px |
+| `/app/admin/reports` | Entry/redirect/state probe | 390 px |
+| `/app/admin/review-claims` | Entry/redirect/state probe | 390 px |
+| `/app/admin/verification` | Entry/redirect/state probe | 390 px |
+| `/app/audience` | Launch-cut redirect | — |
+| `/app/audience/inbox` | Launch-cut redirect | — |
+| `/app/audience/inbox/[membershipId]` | Launch-cut redirect | — |
+| `/app/audience/manage/blocks` | Launch-cut redirect | — |
+| `/app/audience/manage/tiers` | Launch-cut redirect | — |
+| `/app/audience/membership/[personaId]` | Launch-cut redirect | — |
+| `/app/audience/membership/[personaId]/inbox` | Launch-cut redirect | — |
+| `/app/audience/setup` | Launch-cut redirect | — |
+| `/app/beacons` | Launch-cut redirect | — |
+| `/app/business/[id]/activity` | Valid business-owner entry | 390 px |
+| `/app/business/[id]/catalog` | Valid business-owner entry | 390 px |
+| `/app/business/[id]/catalog/[itemId]/edit` | Valid business-owner entry | 390 px |
+| `/app/business/[id]/catalog/new` | Valid business-owner entry | 390 px |
+| `/app/business/[id]/dashboard` | Valid business-owner entry | 390 px |
+| `/app/business/[id]/inbox` | Valid business-owner entry | 390 px |
+| `/app/business/[id]/inbox/[roomId]` | Valid business-owner entry | 390 px |
+| `/app/business/[id]/insights` | Valid business-owner entry | 390 px |
+| `/app/business/[id]/locations` | Valid business-owner entry | 390 px |
+| `/app/business/[id]/locations/[locId]/hours` | Missing-resource/refusal probe only | — |
+| `/app/business/[id]/pages` | Valid business-owner entry | 390 px |
+| `/app/business/[id]/reviews` | Valid business-owner entry | 390 px |
+| `/app/business/[id]/settings/legal` | Valid business-owner entry | 390 px |
+| `/app/business/[id]/settings/profile` | Valid business-owner entry | 320–1,440 px; repaired #3267 |
+| `/app/business/[id]/team` | Valid business-owner entry | 390 px |
+| `/app/business/[id]/team/invite` | Valid business-owner entry | 390 px |
+| `/app/business/new` | Entry/redirect/state probe | 390 px |
+| `/app/businesses` | Entry/redirect/state probe | 390 px |
+| `/app/businesses/[id]/chat` | Valid business-owner entry | 390 px |
+| `/app/businesses/[id]/chat/[roomId]` | Valid business-owner entry | 390 px |
+| `/app/businesses/[id]/dashboard` | Valid business-owner entry | 390 px |
+| `/app/businesses/[id]/pages/[pageId]/edit` | Missing-resource/refusal probe only | — |
+| `/app/businesses/new` | Entry/redirect/state probe | 390 px |
+| `/app/chat` | Entry/redirect/state probe | 390 px |
+| `/app/chat/[roomId]` | Entry/redirect/state probe | 390 px |
+| `/app/chat/ai-assistant` | Entry/redirect/state probe | 390 px |
+| `/app/chat/conversation/[otherUserId]` | Entry/redirect/state probe | 390 px |
+| `/app/chat/new` | Entry/redirect/state probe | 390 px |
+| `/app/connections` | Entry/redirect/state probe | 390 px |
+| `/app/control-center` | Entry/redirect/state probe | 390 px |
+| `/app/discover` | Entry/redirect/state probe | 390 px |
+| `/app/discover-hub` | Launch-cut redirect | — |
+| `/app/feed` | Entry/redirect/state probe | 390 px |
+| `/app/feed/post/[id]` | Entry/redirect/state probe | 390 px |
+| `/app/gigs` | Launch-cut redirect | — |
+| `/app/gigs-v2` | Launch-cut redirect | — |
+| `/app/gigs-v2/[id]` | Missing-resource/refusal probe only | — |
+| `/app/gigs-v2/new` | Launch-cut redirect | — |
+| `/app/gigs/[id]` | Missing-resource/refusal probe only | — |
+| `/app/gigs/[id]/edit` | Launch-cut redirect | — |
+| `/app/gigs/[id]/review` | Missing-resource/refusal probe only | — |
+| `/app/gigs/new` | Launch-cut redirect | — |
+| `/app/gigs/saved` | Launch-cut redirect | — |
+| `/app/homes` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/access` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/bills` | Launch-cut redirect | — |
+| `/app/homes/[id]/calendar` | Launch-cut redirect | — |
+| `/app/homes/[id]/claim-owner/evidence` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/claim-owner/submitted` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/dashboard` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/dispute` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/docs` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/edit` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/emergency` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/invitations` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/maintenance` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/members` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/members/add-guest` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/message` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/messages` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/owners` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/owners/invite` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/owners/review-claim` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/owners/review-claim/history` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/owners/review-claim/relationship` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/owners/review-claim/residency` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/owners/transfer` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/packages` | Launch-cut redirect | — |
+| `/app/homes/[id]/pets` | Launch-cut redirect | — |
+| `/app/homes/[id]/polls` | Launch-cut redirect | — |
+| `/app/homes/[id]/privacy` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/property-details` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/residency` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/scheduling` | Launch-cut redirect | — |
+| `/app/homes/[id]/scheduling/availability` | Launch-cut redirect | — |
+| `/app/homes/[id]/scheduling/events/[eventId]` | Launch-cut redirect | — |
+| `/app/homes/[id]/scheduling/events/new` | Launch-cut redirect | — |
+| `/app/homes/[id]/scheduling/find-a-time` | Launch-cut redirect | — |
+| `/app/homes/[id]/scheduling/resources` | Launch-cut redirect | — |
+| `/app/homes/[id]/scheduling/resources/[rid]` | Launch-cut redirect | — |
+| `/app/homes/[id]/scheduling/resources/[rid]/book` | Launch-cut redirect | — |
+| `/app/homes/[id]/scheduling/resources/[rid]/edit` | Launch-cut redirect | — |
+| `/app/homes/[id]/scheduling/resources/new` | Launch-cut redirect | — |
+| `/app/homes/[id]/scheduling/visits/[visitId]` | Launch-cut redirect | — |
+| `/app/homes/[id]/scheduling/visits/new` | Launch-cut redirect | — |
+| `/app/homes/[id]/scheduling/whos-free` | Launch-cut redirect | — |
+| `/app/homes/[id]/settings` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/settings/security` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/share` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/tasks` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/tasks/[taskId]` | Missing-resource/refusal probe only | 390 px |
+| `/app/homes/[id]/verify-landlord` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/verify-landlord/details` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/verify-landlord/submitted` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/verify-postcard` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/verify-residency` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/verify-residency/submitted` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/waiting-room` | Entry/redirect/state probe | 390 px |
+| `/app/homes/find` | Entry/redirect/state probe | 390 px |
+| `/app/homes/invite` | Entry/redirect/state probe | 390 px |
+| `/app/homes/member-removals` | Entry/redirect/state probe | 390 px |
+| `/app/homes/new` | Entry/redirect/state probe | 390 px |
+| `/app/hub` | Entry/redirect/state probe | 390 px |
+| `/app/hub/today` | Entry/redirect/state probe | 390 px |
+| `/app/identity` | Launch-cut redirect | — |
+| `/app/identity/preview` | Launch-cut redirect | — |
+| `/app/invoice/[id]` | Missing-resource/refusal probe only | — |
+| `/app/invoices` | Entry/redirect/state probe | 390 px |
+| `/app/landlord/properties` | Entry/redirect/state probe | 390 px |
+| `/app/landlord/properties/[homeId]` | Entry/redirect/state probe | — |
+| `/app/listing-offers` | Launch-cut redirect | — |
+| `/app/mailbox` | Launch-cut redirect | — |
+| `/app/mailbox/_legacy_detail` | Launch-cut redirect | — |
+| `/app/mailbox/[drawer]` | Launch-cut redirect | — |
+| `/app/mailbox/[drawer]/[item_id]` | Launch-cut redirect | — |
+| `/app/mailbox/booklet` | Launch-cut redirect | — |
+| `/app/mailbox/cards` | Launch-cut redirect | — |
+| `/app/mailbox/certified` | Launch-cut redirect | — |
+| `/app/mailbox/community` | Launch-cut redirect | — |
+| `/app/mailbox/counter` | Launch-cut redirect | — |
+| `/app/mailbox/coupon` | Launch-cut redirect | — |
+| `/app/mailbox/deleted` | Launch-cut redirect | — |
+| `/app/mailbox/disambiguate` | Launch-cut redirect | — |
+| `/app/mailbox/earn/wallet` | Launch-cut redirect | — |
+| `/app/mailbox/gig` | Launch-cut redirect | — |
+| `/app/mailbox/map` | Launch-cut redirect | — |
+| `/app/mailbox/memory` | Launch-cut redirect | — |
+| `/app/mailbox/package` | Launch-cut redirect | — |
+| `/app/mailbox/party` | Launch-cut redirect | — |
+| `/app/mailbox/records` | Launch-cut redirect | — |
+| `/app/mailbox/records/[asset_id]` | Launch-cut redirect | — |
+| `/app/mailbox/search` | Launch-cut redirect | — |
+| `/app/mailbox/settings/mail-day` | Launch-cut redirect | — |
+| `/app/mailbox/settings/themes` | Launch-cut redirect | — |
+| `/app/mailbox/stamps` | Launch-cut redirect | — |
+| `/app/mailbox/tasks` | Launch-cut redirect | — |
+| `/app/mailbox/translation` | Launch-cut redirect | — |
+| `/app/mailbox/travel` | Launch-cut redirect | — |
+| `/app/mailbox/unboxing` | Launch-cut redirect | — |
+| `/app/mailbox/vacation` | Launch-cut redirect | — |
+| `/app/mailbox/vault` | Launch-cut redirect | — |
+| `/app/mailbox/vault/[folder_id]` | Launch-cut redirect | — |
+| `/app/mailbox/vault/archived` | Launch-cut redirect | — |
+| `/app/map` | Entry/redirect/state probe | 390 px |
+| `/app/marketplace` | Launch-cut redirect | — |
+| `/app/marketplace/[id]` | Launch-cut redirect | — |
+| `/app/marketplace/[id]/edit` | Launch-cut redirect | — |
+| `/app/marketplace/[id]/messages` | Launch-cut redirect | — |
+| `/app/my-bids` | Launch-cut redirect | — |
+| `/app/my-gigs` | Entry/redirect/state probe | 390 px |
+| `/app/my-gigs-v2` | Entry/redirect/state probe | 390 px |
+| `/app/my-listings` | Launch-cut redirect | — |
+| `/app/my-pulse` | Entry/redirect/state probe | 390 px |
+| `/app/nearby` | Entry/redirect/state probe | 390 px |
+| `/app/neighborhood` | Entry/redirect/state probe | 390 px |
+| `/app/network` | Entry/redirect/state probe | 390 px |
+| `/app/notifications` | Entry/redirect/state probe | 390 px |
+| `/app/offers` | Launch-cut redirect | — |
+| `/app/persona` | Launch-cut redirect | — |
+| `/app/persona/[handle]/follow` | Launch-cut redirect | — |
+| `/app/persona/broadcast` | Launch-cut redirect | — |
+| `/app/place` | Entry/redirect/state probe | 390 px |
+| `/app/place/[section]` | Entry/redirect/state probe | — |
+| `/app/place/neighbor-message` | Entry/redirect/state probe | 390 px |
+| `/app/place/neighbor-message/[id]` | Missing-resource/refusal probe only | — |
+| `/app/place/pulse` | Entry/redirect/state probe | 390 px |
+| `/app/place/scout` | Entry/redirect/state probe | 390 px |
+| `/app/professional` | Launch-cut redirect | — |
+| `/app/profile` | Entry/redirect/state probe | 390 px |
+| `/app/profile/edit` | Entry/redirect/state probe | 390 px |
+| `/app/profile/settings` | Entry/redirect/state probe | 390 px |
+| `/app/profile/settings/blocked` | Entry/redirect/state probe | 390 px |
+| `/app/profile/settings/password` | Entry/redirect/state probe | 390 px |
+| `/app/profile/settings/privacy` | Entry/redirect/state probe | 390 px |
+| `/app/saved-listings` | Launch-cut redirect | — |
+| `/app/scheduling` | Launch-cut redirect | — |
+| `/app/scheduling/availability` | Launch-cut redirect | — |
+| `/app/scheduling/availability/[id]` | Launch-cut redirect | — |
+| `/app/scheduling/availability/blocks` | Launch-cut redirect | — |
+| `/app/scheduling/booking-page` | Launch-cut redirect | — |
+| `/app/scheduling/booking-page/embed` | Launch-cut redirect | — |
+| `/app/scheduling/booking-page/one-off` | Launch-cut redirect | — |
+| `/app/scheduling/booking-page/preview` | Launch-cut redirect | — |
+| `/app/scheduling/bookings` | Launch-cut redirect | — |
+| `/app/scheduling/bookings/[id]` | Launch-cut redirect | — |
+| `/app/scheduling/bookings/[id]/roster` | Launch-cut redirect | — |
+| `/app/scheduling/bookings/manual` | Launch-cut redirect | — |
+| `/app/scheduling/bookings/search` | Launch-cut redirect | — |
+| `/app/scheduling/business` | Launch-cut redirect | — |
+| `/app/scheduling/business/members/[memberId]/hours` | Launch-cut redirect | — |
+| `/app/scheduling/business/team-availability` | Launch-cut redirect | — |
+| `/app/scheduling/connected-calendars` | Launch-cut redirect | — |
+| `/app/scheduling/event-types` | Launch-cut redirect | — |
+| `/app/scheduling/event-types/[id]` | Launch-cut redirect | — |
+| `/app/scheduling/event-types/[id]/questions` | Launch-cut redirect | — |
+| `/app/scheduling/insights` | Launch-cut redirect | — |
+| `/app/scheduling/insights/event-types` | Launch-cut redirect | — |
+| `/app/scheduling/insights/no-shows` | Launch-cut redirect | — |
+| `/app/scheduling/insights/team` | Launch-cut redirect | — |
+| `/app/scheduling/invoices` | Entry/redirect/state probe | 390 px |
+| `/app/scheduling/invoices/[id]` | Missing-resource/refusal probe only | — |
+| `/app/scheduling/my-bookings` | Launch-cut redirect | — |
+| `/app/scheduling/my-bookings/recurring` | Launch-cut redirect | — |
+| `/app/scheduling/my-packages` | Entry/redirect/state probe | 390 px |
+| `/app/scheduling/packages` | Entry/redirect/state probe | 390 px |
+| `/app/scheduling/packages/[id]/edit` | Missing-resource/refusal probe only | — |
+| `/app/scheduling/payments` | Entry/redirect/state probe | 390 px |
+| `/app/scheduling/payments/policy` | Launch-cut redirect | — |
+| `/app/scheduling/reminders` | Launch-cut redirect | — |
+| `/app/scheduling/settings` | Launch-cut redirect | — |
+| `/app/scheduling/settings/channels` | Launch-cut redirect | — |
+| `/app/scheduling/settings/notifications` | Launch-cut redirect | — |
+| `/app/scheduling/setup` | Launch-cut redirect | — |
+| `/app/scheduling/setup/onboarding` | Launch-cut redirect | — |
+| `/app/scheduling/templates` | Launch-cut redirect | — |
+| `/app/scheduling/templates/[id]` | Launch-cut redirect | — |
+| `/app/scheduling/waitlist` | Launch-cut redirect | — |
+| `/app/scheduling/workflows` | Launch-cut redirect | — |
+| `/app/scheduling/workflows/[id]` | Launch-cut redirect | — |
+| `/app/settings/notifications` | Entry/redirect/state probe | 390 px |
+| `/app/settings/payments` | Entry/redirect/state probe | 390 px |
+| `/app/settings/security` | Entry/redirect/state probe | 390 px |
+| `/app/support-trains` | Entry/redirect/state probe | 390 px |
+| `/app/support-trains/[id]` | Missing-resource/refusal probe only | — |
+| `/app/support-trains/[id]/calendar` | Missing-resource/refusal probe only | — |
+| `/app/support-trains/[id]/manage` | Missing-resource/refusal probe only | — |
+| `/app/support-trains/new` | Entry/redirect/state probe | 390 px |
+| `/app/today` | Entry/redirect/state probe | 390 px |
+| `/app/wallet` | Entry/redirect/state probe | 390 px |
+| `/auth/callback` | Provider handoff not exercised | — |
+| `/b/[username]` | Entry/redirect/state probe | — |
+| `/b/[username]/[slug]` | Missing-resource/refusal probe only | — |
+| `/book/[slug]` | Launch-cut redirect | — |
+| `/book/[slug]/[eventType]` | Launch-cut redirect | — |
+| `/book/[slug]/[eventType]/confirm` | Launch-cut redirect | — |
+| `/book/[slug]/embed` | Launch-cut redirect | — |
+| `/book/[slug]/packages/[packageId]` | Missing-resource/refusal probe only | — |
+| `/book/o/[token]` | Launch-cut redirect | — |
+| `/booking/[token]` | Launch-cut redirect | — |
+| `/booking/[token]/cancel` | Launch-cut redirect | — |
+| `/booking/[token]/confirmed` | Launch-cut redirect | — |
+| `/booking/[token]/reschedule` | Launch-cut redirect | — |
+| `/booking/[token]/states` | Launch-cut redirect | — |
+| `/chat-offline` | Entry/redirect/state probe | — |
+| `/child-safety` | Entry/redirect/state probe | — |
+| `/contact` | Entry/redirect/state probe | — |
+| `/dashboard` | Entry/redirect/state probe | — |
+| `/delete-account` | Entry/redirect/state probe | — |
+| `/dev/ballot` | Production 404 | — |
+| `/dev/place` | Production 404 | — |
+| `/dev/place-dashboard` | Production 404 | — |
+| `/dev/place-detail` | Production 404 | — |
+| `/dev/place-neighbor-message` | Production 404 | — |
+| `/dev/place-pulse` | Production 404 | — |
+| `/dev/start-preview` | Production 404 | — |
+| `/forgot-password` | Entry/redirect/state probe | — |
+| `/fridge-card/[code]` | Missing-resource/refusal probe only | — |
+| `/gig/[id]` | Missing-resource/refusal probe only | — |
+| `/gigs` | Launch-cut redirect | — |
+| `/gigs/[id]` | Missing-resource/refusal probe only | — |
+| `/gigs/[id]/edit` | Missing-resource/refusal probe only | — |
+| `/gigs/[id]/review` | Missing-resource/refusal probe only | — |
+| `/gigs/new` | Launch-cut redirect | — |
+| `/guest/[token]` | Missing-resource/refusal probe only | — |
+| `/homes` | Entry/redirect/state probe | — |
+| `/homes/[id]/edit` | Missing-resource/refusal probe only | — |
+| `/homes/new` | Entry/redirect/state probe | — |
+| `/identity-check/done` | Entry/redirect/state probe | — |
+| `/invite/[token]` | Missing-resource/refusal probe only | — |
+| `/invite/seat` | Entry/redirect/state probe | — |
+| `/join/[code]` | Missing-resource/refusal probe only | — |
+| `/listing/[id]` | Launch-cut redirect | — |
+| `/listings/[id]` | Launch-cut redirect | — |
+| `/login` | Entry/redirect/state probe | — |
+| `/marketplace/[id]` | Launch-cut redirect | — |
+| `/no-mail/[code]` | Missing-resource/refusal probe only | — |
+| `/open/[mailId]` | Launch-cut redirect | — |
+| `/persona/[personaHandle]` | Launch-cut redirect | — |
+| `/plans/[id]` | Missing-resource/refusal probe only | — |
+| `/plans/unsubscribe` | Entry/redirect/state probe | — |
+| `/poll/[id]` | Launch-cut redirect | — |
+| `/post/[id]` | Entry/redirect/state probe | — |
+| `/posts/[id]` | Entry/redirect/state probe | — |
+| `/privacy` | Entry/redirect/state probe | — |
+| `/profile` | Entry/redirect/state probe | — |
+| `/profile/edit` | Entry/redirect/state probe | — |
+| `/profile/settings` | Entry/redirect/state probe | — |
+| `/register` | Entry/redirect/state probe | — |
+| `/reset-password` | Entry/redirect/state probe | — |
+| `/session/refresh` | Success, transient, invalid and failed-logout journeys | — |
+| `/shared/[token]` | Missing-resource/refusal probe only | — |
+| `/start` | Entry/redirect/state probe | — |
+| `/status/[token]` | Missing-resource/refusal probe only | — |
+| `/support-trains/[id]` | Missing-resource/refusal probe only | — |
+| `/terms` | Entry/redirect/state probe | — |
+| `/u/[username]` | Entry/redirect/state probe | — |
+| `/unlisted` | Entry/redirect/state probe | — |
+| `/verify-claim` | Entry/redirect/state probe | — |
+| `/verify-claim/[code]` | Missing-resource/refusal probe only | — |
+| `/verify-email` | Entry/redirect/state probe | — |
+| `/verify-email-sent` | Entry/redirect/state probe | — |
+| `/verify-residency` | Entry/redirect/state probe | — |
+| `/verify-residency/[code]` | Missing-resource/refusal probe only | — |
+
+</details>
