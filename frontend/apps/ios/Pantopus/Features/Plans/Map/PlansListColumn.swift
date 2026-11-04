@@ -45,7 +45,8 @@ struct PlansListColumn: View {
             }
         }
         .task { await viewModel.start() }
-        .refreshesOnStoreChange(affects: { PlansStoreReads.affects($0) }, perform: { await viewModel.start() })
+        // Plans read again on a change from the map beside this list (`PlansMapBeside`), which stays on screen while
+        // a plan covers the list.
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plansListColumn")
