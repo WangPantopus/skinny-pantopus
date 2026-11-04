@@ -17,7 +17,8 @@
 //   • a race shows only when the address's district number matches it
 //     exactly, in the same state; statewide measures are on every ballot;
 //   • "no votes counted yet" only from a read that saw none, and a count
-//     that could not be re-checked for STALE_AFTER_MS is not shown at all.
+//     that could not be re-checked for STALE_AFTER_MS is not shown at all;
+//   • the count never steps back to one the state posted earlier.
 // ============================================================
 
 const logger = require('../../utils/logger');
@@ -186,6 +187,14 @@ function racesFrom(data, classify = classifyByGroup) {
   return races;
 }
 
+// True when the site posted `iso` before `than`; false when either time is
+// missing or unreadable.
+function postedBefore(iso, than) {
+  const at = Date.parse(iso);
+  const thanAt = Date.parse(than);
+  return Number.isFinite(at) && Number.isFinite(thanAt) && at < thanAt;
+}
+
 async function refresh(reader) {
   if (reader.inflight) return reader.inflight;
   reader.inflight = (async () => {
@@ -195,8 +204,14 @@ async function refresh(reader) {
     const summary = await getJson(base, SUMMARY_TIMEOUT_MS);
     const version = summary && typeof summary.publishVersionId === 'string' ? summary.publishVersionId : null;
     if (!version) throw new Error('unexpected results summary');
-    if (reader.snapshot && reader.snapshot.version === version) {
-      reader.snapshot.checkedAt = Date.now();
+    // While new counts come in, the site's cache hands out older copies
+    // beside the newest for minutes at a time, even one from before any votes
+    // (election night 2026: Washington's 8:03 p.m. copy came back after its
+    // first votes). A copy posted before the count kept is skipped, so the
+    // card never steps back; a correction comes as a new posting.
+    const kept = reader.snapshot;
+    if (kept && (kept.version === version || postedBefore(summary.publishDate, kept.postedAt))) {
+      kept.checkedAt = Date.now();
       return;
     }
     const data = await getJson(`${base}/data`, DATA_TIMEOUT_MS);
@@ -206,6 +221,10 @@ async function refresh(reader) {
     // the data's own version reads it again on the next tick until they agree.
     const dataVersion = typeof data.election.publishVersionId === 'string' ? data.election.publishVersionId : version;
     const postedAt = data.election.publishDate || summary.publishDate || null;
+    if (kept && postedBefore(postedAt, kept.postedAt)) {
+      kept.checkedAt = Date.now();
+      return;
+    }
     reader.snapshot = { version: dataVersion, postedAt, races, checkedAt: Date.now() };
   })()
     .catch((err) => {
