@@ -2,17 +2,8 @@
 //  ReviewClaimDetailComponents.swift
 //  Pantopus
 //
-//  P7.2 (A13.3) — reshaped review-claim primitives. Larger controls live
-//  in sibling files to keep each file under SwiftLint's `file_length`.
-//
-//    • TrustChip / ClaimSummaryTile / ClaimantCard — the claimant header
-//      with a 52pt gradient avatar, a "Pending Nd" chip, the claim
-//      summary tile, and a row of tone-based trust chips.
-//    • EvidenceStrip — a horizontal strip of bespoke, fully-drawn
-//      document previews (deed / photo / utility / signed statement).
-//    • StatementBlock / VerdictBar / ChallengeComposerSheet live in
-//      ReviewClaimDetailVerdictComponents.swift and
-//      ReviewClaimDetailSheetComponents.swift.
+//  Claimant, trust and summary primitives, plus legacy evidence previews.
+//  Verdict controls and sheets live in the neighboring component files.
 //
 
 import SwiftUI
@@ -74,8 +65,9 @@ struct TrustChip: View {
         HStack(spacing: Spacing.s1) {
             Icon(model.icon, size: 11, color: foreground)
             Text(model.label)
-                .font(.system(size: 11, weight: .semibold))
+                .scaledFont(11, weight: .semibold)
                 .foregroundStyle(foreground)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, Spacing.s2)
         .padding(.vertical, 3)
@@ -112,6 +104,7 @@ struct TrustChip: View {
 // MARK: - Claim summary tile
 
 struct ClaimSummaryTile: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let value: String
     let descriptor: String
 
@@ -125,14 +118,15 @@ struct ClaimSummaryTile: View {
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text("Claiming")
-                    .font(.system(size: 12, weight: .medium))
+                    .scaledFont(12, weight: .medium)
                     .foregroundStyle(Theme.Color.appTextSecondary)
-                HStack(alignment: .firstTextBaseline, spacing: Spacing.s1) {
+                summaryLayout {
                     Text(value)
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .scaledFont(14, weight: .semibold)
+                        .fontDesign(.monospaced)
                         .foregroundStyle(Theme.Color.primaryInkStrong)
                     Text(descriptor)
-                        .font(.system(size: 13.5, weight: .medium))
+                        .scaledFont(13.5, weight: .medium)
                         .foregroundStyle(Theme.Color.appTextStrong)
                 }
             }
@@ -147,6 +141,12 @@ struct ClaimSummaryTile: View {
                 .stroke(Theme.Color.appBorder, lineWidth: 1)
         )
     }
+
+    private var summaryLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.s1))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: Spacing.s1))
+    }
 }
 
 // MARK: - Pending chip
@@ -158,7 +158,7 @@ private struct PendingChip: View {
         HStack(spacing: 3) {
             Icon(.clock, size: 9, color: Theme.Color.warmAmber)
             Text(label.uppercased())
-                .font(.system(size: 9.5, weight: .bold))
+                .scaledFont(9.5, weight: .bold)
                 .foregroundStyle(Theme.Color.warmAmber)
         }
         .padding(.horizontal, 6)
@@ -175,18 +175,20 @@ private struct PendingChip: View {
 // MARK: - Claimant card
 
 struct ClaimantCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let model: ClaimantCardModel
 
     var body: some View {
+        let header = dynamicTypeSize.claimHeaderLayout(alignment: .top)
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            HStack(alignment: .top, spacing: Spacing.s3) {
+            header {
                 avatar
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
+                    nameLayout {
                         Text(model.name)
-                            .font(.system(size: 15, weight: .semibold))
+                            .scaledFont(15, weight: .semibold)
                             .foregroundStyle(Theme.Color.appText)
-                            .lineLimit(1)
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                         if let pending = model.pendingLabel {
                             PendingChip(label: pending)
                         }
@@ -195,13 +197,13 @@ struct ClaimantCard: View {
                         HStack(spacing: Spacing.s1) {
                             Icon(.atSign, size: 11, color: Theme.Color.appTextSecondary)
                             Text(email)
-                                .pantopusTextStyle(.caption)
+                                .scaledFont(12)
                                 .foregroundStyle(Theme.Color.appTextSecondary)
-                                .lineLimit(1)
+                                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                         }
                     }
                 }
-                Spacer(minLength: Spacing.s0)
+                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: Spacing.s0) }
             }
 
             ClaimSummaryTile(value: model.shareValue, descriptor: model.shareDescriptor)
@@ -223,6 +225,12 @@ struct ClaimantCard: View {
                 .stroke(Theme.Color.appBorderSubtle, lineWidth: 1)
         )
         .shadow(color: Theme.Color.appText.opacity(0.04), radius: 3, y: 1)
+    }
+
+    private var nameLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
+            : AnyLayout(HStackLayout(spacing: 6))
     }
 
     private var avatar: some View {

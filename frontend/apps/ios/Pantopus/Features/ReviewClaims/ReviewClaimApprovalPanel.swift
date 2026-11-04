@@ -117,10 +117,10 @@ struct ReviewClaimApprovalPanel: View {
                 Toggle(isOn: $identityAttested) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("I confirmed this person\u{2019}s identity")
-                            .font(.system(size: 13.5, weight: .semibold))
+                            .scaledFont(13.5, weight: .semibold)
                             .foregroundStyle(Theme.Color.appText)
                         Text("Turn this on once you\u{2019}ve checked who they are yourself.")
-                            .font(.system(size: 12))
+                            .scaledFont(12)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     }
                 }
@@ -153,10 +153,10 @@ struct ReviewClaimApprovalPanel: View {
             Icon(icon, size: 20, color: Theme.Color.appTextMuted)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .scaledFont(14, weight: .semibold)
                     .foregroundStyle(Theme.Color.appText)
                 Text(detail)
-                    .font(.system(size: 12))
+                    .scaledFont(12)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
