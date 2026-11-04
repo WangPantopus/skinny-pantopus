@@ -82,9 +82,8 @@ export default function PlaceDashboard() {
   // 1) Resolve the resident's primary home (the default place).
   const homeQuery = usePrimaryHome({ enabled: authed });
 
-  // 1b) The resident's full list of places — powers the multi-home
-  // switcher. Supplementary: it never gates the dashboard, so if it
-  // fails the dashboard still renders (without the switch affordance).
+  // 1b) The resident's full list of places powers the multi-home switcher.
+  // The primary-home query shares this read on current servers.
   const myHomesQuery = useQuery({ ...sharedMyHomesQuery(), enabled: authed });
 
   // The resident's own private setup is their place too until they share a
