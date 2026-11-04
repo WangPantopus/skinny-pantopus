@@ -14,7 +14,125 @@ commands, and **check**: how to see that it worked.
   `~/.config/pantopus/hosted-secrets/staging.env` and `production.env` on the
   Mac (mode 600); provider keys come from each provider's console.
 
-Staging, GitHub release gates and Lambda schedules rechecked: 2026-10-11 by L4. Other rows retain their recorded checks.
+Infrastructure rechecked November 4, 2026; see the snapshot below. Other dated rows retain their recorded checks and are not live state.
+
+## Infrastructure baseline and deployed alarms — November 4, 2026
+
+**Applied with the founder's approval on November 4:** six production alarms
+and 30-day retention for the existing Pantopus Lambda log groups. The production
+stack completed its update at about 3:25 a.m. Pacific; all **34** Pantopus alarms,
+including the six additions, were **OK** by 3:27 a.m. The change set added only
+six alarms, with no resource modifications or removals. All 102 pre-existing
+processed resource definitions were unchanged after deployment.
+
+All **31** `/aws/lambda/pantopus-*` log groups in `us-west-2` now retain 30 days:
+30 policies were updated and the health monitor already had that retention.
+Production and staging each passed all 10 public hosted checks after the update;
+Chrome opened their home/login pages and reloaded login with zero uncaught
+errors. Both hosts' API and worker containers were healthy, with zero restarts
+and no recorded OOM kill. These checks do not establish signed-in performance or physical phone
+delivery. The baseline below was collected before the approved changes.
+
+Read-only AWS CLI/SSM checks used the existing production and staging hosts;
+the resource observations below are aggregate values. No credentials, user rows, raw
+logs or device tokens were exported. This updates the topology assumptions in
+[PR 3253](https://github.com/WangPantopus/skinny-pantopus/pull/3253), not its
+application scope. The two environments now have **separate** `t3.small` hosts
+in `us-west-2b`, with encrypted gp3 root disks.
+
+| Measurement | Production | Staging |
+| --- | --- | --- |
+| EC2 CPU, mean of available five-minute samples in the preceding 48 hours | 4.74% | 3.05% (host started November 3 UTC) |
+| Latest CPU credit balance | 576 | 554 |
+| Surplus CPU credits charged in the sampled window | 0 | 0 |
+| Available host memory at inspection | 1,104 MiB of 1,913 MiB | 1,133 MiB of 1,910 MiB |
+| Swap in use at inspection | 0 | 0 |
+| Root filesystem free / total | 26.03 / 29.93 GiB | 17.21 / 19.93 GiB |
+| API and worker containers | Healthy; zero restarts, no recorded OOM kill | Healthy; zero restarts, no recorded OOM kill |
+
+Production's independent one-minute probes averaged about 201 ms for API
+readiness and 186 ms for the direct database HEAD request. The p95 of the
+**five-minute averages** was 343/329 ms; this is neither a request percentile
+nor signed-in app latency. Isolated probes approached the four-second timeout.
+Database available memory reached a minimum of 19.3%; average CPU idle was
+90.5% and average I/O wait 3.3%. These observations do not justify increasing
+compute, adding a cache service or migrating to ECS now. Repeated database
+round trips and browser startup still need the measurements described in PR 3253.
+
+Before the update, all 28 existing Pantopus alarms were OK. None monitored EC2
+CPU, credits or host/disk status. The existing monitor already publishes API
+and database probe timings but had no latency alarms. The existing public
+production and staging checks each passed 10/10. Chrome opened both home and
+login pages, and reloaded both login pages, without uncaught errors or horizontal
+overflow at 1280 px. These checks do not establish authenticated
+journeys, every current native app association, payment behavior or phone delivery.
+Host memory and filesystem space are snapshots, not continuous monitoring.
+
+### Production capacity monitoring (enabled November 4)
+
+`pantopus-seeder/deploy/template.yaml` now defines six additional alarms,
+using the existing `JobAlarmTopic`. They send notifications only; they do not
+restart, resize or replace anything. `CapacityMonitoringEnabled` defaults to
+`false` in the template and is now `true` in production. Enabling it requires
+`HealthMonitoringEnabled=true`; setting the
+environment's `BackendInstanceId` adds the four EC2 alarms. Leaving that ID
+empty enables only the two latency alarms. No new Lambda, IAM permission,
+custom metric, detailed EC2 monitoring or business schedule is needed.
+
+| Alarm | Trigger |
+| --- | --- |
+| API readiness latency | Over 1,000 ms in 3 of 5 one-minute periods |
+| Direct database probe latency | Over 1,000 ms in 3 of 5 one-minute periods |
+| Backend CPU | Average over 80% in 3 of 4 five-minute periods |
+| Backend CPU credits | Below 24 for 3 five-minute periods |
+| EC2 system/instance status | Failure in 2 of 3 one-minute periods |
+| Attached EBS status | Failure in 2 of 3 one-minute periods |
+
+CPU credit and attached EBS metrics are present on both current T3/Nitro
+hosts. Reconsider those alarms if the instance family changes. Low credits
+alone do not prove throttling in unlimited mode. Attached EBS status measures
+reachability/I/O, not free space. Missing host samples remain `INSUFFICIENT_DATA`;
+the existing API health alarm detects a missing service. Missing latency
+samples are handled by the existing health alarms instead of a second alert.
+
+At the November 4 Oregon standard-resolution rate of $0.10 per alarm metric
+month, all six add **$0.60/month** before credits, taxes and SNS delivery costs.
+The two probe alarms alone add $0.20/month. They reuse current metrics, so they
+add no metric-ingestion cost. See [AWS's regional price list](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonCloudWatch/current/us-west-2/index.json),
+[EC2 metric definitions](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/viewing_metrics_with_cloudwatch.html)
+and [CloudWatch alarm behavior](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Alarms.html).
+
+**Deployment record:** the change used the deployed **original SAM** template
+with only these six alarms, two parameters, two conditions and the prerequisite
+rule added. Its compact JSON was 49,894 bytes, within CloudFormation's inline
+limit. All existing parameter values were retained, with
+`CapacityMonitoringEnabled=true` and the verified production `BackendInstanceId`.
+The reviewed change set `capacity-alarms-20261104-112359` added exactly six alarms.
+All six have data, actions enabled, and both ALARM and OK notifications routed
+to the existing topic with its confirmed email subscription. No test notification
+or outage was injected. The seeder's Lambda code and schedules were not redeployed;
+staging's older stack needs its own review before adding alarms there.
+
+Keep the live capacity parameter and instance ID on later seeder deployments.
+Re-read the current stack before changing it; do not replay an old prepared
+template over subsequent changes. Rollback is `CapacityMonitoringEnabled=false`
+with all other parameters retained, removing only these six alarms.
+
+Validation: the existing 505 seeder tests pass on Python 3.13; `cfn-lint` accepts
+the full SAM template and the prepared processed production template. AWS
+`ValidateTemplate` also accepted the complete compact original-source template
+used for deployment. The deployed processed template was compared with the
+baseline: all 102 existing resource definitions match, with exactly six added.
+Staging and production app code, native binaries and database schemas are
+unchanged by this infrastructure update.
+
+**Log retention is applied.** The existing [go-live retention procedure](#5-go-live)
+set the other 30 groups to 30 days; a fresh inventory verified all 31. Events
+older than the retention window are eligible for deletion, which normally takes
+up to 72 hours, rather than disappearing immediately ([AWS retention behavior](https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_PutRetentionPolicy.html)).
+No log contents were read or exported, and the retained rollback EBS volume and
+snapshots were not deleted. Extending retention later cannot recover expired
+events. New Lambda log groups still need an explicit retention setting.
 
 ## Current verification and founder handoff — October 13, 2026
 
@@ -1425,21 +1543,21 @@ native access checks; passing data and offline checks alone does not close this 
 - [ ] Backups: Supabase daily backup visible in the dashboard, and a first
   `scripts/db/backup-project.sh` run of production finishes with "0 missing"
   (Appendix C). L4 rehearsed the backup and restore locally on October 6.
-- [ ] Monitoring: an uptime check on `https://api.pantopus.com/health` every
-  minute (for example UptimeRobot or Better Stack, free tiers) alerting the
-  founder's email; optional Slack alerts via `SLACK_ALERTS_WEBHOOK_URL`.
-- [ ] Log retention: CloudWatch keeps Lambda logs forever unless told otherwise,
-  and on October 8 every `pantopus-*` log group was set that way. The April
-  production ones hold about 110 MB, including April users' ids from the old
-  code's request logging. Keep 30 days on all of them, after P8 and again
-  whenever a function is added (it deletes older log lines, nothing else):
+- [x] Monitoring: verified November 4. The existing independent Lambda probes
+  API/database readiness every minute, and all 34 Pantopus alarms are OK,
+  including the six newly approved production capacity/latency alarms. The
+  production alarms route to the existing confirmed email subscription. No
+  outage or test notification was injected.
+- [x] Log retention: verified November 4 after the founder-approved update.
+  All 31 existing `pantopus-*` Lambda log groups in `us-west-2` retain 30 days.
+  Repeat when a function is added; older events become eligible for deletion:
   ```bash
   for g in $(aws logs describe-log-groups --region us-west-2 --log-group-name-prefix /aws/lambda/pantopus- \
       --query 'logGroups[].logGroupName' --output text); do
     aws logs put-retention-policy --region us-west-2 --log-group-name "$g" --retention-in-days 30
   done
   ```
-  **Check:** this prints `[]` (on October 8 it listed all 27 groups):
+  **Check:** this prints `[]`, verified November 4:
   ```bash
   aws logs describe-log-groups --region us-west-2 --log-group-name-prefix /aws/lambda/pantopus- \
     --query 'logGroups[?retentionInDays!=`30`].logGroupName'
