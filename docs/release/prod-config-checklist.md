@@ -14,7 +14,108 @@ commands, and **check**: how to see that it worked.
   `~/.config/pantopus/hosted-secrets/staging.env` and `production.env` on the
   Mac (mode 600); provider keys come from each provider's console.
 
-Staging, GitHub release gates and Lambda schedules rechecked: 2026-10-11 by L4. Other rows retain their recorded checks.
+Infrastructure rechecked November 4, 2026; see the snapshot below. Other dated rows retain their recorded checks and are not live state.
+
+## Infrastructure baseline and prepared alarms — November 4, 2026
+
+Read-only AWS CLI/SSM checks used the existing production and staging hosts;
+the resource observations below are aggregate values. No credentials, user rows, raw
+logs or device tokens were exported. This updates the topology assumptions in
+[PR 3253](https://github.com/WangPantopus/skinny-pantopus/pull/3253), not its
+application scope. The two environments now have **separate** `t3.small` hosts
+in `us-west-2b`, with encrypted gp3 root disks. No hosted settings were changed.
+
+| Measurement | Production | Staging |
+| --- | --- | --- |
+| EC2 CPU, mean of available five-minute samples in the preceding 48 hours | 4.74% | 3.05% (host started November 3 UTC) |
+| Latest CPU credit balance | 576 | 554 |
+| Surplus CPU credits charged in the sampled window | 0 | 0 |
+| Available host memory at inspection | 1,104 MiB of 1,913 MiB | 1,133 MiB of 1,910 MiB |
+| Swap in use at inspection | 0 | 0 |
+| Root filesystem free / total | 26.03 / 29.93 GiB | 17.21 / 19.93 GiB |
+| API and worker containers | Healthy; zero restarts, no recorded OOM kill | Healthy; zero restarts, no recorded OOM kill |
+
+Production's independent one-minute probes averaged about 201 ms for API
+readiness and 186 ms for the direct database HEAD request. The p95 of the
+**five-minute averages** was 343/329 ms; this is neither a request percentile
+nor signed-in app latency. Isolated probes approached the four-second timeout.
+Database available memory reached a minimum of 19.3%; average CPU idle was
+90.5% and average I/O wait 3.3%. These observations do not justify increasing
+compute, adding a cache service or migrating to ECS now. Repeated database
+round trips and browser startup still need the measurements described in PR 3253.
+
+All 28 existing Pantopus alarms were OK at inspection. None monitored EC2
+CPU, credits or host/disk status. The existing monitor already publishes API
+and database probe timings but had no latency alarms. The existing public
+production and staging checks each passed 10/10. Chrome opened both home and
+login pages, and reloaded both login pages, without uncaught errors or horizontal
+overflow at 1280 px. These checks do not establish authenticated
+journeys, every current native app association, payment behavior or phone delivery.
+Host memory and filesystem space are snapshots, not continuous monitoring.
+
+### Prepared opt-in change (not deployed)
+
+`pantopus-seeder/deploy/template.yaml` now defines six additional alarms,
+using the existing `JobAlarmTopic`. They send notifications only; they do not
+restart, resize or replace anything. `CapacityMonitoringEnabled` defaults to
+`false`. Enabling it requires `HealthMonitoringEnabled=true`; setting the
+environment's `BackendInstanceId` adds the four EC2 alarms. Leaving that ID
+empty enables only the two latency alarms. No new Lambda, IAM permission,
+custom metric, detailed EC2 monitoring or business schedule is needed.
+
+| Alarm | Trigger |
+| --- | --- |
+| API readiness latency | Over 1,000 ms in 3 of 5 one-minute periods |
+| Direct database probe latency | Over 1,000 ms in 3 of 5 one-minute periods |
+| Backend CPU | Average over 80% in 3 of 4 five-minute periods |
+| Backend CPU credits | Below 24 for 3 five-minute periods |
+| EC2 system/instance status | Failure in 2 of 3 one-minute periods |
+| Attached EBS status | Failure in 2 of 3 one-minute periods |
+
+CPU credit and attached EBS metrics are present on both current T3/Nitro
+hosts. Reconsider those alarms if the instance family changes. Low credits
+alone do not prove throttling in unlimited mode. Attached EBS status measures
+reachability/I/O, not free space. Missing host samples remain `INSUFFICIENT_DATA`;
+the existing API health alarm detects a missing service. Missing latency
+samples are handled by the existing health alarms instead of a second alert.
+
+At the November 4 Oregon standard-resolution rate of $0.10 per alarm metric
+month, all six add **$0.60/month** before credits, taxes and SNS delivery costs.
+The two probe alarms alone add $0.20/month. They reuse current metrics, so they
+add no metric-ingestion cost. See [AWS's regional price list](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonCloudWatch/current/us-west-2/index.json),
+[EC2 metric definitions](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/viewing_metrics_with_cloudwatch.html)
+and [CloudWatch alarm behavior](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Alarms.html).
+
+**Founder rollout:** re-read the current production stack and instance before
+applying. Prepare a change set from its deployed **processed** template, adding
+only these six alarm resources, their two parameters, two conditions and the
+health-monitor prerequisite rule. Preserve all existing resources and use
+previous parameter values, with `CapacityMonitoringEnabled=true` and the
+verified production `BackendInstanceId`. Review that the change set adds only
+six alarms: no Lambda code/configuration update, schedule, secret, database or
+host replacement. Do not redeploy the whole seeder just to install these alarms;
+staging's older stack needs its own review. After execution, wait for metric
+evaluation, confirm all six have data and route to the existing confirmed topic,
+and repeat the public checks. No test notification or outage injection is needed.
+Rollback is `CapacityMonitoringEnabled=false` with all other parameters retained;
+this removes only the six new alarms. Re-read the live stack before any rollback.
+
+Validation: the existing 505 seeder tests pass on Python 3.13; `cfn-lint` accepts
+the full SAM template and the prepared processed production template. AWS
+`ValidateTemplate` accepts the new alarm definitions and their dependencies.
+The full production template exceeds that API's inline size limit, so it was
+checked locally. The prepared production payload preserves all 102 existing
+resources exactly and adds six; its parameters retain existing values. No
+CloudFormation change set has been created or executed. Staging and production
+app code, native binaries and database schemas are unchanged by this PR.
+
+**Log retention remains a separate founder action.** Of 31 Pantopus Lambda
+log groups, only the health monitor retains 30 days; the other 30 have no
+expiry. The existing [go-live retention command](#5-go-live) sets
+30 days. Applying it makes events older than 30 days eligible for deletion;
+review that loss before running it. Do not delete the retained rollback EBS
+volume or snapshots as part of this change. A log-retention reduction cannot
+restore expired events on rollback.
 
 ## Current verification and founder handoff — October 13, 2026
 
