@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
@@ -74,7 +75,7 @@ data class BusinessInvoiceRow(
 sealed interface BusinessInvoicesUiState {
     data object Loading : BusinessInvoicesUiState
 
-    data class Loaded(val rows: List<BusinessInvoiceRow>) : BusinessInvoicesUiState
+    data class Loaded(val rows: List<BusinessInvoiceRow>, val pageError: String? = null) : BusinessInvoicesUiState
 
     data object Empty : BusinessInvoicesUiState
 
@@ -146,6 +147,9 @@ class BusinessInvoicesViewModel
         private val _isSearchingRecipients = MutableStateFlow(false)
         val isSearchingRecipients: StateFlow<Boolean> = _isSearchingRecipients.asStateFlow()
 
+        private val _recipientSearchError = MutableStateFlow<String?>(null)
+        val recipientSearchError: StateFlow<String?> = _recipientSearchError.asStateFlow()
+
         private val _dueDate = MutableStateFlow("")
         val dueDate: StateFlow<String> = _dueDate.asStateFlow()
 
@@ -165,7 +169,8 @@ class BusinessInvoicesViewModel
 
         private var page = 1
         private var rows = mutableListOf<BusinessInvoiceRow>()
-        private var isLoadingPage = false
+        private var listLoad: Job? = null
+        private var listGeneration = 0L
         private var nextLineItemKey = 1L
         private var recipientSearch: Job? = null
 
@@ -176,22 +181,18 @@ class BusinessInvoicesViewModel
         private var pendingCreate: Pair<CreateBusinessInvoiceRequest, String>? = null
 
         fun load() {
-            viewModelScope.launch {
-                page = 1
-                rows = mutableListOf()
-                _hasMore.value = false
-                _state.value = BusinessInvoicesUiState.Loading
-                fetchPage()
-            }
+            listLoad?.cancel()
+            val generation = ++listGeneration
+            page = 0
+            rows = mutableListOf()
+            _hasMore.value = false
+            _state.value = BusinessInvoicesUiState.Loading
+            val status = _filter.value.queryValue
+            listLoad = viewModelScope.launch { fetchPage(1, status, generation) }
         }
 
         fun refresh() {
-            viewModelScope.launch {
-                page = 1
-                rows = mutableListOf()
-                _hasMore.value = false
-                fetchPage()
-            }
+            load()
         }
 
         fun setFilter(next: BusinessInvoiceFilter) {
@@ -202,27 +203,32 @@ class BusinessInvoicesViewModel
 
         /** Called from the list's last row. */
         fun loadMoreIfNeeded() {
-            if (!_hasMore.value || isLoadingPage) return
-            viewModelScope.launch {
-                page += 1
-                fetchPage()
-            }
+            if (!_hasMore.value || listLoad?.isActive == true) return
+            val generation = listGeneration
+            val status = _filter.value.queryValue
+            val nextPage = page + 1
+            listLoad = viewModelScope.launch { fetchPage(nextPage, status, generation) }
         }
 
-        private suspend fun fetchPage() {
-            isLoadingPage = true
+        private suspend fun fetchPage(
+            requestedPage: Int,
+            status: String?,
+            generation: Long,
+        ) {
             val result =
                 repository.invoices(
                     businessId = businessId,
-                    page = page,
+                    page = requestedPage,
                     pageSize = PAGE_SIZE,
-                    status = _filter.value.queryValue,
+                    status = status,
                 )
-            isLoadingPage = false
+            // A filter change or refresh owns a new list, even if the old server reply arrives later.
+            if (generation != listGeneration) return
             when (result) {
                 is NetworkResult.Success -> {
                     val mapped = result.data.invoices.map(::rowFrom)
-                    rows.addAll(mapped)
+                    rows = (rows + mapped).distinctBy { it.id }.toMutableList()
+                    page = requestedPage
                     val total = result.data.pagination?.total ?: rows.size
                     _hasMore.value = rows.size < total && mapped.isNotEmpty()
                     _state.value =
@@ -237,8 +243,7 @@ class BusinessInvoicesViewModel
                     if (rows.isEmpty()) {
                         _state.value = BusinessInvoicesUiState.Error(result.error.message)
                     } else {
-                        page = maxOf(1, page - 1)
-                        _action.value = BusinessInvoicesAction.Failed("Couldn't load more invoices.")
+                        _state.value = BusinessInvoicesUiState.Loaded(rows.toList(), "Couldn't load more invoices.")
                     }
                 }
             }
@@ -272,6 +277,8 @@ class BusinessInvoicesViewModel
             recipientSearch?.cancel()
             if (_recipient.value != null) return
             val query = _recipientQuery.value.trim()
+            _recipientSearchError.value = null
+            _recipientOptions.value = emptyList()
             _isSearchingRecipients.value = true
             recipientSearch =
                 viewModelScope.launch {
@@ -279,7 +286,10 @@ class BusinessInvoicesViewModel
                     val result = repository.invoiceRecipients(businessId, query)
                     // A newer search (or a pick) cancelled this one.
                     if (!isActive) return@launch
-                    _recipientOptions.value = (result as? NetworkResult.Success)?.data?.people.orEmpty()
+                    when (result) {
+                        is NetworkResult.Success -> _recipientOptions.value = result.data.people
+                        is NetworkResult.Failure -> _recipientSearchError.value = "Couldn't load recipients. Please try again."
+                    }
                     _isSearchingRecipients.value = false
                 }
         }
@@ -293,6 +303,7 @@ class BusinessInvoicesViewModel
             recipientSearch?.cancel()
             _recipient.value = person
             _isSearchingRecipients.value = false
+            _recipientSearchError.value = null
             _createError.value = null
         }
 
@@ -343,6 +354,8 @@ class BusinessInvoicesViewModel
             _recipient.value = null
             _recipientQuery.value = ""
             _recipientOptions.value = emptyList()
+            _recipientSearchError.value = null
+            _isSearchingRecipients.value = false
             _dueDate.value = ""
             _memo.value = ""
             _lineItems.value = listOf(InvoiceLineItemDraft(key = nextLineItemKey++))
@@ -355,6 +368,7 @@ class BusinessInvoicesViewModel
          * mirrors RN's alerts.
          */
         fun createInvoice(onSent: () -> Unit) {
+            if (_isCreating.value) return
             viewModelScope.launch {
                 _createError.value = null
                 val recipient = _recipient.value?.id
@@ -362,30 +376,14 @@ class BusinessInvoicesViewModel
                     _createError.value = "Choose who to invoice"
                     return@launch
                 }
-                val parsed = mutableListOf<CreateBusinessInvoiceLineItem>()
-                for (item in _lineItems.value) {
-                    val description = item.description.trim()
-                    val amount = item.amount.trim()
-                    if (description.isEmpty() || amount.isEmpty()) continue
-                    val cents = centsFromDollars(amount)
-                    if (cents == null || cents <= 0) {
-                        _createError.value = "Invalid amount: ${item.amount}"
-                        return@launch
-                    }
-                    parsed +=
-                        CreateBusinessInvoiceLineItem(
-                            description = description,
-                            amountCents = cents,
-                            quantity = maxOf(1, item.quantity.trim().toIntOrNull() ?: 1),
-                        )
-                }
-                if (parsed.isEmpty()) {
-                    _createError.value = "At least one line item is required"
+                val parsed = validatedLineItems() ?: return@launch
+                val due = _dueDate.value.trim()
+                if (due.isNotEmpty() && (due.length != ISO_DATE_LENGTH || runCatching { LocalDate.parse(due) }.isFailure)) {
+                    _createError.value = "Enter a valid due date as YYYY-MM-DD, or leave it blank."
                     return@launch
                 }
 
                 _isCreating.value = true
-                val due = _dueDate.value.trim()
                 val note = _memo.value.trim()
                 val draft =
                     CreateBusinessInvoiceRequest(
@@ -414,6 +412,34 @@ class BusinessInvoicesViewModel
             }
         }
 
+        private fun validatedLineItems(): List<CreateBusinessInvoiceLineItem>? {
+            val parsed = mutableListOf<CreateBusinessInvoiceLineItem>()
+            for ((index, item) in _lineItems.value.withIndex()) {
+                val description = item.description.trim()
+                val amount = item.amount.trim()
+                if (description.isEmpty() && amount.isEmpty()) continue
+                if (description.isEmpty() || amount.isEmpty()) {
+                    _createError.value = "Complete the description and amount for line item ${index + 1}."
+                    return null
+                }
+                val cents = centsFromDollars(amount)
+                if (cents == null || cents <= 0) {
+                    _createError.value = "Invalid amount: ${item.amount}"
+                    return null
+                }
+                val quantity = item.quantity.trim().toIntOrNull()
+                if (quantity == null || quantity !in 1..MAX_INVOICE_QUANTITY) {
+                    _createError.value = "Quantity for line item ${index + 1} must be a whole number from 1 to 10,000."
+                    return null
+                }
+                parsed += CreateBusinessInvoiceLineItem(description = description, amountCents = cents, quantity = quantity)
+            }
+            if (parsed.isEmpty()) {
+                _createError.value = "At least one line item is required"
+            }
+            return parsed.takeIf { it.isNotEmpty() }
+        }
+
         fun clearAction() {
             _action.value = BusinessInvoicesAction.Idle
         }
@@ -423,6 +449,7 @@ class BusinessInvoicesViewModel
             private const val RECIPIENT_SEARCH_DEBOUNCE_MS = 250L
             private const val CENTS_PER_UNIT = 100.0
             private const val ISO_DATE_LENGTH = 10
+            private const val MAX_INVOICE_QUANTITY = 10_000
 
             private val VOIDABLE_STATUSES = setOf("sent", "viewed", "overdue")
 
@@ -453,7 +480,7 @@ class BusinessInvoicesViewModel
                     id = dto.id,
                     recipientName = dto.recipient?.displayName("Unknown") ?: "Unknown",
                     createdLabel = shortDate(dto.createdAt) ?: "—",
-                    dueLabel = shortDate(dto.dueDate)?.let { "Due $it" },
+                    dueLabel = shortDate(dto.dueDate, preservingDay = true)?.let { "Due $it" },
                     totalLabel = money(dto.totalCents),
                     feeLabel = money(dto.feeCents),
                     status = status,
@@ -468,12 +495,16 @@ class BusinessInvoicesViewModel
 
             /**
              * ISO-8601 instant or a bare `YYYY-MM-DD` → a short display date.
+             * Due dates store a calendar day at midnight UTC, as in the recipient invoice view.
              */
-            fun shortDate(raw: String?): String? {
+            fun shortDate(
+                raw: String?,
+                preservingDay: Boolean = false,
+            ): String? {
                 if (raw.isNullOrBlank()) return null
                 val fromInstant =
                     runCatching {
-                        Instant.parse(raw).atZone(ZoneId.systemDefault()).toLocalDate()
+                        Instant.parse(raw).atZone(if (preservingDay) ZoneOffset.UTC else ZoneId.systemDefault()).toLocalDate()
                     }.getOrNull()
                 val date =
                     fromInstant

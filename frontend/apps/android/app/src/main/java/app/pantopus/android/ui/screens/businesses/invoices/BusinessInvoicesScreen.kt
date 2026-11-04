@@ -114,6 +114,7 @@ fun BusinessInvoicesScreen(
                         is BusinessInvoicesUiState.Loaded ->
                             InvoicesList(
                                 rows = current.rows,
+                                pageError = current.pageError,
                                 onEndReached = viewModel::loadMoreIfNeeded,
                                 onVoid = { voidTarget = it },
                             )
@@ -264,6 +265,7 @@ private fun InvoicesLoading() {
 @Composable
 private fun InvoicesList(
     rows: List<BusinessInvoiceRow>,
+    pageError: String?,
     onEndReached: () -> Unit,
     onVoid: (BusinessInvoiceRow) -> Unit,
 ) {
@@ -276,6 +278,14 @@ private fun InvoicesList(
             InvoiceCard(row = row, onVoid = { onVoid(row) })
             if (row.id == rows.lastOrNull()?.id) {
                 LaunchedEffect(row.id) { onEndReached() }
+            }
+        }
+        if (pageError != null) {
+            item(key = "pageError") {
+                Column {
+                    Text(text = pageError, color = PantopusColors.error)
+                    TextButton(onClick = onEndReached) { Text("Try again") }
+                }
             }
         }
     }
@@ -414,6 +424,7 @@ private fun CreateInvoiceSheet(
     val recipientQuery by viewModel.recipientQuery.collectAsStateWithLifecycle()
     val recipientOptions by viewModel.recipientOptions.collectAsStateWithLifecycle()
     val isSearchingRecipients by viewModel.isSearchingRecipients.collectAsStateWithLifecycle()
+    val recipientSearchError by viewModel.recipientSearchError.collectAsStateWithLifecycle()
     val dueDate by viewModel.dueDate.collectAsStateWithLifecycle()
     val memo by viewModel.memo.collectAsStateWithLifecycle()
     val lineItems by viewModel.lineItems.collectAsStateWithLifecycle()
@@ -445,6 +456,8 @@ private fun CreateInvoiceSheet(
             query = recipientQuery,
             options = recipientOptions,
             isSearching = isSearchingRecipients,
+            error = recipientSearchError,
+            onRetry = { viewModel.searchRecipients(immediately = true) },
             onQueryChange = viewModel::setRecipientQuery,
             onSelect = viewModel::selectRecipient,
             onClear = viewModel::clearRecipient,
@@ -585,6 +598,8 @@ private fun RecipientPicker(
     query: String,
     options: List<InvoiceRecipientDto>,
     isSearching: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
     onQueryChange: (String) -> Unit,
     onSelect: (InvoiceRecipientDto) -> Unit,
     onClear: () -> Unit,
@@ -658,7 +673,10 @@ private fun RecipientPicker(
                     .background(PantopusColors.appSurface)
                     .border(1.dp, PantopusColors.appBorderSubtle, RoundedCornerShape(Radii.md)),
         ) {
-            if (options.isEmpty()) {
+            if (error != null) {
+                Text(text = error, color = PantopusColors.error, modifier = Modifier.padding(Spacing.s3))
+                TextButton(onClick = onRetry) { Text("Try again") }
+            } else if (options.isEmpty()) {
                 Text(
                     text =
                         if (isSearching) {
