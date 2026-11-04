@@ -11,14 +11,13 @@
 //
 
 import SwiftUI
+import UIKit
 
-/// The scroll view a mail screen reads in (`MailItemDetailShell`): its size,
-/// the part its pinned actions cover, and the window it sits in.
+/// The scroll view a mail screen reads in (`MailItemDetailShell`): its size
+/// and the part its pinned actions cover.
 struct MailItemReadingArea: Equatable {
     var size: CGSize = .zero
     var coveredBottom: CGFloat = 0
-    /// The whole window in global coordinates; its middle is the Duo's hinge.
-    var window: CGRect = .zero
 
     /// The height not under the pinned actions; zero while unknown.
     var readingHeight: CGFloat {
@@ -59,18 +58,26 @@ struct BookletReaderLayout: Equatable {
 
     /// - Parameters:
     ///   - width: the reader's own width.
-    ///   - minX: the reader's leading edge in global coordinates.
-    ///   - fold: the fold, in the reader's coordinates, while the device is half folded.
-    init(width: CGFloat, minX: CGFloat, reading: MailItemReadingArea, controlsHeight: CGFloat, pageCount: Int, fold: CGRect?) {
+    ///   - screenMargin: how far the screen reaches past the reader on each side (`readsBookletScreenMargin`).
+    ///   - hinge: the Duo's hinge where it runs down the reader, in the reader's coordinates.
+    init(
+        width: CGFloat,
+        screenMargin: CGFloat,
+        reading: MailItemReadingArea,
+        controlsHeight: CGFloat,
+        pageCount: Int,
+        hinge: BookletHinge?
+    ) {
         // The page, its controls and the gaps above and below them fit above the pinned actions.
         let chrome = Spacing.s3 + Spacing.s2 + controlsHeight + Spacing.s2
         let fit = reading.readingHeight > 0 ? max(200, reading.readingHeight - chrome) : Self.fallbackHeight
         let single = min(max(0, width - Self.edge) * 4 / 3, fit)
         // A spread may use the screen's side margins, keeping a margin from its edges.
-        let room = reading.size.width > width ? max(0, (reading.size.width - width) / 2 - Spacing.s4) : 0
+        let room = max(0, screenMargin - Spacing.s4)
         let area = width + 2 * room
         let spreadHeight = min(max(0, area - Self.edge) / 2 * 4 / 3, fit)
-        isSpread = pageCount > 1 && spreadHeight >= single * 0.85
+        // Not before the reader knows its width.
+        isSpread = pageCount > 1 && width > 0 && spreadHeight >= single * 0.85
         guard isSpread else {
             pageHeight = single
             pageWidth = single * 3 / 4
@@ -79,14 +86,10 @@ struct BookletReaderLayout: Equatable {
             foldGap = 0
             return
         }
-        // Half folded, the spine is the fold; otherwise the hinge, the middle of the window.
-        var center = area / 2
-        if let fold {
-            center = fold.midX + room
-        } else if reading.window.width > 0 {
-            center = reading.window.midX - minX + room
-        }
-        let gap = fold?.width ?? 0
+        // The spine is on the hinge (the middle of the reader where there's none); half folded, the pages keep
+        // clear of the fold.
+        let center = hinge.map { $0.midX + room } ?? area / 2
+        let gap = hinge?.foldGap ?? 0
         spine = min(max(center, area * 0.3), area * 0.7)
         let side = max(0, min(spine - gap / 2, area - spine - gap / 2 - Self.edge))
         pageHeight = min(side * 4 / 3, fit)
@@ -111,31 +114,86 @@ struct BookletReaderLayout: Equatable {
     }
 }
 
+/// The Duo's hinge where it runs down the reader, in the reader's coordinates.
+struct BookletHinge: Equatable {
+    /// The hinge's middle, where the spine goes.
+    let midX: CGFloat
+    /// The fold to keep clear while the Duo is half folded like a book; zero while it lies open.
+    let foldGap: CGFloat
+}
+
 #if compiler(>=6.4)
-/// Reads the Duo's fold while it's half folded (a division region), in the view's coordinates.
+/// Reads the Duo's hinge (a division region, inactive while the Duo lies open), in the view's coordinates.
 @available(iOS 27.1, *)
-private struct BookletFoldReader: ViewModifier {
-    @Binding var fold: CGRect?
+private struct BookletHingeReader: ViewModifier {
+    @Binding var hinge: BookletHinge?
 
     func body(content: Content) -> some View {
-        // Only where it runs across: scrolling moves the reader, not the fold.
-        content.onGeometryChange(for: CGRect?.self) { proxy in
-            proxy.reservedRegions(kind: .division)
+        // Only where it runs across: scrolling moves the reader, not the hinge.
+        content.onGeometryChange(for: BookletHinge?.self) { proxy in
+            proxy.reservedRegions(kind: .division, options: .includeInactive)
                 .first { $0.frame.height > $0.frame.width }
-                .map { CGRect(x: $0.frame.minX, y: 0, width: $0.frame.width, height: 0) }
-        } action: { fold = $0 }
+                .map { BookletHinge(midX: $0.frame.midX, foldGap: $0.isActive ? $0.frame.width : 0) }
+        } action: { hinge = $0 }
     }
 }
 #endif
 
 extension View {
-    /// Keeps `fold` at the fold that runs down the view while the Duo is half folded like a book; nil otherwise.
-    func readsBookletFold(_ fold: Binding<CGRect?>) -> some View {
+    /// Keeps `hinge` at the Duo's hinge where it runs down the view (held sideways); nil otherwise.
+    func readsBookletHinge(_ hinge: Binding<BookletHinge?>) -> some View {
         #if compiler(>=6.4)
         if #available(iOS 27.1, *) {
-            return AnyView(modifier(BookletFoldReader(fold: fold)))
+            return AnyView(modifier(BookletHingeReader(hinge: hinge)))
         }
         #endif
         return AnyView(self)
+    }
+
+    /// Keeps `margin` at how far the screen's safe area reaches past the view on its nearer side: the reading
+    /// column's side margins, which SwiftUI's padding around the column hides from the view.
+    func readsBookletScreenMargin(_ margin: Binding<CGFloat>) -> some View {
+        background(BookletScreenMarginReader(margin: margin))
+    }
+}
+
+private struct BookletScreenMarginReader: UIViewRepresentable {
+    @Binding var margin: CGFloat
+
+    func makeUIView(context _: Context) -> BookletScreenMarginView {
+        let view = BookletScreenMarginView()
+        view.isHidden = true
+        view.isUserInteractionEnabled = false
+        view.onChange = { margin = $0 }
+        return view
+    }
+
+    func updateUIView(_ view: BookletScreenMarginView, context _: Context) {
+        view.onChange = { margin = $0 }
+    }
+}
+
+private final class BookletScreenMarginView: UIView {
+    var onChange: (@MainActor (CGFloat) -> Void)?
+    private var reported: CGFloat?
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        report()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        report()
+    }
+
+    private func report() {
+        guard let window else { return }
+        let screen = convert(window.bounds.inset(by: window.safeAreaInsets), from: window)
+        let margin = max(0, min(-screen.minX, screen.maxX - bounds.width))
+        guard margin != reported else { return }
+        reported = margin
+        // After the layout pass that measured it.
+        Task { @MainActor [weak self] in self?.onChange?(margin) }
     }
 }

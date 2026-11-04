@@ -29,11 +29,12 @@ public struct BookletPager: View {
     private let onShowPage: () -> Void
     @State private var currentIndex: Int
     @State private var mode: BookletPagerMode
-    /// The reader's width and leading edge in global coordinates, its controls' height, and the fold while the
-    /// Duo is half folded: what the pages size themselves from.
-    @State private var placement: CGRect = .zero
+    /// The reader's width, the screen's side margins beside it, its controls' height, and the Duo's hinge: what
+    /// the pages size themselves from.
+    @State private var readerWidth: CGFloat = 0
+    @State private var screenMargin: CGFloat = 0
     @State private var controlsHeight: CGFloat = 0
-    @State private var fold: CGRect?
+    @State private var hinge: BookletHinge?
 
     public init(
         pages: [URL],
@@ -53,12 +54,12 @@ public struct BookletPager: View {
 
     public var body: some View {
         let layout = BookletReaderLayout(
-            width: placement.width,
-            minX: placement.minX,
+            width: readerWidth,
+            screenMargin: screenMargin,
             reading: readingArea,
             controlsHeight: controlsHeight,
             pageCount: pages.count,
-            fold: fold
+            hinge: hinge
         )
         VStack(spacing: Spacing.s2) {
             switch mode {
@@ -69,12 +70,10 @@ public struct BookletPager: View {
             }
         }
         .frame(maxWidth: .infinity)
-        // Only the horizontal place: scrolling moves the reader up and down without laying it out again.
-        .onGeometryChange(for: CGRect.self) { proxy in
-            let frame = proxy.frame(in: .global)
-            return CGRect(x: frame.minX, y: 0, width: frame.width, height: 0)
-        } action: { placement = $0 }
-        .readsBookletFold($fold)
+        // Only the width: scrolling moves the reader up and down without laying it out again.
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { readerWidth = $0 }
+        .readsBookletHinge($hinge)
+        .readsBookletScreenMargin($screenMargin)
         .accessibilityIdentifier("bookletPager")
     }
 
@@ -125,7 +124,9 @@ public struct BookletPager: View {
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
         .frame(width: layout.areaWidth, height: layout.pageHeight)
-        .frame(maxWidth: .infinity)
+        // Into the side margins, while the reader keeps its own width: a wider reader would widen the screen's
+        // column, and the column the reader again.
+        .frame(minWidth: 0, maxWidth: .infinity)
     }
 
     private func spreadPages(_ left: Int, layout: BookletReaderLayout) -> some View {
@@ -175,7 +176,7 @@ public struct BookletPager: View {
             content()
                 .frame(width: layout.spreadWidth)
                 .offset(x: layout.spreadShift)
-                .frame(maxWidth: .infinity)
+                .frame(minWidth: 0, maxWidth: .infinity)
         } else if fill || layout.pageWidth <= 0 {
             content()
         } else {
