@@ -2,25 +2,18 @@
 //  BookletPager.swift
 //  Pantopus
 //
-//  T6.5c (P21) — Booklet variant of the A17 shell's body slot.
-//
-//  Two render modes per `booklet.jsx`:
-//    - `.page` — indicator strip ("Page N of M" + sky scrubber +
-//      grid-mode toggle button) above a full-width `TabView` swiping
-//      through folded paper page images.
-//    - `.grid` — 3-column thumbnail grid; tap a thumbnail to jump
-//      straight back to `.page` mode at that page.
-//
-//  Lives in the feature folder per the P21 brief — the swipeable
-//  paper-page geometry doesn't generalise to other mail variants.
-//  Community attachments (P22) use a different shape.
+//  A stored booklet's pages (founder, 2026-11-04, "Build it as drawn"). The
+//  booklet opens to its page: the page comes first, as large as fits above
+//  the letter's pinned actions, with one slim row of controls under it and
+//  the page's transcript below. Where two pages fit nearly as tall as one,
+//  such as the open iPhone Duo held sideways, two facing pages lie open with
+//  the spine on the hinge (`BookletReaderLayout`). Page and grid selection
+//  belong to the reader and survive folding, unfolding and turning.
 //
 
 import SwiftUI
-import UIKit
 
-/// Rendering mode for the pager. Exposed at the view init so the variant
-/// view can persist the mode in its caller (e.g. across re-renders).
+/// Page or thumbnail presentation of a booklet.
 public enum BookletPagerMode: Sendable, Hashable {
     case page
     case grid
@@ -29,148 +22,271 @@ public enum BookletPagerMode: Sendable, Hashable {
 @MainActor
 public struct BookletPager: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.mailItemReadingArea) private var readingArea
     private let pages: [URL]
     private let pageCount: Int
     private let ocrTexts: [String]
+    private let onShowPage: () -> Void
     @State private var currentIndex: Int
     @State private var mode: BookletPagerMode
+    /// The reader's width, the screen's side margins beside it, its controls' height, and the Duo's hinge: what
+    /// the pages size themselves from.
+    @State private var readerWidth: CGFloat = 0
+    @State private var screenMargin: CGFloat = 0
+    @State private var controlsHeight: CGFloat = 0
+    @State private var hinge: BookletHinge?
 
     public init(
         pages: [URL],
         pageCount: Int? = nil,
         ocrTexts: [String] = [],
         initialPage: Int = 0,
-        initialMode: BookletPagerMode = .page
+        initialMode: BookletPagerMode = .page,
+        onShowPage: @escaping () -> Void = {}
     ) {
         self.pages = pages
         self.pageCount = max(pageCount ?? pages.count, pages.count)
         self.ocrTexts = ocrTexts
+        self.onShowPage = onShowPage
         _currentIndex = State(initialValue: max(0, min(initialPage, max(0, pages.count - 1))))
         _mode = State(initialValue: initialMode)
     }
 
     public var body: some View {
+        let layout = BookletReaderLayout(
+            width: readerWidth,
+            screenMargin: screenMargin,
+            reading: readingArea,
+            controlsHeight: controlsHeight,
+            pageCount: pages.count,
+            hinge: hinge
+        )
         VStack(spacing: Spacing.s2) {
             switch mode {
             case .page:
-                pageMode
+                pageMode(layout)
             case .grid:
-                gridMode
+                besidePages(layout, fill: true) { gridMode(layout) }
             }
         }
+        .frame(maxWidth: .infinity)
+        // Only the width: scrolling moves the reader up and down without laying it out again.
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { readerWidth = $0 }
+        .readsBookletHinge($hinge)
+        .readsBookletScreenMargin($screenMargin)
         .accessibilityIdentifier("bookletPager")
     }
 
     // MARK: - Page mode
 
-    private var pageMode: some View {
+    private func pageMode(_ layout: BookletReaderLayout) -> some View {
         VStack(spacing: Spacing.s2) {
-            pageIndicator
-            TabView(selection: $currentIndex) {
-                ForEach(Array(pages.enumerated()), id: \.offset) { idx, url in
-                    BookletPageImage(
-                        url: url,
-                        pageNumber: idx + 1,
-                        hasNextPage: idx < pageCount - 1
-                    )
+            Group {
+                if layout.isSpread {
+                    spreads(layout)
+                } else {
+                    singlePages(layout)
+                }
+            }
+            // A turn or a fold that changes one page to two starts the pager over on the same page.
+            .id(layout.isSpread)
+            besidePages(layout) { controls(layout) }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { controlsHeight = $0 }
+            if hasTranscript(layout) {
+                besidePages(layout) { transcripts(layout) }
+            }
+        }
+    }
+
+    private func singlePages(_ layout: BookletReaderLayout) -> some View {
+        TabView(selection: $currentIndex) {
+            ForEach(Array(pages.enumerated()), id: \.offset) { idx, url in
+                BookletPageImage(url: url, pageNumber: idx + 1, hasNextPage: idx < pageCount - 1)
+                    .frame(width: layout.pageWidth + BookletReaderLayout.edge, height: layout.pageHeight)
+                    .frame(maxWidth: .infinity)
                     .tag(idx)
-                    .padding(.horizontal, Spacing.s4)
                     .accessibilityIdentifier("bookletPager_page_\(idx)")
-                }
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 420)
-            if let ocrText = ocrText(for: currentIndex) {
-                BookletOCRCard(text: ocrText)
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .frame(height: layout.pageHeight)
+        // Swipes start at the screen's edge; the page keeps its place.
+        .padding(.horizontal, -Spacing.s4)
+    }
+
+    /// Two facing pages per spread: 1–2, 3–4 and so on.
+    private func spreads(_ layout: BookletReaderLayout) -> some View {
+        TabView(selection: spreadSelection) {
+            ForEach(0..<((pages.count + 1) / 2), id: \.self) { spread in
+                spreadPages(spread * 2, layout: layout)
+                    .tag(spread)
             }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .frame(width: layout.areaWidth, height: layout.pageHeight)
+        // From the reader's leading edge into the trailing margin, while the reader keeps its own width: a wider
+        // reader would widen the screen's column, and the column the reader again.
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func spreadPages(_ left: Int, layout: BookletReaderLayout) -> some View {
+        HStack(spacing: layout.foldGap) {
+            BookletPageImage(url: pages[left], pageNumber: left + 1, hasNextPage: false, foldSize: 0)
+                .frame(width: layout.pageWidth, height: layout.pageHeight)
+                .accessibilityIdentifier("bookletPager_page_\(left)")
+            if left + 1 < pages.count {
+                BookletPageImage(url: pages[left + 1], pageNumber: left + 2, hasNextPage: left + 1 < pageCount - 1)
+                    .frame(width: layout.pageWidth + BookletReaderLayout.edge, height: layout.pageHeight)
+                    .accessibilityIdentifier("bookletPager_page_\(left + 1)")
+            } else {
+                Color.clear.frame(width: layout.pageWidth + BookletReaderLayout.edge, height: layout.pageHeight)
+            }
+        }
+        .overlay(alignment: .leading) {
+            // The spine's shadow where the two pages meet, as in a booklet lying open.
+            if layout.foldGap == 0, left + 1 < pages.count {
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.1), .clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: Spacing.s6, height: layout.pageHeight)
+                .offset(x: layout.pageWidth - Spacing.s3)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+        }
+        .padding(.leading, layout.leftPageX)
+        .frame(width: layout.areaWidth, alignment: .leading)
+    }
+
+    /// The spread on screen as a page: swiping to a spread opens its left page.
+    private var spreadSelection: Binding<Int> {
+        Binding {
+            currentIndex / 2
+        } set: { spread in
+            if spread != currentIndex / 2 { currentIndex = min(spread * 2, max(0, pages.count - 1)) }
         }
     }
 
-    /// A17.2 — per-page OCR transcript, when the sample data carries one.
-    private func ocrText(for index: Int) -> String? {
-        guard ocrTexts.indices.contains(index) else { return nil }
-        let text = ocrTexts[index]
-        return text.isEmpty ? nil : text
-    }
-
-    private var pageIndicator: some View {
-        VStack(spacing: Spacing.s2) {
-            HStack(alignment: .center, spacing: Spacing.s2) {
-                Button {
-                    currentIndex = max(0, currentIndex - 1)
-                } label: {
-                    Icon(.chevronLeft, size: 14, color: Theme.Color.appTextStrong)
-                        .frame(width: 32, height: 32)
-                        .background(Theme.Color.appSurfaceSunken)
-                        .clipShape(Circle())
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(currentIndex == 0)
-                .accessibilityLabel("Previous page")
-                .accessibilityIdentifier("bookletPager_prev")
-                VStack(alignment: .center, spacing: 1) {
-                    pageLabelLayout {
-                        Text("Page \(currentIndex + 1)")
-                            .scaledFont(13, weight: .bold)
-                            .foregroundStyle(Theme.Color.appText)
-                        Text("of \(pageCount)")
-                            .scaledFont(13)
-                            .foregroundStyle(Theme.Color.appTextSecondary)
-                    }
-                    .accessibilityLabel("Page \(currentIndex + 1) of \(pageCount)")
-                    .accessibilityIdentifier("bookletPager_pageLabel")
-                }
+    /// Lays the content out as wide as the page (or the spread, around the hinge) and in line with it.
+    @ViewBuilder
+    private func besidePages(_ layout: BookletReaderLayout, fill: Bool = false, @ViewBuilder _ content: () -> some View) -> some View {
+        if layout.isSpread {
+            content()
+                .frame(width: layout.spreadWidth)
+                .offset(x: layout.spreadShift)
+                .frame(minWidth: 0, maxWidth: .infinity)
+        } else if fill || layout.pageWidth <= 0 {
+            content()
+        } else {
+            content()
+                .frame(width: layout.pageWidth + BookletReaderLayout.edge)
                 .frame(maxWidth: .infinity)
-                Button {
-                    currentIndex = min(pages.count - 1, currentIndex + 1)
-                } label: {
-                    Icon(.chevronRight, size: 14, color: Theme.Color.appTextStrong)
-                        .frame(width: 32, height: 32)
-                        .background(Theme.Color.appSurfaceSunken)
-                        .clipShape(Circle())
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(currentIndex >= pages.count - 1)
-                .accessibilityLabel("Next page")
-                .accessibilityIdentifier("bookletPager_next")
-            }
-            scrubber
-            Button {
-                mode = .grid
-            } label: {
-                HStack(spacing: Spacing.s1) {
-                    Icon(.fileType, size: 12, color: Theme.Color.primaryInk)
-                    Text("View all pages")
-                        .scaledFont(11, weight: .semibold)
-                        .foregroundStyle(Theme.Color.primaryInk)
-                }
-                .padding(.horizontal, Spacing.s3)
-                .padding(.vertical, Spacing.s1)
-                .background(Theme.Color.primary50)
-                .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("bookletPager_toggleGrid")
         }
-        .padding(Spacing.s3)
-        .background(Theme.Color.appSurface)
-        .overlay(
-            RoundedRectangle(cornerRadius: Radii.lg)
-                .stroke(Theme.Color.appBorder, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
+    }
+}
+
+// MARK: - Controls
+
+extension BookletPager {
+    /// One slim row under the page; like a toolbar it stops growing at the largest standard text size, and a long
+    /// press shows a control large.
+    private func controls(_ layout: BookletReaderLayout) -> some View {
+        VStack(spacing: 6) {
+            scrubber
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Spacing.s1) {
+                    pageNavigation(layout).fixedSize(horizontal: true, vertical: false)
+                    Spacer(minLength: Spacing.s2)
+                    gridButton.fixedSize(horizontal: true, vertical: false)
+                }
+                VStack(spacing: Spacing.s1) {
+                    pageNavigation(layout)
+                    gridButton
+                }
+            }
+        }
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
-    private var pageLabelLayout: AnyLayout {
-        dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: Spacing.s1))
-            : AnyLayout(HStackLayout(spacing: Spacing.s1))
+    /// The first page on screen: the page, or a spread's left page.
+    private func firstShown(_ layout: BookletReaderLayout) -> Int {
+        layout.isSpread ? currentIndex / 2 * 2 : currentIndex
+    }
+
+    private func pageNavigation(_ layout: BookletReaderLayout) -> some View {
+        HStack(spacing: Spacing.s1) {
+            pageStepButton(forward: false, layout: layout)
+            pageLabel(layout).frame(maxWidth: .infinity)
+            pageStepButton(forward: true, layout: layout)
+        }
+    }
+
+    private func pageStepButton(forward: Bool, layout: BookletReaderLayout) -> some View {
+        let step = layout.isSpread ? 2 : 1
+        let first = firstShown(layout)
+        let label = forward ? (layout.isSpread ? "Next pages" : "Next page") : (layout.isSpread ? "Previous pages" : "Previous page")
+        return Button {
+            currentIndex = min(max(0, first + (forward ? step : -step)), max(0, pages.count - 1))
+        } label: {
+            Icon(forward ? .chevronRight : .chevronLeft, size: 14, color: Theme.Color.appTextStrong)
+                .frame(width: 32, height: 32)
+                .background(Theme.Color.appSurfaceSunken)
+                .clipShape(Circle())
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(forward ? first + step > pages.count - 1 : first == 0)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier(forward ? "bookletPager_next" : "bookletPager_prev")
+        .accessibilityShowsLargeContentViewer {
+            Icon(forward ? .chevronRight : .chevronLeft, size: 14)
+            Text(label)
+        }
+    }
+
+    private func pageLabel(_ layout: BookletReaderLayout) -> some View {
+        let first = firstShown(layout)
+        let shown = layout.isSpread && first + 1 < pages.count ? "Pages \(first + 1)–\(first + 2) " : "Page \(first + 1) "
+        return (
+            Text(shown)
+                .fontWeight(.bold)
+                .foregroundColor(Theme.Color.appText)
+                + Text("of \(pageCount)")
+                .foregroundColor(Theme.Color.appTextSecondary)
+        )
+        .scaledFont(13)
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityIdentifier("bookletPager_pageLabel")
+        .accessibilityShowsLargeContentViewer()
+    }
+
+    private var gridButton: some View {
+        Button {
+            mode = .grid
+        } label: {
+            HStack(spacing: Spacing.s1) {
+                Icon(.layoutGrid, size: 12, color: Theme.Color.primaryInk)
+                Text("All pages")
+                    .scaledFont(11, weight: .semibold)
+                    .foregroundStyle(Theme.Color.primaryInk)
+            }
+            .padding(.horizontal, Spacing.s3)
+            .padding(.vertical, Spacing.s1)
+            .background(Theme.Color.primary50)
+            .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("bookletPager_toggleGrid")
+        .accessibilityShowsLargeContentViewer {
+            Icon(.layoutGrid, size: 12)
+            Text("All pages")
+        }
     }
 
     private var scrubber: some View {
@@ -191,16 +307,66 @@ public struct BookletPager: View {
         .frame(height: 4)
         .accessibilityHidden(true)
     }
+}
 
-    // MARK: - Grid mode
+// MARK: - Transcripts
 
+extension BookletPager {
+    private func ocrText(for index: Int) -> String? {
+        guard ocrTexts.indices.contains(index) else { return nil }
+        let text = ocrTexts[index]
+        return text.isEmpty ? nil : text
+    }
+
+    private func hasTranscript(_ layout: BookletReaderLayout) -> Bool {
+        let first = firstShown(layout)
+        return ocrText(for: first) != nil || (layout.isSpread && ocrText(for: first + 1) != nil)
+    }
+
+    /// The page's text; in a spread each page's text sits under that page.
+    @ViewBuilder
+    private func transcripts(_ layout: BookletReaderLayout) -> some View {
+        if layout.isSpread {
+            let first = firstShown(layout)
+            HStack(alignment: .top, spacing: max(layout.foldGap, Spacing.s3)) {
+                transcript(ocrText(for: first))
+                transcript(ocrText(for: first + 1))
+            }
+        } else if let text = ocrText(for: currentIndex) {
+            BookletOCRCard(text: text)
+        }
+    }
+
+    @ViewBuilder
+    private func transcript(_ text: String?) -> some View {
+        if let text {
+            BookletOCRCard(text: text)
+        } else {
+            Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+        }
+    }
+}
+
+// MARK: - Grid mode
+
+extension BookletPager {
     private var gridHeaderLayout: AnyLayout {
         dynamicTypeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.s2))
             : AnyLayout(HStackLayout(alignment: .center, spacing: Spacing.s2))
     }
 
-    private var gridMode: some View {
+    /// Three columns, or four in a spread with the widest gap on the hinge, so no page sits on the fold.
+    private func gridColumns(_ layout: BookletReaderLayout) -> [GridItem] {
+        guard layout.isSpread else { return Array(repeating: GridItem(.flexible(), spacing: Spacing.s2), count: 3) }
+        let hinge = max(layout.foldGap, Spacing.s8)
+        return [
+            GridItem(.flexible(), spacing: Spacing.s2), GridItem(.flexible(), spacing: hinge),
+            GridItem(.flexible(), spacing: Spacing.s2), GridItem(.flexible())
+        ]
+    }
+
+    private func gridMode(_ layout: BookletReaderLayout) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
             gridHeaderLayout {
                 VStack(alignment: .leading, spacing: 1) {
@@ -222,19 +388,18 @@ public struct BookletPager: View {
                     .background(Theme.Color.appSurfaceSunken)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
             }
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, Spacing.s2)
             Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.s2), count: 3),
-                spacing: Spacing.s2
-            ) {
+            LazyVGrid(columns: gridColumns(layout), spacing: Spacing.s2) {
                 ForEach(Array(pages.enumerated()), id: \.offset) { idx, url in
                     Button {
                         currentIndex = idx
                         mode = .page
+                        onShowPage()
                     } label: {
-                        ThumbnailCell(
+                        BookletThumbnailCell(
                             url: url,
                             page: idx + 1,
                             isCurrent: idx == currentIndex,
@@ -247,29 +412,7 @@ public struct BookletPager: View {
                 }
             }
             .padding(Spacing.s3)
-            HStack {
-                Spacer()
-                Button {
-                    mode = .page
-                } label: {
-                    HStack(spacing: Spacing.s1) {
-                        Icon(.chevronLeft, size: 12, color: Theme.Color.primaryInk)
-                        Text("Back to reader")
-                            .scaledFont(11, weight: .semibold)
-                            .foregroundStyle(Theme.Color.primaryInk)
-                    }
-                    .padding(.horizontal, Spacing.s3)
-                    .padding(.vertical, Spacing.s1)
-                    .background(Theme.Color.primary50)
-                    .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("bookletPager_togglePage")
-                Spacer()
-            }
-            .padding(.bottom, Spacing.s3)
+            backToReader
         }
         .background(Theme.Color.appSurface)
         .overlay(
@@ -278,190 +421,34 @@ public struct BookletPager: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
     }
-}
 
-private struct BookletPageImage: View {
-    let url: URL
-    let pageNumber: Int
-    let hasNextPage: Bool
-
-    var body: some View {
-        BookletPaperPageChrome(hasNextPage: hasNextPage) {
-            CachedAsyncImage(url: url, keepsOnDisk: false) { phase in
-                switch phase {
-                case let .success(image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                case .failure:
-                    fallback(icon: .alertCircle, label: "Couldn't load page")
-                case .empty:
-                    fallback(icon: .fileType, label: "Loading...")
-                @unknown default:
-                    fallback(icon: .fileType, label: "")
-                }
+    private var backToReader: some View {
+        Button {
+            mode = .page
+            onShowPage()
+        } label: {
+            HStack(spacing: Spacing.s1) {
+                Icon(.chevronLeft, size: 12, color: Theme.Color.primaryInk)
+                Text("Back to reader")
+                    .scaledFont(11, weight: .semibold)
+                    .foregroundStyle(Theme.Color.primaryInk)
             }
+            .padding(.horizontal, Spacing.s3)
+            .padding(.vertical, Spacing.s1)
+            .background(Theme.Color.primary50)
+            .clipShape(RoundedRectangle(cornerRadius: Radii.pill))
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
-        .accessibilityLabel("Booklet page \(pageNumber)")
-    }
-
-    private func fallback(icon: PantopusIcon, label: String) -> some View {
-        ZStack {
-            Theme.Color.appSurfaceSunken
-            VStack(spacing: Spacing.s2) {
-                Icon(icon, size: 24, color: Theme.Color.appTextMuted)
-                if !label.isEmpty {
-                    Text(label)
-                        .scaledFont(11)
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                }
-            }
+        .buttonStyle(.plain)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .accessibilityIdentifier("bookletPager_togglePage")
+        .accessibilityShowsLargeContentViewer {
+            Icon(.chevronLeft, size: 12)
+            Text("Back to reader")
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-private struct ThumbnailCell: View {
-    let url: URL
-    let page: Int
-    let isCurrent: Bool
-    let hasNextPage: Bool
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            BookletPaperPageChrome(
-                hasNextPage: hasNextPage,
-                foldSize: Spacing.s4,
-                cornerRadius: Radii.sm
-            ) {
-                CachedAsyncImage(url: url, keepsOnDisk: false) { phase in
-                    switch phase {
-                    case let .success(image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    case .failure, .empty:
-                        Rectangle()
-                            .fill(Theme.Color.appSurfaceSunken)
-                    @unknown default:
-                        Rectangle()
-                            .fill(Theme.Color.appSurfaceSunken)
-                    }
-                }
-            }
-            .overlay(
-                RoundedRectangle(cornerRadius: Radii.sm)
-                    .stroke(
-                        isCurrent ? Theme.Color.primary600 : Theme.Color.appBorder,
-                        lineWidth: isCurrent ? 2.5 : 1
-                    )
-            )
-            VStack(alignment: .trailing, spacing: Spacing.s0) {
-                if isCurrent {
-                    Icon(.eye, size: 10, color: Theme.Color.appTextInverse)
-                        .frame(width: 18, height: 18)
-                        .background(Theme.Color.primarySolid)
-                        .clipShape(Circle())
-                        .padding(Spacing.s1)
-                }
-                Spacer(minLength: Spacing.s0)
-                Text("\(page)")
-                    .font(.system(size: 10, weight: .bold, design: .serif))
-                    .italic()
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                    .padding(.horizontal, Spacing.s1)
-                    .padding(.bottom, Spacing.s1)
-                    .frame(maxWidth: .infinity, alignment: .center)
-            }
-        }
-    }
-}
-
-/// The supplied per-page transcript. Only show actions we can perform;
-/// the stored payload does not supply an OCR confidence score.
-private struct BookletOCRCard: View {
-    let text: String
-    @State private var copied = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            header
-            transcript
-            VStack(alignment: .leading, spacing: 10) {
-                Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
-                Button {
-                    UIPasteboard.general.string = text
-                    copied = true
-                } label: {
-                    action(icon: .copy, label: copied ? "Copied" : "Copy text", color: Theme.Color.primary600)
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(Spacing.s3)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.Color.appSurface)
-        .overlay(
-            RoundedRectangle(cornerRadius: Radii.lg)
-                .stroke(Theme.Color.appBorder, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: Radii.lg))
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("bookletPager_ocrCard")
-        .onChange(of: text) { _, _ in copied = false }
-    }
-
-    private var header: some View {
-        HStack(spacing: Spacing.s2) {
-            Icon(.scanLine, size: 13, color: Theme.Color.appTextSecondary)
-                .frame(width: 22, height: 22)
-                .background(Theme.Color.appSurfaceSunken)
-                .clipShape(RoundedRectangle(cornerRadius: Radii.sm))
-            Text("Text from this page")
-                .scaledFont(12, weight: .bold)
-                .foregroundStyle(Theme.Color.appText)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityAddTraits(.isHeader)
-        }
-    }
-
-    /// Transcript lines map onto the JSX kinds by position: line 0 is the
-    /// overline, line 1 the title, the remainder body copy.
-    private var transcript: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(text.components(separatedBy: "\n").enumerated()), id: \.offset) { idx, line in
-                switch idx {
-                case 0:
-                    Text(line)
-                        .scaledFont(10, weight: .bold)
-                        .tracking(0.8)
-                        .textCase(.uppercase)
-                        .foregroundStyle(Theme.Color.appTextMuted)
-                case 1:
-                    Text(line)
-                        .scaledFont(14, weight: .bold)
-                        .foregroundStyle(Theme.Color.appText)
-                default:
-                    Text(line)
-                        .scaledFont(12.5)
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                        .lineSpacing(3)
-                }
-            }
-        }
-    }
-
-    private func action(icon: PantopusIcon, label: String, color: Color) -> some View {
-        HStack(spacing: Spacing.s1) {
-            Icon(icon, size: 12, color: color)
-            Text(label)
-                .scaledFont(12, weight: .semibold)
-                .foregroundStyle(color)
-        }
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, Spacing.s3)
     }
 }
 

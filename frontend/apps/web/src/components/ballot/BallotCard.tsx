@@ -8,16 +8,23 @@
 // 12px source line.
 //
 // Every sentence comes from the server (civic_election, ballot_p0).
-// This component lays it out and draws nothing it wasn't given.
+// This component lays it out and draws nothing it wasn't given. While
+// ballots are counted, LiveCount draws the official count (live_count)
+// over its own note; the plain `note` repeats the count as text for apps
+// that don't draw it.
 // ============================================================
 
 'use client';
 
 import { Calendar, ExternalLink } from 'lucide-react';
 import type {
+  BallotCountGroup,
+  BallotCountOption,
+  BallotCountRace,
   BallotDeadline,
   BallotElectionOffice,
   BallotGovernments,
+  BallotLiveCount,
   BallotMoverPrompt,
   BallotOfficialLink,
   BallotPrimaryAction,
@@ -27,6 +34,7 @@ import type {
 } from '@pantopus/types';
 import { BallotTile } from './BallotGlyph';
 import DeadlineTimeline from './DeadlineTimeline';
+import LiveCount from './LiveCount';
 import { asOfLabel } from './format';
 
 export const CARD_FRAME =
@@ -104,6 +112,43 @@ function readMover(v: unknown): BallotMoverPrompt | null {
   return { text: o.text as string, days_left: days, url: httpsUrl(o.url) };
 }
 
+function readCountOption(v: unknown): BallotCountOption | null {
+  const o = record(v);
+  const share = o && num(o.share);
+  if (!o || !text(o.name) || !text(o.votes_label) || !text(o.percent_label) || share === null) return null;
+  return { name: o.name as string, votes_label: o.votes_label as string, percent_label: o.percent_label as string, share };
+}
+
+function readCountRace(v: unknown): BallotCountRace | null {
+  const o = record(v);
+  if (!o || !text(o.key) || !text(o.title) || (o.kind !== 'candidates' && o.kind !== 'measure')) return null;
+  const options = listOf(o.options, readCountOption);
+  if (!options.length) return null;
+  return { key: o.key as string, kind: o.kind as BallotCountRace['kind'], title: o.title as string, qualifier: text(o.qualifier), options };
+}
+
+function readCountGroup(v: unknown): BallotCountGroup | null {
+  const o = record(v);
+  if (!o || !text(o.key) || !text(o.title)) return null;
+  const races = listOf(o.races, readCountRace);
+  if (!races.length) return null;
+  const fold = record(o.fold);
+  return {
+    key: o.key as string,
+    title: o.title as string,
+    races,
+    fold: fold && text(fold.label) && text(fold.detail) ? { label: fold.label as string, detail: fold.detail as string } : null,
+  };
+}
+
+/** The drawn live count, or null: the card's note then carries the count as text. */
+function readLiveCount(v: unknown): BallotLiveCount | null {
+  const o = record(v);
+  if (!o || !text(o.status) || !text(o.posted)) return null;
+  const groups = listOf(o.groups, readCountGroup);
+  return groups.length ? { status: o.status as string, posted: o.posted as string, groups, note: text(o.note) } : null;
+}
+
 /** The /start teaser (`ballot_teaser`), or null when absent or unusable. */
 export function ballotTeaserData(v: unknown): BallotTeaser | null {
   const o = record(v);
@@ -139,6 +184,7 @@ export function ballotCardData(data: unknown): PlaceBallotElectionData | null {
     chip: text(d.chip),
     line: text(d.line),
     note: text(d.note),
+    live_count: readLiveCount(d.live_count),
     how_it_works: text(d.how_it_works),
     deadlines: listOf(d.deadlines, readDeadline),
     election_day_notice: notice && text(notice.lead) ? { lead: notice.lead as string, detail: text(notice.detail) ?? '' } : null,
@@ -220,6 +266,7 @@ export default function BallotCard({ data, asOf = null, onOpenGovernments, class
   const when = asOfLabel(asOf);
   const source = data.source_line ? `${data.source_line}${when ? ` · as of ${when}` : ''}` : null;
   const timeline = inSeason && data.deadlines && data.today ? data.deadlines : null;
+  const note = data.live_count ? data.live_count.note : data.note;
 
   return (
     <section
@@ -238,7 +285,9 @@ export default function BallotCard({ data, asOf = null, onOpenGovernments, class
         <div className="text-[13.5px] leading-[19px] text-app-text-strong">{data.how_it_works}</div>
       ) : null}
 
-      {data.note ? <div className="whitespace-pre-line text-[13.5px] leading-[19px] text-app-text-strong">{data.note}</div> : null}
+      {data.live_count ? <LiveCount count={data.live_count} /> : null}
+
+      {note ? <div className="whitespace-pre-line text-[13.5px] leading-[19px] text-app-text-strong">{note}</div> : null}
 
       {data.primary_action && data.primary_action.kind === 'governments' && onOpenGovernments ? (
         <button

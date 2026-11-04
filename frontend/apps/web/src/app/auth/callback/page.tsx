@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import * as api from '@pantopus/api';
@@ -16,31 +16,44 @@ const PROVIDER_CANCEL_ERRORS = new Set(['access_denied', 'user_cancelled_authori
 // Same sentence as the apps' rejected callback.
 const ATTEMPT_REJECTED_ERROR = "Sign-in couldn't be verified. Please try again.";
 
+// The sign-in this callback is finishing, kept outside the page: saving the session makes the app rebuild every page
+// (QueryProvider), and the rebuilt page must carry on with the tokens already taken out of the address, the decided
+// check and the exchange, or it finds no code and never lands. A callback with another check starts over.
+type CallbackSignIn = {
+  nonce: string | null;
+  hashCredentials: { access: string; refresh: string | null } | null;
+  // Whether this callback is the sign-in this tab started. Decided once, because
+  // deciding uses the attempt up and the effect below can run more than once.
+  attemptOwned: boolean | null;
+  // The friend's invite code a Create account attempt carried; the server credits them if this sign-in makes the account.
+  inviteCode: string | undefined;
+  exchange: { key: string; promise: ReturnType<typeof api.auth.oauthCallback> } | null;
+  // Where the finished sign-in goes, asked once per exchange: a household invitation opens only once.
+  landing: { key: string; promise: Promise<string> } | null;
+};
+let callbackSignIn: CallbackSignIn | null = null;
+
 function AuthCallbackPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = safeRedirectPath(readAuthRedirectQuery(searchParams), '/app/place');
   const [error, setError] = useState('');
-  const exchangeRef = useRef<{ key: string; promise: ReturnType<typeof api.auth.oauthCallback> } | null>(null);
-  // Where the finished sign-in goes, asked once per exchange: a household invitation opens only once.
-  const landingRef = useRef<{ key: string; promise: Promise<string> } | null>(null);
-  const hashCredentials = useRef<{ access: string; refresh: string | null } | null>(null);
-  // Whether this callback is the sign-in this tab started. Decided once, because
-  // deciding uses the attempt up and the effect below can run more than once.
-  const attemptOwned = useRef<boolean | null>(null);
-  // The friend's invite code a Create account attempt carried; the server credits them if this sign-in makes the account.
-  const inviteCode = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
     const params = new URLSearchParams(window.location.search);
     const code = searchParams?.get('code') || params.get('code');
+    const nonce = searchParams?.get(OAUTH_NONCE_PARAM) || params.get(OAUTH_NONCE_PARAM);
+    if (callbackSignIn?.nonce !== nonce) {
+      callbackSignIn = { nonce, hashCredentials: null, attemptOwned: null, inviteCode: undefined, exchange: null, landing: null };
+    }
+    const signIn = callbackSignIn;
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     const access = hash.get('access_token');
-    if (access) hashCredentials.current = { access, refresh: hash.get('refresh_token') };
+    if (access) signIn.hashCredentials = { access, refresh: hash.get('refresh_token') };
     if (window.location.hash) window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
     const providerError = params.get('error') || hash.get('error');
-    if (providerError && !code && !hashCredentials.current) {
+    if (providerError && !code && !signIn.hashCredentials) {
       if (PROVIDER_CANCEL_ERRORS.has(providerError)) {
         router.replace(authPageHref('/login', redirectTo));
       } else {
@@ -48,7 +61,7 @@ function AuthCallbackPageContent() {
       }
       return () => { cancelled = true; };
     }
-    const credentials = hashCredentials.current;
+    const credentials = signIn.hashCredentials;
     if (!code && !credentials) {
       const timeout = setTimeout(() => {
         if (!cancelled) setError('No authorization code received. Please try signing in again.');
@@ -57,30 +70,32 @@ function AuthCallbackPageContent() {
     }
     // A link carrying someone else's session or code (login CSRF) never signs
     // this browser in: only the attempt this tab started, with its check.
-    if (attemptOwned.current === null) {
-      inviteCode.current = oauthAttemptInviteCode();
-      attemptOwned.current = takeOAuthAttempt(searchParams?.get(OAUTH_NONCE_PARAM) || params.get(OAUTH_NONCE_PARAM));
+    if (signIn.attemptOwned === null) {
+      signIn.inviteCode = oauthAttemptInviteCode();
+      signIn.attemptOwned = takeOAuthAttempt(nonce);
     }
-    if (!attemptOwned.current) {
+    if (!signIn.attemptOwned) {
       setError(ATTEMPT_REJECTED_ERROR);
       return () => { cancelled = true; };
     }
 
     const key = credentials ? `token:${credentials.access}` : `code:${code}`;
-    if (exchangeRef.current?.key !== key) {
-      exchangeRef.current = {
+    if (signIn.exchange?.key !== key) {
+      signIn.exchange = {
         key,
         promise: credentials
-          ? api.auth.oauthTokenCallback(credentials.access, credentials.refresh, inviteCode.current)
-          : api.auth.oauthCallback(code!, inviteCode.current),
+          ? api.auth.oauthTokenCallback(credentials.access, credentials.refresh, signIn.inviteCode)
+          : api.auth.oauthCallback(code!, signIn.inviteCode),
       };
     }
     setError('');
-    exchangeRef.current.promise.then((response) => {
+    signIn.exchange.promise.then((response) => {
       if (cancelled) return;
-      bindPlaceArrival(redirectTo, response.user?.id);
-      if (landingRef.current?.key !== key) landingRef.current = { key, promise: landingAfterSignIn(redirectTo) };
-      return landingRef.current.promise.then((landing) => { if (!cancelled) router.replace(landing); });
+      if (signIn.landing?.key !== key) {
+        bindPlaceArrival(redirectTo, response.user?.id);
+        signIn.landing = { key, promise: landingAfterSignIn(redirectTo) };
+      }
+      return signIn.landing.promise.then((landing) => { if (!cancelled) router.replace(landing); });
     }).catch((err: unknown) => {
       if (!cancelled) setError(err instanceof Error ? err.message : 'Sign-in failed. Please try again.');
     });

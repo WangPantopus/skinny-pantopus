@@ -87,10 +87,9 @@ public struct SettingsView: View {
             .background(Theme.Color.appBg)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("settings")
-            .confirmationDialog(
+            .alert(
                 "Sign out of Pantopus?",
-                isPresented: $showsSignOutConfirm,
-                titleVisibility: .visible
+                isPresented: $showsSignOutConfirm
             ) {
                 Button("Sign out", role: .destructive) {
                     Task {

@@ -56,8 +56,16 @@ struct PulseMediaPicker: UIViewControllerRepresentable {
 
 @MainActor
 private enum PulsePickedMedia {
+    /// What the Photos picker registers for a Live Photo: `com.apple.live-photo-bundle`
+    /// (PHLivePhoto's readable type), which doesn't conform to `UTType.livePhoto`.
+    private static let livePhotoTypes = ["com.apple.live-photo-bundle", UTType.livePhoto.identifier]
+
     static func load(_ provider: NSItemProvider) async throws -> PulseComposePhoto {
-        if provider.canLoadObject(ofClass: PHLivePhoto.self) {
+        // Only request Live Photo objects when the selected item advertises
+        // that representation. Probing PHLivePhoto for an ordinary still can
+        // raise an Objective-C exception on the current simulator runtime,
+        // so the check reads the provider's own types, never PHLivePhoto's.
+        if livePhotoTypes.contains(where: provider.hasItemConformingToTypeIdentifier) {
             let live: PHLivePhoto = try await withCheckedThrowingContinuation { continuation in
                 provider.loadObject(ofClass: PHLivePhoto.self) { object, error in
                     if let live = object as? PHLivePhoto {
