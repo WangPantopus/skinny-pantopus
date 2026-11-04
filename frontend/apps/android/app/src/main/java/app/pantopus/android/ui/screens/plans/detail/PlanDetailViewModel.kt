@@ -125,8 +125,14 @@ class PlanDetailViewModel
         private var active = true
         private var readGeneration = 0L
 
+        /** Only the stored public card is on screen: its actions wait for a fresh read, so a failed read offers Retry. */
+        private var storedCardOnly = false
+
         init {
-            repository.card(planId)?.let { card -> _ui.update { it.copy(state = PlanDetailUiState.Ready(card, fresh = false)) } }
+            repository.card(planId)?.let { card ->
+                storedCardOnly = true
+                _ui.update { it.copy(state = PlanDetailUiState.Ready(card, fresh = false)) }
+            }
         }
 
         /** Every appearance: read the plan fresh (opening an invitation first, once). */
@@ -152,7 +158,10 @@ class PlanDetailViewModel
             inviteClaimed = true
             when (result) {
                 is NetworkResult.Success ->
-                    result.data.plan?.let { plan -> _ui.update { it.copy(state = PlanDetailUiState.Ready(plan, fresh = false)) } }
+                    result.data.plan?.let { plan ->
+                        storedCardOnly = false
+                        _ui.update { it.copy(state = PlanDetailUiState.Ready(plan, fresh = false)) }
+                    }
                 is NetworkResult.Failure -> {
                     val sentence =
                         when {
@@ -186,7 +195,7 @@ class PlanDetailViewModel
                 is PlanRead.Failed ->
                     _ui.update {
                         val refused = read.error is NetworkError.Forbidden || read.error == NetworkError.Unauthorized
-                        if (it.state is PlanDetailUiState.Ready && !refused) {
+                        if (it.state is PlanDetailUiState.Ready && !refused && !storedCardOnly) {
                             it.copy(notice = read.error.planMessage)
                         } else {
                             it.copy(
@@ -206,6 +215,7 @@ class PlanDetailViewModel
             val wasWaiting = before == PlanViewerStanding.REQUESTED || before == PlanViewerStanding.WAITLISTED
             val reveal = nowIn && (revealOnOpen || wasWaiting || events.shouldReveal(plan.id))
             if (nowIn) events.revealed(plan.id)
+            storedCardOnly = false
             _ui.update {
                 it.copy(
                     state = PlanDetailUiState.Ready(plan, fresh = true),
@@ -293,6 +303,7 @@ class PlanDetailViewModel
                 requestsJob?.cancel()
                 requestsJob = null
                 val card = repository.card(planId)
+                storedCardOnly = card != null
                 _ui.update {
                     it.copy(
                         state = card?.let { plan -> PlanDetailUiState.Ready(plan, fresh = false) } ?: PlanDetailUiState.Loading,
@@ -371,7 +382,10 @@ class PlanDetailViewModel
                         val status = PlanRequestStatus.from(result.data.request?.status)
                         _ui.update { it.copy(askOpen = false, ask = it.ask.copy(sending = false)) }
                         if (!active || generation != readGeneration) return@launch
-                        result.data.plan?.let { reply -> _ui.update { it.copy(state = PlanDetailUiState.Ready(reply, fresh = false)) } }
+                        result.data.plan?.let { reply ->
+                            storedCardOnly = false
+                            _ui.update { it.copy(state = PlanDetailUiState.Ready(reply, fresh = false)) }
+                        }
                         if (status == PlanRequestStatus.ACCEPTED) _ui.update { it.copy(reveal = true) }
                         read()
                     }
