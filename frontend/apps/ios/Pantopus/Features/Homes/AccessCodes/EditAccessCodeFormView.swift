@@ -112,18 +112,28 @@ public struct EditAccessCodeFormView: View {
         viewModel.canManage && viewModel.availableVisibilities.contains(viewModel.visibility)
     }
 
+    private var canEditFields: Bool {
+        viewModel.canManage && !viewModel.awaitingCreateConfirmation
+    }
+
     @ViewBuilder private var formContent: some View {
         if viewModel.isLoading || viewModel.isConfirmingAccess {
             EditAccessCodeFormSkeleton()
         } else if canShowContent {
             if !viewModel.canManage {
-                Text("You can view and copy this code. Editing is unavailable with your current access.")
+                Text(viewModel.isDirty
+                    ? "Your unsaved changes are kept. Editing is unavailable with your current access."
+                    : "You can view and copy this code. Editing is unavailable with your current access.")
                     .pantopusTextStyle(.small)
             }
-            categorySection.disabled(!viewModel.canManage)
+            if viewModel.awaitingCreateConfirmation {
+                Text("The code may already be saved. Your details are kept. Tap Save to check.")
+                    .pantopusTextStyle(.small)
+            }
+            categorySection.disabled(!canEditFields)
             detailsSection
-            notesSection.disabled(!viewModel.canManage)
-            sharedWithSection.disabled(!viewModel.canManage)
+            notesSection.disabled(!canEditFields)
+            sharedWithSection.disabled(!canEditFields)
             if viewModel.canManage, !canSaveScope {
                 Text("Choose a sharing option allowed by your current access.")
                     .pantopusTextStyle(.caption)
@@ -184,11 +194,11 @@ public struct EditAccessCodeFormView: View {
                 contentType: .oneTimeCode,
                 identifier: EditAccessCodeA11y.labelField
             )
-            .disabled(!viewModel.canManage)
+            .disabled(!canEditFields)
             ValueField(
                 value: valueBinding,
                 isRevealed: viewModel.isRevealed,
-                canEdit: viewModel.canManage,
+                canEdit: canEditFields,
                 state: fieldState(for: viewModel.fields[.value]),
                 onToggleReveal: { if canShowContent { viewModel.toggleReveal() } },
                 onCopy: { if canShowContent { viewModel.copyValue() } }

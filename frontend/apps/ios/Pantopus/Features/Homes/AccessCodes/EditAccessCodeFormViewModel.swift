@@ -102,6 +102,7 @@ final class EditAccessCodeFormViewModel {
     private(set) var accessError: String?
     /// The pre-save check of current access is running; the form stays visible but disabled.
     private(set) var isRechecking = false
+    private(set) var awaitingCreateConfirmation = false
 
     /// `true` when this VM is editing an existing code.
     var isEditing: Bool {
@@ -124,6 +125,10 @@ final class EditAccessCodeFormViewModel {
     private let clipboard: @MainActor (String) -> Void
     private var toastTask: Task<Void, Never>?
     private var readGeneration = 0
+    private var readSecretIds: Set<String> = []
+    private var creationBaselineIds: Set<String> = []
+    private var creatingActorId: String?
+    private var creationConfirmed = false
 
     init(
         homeId: String,
@@ -152,6 +157,8 @@ final class EditAccessCodeFormViewModel {
         hasCurrentAccess = false
         canManage = false
         availableVisibilities = []
+        creationConfirmed = false
+        readSecretIds = []
         isLoading = true
         isConfirmingAccess = true
         isRechecking = false
@@ -183,6 +190,7 @@ final class EditAccessCodeFormViewModel {
             canManage = false
             availableVisibilities = []
         }
+        creationConfirmed = false
         accessError = nil
         defer {
             if generation == readGeneration {
@@ -193,6 +201,7 @@ final class EditAccessCodeFormViewModel {
         do {
             let response: HomeAccessSecretsResponse = try await api.request(HomesEndpoints.accessSecrets(homeId: homeId))
             guard generation == readGeneration, !Task.isCancelled else { return }
+            readSecretIds = Set(response.secrets.map(\.id))
             availableVisibilities = response.canManage == true
                 ? Set((response.allowedVisibilities ?? []).compactMap(AccessVisibility.init(rawValue:)))
                 : []
@@ -209,6 +218,11 @@ final class EditAccessCodeFormViewModel {
             } else {
                 hasCurrentAccess = canManage
                 if !canManage { accessError = "You don't have permission to add an access code." }
+                if awaitingCreateConfirmation, let creatingActorId {
+                    creationConfirmed = response.secrets.contains {
+                        !creationBaselineIds.contains($0.id) && matchesCreateIntent($0, actorId: creatingActorId)
+                    }
+                }
             }
             state = .editing
         } catch {
@@ -288,7 +302,12 @@ final class EditAccessCodeFormViewModel {
         isSaving = true
         defer { isSaving = false }
         do {
-            try await sendRequest()
+            if !isEditing, !awaitingCreateConfirmation {
+                creationBaselineIds = readSecretIds
+                if case let .signedIn(user) = (api.authProvider ?? AuthManager.shared).state { creatingActorId = user.id }
+            }
+            if !awaitingCreateConfirmation || !creationConfirmed { try await sendRequest() }
+            awaitingCreateConfirmation = false
             toast = ToastMessage(
                 text: isEditing ? "Code updated." : "Code added.",
                 kind: .success
@@ -297,6 +316,7 @@ final class EditAccessCodeFormViewModel {
             shouldDismiss = true
             return true
         } catch {
+            if !isEditing { awaitingCreateConfirmation = creationMayHaveSucceeded(after: error) }
             toast = ToastMessage(
                 text: (error as? APIError)?.errorDescription
                     ?? (isEditing ? "Couldn't save code." : "Couldn't add code."),

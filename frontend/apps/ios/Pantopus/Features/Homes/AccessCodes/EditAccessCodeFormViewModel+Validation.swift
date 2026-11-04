@@ -8,6 +8,26 @@
 import Foundation
 
 extension EditAccessCodeFormViewModel {
+    /// Recovery is only for this actor's exact retained intent, never a generic label conflict.
+    func matchesCreateIntent(_ secret: HomeAccessSecretDTO, actorId: String) -> Bool {
+        func value(_ field: EditAccessCodeField) -> String {
+            (fields[field]?.value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return secret.homeId == homeId && secret.createdBy == actorId
+            && secret.accessType == category.backendAccessType && secret.visibility == visibility.rawValue
+            && secret.label == value(.label) && secret.secretValue == value(.value)
+            && (secret.notes ?? "") == value(.notes)
+    }
+
+    func creationMayHaveSucceeded(after error: any Error) -> Bool {
+        guard let error = error as? APIError else { return true }
+        switch error {
+        case .invalidResponse, .server, .transport, .decoding, .retriesExhausted: return true
+        case let .clientError(status, _): return status == 408
+        case .invalidURL, .unauthorized, .forbidden, .notFound: return false
+        }
+    }
+
     // MARK: - Aggregate
 
     var aggregate: FormAggregate {
