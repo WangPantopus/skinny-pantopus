@@ -96,8 +96,9 @@ export function useSyncChanged(): void {
     const connected = () => {
       if (connectedBefore) {
         mark(client, ['homes']);
-        mark(client, queryKeys.placePrimaryHome());
+        // The list first, as for the `homes` topic: the primary read derives from it.
         mark(client, queryKeys.placeMyHomes());
+        mark(client, queryKeys.placePrimaryHome());
         mark(client, queryKeys.placeMyClaims());
         markTopic(client, 'chats');
         void client.invalidateQueries({ queryKey: ['chat'],
