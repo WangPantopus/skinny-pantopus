@@ -317,12 +317,11 @@ private struct BookletPiece: View {
             HStack(alignment: .bottom, spacing: Spacing.s4) {
                 coverHeading.fixedSize(horizontal: true, vertical: false)
                 Spacer(minLength: Spacing.s2)
-                addressee.frame(width: 150)
+                addressee(width: 150)
             }
             VStack(alignment: .leading, spacing: Spacing.s2) {
                 coverHeading
-                addressee
-                    .frame(maxWidth: 150, alignment: .leading)
+                addressee(width: 150)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
@@ -348,8 +347,7 @@ private struct BookletPiece: View {
                 .frame(width: width * 0.52, alignment: .leading)
                 .padding(.leading, 22)
                 .padding(.top, 50)
-            addressee
-                .frame(width: min(150, width * 0.42), alignment: .leading)
+            addressee(width: min(150, width * 0.42))
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 .padding(Spacing.s3)
         }
@@ -380,7 +378,8 @@ private struct BookletPiece: View {
         }
     }
 
-    private var addressee: some View {
+    /// The mailing label: a fixed width whatever the name's length, as a label is.
+    private func addressee(width: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
             Text(model.to).lineLimit(1)
             if let line = model.toLine { Text(line).lineLimit(1) }
@@ -389,6 +388,7 @@ private struct BookletPiece: View {
         .foregroundStyle(MailPaper.postalInk)
         .padding(.horizontal, 9)
         .padding(.vertical, 7)
+        .frame(width: width, alignment: .leading)
         .background(MailPaper.envelope, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
     }
 }
