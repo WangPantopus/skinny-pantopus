@@ -16,6 +16,7 @@ import CoreLocation
 import Foundation
 import MapKit
 import Observation
+import SwiftUI
 
 /// Board P3 "The sheet": peek (its first lines), half, and full (under the
 /// floating chrome). `PlansSheetLayout` places them on the screen.
@@ -74,6 +75,8 @@ final class PlansMapViewModel {
     @ObservationIgnored private var fitsAfterPins = false
     /// Where the camera last settled.
     @ObservationIgnored private(set) var lastRegion: MKCoordinateRegion?
+    /// The same, as a camera: its distance keeps the zoom when a new map is a different shape (a fold).
+    @ObservationIgnored private(set) var lastCamera: MapCamera?
 
     private var span: Double = 0.06
     /// The map's height on screen, so pins join clusters at the same distance on every phone.
@@ -243,8 +246,9 @@ final class PlansMapViewModel {
     }
 
     /// The camera settled: read the pins for the visible box (debounced).
-    func cameraChanged(_ region: MKCoordinateRegion) {
+    func cameraChanged(_ region: MKCoordinateRegion, camera: MapCamera? = nil) {
         lastRegion = region
+        if let camera { lastCamera = camera }
         span = max(region.span.latitudeDelta, 0.002)
         viewport = PlansViewport(
             south: region.center.latitude - region.span.latitudeDelta / 2,
@@ -293,8 +297,9 @@ final class PlansMapViewModel {
 
     // MARK: - What shows
 
-    /// Pins after the type filter, clustered at this zoom (board P1).
-    var markers: [PlansMarker] {
+    /// Pins after the type filter, clustered at this zoom (board P1), `selectedId` (the plan shown selected) never
+    /// in a cluster.
+    func markers(selectedId: String?) -> [PlansMarker] {
         PlansClustering.markers(
             pins.filter { kindFilter == nil || $0.kind == kindFilter },
             span: span,

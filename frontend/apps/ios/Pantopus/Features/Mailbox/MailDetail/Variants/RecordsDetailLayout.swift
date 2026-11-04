@@ -19,6 +19,8 @@ import SwiftUI
 
 @MainActor
 struct RecordsDetailLayout: View {
+    /// Beside the Mailbox the list is the way back (`mailPieceShowsBack`).
+    @Environment(\.mailPieceShowsBack) private var showsBack
     let content: MailDetailContent
     let records: RecordsDetailDTO
     let fileInFlight: Bool
@@ -31,7 +33,7 @@ struct RecordsDetailLayout: View {
 
     var body: some View {
         MailItemDetailShell(
-            topBar: makeTopBar(),
+            topBar: makeTopBar().showingBack(showsBack),
             aiElf: makeAIElf(),
             attachments: nil,
             hero: { RecordsHeroCard(content: content, records: records) },
