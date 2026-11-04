@@ -41,30 +41,35 @@ struct BookletDetailLayout: View {
     var downloadInFlight: Bool = false
 
     var body: some View {
-        MailItemDetailShell(
-            topBar: makeTopBar(),
-            aiElf: makeAIElf(),
-            attachments: makeAttachments(),
-            hero: { HeroCard(content: content) },
-            keyFacts: { keyFacts() },
-            body: {
-                BookletPager(
-                    pages: booklet.pages,
-                    pageCount: booklet.pageCount,
-                    ocrTexts: booklet.ocrTexts
-                )
-            },
-            sender: { SenderCard(content: content, onOpenProfile: onOpenSenderProfile) },
-            actions: {
-                ActionsRow(
-                    onSaveToVault: onSaveToVault,
-                    onArchive: onArchive,
-                    onDownloadPDF: onDownloadPDF,
-                    downloadInFlight: downloadInFlight
-                )
-            }
-        )
-        .accessibilityIdentifier("mailDetail_booklet")
+        ScrollViewReader { scroll in
+            MailItemDetailShell(
+                topBar: makeTopBar(),
+                aiElf: makeAIElf(),
+                attachments: makeAttachments(),
+                hero: { HeroCard(content: content) },
+                keyFacts: { keyFacts() },
+                body: {
+                    BookletPager(
+                        pages: booklet.pages,
+                        pageCount: booklet.pageCount,
+                        ocrTexts: booklet.ocrTexts
+                    ) {
+                        scroll.scrollTo(content.mailId, anchor: .top)
+                    }
+                    .id(content.mailId)
+                },
+                sender: { SenderCard(content: content, onOpenProfile: onOpenSenderProfile) },
+                actions: {
+                    ActionsRow(
+                        onSaveToVault: onSaveToVault,
+                        onArchive: onArchive,
+                        onDownloadPDF: onDownloadPDF,
+                        downloadInFlight: downloadInFlight
+                    )
+                }
+            )
+            .accessibilityIdentifier("mailDetail_booklet")
+        }
     }
 
     // MARK: - Top bar
