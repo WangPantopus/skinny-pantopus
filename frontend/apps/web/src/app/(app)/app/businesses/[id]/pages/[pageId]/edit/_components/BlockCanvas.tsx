@@ -229,9 +229,11 @@ export default function BlockCanvas({
             <div className="mt-4">
               <button
                 onClick={() => {
-                  // Scroll palette into view or show inline hint
-                  const sidebar = document.querySelector('aside');
-                  if (sidebar) sidebar.scrollTo({ top: 0, behavior: 'smooth' });
+                  // The app navigation is also an aside; target this editor's
+                  // palette and give keyboard users a block they can choose.
+                  const firstBlock = document.getElementById('business-block-palette')?.querySelector('button');
+                  firstBlock?.focus();
+                  firstBlock?.scrollIntoView({ block: 'center', behavior: 'smooth' });
                 }}
                 className="w-full py-3 rounded-xl border-2 border-dashed border-app-border text-sm font-medium text-app-text-muted hover:border-violet-300 hover:text-violet-500 transition"
               >
