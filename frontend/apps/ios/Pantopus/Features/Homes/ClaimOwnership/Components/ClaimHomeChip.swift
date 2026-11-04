@@ -10,13 +10,30 @@ import SwiftUI
 
 /// Green home-pillar pill identifying the home being claimed.
 struct ClaimHomeChip: View {
+    let label: String
+
+    var body: some View {
+        // The Home is the step's context: its capitals stop growing at the first accessibility size instead of
+        // filling a phone's screen at the largest, and a long press shows them large.
+        ClaimHomeChipPill(label: label)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+            .accessibilityShowsLargeContentViewer {
+                Icon(.home, size: 22)
+                Text("Home · \(label)")
+            }
+    }
+}
+
+/// The pill, sized for the text size it's given.
+private struct ClaimHomeChipPill: View {
     @ScaledMetric(relativeTo: .caption2) private var overlineSize = PantopusTextStyle.overline.size
+    @ScaledMetric(relativeTo: .caption2) private var iconSize = 11.0
 
     let label: String
 
     var body: some View {
         HStack(spacing: Spacing.s1) {
-            Icon(.home, size: 11, color: Theme.Color.home)
+            Icon(.home, size: iconSize, color: Theme.Color.home)
             Text("Home · \(label)", style: .overline, font: .system(size: overlineSize, weight: .semibold))
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(Theme.Color.home)

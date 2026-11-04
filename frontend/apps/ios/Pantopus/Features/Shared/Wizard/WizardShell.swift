@@ -180,7 +180,8 @@ public struct WizardShell<Content: View>: View {
     }
 }
 
-/// Top bar: X/back leading, centered title, "N/M" trailing; grows with text.
+/// Top bar: X/back leading, centered title, "N/M" trailing. Like a system bar's, its text stops growing at the
+/// largest standard size, so the step keeps the screen at the accessibility sizes; a long press shows it large.
 private struct WizardTopBar: View {
     let title: String
     let leading: WizardLeadingControl
@@ -195,12 +196,18 @@ private struct WizardTopBar: View {
             }
             .accessibilityLabel(leadingA11y)
             .accessibilityIdentifier("wizardLeadingButton")
+            .accessibilityShowsLargeContentViewer {
+                Icon(leadingIcon, size: 22)
+                Text(leadingA11y)
+            }
             Text(title)
                 .scaledFont(PantopusTextStyle.body.size)
                 .foregroundStyle(Theme.Color.appText)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity)
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                .accessibilityShowsLargeContentViewer()
                 .accessibilityAddTraits(.isHeader)
             if case let .stepOf(current, total) = progressLabel {
                 Text("\(current)/\(total)")
@@ -208,6 +215,7 @@ private struct WizardTopBar: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .fixedSize()
                     .frame(minWidth: 44)
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .accessibilityIdentifier("wizardStepReadout")
             } else {
                 Color.clear.frame(width: 44, height: 44)
