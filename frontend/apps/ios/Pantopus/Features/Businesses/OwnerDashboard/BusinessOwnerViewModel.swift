@@ -37,6 +37,7 @@ public final class BusinessOwnerViewModel {
     private let client: APIClient
     private let defaults: UserDefaults
     private let logger = Logger(label: "app.pantopus.ios.BusinessOwner")
+    private var readGeneration = 0
 
     /// Per-business dismissal flag for the founding banner. Mirrors RN's
     /// `AsyncStorage` key `pantopus_founding_dismissed_<businessId>`
@@ -196,11 +197,19 @@ public final class BusinessOwnerViewModel {
     // MARK: - Fetch
 
     private func fetch() async {
+        readGeneration &+= 1
+        let generation = readGeneration
+        // Both required reads can start together. Optional sections must not
+        // keep the whole dashboard behind its loading placeholder.
+        async let dashboardRead: BusinessDashboardResponse = client.request(
+            BusinessesEndpoints.dashboard(businessId: businessId)
+        )
         // 1. Public render (primary) — reuse the Business Profile projection so
         //    the owner frame reads exactly the public page. This also gives the
         //    not-found / error semantics for the whole screen.
         let profileViewModel = BusinessProfileViewModel(businessId: businessId, client: client)
         await profileViewModel.load()
+        guard generation == readGeneration, !Task.isCancelled else { return }
         let publicProfile: BusinessProfileContent
         switch profileViewModel.state {
         case let .loaded(content):
@@ -219,12 +228,10 @@ public final class BusinessOwnerViewModel {
         // 2. Owner-scoped dashboard (required) — publish state + strength.
         let dashboard: BusinessDashboardResponse
         do {
-            dashboard = try await client.request(
-                BusinessesEndpoints.dashboard(businessId: businessId),
-                as: BusinessDashboardResponse.self
-            )
-        } catch let error as APIError {
-            switch error {
+            dashboard = try await dashboardRead
+        } catch {
+            guard generation == readGeneration, !Task.isCancelled else { return }
+            switch error as? APIError {
             case .forbidden:
                 state = .error(message: "You don't have access to this business.")
             case .notFound:
@@ -233,38 +240,61 @@ public final class BusinessOwnerViewModel {
                 state = .error(message: "Couldn't load your business")
             }
             return
-        } catch {
-            state = .error(message: "Couldn't load your business")
-            return
         }
-
-        // 3. Tiles + reviews (best-effort overlays; sequential so the request
-        //    order stays deterministic for the stubbed-network tests).
-        let insights = try? await client.request(
-            BusinessesEndpoints.insights(businessId: businessId),
-            as: BusinessInsightsResponse.self
-        )
-        let reviewsResponse = try? await client.request(
-            BusinessesEndpoints.reviews(businessId: businessId),
-            as: BusinessOwnerReviewsResponse.self
-        )
-        // 4. Founding-offer banner (best-effort; RN fetches it on the same
-        //    dashboard load and hides the banner on any failure).
-        let founding = await loadFoundingOffer()
-
+        guard generation == readGeneration, !Task.isCancelled else { return }
         state = .loaded(
             makeContent(
                 publicProfile: publicProfile,
                 dashboard: dashboard,
-                insights: insights,
-                reviews: reviewsResponse?.reviews ?? [],
-                foundingOffer: founding
+                insights: nil,
+                reviews: []
             )
         )
+        await loadAdditionalContent(generation: generation)
     }
 
-    // MARK: - Projection (pure; testable)
+    private enum AdditionalContent {
+        case insights(BusinessInsightsResponse?)
+        case reviews([BusinessOwnerReviewDTO])
+        case founding(OwnerFoundingOffer?)
+    }
 
+    private func loadAdditionalContent(generation: Int) async {
+        await withTaskGroup(of: AdditionalContent.self) { group in
+            group.addTask { [client, businessId] in
+                await .insights(try? client.request(BusinessesEndpoints.insights(businessId: businessId)))
+            }
+            group.addTask { [client, businessId] in
+                let response: BusinessOwnerReviewsResponse? = try? await client.request(
+                    BusinessesEndpoints.reviews(businessId: businessId)
+                )
+                return .reviews(response?.reviews ?? [])
+            }
+            group.addTask { await .founding(self.loadFoundingOffer()) }
+            for await result in group {
+                guard generation == readGeneration, !Task.isCancelled,
+                      case let .loaded(current) = state else {
+                    group.cancelAll()
+                    return
+                }
+                // Merge into the current content so another section finishing
+                // cannot erase an optimistic review reply or a dismissed offer.
+                switch result {
+                case let .insights(insights):
+                    state = .loaded(current.withAdditionalContent(insights: insightTiles(from: insights)))
+                case let .reviews(reviews):
+                    state = .loaded(current.withAdditionalContent(reviews: reviews.map(ownerReview)))
+                case let .founding(offer):
+                    state = .loaded(current.withFoundingOffer(defaults.bool(forKey: foundingDismissedKey) ? nil : offer))
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Projection (pure; testable)
+
+extension BusinessOwnerViewModel {
     /// Compose the owner content from the public render + the owner-scoped
     /// fetches. Exposed `internal` so the projection can be unit-tested
     /// without sequencing six network responses.
