@@ -185,7 +185,11 @@ fun SlotEditorSheet(
 
     pickerTarget?.let { target ->
         FutureDateTimePickerDialogs(
-            initial = null,
+            initial =
+                runCatching {
+                    val time = if (target == PickerTarget.END) draft.endTime else draft.startTime
+                    LocalDate.parse(draft.slotDate).atTime(LocalTime.parse(time))
+                }.getOrNull(),
             onPicked = { picked ->
                 draft =
                     when (target) {
