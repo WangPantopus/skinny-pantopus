@@ -999,8 +999,8 @@ private class RadonTodayState(
     val hasRadon: Boolean,
     private val memory: RadonTodayMemory?,
     private val reportReader: (suspend (Uri) -> RadonReportReading?)?,
-    private var suspendedDraft: RadonTodayDraft? = null,
 ) {
+    var suspendedDraft: RadonTodayDraft? = null
     val lifetime = CoroutineScope(parent.coroutineContext + Job(parent.coroutineContext[Job]))
     private var active = true
     private val dispatchContext: suspend () -> Unit = {
@@ -1108,7 +1108,8 @@ private class RadonTodayState(
                 return
             }
             val readAt = memory?.byHome?.get(homeId)?.readAt ?: 0L
-            if (!force && suspendedDraft == null && loaded && System.currentTimeMillis() - readAt in 0 until RADON_TASKS_FRESH_MS) {
+            val copyFresh = loaded && System.currentTimeMillis() - readAt in 0 until RADON_TASKS_FRESH_MS
+            if (!force && suspendedDraft == null && copyFresh) {
                 keepSnapshot()
                 return
             }
@@ -1334,8 +1335,8 @@ private fun rememberHomeTodayState(
     val state =
         remember(homeId, intel, epoch) {
             RadonTodayState(
-                homeId, factory, parent, contextGuard, events, context.homeTodayPreferences, hasRadon, memory, reportReader, pausedDraft,
-            )
+                homeId, factory, parent, contextGuard, events, context.homeTodayPreferences, hasRadon, memory, reportReader,
+            ).apply { suspendedDraft = pausedDraft }
         }
     DisposableEffect(state) { onDispose { state.close() } }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
