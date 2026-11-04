@@ -96,14 +96,16 @@ struct PlansMapView: View {
 
     private func select(_ pin: PlanPinDTO) {
         withSheetAnimation { viewModel.select(pin) }
-        // Keep the pin above the half-open sheet: center the camera below it.
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) { showAboveCard(pin) }
+    }
+
+    /// Keep the pin above the half-open sheet: center the camera below it.
+    private func showAboveCard(_ pin: PlanPinDTO) {
         let span = viewModel.lastRegion?.span ?? MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) {
-            camera = .region(MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: pin.latitude - span.latitudeDelta * 0.22, longitude: pin.longitude),
-                span: span
-            ))
-        }
+        camera = .region(MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: pin.latitude - span.latitudeDelta * 0.22, longitude: pin.longitude),
+            span: span
+        ))
     }
 
     private func zoom(to cluster: PlansCluster) {
@@ -144,10 +146,14 @@ struct PlansMapView: View {
     }
 
     /// A map made again for the same plans (a new layout of this screen) opens where the last one was left, at its
-    /// zoom, instead of on its own first look.
+    /// zoom, instead of on its own first look; with a pin selected (its card in the sheet), with that pin above the card.
     private func restoreCamera() {
-        guard camera == .automatic, let last = viewModel.lastCamera else { return }
-        camera = .camera(last)
+        guard camera == .automatic else { return }
+        if let id = viewModel.selectedId, let pin = viewModel.pin(for: id) {
+            showAboveCard(pin)
+        } else if let last = viewModel.lastCamera {
+            camera = .camera(last)
+        }
     }
 
     private func recenter() {

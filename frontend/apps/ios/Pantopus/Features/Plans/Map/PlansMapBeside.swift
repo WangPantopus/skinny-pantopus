@@ -54,8 +54,8 @@ struct PlansMapBeside: View {
             .onChange(of: viewModel.widenRequest) { _, _ in widen(window: window, mapSize: mapSize) }
             .onChange(of: viewModel.recenterRequest) { _, _ in recenter(window: window, mapSize: mapSize) }
             .onChange(of: selectedId) { _, id in bringIntoSight(id, window: window, mapSize: mapSize) }
+            .onAppear { restoreCamera(window: window, mapSize: mapSize) }
         }
-        .onAppear(perform: restoreCamera)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plansMapBeside")
     }
@@ -66,10 +66,15 @@ struct PlansMapBeside: View {
         CGRect(x: insets.leading + 32, y: insets.top + 72, width: size.width - 64, height: size.height - 72 - 32)
     }
 
-    /// A map made again for the same plans (a fold, a turn) opens where the last one was left, at its zoom.
-    private func restoreCamera() {
-        guard camera == .automatic, let last = viewModel.lastCamera else { return }
-        camera = .camera(last)
+    /// A map made again for the same plans (an unfold, a turn) opens where the last one was left, at its zoom; with
+    /// a plan open in the column, with that plan in the open map's middle.
+    private func restoreCamera(window: CGRect, mapSize: CGSize) {
+        guard camera == .automatic else { return }
+        if let id = selectedId, let pin = viewModel.pin(for: id), let span = viewModel.lastRegion?.span {
+            camera = .region(centered(on: pin, span: span, window: window, mapSize: mapSize))
+        } else if let last = viewModel.lastCamera {
+            camera = .camera(last)
+        }
     }
 
     /// F1's first look: you and the plans around you, inside the open map.
@@ -123,14 +128,20 @@ struct PlansMapBeside: View {
             y: (north - pin.latitude) / region.span.latitudeDelta * mapSize.height
         )
         guard !window.contains(point) else { return }
-        // The pin at the open map's middle, the span kept.
-        let center = CLLocationCoordinate2D(
-            latitude: pin.latitude + (window.midY - mapSize.height / 2) * region.span.latitudeDelta / mapSize.height,
-            longitude: pin.longitude - (window.midX - mapSize.width / 2) * region.span.longitudeDelta / mapSize.width
-        )
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) {
-            camera = .region(MKCoordinateRegion(center: center, span: region.span))
+            camera = .region(centered(on: pin, span: region.span, window: window, mapSize: mapSize))
         }
+    }
+
+    /// A region of this span with the pin at the open map's middle.
+    private func centered(on pin: PlanPinDTO, span: MKCoordinateSpan, window: CGRect, mapSize: CGSize) -> MKCoordinateRegion {
+        MKCoordinateRegion(
+            center: CLLocationCoordinate2D(
+                latitude: pin.latitude + (window.midY - mapSize.height / 2) * span.latitudeDelta / mapSize.height,
+                longitude: pin.longitude - (window.midX - mapSize.width / 2) * span.longitudeDelta / mapSize.width
+            ),
+            span: span
+        )
     }
 
     /// Four points `miles` north, south, east and west of a center.
