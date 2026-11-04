@@ -226,6 +226,11 @@ class AccessCodesViewModel
         // ─── Chip strip ────────────────────────────────────────────
 
         private fun rebuildChipStrip() {
+            // Counts describe the current read only; a pending or failed read shows no chips.
+            if (!hasCurrentSecrets) {
+                _chipStrip.value = null
+                return
+            }
             val counts = countsByCategory()
             val chips =
                 buildList {
