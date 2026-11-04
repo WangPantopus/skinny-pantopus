@@ -548,7 +548,11 @@ Plan: [docs/ballot-implementation-plan-2026-09-24.md](docs/ballot-implementation
   all one neutral gray with no party colors or leader marks; measures as one Yes/No bar; your districts first and the
   statewide races folded behind one row. The server sends the count as data (`live_count`) beside the old text, so
   older apps keep the text. Web: live that night at 10:49 p.m. (#3242). iPhone (#3243) and Android (#3244): merged at
-  11:00 p.m.; they reach phones with the next store builds.
+  11:00 p.m.; they reach phones with the next store builds. Party labels came later that night (your go-ahead on the
+  sample): each candidate's party sits under the name as the state words it ("Prefers Democratic Party"), the two
+  major parties' bars are blue and red, and other parties, nonpartisan races and measures stay gray. Web: live at
+  12:32 a.m. on November 4 (#3246). iPhone (#3247) and Android (#3249): merged at 1:38 a.m.; they reach phones with
+  the next store builds.
 - [x] November 3, results links for every state (your go-ahead that evening). Outside the 8 checked states the card
   used to end with Election Day. Now 42 states carry their official results page, each opened on November 3. It's one
   of the card's three links on Election Day, and for the week after the card stays to point there ("Results are
