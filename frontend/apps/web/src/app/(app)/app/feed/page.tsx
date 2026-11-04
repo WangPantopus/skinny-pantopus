@@ -22,7 +22,6 @@ import {
 import type { SportsStarter } from '@/components/feed/EmptyFeed';
 import ReportModal from '@/components/ui/ReportModal';
 import ErrorState from '@/components/ui/ErrorState';
-import InquiryChatDrawer from '@/components/discover/InquiryChatDrawer';
 import { useAreaPicker } from '@/hooks/useAreaPicker';
 import { useFeedPreferences } from '@/hooks/useFeedPreferences';
 import { useFeedData, type FilterType } from '@/hooks/useFeedData';
@@ -42,6 +41,7 @@ import { mapFilterLabel } from './pulseMapFilters';
 import './pulse.css';
 
 const FeedMap = dynamic(() => import('./FeedMap'), { ssr: false });
+const InquiryChatDrawer = dynamic(() => import('@/components/discover/InquiryChatDrawer'), { ssr: false });
 
 /** Map mode: the reveal capsule's bottom edge (top-2 + h-8), where the map's top pills start while the header is away. */
 const REVEAL_CAPSULE_BOTTOM_PX = 40;

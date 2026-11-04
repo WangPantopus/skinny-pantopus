@@ -1,10 +1,16 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import { useBadges } from '@/contexts/BadgeContext';
-import MiniConversationList from './MiniConversationList';
-import MiniChatView from './MiniChatView';
+
+// Every app page shows the closed bubble. Load the inbox and conversation
+// controls only when someone opens them, including on phones where the panel
+// is hidden. Keep the panel's dimensions while its code downloads.
+const panelLoading = () => <div role="status" className="p-4 text-sm text-app-muted">Loading messages…</div>;
+const MiniConversationList = dynamic(() => import('./MiniConversationList'), { loading: panelLoading });
+const MiniChatView = dynamic(() => import('./MiniChatView'), { loading: panelLoading });
 
 type WidgetView = 'closed' | 'list' | 'chat';
 
