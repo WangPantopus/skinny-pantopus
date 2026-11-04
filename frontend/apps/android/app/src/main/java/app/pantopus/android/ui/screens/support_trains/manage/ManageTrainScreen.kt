@@ -209,6 +209,7 @@ fun ManageTrainScreen(
                 isSubmitting = state.isSubmitting,
                 onSave = { viewModel.saveSlot(it) },
                 onCancel = { viewModel.dismissSlotEditor() },
+                onDraftChange = viewModel::updateSlotEditor,
             )
         }
     }
