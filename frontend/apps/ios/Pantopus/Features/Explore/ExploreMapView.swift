@@ -96,7 +96,7 @@ public struct ExploreMapView: View {
             SavePlaceSheet(
                 pending: pending,
                 onSave: { label, choice in
-                    Task { await savedStore.commitSave(label: label, choice: choice) }
+                    try await savedStore.commitSave(label: label, choice: choice)
                 },
                 onClose: { savedStore.pendingSave = nil }
             )

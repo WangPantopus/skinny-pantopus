@@ -79,10 +79,9 @@ struct LoginView: View {
                         RememberedAccountCard(hint: remembered) {
                             showRemoveConfirmation = true
                         }
-                        .confirmationDialog(
+                        .alert(
                             "Remove this account from this device?",
-                            isPresented: $showRemoveConfirmation,
-                            titleVisibility: .visible
+                            isPresented: $showRemoveConfirmation
                         ) {
                             Button("Remove account", role: .destructive) {
                                 Task {
@@ -960,14 +959,11 @@ final class LoginViewModel {
         auth?.setSessionEndReason(nil)
     }
 
-    /// The backend blocks an unverified sign-in with 403 "Please verify your
-    /// email before signing in." (`backend/routes/users.js:1639`), which maps
-    /// to `.serverError(_)`. RN reveals its resend link on the same signal —
-    /// any login error whose copy mentions "verify"
-    /// (`pantopus/frontend/apps/mobile/src/app/(auth)/login.tsx:58`).
+    /// Only the sign-in refusal for an unconfirmed email offers email recovery.
+    /// Device-verification outages also mention "verify", but resending an
+    /// email cannot resolve those failures.
     var canResendVerification: Bool {
-        guard let description = errorMessage?.errorDescription else { return false }
-        return description.range(of: "verify", options: .caseInsensitive) != nil
+        errorMessage == .serverError("Please verify your email before signing in.")
     }
 
     /// `POST /api/users/resend-verification` (route

@@ -15,8 +15,7 @@ extension AuthManager {
         // `APIClient` maps 403 to `.forbidden` before the generic `400..<500`
         // case, so the login body never reaches `mapByStatus`. The only 403 the
         // login handler emits is the unverified-email refusal
-        // (`backend/routes/users.js:1526`), and `LoginView.canResendVerification`
-        // reveals the resend link on any error whose copy mentions "verify" —
+        // and `LoginView.canResendVerification` recognizes this exact refusal —
         // without this case it fell to `.unknown` and the link never appeared.
         case .forbidden: .serverError("Please verify your email before signing in.")
         case let .clientError(status, body): mapByStatus(status: status, body: body)
