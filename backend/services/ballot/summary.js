@@ -16,11 +16,17 @@
 //     dates and cutoffs are read on the voter's own clock (a county or place
 //     that keeps another time zone is named in states.json);
 //   • a certification "by" date is a legal deadline: once it passes the card
-//     says so, and never claims the certification happened.
+//     says so, and never claims the certification happened;
+//   • while ballots are counted, a state with live results (liveResults.js)
+//     shows the official count for the address's races, with the state's own
+//     publish time, above the counting sentence.
 // ============================================================
 
 const referenceData = require('./referenceData');
 const governments = require('./governments');
+const liveResults = require('./liveResults');
+const featureFlagService = require('../featureFlagService');
+const logger = require('../../utils/logger');
 
 const MOVER_WINDOW_DAYS = 365;
 const MAX_LINKS = 3;
@@ -168,12 +174,35 @@ function afterNote(stage, cert, county) {
   return `${capitalize(who)} certified the results ${when}.`;
 }
 
+// "20:00" → "8 p.m."; "19:30" → "7:30 p.m.".
+function clockWords(hhmm) {
+  const [h, m] = String(hhmm).split(':').map(Number);
+  if (!Number.isInteger(h) || !Number.isInteger(m)) return null;
+  const suffix = h >= 12 ? 'p.m.' : 'a.m.';
+  const hour = h % 12 || 12;
+  return m ? `${hour}:${String(m).padStart(2, '0')} ${suffix}` : `${hour} ${suffix}`;
+}
+
+// Live results above the counting sentence: the official count for the
+// address's races, or, on election night before the first count, when it
+// will appear (liveResults.js says which).
+function countLines(results, { county, cert, block }) {
+  if (results.pending) {
+    const who = (county && county.election_office) || cert.certifier;
+    const returnBy = (block.deadlines || []).find((d) => d.key === 'return_by');
+    const closed = returnBy && returnBy.time_local ? clockWords(returnBy.time_local) : null;
+    // The clock already ends in "a.m." or "p.m.".
+    return [`${closed ? `Voting closed at ${closed} ` : ''}The first count will show here as soon as ${who} posts it.`];
+  }
+  return [results.header, ...results.lines];
+}
+
 /**
  * Pure composition — everything the P0 surfaces need for one state on
  * one day. `governmentsResult` comes from governments.js (or null);
  * `moveInDate` is Home.move_in_date (or null).
  */
-function composeSummary({ stateValue, countyGeoid = null, governmentsResult = null, moveInDate = null, now = new Date() }) {
+function composeSummary({ stateValue, countyGeoid = null, governmentsResult = null, moveInDate = null, now = new Date(), results = null }) {
   const stateInfo = referenceData.stateEntry(stateValue);
   if (!stateInfo) return null;
   // An answer for another state is dropped whole (its county goes with it).
@@ -255,6 +284,7 @@ function composeSummary({ stateValue, countyGeoid = null, governmentsResult = nu
   }
   if (afterStage) {
     note = afterNote(afterStage, cert, county);
+    if (afterStage === 'counting' && results) note = [...countLines(results, { county, cert, block }), note].join('\n');
   } else if (phase === 'after') {
     // In a sentence a state office takes "the" ("the Oregon Secretary of
     // State"); a county office's own name reads as it is.
@@ -339,20 +369,67 @@ function moverPrompt({ moveInDate, registration, today, links, text }) {
   };
 }
 
+// Local checks only: BALLOT_TEST_NOW (an ISO time) sets the card's clock so
+// Election Day evening can be checked before it comes. Never in production.
+function cardNow() {
+  const raw = process.env.NODE_ENV !== 'production' ? process.env.BALLOT_TEST_NOW : null;
+  const at = raw ? new Date(raw) : null;
+  return at && Number.isFinite(at.getTime()) ? at : new Date();
+}
+
+// Live results (docs/product/ballot-live-results-plan-2026-11-03.md) are on
+// while the ballot_results flag is on for everyone. Off, or on any failure,
+// the card keeps its counting sentence alone.
+async function liveResultsOn() {
+  try {
+    const flag = await featureFlagService.getFlag('ballot_results');
+    return Boolean(flag && flag.enabled_globally);
+  } catch {
+    return false;
+  }
+}
+
+// While ballots are counted in a state Pantopus reads results for, the card
+// is composed again with the live count for the address's races.
+async function withLiveResults(summary, compose, districtsFor) {
+  if (!summary || summary.after_stage !== 'counting' || !liveResults.covers(summary.state)) return summary;
+  try {
+    if (!(await liveResultsOn())) return summary;
+    const state = referenceData.stateEntry(summary.state);
+    const results = await liveResults.forCard({
+      stateCode: summary.state,
+      electionDate: summary.date,
+      districts: await districtsFor(),
+      zone: state.timezone,
+      today: summary.today,
+      electionNight: summary.today === summary.date,
+    });
+    return results ? compose(results) : summary;
+  } catch (err) {
+    logger.warn('ballot: live results skipped', { error: err.message });
+    return summary;
+  }
+}
+
 /** The Place card summary for a saved home (null ⇒ keep pre-Ballot behavior). */
-async function summaryForHome(home, { now = new Date() } = {}) {
+async function summaryForHome(home, { now = cardNow() } = {}) {
   if (!home) return null;
   const current = referenceData.currentElection(home.state, { now });
   if (!current) return null;
   const supported = current.state.coverage === 'supported' && Boolean(current.block);
   const govResult = supported ? await governments.governmentsForHome(home) : null;
-  return composeSummary({
+  const input = {
     stateValue: home.state,
     countyGeoid: govResult ? govResult.county_geoid : null,
     governmentsResult: govResult,
     moveInDate: home.move_in_date || null,
     now,
-  });
+  };
+  return withLiveResults(
+    composeSummary(input),
+    (results) => composeSummary({ ...input, results }),
+    async () => (govResult && govResult.districts) || governments.districtsForHome(home),
+  );
 }
 
 // A live boundary lookup stamped with the moment it was made.
@@ -463,15 +540,20 @@ async function teaserForPoint({ lat, lng, state }, { now = new Date(), timeoutMs
  * household's "Moved this year?" line (no move-in date). Coordinates only;
  * `timeoutMs` and `lookup` as for the teaser.
  */
-async function summaryForPoint({ lat, lng, state }, { now = new Date(), timeoutMs, lookup = lookupPoint } = {}) {
+async function summaryForPoint({ lat, lng, state }, { now = cardNow(), timeoutMs, lookup = lookupPoint } = {}) {
   const point = await pointElection({ lat, lng, state }, { now, timeoutMs, lookup });
   if (!point) return null;
-  return composeSummary({
+  const input = {
     stateValue: point.stateValue,
     countyGeoid: point.result ? point.result.county_geoid : null,
     governmentsResult: point.result,
     now,
-  });
+  };
+  return withLiveResults(
+    composeSummary(input),
+    (results) => composeSummary({ ...input, results }),
+    async () => (point.result && point.result.districts) || governments.districtsForPoint(Number(lat), Number(lng), { timeoutMs }),
+  );
 }
 
 const LONG_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
