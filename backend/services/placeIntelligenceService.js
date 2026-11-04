@@ -1383,7 +1383,7 @@ const COMPOSER_SECTIONS = [
   { ids: ['rent_band'], budget: true, run: ({ home }) => placeSectionAdapters.composeRentBand(home) },
   { ids: ['real_rent'], run: ({ home, tier, userId, access }) => composeRealRent(home, tier, userId, !nonResidentViewer(access)) },
   { ids: ['civic_districts'], budget: true, run: ({ home, ballot }) => placeSectionAdapters.composeCivicDistricts(home, { ballot }) },
-  { ids: ['civic_election'], budget: true, run: ({ home, ballot }) => placeSectionAdapters.composeCivicElection(home, { ballot }) },
+  { ids: ['civic_election'], budget: true, run: ({ home, ballot, budgetMs }) => placeSectionAdapters.composeCivicElection(home, { ballot, budgetMs }) },
 ];
 
 // ── Per-home privacy → the place address ref (§ homePrivacy) ──
