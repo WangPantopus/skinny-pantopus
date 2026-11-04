@@ -190,6 +190,42 @@ public final class BusinessLegalViewModel {
     private let uploader: MultipartUploader
     private let seededContent: BusinessLegalContent?
     private var pendingEvidence: (draft: [String], fileId: String)?
+    private var sensitiveGeneration = UUID()
+    private var loadedDraft = PrivateDraft()
+
+    private struct PrivateDraft {
+        var legalName = ""
+        var taxIdLast4 = ""
+        var supportEmail = ""
+
+        init() {}
+
+        init(record: BusinessPrivateDTO?) {
+            legalName = record?.legalName ?? ""
+            taxIdLast4 = record?.taxIdLast4 ?? ""
+            supportEmail = record?.supportEmail ?? ""
+        }
+    }
+
+    private var currentDraft: PrivateDraft {
+        var draft = PrivateDraft()
+        draft.legalName = legalName
+        draft.taxIdLast4 = taxIdLast4
+        draft.supportEmail = supportEmail
+        return draft
+    }
+
+    /// Refresh untouched fields, while keeping edits made before or during a request.
+    private func apply(_ draft: PrivateDraft, replacing baseline: PrivateDraft) {
+        if legalName == baseline.legalName { legalName = draft.legalName }
+        if taxIdLast4 == baseline.taxIdLast4 { taxIdLast4 = draft.taxIdLast4 }
+        if supportEmail == baseline.supportEmail { supportEmail = draft.supportEmail }
+        loadedDraft = draft
+    }
+
+    private func isCurrent(_ generation: UUID) -> Bool {
+        sensitiveGeneration == generation && !Task.isCancelled
+    }
 
     /// Production initialiser — `APIClient` is module-internal.
     public convenience init(businessId: String) {
@@ -230,6 +266,7 @@ public final class BusinessLegalViewModel {
     }
 
     private func fetch() async {
+        let generation = sensitiveGeneration
         // Verification status is the spine of the screen — a failure there is
         // a screen-level error.
         let verification: BusinessVerificationStatusResponse
@@ -238,11 +275,13 @@ public final class BusinessLegalViewModel {
                 BusinessFinanceEndpoints.verificationStatus(businessId: businessId)
             )
         } catch {
+            guard isCurrent(generation) else { return }
             state = .error(
                 message: (error as? APIError)?.errorDescription ?? "Couldn't load verification status."
             )
             return
         }
+        guard isCurrent(generation) else { return }
 
         // `/private` 403s for staff without `sensitive.view`; that's a
         // legitimate, renderable outcome rather than a screen failure.
@@ -254,6 +293,7 @@ public final class BusinessLegalViewModel {
             )
             privateRecord = response.privateRecord
         } catch let error as APIError {
+            guard isCurrent(generation) else { return }
             if case .forbidden = error {
                 privateDenied = true
             } else {
@@ -261,14 +301,16 @@ public final class BusinessLegalViewModel {
                 return
             }
         } catch {
+            guard isCurrent(generation) else { return }
             state = .error(message: "Couldn't load legal information. Try again.")
             return
         }
+        guard isCurrent(generation) else { return }
 
-        if let privateRecord {
-            legalName = privateRecord.legalName ?? ""
-            taxIdLast4 = privateRecord.taxIdLast4 ?? ""
-            supportEmail = privateRecord.supportEmail ?? ""
+        if privateDenied {
+            clearSensitive()
+        } else {
+            apply(PrivateDraft(record: privateRecord), replacing: loadedDraft)
         }
 
         state = .loaded(
@@ -285,6 +327,8 @@ public final class BusinessLegalViewModel {
     /// `PATCH /private`. Only the three fields this screen owns are sent.
     public func savePrivateRecord() async {
         guard seededContent == nil, action != .saving else { return }
+        let generation = sensitiveGeneration
+        let submittedDraft = currentDraft
         let name = legalName.trimmingCharacters(in: .whitespacesAndNewlines)
         let last4 = taxIdLast4.trimmingCharacters(in: .whitespacesAndNewlines)
         let email = supportEmail.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -298,7 +342,7 @@ public final class BusinessLegalViewModel {
         }
         action = .saving
         do {
-            _ = try await api.request(
+            let response = try await api.request(
                 BusinessFinanceEndpoints.updatePrivateRecord(
                     businessId: businessId,
                     body: UpdateBusinessPrivateRequest(
@@ -310,10 +354,12 @@ public final class BusinessLegalViewModel {
                 ),
                 as: BusinessPrivateResponse.self
             )
-            taxIdLast4 = String(last4)
+            guard isCurrent(generation) else { return }
+            apply(PrivateDraft(record: response.privateRecord), replacing: submittedDraft)
             action = .succeeded(message: "Legal information updated.")
             await refresh()
         } catch {
+            guard isCurrent(generation) else { return }
             action = .failed(
                 message: (error as? APIError)?.errorDescription ?? "Couldn't save legal information."
             )
@@ -327,6 +373,7 @@ public final class BusinessLegalViewModel {
     /// location and answers 400 `NO_VERIFIED_LOCATION` otherwise.
     public func selfAttest() async {
         guard seededContent == nil else { return }
+        let generation = sensitiveGeneration
         let name = legalName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
             action = .failed(message: "Enter your registered legal business name first.")
@@ -344,9 +391,11 @@ public final class BusinessLegalViewModel {
                     body: BusinessSelfAttestRequest(legalName: name, addressConfirmed: true)
                 )
             )
+            guard isCurrent(generation) else { return }
             action = .succeeded(message: response.message ?? "Business self-attestation complete.")
             await refresh()
         } catch {
+            guard isCurrent(generation) else { return }
             action = .failed(
                 message: (error as? APIError)?.errorDescription ?? "Couldn't complete self-attestation."
             )
@@ -358,6 +407,7 @@ public final class BusinessLegalViewModel {
     /// `POST /verify/upload-evidence`.
     public func uploadEvidence(type: BusinessEvidenceType, file: PickedEvidenceFile) async {
         guard seededContent == nil, action != .uploading else { return }
+        let generation = sensitiveGeneration
         action = .uploading
         let draft = [
             type.rawValue, file.filename, file.mimeType,
@@ -375,6 +425,7 @@ public final class BusinessLegalViewModel {
                     ),
                     formFields: ["file_type": "business_verification", "visibility": "private"]
                 )
+                guard isCurrent(generation) else { return }
                 pendingEvidence = (draft, upload.file.id)
             }
             guard let fileId = pendingEvidence?.fileId else { return }
@@ -388,10 +439,12 @@ public final class BusinessLegalViewModel {
                 ),
                 as: BusinessUploadEvidenceResponse.self
             )
+            guard isCurrent(generation) else { return }
             pendingEvidence = nil
             action = .succeeded(message: "Document submitted for review.")
             await refresh()
         } catch {
+            guard isCurrent(generation) else { return }
             action = .failed(
                 message: (error as? APIError)?.errorDescription ?? "Couldn't submit the document."
             )
@@ -405,7 +458,10 @@ public final class BusinessLegalViewModel {
     /// Wipe the PII fields when the screen goes away so the values don't
     /// outlive the surface that needed them.
     public func clearSensitive() {
+        sensitiveGeneration = UUID()
         pendingEvidence = nil
+        loadedDraft = PrivateDraft()
+        action = .idle
         legalName = ""
         taxIdLast4 = ""
         supportEmail = ""
