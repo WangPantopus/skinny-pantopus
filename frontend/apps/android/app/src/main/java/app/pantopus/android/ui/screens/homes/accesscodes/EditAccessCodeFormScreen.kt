@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -54,6 +53,7 @@ import app.pantopus.android.core.security.SecureScreenEffect
 import app.pantopus.android.core.security.SensitiveClipboard
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
+import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
 import app.pantopus.android.ui.components.keepsKeyboard
@@ -161,12 +161,7 @@ internal fun EditAccessCodeFormContent(
             onCommit = onCommit,
         ) {
             if (!state.isLoaded) {
-                Text(state.loadError ?: "Checking access…", color = PantopusColors.appTextSecondary)
-                if (state.loadError != null) {
-                    TextButton(onClick = onRetry) { Text("Try again") }
-                } else {
-                    CircularProgressIndicator()
-                }
+                AccessCodeLoading(error = state.loadError, onRetry = onRetry)
             } else {
                 FormFieldGroup("Category") {
                     if (state.canManage) {
@@ -259,6 +254,38 @@ internal fun EditAccessCodeFormContent(
         }
     }
 }
+
+/**
+ * Shown until the secret read confirms what this person may see and change: a skeleton of the form's field groups,
+ * as the Add household task form does, instead of a screen-level spinner; or the failed read with Try again.
+ */
+@Composable
+private fun AccessCodeLoading(
+    error: String?,
+    onRetry: () -> Unit,
+) {
+    if (error != null) {
+        Text(error, color = PantopusColors.appTextSecondary)
+        TextButton(onClick = onRetry) { Text("Try again") }
+    } else {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = "Checking access" },
+            verticalArrangement = Arrangement.spacedBy(Spacing.s5),
+        ) {
+            repeat(SKELETON_GROUPS) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                    Shimmer(width = 96.dp, height = 12.dp)
+                    Shimmer(width = 240.dp, height = 44.dp)
+                }
+            }
+        }
+    }
+}
+
+private const val SKELETON_GROUPS = 4
 
 /** Removing a code takes it away from everyone it's shared with, so it asks first. */
 @Composable
