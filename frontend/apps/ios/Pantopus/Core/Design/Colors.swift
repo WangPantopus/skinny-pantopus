@@ -297,6 +297,12 @@ public extension Theme.Color {
     static let ballotCountYes = SwiftUI.Color("Ballot/CountYes", bundle: Theme.bundle)
     /// A measure's No (or Against) side — `#94a3b8`, `#64748b` in dark.
     static let ballotCountNo = SwiftUI.Color("Ballot/CountNo", bundle: Theme.bundle)
+    /// A Democratic candidate's bar and dot in the live count — `#2563eb`,
+    /// `#60a5fa` in dark.
+    static let ballotCountDemocratic = SwiftUI.Color("Ballot/CountDemocratic", bundle: Theme.bundle)
+    /// A Republican candidate's bar and dot in the live count — `#dc2626`,
+    /// `#f87171` in dark.
+    static let ballotCountRepublican = SwiftUI.Color("Ballot/CountRepublican", bundle: Theme.bundle)
 
     // MARK: - Category accents
 

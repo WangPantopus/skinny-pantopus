@@ -89,9 +89,11 @@ function ballotLookupMs(budgetMs = sectionBudgetMs()) {
 async function composeElection(home, ballot, budgetMs) {
   if (ballot) {
     try {
+      // The live count gets only what is left of the section's budget.
+      const deadline = Date.now() + (budgetMs > 0 ? budgetMs : sectionBudgetMs());
       const summary = await ballotSummary.summaryForPoint(
         { lat: home.map_center_lat, lng: home.map_center_lng, state: home.state },
-        { timeoutMs: ballotLookupMs(budgetMs), lookup: ballot.lookup },
+        { timeoutMs: ballotLookupMs(budgetMs), lookup: ballot.lookup, deadline },
       );
       if (summary) return [adapters.ballotElectionSection(summary)];
     } catch (err) {

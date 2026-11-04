@@ -341,8 +341,9 @@ export interface MyHome extends Omit<Home, 'location' | 'address' | 'city' | 'st
 /**
  * Get current user's homes (owned + occupied).
  */
-export async function getMyHomes(): Promise<{ homes: MyHome[] }> {
-  return get<{ homes: MyHome[] }>('/api/homes/my-homes');
+export async function getMyHomes(): Promise<{ homes: MyHome[]; primary_home?: PrimaryHome | null }> {
+  // Older servers omit primary_home; null explicitly means no current residence.
+  return get<{ homes: MyHome[]; primary_home?: PrimaryHome | null }>('/api/homes/my-homes');
 }
 
 /**

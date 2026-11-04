@@ -37,8 +37,10 @@ export function markTopic(client: QueryClient, topic: string): void {
       mark(client, queryKeys.me());
       break;
     case 'homes':
-      mark(client, queryKeys.placePrimaryHome());
       mark(client, queryKeys.placeMyHomes());
+      // The primary read derives from this list; invalidate its source first
+      // so a refetch cannot renew the old primary from a still-fresh list.
+      mark(client, queryKeys.placePrimaryHome());
       mark(client, queryKeys.placeMyClaims());
       mark(client, queryKeys.hub());
       break;
@@ -94,8 +96,9 @@ export function useSyncChanged(): void {
     const connected = () => {
       if (connectedBefore) {
         mark(client, ['homes']);
-        mark(client, queryKeys.placePrimaryHome());
+        // The list first, as for the `homes` topic: the primary read derives from it.
         mark(client, queryKeys.placeMyHomes());
+        mark(client, queryKeys.placePrimaryHome());
         mark(client, queryKeys.placeMyClaims());
         markTopic(client, 'chats');
         void client.invalidateQueries({ queryKey: ['chat'],

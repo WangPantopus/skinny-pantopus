@@ -609,8 +609,8 @@ function withinBudget(promise, ms) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-// Each public-data section's time budget, on the anonymous preview and on a
-// saved home's Place alike (PLACE_PREVIEW_SECTION_BUDGET_MS, default 3.5 s).
+// Each provider-backed section's time budget, on the anonymous preview and
+// a saved home's Place alike (PLACE_PREVIEW_SECTION_BUDGET_MS, default 3.5 s).
 const DEFAULT_SECTION_BUDGET_MS = 3500;
 
 function sectionBudgetMs() {
@@ -647,8 +647,10 @@ function withBudget(run, ms, fallback) {
 // load this · Try again" on every client), not "not available for your area":
 // the source covers the point, it just didn't answer in time, and its fetch
 // keeps running, so a retry a moment later usually finds it cached.
-const failedSections = (ids) =>
-  () => ids.map((id) => serializePlaceSection(id, { status: 'error' }));
+const failedSections = (ids, tier = 'T1') =>
+  () => ids.map((id) => serializePlaceSection(id, {
+    access: bandAccess(PLACE_SECTION_META[id].band, tier), status: 'error',
+  }));
 
 // Today for a POINT (no user, no home) — the anonymous preview's daily
 // snapshot. Calls the same providers the Hub uses, straight from a
@@ -1357,33 +1359,32 @@ async function composeExemptionCheck(home, tier) {
 // Still BUILD_PENDING: `incentives` only (DSIRE's API is license-gated;
 // curated federal copy would rot).
 //
-// `budget`: a public-data section that asks an outside source about the
-// point (Census, FEMA, EPA, USGS, the Forest Service, Open-Meteo), timed like
-// the preview's — see composeHomeIntelligence. Today's weather, air and
-// alerts keep their own 5 s provider limits; the household's sections read
-// our own data.
+// `budget`: a section that can wait on an outside source, including weather,
+// county calendar lookup and ATTOM property records. A provider's longer
+// timeout must not hold the whole dashboard beyond its section budget.
+// Household-only sections read our own data.
 const COMPOSER_SECTIONS = [
-  { ids: ['weather', 'air_quality', 'alerts', 'good_day_to'], run: async ({ home, userId, hubPromise }) => composeToday(userId, home, await hubPromise) },
+  { ids: ['weather', 'air_quality', 'alerts', 'good_day_to'], budget: true, run: async ({ home, userId, hubPromise }) => composeToday(userId, home, await hubPromise) },
   { ids: ['sunrise_sunset'], budget: true, run: ({ home }) => placeSectionAdapters.composeSunriseSunset(home) },
   // A claimant gets the public calendar: without the Home id, the household's own pickup day isn't loaded.
-  { ids: ['address_calendar'], run: ({ home, claimant, countyReads }) => composeAddressCalendar(claimant ? { ...home, id: null } : home, countyReads) },
+  { ids: ['address_calendar'], budget: true, run: ({ home, claimant, countyReads }) => composeAddressCalendar(claimant ? { ...home, id: null } : home, countyReads) },
   { ids: ['flood'], budget: true, run: ({ home, budgetMs }) => composeFlood(home, budgetMs) },
   { ids: ['census_context'], budget: true, run: ({ home }) => composeCensusContext(home) },
-  { ids: ['heat_cold'], run: ({ home, hubPromise }) => composeHeatCold(home, hubPromise) },
+  { ids: ['heat_cold'], budget: true, run: ({ home, hubPromise }) => composeHeatCold(home, hubPromise) },
   { ids: ['seismic'], budget: true, run: ({ home }) => placeSectionAdapters.composeSeismic(home) },
   { ids: ['wildfire'], budget: true, run: ({ home }) => placeSectionAdapters.composeWildfire(home) },
   { ids: ['lead_radon'], budget: true, run: ({ home }) => placeSectionAdapters.composeLeadRadon(home) },
   { ids: ['drinking_water'], budget: true, run: ({ home }) => placeSectionAdapters.composeDrinkingWater(home) },
   { ids: ['environmental_hazards'], budget: true, run: ({ home }) => placeSectionAdapters.composeEnvironmentalHazards(home) },
   { ids: ['block_density'], run: ({ home }) => composeDensity(home) },
-  { ids: ['your_home'], run: ({ home, tier }) => composeYourHome(home, tier) },
+  { ids: ['your_home'], budget: true, run: ({ home, tier }) => composeYourHome(home, tier) },
   { ids: ['home_systems'], run: ({ home, tier, access }) => composeHomeSystems(home, tier, access) },
   { ids: ['bill_benchmark'], run: ({ home, access, userId }) => composeBillBenchmark(home, access, userId) },
-  { ids: ['exemption_check'], run: ({ home, tier }) => composeExemptionCheck(home, tier) },
+  { ids: ['exemption_check'], budget: true, run: ({ home, tier }) => composeExemptionCheck(home, tier) },
   { ids: ['rent_band'], budget: true, run: ({ home }) => placeSectionAdapters.composeRentBand(home) },
   { ids: ['real_rent'], run: ({ home, tier, userId, access }) => composeRealRent(home, tier, userId, !nonResidentViewer(access)) },
   { ids: ['civic_districts'], budget: true, run: ({ home, ballot }) => placeSectionAdapters.composeCivicDistricts(home, { ballot }) },
-  { ids: ['civic_election'], budget: true, run: ({ home, ballot }) => placeSectionAdapters.composeCivicElection(home, { ballot }) },
+  { ids: ['civic_election'], budget: true, run: ({ home, ballot, budgetMs }) => placeSectionAdapters.composeCivicElection(home, { ballot, budgetMs }) },
 ];
 
 // ── Per-home privacy → the place address ref (§ homePrivacy) ──
@@ -1514,7 +1515,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   const subject = claimant ? { ...home, move_in_date: null } : home;
   // The response waits for every section, so a stalled source (the Census
   // geocoder, FEMA's flood map) held the whole Place for its 8 s cutoff. The
-  // public-data sections get the preview's per-section budget: one that runs
+  // provider-backed sections get the preview's per-section budget: one that runs
   // past it is a retryable error, and its lookup keeps going to fill the
   // cache for the next look.
   const budgetMs = sectionBudgetMs();
@@ -1526,7 +1527,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
       if (!budget) return compose();
       return withBudget(compose, budgetMs, () => {
         late.push(...ids);
-        return failedSections(ids)();
+        return failedSections(ids, tier)();
       });
     }),
   ]);

@@ -149,11 +149,19 @@ public struct BallotCountOption: Decodable, Sendable, Hashable {
     public let percentLabel: String
     /// Its share of the race's votes, write-ins included (0–1), for the bar.
     public let share: Double
+    /// The candidate's party as the state words it ("Prefers Democratic
+    /// Party"); nil for nonpartisan races and measures.
+    public let partyLabel: String?
+    /// `democratic` or `republican` color the bar; anything else, or nil,
+    /// keeps the neutral bar.
+    public let partyTone: String?
 
     private enum CodingKeys: String, CodingKey {
         case name, share
         case votesLabel = "votes_label"
         case percentLabel = "percent_label"
+        case partyLabel = "party_label"
+        case partyTone = "party_tone"
     }
 }
 
