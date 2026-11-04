@@ -12,6 +12,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 /// How wide the leading column is allowed to be.
 struct SideBySideColumnWidth {
@@ -51,8 +52,62 @@ struct SideBySideSplit<Leading: View, Detail: View>: View {
                 .navigationSplitViewColumnWidth(min: leadingWidth.min, ideal: leadingWidth.ideal, max: leadingWidth.max)
         } detail: {
             detail()
+                .background { KeepsColumnsBeside().accessibilityHidden(true) }
         }
         .navigationSplitViewStyle(.balanced)
+    }
+}
+
+/// Puts the two columns back side by side when the split has fallen back to an overlay. UIKit overlays the leading
+/// column on a dimmed detail when the window is too narrow for both. A first launch under load can lay the split out
+/// before the window reaches its width, and it then stays an overlay at full width, with no button to bring the
+/// columns back, until a fold or a turn. This sits behind the detail column, which UIKit lays out again whenever the
+/// split changes mode, and asks for side by side again whenever both columns fit.
+private struct KeepsColumnsBeside: UIViewControllerRepresentable {
+    func makeUIViewController(context _: Context) -> Controller {
+        Controller()
+    }
+
+    func updateUIViewController(_: Controller, context _: Context) {}
+
+    final class Controller: UIViewController {
+        /// The narrowest detail UIKit puts beside the leading column.
+        private let narrowestDetail: CGFloat = 320
+        /// The split's width when this last asked for side by side: once per width, so a split UIKit won't tile isn't
+        /// asked again on every layout pass.
+        private var askedAtWidth: CGFloat?
+
+        override func loadView() {
+            view = UIView()
+            view.isUserInteractionEnabled = false
+        }
+
+        override func viewDidLayoutSubviews() {
+            super.viewDidLayoutSubviews()
+            // After this layout pass: changing the mode inside one starts another.
+            Task { @MainActor [weak self] in self?.keepBeside() }
+        }
+
+        private func keepBeside() {
+            guard let split = splitViewController, !split.isCollapsed else { return }
+            let width = split.view.bounds.width
+            let besideColumn = width - split.primaryColumnWidth
+            // Wider than the room beside the leading column: laid out under it (an overlay, or the column hidden). The
+            // frames change as the mode does, while `displayMode` still reports the old mode.
+            guard view.bounds.width > besideColumn + 24 else {
+                askedAtWidth = nil
+                return
+            }
+            guard besideColumn >= narrowestDetail, askedAtWidth != width else { return }
+            askedAtWidth = width
+            // An overlay brings the overlay behavior with it; side by side needs tiling back.
+            split.preferredSplitBehavior = .tile
+            // UIKit only works out its mode again when the preferred mode changes.
+            if split.preferredDisplayMode == .oneBesideSecondary {
+                split.preferredDisplayMode = .automatic
+            }
+            split.preferredDisplayMode = .oneBesideSecondary
+        }
     }
 }
 
