@@ -245,7 +245,7 @@ The comprehensive infrastructure proposal is in [#3253](https://github.com/WangP
 | Route pattern | Entry check | Narrow viewport |
 | --- | --- | --- |
 | `/` | Entry/redirect/state probe | — |
-| `/[username]` | Entry/redirect/state probe | — |
+| `/[username]` | Business reviews: second-account reply view and reload; other profile flows retain earlier coverage | Desktop |
 | `/about` | Entry/redirect/state probe | — |
 | `/app` | Entry/redirect/state probe | 390 px |
 | `/app/address-verify` | Entry/redirect/state probe | 390 px |
@@ -263,14 +263,14 @@ The comprehensive infrastructure proposal is in [#3253](https://github.com/WangP
 | `/app/beacons` | Launch-cut redirect | — |
 | `/app/business/[id]/activity` | Valid business-owner entry | 390 px |
 | `/app/business/[id]/catalog` | Valid business-owner entry | 390 px |
-| `/app/business/[id]/catalog/[itemId]/edit` | Valid business-owner entry | 390 px |
+| `/app/business/[id]/catalog/[itemId]/edit` | Retained item edit/save/Back/reload after its category was deleted | Desktop; earlier 390 px entry |
 | `/app/business/[id]/catalog/new` | Valid business-owner entry | 390 px |
 | `/app/business/[id]/dashboard` | Valid business-owner entry | 390 px |
 | `/app/business/[id]/inbox` | Valid business-owner entry | 390 px |
 | `/app/business/[id]/inbox/[roomId]` | Valid business-owner entry | 390 px |
 | `/app/business/[id]/insights` | Valid business-owner entry | 390 px |
 | `/app/business/[id]/locations` | Valid business-owner entry | 390 px |
-| `/app/business/[id]/locations/[locId]/hours` | Missing-resource/refusal probe only | — |
+| `/app/business/[id]/locations/[locId]/hours` | Owner weekly-hours edit/save/reload/Back; viewer read-only controls; address onboarding bypassed by fixture | Desktop |
 | `/app/business/[id]/pages` | Valid business-owner entry | 390 px |
 | `/app/business/[id]/reviews` | Valid business-owner entry | 390 px |
 | `/app/business/[id]/settings/legal` | Valid business-owner entry | 390 px |
@@ -281,7 +281,7 @@ The comprehensive infrastructure proposal is in [#3253](https://github.com/WangP
 | `/app/businesses` | Entry/redirect/state probe | 390 px |
 | `/app/businesses/[id]/chat` | Valid business-owner entry | 390 px |
 | `/app/businesses/[id]/chat/[roomId]` | Valid business-owner entry | 390 px |
-| `/app/businesses/[id]/dashboard` | Owner invoice pagination, failures/retry, filter races, create/void and recipient reload | 320/390/768/1440 px |
+| `/app/businesses/[id]/dashboard` | Invoice flows; optional-offer loading/recovery; catalog create/edit/archive; review reply; location/hour navigation; other-person and reload checks | 320/390/768/1440 px; desktop |
 | `/app/businesses/[id]/pages/[pageId]/edit` | Create/edit/save/publish, save failure/retry, public view and reload | 320/390/768/1440 px |
 | `/app/businesses/new` | Entry/redirect/state probe | 390 px |
 | `/app/chat` | Entry/redirect/state probe | 390 px |
@@ -492,7 +492,7 @@ The comprehensive infrastructure proposal is in [#3253](https://github.com/WangP
 | `/app/today` | Entry/redirect/state probe | 390 px |
 | `/app/wallet` | Entry/redirect/state probe | 390 px |
 | `/auth/callback` | Provider handoff not exercised | — |
-| `/b/[username]` | Entry/redirect/state probe | — |
+| `/b/[username]` | Public replies, loading/error/retry, warm review revalidation; surviving catalog item; signed-out/second-account reload | 320/390 px; desktop |
 | `/b/[username]/[slug]` | Missing-resource/refusal probe only | — |
 | `/book/[slug]` | Launch-cut redirect | — |
 | `/book/[slug]/[eventType]` | Launch-cut redirect | — |
@@ -698,7 +698,7 @@ With a synthetic local location and hours, dashboard database reads fell from **
 
 The new positive fixture also exercised the web Location Hours route: open it from the dashboard, edit weekly hours, save, reload the saved time, return to Locations, and reopen the dashboard. A viewer could read the location without write controls. Real catalog, hours and profile read faults showed Retry; removing each fault restored the dashboard. Standalone and reused completeness inputs agreed, and a failed recalculation left the stored score unchanged. After removing the temporary location/hours/viewer rows and recalculating the synthetic business's stored score, the genuine no-location case showed its correct empty state. The fixture bypassed address validation, so it does not establish provider-backed location onboarding.
 
-Backend privacy gates passed. The full existing suite had 341 passing suites / 6,631 passing tests and one unrelated Place endpoint timeout; that entire 35-test suite passed on rerun, completing the existing 342-suite / 6,632-test set. The existing one suite / 16 tests remained skipped. No tests were added. GitHub CI is tracked on the PRs; these local checks are not a claim that pending remote jobs have passed.
+Backend privacy gates passed. The full existing suite had 341 passing suites / 6,631 passing tests and one unrelated Place endpoint timeout; that entire 35-test suite passed on rerun, completing the existing 342-suite / 6,632-test set. The existing one suite / 16 tests remained skipped. No tests were added. GitHub CI subsequently passed for both #3309 and #3311, including the relevant web/backend checks, schema replay and the backend image build.
 
 ### Combined production-build startup check — November 4
 
@@ -715,3 +715,21 @@ Three fresh browser contexts per scenario used Chrome at 100 ms network latency,
 Every recovery made one refresh request; no homepage JavaScript chunk or browser page error appeared. A separate, unthrottled navigation check returned to a loaded Today page in 51 ms without another briefing read; manual Refresh made a fresh request. These are integration measurements under the stated local conditions, not before/after production results or a claim that the reported 5–10 second delay is fixed.
 
 The normal cold-load waterfall still places the first data request at roughly 2.5 seconds for Messages and 2.7 seconds for Place, before the local API's short response. Initial JavaScript loading/execution therefore remains a concrete investigation target. Repeated badge reads also remain visible in the waterfall and need their connection/update semantics checked before consolidation. Production cold/warm traces, session-recovery traces and API/database timings remain necessary to separate those costs from hosted latency. The infrastructure proposal remains in [#3253](https://github.com/WangPantopus/skinny-pantopus/pull/3253); no production infrastructure or hosted database was changed.
+
+### Public business review replies and recovery — November 4
+
+The owner dashboard saved review replies successfully, but the web's public review endpoint omitted `owner_response` and `owner_responded_at` from its normal joined select, and the public business card did not render them. A failed review read also became a permanent “No reviews yet” state. [#3316](https://github.com/WangPantopus/skinny-pantopus/pull/3316), source `9897ea16960c2c0c131c45c409e39579a1be902c`, preserves those existing public fields, renders replies, and uses the existing per-person query cache with loading/retry states. Returning to the tab shows cached rows while revalidating; a failed refresh preserves the previous rows. The native public-profile endpoint `/api/users/id/:id` already preserved the reply fields and was not changed.
+
+Chrome checks against the real local backend/database covered owner reply submission, signed-out `/b/[username]` and signed-in second-account `/[username]` views, reload persistence, a delayed initial read, initial and refresh 503/retry recovery, a successful empty state, and a newer reply arriving on a warm tab return. Long multiline replies fit 320 px and 390 px without document overflow; embedded markup stayed plain text. A non-member write with valid CSRF returned 403 without replacing the reply. No page errors occurred. The completed job was a synthetic fixture, so these checks do not certify job completion or payment. That fixture and its review records were removed afterward. All 123 existing web suites / 2,383 tests, the existing backend review notification test, privacy gates, TypeScript and targeted lint passed. GitHub CI passed, including web E2E, backend tests, schema replay and image build.
+
+### Remaining API namespace import — November 4
+
+A deferred scheduling page dynamically imported the entire API package for a permission read even though it already imported that client. [#3318](https://github.com/WangPantopus/skinny-pantopus/pull/3318), source `64589ac83c18d38952394c375f4caa79dd87a79a`, calls the existing `api.get` instead. In the combined production-build checkout described above, this reduced JavaScript transferred before Messages readiness from **304,212 to 301,776 bytes** and Place from **342,826 to 340,389 bytes**. This is a small bundle reduction, not a resolution of startup latency.
+
+Three cold Chrome runs per version used the same real local backend/database and 100 ms latency / 1.5 Mbps / 4× CPU conditions. Median Messages readiness was 2,718→2,704 ms, Place 3,311→3,286 ms, and access-cookie recovery 3,415→3,398 ms. These differences are too small to establish a meaningful latency gain; the earlier build was also running during part of the repeated baseline measurement. Each recovery made one refresh; no homepage chunk or page error appeared. An unthrottled warm Today return took 65 ms without another briefing read, and manual Refresh worked. Scheduling remained behind its existing launch flag; the booking flow itself was not exercised. Production integration build, 22 existing scheduling suites / 285 tests, TypeScript and targeted lint passed; GitHub web CI, E2E and schema replay passed.
+
+### Catalog category deletion and surviving items — November 4
+
+An iOS owner report exposed a shared backend defect: deleting a category hid it from the category list but left surviving items joined to its old name. [#3320](https://github.com/WangPantopus/skinny-pantopus/pull/3320), source `3b398fe9b8311024e0aab922f37c11fd1721d4eb`, adds an atomic database repair using the existing category and item tables. Deactivation clears grouping, stale/foreign assignments are rejected, and previous orphan assignments are repaired. Items and soft-deleted category identities remain available, including recovery of an original item create after the category was removed. Category updates allow only the existing edit fields. The additive migration was exercised only on the local database; eventual hosted application remains an owner action, with the backend error mapping deployed first.
+
+Real API/database checks reproduced the defect, checked historical repair and preserved item fields, original create replays, inactive/foreign assignment refusal, non-member refusal, and immutable category identity. Holding an item lock forced deletion to fail: both category and item stayed unchanged, and retry ungrouped the item. Both concurrent insert/delete orders preserved the invariant. The trigger helpers were not executable by anonymous/authenticated clients. Browser checks confirmed the retained item in the owner dashboard, edit/save/Back/reload persistence, and the second account's public catalog/reload, with no page errors. The web view has no category-delete control; iOS verification of that button flow is pending. Only this session's extra catalog fixtures were removed. All 342 existing backend suites / 6,632 tests passed (one suite / 16 existing tests skipped), along with privacy gates, migration policy, syntax and diff checks. Full-schema replay is pending in GitHub CI.
