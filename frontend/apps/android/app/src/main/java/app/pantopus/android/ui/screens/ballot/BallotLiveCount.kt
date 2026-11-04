@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -51,11 +54,13 @@ import app.pantopus.android.ui.theme.Spacing
 
 // Place — "Your ballot", the live count drawn while ballots are counted
 // (the November 3, 2026 results design): a status line, then each race
-// with a bar per choice, or one Yes/No bar for a measure. Every bar is the
-// same neutral slate: no party colors and nothing marks a leader.
-// Statewide races can start folded behind one row. Every word and number
-// comes from the server (`civic_election.live_count`); these composables
-// only lay them out. Parity twin of iOS `BallotLiveCountView.swift`.
+// with a bar per choice, or one Yes/No bar for a measure. A candidate's
+// party, as the state words it, sits under the name; the two major parties'
+// bars are blue and red, and everything else is neutral slate. Nothing marks
+// a leader. Statewide races can start folded behind one row. Every word and
+// number comes from the server (`civic_election.live_count`); these
+// composables only lay them out. Parity twin of iOS
+// `BallotLiveCountView.swift`.
 
 /** Digits all one width, so the percentages line up race to race. */
 private fun TextStyle.tabular(): TextStyle = copy(fontFeatureSettings = "tnum")
@@ -173,11 +178,15 @@ private fun CountRace(
 
 @Composable
 private fun CandidateRow(option: BallotCountOption) {
+    val fill = partyFill(option.partyTone)
+    val party = option.partyLabel?.let { ", $it" }.orEmpty()
     Column(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clearAndSetSemantics { contentDescription = "${option.name}, ${option.percentLabel}, ${option.votesLabel} votes" },
+                .clearAndSetSemantics {
+                    contentDescription = "${option.name}$party, ${option.percentLabel}, ${option.votesLabel} votes"
+                },
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
@@ -201,6 +210,16 @@ private fun CandidateRow(option: BallotCountOption) {
                 modifier = Modifier.widthIn(min = 46.dp).alignByBaseline(),
             )
         }
+        option.partyLabel?.let { label ->
+            Row(
+                modifier = Modifier.padding(bottom = 1.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(fill))
+                Text(label, style = BallotText.style(12.sp, lineHeight = 15.sp), color = PantopusColors.appTextSecondary)
+            }
+        }
         Box(
             modifier =
                 Modifier
@@ -215,11 +234,19 @@ private fun CandidateRow(option: BallotCountOption) {
                         .fillMaxWidth(option.share.toFloat().coerceIn(0f, 1f))
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(3.dp))
-                        .background(PantopusColors.ballotCountFill),
+                        .background(fill),
             )
         }
     }
 }
+
+/** The bar and the party dot: blue and red for the two major parties, the neutral slate for everyone else. */
+private fun partyFill(tone: String?): Color =
+    when (tone) {
+        "democratic" -> PantopusColors.ballotCountDemocratic
+        "republican" -> PantopusColors.ballotCountRepublican
+        else -> PantopusColors.ballotCountFill
+    }
 
 @Composable
 private fun MeasureBar(
