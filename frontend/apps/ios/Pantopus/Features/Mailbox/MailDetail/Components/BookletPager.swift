@@ -291,7 +291,8 @@ private struct BookletPageImage: View {
 
     var body: some View {
         BookletPaperPageChrome(hasNextPage: hasNextPage) {
-            CachedAsyncImage(url: url, keepsOnDisk: false) { phase in
+            // About the largest a page is shown (a thumbnail, 600), not the scan's full ~31 MB bitmap.
+            CachedAsyncImage(url: url, keepsOnDisk: false, maxPixelSize: 2048) { phase in
                 switch phase {
                 case let .success(image):
                     image
@@ -357,7 +358,7 @@ private struct ThumbnailCell: View {
                 foldSize: Spacing.s4,
                 cornerRadius: Radii.sm
             ) {
-                CachedAsyncImage(url: url, keepsOnDisk: false) { phase in
+                CachedAsyncImage(url: url, keepsOnDisk: false, maxPixelSize: 600) { phase in
                     switch phase {
                     case let .success(image):
                         image
