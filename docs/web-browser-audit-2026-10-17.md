@@ -351,7 +351,7 @@ The comprehensive infrastructure proposal is in [#3253](https://github.com/WangP
 | `/app/homes/[id]/settings` | Entry/redirect/state probe | 390 px |
 | `/app/homes/[id]/settings/security` | Entry/redirect/state probe | 390 px |
 | `/app/homes/[id]/share` | Entry/redirect/state probe | 390 px |
-| `/app/homes/[id]/tasks` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/tasks` | Owner/member create, assign, complete, delete, permission/retry, delayed-roster and reload flows | 390 px |
 | `/app/homes/[id]/tasks/[taskId]` | Missing-resource/refusal probe only | 390 px |
 | `/app/homes/[id]/verify-landlord` | Entry/redirect/state probe | 390 px |
 | `/app/homes/[id]/verify-landlord/details` | Entry/redirect/state probe | 390 px |
@@ -659,3 +659,15 @@ Owner and read-only member Chrome sessions against the real local API/database v
 A separate presentation-only [#3300](https://github.com/WangPantopus/skinny-pantopus/pull/3300), source `cfdc3cb93941351a9bfa18f670f478520ae40ac5`, is stacked on #3298. A long revealed value previously overflowed its card at 320 px. The value now wraps without altering its contents; value and controls fit at 320, 390, 768 and 1440 px. Reveal/Hide and masked reload passed with no JavaScript errors.
 
 The functional repair passed all 123 existing web suites / 2,383 tests. Both changes passed zero-error TypeScript and targeted lint with only three pre-existing any warnings; no new unit tests were added. The synthetic access value was deleted through the API, and only this check's temporary membership/permission rows were removed. These checks establish the tested local flows, not completion of the entire route matrix or a production startup result. All PRs remain unmerged and no production infrastructure was changed.
+
+### Tasks blocked by optional member names — November 4
+
+The native access-code audit's roster dependency prompted a web follow-up. The web Access & Codes reader has no roster dependency or visibility-choice labels, but `/app/homes/[id]/tasks` awaited `/occupants` after its authorized task response and kept the entire page loading. The same pending roster also held the collection's busy flag, delaying reload after task completion.
+
+[#3303](https://github.com/WangPantopus/skinny-pantopus/pull/3303), source `77bce1b40316da8c3ee86747c8f6f053e928cf42`, loads member names independently. Current task capabilities still control actions. Previous names clear while rechecking, and each roster response must belong to the current collection and session before it can populate the form.
+
+Three Chrome runs per version against the real local backend/database delayed only the real roster response by eight seconds. Median time from receipt of the task response to the usable list fell from **8,282 ms to 29 ms**. The repaired list and Add Task were available before the held roster returned in every run. These development-browser measurements isolate the dependency; they do not measure total production startup or establish a normal-user latency reduction of eight seconds.
+
+A draft survived the eventual names response, assignment and creation persisted, and the assigned member saw the task after reload. Completing a task and refreshing the collection succeeded while an older roster was still held. That old authorized roster could not repopulate member choices after the newer roster failed. A roster 403 left authorized tasks usable; a task 503 exposed Retry without rows or create access. Actual member task-read revocation returned 403, and restoring the permission recovered. A real second-tab session-marker change remounted the current view; a failed new task read stayed clear when the previous roster arrived, then Retry recovered. Delete cancellation, confirmed deletion and reload for both people passed. Browser checks followed the existing explicit “Start another task” recovery behavior where a confirmed create was retained; it was not a new-task failure.
+
+All 123 existing web suites / 2,383 tests, TypeScript, targeted lint and diff checks passed. No new unit tests were added. The two synthetic tasks were deleted through the UI and only this check's temporary member/permission rows were removed. No backend contract, launch flag or production infrastructure was changed. The task-detail route's separate entry-only coverage is unchanged.
