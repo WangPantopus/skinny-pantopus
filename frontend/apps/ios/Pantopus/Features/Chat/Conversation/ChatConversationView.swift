@@ -1191,7 +1191,8 @@ public struct ChatConversationView: View {
             Spacer()
         }
         .padding(.horizontal, 28)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Half folded, beside the fold rather than across it.
+        .centeredClearOfFold()
         .accessibilityIdentifier("chatConversationEmpty")
     }
 
@@ -2087,7 +2088,8 @@ extension ChatConversationView {
             Spacer()
         }
         .padding(.horizontal, Spacing.s6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Half folded, Try again beside the fold rather than on it.
+        .centeredClearOfFold()
         .accessibilityIdentifier("chatConversationError")
     }
 

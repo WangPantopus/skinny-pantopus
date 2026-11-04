@@ -22,9 +22,10 @@ struct SideBySideColumnWidth {
     /// The chat list: a bit narrower than a phone, so the conversation gets the bigger side (the founder's pick).
     static let chatList = SideBySideColumnWidth(min: 320, ideal: 340, max: 480)
     /// The Nearby tab's leading column: a phone's width, so the Pulse header's buttons fit as they do closed (the
-    /// founder's pick). Both segments use it, so the switch above them stays put. Fixed, because the split view
-    /// otherwise narrows a column it laid out before a rotation.
-    static let nearby = SideBySideColumnWidth(min: 382, ideal: 382, max: 382)
+    /// founder's pick). Both segments use it, so the switch above them stays put. Never narrower, because the split
+    /// view otherwise narrows a column it laid out before a rotation. Half folded like a book, the split view widens
+    /// it to the fold, as it does the chat list, so the open post or the map has the other side to itself.
+    static let nearby = SideBySideColumnWidth(min: 382, ideal: 382, max: 480)
 
     /// Whether a screen this wide holds the column with the narrowest iPhone's width (375 pt) beside it. Upright,
     /// the open iPhone Duo (669 pt) doesn't hold the Nearby column: a post beside it got 287 pt, and the map beside
