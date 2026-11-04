@@ -176,8 +176,8 @@ function AccessContent() {
                   {catSecrets.map((secret: any) => (
                     <div key={secret.id} className="flex items-center gap-3 bg-app-surface border border-app-border rounded-xl p-4">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-app-text">{secret.label || secret.title}</p>
-                        {(secret.notes || secret.description) && <p className="text-xs text-app-text-secondary mt-0.5">{secret.notes || secret.description}</p>}
+                        <p className="text-sm font-medium text-app-text break-words">{secret.label || secret.title}</p>
+                        {(secret.notes || secret.description) && <p className="text-xs text-app-text-secondary mt-0.5 break-words whitespace-pre-line">{secret.notes || secret.description}</p>}
                         <p className="text-base font-semibold font-mono tracking-wider text-app-text mt-2 break-all">
                           {revealed[secret.id] ? (secret.secret_value ?? secret.value ?? secret.code) : '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'}
                         </p>
