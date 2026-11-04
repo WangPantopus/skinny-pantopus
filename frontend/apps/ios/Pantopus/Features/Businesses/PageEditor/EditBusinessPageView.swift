@@ -244,6 +244,15 @@ public struct EditBusinessPageView: View {
                 onPickMedia: pickMediaAction,
                 uploadingMedia: viewModel.uploadingMedia,
                 onManageServices: manageServicesAction,
+                onChangeHours: editableHours ? { viewModel.updateHours(dayId: $0, to: $1) } : nil,
+                onApplyWeekdays: editableHours ? { viewModel.applyWeekdayHours() } : nil,
+                isLoadingHours: viewModel.isLoadingHours,
+                hoursLoaded: viewModel.hasLoadedHours,
+                hoursError: viewModel.hoursError,
+                onRetryHours: { Task { await viewModel.refreshHours() } },
+                isLoadingServices: viewModel.isLoadingServices,
+                servicesError: viewModel.servicesError,
+                onRetryServices: { Task { await viewModel.refreshServices() } },
                 canEditProfile: viewModel.canEditProfile,
                 canEditLocation: viewModel.canEditLocation,
                 accessMessage: viewModel.isCheckingAccess ? "Checking edit access…" : viewModel.accessError,
@@ -292,6 +301,11 @@ public struct EditBusinessPageView: View {
             .accessibilityIdentifier("editBusinessPage.error")
         }
     }
+
+    private var editableHours: Bool {
+        viewModel.canEditProfile && viewModel.canEditHours && viewModel.hasLoadedHours && !viewModel.isLoadingHours
+            && viewModel.hoursError == nil
+    }
 }
 
 // MARK: - Loaded layout
@@ -312,6 +326,15 @@ public struct EditBusinessPageLoadedView: View {
     public let onPickMedia: (@MainActor (BusinessMediaKind, Data, String) -> Void)?
     public let uploadingMedia: BusinessMediaKind?
     public let onManageServices: (@MainActor () -> Void)?
+    public let onChangeHours: ((String, EditBusinessPageHoursRow.State) -> Void)?
+    public let onApplyWeekdays: (() -> Void)?
+    public let isLoadingHours: Bool
+    public let hoursLoaded: Bool
+    public let hoursError: String?
+    public let onRetryHours: () -> Void
+    public let isLoadingServices: Bool
+    public let servicesError: String?
+    public let onRetryServices: () -> Void
     public let canEditProfile: Bool
     public let canEditLocation: Bool
     public let accessMessage: String?
@@ -333,6 +356,15 @@ public struct EditBusinessPageLoadedView: View {
         onPickMedia: (@MainActor (BusinessMediaKind, Data, String) -> Void)? = nil,
         uploadingMedia: BusinessMediaKind? = nil,
         onManageServices: (@MainActor () -> Void)? = nil,
+        onChangeHours: ((String, EditBusinessPageHoursRow.State) -> Void)? = nil,
+        onApplyWeekdays: (() -> Void)? = nil,
+        isLoadingHours: Bool = false,
+        hoursLoaded: Bool = true,
+        hoursError: String? = nil,
+        onRetryHours: @escaping () -> Void = {},
+        isLoadingServices: Bool = false,
+        servicesError: String? = nil,
+        onRetryServices: @escaping () -> Void = {},
         canEditProfile: Bool = true,
         canEditLocation: Bool = true,
         accessMessage: String? = nil,
@@ -352,6 +384,15 @@ public struct EditBusinessPageLoadedView: View {
         self.onPickMedia = onPickMedia
         self.uploadingMedia = uploadingMedia
         self.onManageServices = onManageServices
+        self.onChangeHours = onChangeHours
+        self.onApplyWeekdays = onApplyWeekdays
+        self.isLoadingHours = isLoadingHours
+        self.hoursLoaded = hoursLoaded
+        self.hoursError = hoursError
+        self.onRetryHours = onRetryHours
+        self.isLoadingServices = isLoadingServices
+        self.servicesError = servicesError
+        self.onRetryServices = onRetryServices
         self.canEditProfile = canEditProfile
         self.canEditLocation = canEditLocation
         self.accessMessage = accessMessage
@@ -513,15 +554,43 @@ public struct EditBusinessPageLoadedView: View {
             }
         }
     }
+}
 
-    private var hoursSection: some View {
+private extension EditBusinessPageLoadedView {
+    var hoursSection: some View {
         EditBusinessSection(overline: "Hours") {
-            EditBusinessHoursEditor(state: content.hours)
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                if isLoadingHours {
+                    ProgressView("Loading hours…")
+                }
+                if let hoursError {
+                    Text(hoursError).pantopusTextStyle(.small)
+                    Button("Retry hours", action: onRetryHours)
+                        .frame(minHeight: 44)
+                        .disabled(!canEditProfile)
+                }
+                if hoursLoaded || (!isLoadingHours && hoursError == nil) {
+                    EditBusinessHoursEditor(
+                        state: content.hours,
+                        onChange: onChangeHours,
+                        onApplyWeekdays: onApplyWeekdays
+                    )
+                }
+            }
         }
     }
 
     private var servicesSection: some View {
         EditBusinessSection(overline: "Services") {
+            if isLoadingServices {
+                ProgressView("Loading services…")
+            }
+            if let servicesError {
+                Text(servicesError).pantopusTextStyle(.small)
+                Button("Retry services", action: onRetryServices)
+                    .frame(minHeight: 44)
+                    .disabled(!canEditProfile)
+            }
             switch content.services {
             case let .chips(chips):
                 VStack(alignment: .leading, spacing: 6) {
@@ -529,8 +598,10 @@ public struct EditBusinessPageLoadedView: View {
                     EditBusinessServiceChipsEditor(chips: chips, onManage: onManageServices)
                 }
             case let .prompt(prompt):
-                PromptBlock(prompt: prompt, onTap: onManageServices)
-                    .disabled(onManageServices == nil)
+                if !isLoadingServices, servicesError == nil {
+                    PromptBlock(prompt: prompt, onTap: onManageServices)
+                        .disabled(onManageServices == nil)
+                }
             }
         }
     }

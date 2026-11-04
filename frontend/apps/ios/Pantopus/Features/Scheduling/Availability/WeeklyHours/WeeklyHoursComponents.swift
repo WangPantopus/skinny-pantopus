@@ -376,16 +376,19 @@ struct TimeRangePickerSheet: View {
     @State private var start: Date
     @State private var end: Date
     let onCommit: (TimeOfDay, TimeOfDay) -> Void
+    private let validationMessage: ((TimeOfDay, TimeOfDay) -> String?)?
     @Environment(\.dismiss) private var dismiss
 
     init(
         range: TimeRange,
+        validationMessage: ((TimeOfDay, TimeOfDay) -> String?)? = nil,
         onCommit: @escaping (TimeOfDay, TimeOfDay) -> Void
     ) {
         title = "Edit time range"
         _start = State(initialValue: range.start.referenceDate())
         _end = State(initialValue: range.end.referenceDate())
         self.onCommit = onCommit
+        self.validationMessage = validationMessage
     }
 
     var body: some View {
@@ -410,17 +413,27 @@ struct TimeRangePickerSheet: View {
                         .accessibilityLabel("End time")
                 }
             }
+            if let error {
+                Text(error)
+                    .pantopusTextStyle(.small)
+                    .foregroundStyle(Theme.Color.error)
+            }
             PrimaryButton(title: "Done") {
                 onCommit(TimeOfDay(from: start), TimeOfDay(from: end))
                 await MainActor.run { dismiss() }
             }
+            .disabled(error != nil)
             .padding(.horizontal, Spacing.s4)
             Spacer(minLength: 0)
         }
         .background(Theme.Color.appBg)
-        .presentationDetents([.height(360)])
+        .presentationDetents([.height(error == nil ? 360 : 400)])
         .presentationDragIndicator(.visible)
         .accessibilityIdentifier("scheduling.weeklyHours.timeRangeSheet")
+    }
+
+    private var error: String? {
+        validationMessage?(TimeOfDay(from: start), TimeOfDay(from: end))
     }
 }
 

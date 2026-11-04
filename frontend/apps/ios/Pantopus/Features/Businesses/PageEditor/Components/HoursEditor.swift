@@ -13,9 +13,18 @@ import SwiftUI
 @MainActor
 public struct EditBusinessHoursEditor: View {
     private let state: EditBusinessPageHoursState
+    private let onChange: ((String, EditBusinessPageHoursRow.State) -> Void)?
+    private let onApplyWeekdays: (() -> Void)?
+    @State private var editingRow: EditBusinessPageHoursRow?
 
-    public init(state: EditBusinessPageHoursState) {
+    public init(
+        state: EditBusinessPageHoursState,
+        onChange: ((String, EditBusinessPageHoursRow.State) -> Void)? = nil,
+        onApplyWeekdays: (() -> Void)? = nil
+    ) {
         self.state = state
+        self.onChange = onChange
+        self.onApplyWeekdays = onApplyWeekdays
     }
 
     public var body: some View {
@@ -24,6 +33,24 @@ public struct EditBusinessHoursEditor: View {
             footer
         }
         .accessibilityIdentifier("editBusinessPage.hours")
+        .sheet(item: $editingRow) { row in
+            TimeRangePickerSheet(
+                range: timeRange(for: row),
+                validationMessage: { start, end in
+                    guard rows.contains(where: { $0.id == row.id }) else {
+                        return "These hours changed. Close this sheet and select the current hours."
+                    }
+                    return start == end ? "Opening and closing times must be different." : nil
+                },
+                onCommit: { start, end in
+                    onChange?(row.id, .open(
+                        openLabel: EditBusinessPageMapper.formatAPITime(start.hhmm) ?? start.hhmm,
+                        closeLabel: EditBusinessPageMapper.formatAPITime(end.hhmm) ?? end.hhmm
+                    ))
+                }
+            )
+            .disabled(onChange == nil)
+        }
     }
 
     private var rows: [EditBusinessPageHoursRow] {
@@ -36,7 +63,15 @@ public struct EditBusinessHoursEditor: View {
     private var card: some View {
         VStack(spacing: Spacing.s0) {
             ForEach(Array(rows.enumerated()), id: \.element.id) { idx, row in
-                EditHoursRowView(row: row)
+                Menu {
+                    Button("Set hours") { editingRow = row }
+                    Button("Open 24 hours") { onChange?(row.id, .open(openLabel: "12:00 AM", closeLabel: "24:00")) }
+                    Button("Closed all day") { onChange?(row.id, .closed) }
+                } label: {
+                    EditHoursRowView(row: row)
+                }
+                .disabled(onChange == nil)
+                .accessibilityIdentifier("editBusinessPage.hours.\(row.id)")
                 if idx != rows.count - 1 {
                     Divider()
                         .background(Theme.Color.appBorderSubtle)
@@ -65,19 +100,25 @@ public struct EditBusinessHoursEditor: View {
                 .padding(.top, 2)
             }
         case .quickApply:
-            HStack(spacing: Spacing.s2) {
+            Button { onApplyWeekdays?() } label: {
                 quickApplyButton(
                     label: "Apply 9–5 weekdays",
                     icon: .calendarClock,
                     tint: .violet
                 )
-                quickApplyButton(
-                    label: "Copy from another biz",
-                    icon: .copy,
-                    tint: .neutral
-                )
             }
+            .buttonStyle(.plain)
+            .disabled(onApplyWeekdays == nil)
         }
+    }
+
+    private func timeRange(for row: EditBusinessPageHoursRow) -> TimeRange {
+        guard case let .open(open, close) = row.state,
+              let start = EditBusinessPageMapper.parseDisplayTime(open).flatMap(TimeOfDay.init),
+              let end = EditBusinessPageMapper.parseDisplayTime(close).flatMap(TimeOfDay.init) else {
+            return .nineToFive
+        }
+        return TimeRange(start: start, end: end)
     }
 
     private enum QuickTint { case violet, neutral }
@@ -93,7 +134,7 @@ public struct EditBusinessHoursEditor: View {
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(tint == .violet ? Theme.Color.businessDark : Theme.Color.appTextStrong)
         }
-        .frame(maxWidth: .infinity, minHeight: 34)
+        .frame(maxWidth: .infinity, minHeight: 44)
         .padding(.horizontal, Spacing.s2)
         .background(tint == .violet ? Theme.Color.businessBg : Theme.Color.appSurface)
         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
@@ -150,11 +191,15 @@ private struct EditHoursRowView: View {
         switch row.state {
         case let .open(openLabel, closeLabel):
             HStack(spacing: 6) {
-                TimePill(value: openLabel)
-                Text("—")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.Color.appTextMuted)
-                TimePill(value: closeLabel)
+                if isAllDay {
+                    Text("Open 24 hours").pantopusTextStyle(.caption)
+                } else {
+                    TimePill(value: openLabel)
+                    Text("—")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                    TimePill(value: closeLabel == "24:00" ? "12:00 AM" : closeLabel)
+                }
                 Spacer()
                 Icon(.moreHorizontal, size: 14, color: Theme.Color.appTextSecondary)
                     .padding(4)
@@ -191,12 +236,17 @@ private struct EditHoursRowView: View {
 
     private var a11yLabel: String {
         let stateLabel = switch row.state {
-        case let .open(open, close): "\(open) to \(close)"
+        case let .open(open, close): isAllDay ? "Open 24 hours" : "\(open) to \(close)"
         case .closed: "Closed"
         case .notSet: "Not set"
         }
         let dirtyTag = row.isDirty ? ", unsaved" : ""
         return "\(row.dayLabel), \(stateLabel)\(dirtyTag)"
+    }
+
+    private var isAllDay: Bool {
+        guard case let .open(open, close) = row.state else { return false }
+        return ["12:00 AM", "00:00"].contains(open) && close == "24:00"
     }
 }
 

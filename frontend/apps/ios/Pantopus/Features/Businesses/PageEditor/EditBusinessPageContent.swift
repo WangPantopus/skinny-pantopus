@@ -100,12 +100,24 @@ public struct EditBusinessPageHoursRow: Sendable, Hashable, Identifiable {
     public let dayLabel: String
     public let state: State
     public let isDirty: Bool
+    public let notes: String?
+    /// Untouched intervals retain the server's full time precision and notes.
+    public let source: BusinessHoursDTO?
 
-    public init(id: String, dayLabel: String, state: State, isDirty: Bool = false) {
+    public init(
+        id: String,
+        dayLabel: String,
+        state: State,
+        isDirty: Bool = false,
+        notes: String? = nil,
+        source: BusinessHoursDTO? = nil
+    ) {
         self.id = id
         self.dayLabel = dayLabel
         self.state = state
         self.isDirty = isDirty
+        self.notes = notes
+        self.source = source
     }
 }
 

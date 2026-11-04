@@ -445,6 +445,7 @@ public struct BusinessHoursDTO: Decodable, Sendable, Hashable, Identifiable {
     public let openTime: String?
     public let closeTime: String?
     public let isClosed: Bool?
+    public let notes: String?
 
     /// Identifiable conformance with a stable id even when the backend
     /// row id is missing.
@@ -459,6 +460,7 @@ public struct BusinessHoursDTO: Decodable, Sendable, Hashable, Identifiable {
         case openTime = "open_time"
         case closeTime = "close_time"
         case isClosed = "is_closed"
+        case notes
     }
 }
 
@@ -898,12 +900,14 @@ public struct SetBusinessHoursDayRequest: Encodable, Sendable, Hashable {
     public let openTime: String?
     public let closeTime: String?
     public let isClosed: Bool
+    public let notes: String?
 
-    public init(dayOfWeek: Int, openTime: String?, closeTime: String?, isClosed: Bool) {
+    public init(dayOfWeek: Int, openTime: String?, closeTime: String?, isClosed: Bool, notes: String? = nil) {
         self.dayOfWeek = dayOfWeek
         self.openTime = openTime
         self.closeTime = closeTime
         self.isClosed = isClosed
+        self.notes = notes
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -911,6 +915,7 @@ public struct SetBusinessHoursDayRequest: Encodable, Sendable, Hashable {
         case openTime = "open_time"
         case closeTime = "close_time"
         case isClosed = "is_closed"
+        case notes
     }
 }
 
