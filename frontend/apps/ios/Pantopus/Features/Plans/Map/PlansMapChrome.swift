@@ -15,7 +15,7 @@ struct PlansMapTopBar: View {
     let showsPlaydates: Bool
     /// "Ask Pantopus" about plans, the bar's trailing button.
     var onAsk: (@MainActor () -> Void)?
-    let onAreaTap: () -> Void
+    let onAreaTap: @MainActor () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {

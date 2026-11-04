@@ -20,21 +20,19 @@ struct PlansMapView: View {
     @State private var camera: MapCameraPosition = .automatic
     /// The area pill and chips' height: the sheet's full stop sits under them, and the first look keeps pins out from under them.
     @State private var chromeHeight: CGFloat = 0
-    @State private var showsAreaPicker = false
     /// When a pin was last tapped: the same touch also reaches the map's own
     /// tap (which clears a selection) and must not undo the pin's.
     @State private var pinTappedAt: Date?
     @State private var flags = PlansFlags.shared
-    /// The assistant, opened from the header about plans.
-    @State private var askTopic: AIAskTopic?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let tabActions: PlansMapActions
+    private let actions: PlansMapActions
 
-    init(viewModel: PlansMapViewModel = PlansMapViewModel(), actions: PlansMapActions) {
+    /// The Plans tab holds `viewModel`, so a new layout of this screen keeps its plans, filters and selection.
+    init(viewModel: PlansMapViewModel, actions: PlansMapActions) {
         _viewModel = State(initialValue: viewModel)
         _drag = State(initialValue: PlansSheetDrag(viewModel: viewModel))
-        tabActions = actions
+        self.actions = actions
     }
 
     var body: some View {
@@ -49,9 +47,10 @@ struct PlansMapView: View {
                 PlansMapTopBar(
                     viewModel: viewModel,
                     showsPlaydates: flags.playdates && viewModel.showsPlaydateFilter,
-                    onAsk: actions.ask
-                ) { showsAreaPicker = true }
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chromeHeight = $0 }
+                    onAsk: actions.ask,
+                    onAreaTap: actions.areaPicker
+                )
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chromeHeight = $0 }
             }
             .ignoresSafeArea(edges: .bottom)
             // Over the map and the chrome, but not in their stack: a child taller than the safe area
@@ -75,12 +74,7 @@ struct PlansMapView: View {
         .refreshesOnStoreChange(affects: { PlansStoreReads.affects($0) }, perform: { await viewModel.start() })
         .onChange(of: viewModel.recenterRequest) { _, _ in recenter() }
         .onChange(of: reduceMotion, initial: true) { _, reduce in drag.reduceMotion = reduce }
-        .sheet(isPresented: $showsAreaPicker) {
-            PlansAreaPicker(viewModel: viewModel) { showsAreaPicker = false }
-                .presentationDetents([.medium, .large])
-                .presentationBackground(Theme.Color.appSurface)
-        }
-        .askPantopus($askTopic)
+        .onAppear(perform: restoreCamera)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plansMap")
@@ -129,7 +123,7 @@ struct PlansMapView: View {
         // of it off screen on every frame, and an overlay that ignores the safe area moved the map down.
         .mapStyle(.standard(emphasis: dimsMap ? .muted : .automatic, pointsOfInterest: .excludingAll))
         .onMapCameraChange(frequency: .onEnd) { context in
-            viewModel.cameraChanged(context.region)
+            viewModel.cameraChanged(context.region, camera: context.camera)
         }
         .onTapGesture {
             if let pinTappedAt, Date().timeIntervalSince(pinTappedAt) < 0.5 { return }
@@ -253,6 +247,13 @@ struct PlansMapView: View {
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.4)) { camera = .region(region) }
     }
 
+    /// A map made again for the same plans (a new layout of this screen) opens where the last one was left, at its
+    /// zoom, instead of on its own first look.
+    private func restoreCamera() {
+        guard camera == .automatic, let last = viewModel.lastCamera else { return }
+        camera = .camera(last)
+    }
+
     private func recenter() {
         guard let center = viewModel.center else { return }
         // About 5 miles across, a little south so the center sits above the sheet.
@@ -303,27 +304,20 @@ enum PlanOpenIntent: Hashable {
     case invite(token: String)
 }
 
-extension PlansMapView {
-    /// The tab's actions, with Ask opening the assistant over the map.
-    private var actions: PlansMapActions {
-        var actions = tabActions
-        actions.ask = { askTopic = .plans() }
-        return actions
-    }
-}
-
 /// The actions the map hands to the Plans tab's stack.
 struct PlansMapActions {
     /// Open a plan (J1 and the screens after it), from its card when one is on screen.
     let openPlan: @MainActor (PlanCardDTO?, String, PlanOpenIntent) -> Void
     /// Start hosting, optionally with a kind (and a game) chosen.
     let host: @MainActor (PlansHostStart?) -> Void
+    /// "Area and time" (the area pill), the sheet over the tab.
+    let areaPicker: @MainActor () -> Void
     /// "More nearby": Pulse. Nil drops the "More nearby" rows (the Pulse
     /// redesign is off, and the Nearby tab beside Plans has them).
     var openPulse: (@MainActor () -> Void)?
     /// "More nearby": Connections.
     var openConnections: (@MainActor () -> Void)?
-    /// "Ask Pantopus" about plans (the header's trailing button); the map fills it in.
+    /// "Ask Pantopus" about plans (the header's trailing button), the assistant over the tab.
     var ask: (@MainActor () -> Void)?
 }
 

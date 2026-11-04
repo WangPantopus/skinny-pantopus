@@ -11,6 +11,11 @@
 //  `PlansNavigator`. With the redesign off, the list has no "More nearby"
 //  rows: Pulse and Connections are on the Nearby tab beside it.
 //
+//  The map's plans, filters, selection and camera, and the sheets over it
+//  (Area and time, the assistant), are held here, above the screen that
+//  shows them, so a new layout for the same screen (the iPhone Duo folded or
+//  unfolded) starts where the last one was.
+//
 
 import SwiftUI
 
@@ -22,12 +27,16 @@ public struct PlansTabRoot: View {
     @State private var hostRequest: PlansHostRequest?
     /// The plan just posted, opened once the composer has gone.
     @State private var postedPlanId: String?
+    @State private var map = PlansMapViewModel()
+    @State private var showsAreaPicker = false
+    /// The assistant, opened from the map's header about plans.
+    @State private var askTopic: AIAskTopic?
 
     public init() {}
 
     public var body: some View {
         NavigationStack(path: $plansPath) {
-            PlansMapView(actions: plansActions)
+            PlansMapView(viewModel: map, actions: plansActions)
                 .toolbar(.hidden, for: .navigationBar)
                 .swipesBackFromEdge()
                 .navigationDestination(for: PlansRoute.self) { route in
@@ -37,6 +46,12 @@ public struct PlansTabRoot: View {
                 }
         }
         .accessibilityIdentifier("plansTabRoot")
+        .sheet(isPresented: $showsAreaPicker) {
+            PlansAreaPicker(viewModel: map) { showsAreaPicker = false }
+                .presentationDetents([.medium, .large])
+                .presentationBackground(Theme.Color.appSurface)
+        }
+        .askPantopus($askTopic)
         .fullScreenCover(item: $hostRequest, onDismiss: openPostedPlan) { request in
             PlanComposerRoot(start: request.start) { posted in
                 postedPlanId = posted
@@ -50,6 +65,8 @@ public struct PlansTabRoot: View {
             if !isOn {
                 plansPath = []
                 hostRequest = nil
+                showsAreaPicker = false
+                askTopic = nil
             }
         }
         .onChange(of: rootTabs.selected) { _, _ in consumePlansHandOff() }
@@ -74,8 +91,10 @@ public struct PlansTabRoot: View {
                 if let card { PlansStoreReads.seed(card) }
                 plansPath.append(.plan(id: id, intent: intent))
             },
-            host: { start in hostRequest = PlansHostRequest(start: start) }
+            host: { start in hostRequest = PlansHostRequest(start: start) },
+            areaPicker: { showsAreaPicker = true }
         )
+        actions.ask = { askTopic = .plans() }
         if LaunchFeatures.pulseRedesign {
             actions.openPulse = { rootTabs.selected = .pulse }
             actions.openConnections = { DeepLinkRouter.shared.handle(path: "/connections") }
