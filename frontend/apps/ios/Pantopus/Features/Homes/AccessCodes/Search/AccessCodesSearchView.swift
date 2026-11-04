@@ -13,6 +13,9 @@ import SwiftUI
 
 struct AccessCodesSearchView: View {
     @State private var viewModel: AccessCodesSearchViewModel
+    @State private var isVisible = false
+    @State private var needsForegroundRead = false
+    @Environment(\.scenePhase) private var scenePhase
 
     init(viewModel: AccessCodesSearchViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -41,6 +44,36 @@ struct AccessCodesSearchView: View {
         .accessibilityIdentifier("accessCodesSearch")
         .sensitiveScreen()
         .task { await viewModel.load() }
+        .onAppear {
+            isVisible = true
+            needsForegroundRead = false
+        }
+        .onDisappear {
+            isVisible = false
+            viewModel.suspend()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard isVisible else { return }
+            if phase == .background {
+                needsForegroundRead = true
+                viewModel.suspend()
+            } else if phase == .active, needsForegroundRead {
+                needsForegroundRead = false
+                Task { await viewModel.load() }
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if let message = viewModel.errorMessage {
+                VStack(spacing: Spacing.s2) {
+                    Text(message)
+                        .pantopusTextStyle(.small)
+                    Button("Try again") { Task { await viewModel.load() } }
+                }
+                .padding(Spacing.s4)
+                .frame(maxWidth: .infinity)
+                .background(Theme.Color.appBg)
+            }
+        }
     }
 }
 

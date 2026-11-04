@@ -143,6 +143,11 @@ final class EditAccessCodeFormViewModel {
     var toast: ToastMessage?
     private(set) var shakeTrigger: Int = 0
     private(set) var shouldDismiss: Bool = false
+    private(set) var isLoading = false
+    private(set) var isConfirmingAccess = true
+    private(set) var hasCurrentAccess = false
+    private(set) var canManage = false
+    private(set) var accessError: String?
 
     /// `true` when this VM is editing an existing code.
     var isEditing: Bool {
@@ -162,8 +167,11 @@ final class EditAccessCodeFormViewModel {
     // MARK: - Dependencies
 
     private let api: APIClient
+    private let authority: HomeDashboardAccess
     private let clipboard: @MainActor (String) -> Void
     private var toastTask: Task<Void, Never>?
+    private var readGeneration = 0
+    private var accessGeneration = 0
 
     init(
         homeId: String,
@@ -178,6 +186,7 @@ final class EditAccessCodeFormViewModel {
         self.secretId = secretId
         category = initialCategory ?? .wifi
         self.api = api
+        authority = HomeDashboardAccess(homeId: homeId, api: api)
         self.clipboard = clipboard
         seedDefaultFields()
     }
@@ -185,12 +194,60 @@ final class EditAccessCodeFormViewModel {
     /// Load the existing secret (when editing) plus the household
     /// roster. Idempotent: re-running re-fetches both.
     func load() async {
+        readGeneration &+= 1
+        let generation = readGeneration
+        isLoading = true
+        defer { if generation == readGeneration { isLoading = false } }
         // Always pull the roster — it powers the "Shared with" copy
         // even in the create flow.
-        await loadRoster()
+        await loadRoster(generation: generation)
+        guard generation == readGeneration, !Task.isCancelled else { return }
         // Then hydrate from the existing secret, if any.
         if let secretId {
-            await loadSecret(secretId: secretId)
+            await loadSecret(secretId: secretId, generation: generation)
+        } else {
+            state = .editing
+        }
+    }
+
+    func suspend() {
+        readGeneration &+= 1
+        accessGeneration &+= 1
+        hasCurrentAccess = false
+        canManage = false
+        isLoading = true
+        isConfirmingAccess = true
+        isRevealed = false
+        roster = []
+        toastTask?.cancel()
+        toast = nil
+    }
+
+    /// Fresh authority for the live screen and for each attempted write. The access-code read
+    /// separately confirms that this specific record remains visible to the current account.
+    @discardableResult
+    func confirmAccess() async -> Bool {
+        accessGeneration &+= 1
+        let generation = accessGeneration
+        hasCurrentAccess = false
+        canManage = false
+        isConfirmingAccess = true
+        accessError = nil
+        defer { if generation == accessGeneration { isConfirmingAccess = false } }
+        do {
+            let current = try await authority.read()
+            guard generation == accessGeneration, !Task.isCancelled else { return false }
+            let permissions = current.access?.permissions ?? []
+            canManage = permissions.contains("access.manage")
+            hasCurrentAccess = canManage || (isEditing && permissions.contains {
+                $0 == "access.view_wifi" || $0 == "access.view_codes"
+            })
+            if !hasCurrentAccess { accessError = "You don't have permission to open this access code." }
+            return canManage
+        } catch {
+            guard generation == accessGeneration, !Task.isCancelled else { return false }
+            accessError = "Couldn't confirm your access. Try again."
+            return false
         }
     }
 
@@ -240,25 +297,6 @@ final class EditAccessCodeFormViewModel {
         guard !current.isEmpty else { return }
         clipboard(current)
         showToast("Copied")
-    }
-
-    // MARK: - Aggregate
-
-    var aggregate: FormAggregate {
-        FormAggregate(fields: EditAccessCodeField.allCases.compactMap { fields[$0] })
-    }
-
-    var isDirty: Bool {
-        aggregate.isDirty
-    }
-
-    /// Required fields: category, label, value. Notes + visibility are
-    /// optional (visibility has a default).
-    var isValid: Bool {
-        guard aggregate.isValid else { return false }
-        let label = (fields[.label]?.value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let value = (fields[.value]?.value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return !label.isEmpty && !value.isEmpty
     }
 
     // MARK: - Submit
@@ -329,41 +367,6 @@ final class EditAccessCodeFormViewModel {
         shouldDismiss = false
     }
 
-    // MARK: - Validation table
-
-    private func validator(for field: EditAccessCodeField) -> FormValidator {
-        switch field {
-        case .category:
-            FormValidator { value in
-                AccessCategory(rawValue: value) == nil ? "Pick a category." : nil
-            }
-        case .label:
-            .all([.required("Label"), .maxLength(120)])
-        case .value:
-            .all([.required("Code"), .maxLength(512)])
-        case .notes:
-            .maxLength(2000)
-        case .sharedWith:
-            FormValidator { value in
-                AccessVisibility(rawValue: value) == nil ? "Pick a visibility scope." : nil
-            }
-        }
-    }
-
-    @discardableResult
-    func validateAll() -> EditAccessCodeField? {
-        var firstInvalid: EditAccessCodeField?
-        for field in EditAccessCodeField.allCases {
-            guard var snapshot = fields[field] else { continue }
-            let message = validator(for: field).validate(snapshot.value)
-            snapshot.error = message
-            snapshot.touched = true
-            fields[field] = snapshot
-            if firstInvalid == nil, message != nil { firstInvalid = field }
-        }
-        return firstInvalid
-    }
-
     // MARK: - Networking
 
     private func sendRequest() async throws {
@@ -405,27 +408,30 @@ final class EditAccessCodeFormViewModel {
 
     // MARK: - Hydration
 
-    private func loadSecret(secretId: String) async {
+    private func loadSecret(secretId: String, generation: Int) async {
         // Backend has no GET-one endpoint — pull the list and find the
-        // matching row. The list is already cached by the screen that
-        // pushed us here so re-fetching is cheap.
+        // matching row under the server's current access and visibility checks.
         let endpoint = HomesEndpoints.accessSecrets(homeId: homeId)
         do {
             let response: HomeAccessSecretsResponse = try await api.request(endpoint)
+            guard generation == readGeneration, !Task.isCancelled else { return }
             if let secret = response.secrets.first(where: { $0.id == secretId }) {
-                hydrate(from: secret)
+                if !isDirty { hydrate(from: secret) }
+                state = .editing
             } else {
                 state = .error("Couldn't find that access code.")
             }
         } catch {
+            guard generation == readGeneration, !Task.isCancelled else { return }
             state = .error("Couldn't load access code. Try again.")
         }
     }
 
-    private func loadRoster() async {
+    private func loadRoster(generation: Int) async {
         let endpoint = HomesEndpoints.listOccupants(homeId: homeId)
         do {
             let response: OccupantsResponse = try await api.request(endpoint)
+            guard generation == readGeneration, !Task.isCancelled else { return }
             roster = response.occupants
                 .filter(\.isActive)
                 .map { occupant in
@@ -438,6 +444,7 @@ final class EditAccessCodeFormViewModel {
                     )
                 }
         } catch {
+            guard generation == readGeneration, !Task.isCancelled else { return }
             // Non-fatal — the picker still works with the bare scope
             // labels, the roster strip just stays empty.
             roster = []

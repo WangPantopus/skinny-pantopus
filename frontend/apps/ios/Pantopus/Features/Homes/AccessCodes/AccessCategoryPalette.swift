@@ -139,3 +139,71 @@ public enum AccessCategory: String, CaseIterable, Sendable, Hashable {
         }
     }
 }
+
+// MARK: - Category grid
+
+/// 3-column grid of category tiles. Selected tile carries the
+/// category's tinted background + a 2pt primary600 border so the
+/// selection is unambiguous against the white card.
+@MainActor
+struct AccessCodeCategoryGrid: View {
+    let selected: AccessCategory
+    let onSelect: (AccessCategory) -> Void
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: Spacing.s2), count: 3)
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: Spacing.s2) {
+            ForEach(AccessCategory.displayOrder, id: \.self) { category in
+                CategoryTile(
+                    category: category,
+                    isSelected: category == selected
+                ) {
+                    onSelect(category)
+                }
+            }
+        }
+        .accessibilityIdentifier(EditAccessCodeA11y.categoryGrid)
+    }
+}
+
+@MainActor
+private struct CategoryTile: View {
+    let category: AccessCategory
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            VStack(spacing: Spacing.s2) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+                        .fill(category.background)
+                        .frame(width: 40, height: 40)
+                    Icon(category.icon, size: 20, color: category.foreground)
+                }
+                Text(category.label)
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appText)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, minHeight: 80)
+            .padding(.vertical, Spacing.s2)
+            .background(
+                RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+                    .fill(isSelected ? category.background.opacity(0.4) : Theme.Color.appSurface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+                    .stroke(
+                        isSelected ? Theme.Color.primary600 : Theme.Color.appBorder,
+                        lineWidth: isSelected ? 2 : 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("\(EditAccessCodeA11y.categoryOption)_\(category.rawValue)")
+        .accessibilityLabel(category.label)
+        .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
+    }
+}
