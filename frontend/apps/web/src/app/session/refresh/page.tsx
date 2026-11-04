@@ -82,8 +82,10 @@ async function signOutLocally(): Promise<void> {
     // set, the middleware sends the next visit (e.g. `/`) straight back to this
     // page, which refreshes and fails to sign out again, page after page.
     clearSessionFlag();
+    clearAuthToken();
   }
-  clearAuthToken();
+  // logout() already clears the API session on success; clearing it again
+  // would only remount this page once more on the way out.
 }
 
 /** Expire the JS-readable `pantopus_session` flag (set host-only on path `/`). */
@@ -92,12 +94,14 @@ function clearSessionFlag(): void {
   document.cookie = `pantopus_session=; Max-Age=0; Path=/; SameSite=Lax${secure}`;
 }
 
-// The copy of this page that has decided to sign out and leave; it clears this
-// when it unmounts. Signing out changes the auth session, and QueryProvider
-// remounts the whole tree on every auth change, so a fresh copy of this page
-// mounts before the navigation completes. That copy must not refresh and sign
-// out again: each pass would remount it once more, looping until the backend
-// rate-limits the visitor (and their sign-in).
+// The copy of this page that is signing out and leaving. Signing out changes
+// the auth session, and QueryProvider remounts the whole tree on every auth
+// change, so fresh copies of this page mount before the navigation completes;
+// one sign-out remounts it more than once (the logout response clears this
+// site's storage, then the API client drops the session). Each copy mounted
+// during the hand-off takes it over, so none of them refreshes and signs out
+// again: each pass would remount it once more and restart the navigation,
+// looping until the backend rate-limits the visitor (and their sign-in).
 let signOutOwner: object | null = null;
 
 function SessionRefreshContent() {
@@ -165,14 +169,16 @@ function SessionRefreshContent() {
     void attempt();
   }, [attempt, handingOff]);
 
-  // A later mount with no navigation in between (a stopped navigation, or a test
-  // rendering the page again) starts fresh.
-  useEffect(
-    () => () => {
+  // A copy remounted during the hand-off holds it until the next copy takes it
+  // over. The last one to unmount releases it, so a later mount with no
+  // navigation in between (a stopped navigation, or a test rendering the page
+  // again) starts fresh.
+  useEffect(() => {
+    if (handingOff) signOutOwner = instance;
+    return () => {
       if (signOutOwner === instance) signOutOwner = null;
-    },
-    [instance],
-  );
+    };
+  }, [handingOff, instance]);
 
   return (
     <div className="min-h-screen bg-app flex items-center justify-center px-4">
