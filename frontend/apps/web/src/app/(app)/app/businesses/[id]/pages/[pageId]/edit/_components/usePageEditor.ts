@@ -153,8 +153,10 @@ export function usePageEditor() {
 
       setHasUnsavedChanges(false);
       showToast('Draft saved', 'success');
+      return true;
     } catch (e: unknown) {
       showToast(e instanceof Error ? e.message : 'Failed to save draft', 'error');
+      return false;
     } finally {
       setSaving(false);
     }
@@ -163,7 +165,9 @@ export function usePageEditor() {
   const publish = async () => {
     setPublishing(true);
     try {
-      if (hasUnsavedChanges) await saveDraft();
+      // Publishing uses the server's saved revision. A failed save must leave
+      // the live page and the unsaved-change warning alone for a retry.
+      if (hasUnsavedChanges && !(await saveDraft())) return;
       const res = await api.businesses.publishPage(businessId, pageId);
       setPublishedRevision(res.published_revision);
       setHasUnsavedChanges(false);

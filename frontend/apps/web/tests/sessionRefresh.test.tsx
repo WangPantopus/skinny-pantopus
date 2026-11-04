@@ -184,7 +184,9 @@ describe('/session/refresh page', () => {
 
     await waitFor(() => expect(replaceSpy).toHaveBeenCalledWith('/login?redirectTo=%2Fapp%2Fplace'));
     expect(apiMock.auth.logout).toHaveBeenCalledTimes(1);
-    expect(apiMock.clearAuthToken).toHaveBeenCalledTimes(1);
+    // Successful API logout owns session cleanup; the page must not emit
+    // another auth change and remount recovery a second time.
+    expect(apiMock.clearAuthToken).not.toHaveBeenCalled();
   });
 
   test('invalid with onFail → goes to the public fallback instead of login', async () => {

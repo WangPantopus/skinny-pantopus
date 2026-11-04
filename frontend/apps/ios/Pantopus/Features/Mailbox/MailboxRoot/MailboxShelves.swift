@@ -58,6 +58,7 @@ private struct MailCounterRow: View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             Button(action: onOpen) {
                 MailPieceView(model: item.piece)
+                    .mailOpenOutline(id: item.id)
                     .padding(.trailing, 44)
                     .overlay(alignment: .topTrailing) { MailDueTag(text: item.tag) }
                     .contentShape(Rectangle())
@@ -66,6 +67,7 @@ private struct MailCounterRow: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(item.spokenLabel)
             .accessibilityAddTraits(.isButton)
+            .mailOpenSelection(id: item.id)
             .accessibilityIdentifier("mailCounterPiece.\(item.id)")
             // The letter opens out of this piece and goes back into it.
             .itemZoomSource(.mailPiece, id: item.id)

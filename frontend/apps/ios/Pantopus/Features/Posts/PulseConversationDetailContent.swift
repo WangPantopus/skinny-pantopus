@@ -40,6 +40,7 @@ struct PulseConversationDetailContent: View {
                 onRefresh: { await viewModel.refresh() },
                 scalesType: true,
                 scrollOverlay: newRepliesPill(proxy),
+                scrollPlace: viewModel.scrollPlace,
                 header: { header },
                 body: { replies }
             )

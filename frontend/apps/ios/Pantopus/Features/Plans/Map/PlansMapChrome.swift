@@ -5,7 +5,9 @@
 //  What floats over the Plans map (boards F1, F3, F4): the area and time
 //  pill, "Show my location", the type chips (glass, 36 pt, the choice
 //  rule), the Host button, and with a pin selected the back button and the
-//  "Area only until you're in" chip.
+//  "Area only until you're in" chip. Beside the map (the open iPhone Duo)
+//  the pill and chips top the list's column, and "Show my location" stays on
+//  the map.
 //
 
 import SwiftUI
@@ -15,17 +17,20 @@ struct PlansMapTopBar: View {
     let showsPlaydates: Bool
     /// "Ask Pantopus" about plans, the bar's trailing button.
     var onAsk: (@MainActor () -> Void)?
-    let onAreaTap: () -> Void
+    let onAreaTap: @MainActor () -> Void
+    /// The top of the list's column beside the map: "Show my location" is on the map, and a plan opens in the
+    /// column instead of a pin's card, so there's no selected-pin bar.
+    var inColumn = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if viewModel.selectedId != nil {
+            if viewModel.selectedId != nil, !inColumn {
                 selectedBar
             } else if viewModel.phase == .ready {
                 HStack(spacing: Spacing.s2) {
                     areaPill
-                    if !viewModel.isEmpty { locateButton }
+                    if !viewModel.isEmpty, !inColumn { PlansLocateButton(viewModel: viewModel) }
                     if let onAsk { askButton(onAsk) }
                     menuButton
                 }
@@ -77,21 +82,6 @@ struct PlansMapTopBar: View {
         case .week: "This week"
         case .weekend: "This weekend"
         }
-    }
-
-    private var locateButton: some View {
-        Button {
-            Task { await viewModel.locate() }
-        } label: {
-            Icon(.locationArrow, size: 20, color: Theme.Color.appText)
-                .frame(width: 48, height: 48)
-                .background(Circle().fill(.regularMaterial))
-                .shadow(color: .black.opacity(0.12), radius: 5, x: 0, y: 2)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Show my location")
-        .accessibilityIdentifier("plansLocate")
     }
 
     /// The side menu, on every tab (founder decision 2026-10-20).
@@ -209,6 +199,26 @@ struct PlansMapTopBar: View {
     private var showsAreaChip: Bool {
         guard let id = viewModel.selectedId, let pin = viewModel.pin(for: id) else { return true }
         return !pin.isExactPoint
+    }
+}
+
+/// "Show my location": back to the device's area, in the map's top bar or on the map beside the list.
+struct PlansLocateButton: View {
+    let viewModel: PlansMapViewModel
+
+    var body: some View {
+        Button {
+            Task { await viewModel.locate() }
+        } label: {
+            Icon(.locationArrow, size: 20, color: Theme.Color.appText)
+                .frame(width: 48, height: 48)
+                .background(Circle().fill(.regularMaterial))
+                .shadow(color: .black.opacity(0.12), radius: 5, x: 0, y: 2)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Show my location")
+        .accessibilityIdentifier("plansLocate")
     }
 }
 

@@ -353,7 +353,7 @@ export async function updateBusiness(businessId: string, data: Partial<{
   public_phone: string;
   website: string;
   social_links: Record<string, string>;
-  founded_year: number;
+  founded_year: number | null;
   employee_count: string;
   service_area: Record<string, any>;
   theme: Record<string, any>;

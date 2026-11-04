@@ -136,7 +136,7 @@ struct AddressTodayTabView: View {
     @ViewBuilder
     private var content: some View {
         if !resolved {
-            PlaceDetailSkeleton()
+            TodaySkeleton()
         } else if let detail {
             // The Ballot P0 card's "Open your ballot" lands on the Place tab.
             AddressTodayLoaded(
@@ -391,7 +391,7 @@ private struct AddressTodayLoaded: View {
             } else {
                 switch viewModel.state {
                 case .loading:
-                    PlaceDetailSkeleton()
+                    TodaySkeleton()
                 case let .loaded(intel):
                     ScrollViewReader { proxy in
                         loadedScroll(intel)
@@ -436,20 +436,6 @@ private struct AddressTodayLoaded: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Color.clear.frame(height: 0).id(Self.topAnchor)
-                if let claim {
-                    // My homes' words for what the claim waits on; its Waiting Room has the steps.
-                    PlaceVerifyBanner(
-                        icon: .clock,
-                        message: "Your claim is in review. \(claim.waitingLabel).",
-                        action: "Check claim status",
-                        identifier: "today.claimBanner"
-                    ) { openClaimStatus(claim) }
-                        .padding(.bottom, 12)
-                }
-                if savedAnchorMatches {
-                    StatusChip("Saved place · Only you", variant: .neutral)
-                        .padding(.bottom, 4)
-                }
                 // Plans cards (with `plans` on), the saved place's reminders row and Ask
                 // Pantopus come with the tab; the assistant reads a claimed Home's public view.
                 PlaceTodayDetailContent(
@@ -462,13 +448,15 @@ private struct AddressTodayLoaded: View {
                         onAddHome: onAddHome,
                         onAsk: { askTopic = .today(homeId: viewModel.savedPlaceId == nil ? viewModel.homeId : nil) },
                         onOpenTask: { homeId, taskId in openedTask = TodayOpenedTask(homeId: homeId, taskId: taskId) },
-                        needsYou: needsYou
+                        needsYou: needsYou,
+                        lead: claim != nil || savedAnchorMatches ? AnyView(lead) : nil
                     )
                 )
             }
             .padding(.horizontal, 16)
             .padding(.bottom, Spacing.s10)
         }
+        .readableColumnWidens(from: PlaceColumnsSplit.minimumScreenWidth)
         // The home-screen widget shows what Today just showed for this place.
         .task(id: WidgetSource(intel: intel, fallback: viewModel.fallbackCalendar)) {
             guard scope.isCurrent,
@@ -491,6 +479,26 @@ private struct AddressTodayLoaded: View {
         }
     }
 
+    /// The claim's status or the saved place's chip, above the day.
+    private var lead: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let claim {
+                // My homes' words for what the claim waits on; its Waiting Room has the steps.
+                PlaceVerifyBanner(
+                    icon: .clock,
+                    message: "Your claim is in review. \(claim.waitingLabel).",
+                    action: "Check claim status",
+                    identifier: "today.claimBanner"
+                ) { openClaimStatus(claim) }
+                    .padding(.bottom, 12)
+            }
+            if savedAnchorMatches {
+                StatusChip("Saved place · Only you", variant: .neutral)
+                    .padding(.bottom, 4)
+            }
+        }
+    }
+
     private func checkSavedAnchor() async throws -> Bool {
         guard let savedPlace else { return false }
         try scope.requireCurrent()
@@ -510,6 +518,30 @@ private struct AddressTodayLoaded: View {
         } catch {
             if !scope.isCurrent { sessionChanged = true }
         }
+    }
+}
+
+/// Today while it loads: Place's detail placeholders, in two columns where the day will have two.
+private struct TodaySkeleton: View {
+    var body: some View {
+        ScrollView {
+            PlaceColumns {
+                VStack(alignment: .leading, spacing: 10) {
+                    PlaceSkeleton(width: 96, height: 11)
+                        .padding(.top, 26)
+                    PlaceSkeleton(widthFraction: 1, height: 96, radius: 16)
+                    PlaceSkeleton(widthFraction: 1, height: 96, radius: 16)
+                }
+                .placeColumn(.leading, order: 0)
+                // Level with the first card beside it in two columns.
+                PlaceSkeleton(widthFraction: 1, height: 96, radius: 16)
+                    .modifier(PlaceColumnGap(oneColumn: 10, twoColumns: 47))
+                    .placeColumn(.trailing, order: 1)
+            }
+            .padding(.horizontal, 16)
+        }
+        .readableColumnWidens(from: PlaceColumnsSplit.minimumScreenWidth)
+        .accessibilityLabel("Loading section details")
     }
 }
 

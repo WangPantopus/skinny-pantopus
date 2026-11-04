@@ -56,23 +56,23 @@ export default function EditorToolbar({
   };
 
   return (
-    <header className="h-12 bg-app-surface border-b border-app-border flex items-center justify-between px-4 flex-shrink-0 z-20">
-      <div className="flex items-center gap-3">
+    <header className="sticky top-14 md:static min-h-12 md:h-12 bg-app-surface border-b border-app-border flex flex-wrap md:flex-nowrap items-center justify-between gap-2 px-4 py-2 md:py-0 flex-shrink-0 z-20">
+      <div className="flex min-w-0 items-center gap-3">
         <button
           onClick={handleBack}
-          className="text-app-text-muted hover:text-app-text-secondary p-1"
+          className="shrink-0 text-app-text-muted hover:text-app-text-secondary p-1"
           title="Back to pages"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <div>
-          <div className="text-sm font-semibold text-app-text">{page?.title || 'Page'}</div>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-app-text">{page?.title || 'Page'}</div>
           <div className="text-[10px] text-app-text-muted flex items-center gap-1">
-            /{page?.slug}
+            <span className="truncate">/{page?.slug}</span>
             {hasUnsavedChanges && (
-              <span className="inline-flex items-center gap-0.5 text-amber-600">
+              <span className="inline-flex shrink-0 items-center gap-0.5 text-amber-600">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                 Unsaved
               </span>
@@ -81,7 +81,7 @@ export default function EditorToolbar({
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex max-w-full flex-wrap md:flex-nowrap md:shrink-0 items-center gap-2">
         {/* Undo / Redo */}
         <div className="flex items-center border border-app-border rounded-lg overflow-hidden mr-1">
           <button
