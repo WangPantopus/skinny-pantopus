@@ -151,6 +151,10 @@ data class BallotCountOption(
     @Json(name = "percent_label") val percentLabel: String,
     /** Its share of the race's votes, write-ins included (0–1), for the bar. */
     val share: Double,
+    /** The candidate's party as the state words it ("Prefers Democratic Party"); null for nonpartisan races and measures. */
+    @Json(name = "party_label") val partyLabel: String? = null,
+    /** `democratic` or `republican` color the bar; anything else, or null, keeps the neutral bar. */
+    @Json(name = "party_tone") val partyTone: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

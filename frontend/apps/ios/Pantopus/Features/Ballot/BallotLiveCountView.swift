@@ -4,10 +4,12 @@
 //
 //  Place — "Your ballot", the live count drawn while ballots are counted
 //  (the November 3, 2026 results design): a status line, then each race
-//  with a bar per choice, or one Yes/No bar for a measure. Every bar is the
-//  same neutral slate: no party colors and nothing marks a leader.
-//  Statewide races can start folded behind one row. Parity twin of the
-//  web's `LiveCount` and Android's `BallotLiveCount`.
+//  with a bar per choice, or one Yes/No bar for a measure. A candidate's
+//  party, as the state words it, sits under the name; the two major
+//  parties' bars are blue and red, and everything else is neutral slate.
+//  Nothing marks a leader. Statewide races can start folded behind one
+//  row. Parity twin of the web's `LiveCount` and Android's
+//  `BallotLiveCount`.
 //
 //  Every word and number comes from the server (`civic_election.live_count`);
 //  this view only lays them out.
@@ -145,6 +147,16 @@ private struct BallotCountRaceView: View {
 private struct BallotCandidateRow: View {
     let option: BallotCountOption
 
+    /// The bar and the party dot: blue and red for the two major parties,
+    /// the neutral slate for everyone else.
+    private var fill: Color {
+        switch option.partyTone {
+        case "democratic": Theme.Color.ballotCountDemocratic
+        case "republican": Theme.Color.ballotCountRepublican
+        default: Theme.Color.ballotCountFill
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.s2) {
@@ -160,19 +172,35 @@ private struct BallotCandidateRow: View {
                     .foregroundStyle(Theme.Color.appText)
                     .frame(minWidth: 46, alignment: .trailing)
             }
+            if let party = option.partyLabel {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(fill)
+                        .frame(width: 7, height: 7)
+                    Text(party)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                }
+                .padding(.top, -2)
+            }
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
                         .fill(Theme.Color.appBorder)
                     RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(Theme.Color.ballotCountFill)
+                        .fill(fill)
                         .frame(width: geo.size.width * min(1, max(0, option.share)))
                 }
             }
             .frame(height: 6)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(option.name), \(option.percentLabel), \(option.votesLabel) votes")
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private var accessibilityText: String {
+        let party = option.partyLabel.map { ", \($0)" } ?? ""
+        return "\(option.name)\(party), \(option.percentLabel), \(option.votesLabel) votes"
     }
 }
 
