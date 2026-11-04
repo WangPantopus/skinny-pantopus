@@ -133,7 +133,8 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
   useEffect(() => {
     if (!showCreate || recipient) return;
     let current = true;
-    setRecipientsLoading(true); setRecipientError(null); setRecipientOptions([]);
+    // The previous matches stay until new ones arrive, so typing doesn't blank the list on every key.
+    setRecipientsLoading(true); setRecipientError(null);
     const timer = setTimeout(() => {
       api.businesses.getInvoiceRecipients(businessId, recipientQuery.trim() || undefined)
         .then((res) => {
@@ -141,7 +142,11 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
           if (!Array.isArray(res.people)) throw new Error('Could not load recipients. Please retry.');
           setRecipientOptions(res.people);
         })
-        .catch((err: unknown) => { if (current) setRecipientError(err instanceof Error ? err.message : 'Could not load recipients. Please retry.'); })
+        .catch((err: unknown) => {
+          if (!current) return;
+          setRecipientOptions([]);
+          setRecipientError(err instanceof Error ? err.message : 'Could not load recipients. Please retry.');
+        })
         .finally(() => { if (current) setRecipientsLoading(false); });
     }, recipientQuery ? 250 : 0);
     return () => { current = false; clearTimeout(timer); };
@@ -215,6 +220,13 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
     setLineItems(prev => prev.map((item, i) => i === index ? { ...item, [field]: value } : item));
   };
 
+  const listError = loadError && (
+    <div role="alert" className="text-center py-6">
+      <p className="text-sm text-red-600">{loadError}</p>
+      <button onClick={() => void loadInvoices(failedPage)} className="text-sm text-violet-600 font-medium mt-3 hover:underline">Retry</button>
+    </div>
+  );
+
   return (
     <div>
       {/* Header */}
@@ -244,13 +256,7 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
       {loading ? (
         <div className="flex items-center justify-center py-16"><div className="animate-spin h-8 w-8 border-2 border-violet-600 border-t-transparent rounded-full" /></div>
       ) : <>
-      {loadError && (
-        <div role="alert" className="text-center py-6">
-          <p className="text-sm text-red-600">{loadError}</p>
-          <button onClick={() => void loadInvoices(failedPage)} className="text-sm text-violet-600 font-medium mt-3 hover:underline">Retry</button>
-        </div>
-      )}
-      {invoices.length === 0 ? !loadError && (
+      {invoices.length === 0 ? listError || (
         <div className="text-center py-16">
           <FileText className="w-12 h-12 mx-auto text-app-text-muted mb-3" />
           <p className="text-sm text-app-text-secondary">{statusFilter ? `No ${statusFilter} invoices` : 'No invoices yet'}</p>
@@ -305,7 +311,8 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
           })}
         </div>
       )}
-      {hasMore && !loadError && (
+      {/* A later page that fails keeps the rows above and offers its retry where Load more was. */}
+      {invoices.length > 0 && listError ? listError : hasMore && (
         <button onClick={() => void loadInvoices(loadedPage + 1)} disabled={loadingMore}
           className="w-full py-3 text-sm text-violet-600 font-medium hover:underline disabled:opacity-50 mt-2">
           {loadingMore ? 'Loading...' : 'Load more invoices'}
