@@ -90,7 +90,17 @@ public final class EditBusinessPageViewModel {
     /// Whether the stored phone carried a `+1` the loader stripped.
     private var loadedPhoneHadCountryCode = false
     private var isSaving = false
+    private var isPublishing = false
     private var hasLoadedOnce = false
+
+    public var hasUnsavedChanges: Bool {
+        guard case let .loaded(content) = state else { return false }
+        return EditBusinessPageMapper.unsavedCount(in: content) > 0
+    }
+
+    public var hasInFlightOperation: Bool {
+        isSaving || isPublishing || uploadingMedia != nil || isClosing
+    }
 
     init(
         businessId: String,
@@ -334,7 +344,9 @@ public final class EditBusinessPageViewModel {
     }
 
     public func publish() async {
-        guard case let .loaded(content) = state else { return }
+        guard !isPublishing, case let .loaded(content) = state else { return }
+        isPublishing = true
+        defer { isPublishing = false }
         if localPreviewPersistenceEnabled {
             toastMessage = "Published"
             return

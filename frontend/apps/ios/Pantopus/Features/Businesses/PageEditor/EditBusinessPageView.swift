@@ -24,6 +24,13 @@ import SwiftUI
 @MainActor
 public struct EditBusinessPageView: View {
     @State private var viewModel: EditBusinessPageViewModel
+    @State private var pendingExit: EditorExit?
+
+    private enum EditorExit {
+        case back
+        case preview
+    }
+
     private let onBack: @MainActor () -> Void
     private let onPreview: @MainActor () -> Void
     private let onClosed: @MainActor () -> Void
@@ -60,19 +67,25 @@ public struct EditBusinessPageView: View {
         .background(Theme.Color.appBg)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityIdentifier("editBusinessPage")
+        // Back asks before unsaved edits are dropped; the edge swipe would leave without asking.
+        .swipeBackDisabled(viewModel.hasUnsavedChanges || viewModel.hasInFlightOperation)
         .task { await viewModel.load() }
-        .confirmationDialog(
+        .alert(
             "Discard unsaved edits?",
             isPresented: Binding(
                 get: { viewModel.showsDiscardConfirm },
                 set: { viewModel.showsDiscardConfirm = $0 }
-            ),
-            titleVisibility: .visible
+            )
         ) {
             Button("Discard edits", role: .destructive) {
-                Task { await viewModel.discardConfirmed() }
+                let destination = pendingExit
+                pendingExit = nil
+                Task {
+                    await viewModel.discardConfirmed()
+                    if let destination { finishExit(destination) }
+                }
             }
-            Button("Keep editing", role: .cancel) {}
+            Button("Keep editing", role: .cancel) { pendingExit = nil }
         }
         .alert(
             "Image wasn't updated",
@@ -104,6 +117,26 @@ public struct EditBusinessPageView: View {
         }
         .onChange(of: viewModel.didClose) { _, closed in
             if closed { onClosed() }
+        }
+    }
+
+    private func requestExit(_ destination: EditorExit) {
+        guard !viewModel.hasInFlightOperation else {
+            viewModel.toastMessage = "Wait for the current update to finish, then try again."
+            return
+        }
+        if viewModel.hasUnsavedChanges {
+            pendingExit = destination
+            viewModel.discardRequested()
+        } else {
+            finishExit(destination)
+        }
+    }
+
+    private func finishExit(_ destination: EditorExit) {
+        switch destination {
+        case .back: onBack()
+        case .preview: onPreview()
         }
     }
 
@@ -155,9 +188,12 @@ public struct EditBusinessPageView: View {
         case let .loaded(payload):
             EditBusinessPageLoadedView(
                 content: payload,
-                onBack: onBack,
-                onPreview: onPreview,
-                onDiscard: { viewModel.discardRequested() },
+                onBack: { requestExit(.back) },
+                onPreview: { requestExit(.preview) },
+                onDiscard: {
+                    pendingExit = nil
+                    viewModel.discardRequested()
+                },
                 onSave: { Task { await viewModel.save() } },
                 onSaveDraft: { Task { await viewModel.saveDraft() } },
                 onPublish: { Task { await viewModel.publish() } },
