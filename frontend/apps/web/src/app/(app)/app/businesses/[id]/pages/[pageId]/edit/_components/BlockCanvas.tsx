@@ -51,9 +51,9 @@ export default function BlockCanvas({
   const selectedBlock = selectedBlockIndex !== null ? blocks[selectedBlockIndex] : null;
 
   return (
-    <div className="flex-1 flex overflow-hidden relative">
+    <div className="flex-1 flex min-w-0 flex-col md:flex-row md:min-h-0 md:overflow-hidden relative">
       <main
-        className="flex-1 overflow-y-auto"
+        className="flex-1 min-w-0 md:overflow-y-auto"
         onClick={(e) => {
           // Click on empty canvas area -> deselect
           if (e.target === e.currentTarget && !showPreview) onSelectBlock(null);
@@ -75,7 +75,7 @@ export default function BlockCanvas({
               <div className="text-xs text-app-text-muted mt-1 max-w-xs mx-auto">
                 {showPreview
                   ? 'This page has no content yet.'
-                  : 'Click a block type from the left panel to add your first block.'}
+                  : 'Choose a block type from the palette to add your first block.'}
               </div>
             </div>
           ) : (
@@ -229,13 +229,15 @@ export default function BlockCanvas({
             <div className="mt-4">
               <button
                 onClick={() => {
-                  // Scroll palette into view or show inline hint
-                  const sidebar = document.querySelector('aside');
-                  if (sidebar) sidebar.scrollTo({ top: 0, behavior: 'smooth' });
+                  // The app navigation is also an aside; target this editor's
+                  // palette and give keyboard users a block they can choose.
+                  const firstBlock = document.getElementById('business-block-palette')?.querySelector('button');
+                  firstBlock?.focus();
+                  firstBlock?.scrollIntoView({ block: 'center', behavior: 'smooth' });
                 }}
                 className="w-full py-3 rounded-xl border-2 border-dashed border-app-border text-sm font-medium text-app-text-muted hover:border-violet-300 hover:text-violet-500 transition"
               >
-                + Add block from left panel
+                + Add block from palette
               </button>
             </div>
           )}
@@ -244,7 +246,7 @@ export default function BlockCanvas({
 
       {/* Right: Block editor panel */}
       {!showPreview && selectedBlock && selectedBlockIndex !== null && (
-        <aside className="w-72 bg-app-surface border-l border-app-border flex-shrink-0 overflow-hidden">
+        <aside className="w-full md:w-72 bg-app-surface border-t md:border-t-0 md:border-l border-app-border flex-shrink-0 overflow-hidden pb-24 md:pb-0">
           <BlockEditor
             key={`${selectedBlockIndex}-${selectedBlock.block_type}`}
             block={selectedBlock}

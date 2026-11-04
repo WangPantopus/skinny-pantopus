@@ -40,6 +40,11 @@ public struct ChatSearchView: View {
             filters: viewModel
                 .searchFailed ? AnyView(Button("Try again") { viewModel.setQuery(viewModel.query) }.padding(Spacing.s3)) : nil,
             emptyState: viewModel.emptyState,
+            focusesOnOpen: !viewModel.hasOpened,
+            topResult: Binding(
+                get: { viewModel.topResult },
+                set: { viewModel.topResult = $0 }
+            ),
             row: { result in
                 VStack(spacing: 0) {
                     ChatSearchResultRow(result: result, onOpen: onOpenResult)
@@ -58,6 +63,7 @@ public struct ChatSearchView: View {
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .refreshFailureToast($viewModel.failureMessage)
         .task { await viewModel.load() }
+        .onAppear { viewModel.hasOpened = true }
         // The Inbox route owner tears down search when the route leaves. A
         // presentation disappearing during a fold must not cancel its query.
         .accessibilityIdentifier("chatSearch")

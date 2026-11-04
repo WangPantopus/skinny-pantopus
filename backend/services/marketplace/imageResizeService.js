@@ -25,20 +25,21 @@ const VARIANTS = [
   { suffix: '_full',   width: 1200, height: 1200, fit: 'inside' },
 ];
 
-/**
- * Process an original image buffer into multiple resized variants.
- *
- * @param {Buffer} originalBuffer - The original image file buffer
- * @param {string} s3Key - The S3 key of the original image (e.g. uploads/listings/abc/photo1.png)
- * @returns {Promise<Object|null>} { thumb, card, detail, full } URLs, or null if sharp unavailable
- */
+// Keep all possible keys for cleanup, including older posts' unused variants.
 function getImageVariantKeys(s3Key) {
   const ext = path.extname(s3Key);
   const baseName = s3Key.slice(0, -ext.length);
   return VARIANTS.map(({ suffix }) => `${baseName}${suffix}.jpg`);
 }
 
-async function processListingImage(originalBuffer, s3Key) {
+/**
+ * Process an original image buffer into resized variants.
+ * @param {Buffer} originalBuffer - The original image file buffer
+ * @param {string} s3Key - The S3 key of the original image
+ * @param {{ thumbnailOnly?: boolean }} options - Posts only persist/use the thumbnail variant
+ * @returns {Promise<Object|null>} Generated variant URLs, or null if sharp unavailable
+ */
+async function processListingImage(originalBuffer, s3Key, { thumbnailOnly = false } = {}) {
   if (!sharp) return null;
 
   const variantKeys = getImageVariantKeys(s3Key);
@@ -46,6 +47,7 @@ async function processListingImage(originalBuffer, s3Key) {
 
   await Promise.all(
     VARIANTS.map(async ({ suffix, width, height, fit }, index) => {
+      if (thumbnailOnly && suffix !== '_thumb') return;
       try {
         const buffer = await sharp(originalBuffer)
           .resize(width, height, { fit, withoutEnlargement: true })

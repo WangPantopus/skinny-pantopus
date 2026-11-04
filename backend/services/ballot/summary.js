@@ -400,20 +400,50 @@ async function liveResultsOn() {
   }
 }
 
+// A Place gives the card's section one time budget, and running past it
+// drops the whole card ("Couldn't load this"). The live count is extra, so
+// it gets only what is left of `deadline`, less a margin to compose and send
+// the card, and none when too little is left: the card comes on time, and
+// the next load has the count. No deadline: no limit.
+const LIVE_MARGIN_MS = 250;
+const LIVE_MIN_MS = 300;
+const TOO_LATE = Symbol('too late');
+
+function timeLeft(deadline) {
+  return deadline == null ? Infinity : deadline - Date.now() - LIVE_MARGIN_MS;
+}
+
+function within(promise, ms) {
+  if (ms === Infinity) return promise;
+  let timer = null;
+  return Promise.race([
+    promise,
+    new Promise((resolve) => {
+      timer = setTimeout(() => resolve(TOO_LATE), Math.max(0, ms));
+      if (typeof timer.unref === 'function') timer.unref();
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
 // While ballots are counted in a state Pantopus reads results for, the card
 // is composed again with the live count for the address's races.
-async function withLiveResults(summary, compose, districtsFor) {
+async function withLiveResults(summary, compose, districtsFor, { deadline = null } = {}) {
   if (!summary || summary.after_stage !== 'counting' || !liveResults.covers(summary.state)) return summary;
   try {
-    if (!(await liveResultsOn())) return summary;
+    if (timeLeft(deadline) < LIVE_MIN_MS || !(await liveResultsOn())) return summary;
+    // A boundary lookup still running (a slow Census answer) can't hold the
+    // card: past the time left, the card goes without the count.
+    const districts = await within(districtsFor(), timeLeft(deadline));
+    if (districts === TOO_LATE) return summary;
     const state = referenceData.stateEntry(summary.state);
     const results = await liveResults.forCard({
       stateCode: summary.state,
       electionDate: summary.date,
-      districts: await districtsFor(),
+      districts,
       zone: state.timezone,
       today: summary.today,
       electionNight: summary.today === summary.date,
+      waitMs: timeLeft(deadline),
     });
     return results ? compose(results) : summary;
   } catch (err) {
@@ -422,8 +452,11 @@ async function withLiveResults(summary, compose, districtsFor) {
   }
 }
 
-/** The Place card summary for a saved home (null ⇒ keep pre-Ballot behavior). */
-async function summaryForHome(home, { now = cardNow() } = {}) {
+/**
+ * The Place card summary for a saved home (null ⇒ keep pre-Ballot behavior).
+ * `deadline` (epoch ms): when the card's section budget ends.
+ */
+async function summaryForHome(home, { now = cardNow(), deadline = null } = {}) {
   if (!home) return null;
   const current = referenceData.currentElection(home.state, { now });
   if (!current) return null;
@@ -440,6 +473,7 @@ async function summaryForHome(home, { now = cardNow() } = {}) {
     composeSummary(input),
     (results) => composeSummary({ ...input, results }),
     async () => (govResult && govResult.districts) || governments.districtsForHome(home),
+    { deadline },
   );
 }
 
@@ -549,9 +583,9 @@ async function teaserForPoint({ lat, lng, state }, { now = new Date(), timeoutMs
  * The Place card for a point with no household: a saved address's preview,
  * or a typed address's. It is the card a Home there shows, without the
  * household's "Moved this year?" line (no move-in date). Coordinates only;
- * `timeoutMs` and `lookup` as for the teaser.
+ * `timeoutMs` and `lookup` as for the teaser, `deadline` as for a home.
  */
-async function summaryForPoint({ lat, lng, state }, { now = cardNow(), timeoutMs, lookup = lookupPoint } = {}) {
+async function summaryForPoint({ lat, lng, state }, { now = cardNow(), timeoutMs, lookup = lookupPoint, deadline = null } = {}) {
   const point = await pointElection({ lat, lng, state }, { now, timeoutMs, lookup });
   if (!point) return null;
   const input = {
@@ -564,6 +598,7 @@ async function summaryForPoint({ lat, lng, state }, { now = cardNow(), timeoutMs
     composeSummary(input),
     (results) => composeSummary({ ...input, results }),
     async () => (point.result && point.result.districts) || governments.districtsForPoint(Number(lat), Number(lng), { timeoutMs }),
+    { deadline },
   );
 }
 
