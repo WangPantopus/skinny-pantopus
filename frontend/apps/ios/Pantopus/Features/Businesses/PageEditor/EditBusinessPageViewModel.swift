@@ -64,6 +64,9 @@ public final class EditBusinessPageViewModel {
     public var toastMessage: String?
     public var mediaUploadError: String?
     public var showsDiscardConfirm = false
+    public var showsCatalog = false
+    public private(set) var canManageCatalog = false
+    private var isCheckingCatalog = false
     /// The banner or logo upload in flight, if any.
     public private(set) var uploadingMedia: BusinessMediaKind?
     /// Only an owner can close the business; `DELETE /:businessId` refuses
@@ -136,6 +139,9 @@ public final class EditBusinessPageViewModel {
     private func fetch(showLoading: Bool) async {
         if showLoading { state = .loading }
         do {
+            async let catalogAccess: BusinessTeamAccessDTO? = try? api.request(
+                BusinessTeamEndpoints.access(businessId: businessId)
+            )
             let detail: BusinessDetailResponse = try await api.request(
                 BusinessesEndpoints.business(businessId: businessId)
             )
@@ -145,6 +151,7 @@ public final class EditBusinessPageViewModel {
                 return
             }
             canClose = detail.access?.isOwner == true
+            canManageCatalog = await Self.allowsCatalog(catalogAccess)
             let location = detail.profile?.primaryLocation
                 ?? detail.locations.first { $0.isPrimary == true }
                 ?? detail.locations.first
@@ -170,7 +177,7 @@ public final class EditBusinessPageViewModel {
             // unreachable for every unpublished business.
             var catalog: [BusinessCatalogItemDTO]?
             if let itemsResponse: BusinessCatalogItemsResponse = try? await api.request(
-                BusinessesEndpoints.catalogItems(businessId: businessId)
+                BusinessesEndpoints.catalogItems(businessId: businessId, status: "active")
             ) {
                 catalog = itemsResponse.items
             }
@@ -202,6 +209,46 @@ public final class EditBusinessPageViewModel {
             }
             hasLoadedOnce = false
         }
+    }
+
+    // MARK: - Services
+
+    /// Reuse the catalog manager without navigating away from unsaved profile fields.
+    public func openCatalog() async {
+        guard !isCheckingCatalog, !hasInFlightOperation else { return }
+        isCheckingCatalog = true
+        defer { isCheckingCatalog = false }
+        do {
+            let access: BusinessTeamAccessDTO = try await api.request(
+                BusinessTeamEndpoints.access(businessId: businessId)
+            )
+            canManageCatalog = Self.allowsCatalog(access)
+            guard canManageCatalog else {
+                toastMessage = "You don't have permission to manage this catalog."
+                return
+            }
+            showsCatalog = true
+        } catch {
+            toastMessage = "Couldn't check catalog access. Please try again."
+        }
+    }
+
+    public func refreshServices() async {
+        do {
+            let response: BusinessCatalogItemsResponse = try await api.request(
+                BusinessesEndpoints.catalogItems(businessId: businessId, status: "active")
+            )
+            guard case let .loaded(content) = state else { return }
+            state = .loaded(EditBusinessPageMapper.withRecomputedMode(
+                EditBusinessPageMapper.copy(content, services: EditBusinessPageMapper.mapServices(response.items))
+            ))
+        } catch {
+            toastMessage = "Couldn't refresh services. Your other edits are kept."
+        }
+    }
+
+    private static func allowsCatalog(_ access: BusinessTeamAccessDTO?) -> Bool {
+        access?.hasAccess == true && access?.permissions.contains("catalog.edit") == true
     }
 
     // MARK: - Banner and logo
