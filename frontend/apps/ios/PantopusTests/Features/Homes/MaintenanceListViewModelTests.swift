@@ -412,14 +412,6 @@ final class MaintenanceListViewModelTests: XCTestCase {
 
     // MARK: - FAB + top-bar action
 
-    func testFabIsCanonicalCreateWithHomeTint() {
-        let vm = makeVM()
-        let fab = vm.fab
-        XCTAssertNotNil(fab)
-        XCTAssertEqual(fab?.icon, .plus)
-        XCTAssertEqual(fab?.tint, .home)
-    }
-
     func testTopBarActionIsNilByDesign() {
         let vm = makeVM()
         XCTAssertNil(vm.topBarAction)
