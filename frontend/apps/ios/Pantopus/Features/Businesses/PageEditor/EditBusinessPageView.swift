@@ -23,8 +23,11 @@ import SwiftUI
 /// Top-level edit screen for a business profile.
 @MainActor
 public struct EditBusinessPageView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: EditBusinessPageViewModel
     @State private var pendingExit: EditorExit?
+    @State private var isVisible = false
+    @State private var needsForegroundRead = false
     private let businessId: String
 
     private enum EditorExit {
@@ -57,8 +60,9 @@ public struct EditBusinessPageView: View {
     public var body: some View {
         ZStack(alignment: .bottom) {
             content
-            if let toast = viewModel.toastMessage {
+            if let toast = viewModel.toastMessage, viewModel.accessError == nil {
                 ToastView(message: ToastMessage(text: toast, kind: .neutral))
+                    .allowsHitTesting(false)
                     .padding(.bottom, Spacing.s16)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .dismissToast(after: toast, minimum: 2) {
@@ -71,7 +75,24 @@ public struct EditBusinessPageView: View {
         .accessibilityIdentifier("editBusinessPage")
         // Back asks before unsaved edits are dropped; the edge swipe would leave without asking.
         .swipeBackDisabled(viewModel.hasUnsavedChanges || viewModel.hasInFlightOperation)
-        .task { await viewModel.load() }
+        .onAppear {
+            isVisible = true
+            Task { await viewModel.load() }
+        }
+        .onDisappear {
+            isVisible = false
+            viewModel.suspend()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard isVisible else { return }
+            if phase == .background {
+                needsForegroundRead = true
+                viewModel.suspend()
+            } else if phase == .active, needsForegroundRead {
+                needsForegroundRead = false
+                Task { await viewModel.load() }
+            }
+        }
         .sheet(
             isPresented: $viewModel.showsCatalog,
             onDismiss: { Task { await viewModel.refreshServices() } },
@@ -156,8 +177,15 @@ public struct EditBusinessPageView: View {
     }
 
     private var manageServicesAction: (@MainActor () -> Void)? {
-        guard viewModel.canManageCatalog else { return nil }
+        guard viewModel.canEditProfile, viewModel.canManageCatalog else { return nil }
         return { Task { await viewModel.openCatalog() } }
+    }
+
+    private var pickMediaAction: (@MainActor (BusinessMediaKind, Data, String) -> Void)? {
+        guard viewModel.canEditProfile else { return nil }
+        return { kind, data, mimeType in
+            Task { await viewModel.uploadMedia(kind, data: data, mimeType: mimeType) }
+        }
     }
 
     private var closingBusinessName: String {
@@ -213,13 +241,17 @@ public struct EditBusinessPageView: View {
                 onPublish: { Task { await viewModel.publish() } },
                 onFieldChange: { key, value in viewModel.update(key, to: value) },
                 onBeginDescription: { viewModel.beginDescriptionEditing() },
-                onPickMedia: { kind, data, mimeType in
-                    Task { await viewModel.uploadMedia(kind, data: data, mimeType: mimeType) }
-                },
+                onPickMedia: pickMediaAction,
                 uploadingMedia: viewModel.uploadingMedia,
                 onManageServices: manageServicesAction,
+                canEditProfile: viewModel.canEditProfile,
+                canEditLocation: viewModel.canEditLocation,
+                accessMessage: viewModel.isCheckingAccess ? "Checking edit access…" : viewModel.accessError,
+                canRetryAccess: !viewModel.isCheckingAccess,
+                onRetryAccess: { Task { await viewModel.refreshAccess() } },
                 onCloseBusiness: closeBusinessAction
             )
+            .disabled(viewModel.hasInFlightOperation)
         case .empty:
             VStack(spacing: Spacing.s0) {
                 EditBusinessTopBar(
@@ -280,6 +312,11 @@ public struct EditBusinessPageLoadedView: View {
     public let onPickMedia: (@MainActor (BusinessMediaKind, Data, String) -> Void)?
     public let uploadingMedia: BusinessMediaKind?
     public let onManageServices: (@MainActor () -> Void)?
+    public let canEditProfile: Bool
+    public let canEditLocation: Bool
+    public let accessMessage: String?
+    public let canRetryAccess: Bool
+    public let onRetryAccess: @MainActor () -> Void
     /// Owner only; nil hides the Close business section.
     public let onCloseBusiness: (@MainActor () -> Void)?
 
@@ -296,6 +333,11 @@ public struct EditBusinessPageLoadedView: View {
         onPickMedia: (@MainActor (BusinessMediaKind, Data, String) -> Void)? = nil,
         uploadingMedia: BusinessMediaKind? = nil,
         onManageServices: (@MainActor () -> Void)? = nil,
+        canEditProfile: Bool = true,
+        canEditLocation: Bool = true,
+        accessMessage: String? = nil,
+        canRetryAccess: Bool = true,
+        onRetryAccess: @escaping @MainActor () -> Void = {},
         onCloseBusiness: (@MainActor () -> Void)? = nil
     ) {
         self.content = content
@@ -310,6 +352,11 @@ public struct EditBusinessPageLoadedView: View {
         self.onPickMedia = onPickMedia
         self.uploadingMedia = uploadingMedia
         self.onManageServices = onManageServices
+        self.canEditProfile = canEditProfile
+        self.canEditLocation = canEditLocation
+        self.accessMessage = accessMessage
+        self.canRetryAccess = canRetryAccess
+        self.onRetryAccess = onRetryAccess
         self.onCloseBusiness = onCloseBusiness
     }
 
@@ -335,13 +382,17 @@ public struct EditBusinessPageLoadedView: View {
                     .padding(.top, Spacing.s4)
 
                     nameAndTaglineSection
+                        .disabled(!canEditProfile)
                     descriptionSection
+                        .disabled(!canEditProfile)
                     hoursSection
                     servicesSection
                     // No gallery backend yet: the Gallery section only held add
                     // tiles that did nothing, so it stays hidden until one exists.
                     contactSection
+                        .disabled(!canEditProfile)
                     locationSection
+                        .disabled(!canEditProfile || !canEditLocation)
                     if let onCloseBusiness {
                         closeBusinessSection(onCloseBusiness)
                     }
@@ -350,8 +401,27 @@ public struct EditBusinessPageLoadedView: View {
             .contentMargins(.bottom, Spacing.s4, for: .scrollContent)
             .scrollDismissesKeyboard(.interactively)
             .background(Theme.Color.appBg)
+            if let accessMessage {
+                HStack(spacing: Spacing.s3) {
+                    Text(accessMessage)
+                        .pantopusTextStyle(.small)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button("Retry access", action: onRetryAccess)
+                        .font(Theme.Font.small)
+                        .foregroundStyle(Theme.Color.business)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                        .disabled(!canRetryAccess)
+                }
+                .padding(Spacing.s3)
+                .background(Theme.Color.appSurface)
+                .accessibilityIdentifier("editBusinessPage.accessNotice")
+            }
             EditBusinessStickySave(
                 mode: stickyMode,
+                canSave: canEditProfile,
+                canPublish: canEditProfile,
                 onDiscard: onDiscard,
                 onSave: onSave,
                 onSaveDraft: onSaveDraft,
@@ -538,7 +608,9 @@ public struct EditBusinessPageLoadedView: View {
             }
         }
     }
+}
 
+private extension EditBusinessPageLoadedView {
     /// Owner only. The danger ghost button opens the typed confirmation.
     private func closeBusinessSection(_ onClose: @escaping @MainActor () -> Void) -> some View {
         EditBusinessSection(overline: "Close business") {
