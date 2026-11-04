@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -56,6 +57,7 @@ import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
 import app.pantopus.android.ui.components.keepsKeyboard
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.shared.form.FormFieldGroup
 import app.pantopus.android.ui.screens.shared.form.FormShell
 import app.pantopus.android.ui.theme.MotionTokens
@@ -96,9 +98,10 @@ fun EditAccessCodeFormScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
+    HomeCopyLifecycle(load = viewModel::load, pause = viewModel::pause)
+
     LaunchedEffect(Unit) {
         viewModel.bindClipboard { value -> SensitiveClipboard.copy(context, "Access code", value) }
-        viewModel.load()
     }
 
     LaunchedEffect(state.shouldDismiss) {
@@ -122,6 +125,7 @@ fun EditAccessCodeFormScreen(
         rosterSummary = viewModel::rosterSummary,
         sharedWithNames = viewModel::sharedWithNames,
         onDelete = viewModel::delete,
+        onRetry = viewModel::load,
     )
 }
 
@@ -138,6 +142,7 @@ internal fun EditAccessCodeFormContent(
     rosterSummary: (AccessVisibility) -> String,
     sharedWithNames: () -> List<String>,
     onDelete: (() -> Unit)? = null,
+    onRetry: () -> Unit = {},
 ) {
     Box(
         modifier =
@@ -148,56 +153,83 @@ internal fun EditAccessCodeFormContent(
     ) {
         FormShell(
             title = state.title,
-            rightActionLabel = "Save",
+            rightActionLabel = "Save".takeIf { state.isLoaded && state.canManage },
             isValid = state.isValid,
-            isDirty = state.isDirty,
+            isDirty = state.isLoaded && state.canManage && state.isDirty,
             isSaving = state.isSaving,
             onClose = onClose,
             onCommit = onCommit,
         ) {
-            FormFieldGroup("Category") {
-                CategoryGrid(
-                    selected = state.category,
-                    onSelect = onSelectCategory,
-                )
-            }
-            FormFieldGroup("Details") {
-                LabelField(state = state, onUpdate = onUpdate)
-                ValueField(
-                    value = state.fields[EditAccessCodeField.Value]?.value.orEmpty(),
-                    isRevealed = state.isRevealed,
-                    error = state.fields[EditAccessCodeField.Value]?.error,
-                    touched = state.fields[EditAccessCodeField.Value]?.touched == true,
-                    onChange = { onUpdate(EditAccessCodeField.Value, it) },
-                    onToggleReveal = onToggleReveal,
-                    onCopy = onCopy,
-                )
-            }
-            FormFieldGroup("Notes (optional)") {
-                NotesField(
-                    value = state.fields[EditAccessCodeField.Notes]?.value.orEmpty(),
-                    error = state.fields[EditAccessCodeField.Notes]?.error,
-                    onChange = { onUpdate(EditAccessCodeField.Notes, it) },
-                )
-            }
-            FormFieldGroup("Shared with") {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                    AccessVisibility.displayOrder.forEach { scope ->
-                        VisibilityRow(
-                            scope = scope,
-                            isSelected = state.visibility == scope,
-                            summary = rosterSummary(scope),
-                            onSelect = { onSelectVisibility(scope) },
+            if (!state.isLoaded) {
+                Text(state.loadError ?: "Checking access…", color = PantopusColors.appTextSecondary)
+                if (state.loadError != null) {
+                    TextButton(onClick = onRetry) { Text("Try again") }
+                } else {
+                    CircularProgressIndicator()
+                }
+            } else {
+                FormFieldGroup("Category") {
+                    if (state.canManage) {
+                        CategoryGrid(
+                            selected = state.category,
+                            onSelect = onSelectCategory,
                         )
-                    }
-                    val preview = sharedWithNames()
-                    if (preview.isNotEmpty()) {
-                        MemberPreviewStrip(names = preview)
+                    } else {
+                        Text(state.category.label, style = PantopusTextStyle.body)
                     }
                 }
-            }
-            if (state.isEditing && onDelete != null) {
-                DeleteCodeButton(enabled = !state.isSaving, onDelete = onDelete)
+                FormFieldGroup("Details") {
+                    LabelField(state = state, onUpdate = onUpdate)
+                    ValueField(
+                        value = state.fields[EditAccessCodeField.Value]?.value.orEmpty(),
+                        isRevealed = state.isRevealed,
+                        error = state.fields[EditAccessCodeField.Value]?.error,
+                        touched = state.fields[EditAccessCodeField.Value]?.touched == true,
+                        onChange = { onUpdate(EditAccessCodeField.Value, it) },
+                        onToggleReveal = onToggleReveal,
+                        onCopy = onCopy,
+                        readOnly = !state.canManage,
+                    )
+                }
+                FormFieldGroup("Notes (optional)") {
+                    NotesField(
+                        value = state.fields[EditAccessCodeField.Notes]?.value.orEmpty(),
+                        error = state.fields[EditAccessCodeField.Notes]?.error,
+                        onChange = { onUpdate(EditAccessCodeField.Notes, it) },
+                        readOnly = !state.canManage,
+                    )
+                }
+                FormFieldGroup("Shared with") {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                        if (state.canManage) {
+                            AccessVisibility.displayOrder.filter { it in state.allowedVisibilities }.forEach { scope ->
+                                VisibilityRow(
+                                    scope = scope,
+                                    isSelected = state.visibility == scope,
+                                    summary = rosterSummary(scope),
+                                    onSelect = { onSelectVisibility(scope) },
+                                )
+                            }
+                            if (state.visibility !in state.allowedVisibilities) {
+                                Text("Choose a sharing scope you can use.", color = PantopusColors.error)
+                            }
+                        } else {
+                            Text(state.visibility.headline, style = PantopusTextStyle.body)
+                            Text(state.visibility.subcopy, style = PantopusTextStyle.caption)
+                        }
+                        val preview = sharedWithNames()
+                        if (preview.isNotEmpty()) {
+                            Text(
+                                "People in this scope still need permission to view this category of code.",
+                                style = PantopusTextStyle.caption,
+                            )
+                            MemberPreviewStrip(names = preview)
+                        }
+                    }
+                }
+                if (state.isEditing && state.canManage && onDelete != null) {
+                    DeleteCodeButton(enabled = !state.isSaving, onDelete = onDelete)
+                }
             }
         }
 
@@ -276,6 +308,7 @@ private fun LabelField(
         placeholder = "Main network",
         state = fieldState,
         fieldTestTag = EditAccessCodeA11y.LABEL_FIELD,
+        enabled = state.canManage && !state.isSaving,
     )
 }
 
@@ -368,6 +401,7 @@ private fun ValueField(
     onChange: (String) -> Unit,
     onToggleReveal: () -> Unit,
     onCopy: () -> Unit,
+    readOnly: Boolean = false,
 ) {
     val borderColor =
         when {
@@ -398,6 +432,7 @@ private fun ValueField(
         ) {
             BasicTextField(
                 value = value,
+                readOnly = readOnly,
                 onValueChange = onChange,
                 textStyle =
                     PantopusTextStyle.body.copy(
@@ -469,6 +504,7 @@ private fun NotesField(
     value: String,
     error: String?,
     onChange: (String) -> Unit,
+    readOnly: Boolean = false,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
         Box(
@@ -488,6 +524,7 @@ private fun NotesField(
         ) {
             BasicTextField(
                 value = value,
+                readOnly = readOnly,
                 onValueChange = onChange,
                 textStyle = PantopusTextStyle.body.copy(color = PantopusColors.appText),
                 cursorBrush = SolidColor(PantopusColors.primary600),
@@ -596,7 +633,7 @@ private fun MemberPreviewStrip(names: List<String>) {
         modifier =
             Modifier
                 .padding(top = Spacing.s1)
-                .semantics { contentDescription = "Shared with: $display" },
+                .semantics { contentDescription = "People in this scope: $display" },
     ) {
         PantopusIconImage(
             icon = PantopusIcon.Users,
