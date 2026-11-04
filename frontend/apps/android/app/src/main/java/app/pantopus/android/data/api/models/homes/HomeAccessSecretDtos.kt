@@ -34,6 +34,8 @@ data class HomeAccessSecretDto(
 @JsonClass(generateAdapter = true)
 data class HomeAccessSecretsResponse(
     val secrets: List<HomeAccessSecretDto>,
+    val canManage: Boolean = false,
+    val allowedVisibilities: List<String> = emptyList(),
 ) {
     init {
         // Moshi can decode null array members despite the Kotlin element type.
