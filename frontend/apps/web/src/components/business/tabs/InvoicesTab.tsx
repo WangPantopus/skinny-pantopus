@@ -370,15 +370,15 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
               <div>
                 <label className="text-xs text-app-text-secondary mb-1 block">Line Items</label>
                 {lineItems.map((item, i) => (
-                  <div key={i} className="flex items-center gap-2 mb-2">
+                  <div key={i} className="flex flex-wrap sm:flex-nowrap items-center gap-2 mb-2">
                     <input type="text" value={item.description} onChange={e => updateLineItem(i, 'description', e.target.value)} placeholder="Description" aria-label={`Line ${i + 1} description`}
-                      className="flex-[2] text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                      className="w-full min-w-0 sm:flex-[2] text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
                     <input type="text" value={item.amount} onChange={e => updateLineItem(i, 'amount', e.target.value)} placeholder="$0.00" inputMode="decimal" aria-label={`Line ${i + 1} unit amount`}
-                      className="flex-1 text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                      className="min-w-0 flex-1 text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
                     <input type="text" value={item.quantity} onChange={e => updateLineItem(i, 'quantity', e.target.value)} placeholder="1" inputMode="numeric" aria-label={`Line ${i + 1} quantity`}
-                      className="w-12 text-sm px-2 py-2 border border-app-border rounded-lg bg-app-surface text-app-text text-center focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                      className="w-12 shrink-0 text-sm px-2 py-2 border border-app-border rounded-lg bg-app-surface text-app-text text-center focus:outline-none focus:ring-1 focus:ring-violet-500" />
                     {lineItems.length > 1 && (
-                      <button aria-label="Remove line item" onClick={() => setLineItems(prev => prev.filter((_, j) => j !== i))} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></button>
+                      <button aria-label="Remove line item" onClick={() => setLineItems(prev => prev.filter((_, j) => j !== i))} className="shrink-0 text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></button>
                     )}
                   </div>
                 ))}
