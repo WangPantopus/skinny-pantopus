@@ -381,6 +381,13 @@ private enum AIHistoryLoad {
     case read, missing, failed
 }
 
+/// A timeline row the reader is at (`ChatConversationViewModel.readingPlace`): at the top of the viewport, or in its
+/// middle for a search match.
+struct ChatReadingPlace: Equatable {
+    let rowId: String
+    let isCentered: Bool
+}
+
 @Observable
 @MainActor
 public final class ChatConversationViewModel {
@@ -392,6 +399,21 @@ public final class ChatConversationViewModel {
     /// message that is present in the loaded page; the view clears it via
     /// `consumePendingScroll()` after scrolling.
     public private(set) var pendingScrollTargetId: String?
+    /// Where the reader is while away from the latest message: the timeline row across the top of the viewport as
+    /// they last scrolled, or the search match or brief the thread landed on. A fold or a turn puts up a new
+    /// conversation screen for this model (the Inbox tab keeps it), which opens there instead of at the latest
+    /// message. Not observed: it changes as the reader scrolls.
+    @ObservationIgnored var readingPlace: ChatReadingPlace?
+    /// The reader is at (or near) the latest message, where a new screen for this model opens anyway.
+    @ObservationIgnored var isReadingLatest = true
+    /// The composer has the keyboard. A new screen for this model after a fold or a turn gives it back. Not observed.
+    @ObservationIgnored var isComposing = false
+    /// The details drawer open over the thread, and the report form in it with what was chosen and typed. They
+    /// belong to the thread, not to one screen of it: a fold or a turn rebuilds the screen, which shows them again.
+    public var isShowingDetails = false
+    var isShowingReportForm = false
+    var reportReason: String?
+    var reportDetails = ""
     public private(set) var isViewingSearchContext = false
     public private(set) var isViewingEarlierHistory = false
     private static let retainedMessageLimit = 600
@@ -818,6 +840,8 @@ public final class ChatConversationViewModel {
     private var draftSaveTask: Task<Void, Never>?
     /// The screens showing this thread (`presentationDidAppear()`).
     private var presentationCount = 0
+    /// The teardown waiting a moment after the last screen left (`presentationDidDisappear()`).
+    private var pendingTeardown: Task<Void, Never>?
 
     private enum ChatSendError: Error {
         case noRoom
@@ -2340,11 +2364,25 @@ public final class ChatConversationViewModel {
     /// when the last screen showing it leaves.
     func presentationDidAppear() {
         presentationCount += 1
+        pendingTeardown?.cancel()
+        pendingTeardown = nil
     }
 
+    /// The old screen can also leave before the new one appears: the thread
+    /// waits a moment before it stops listening, so a fold or a turn keeps its
+    /// rooms, its sockets and an assistant reply on its way, and makes no
+    /// catch-up requests. Leaving the thread tears it down as before, a moment
+    /// later.
     func presentationDidDisappear() {
         presentationCount = max(presentationCount - 1, 0)
-        if presentationCount == 0 { teardown() }
+        guard presentationCount == 0 else { return }
+        pendingTeardown?.cancel()
+        pendingTeardown = Task { @MainActor [self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled, presentationCount == 0 else { return }
+            pendingTeardown = nil
+            teardown()
+        }
     }
 
     public func teardown() {

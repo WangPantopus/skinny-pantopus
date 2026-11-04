@@ -280,6 +280,7 @@ public struct PulsePostDetailView: View {
             replyingToName: viewModel.replyTarget?.authorName,
             topBarAction: overflowAction,
             topBarSecondaryAction: viewModel.canSharePost ? shareAction : nil,
+            scrollPlace: viewModel.scrollPlace,
             nearbyProviders: viewModel.nearbyProviders,
             onOpenBusiness: onOpenBusiness,
             onBack: onBack,

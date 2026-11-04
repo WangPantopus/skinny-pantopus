@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 // swiftlint:disable type_body_length file_length
 
@@ -78,6 +79,13 @@ public struct FeedView: View {
     @State private var topSafeInset: CGFloat = 0
     /// Bumped by the "new posts" pill: the list scrolls back to the top.
     @State private var scrollToTopRequest = 0
+    /// Where the last feed screen for this view model left the reader, down the list: a fold or a turn rebuilt the
+    /// feed, which goes back to that post (`returnToReadingPost`). Read once, as the screen is made.
+    @State private var returnPostId: String?
+    /// Whether the reader is scrolling the list, held by reference (it flips with every scroll).
+    @State private var listScroll = FeedListScroll()
+    /// The list's width: a change re-wraps the posts while the offset stays.
+    @State private var listWidth: CGFloat = 0
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let onOpenPost: @MainActor (String) -> Void
@@ -119,6 +127,7 @@ public struct FeedView: View {
         let resolved = viewModel ?? PulseFeedViewModel()
         let map = mapViewModel ?? FeedMapViewModel(surface: resolved.surface)
         _viewModel = State(initialValue: resolved)
+        _returnPostId = State(initialValue: resolved.readsFeedTop ? nil : resolved.readingPostId)
         _mapViewModel = State(initialValue: map)
         // The feed's area callback references the context bar weakly. A new
         // area moves the map too.
@@ -931,10 +940,38 @@ public struct FeedView: View {
             .refreshable { await refreshFeedAndCard() }
             .onPulseListScroll { offset in listScrolled(to: offset) }
             .onChange(of: scrollToTopRequest) { _, _ in
+                viewModel.readsFeedTop = true
                 withAnimation { proxy.scrollTo(firstPostID ?? Self.listTopID, anchor: .top) }
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listWidth = $0 }
+            .onChange(of: listWidth) { oldWidth, _ in
+                // The feed's column changed width (a fold or a turn, the split view settling): the posts re-wrap
+                // while the offset stays, so a reader down the list goes back to their post.
+                guard oldWidth > 0, !viewModel.readsFeedTop, let postId = viewModel.readingPostId else { return }
+                Task { await scrollBack(to: postId, proxy: proxy) }
+            }
+            .task { await returnToReadingPost(proxy) }
         }
         .accessibilityIdentifier("pulseFeedList")
+    }
+
+    /// Puts the reader's post back at the top of the list after a fold or a
+    /// turn rebuilt the feed.
+    private func returnToReadingPost(_ proxy: ScrollViewProxy) async {
+        guard let postId = returnPostId else { return }
+        returnPostId = nil
+        await scrollBack(to: postId, proxy: proxy)
+    }
+
+    /// Posts far down sit at estimated heights until they come near: the first
+    /// scroll brings the post's neighbors in, and the later ones, once they have
+    /// laid out, put it exactly at the top.
+    private func scrollBack(to postId: String, proxy: ScrollViewProxy) async {
+        for delayMs: UInt64 in [16, 80, 250] {
+            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+            guard !Task.isCancelled else { return }
+            proxy.scrollTo(postId, anchor: .top)
+        }
     }
 
     /// The "new posts" pill shows over the list, below the header.
@@ -1013,6 +1050,21 @@ public struct FeedView: View {
                         let id = row.id
                         Task { await viewModel.loadMoreIfNeeded(rowId: id) }
                     }
+                    // The post the reader scrolls to the top of the list is where they are, for a feed screen a
+                    // fold or a turn puts up next (`readingPostId`); the first post going back below the top is
+                    // the reader back at the top. Layouts move the posts too (a fold re-wraps them before the
+                    // screen is rebuilt); only the reader's scrolling moves their place.
+                    .onGeometryChange(for: FeedPostPlace.self) { proxy in
+                        FeedPostPlace(proxy.frame(in: .scrollView))
+                    } action: { place in
+                        guard listScroll.isScrolling else { return }
+                        if place == .acrossTop {
+                            viewModel.readingPostId = row.id
+                            viewModel.readsFeedTop = false
+                        } else if place == .belowTop, row.id == rows.first?.id {
+                            viewModel.readsFeedTop = true
+                        }
+                    }
             }
             if viewModel.isLoadingMore {
                 ProgressView()
@@ -1037,6 +1089,12 @@ public struct FeedView: View {
             Spacer(minLength: 80)
         }
         .padding(.vertical, Spacing.s3)
+        // Hands the list's UIKit scroll view to `listScroll`, for whether the reader is scrolling it.
+        .background(alignment: .topLeading) {
+            FeedScrollViewProbe(listScroll: listScroll)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+        }
     }
 
     private func postCard(_ row: PulsePostCardContent) -> some View {
@@ -1461,6 +1519,61 @@ private extension View {
             }
         } else {
             self
+        }
+    }
+}
+
+/// Where a post is against the top of the list's viewport.
+private enum FeedPostPlace: Equatable {
+    case aboveTop, acrossTop, belowTop
+
+    init(_ frame: CGRect) {
+        self = frame.maxY <= 0 ? .aboveTop : frame.minY > 0 ? .belowTop : .acrossTop
+    }
+}
+
+/// Whether the reader is scrolling the feed's list (`FeedView.listScroll`): a finger on it, or a fling it started.
+/// Layouts move the posts too (a fold of the iPhone Duo re-wraps them before the screen is rebuilt); only this moves
+/// the reader's place.
+@MainActor
+private final class FeedListScroll {
+    weak var scrollView: UIScrollView?
+
+    var isScrolling: Bool {
+        guard let scrollView else { return false }
+        return scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating
+    }
+}
+
+/// Finds the list's UIKit scroll view: it sits in the scroll content, so the scroll view is its nearest ancestor of
+/// that kind.
+private struct FeedScrollViewProbe: UIViewRepresentable {
+    let listScroll: FeedListScroll
+
+    func makeUIView(context _: Context) -> ProbeView {
+        let view = ProbeView()
+        view.listScroll = listScroll
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: ProbeView, context _: Context) {
+        view.listScroll = listScroll
+    }
+
+    final class ProbeView: UIView {
+        weak var listScroll: FeedListScroll?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard window != nil else { return }
+            var ancestor = superview
+            while let view = ancestor, !(view is UIScrollView) {
+                ancestor = view.superview
+            }
+            if let scrollView = ancestor as? UIScrollView {
+                listScroll?.scrollView = scrollView
+            }
         }
     }
 }

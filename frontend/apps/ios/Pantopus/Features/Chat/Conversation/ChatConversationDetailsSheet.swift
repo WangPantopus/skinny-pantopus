@@ -20,7 +20,6 @@ struct ChatConversationDetailsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var blockConfirmPresented = false
     @State private var blockFailedPresented = false
-    @State private var reportSheetPresented = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -56,7 +55,11 @@ struct ChatConversationDetailsSheet: View {
         } message: {
             Text("Please try again.")
         }
-        .sheet(isPresented: $reportSheetPresented) {
+        // The thread keeps the form open, with its reason and details, while a fold rebuilds the screens.
+        .sheet(isPresented: Binding(
+            get: { viewModel.isShowingReportForm },
+            set: { viewModel.isShowingReportForm = $0 }
+        )) {
             ChatReportUserSheet(viewModel: viewModel, firstName: firstName)
                 .presentationDetents([.medium, .large])
         }
@@ -136,7 +139,7 @@ struct ChatConversationDetailsSheet: View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             sectionLabel("Safety")
             Button {
-                reportSheetPresented = true
+                viewModel.isShowingReportForm = true
             } label: {
                 HStack(spacing: Spacing.s3) {
                     Icon(.flag, size: 14, strokeWidth: 2.4, color: Theme.Color.appTextSecondary)
@@ -213,8 +216,6 @@ struct ChatReportUserSheet: View {
     let firstName: String
 
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedReason: String?
-    @State private var details = ""
     @State private var submitted = false
     @State private var failedPresented = false
 
@@ -283,7 +284,7 @@ struct ChatReportUserSheet: View {
                         .font(.system(size: 10.5, weight: .bold))
                         .tracking(0.5)
                         .foregroundStyle(Theme.Color.appTextMuted)
-                    TextField("Anything else we should know?", text: $details, axis: .vertical)
+                    TextField("Anything else we should know?", text: details, axis: .vertical)
                         .font(.system(size: 13.5))
                         .lineLimit(3...6)
                         .padding(Spacing.s3)
@@ -298,9 +299,18 @@ struct ChatReportUserSheet: View {
         }
     }
 
+    /// What was chosen and typed, kept by the thread (`ChatConversationViewModel.reportReason`).
+    private var selectedReason: String? {
+        viewModel.reportReason
+    }
+
+    private var details: Binding<String> {
+        Binding(get: { viewModel.reportDetails }, set: { viewModel.reportDetails = $0 })
+    }
+
     private func reasonRow(_ code: String, _ label: String) -> some View {
         Button {
-            selectedReason = code
+            viewModel.reportReason = code
         } label: {
             HStack(spacing: Spacing.s3) {
                 Icon(
@@ -362,13 +372,15 @@ struct ChatReportUserSheet: View {
 
     private func submit() async {
         guard let reason = selectedReason else { return }
-        let trimmed = String(details.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1000))
+        let trimmed = String(viewModel.reportDetails.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1000))
         let ok = await viewModel.reportCounterparty(
             reason: reason,
             details: trimmed.isEmpty ? nil : trimmed
         )
         if ok {
             submitted = true
+            viewModel.reportReason = nil
+            viewModel.reportDetails = ""
             try? await Task.sleep(nanoseconds: 1_400_000_000)
             dismiss()
         } else {

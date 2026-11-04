@@ -254,6 +254,11 @@ public final class PulseFeedViewModel {
     public private(set) var newPostsCount = 0
     /// Set by the list: its first card is on screen.
     public var isReadingAtTop = true
+    /// The post the reader scrolled to the top of the list, and whether they are at the list's top instead: a fold
+    /// or a turn of the iPhone Duo puts up a new feed screen for this model (the Nearby tab keeps it), which opens
+    /// the list there. Not observed: they change as the list scrolls.
+    @ObservationIgnored var readingPostId: String?
+    @ObservationIgnored var readsFeedTop = true
 
     private struct PendingFirstPage {
         let response: FeedResponse
