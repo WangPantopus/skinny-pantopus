@@ -315,7 +315,7 @@ The comprehensive infrastructure proposal is in [#3253](https://github.com/WangP
 | `/app/homes/[id]/dispute` | Entry/redirect/state probe | 390 px |
 | `/app/homes/[id]/docs` | Owner/member document category, permissions, download, reload and failed-delete/retry flows | 390 px entry; desktop flows |
 | `/app/homes/[id]/edit` | Entry/redirect/state probe | 390 px |
-| `/app/homes/[id]/emergency` | Entry/redirect/state probe | 390 px |
+| `/app/homes/[id]/emergency` | Owner/member create, retry, delete, current access, late-response and reload flows | 390 px |
 | `/app/homes/[id]/invitations` | Entry/redirect/state probe | 390 px |
 | `/app/homes/[id]/maintenance` | Entry/redirect/state probe | 390 px |
 | `/app/homes/[id]/members` | Entry/redirect/state probe | 390 px |
@@ -540,7 +540,7 @@ The comprehensive infrastructure proposal is in [#3253](https://github.com/WangP
 | `/no-mail/[code]` | Missing-resource/refusal probe only | — |
 | `/open/[mailId]` | Launch-cut redirect | — |
 | `/persona/[personaHandle]` | Launch-cut redirect | — |
-| `/plans/[id]` | Missing-resource/refusal probe only | — |
+| `/plans/[id]` | Public/host/accepted guest, invitation recovery, optional-viewer deadline and production HTML privacy | — |
 | `/plans/unsubscribe` | Entry/redirect/state probe | — |
 | `/poll/[id]` | Launch-cut redirect | — |
 | `/post/[id]` | Entry/redirect/state probe | — |
@@ -619,3 +619,23 @@ Real API/database/storage checks passed PDF upload, maintenance create, identica
 The browser check uncovered two additional web defects repaired in [#3281](https://github.com/WangPantopus/skinny-pantopus/pull/3281), source `6c7ed89822761d45c657c6538cea0d5b850e5176`: receipts were grouped under Other using a nonexistent `folder` field, and read-only household members saw Delete controls the backend would refuse. The page now uses `doc_type` and the existing document permissions. Separate owner/member Chrome sessions verified the Receipt category, correct Delete availability, restricted-document hiding, exact PDF download and reload. An injected delete 503 kept the document visible; retry removed it, and reload removed it from both viewers. Uploaded test documents were deleted through the UI and the temporary membership/permission fixtures were removed. The private QA runtime remains available to the Android audit using its separate fixtures.
 
 The web repair passed all 123 existing suites / 2,383 tests, zero-error TypeScript and targeted lint (only pre-existing any-type warnings). No new unit tests were added. Both code PRs remain unmerged; native receipt UI completion, hosted storage and the previously listed role/provider/browser gaps remain separately tracked.
+
+### Plan share-page blocking request and invitation recovery — November 4
+
+[#3287](https://github.com/WangPantopus/skinny-pantopus/pull/3287), source `934a7a1d1ff77791afe3b82098ab39cac9de34e7`, fixes two reproduced issues on `/plans/[id]`. Its optional signed-in viewer lookup had no deadline, so a slow private API response delayed the entire public page. It now has a 1.5-second deadline, including body consumption, and uses the existing public-card fallback. A failed public Plan load also lost a valid invitation token from Try again and Open app; both links now retain it for recovery. Known invalid or revoked invitations keep their existing handling.
+
+Three fresh production Chrome loads per build used the same real local backend and an injected eight-second delay only on the optional viewer request. Median visible-page time fell from **8,063 ms to 1,529 ms**; an independently stalled response body fell back in 1,533 ms. These are controlled failure-scenario results, not normal production latency or a combined measurement of the other startup PRs. Normal signed-out, host and accepted-guest views were checked too. A real local share invitation survived a failed load and recovered its invitation CTA after Retry; invalid tokens were not carried forward.
+
+Production HTML omitted the synthetic precise-address, private-note and coordinate markers even though the authorized API returned them. Reload after revocation removed the guest claim; a private-viewer 503 used public copy. Browser automation did not produce a confirmed hidden visibility state during the separate background experiment, so no real hidden/resume or bfcache claim is made for this Plan page. Both production builds and all 123 existing web suites / 2,383 tests passed. The Jest run excluded only the temporary standalone benchmark build directories, which otherwise duplicate package names; no test files were excluded. Temporary Plan/invitation fixtures and web/proxy runtimes were cleaned up. CI is green and the PR remains unmerged.
+
+### Emergency-info authority and web recovery — November 4
+
+The current web page exposed Add/Delete to a read-only household member. After `sensitive.view` was revoked, a focus event made no new request and left the previous sensitive row visible; a full reload correctly refused access. This distinguishes the web lifecycle defect from the existing backend permission enforcement.
+
+[#3289](https://github.com/WangPantopus/skinny-pantopus/pull/3289), source `6460aef10705d54bd2cff117688cf2691db3cab6`, adds `canManage` to the existing emergency list response, using `home.edit` from its final shared-home authority recheck. No extra database query, frontend request, table or migration is needed. Owner/member local API checks covered current grants and revocations, refused writes and sensitive-read denial without rows; the existing 43 emergency tests and complete backend CI pass.
+
+[#3291](https://github.com/WangPantopus/skinny-pantopus/pull/3291), source `904d7fa01bc4619c082e62195537b245a7f404e8`, is stacked on #3289. It consumes that capability, treats a missing value as read-only, cancels and retires previous reads on departure, and checks current authority on return and Home/session changes. Failed checks cannot retain old rows or write controls. Stale delete confirmations and responses cannot affect a newer Home/session. Saves retain their existing retry identity and unsent draft after an uncertain result; controls lock while saving.
+
+Chrome with the real local backend/database verified owner/member reloads, current edit grants/revocations, sensitive-read refusal, failed-read Retry, and missing-capability behavior. A committed save with an injected lost response retained the draft; retry produced exactly one row and the second account saw it after reload. A delayed authorized read could not restore rows after a newer 403. A successful save arriving after departure neither exposed rows nor started another read until return. Departure canceled an open delete confirmation; a delete 503 kept the row, then retry and reload removed it for both people. Paired focus/visibility events made one read. The phone link and 390px layout were checked with no horizontal overflow or JavaScript errors.
+
+These web lifecycle checks dispatched focus/blur/visibility events in Chrome; they do not certify OS backgrounding, bfcache, Safari or Firefox. All 123 existing web suites / 2,383 tests, zero-error TypeScript and targeted lint pass. Existing mocks were updated, with no new unit tests. The Android owner separately reported real emulator background/revocation and delayed-response checks for [#3290](https://github.com/WangPantopus/skinny-pantopus/pull/3290); iOS verification is tracked by its owner. A local combined receipt/emergency backend is available to the native audits; the shared runtimes and all production infrastructure remain unchanged. Both repair PRs remain unmerged.
