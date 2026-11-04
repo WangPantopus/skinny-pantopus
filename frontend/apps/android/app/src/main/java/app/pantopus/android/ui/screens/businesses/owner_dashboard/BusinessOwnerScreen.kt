@@ -146,68 +146,83 @@ fun BusinessOwnerScreen(
                 .background(PantopusColors.appBg)
                 .testTag("businessOwner"),
     ) {
-        when (val current = state) {
-            BusinessOwnerUiState.Loading -> OwnerLoadingLayout(onBack = onBack)
-            BusinessOwnerUiState.NotFound ->
-                OwnerMessageLayout(
-                    icon = PantopusIcon.Building2,
-                    headline = "Business not found",
-                    subcopy = "This business may have moved or unpublished its page.",
-                    onBack = onBack,
-                    onRetry = viewModel::refresh,
-                )
-            is BusinessOwnerUiState.Error ->
-                OwnerMessageLayout(
-                    icon = PantopusIcon.AlertCircle,
-                    headline = "Couldn't load your business",
-                    subcopy = current.message,
-                    onBack = onBack,
-                    onRetry = viewModel::refresh,
-                )
-            is BusinessOwnerUiState.Loaded ->
-                ownerState.SaveableStateProvider(current.content.businessId) {
-                    Crossfade(targetState = mode, animationSpec = tween(180), label = "ownerMode") { m ->
-                        when (m) {
-                            OwnerViewMode.Owner ->
-                                OwnerEditFrame(
-                                    content = current.content,
-                                    onBack = onBack,
-                                    onEditPage = onEditPage,
-                                    onOpenInsights = onOpenInsights,
-                                    onOpenSettings = onOpenSettings,
-                                    onOpenTeam = onOpenTeam,
-                                    onOpenPages = onOpenPages,
-                                    onOpenPayments = onOpenPayments,
-                                    onOpenInvoices = onOpenInvoices,
-                                    onOpenLegal = onOpenLegal,
-                                    onPreview = { mode = OwnerViewMode.Preview },
-                                    onManageCatalog = { mode = OwnerViewMode.Catalog },
-                                    onOpenInbox = { mode = OwnerViewMode.Inbox },
-                                    onSubmitReply = { id, text -> viewModel.submitReply(id, text) },
-                                    onClaimFounding = viewModel::claimFoundingOffer,
-                                    onDismissFounding = viewModel::dismissFoundingBanner,
-                                )
-                            OwnerViewMode.Preview ->
-                                OwnerPreviewFrame(
-                                    content = current.content.publicProfile,
-                                    onExit = { mode = OwnerViewMode.Owner },
-                                )
-                            OwnerViewMode.Catalog ->
-                                BusinessCatalogScreen(
-                                    onBack = {
-                                        mode = OwnerViewMode.Owner
-                                        viewModel.refresh()
-                                    },
-                                )
-                            OwnerViewMode.Inbox ->
-                                BusinessInboxScreen(
-                                    onBack = { mode = OwnerViewMode.Owner },
-                                    onOpenRoom = onOpenChatRoom,
-                                    onOpenPost = onOpenPost,
-                                )
-                        }
-                    }
+        val current = state
+        // The catalog and inbox own their reads, so they (and an unsaved catalog edit) stay while the owner
+        // content is cleared on pause and read again; a refused or failed owner read still replaces them.
+        val ownsReads = mode == OwnerViewMode.Catalog || mode == OwnerViewMode.Inbox
+        val showsOwnFrame = ownsReads && (current is BusinessOwnerUiState.Loading || current is BusinessOwnerUiState.Loaded)
+        Crossfade(targetState = showsOwnFrame, animationSpec = tween(180), label = "ownerFrame") { ownFrame ->
+            if (ownFrame) {
+                when (mode) {
+                    OwnerViewMode.Catalog ->
+                        BusinessCatalogScreen(
+                            onBack = {
+                                mode = OwnerViewMode.Owner
+                                viewModel.refresh()
+                            },
+                        )
+                    OwnerViewMode.Inbox ->
+                        BusinessInboxScreen(
+                            onBack = { mode = OwnerViewMode.Owner },
+                            onOpenRoom = onOpenChatRoom,
+                            onOpenPost = onOpenPost,
+                        )
+                    else -> Unit
                 }
+            } else {
+                when (current) {
+                    BusinessOwnerUiState.Loading -> OwnerLoadingLayout(onBack = onBack)
+                    BusinessOwnerUiState.NotFound ->
+                        OwnerMessageLayout(
+                            icon = PantopusIcon.Building2,
+                            headline = "Business not found",
+                            subcopy = "This business may have moved or unpublished its page.",
+                            onBack = onBack,
+                            onRetry = viewModel::refresh,
+                        )
+                    is BusinessOwnerUiState.Error ->
+                        OwnerMessageLayout(
+                            icon = PantopusIcon.AlertCircle,
+                            headline = "Couldn't load your business",
+                            subcopy = current.message,
+                            onBack = onBack,
+                            onRetry = viewModel::refresh,
+                        )
+                    is BusinessOwnerUiState.Loaded ->
+                        ownerState.SaveableStateProvider(current.content.businessId) {
+                            Crossfade(targetState = mode, animationSpec = tween(180), label = "ownerMode") { m ->
+                                when (m) {
+                                    OwnerViewMode.Owner ->
+                                        OwnerEditFrame(
+                                            content = current.content,
+                                            onBack = onBack,
+                                            onEditPage = onEditPage,
+                                            onOpenInsights = onOpenInsights,
+                                            onOpenSettings = onOpenSettings,
+                                            onOpenTeam = onOpenTeam,
+                                            onOpenPages = onOpenPages,
+                                            onOpenPayments = onOpenPayments,
+                                            onOpenInvoices = onOpenInvoices,
+                                            onOpenLegal = onOpenLegal,
+                                            onPreview = { mode = OwnerViewMode.Preview },
+                                            onManageCatalog = { mode = OwnerViewMode.Catalog },
+                                            onOpenInbox = { mode = OwnerViewMode.Inbox },
+                                            onSubmitReply = { id, text -> viewModel.submitReply(id, text) },
+                                            onClaimFounding = viewModel::claimFoundingOffer,
+                                            onDismissFounding = viewModel::dismissFoundingBanner,
+                                        )
+                                    OwnerViewMode.Preview ->
+                                        OwnerPreviewFrame(
+                                            content = current.content.publicProfile,
+                                            onExit = { mode = OwnerViewMode.Owner },
+                                        )
+                                    // Drawn by the outer frame; nothing here while it fades in.
+                                    OwnerViewMode.Catalog, OwnerViewMode.Inbox -> Unit
+                                }
+                            }
+                        }
+                }
+            }
         }
 
         // Founding-claim confirmation / error copy. RN raises an `Alert`;

@@ -140,7 +140,8 @@ class BusinessOwnerViewModel
             viewModelScope.launch {
                 val result = businesses.respondToReview(businessId, reviewId, trimmed)
                 if (result is NetworkResult.Success && active && !isCurrent(request)) refresh()
-                if (result is NetworkResult.Failure && isCurrent(request)) {
+                if (result is NetworkResult.Failure && active) {
+                    // A newer read already shows the server's reviews, so only the current one is rolled back.
                     updateContent(request) { latest ->
                         val original = current.content.reviews.firstOrNull { it.id == reviewId }
                         val restored = latest.reviews.map { if (it.id == reviewId) original ?: it else it }
@@ -261,7 +262,7 @@ class BusinessOwnerViewModel
                 if (!isCurrent(request)) return@coroutineScope
                 val profile = BusinessProfileMapper.build(payload, renderData, null).copy(hasPublicPage = publicData != null)
                 publish(request, BusinessOwnerUiState.Loaded(buildContent(profile, dashboard, null, emptyList())))
-                loadOverlays(request, payload, renderData, publicData != null)
+                loadOverlays(request, payload, renderData, publicData != null, dashboard.access?.isOwner == true)
             }
 
         /** Optional sections must not hold the business page behind their network latency. */
@@ -270,6 +271,7 @@ class BusinessOwnerViewModel
             detail: BusinessDetailResponse,
             renderData: BusinessPublicResponse,
             hasPublicPage: Boolean,
+            isOwner: Boolean,
         ) = coroutineScope {
             launch {
                 val reviews = (profiles.publicProfile(businessId) as? NetworkResult.Success)?.data ?: return@launch
@@ -289,9 +291,12 @@ class BusinessOwnerViewModel
                     it.copy(reviews = mapped, reviewsToReplyLabel = if (pending > 0) "$pending to reply" else null)
                 }
             }
-            launch {
-                val offer = loadFoundingOffer()
-                updateContent(request) { it.copy(foundingOffer = offer) }
+            // Only the owner can claim a founding slot (the claim route refuses everyone else), as on iOS and web.
+            if (isOwner) {
+                launch {
+                    val offer = loadFoundingOffer()
+                    updateContent(request) { it.copy(foundingOffer = offer) }
+                }
             }
         }
 
