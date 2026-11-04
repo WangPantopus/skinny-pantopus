@@ -212,6 +212,7 @@ class BusinessOwnerViewModelTest {
     @Test fun load_primary404EmitsNotFound() =
         runTest {
             coEvery { businesses.business("marlow") } returns NetworkResult.Failure(NetworkError.NotFound)
+            coEvery { businesses.dashboard("marlow") } returns NetworkResult.Failure(NetworkError.NotFound)
             val vm = makeVm()
             vm.load()
             advanceUntilIdle()
