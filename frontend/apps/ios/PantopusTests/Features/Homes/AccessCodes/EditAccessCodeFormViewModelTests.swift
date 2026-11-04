@@ -184,11 +184,9 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
          "label":"Main","secret_value":"Hunter2!","visibility":"members"}}
         """
         SequencedURLProtocol.sequence = [
-            .status(200, body: "{\"secrets\":[]}"),
             .status(201, body: createResponse)
         ]
         let vm = makeVM()
-        await vm.load()
 
         vm.update(.label, to: "Main")
         vm.update(.value, to: "Hunter2!")
@@ -219,11 +217,9 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
 
     func testSubmitFailureSurfacesErrorToast() async {
         SequencedURLProtocol.sequence = [
-            .status(200, body: "{\"secrets\":[]}"),
             .status(500, body: "{\"error\":\"Failed to create access secret\"}")
         ]
         let vm = makeVM()
-        await vm.load()
 
         vm.update(.label, to: "Main")
         vm.update(.value, to: "Hunter2!")
