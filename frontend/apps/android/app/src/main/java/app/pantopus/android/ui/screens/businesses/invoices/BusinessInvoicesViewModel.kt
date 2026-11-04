@@ -436,9 +436,8 @@ class BusinessInvoicesViewModel
             }
             if (parsed.isEmpty()) {
                 _createError.value = "At least one line item is required"
-                return null
             }
-            return parsed
+            return parsed.takeIf { it.isNotEmpty() }
         }
 
         fun clearAction() {
