@@ -16,6 +16,8 @@ import SwiftUI
 
 @MainActor
 struct MemoryDetailLayout: View {
+    /// Beside the Mailbox the list is the way back (`mailPieceShowsBack`).
+    @Environment(\.mailPieceShowsBack) private var showsBack
     let content: MailDetailContent
     let memory: MemoryDetailDTO
     let saveInFlight: Bool
@@ -28,7 +30,7 @@ struct MemoryDetailLayout: View {
 
     var body: some View {
         MailItemDetailShell(
-            topBar: makeTopBar(),
+            topBar: makeTopBar().showingBack(showsBack),
             aiElf: makeAIElf(),
             attachments: makeAttachments(),
             hero: { MemoryHeroCard(content: content, memory: memory) },

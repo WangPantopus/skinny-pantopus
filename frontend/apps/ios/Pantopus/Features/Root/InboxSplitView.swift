@@ -59,9 +59,14 @@ struct InboxSplitView<List: View, Destination: View>: View {
         }
     }
 
-    /// The row of the conversation open in the column.
+    /// The row of the conversation open in the column: the one on top, when a link or a profile's Message opened a
+    /// second conversation over the first (closed, the stack pushes it; unfolded, it stays pushed in the column).
     private var selectedRowId: String? {
-        guard case let .conversation(conversation)? = path.routes.dropFirst(searching ? 1 : 0).first else { return nil }
+        let top = path.routes.dropFirst(searching ? 1 : 0).last { route in
+            if case .conversation = route { return true }
+            return false
+        }
+        guard case let .conversation(conversation)? = top else { return nil }
         switch conversation.mode {
         case .ai: return ChatListViewModel.assistantRow.id
         case let .room(id): return id

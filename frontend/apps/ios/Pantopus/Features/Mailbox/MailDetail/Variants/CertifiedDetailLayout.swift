@@ -21,6 +21,8 @@ import SwiftUI
 
 @MainActor
 struct CertifiedDetailLayout: View {
+    /// Beside the Mailbox the list is the way back (`mailPieceShowsBack`).
+    @Environment(\.mailPieceShowsBack) private var showsBack
     let content: MailDetailContent
     let certified: CertifiedDetailDTO
     let ackInFlight: Bool
@@ -54,7 +56,7 @@ struct CertifiedDetailLayout: View {
 
     var body: some View {
         MailItemDetailShell(
-            topBar: makeTopBar(),
+            topBar: makeTopBar().showingBack(showsBack),
             aiElf: makeAIElf(),
             attachments: makeAttachments(),
             hero: { HeroCard(content: content, certified: certified) },

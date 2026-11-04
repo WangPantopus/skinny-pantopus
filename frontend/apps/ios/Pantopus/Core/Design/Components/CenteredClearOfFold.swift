@@ -1,0 +1,116 @@
+//
+//  CenteredClearOfFold.swift
+//  Pantopus
+//
+//  Placeholders and short centered notes keep off the iPhone Duo's fold
+//  (founder, 2026-11-04). Half folded, the Duo's hinge is a crease across
+//  the inner screen: down the middle like a book held sideways, across it
+//  like a laptop held upright. Centered on a screen, a placeholder such as
+//  Messages' "Pick a conversation" sits right on it. Apple reports the
+//  hinge as a division region, active only while the Duo is half folded
+//  (lying open it is flat, and inactive); this centers the content in the
+//  larger part beside it instead, when the content fits there. Open flat,
+//  closed and on every other iPhone, it centers as before.
+//
+
+import SwiftUI
+
+public extension View {
+    /// Fills the space offered and centers this view in it, as `.frame(maxWidth: .infinity, maxHeight: .infinity)`
+    /// does; while the iPhone Duo is half folded across it, in the larger part beside the fold instead, when this
+    /// view fits there. For placeholders and short notes (an empty column, an error with Try again), not for content
+    /// that scrolls.
+    func centeredClearOfFold() -> some View {
+        modifier(CenteredClearOfFold())
+    }
+}
+
+private struct CenteredClearOfFold: ViewModifier {
+    /// The active fold where it crosses this view, with the room to keep clear beside it, in its own coordinates.
+    @State private var fold: CGRect?
+
+    func body(content: Content) -> some View {
+        FoldClearCentering(fold: fold) { content }
+            .readsActiveFold($fold)
+    }
+}
+
+/// Centers its one subview in the space offered, or in the larger part beside `fold` when the subview fits there.
+private struct FoldClearCentering: Layout {
+    let fold: CGRect?
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
+        let natural = subviews.first?.sizeThatFits(proposal) ?? .zero
+        return CGSize(width: proposal.width ?? natural.width, height: proposal.height ?? natural.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
+        guard let content = subviews.first else { return }
+        let area = clearArea(in: bounds, for: content) ?? bounds
+        content.place(at: CGPoint(x: area.midX, y: area.midY), anchor: .center, proposal: ProposedViewSize(area.size))
+    }
+
+    /// The larger part of `bounds` beside the fold (the top or leading one when they match), if the fold runs across
+    /// `bounds` and the content fits in that part at its width.
+    private func clearArea(in bounds: CGRect, for content: LayoutSubview) -> CGRect? {
+        guard let fold else { return nil }
+        let crease = fold.offsetBy(dx: bounds.minX, dy: bounds.minY)
+        let sides: [CGRect] = if crease.height > crease.width {
+            [
+                CGRect(x: bounds.minX, y: bounds.minY, width: crease.minX - bounds.minX, height: bounds.height),
+                CGRect(x: crease.maxX, y: bounds.minY, width: bounds.maxX - crease.maxX, height: bounds.height)
+            ]
+        } else {
+            [
+                CGRect(x: bounds.minX, y: bounds.minY, width: bounds.width, height: crease.minY - bounds.minY),
+                CGRect(x: bounds.minX, y: crease.maxY, width: bounds.width, height: bounds.maxY - crease.maxY)
+            ]
+        }
+        // Only a fold through the content's space: one along its edge leaves nothing to avoid.
+        guard sides.allSatisfy({ $0.width > 0 && $0.height > 0 }),
+              let side = sides.max(by: { $0.width * $0.height < $1.width * $1.height }) else { return nil }
+        let size = content.sizeThatFits(ProposedViewSize(width: side.width, height: nil))
+        return size.width <= side.width + 0.5 && size.height <= side.height + 0.5 ? side : nil
+    }
+}
+
+private extension View {
+    /// Keeps `fold` at the iPhone Duo's fold while it is half folded and the fold crosses this view; nil otherwise.
+    @ViewBuilder
+    func readsActiveFold(_ fold: Binding<CGRect?>) -> some View {
+        #if compiler(>=6.4)
+        if #available(iOS 27.1, *) {
+            modifier(ActiveFoldReader(fold: fold))
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+}
+
+#if compiler(>=6.4)
+/// The hinge is a division region. Lying open it is inactive (and left out here); half folded it is active. Its
+/// margins are the room Apple asks to keep clear beside it.
+@available(iOS 27.1, *)
+private struct ActiveFoldReader: ViewModifier {
+    @Binding var fold: CGRect?
+
+    func body(content: Content) -> some View {
+        content.onGeometryChange(for: CGRect?.self) { proxy in
+            let bounds = CGRect(origin: .zero, size: proxy.size)
+            guard let region = proxy.reservedRegions(kind: .division)
+                .first(where: { $0.isActive && $0.frame.intersects(bounds) }) else { return nil }
+            let frame = region.frame
+            let margins = region.margins
+            return CGRect(
+                x: frame.minX - margins.leading,
+                y: frame.minY - margins.top,
+                width: frame.width + margins.leading + margins.trailing,
+                height: frame.height + margins.top + margins.bottom
+            )
+        } action: { fold = $0 }
+    }
+}
+#endif

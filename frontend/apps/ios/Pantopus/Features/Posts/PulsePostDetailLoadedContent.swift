@@ -12,6 +12,8 @@ public struct PulsePostDetailLoadedContent: View {
     private let replyingToName: String?
     private let topBarAction: ContentDetailTopBarAction?
     private let topBarSecondaryAction: ContentDetailTopBarAction?
+    /// Where the reader was down the post, kept by its model through a fold.
+    private let scrollPlace: ScrollPlace?
     /// Organically matched local businesses — empty hides the card.
     private let nearbyProviders: [NearbyProviderRow]
     private let onOpenBusiness: @MainActor (String) -> Void
@@ -38,6 +40,7 @@ public struct PulsePostDetailLoadedContent: View {
         replyingToName: String? = nil,
         topBarAction: ContentDetailTopBarAction? = nil,
         topBarSecondaryAction: ContentDetailTopBarAction? = nil,
+        scrollPlace: ScrollPlace? = nil,
         nearbyProviders: [NearbyProviderRow] = [],
         onOpenBusiness: @escaping @MainActor (String) -> Void = { _ in },
         onBack: @escaping @MainActor () -> Void = {},
@@ -59,6 +62,7 @@ public struct PulsePostDetailLoadedContent: View {
         self.replyingToName = replyingToName
         self.topBarAction = topBarAction
         self.topBarSecondaryAction = topBarSecondaryAction
+        self.scrollPlace = scrollPlace
         self.nearbyProviders = nearbyProviders
         self.onOpenBusiness = onOpenBusiness
         self.onBack = onBack
@@ -108,6 +112,7 @@ public struct PulsePostDetailLoadedContent: View {
             topBarAction: topBarAction,
             topBarSecondaryAction: topBarSecondaryAction,
             onRefresh: onRefresh,
+            scrollPlace: scrollPlace,
             header: {
                 VStack(alignment: .leading, spacing: Spacing.s4) {
                     if detail.post.isRemovedByModerator {
