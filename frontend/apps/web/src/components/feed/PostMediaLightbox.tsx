@@ -3,6 +3,7 @@
 /** Shared Pulse and Beacon viewer for images, Live Photos, videos, and PDFs. */
 
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import FeedMediaImage from './FeedMediaImage';
 import LivePhotoTile from './LivePhotoTile';
@@ -61,7 +62,8 @@ export default function PostMediaLightbox({
     return () => document.removeEventListener('keydown', handler);
   }, [isOpen, count, onClose, step]);
 
-  // Same body-scroll lock PostDetailPanel takes while its lightbox is up.
+  // This viewer owns the lock. A second lock in its parent can restore
+  // "hidden" after this one closes, leaving the feed unable to scroll.
   useEffect(() => {
     if (!isOpen || typeof document === 'undefined') return;
     const previous = document.body.style.overflow;
@@ -71,11 +73,11 @@ export default function PostMediaLightbox({
     };
   }, [isOpen]);
 
-  if (!isOpen || index === null) return null;
+  if (!isOpen || index === null || typeof document === 'undefined') return null;
 
   const slot = resolvePostMediaSlots(urls, mediaTypes, liveUrls)[index];
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
       role="dialog"
@@ -153,6 +155,7 @@ export default function PostMediaLightbox({
             alt=""
             width={1920}
             height={1080}
+            sizes="96vw"
             className="max-h-[min(92vh,1080px)] w-auto max-w-full object-contain"
             priority
             errorFallback={
@@ -176,6 +179,7 @@ export default function PostMediaLightbox({
           {index + 1} / {count}
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }

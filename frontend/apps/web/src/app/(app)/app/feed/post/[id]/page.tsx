@@ -684,18 +684,30 @@ export default function PostDetailPage() {
                   : 'grid-cols-2'
               }`}
             >
-              {post.media_urls.map((url: string, idx: number) => (
-                <div
-                  key={idx}
-                  className={`relative overflow-hidden rounded-xl bg-surface-muted cursor-pointer hover:opacity-90 transition ${
-                    post.media_urls!.length === 1 ? 'aspect-video' : 'aspect-square'
-                  } ${post.media_urls!.length === 3 && idx === 0 ? 'row-span-2 aspect-auto' : ''}`}
-                  onClick={() => setLightboxIdx(idx)}
-                >
-                  <PostMediaPreview url={url} thumbnailUrl={post.media_thumbnails?.[idx]} slot={resolvePostMediaSlots(post.media_urls!, post.media_types, post.media_live_urls)[idx]} onPress={() => setLightboxIdx(idx)} />
-
-                </div>
-              ))}
+              {post.media_urls.map((url: string, idx: number) => {
+                const slot = resolvePostMediaSlots(post.media_urls!, post.media_types, post.media_live_urls)[idx];
+                return (
+                  <div
+                    key={idx}
+                    role={slot.kind === 'live' ? undefined : 'button'}
+                    tabIndex={slot.kind === 'live' ? undefined : 0}
+                    aria-label={slot.kind === 'live' ? undefined : `View attachment ${idx + 1} full size`}
+                    className={`relative overflow-hidden rounded-xl bg-surface-muted cursor-pointer hover:opacity-90 transition ${
+                      post.media_urls!.length === 1 ? 'aspect-video' : 'aspect-square'
+                    } ${post.media_urls!.length === 3 && idx === 0 ? 'row-span-2 aspect-auto' : ''}`}
+                    onClick={() => setLightboxIdx(idx)}
+                    onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget || slot.kind === 'live') return;
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setLightboxIdx(idx);
+                      }
+                    }}
+                  >
+                    <PostMediaPreview url={url} thumbnailUrl={post.media_thumbnails?.[idx]} slot={slot} onPress={() => setLightboxIdx(idx)} />
+                  </div>
+                );
+              })}
             </div>
           )}
 

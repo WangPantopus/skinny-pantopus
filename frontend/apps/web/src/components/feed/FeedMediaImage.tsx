@@ -89,16 +89,18 @@ export function canUseNextImage(src: string): boolean {
   if (/^(data:|blob:)/i.test(src)) return false;
 
   try {
-    const { protocol, hostname } = new URL(src);
+    const { protocol, hostname, pathname } = new URL(src);
     if (protocol !== 'http:' && protocol !== 'https:') return false;
     // Our own S3/CloudFront storage only (the optimizer refuses everyone else's,
-    // such as a news site's CDN, so those load as a plain <img>). Supabase
-    // Storage media keeps loading directly, as before.
+    // such as a news site's CDN, so those load as a plain <img>). Only public
+    // Supabase objects may enter the shared optimizer; signed/private media
+    // must keep loading directly.
     return (
-      hostname === 'localhost' ||
+      (process.env.NODE_ENV === 'development' && ['localhost', '127.0.0.1'].includes(hostname)) ||
       hostname === 'pantopus.com' ||
       hostname === 'www.pantopus.com' ||
-      ((hostname.endsWith('.amazonaws.com') || hostname.endsWith('.cloudfront.net')) && isPantopusMediaUrl(src))
+      (isPantopusMediaUrl(src) && (hostname.endsWith('.amazonaws.com') || hostname.endsWith('.cloudfront.net')
+        || (hostname.endsWith('.supabase.co') && pathname.startsWith('/storage/v1/object/public/'))))
     );
   } catch {
     return false;
@@ -112,31 +114,41 @@ export default function FeedMediaImage({
   height = 600,
   priority,
   errorFallback,
+  sizes = '(max-width: 768px) calc(100vw - 32px), 640px',
   ...props
 }: FeedMediaImageProps) {
   const candidates = useMemo(() => buildFeedMediaCandidates(src), [src]);
   const [candidateIdx, setCandidateIdx] = useState(0);
   const [exhausted, setExhausted] = useState(false);
+  const [bypassOptimizer, setBypassOptimizer] = useState(false);
   const currentSrc = candidates[candidateIdx];
 
   useEffect(() => {
     setCandidateIdx(0);
     setExhausted(false);
+    setBypassOptimizer(false);
   }, [src]);
 
   if (candidates.length === 0 || exhausted) {
-    return errorFallback ?? <div className={className} aria-hidden="true" />;
+    return errorFallback ?? <div className={`${className ?? ''} flex items-center justify-center text-xs text-app-muted`} role="img" aria-label="Image unavailable">Image unavailable</div>;
   }
 
   const handleError = () => {
+    // The source may still be healthy when an optimizer request fails. Try
+    // it directly once before giving up or moving to a legacy URL.
+    if (canUseNextImage(currentSrc) && !bypassOptimizer) {
+      setBypassOptimizer(true);
+      return;
+    }
     if (candidateIdx < candidates.length - 1) {
+      setBypassOptimizer(false);
       setCandidateIdx((idx) => idx + 1);
     } else {
       setExhausted(true);
     }
   };
 
-  if (!canUseNextImage(currentSrc)) {
+  if (!canUseNextImage(currentSrc) || bypassOptimizer) {
     return (
       <img
         alt=""
@@ -157,7 +169,7 @@ export default function FeedMediaImage({
       className={className}
       width={width}
       height={height}
-      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+      sizes={sizes}
       quality={80}
       priority={priority}
       onError={handleError}
