@@ -5,7 +5,6 @@ package app.pantopus.android.ui.screens.homes.maintenance
 import android.app.DatePickerDialog
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -44,7 +43,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,12 +63,10 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
-import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Calendar
-import java.util.UUID
 
 /**
  * P2.9 — Log / Edit maintenance form. Wraps a [FormShellLike]-style
@@ -78,9 +74,8 @@ import java.util.UUID
  * card-grouped fields, no bottom CTA (the top-right `Log` / `Save`
  * action commits).
  *
- * Photos are picked via the system Photo Picker; receipts via
- * [ActivityResultContracts.OpenDocument] so PDFs are accepted alongside
- * images.
+ * One receipt is picked through [ActivityResultContracts.OpenDocument],
+ * uploaded to Home Documents, and linked to the saved maintenance entry.
  */
 @Composable
 fun LogMaintenanceFormScreen(
@@ -92,52 +87,11 @@ fun LogMaintenanceFormScreen(
     val isDirty by viewModel.isDirty.collectAsStateWithLifecycle()
     val event by viewModel.event.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    // Picker launchers live on the screen (not the content composable)
-    // so the content can be exercised under Paparazzi — which does not
-    // provide an `ActivityResultRegistryOwner`.
-    val photoPicker =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.PickVisualMedia(),
-        ) { uri: Uri? ->
-            if (uri == null) return@rememberLauncherForActivityResult
-            scope.launch {
-                val resolver = context.contentResolver
-                val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
-                if (bytes != null) {
-                    viewModel.addPhoto(
-                        MaintenanceDraftFile(
-                            id = UUID.randomUUID().toString(),
-                            filename = "photo-${UUID.randomUUID().toString().take(6)}.jpg",
-                            mimeType = "image/jpeg",
-                            bytes = bytes,
-                        ),
-                    )
-                }
-            }
-        }
-
     val receiptPicker =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.OpenDocument(),
         ) { uri: Uri? ->
-            if (uri == null) return@rememberLauncherForActivityResult
-            scope.launch {
-                val resolver = context.contentResolver
-                val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
-                val name = uri.lastPathSegment?.substringAfterLast('/') ?: "receipt"
-                val mime = resolver.getType(uri) ?: "application/octet-stream"
-                if (bytes != null) {
-                    viewModel.pickReceipt(
-                        MaintenanceDraftFile(
-                            filename = name,
-                            mimeType = mime,
-                            bytes = bytes,
-                        ),
-                    )
-                }
-            }
+            if (uri != null) viewModel.readReceipt(context.contentResolver, uri)
         }
 
     LaunchedEffect(Unit) {
@@ -183,13 +137,6 @@ fun LogMaintenanceFormScreen(
                 onUpdateRecurrence = viewModel::updateRecurrence,
                 onRemovePhoto = viewModel::removePhoto,
                 onClearReceipt = { viewModel.pickReceipt(null) },
-                onLaunchPhotoPicker = {
-                    photoPicker.launch(
-                        PickVisualMediaRequest(
-                            ActivityResultContracts.PickVisualMedia.ImageOnly,
-                        ),
-                    )
-                },
                 onLaunchReceiptPicker = {
                     receiptPicker.launch(arrayOf("image/*", "application/pdf"))
                 },
@@ -393,22 +340,27 @@ internal fun LogMaintenanceFormContent(
 
             FieldGroup("PHOTOS") {
                 Text(
-                    text = "Up to 4 photos.",
+                    text = "Use Attach receipt below to save one PDF or photo. Separate photos are not supported yet.",
                     style = PantopusTextStyle.caption,
                     color = PantopusColors.appTextSecondary,
                 )
                 Spacer(modifier = Modifier.height(Spacing.s2))
-                PhotoGrid(
-                    slots = form.photoSlots(),
-                    onPick = callbacks.onLaunchPhotoPicker,
-                    onRemove = callbacks.onRemovePhoto,
-                )
+                if (form.photos.isNotEmpty()) {
+                    PhotoGrid(
+                        slots = form.photoSlots(),
+                        onPick = callbacks.onLaunchPhotoPicker,
+                        onRemove = callbacks.onRemovePhoto,
+                    )
+                }
             }
 
             FieldGroup("RECEIPT") {
+                if (form.isReadingReceipt) {
+                    Text("Reading receipt…", style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary)
+                }
                 ReceiptBlock(
                     file = form.receipt,
-                    onPick = callbacks.onLaunchReceiptPicker,
+                    onPick = { if (!form.isSubmitting) callbacks.onLaunchReceiptPicker() },
                     onRemove = callbacks.onClearReceipt,
                 )
             }
@@ -999,7 +951,14 @@ private fun ReceiptBlock(
                     maxLines = 1,
                 )
                 Text(
-                    text = if (file.mimeType == "application/pdf") "PDF" else "Image",
+                    text =
+                        if (file.documentId != null) {
+                            "Saved in Home Documents"
+                        } else if (file.mimeType == "application/pdf") {
+                            "PDF"
+                        } else {
+                            "Image"
+                        },
                     style = PantopusTextStyle.caption,
                     color = PantopusColors.appTextSecondary,
                 )

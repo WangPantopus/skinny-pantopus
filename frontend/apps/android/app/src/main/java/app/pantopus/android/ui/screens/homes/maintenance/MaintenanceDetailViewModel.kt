@@ -66,6 +66,9 @@ class MaintenanceDetailViewModel
         private val _state = MutableStateFlow<MaintenanceDetailUiState>(MaintenanceDetailUiState.Loading)
         val state: StateFlow<MaintenanceDetailUiState> = _state.asStateFlow()
 
+        private val _canEdit = MutableStateFlow(false)
+        val canEdit: StateFlow<Boolean> = _canEdit.asStateFlow()
+
         private val _isMutating = MutableStateFlow(false)
         val isMutating: StateFlow<Boolean> = _isMutating.asStateFlow()
 
@@ -102,6 +105,7 @@ class MaintenanceDetailViewModel
         }
 
         private fun clearCopy() {
+            _canEdit.value = false
             _actionError.value = null
             _state.value = MaintenanceDetailUiState.Loading
         }
@@ -132,6 +136,7 @@ class MaintenanceDetailViewModel
             generation: Long,
         ): Stored<GetHomeMaintenanceResponse> {
             val refusal = gate.checkForRead(force) { if (generation == readGeneration) clearCopy() }
+            if (generation == readGeneration) _canEdit.value = refusal == null && gate.can("home.edit")
             if (refusal != null) return Stored(failure = refusal)
             if (generation != readGeneration) return Stored()
             val stored = repo.getHomeMaintenanceStored(homeId, force || !gate.showsCopy)
