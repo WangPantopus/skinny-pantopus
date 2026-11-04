@@ -203,7 +203,7 @@ class PlansMapViewModel
 
         private fun resolveLocation(asked: Boolean = false) {
             viewModelScope.launch {
-                val resolved = locations.resolve()
+                val resolved = locations.resolve(waitForFix = asked)
                 if (resolved != null) {
                     setLocation(resolved)
                 } else {
