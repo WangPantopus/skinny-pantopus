@@ -2249,47 +2249,34 @@ router.put('/:businessId/locations/:locationId/hours', verifyToken, validate(wee
     const { businessId, locationId } = req.params;
     const userId = req.user.id;
 
-    const access = await checkBusinessPermission(businessId, userId, 'hours.edit');
+    // A malformed ID can't name a location, and the 503 below would tell the owner to retry it.
+    if ([businessId, locationId].some((id) => Joi.string().uuid().validate(id).error)) {
+      return res.status(404).json({ error: 'Location not found' });
+    }
+
+    const access = await checkBusinessPermission(businessId, userId, 'hours.edit', { throwOnError: true });
     if (!access.hasAccess) {
       return res.status(403).json({ error: 'No permission to edit hours' });
     }
 
-    // Verify location belongs to business
-    const { data: loc } = await supabaseAdmin
-      .from('BusinessLocation')
-      .select('id')
-      .eq('id', locationId)
-      .eq('business_user_id', businessId)
-      .single();
-
-    if (!loc) {
-      return res.status(404).json({ error: 'Location not found' });
-    }
-
-    // Delete existing hours for this location
-    await supabaseAdmin
-      .from('BusinessHours')
-      .delete()
-      .eq('location_id', locationId);
-
-    // Insert new hours
-    const hoursRows = req.body.hours.map(h => ({
-      location_id: locationId,
-      day_of_week: h.day_of_week,
-      open_time: h.is_closed ? null : h.open_time,
-      close_time: h.is_closed ? null : h.close_time,
-      is_closed: h.is_closed,
-      notes: h.notes || null,
-    }));
-
+    // Verify and lock the location, then replace the week in one transaction.
+    // A failed insert keeps the old schedule; an identical retry keeps row IDs.
     const { data: hours, error } = await supabaseAdmin
-      .from('BusinessHours')
-      .insert(hoursRows)
-      .select();
+      .rpc('replace_business_weekly_hours', {
+        p_business_id: businessId,
+        p_location_id: locationId,
+        p_hours: req.body.hours,
+      });
 
     if (error) {
+      if (error.code === 'P0002') {
+        return res.status(404).json({ error: 'Location not found' });
+      }
+      if (['22007', '22008', '22023', '23502', '23505', '23514'].includes(error.code)) {
+        return res.status(400).json({ error: 'Enter valid hours without duplicate opening times for the same day.' });
+      }
       logger.error('Error saving hours', { error: error.message });
-      return res.status(500).json({ error: 'Failed to save hours' });
+      return res.status(503).json({ error: 'Hours could not be saved right now. Please try again.' });
     }
 
     // Recalculate profile completeness after hours mutation
@@ -2300,7 +2287,7 @@ router.put('/:businessId/locations/:locationId/hours', verifyToken, validate(wee
     res.json({ hours: hours || [] });
   } catch (err) {
     logger.error('Set hours error', { error: err.message });
-    res.status(500).json({ error: 'Failed to save hours' });
+    res.status(503).json({ error: 'Hours could not be saved right now. Please try again.' });
   }
 });
 
