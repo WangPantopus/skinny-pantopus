@@ -142,6 +142,54 @@ public struct BallotNotice: Decodable, Sendable, Hashable {
     public let detail: String?
 }
 
+/// One choice in the drawn live count; every word and number comes written.
+public struct BallotCountOption: Decodable, Sendable, Hashable {
+    public let name: String
+    public let votesLabel: String
+    public let percentLabel: String
+    /// Its share of the race's votes, write-ins included (0–1), for the bar.
+    public let share: Double
+
+    private enum CodingKeys: String, CodingKey {
+        case name, share
+        case votesLabel = "votes_label"
+        case percentLabel = "percent_label"
+    }
+}
+
+public struct BallotCountRace: Decodable, Sendable, Hashable {
+    public let key: String
+    /// `measure`: one Yes/No bar over two options; `candidates`: a bar per choice.
+    public let kind: String
+    public let title: String
+    public let qualifier: String?
+    public let options: [BallotCountOption]
+}
+
+public struct BallotCountFold: Decodable, Sendable, Hashable {
+    public let label: String
+    public let detail: String
+}
+
+public struct BallotCountGroup: Decodable, Sendable, Hashable {
+    public let key: String
+    public let title: String
+    public let races: [BallotCountRace]
+    /// Set when the group starts folded behind one row.
+    public let fold: BallotCountFold?
+}
+
+/// The official count drawn on the card while ballots are counted
+/// (backend ballot/liveResults.js). Any malformed part fails the whole
+/// decode, and the card shows `note`, which carries the count as text.
+public struct BallotLiveCount: Decodable, Sendable, Hashable {
+    public let status: String
+    public let posted: String
+    public let groups: [BallotCountGroup]
+    /// The card's note shown with the drawn count.
+    public let note: String?
+}
+
 /// The Ballot P0 card, present only when the server sent it.
 public struct BallotSummary: Sendable, Hashable {
     public let coverage: BallotCoverage
@@ -153,6 +201,9 @@ public struct BallotSummary: Sendable, Hashable {
     public let chip: String?
     public let line: String?
     public let note: String?
+    /// While ballots are counted in a state with live results: drawn with
+    /// its own note in place of `note`.
+    public let liveCount: BallotLiveCount?
     public let howItWorks: String?
     public let deadlines: [BallotDeadline]
     public let electionDayNotice: BallotNotice?
@@ -167,6 +218,7 @@ public struct BallotSummary: Sendable, Hashable {
 extension BallotSummary {
     enum CodingKeys: String, CodingKey {
         case coverage, phase, today, title, subtitle, chip, line, note, deadlines, governments
+        case liveCount = "live_count"
         case howItWorks = "how_it_works"
         case electionDayNotice = "election_day_notice"
         case primaryAction = "primary_action"
@@ -196,6 +248,7 @@ extension BallotSummary {
             chip: opt(String.self, .chip),
             line: opt(String.self, .line),
             note: opt(String.self, .note),
+            liveCount: opt(BallotLiveCount.self, .liveCount).flatMap { $0.groups.isEmpty ? nil : $0 },
             howItWorks: opt(String.self, .howItWorks),
             deadlines: opt([BallotDeadline].self, .deadlines) ?? [],
             electionDayNotice: opt(BallotNotice.self, .electionDayNotice),
