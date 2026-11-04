@@ -208,12 +208,14 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
       if (data?.notifications != null) {
         const total = Number(data.notifications) || 0;
         if (total !== socketNotifications.current) {
-          // The first push after connecting repeats the counts of this
-          // session's badge read, which always runs at startup (a cold
-          // Messages inbox holds it until its rows paint) and loads the
-          // breakdown too. Only a different total after that read needs another.
+          // The first push after connecting usually repeats the total this
+          // session's startup badge read just loaded with its breakdown. Any
+          // other first push still reads the breakdown: one that arrives before
+          // that read has landed (a read still under way is discarded by this
+          // push, and a cold Messages inbox holds it until its rows paint) or
+          // after it failed.
           const repeatsRead = socketNotifications.current === null
-            && (polledNotifications.current === null || total === polledNotifications.current);
+            && polledNotifications.current !== null && total === polledNotifications.current;
           socketNotifications.current = total;
           if (!repeatsRead) void refreshNotificationContexts();
         }
