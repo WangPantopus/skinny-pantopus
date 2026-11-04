@@ -1,9 +1,10 @@
 // ============================================================
 // Place — "Your ballot", the live count drawn while ballots are counted
 // (the November 3, 2026 results design): a status line, then each race
-// with a bar per choice, or one Yes/No bar for a measure. Every bar is
-// the same neutral slate: no party colors and nothing marks a leader.
-// Statewide races can start folded behind one row.
+// with a bar per choice, or one Yes/No bar for a measure. A candidate's
+// party, as the state words it, sits under the name; the two major
+// parties' bars are blue and red, and everything else is neutral slate.
+// Nothing marks a leader. Statewide races can start folded behind one row.
 //
 // Every word and number comes from the server (civic_election.live_count,
 // backend ballot/liveResults.js); this component only lays them out.
@@ -15,7 +16,16 @@ import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { BallotCountGroup, BallotCountOption, BallotCountRace, BallotLiveCount } from '@pantopus/types';
 
+// The bar (and the party dot) by party: blue and red for the two major
+// parties, the neutral slate for everyone else.
+const TONE_FILL = {
+  democratic: 'bg-blue-600 dark:bg-blue-400',
+  republican: 'bg-red-600 dark:bg-red-400',
+  neutral: 'bg-slate-500 dark:bg-slate-400',
+} as const;
+
 function CandidateRow({ option }: { option: BallotCountOption }) {
+  const fill = TONE_FILL[option.party_tone ?? 'neutral'];
   return (
     <div className="flex flex-col gap-[5px]">
       <div className="flex items-baseline gap-2 text-[14px] leading-[18px]">
@@ -26,8 +36,14 @@ function CandidateRow({ option }: { option: BallotCountOption }) {
         </span>
         <span className="min-w-[46px] text-right font-semibold tabular-nums text-app-text">{option.percent_label}</span>
       </div>
+      {option.party_label ? (
+        <div className="-mt-0.5 flex items-center gap-1.5 text-[12px] leading-[15px] text-app-text-secondary">
+          <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${fill}`} aria-hidden="true" />
+          {option.party_label}
+        </div>
+      ) : null}
       <div className="h-1.5 overflow-hidden rounded-[3px] bg-app-border" aria-hidden="true">
-        <div className="h-full rounded-[3px] bg-slate-500 dark:bg-slate-400" style={{ width: `${Math.min(1, Math.max(0, option.share)) * 100}%` }} />
+        <div className={`h-full rounded-[3px] ${fill}`} style={{ width: `${Math.min(1, Math.max(0, option.share)) * 100}%` }} />
       </div>
     </div>
   );
