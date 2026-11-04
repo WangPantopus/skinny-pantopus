@@ -9,7 +9,7 @@ interface BlockPaletteProps {
 
 export default function BlockPalette({ onAddBlock }: BlockPaletteProps) {
   return (
-    <aside className="w-56 bg-app-surface border-r border-app-border flex flex-col flex-shrink-0 overflow-hidden">
+    <aside id="business-block-palette" className="w-56 bg-app-surface border-r border-app-border flex flex-col flex-shrink-0 overflow-hidden">
       <div className="px-3 py-2 border-b border-app-border-subtle">
         <div className="text-xs font-semibold text-app-text-secondary uppercase tracking-wider">Add Blocks</div>
       </div>
