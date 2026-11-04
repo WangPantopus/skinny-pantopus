@@ -282,7 +282,7 @@ The comprehensive infrastructure proposal is in [#3253](https://github.com/WangP
 | `/app/businesses/[id]/chat` | Valid business-owner entry | 390 px |
 | `/app/businesses/[id]/chat/[roomId]` | Valid business-owner entry | 390 px |
 | `/app/businesses/[id]/dashboard` | Valid business-owner entry | 390 px |
-| `/app/businesses/[id]/pages/[pageId]/edit` | Missing-resource/refusal probe only | — |
+| `/app/businesses/[id]/pages/[pageId]/edit` | Create/edit/save/publish, save failure/retry, public view and reload | 320/390/768/1440 px |
 | `/app/businesses/new` | Entry/redirect/state probe | 390 px |
 | `/app/chat` | Entry/redirect/state probe | 390 px |
 | `/app/chat/[roomId]` | Entry/redirect/state probe | 390 px |
@@ -567,3 +567,43 @@ The comprehensive infrastructure proposal is in [#3253](https://github.com/WangP
 | `/verify-residency/[code]` | Missing-resource/refusal probe only | — |
 
 </details>
+
+
+## Further startup and business-flow checks — November 4
+
+This follow-up adds four unmerged code PRs. Production configuration and infrastructure were not changed.
+
+- [#3271](https://github.com/WangPantopus/skinny-pantopus/pull/3271): clearing optional business profile fields now sends explicit empty values instead of omitting the fields. Before the repair, tagline, public email, phone, website, founded year and employee count all returned after a successful save/reload. All six now stay empty. Description removal was checked too, including a separate signed-out visitor: the removed email/phone/website links and description disappear after reload. Synthetic profile content was restored after the check.
+- [#3274](https://github.com/WangPantopus/skinny-pantopus/pull/3274): the root not-found fallback's server-rendered Next Link pulled the homepage's client chunks into healthy routes. Its ordinary home anchor removes that dependency and still lets middleware choose the signed-in Place or signed-out homepage. Both actual 404 return journeys were checked in the browser, with no JavaScript errors.
+- [#3275](https://github.com/WangPantopus/skinny-pantopus/pull/3275): a failed draft save no longer proceeds to publish an older server revision or clears the unsaved-change warning. Created a page and text block, published it, saved an intermediate draft, then edited again and injected a 503 on saving. Before the repair, the older draft was published with a success toast. Afterward the live page stays unchanged for a signed-out visitor, the editor retains its unsaved text/warning, and retrying without the fault publishes the latest edits. Both views were reloaded. The canvas Add block button also now focuses the editor palette rather than targeting the app sidebar's first `aside`.
+- [#3276](https://github.com/WangPantopus/skinny-pantopus/pull/3276): presentation follow-up stacked on #3275. At 390 px, Publish extended to x=563 and the body field to x=496 inside a clipped workspace. The existing panels now stack on phone widths, the toolbar wraps and stays visible while scrolling, and larger screens retain their columns. Checked 320, 390, 768 and 1440 px, plus editing, saving, preview/edit, publishing and reload at 390 px. Buttons and fields stay within the viewport. This is coverage of the business page builder with valid fixtures, beyond its earlier negative entry probe.
+
+### Startup measurements for #3274
+
+Production builds ran against the same real local backend/database. Three alternating fresh Chrome contexts per build/route used 100 ms network latency, 1.5 Mbps download and 4× CPU slowdown. HTTP cache was disabled and service workers blocked to separate cold loading from the worker's public-asset cache. These are controlled local measurements, not production latency promises.
+
+| Cold entry metric (median of three) | Before | After |
+| --- | ---: | ---: |
+| Messages, first visible inbox rows | 3,321 ms | 2,757 ms |
+| Messages, first API request | 2,719 ms | 2,468 ms |
+| Messages, JavaScript completed by first visible content | 340,508 B | 299,935 B |
+| Place, first usable dashboard | 3,805 ms | 3,502 ms |
+| Place, first API request | 2,892 ms | 2,677 ms |
+
+The homepage chunk was requested on every baseline entry and on none of the repaired entries. The source of the delay is visible before API work starts: downloading and executing unrelated JavaScript postpones hydration and the first data requests. A run with the service worker enabled was kept separate; its cached assets made reloads substantially faster and cannot be mixed into the cold comparison.
+
+A second three-run comparison used a fresh UI login for each run, removed only the access cookie, and opened Messages through the real session-recovery flow. Both builds used the same throttling and cold-cache conditions:
+
+| Expired-access entry metric (median of three) | Before | After |
+| --- | ---: | ---: |
+| Refresh request starts | 2,235 ms | 2,075 ms |
+| Inbox visible after recovery | 5,325 ms | 4,885 ms |
+| JavaScript transferred before refresh | 258,503 B | 242,340 B |
+
+Every run sent one refresh request and had no JavaScript errors. Recovery still requires its own document followed by the authenticated app document. This comparison isolates #3274: neither build includes the still-open session-import and sign-out PRs (#3261/#3269), so these numbers must not be added to the earlier measurements as if they were a combined test. The shared local backend was preserved for the native audits; this was not a new backend deployment or a production trace.
+
+### Checks and remaining scope
+
+The existing web suite passed again: 123 suites / 2,383 tests. Relevant lint and zero-error typecheck gates passed; the startup repair was measured in production builds, and the layout/flow repairs were exercised in Chrome with the real local backend and database. No new unit tests were added. Screenshots and raw runtime records remain outside Git.
+
+This pass closes additional positive-fixture business profile/page-editor coverage. It does not turn the earlier route-entry matrix into full flow certification. Authorized household guest/invite/landlord/admin paths, business location/address-provider flows, payment/provider integrations, Safari/Firefox, accessibility and sustained load checks remain separate gaps. Remaining startup investigation needs a production waterfall after reviewed code changes, plus cold/warm and expired-session timings under the real API/database network path. The infrastructure options and staged rollout remain in `docs/09-web-performance-optimization-plan.md`; no infrastructure change was executed here.
