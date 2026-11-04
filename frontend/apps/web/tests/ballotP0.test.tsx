@@ -529,6 +529,7 @@ describe('Today', () => {
   describe('the reads behind it', () => {
     const flag = api.featureFlags.getFeatureFlag as jest.Mock;
     const primaryHome = api.homes.getPrimaryHome as jest.Mock;
+    const myHomes = api.homes.getMyHomes as jest.Mock;
     const intel = api.place.getPlaceIntelligence as jest.Mock;
     // Lets the reads that would have been sent settle, inside act like the rest.
     const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)); });
@@ -541,6 +542,7 @@ describe('Today', () => {
     beforeEach(() => {
       flag.mockReset();
       primaryHome.mockReset();
+      myHomes.mockReset().mockResolvedValue({ homes: [] }); // older-server fallback
       intel.mockReset();
     });
 
@@ -556,12 +558,13 @@ describe('Today', () => {
 
     it('with ballot_p0 read the primary home, then only the civic_election section, and show the card', async () => {
       flag.mockResolvedValue({ flagName: 'ballot_p0', enabled: true });
-      primaryHome.mockResolvedValue({ home: { id: 'home-1' } });
+      myHomes.mockResolvedValue({ homes: [{ id: 'home-1' }], primary_home: { id: 'home-1' } });
       intel.mockResolvedValue(intelligence(WEEK));
       renderWithClient(<TodayProbe />);
       expect(await screen.findByText('Ballots were mailed by Oct 16')).toBeInTheDocument();
       expect(intel).toHaveBeenCalledTimes(1);
       expect(intel).toHaveBeenCalledWith('home-1', ['civic_election']);
+      expect(primaryHome).not.toHaveBeenCalled();
     });
 
     it('send nothing, not even the flag read, until the page has a session', async () => {
