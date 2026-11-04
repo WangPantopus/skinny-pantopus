@@ -143,6 +143,54 @@ data class BallotNotice(
     val detail: String? = null,
 )
 
+/** One choice in the drawn live count; every word and number comes written. */
+@JsonClass(generateAdapter = true)
+data class BallotCountOption(
+    val name: String,
+    @Json(name = "votes_label") val votesLabel: String,
+    @Json(name = "percent_label") val percentLabel: String,
+    /** Its share of the race's votes, write-ins included (0–1), for the bar. */
+    val share: Double,
+)
+
+@JsonClass(generateAdapter = true)
+data class BallotCountRace(
+    val key: String,
+    /** `measure`: one Yes/No bar over two options; `candidates`: a bar per choice. */
+    val kind: String,
+    val title: String,
+    val qualifier: String? = null,
+    val options: List<BallotCountOption>,
+)
+
+@JsonClass(generateAdapter = true)
+data class BallotCountFold(
+    val label: String,
+    val detail: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class BallotCountGroup(
+    val key: String,
+    val title: String,
+    val races: List<BallotCountRace>,
+    /** Set when the group starts folded behind one row. */
+    val fold: BallotCountFold? = null,
+)
+
+/**
+ * The official count drawn on the card while ballots are counted (backend ballot/liveResults.js). Any malformed part
+ * fails the whole decode, and the card shows [BallotSummary.note], which carries the count as text.
+ */
+@JsonClass(generateAdapter = true)
+data class BallotLiveCount(
+    val status: String,
+    val posted: String,
+    val groups: List<BallotCountGroup>,
+    /** The card's note shown with the drawn count. */
+    val note: String? = null,
+)
+
 /** The Ballot P0 card, present only when the server sent it. */
 data class BallotSummary(
     val coverage: BallotCoverage,
@@ -154,6 +202,8 @@ data class BallotSummary(
     val chip: String? = null,
     val line: String? = null,
     val note: String? = null,
+    /** While ballots are counted in a state with live results: drawn with its own note in place of [note]. */
+    val liveCount: BallotLiveCount? = null,
     val howItWorks: String? = null,
     val deadlines: List<BallotDeadline> = emptyList(),
     val electionDayNotice: BallotNotice? = null,
@@ -191,6 +241,7 @@ data class BallotSummary(
                 chip = fields.text("chip"),
                 line = fields.text("line"),
                 note = fields.text("note"),
+                liveCount = fields.obj("live_count", BallotLiveCount::class.java)?.takeIf { it.groups.isNotEmpty() },
                 howItWorks = fields.text("how_it_works"),
                 deadlines = fields.list("deadlines", BallotDeadline::class.java),
                 electionDayNotice = fields.obj("election_day_notice", BallotNotice::class.java),
@@ -228,6 +279,7 @@ data class BallotSummary(
             "chip" to chip,
             "line" to line,
             "note" to note,
+            "live_count" to json(BallotLiveCount::class.java, liveCount),
             "how_it_works" to howItWorks,
             "deadlines" to jsonList(BallotDeadline::class.java, deadlines),
             "election_day_notice" to json(BallotNotice::class.java, electionDayNotice),

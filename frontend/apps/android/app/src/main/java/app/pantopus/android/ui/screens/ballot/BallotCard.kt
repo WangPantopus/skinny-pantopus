@@ -56,8 +56,11 @@ import app.pantopus.android.ui.theme.pantopusShadow
 // "N days" pill; the deadline timeline; the 44dp primary button (radius
 // 12); the sunken links well (radius 14); the 12sp source line. Every
 // sentence comes from the server (`civic_election`, `ballot_p0`); these
-// composables lay it out and draw nothing they weren't given. Parity twin
-// of iOS `BallotCardView.swift`.
+// composables lay it out and draw nothing they weren't given. While
+// ballots are counted, [BallotLiveCount] draws the official count
+// (`live_count`) over its own note; the plain `note` repeats the count as
+// text for apps that don't draw it. Parity twin of iOS
+// `BallotCardView.swift`.
 
 private val CardShape = RoundedCornerShape(Radii.xl2)
 
@@ -123,7 +126,8 @@ fun BallotCard(
         }
         card.electionDayNotice?.let { BallotNoticeWell(lead = it.lead, detail = it.detail) }
         card.howItWorks?.let { BallotBodyText(it) }
-        card.note?.let { BallotBodyText(it) }
+        card.liveCount?.let { BallotLiveCount(it) }
+        (if (card.liveCount != null) card.liveCount.note else card.note)?.let { BallotBodyText(it) }
         val action = card.primaryAction
         if (action != null && action.kind == "governments" && onOpenGovernments != null) {
             BallotPrimaryButton(
