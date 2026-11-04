@@ -2966,7 +2966,9 @@ router.delete('/:id', verifyToken, async (req, res) => {
         }
         const key = folder + name;
         keys.add(key);
-        if (!/_(?:thumb|card|detail|full|live)\.[a-z0-9]+$/.test(name)) {
+        // Photos, a Live Photo's still among them, have resized copies; PDFs and videos never do. Tell them apart by
+        // the key's extension: a post edit can rewrite media_types.
+        if (!/_(?:thumb|card|detail|full|live)\.[a-z0-9]+$/.test(name) && !/\.(?:pdf|mp4|mov|avi|webm)$/.test(name)) {
           for (const variant of require('../services/marketplace/imageResizeService').getImageVariantKeys(key)) {
             keys.add(variant);
           }
