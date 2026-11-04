@@ -1237,15 +1237,7 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
     }
 
     // Parallel fetch
-    const [
-      { data: bizUser },
-      { data: profile },
-      { data: locations },
-      { data: teamMembers },
-      { data: catalogItems },
-      { data: pages },
-      profileCompleteness,
-    ] = await Promise.all([
+    const results = await Promise.all([
       supabaseAdmin.from('User').select('id, username, name, email, profile_picture_url, cover_photo_url, bio, tagline, average_rating, review_count, account_type, gigs_completed, created_at').eq('id', businessId).single(),
       supabaseAdmin.from('BusinessProfile').select('*').eq('business_user_id', businessId).single(),
       supabaseAdmin.from('BusinessLocation').select('*').eq('business_user_id', businessId).eq('is_active', true).order('sort_order'),
@@ -1256,23 +1248,29 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
       `).eq('business_user_id', businessId).eq('is_active', true).order('created_at'),
       supabaseAdmin.from('BusinessCatalogItem').select('id, name, kind, status, is_featured, price_cents, sort_order').eq('business_user_id', businessId).neq('status', 'archived').order('sort_order').limit(50),
       supabaseAdmin.from('BusinessPage').select('id, slug, title, is_default, published_revision, draft_revision').eq('business_user_id', businessId).order('nav_order'),
-      calculateProfileCompleteness(businessId),
     ]);
+    // Missing reads must not become empty collections or an incomplete setup checklist.
+    if (results.some((result) => result.error)) {
+      return res.status(503).json({ error: 'Business dashboard could not be loaded right now. Please retry.' });
+    }
+    const [{ data: bizUser }, { data: profile }, { data: locations }, { data: teamMembers },
+      { data: catalogItems }, { data: pages }] = results;
+    if (!bizUser || !profile) return res.status(404).json({ error: 'Business not found' });
+
+    const locationIds = (locations || []).map((location) => location.id);
+    const hoursRead = locationIds.length > 0
+      ? Promise.resolve(supabaseAdmin.from('BusinessHours').select('id', { count: 'exact', head: true })
+        .in('location_id', locationIds))
+      : Promise.resolve({ count: 0 });
+    const [hoursResult, profileCompleteness] = await Promise.all([
+      hoursRead,
+      calculateProfileCompleteness(businessId, { profile, locations: locations || [], user: bizUser, hoursRead }),
+    ]);
+    const hasHours = (hoursResult.count || 0) > 0;
 
     // Parse PostGIS
     for (const loc of (locations || [])) {
       if (loc.location) loc.location = parsePostGISPoint(loc.location);
-    }
-
-    // Check if any location has business hours
-    const locationIds = (locations || []).map((l) => l.id);
-    let hasHours = false;
-    if (locationIds.length > 0) {
-      const { count: hoursCount } = await supabaseAdmin
-        .from('BusinessHours')
-        .select('id', { count: 'exact', head: true })
-        .in('location_id', locationIds);
-      hasHours = (hoursCount || 0) > 0;
     }
 
     // Self-attestation records the owner's claim; only reviewed verification
@@ -1317,7 +1315,7 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('Business dashboard error', { error: err.message, businessId: req.params.businessId });
-    res.status(500).json({ error: 'Failed to fetch dashboard' });
+    res.status(err.statusCode === 503 ? 503 : 500).json({ error: 'Failed to fetch dashboard' });
   }
 });
 
