@@ -3,8 +3,9 @@
 // read from the state's own results site while ballots are counted
 // (docs/product/ballot-live-results-plan-2026-11-03.md, Step 1).
 //
-// Washington publishes every county's count on results.votewa.gov. A timer
-// reads that site's small election summary every few seconds and its
+// Washington (results.votewa.gov) and Utah (electionresults.utah.gov)
+// publish every county's count on the same results software. A timer
+// reads a site's small election summary every few seconds and its
 // results data whenever the published version changes, so a card request
 // never waits on the state's site: it reads the last count kept in memory.
 // The site's cache serves copies up to 60 seconds old; nothing here can be
@@ -22,9 +23,12 @@
 const logger = require('../../utils/logger');
 
 // The states whose results Pantopus reads: the site's own JSON API (the
-// one its public results page loads) and the state's name in it.
+// one its public results page loads), the state's name in it, and how its
+// contests name the races a card shows. Washington and Utah run the same
+// results software; Washington groups its contests, Utah only names them.
 const SOURCES = {
-  WA: { api: 'https://results.votewa.gov/results/public/api', jurisdiction: 'washington', fips: '53' },
+  WA: { api: 'https://results.votewa.gov/results/public/api', jurisdiction: 'washington', fips: '53', classify: classifyByGroup },
+  UT: { api: 'https://electionresults.utah.gov/results/public/api', jurisdiction: 'Utah', fips: '49', classify: classifyByName },
 };
 
 const FAST_MS = 5_000; // election night (the election's own date, local time)
@@ -49,12 +53,36 @@ function covers(stateCode) {
 // BALLOT_RESULTS_API another address (an unreachable one shows the fallback).
 function sourceFor(stateCode, electionDate) {
   const source = SOURCES[stateCode];
-  if (!source) return null;
+  if (!source || !/^\d{4}-\d\d-\d\d$/.test(String(electionDate || ''))) return null;
   const local = process.env.NODE_ENV !== 'production';
   const api = (local && process.env.BALLOT_RESULTS_API) || source.api;
-  const electionId = (local && process.env.BALLOT_RESULTS_ELECTION_ID) || String(electionDate || '').replace(/-/g, '');
-  if (!/^\w+$/.test(electionId)) return null;
-  return { key: `${stateCode}:${electionId}:${api}`, api, jurisdiction: source.jurisdiction, fips: source.fips, electionId };
+  // Otherwise the site's own id for the election, found by its date.
+  const electionId = (local && process.env.BALLOT_RESULTS_ELECTION_ID) || null;
+  if (electionId && !/^\w+$/.test(electionId)) return null;
+  return {
+    key: `${stateCode}:${electionDate}:${electionId || ''}:${api}`,
+    api,
+    jurisdiction: source.jurisdiction,
+    fips: source.fips,
+    classify: source.classify,
+    electionDate,
+    electionId,
+  };
+}
+
+// The site lists its elections with their dates ("20261103" in
+// Washington, "General11032026" in Utah).
+async function electionIdFor(reader) {
+  if (reader.electionId) return reader.electionId;
+  const { api, jurisdiction, electionDate } = reader.source;
+  const info = await getJson(`${api}/jurisdictions/${encodeURIComponent(jurisdiction)}`, SUMMARY_TIMEOUT_MS);
+  const elections = info && Array.isArray(info.elections) ? info.elections : [];
+  const match = elections.find((e) => e && String(e.electionDate || '').slice(0, 10) === electionDate);
+  if (!match || typeof match.publicElectionId !== 'string' || !/^\w+$/.test(match.publicElectionId)) {
+    throw new Error('the election is not on the results site');
+  }
+  reader.electionId = match.publicElectionId;
+  return reader.electionId;
 }
 
 // The site's text fields are lists of translations.
@@ -83,12 +111,52 @@ function measureLabel(name) {
   return name.replace(/^Initiative Measure No\.?\s*/i, 'Initiative ');
 }
 
+// Washington groups its contests: "State Measures", "U.S. Congressional
+// Representative" ("Congressional District 3 - U.S. Representative") and
+// "Legislative" ("Legislative District 17 - State Representative Pos. 1").
+function classifyByGroup(name, heading) {
+  if (/^State Measures$/i.test(heading)) return { kind: 'measure', district: null, label: measureLabel(name) };
+  if (/^U\.S\. Congressional Representative$/i.test(heading)) {
+    const district = /Congressional District (\d+)/i.exec(name);
+    return district ? { kind: 'house', district: String(Number(district[1])), label: `U.S. House, District ${Number(district[1])}` } : null;
+  }
+  if (/^Legislative$/i.test(heading)) {
+    const district = /Legislative District (\d+)/i.exec(name);
+    const position = /State Representative,?\s*Pos(?:ition|\.)?\s*(\d+)/i.exec(name);
+    if (district && /State Senator/i.test(name)) {
+      return { kind: 'state_senate', district: String(Number(district[1])), label: `State Senate, District ${Number(district[1])}` };
+    }
+    if (district && position) {
+      return {
+        kind: 'state_house',
+        district: String(Number(district[1])),
+        label: `State House, District ${Number(district[1])}, Position ${Number(position[1])}`,
+      };
+    }
+  }
+  return null;
+}
+
+// Utah names them alone: "U.S. House District 3", "State Senate District 12
+// (Multi-County)", "State House District 7" and "Constitutional Amendment A".
+// Judicial retention and school board races stay on the official page.
+function classifyByName(name) {
+  const house = /^U\.S\. House District (\d+)\b/i.exec(name);
+  if (house) return { kind: 'house', district: String(Number(house[1])), label: `U.S. House, District ${Number(house[1])}` };
+  const senate = /^State Senate District (\d+)\b/i.exec(name);
+  if (senate) return { kind: 'state_senate', district: String(Number(senate[1])), label: `State Senate, District ${Number(senate[1])}` };
+  const stateHouse = /^State House District (\d+)\b/i.exec(name);
+  if (stateHouse) return { kind: 'state_house', district: String(Number(stateHouse[1])), label: `State House, District ${Number(stateHouse[1])}` };
+  if (/^Constitutional Amendment [A-Z]{1,2}$/i.test(name)) return { kind: 'measure', district: null, label: name };
+  return null;
+}
+
 /**
  * The races a card can show, from the site's results data: statewide
  * measures, U.S. House seats and legislative seats, each with its district
  * number. Every other contest stays on the official results page.
  */
-function racesFrom(data) {
+function racesFrom(data, classify = classifyByGroup) {
   const election = data && data.election;
   const items = data && data.ballotItems;
   if (!election || !Array.isArray(election.contestGroups) || !Array.isArray(items)) {
@@ -101,25 +169,7 @@ function racesFrom(data) {
     const name = textOf(item && item.name);
     const options = item && item.summaryResults && item.summaryResults.ballotOptions;
     if (!name || !Array.isArray(options) || !options.length) return;
-    let race = null;
-    if (/^State Measures$/i.test(heading)) {
-      race = { kind: 'measure', district: null, label: measureLabel(name) };
-    } else if (/^U\.S\. Congressional Representative$/i.test(heading)) {
-      const district = /Congressional District (\d+)/i.exec(name);
-      if (district) race = { kind: 'house', district: String(Number(district[1])), label: `U.S. House, District ${Number(district[1])}` };
-    } else if (/^Legislative$/i.test(heading)) {
-      const district = /Legislative District (\d+)/i.exec(name);
-      const position = /State Representative,?\s*Pos(?:ition|\.)?\s*(\d+)/i.exec(name);
-      if (district && /State Senator/i.test(name)) {
-        race = { kind: 'state_senate', district: String(Number(district[1])), label: `State Senate, District ${Number(district[1])}` };
-      } else if (district && position) {
-        race = {
-          kind: 'state_house',
-          district: String(Number(district[1])),
-          label: `State House, District ${Number(district[1])}, Position ${Number(position[1])}`,
-        };
-      }
-    }
+    const race = classify(name, heading);
     if (!race) return;
     const rows = options.map((o) => {
       const optionName = textOf(o && o.name);
@@ -139,7 +189,8 @@ function racesFrom(data) {
 async function refresh(reader) {
   if (reader.inflight) return reader.inflight;
   reader.inflight = (async () => {
-    const { api, jurisdiction, electionId } = reader.source;
+    const { api, jurisdiction, classify } = reader.source;
+    const electionId = await electionIdFor(reader);
     const base = `${api}/elections/${encodeURIComponent(jurisdiction)}/${encodeURIComponent(electionId)}`;
     const summary = await getJson(base, SUMMARY_TIMEOUT_MS);
     const version = summary && typeof summary.publishVersionId === 'string' ? summary.publishVersionId : null;
@@ -149,7 +200,7 @@ async function refresh(reader) {
       return;
     }
     const data = await getJson(`${base}/data`, DATA_TIMEOUT_MS);
-    const races = racesFrom(data);
+    const races = racesFrom(data, classify);
     // The data names the version it holds. The site caches each address on
     // its own, so the data can lag the summary for up to a minute; keeping
     // the data's own version reads it again on the next tick until they agree.
@@ -191,7 +242,9 @@ function keepReading(reader, intervalMs) {
 function readerFor(source) {
   let reader = readers.get(source.key);
   if (!reader) {
-    reader = { source, snapshot: null, inflight: null, running: false, askedAt: 0, intervalMs: SLOW_MS, loggedAt: 0 };
+    reader = {
+      source, electionId: source.electionId, snapshot: null, inflight: null, running: false, askedAt: 0, intervalMs: SLOW_MS, loggedAt: 0,
+    };
     readers.set(source.key, reader);
   }
   return reader;
@@ -274,6 +327,8 @@ module.exports = {
   forCard,
   // Exported for unit tests.
   racesFrom,
+  classifyByGroup,
+  classifyByName,
   cardLines,
   postedLabel,
 };
