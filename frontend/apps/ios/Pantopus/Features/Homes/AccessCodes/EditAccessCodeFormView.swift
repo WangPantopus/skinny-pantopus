@@ -139,14 +139,13 @@ public struct EditAccessCodeFormView: View {
     }
 
     private func refresh() async {
-        async let data: Void = viewModel.load()
-        await viewModel.confirmAccess()
-        await data
+        await viewModel.load()
     }
 
     private func commit(deleting: Bool = false) {
         Task {
-            guard await viewModel.confirmAccess(), canShowContent, isVisible, scenePhase == .active else { return }
+            guard !viewModel.isSaving else { return }
+            guard await viewModel.confirmAccess(), !viewModel.isSaving, canShowContent, isVisible, scenePhase == .active else { return }
             guard deleting || canSaveScope else { return }
             if deleting { await viewModel.delete() } else { await viewModel.submit() }
         }

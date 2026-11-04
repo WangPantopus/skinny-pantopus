@@ -117,7 +117,6 @@ final class AccessCodesViewModel: ListOfRowsDataSource {
     // MARK: - Dependencies
 
     private let api: APIClient
-    private let authority: HomeDashboardAccess
     private let onSelect: @MainActor (AccessCodesTarget) -> Void
     private let clipboard: @MainActor (String) -> Void
 
@@ -139,7 +138,6 @@ final class AccessCodesViewModel: ListOfRowsDataSource {
         self.homeId = homeId
         self.homeName = homeName
         self.api = api
-        authority = HomeDashboardAccess(homeId: homeId, api: api)
         self.onSelect = onSelect
         self.clipboard = clipboard
     }
@@ -224,17 +222,15 @@ final class AccessCodesViewModel: ListOfRowsDataSource {
         let generation = readGeneration
         canManage = false
         revealedIds = []
-        async let access = try? authority.read()
         let endpoint = HomesEndpoints.accessSecrets(homeId: homeId)
         do {
             let response: HomeAccessSecretsResponse = try await api.request(endpoint)
             guard generation == readGeneration, !Task.isCancelled else { return }
             secrets = response.secrets
             loadedOnce = true
-            rebuild()
-            let current = await access
-            guard generation == readGeneration, !Task.isCancelled else { return }
-            canManage = current?.access?.permissions.contains("access.manage") == true
+            canManage = response.canManage == true && response.allowedVisibilities?.contains {
+                AccessVisibility(rawValue: $0) != nil
+            } == true
             rebuild()
         } catch {
             guard generation == readGeneration, !Task.isCancelled else { return }

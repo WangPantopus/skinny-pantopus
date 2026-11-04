@@ -119,11 +119,9 @@ final class EditAccessCodeFormViewModel {
     // MARK: - Dependencies
 
     private let api: APIClient
-    private let authority: HomeDashboardAccess
     private let clipboard: @MainActor (String) -> Void
     private var toastTask: Task<Void, Never>?
     private var readGeneration = 0
-    private var accessGeneration = 0
 
     init(
         homeId: String,
@@ -138,27 +136,54 @@ final class EditAccessCodeFormViewModel {
         self.secretId = secretId
         category = initialCategory ?? .wifi
         self.api = api
-        authority = HomeDashboardAccess(homeId: homeId, api: api)
         self.clipboard = clipboard
         seedDefaultFields()
     }
 
-    /// Confirm the existing secret against current server visibility without waiting for a roster.
+    /// Data and current write capabilities share one server-side secret scope and one request.
     func load() async {
         readGeneration &+= 1
         let generation = readGeneration
         isLoading = true
-        defer { if generation == readGeneration { isLoading = false } }
-        if let secretId {
-            await loadSecret(secretId: secretId, generation: generation)
-        } else {
+        isConfirmingAccess = true
+        hasCurrentAccess = false
+        canManage = false
+        availableVisibilities = []
+        accessError = nil
+        defer {
+            if generation == readGeneration {
+                isLoading = false
+                isConfirmingAccess = false
+            }
+        }
+        do {
+            let response: HomeAccessSecretsResponse = try await api.request(HomesEndpoints.accessSecrets(homeId: homeId))
+            guard generation == readGeneration, !Task.isCancelled else { return }
+            if response.canManage == true {
+                availableVisibilities = Set((response.allowedVisibilities ?? []).compactMap(AccessVisibility.init(rawValue:)))
+            }
+            canManage = !availableVisibilities.isEmpty
+            if let secretId {
+                guard let secret = response.secrets.first(where: { $0.id == secretId }) else {
+                    state = .error("Couldn't find that access code.")
+                    return
+                }
+                if !isDirty { hydrate(from: secret) }
+                // The successful secret read authorizes viewing, including a private setup's creator.
+                hasCurrentAccess = true
+            } else {
+                hasCurrentAccess = canManage
+                if !canManage { accessError = "You don't have permission to add an access code." }
+            }
             state = .editing
+        } catch {
+            guard generation == readGeneration, !Task.isCancelled else { return }
+            state = .error("Couldn't load access code. Try again.")
         }
     }
 
     func suspend() {
         readGeneration &+= 1
-        accessGeneration &+= 1
         hasCurrentAccess = false
         canManage = false
         availableVisibilities = []
@@ -169,40 +194,12 @@ final class EditAccessCodeFormViewModel {
         toast = nil
     }
 
-    /// Fresh authority for the live screen and for each attempted write. The access-code read
-    /// separately confirms that this specific record remains visible to the current account.
+    /// Reconfirm this record and its capabilities before a write without replacing a dirty draft.
     @discardableResult
     func confirmAccess() async -> Bool {
-        accessGeneration &+= 1
-        let generation = accessGeneration
-        hasCurrentAccess = false
-        canManage = false
-        availableVisibilities = []
-        isConfirmingAccess = true
-        accessError = nil
-        defer { if generation == accessGeneration { isConfirmingAccess = false } }
-        do {
-            let current = try await authority.read()
-            guard generation == accessGeneration, !Task.isCancelled else { return false }
-            let permissions = current.access?.permissions ?? []
-            canManage = permissions.contains("access.manage")
-            if canManage {
-                availableVisibilities = [.everyone, .members]
-                if ["owner", "admin", "manager"].contains(current.access?.roleBase ?? "") {
-                    availableVisibilities.insert(.managers)
-                }
-                if permissions.contains("sensitive.view") { availableVisibilities.insert(.sensitive) }
-            }
-            hasCurrentAccess = canManage || (isEditing && permissions.contains {
-                $0 == "access.view_wifi" || $0 == "access.view_codes"
-            })
-            if !hasCurrentAccess { accessError = "You don't have permission to open this access code." }
-            return canManage
-        } catch {
-            guard generation == accessGeneration, !Task.isCancelled else { return false }
-            accessError = "Couldn't confirm your access. Try again."
-            return false
-        }
+        let generation = readGeneration &+ 1
+        await load()
+        return generation == readGeneration && !Task.isCancelled && hasCurrentAccess && canManage
     }
 
     // MARK: - Field updates
@@ -361,25 +358,6 @@ final class EditAccessCodeFormViewModel {
     }
 
     // MARK: - Hydration
-
-    private func loadSecret(secretId: String, generation: Int) async {
-        // Backend has no GET-one endpoint — pull the list and find the
-        // matching row under the server's current access and visibility checks.
-        let endpoint = HomesEndpoints.accessSecrets(homeId: homeId)
-        do {
-            let response: HomeAccessSecretsResponse = try await api.request(endpoint)
-            guard generation == readGeneration, !Task.isCancelled else { return }
-            if let secret = response.secrets.first(where: { $0.id == secretId }) {
-                if !isDirty { hydrate(from: secret) }
-                state = .editing
-            } else {
-                state = .error("Couldn't find that access code.")
-            }
-        } catch {
-            guard generation == readGeneration, !Task.isCancelled else { return }
-            state = .error("Couldn't load access code. Try again.")
-        }
-    }
 
     private func hydrate(from secret: HomeAccessSecretDTO) {
         category = AccessCategory.from(accessType: secret.accessType)

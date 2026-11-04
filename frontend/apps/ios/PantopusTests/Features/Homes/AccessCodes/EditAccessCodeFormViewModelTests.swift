@@ -57,9 +57,8 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
 
     // MARK: - Defaults
 
-    func testAddPoseSeedsWifiCategoryAndMembersVisibility() async {
+    func testAddPoseSeedsWifiCategoryAndMembersVisibility() {
         let vm = makeVM()
-        await vm.load()
 
         XCTAssertEqual(vm.category, .wifi)
         XCTAssertEqual(vm.visibility, .members)
@@ -69,9 +68,8 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
         XCTAssertFalse(vm.isEditing)
     }
 
-    func testAddPoseRespectsInitialCategory() async {
+    func testAddPoseRespectsInitialCategory() {
         let vm = makeVM(initialCategory: .alarm)
-        await vm.load()
 
         XCTAssertEqual(vm.category, .alarm)
         XCTAssertEqual(vm.fields[.category]?.value, "alarm")
@@ -112,9 +110,8 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
 
     // MARK: - Category projection
 
-    func testEachCategorySelectsCleanly() async {
+    func testEachCategorySelectsCleanly() {
         let vm = makeVM()
-        await vm.load()
 
         for category in AccessCategory.allCases {
             vm.selectCategory(category)
@@ -125,9 +122,8 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
 
     // MARK: - Reveal toggle
 
-    func testToggleRevealFlipsRevealState() async {
+    func testToggleRevealFlipsRevealState() {
         let vm = makeVM()
-        await vm.load()
 
         XCTAssertFalse(vm.isRevealed)
         vm.toggleReveal()
@@ -138,10 +134,9 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
 
     // MARK: - Copy
 
-    func testCopyValueWritesClipboardAndShowsCopiedToast() async {
+    func testCopyValueWritesClipboardAndShowsCopiedToast() {
         var copied: String?
         let vm = makeVM { value in copied = value }
-        await vm.load()
 
         vm.update(.label, to: "Main")
         vm.update(.value, to: "Hunter2!")
@@ -152,10 +147,9 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
         XCTAssertEqual(vm.toast?.kind, .success)
     }
 
-    func testCopyValueWithEmptyValueIsNoop() async {
+    func testCopyValueWithEmptyValueIsNoop() {
         var copied: String?
         let vm = makeVM { value in copied = value }
-        await vm.load()
 
         vm.copyValue()
         XCTAssertNil(copied)
@@ -166,7 +160,6 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
 
     func testValidationBlocksSubmitOnEmptyLabel() async {
         let vm = makeVM()
-        await vm.load()
 
         vm.update(.value, to: "Hunter2!")
         XCTAssertFalse(vm.isValid, "Label required")
@@ -176,9 +169,8 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
         XCTAssertEqual(vm.fields[.label]?.error, "Label is required.")
     }
 
-    func testValidationBlocksSubmitOnEmptyValue() async {
+    func testValidationBlocksSubmitOnEmptyValue() {
         let vm = makeVM()
-        await vm.load()
 
         vm.update(.label, to: "Main")
         XCTAssertFalse(vm.isValid, "Code required")
@@ -192,6 +184,7 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
          "label":"Main","secret_value":"Hunter2!","visibility":"members"}}
         """
         SequencedURLProtocol.sequence = [
+            .status(200, body: "{\"secrets\":[]}"),
             .status(201, body: createResponse)
         ]
         let vm = makeVM()
@@ -226,6 +219,7 @@ final class EditAccessCodeFormViewModelTests: XCTestCase {
 
     func testSubmitFailureSurfacesErrorToast() async {
         SequencedURLProtocol.sequence = [
+            .status(200, body: "{\"secrets\":[]}"),
             .status(500, body: "{\"error\":\"Failed to create access secret\"}")
         ]
         let vm = makeVM()
