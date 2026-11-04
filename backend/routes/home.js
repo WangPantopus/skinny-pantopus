@@ -3027,13 +3027,12 @@ const MAINTENANCE_CATEGORY_VALUES = new Set([
 const maintenanceCostSchema = Joi.number().min(0).max(9999999999.99)
   .precision(2).strict().allow(null).optional();
 
-async function visibleMaintenanceDocuments(homeId, userId, documentIds) {
+// `access` is the route's own current read (maintenance.view or home.edit). It
+// carries the viewer's full effective permissions, so docs.view needs no second read.
+async function visibleMaintenanceDocuments(homeId, userId, access, documentIds) {
   const ids = [...new Set(documentIds.filter(Boolean))];
-  if (!ids.length) return new Set();
+  if (!ids.length || !access.permissions?.includes('docs.view')) return new Set();
   const unavailable = () => Object.assign(new Error('Document access could not be checked. Please retry.'), { statusCode: 503 });
-  const access = await checkHomePermission(homeId, userId, 'docs.view');
-  if (access.readFailed) throw unavailable();
-  if (!access.hasAccess) return new Set();
   const visibility = await homeDocumentVisibilities(homeId, userId, access);
   if (visibility.readFailed) throw unavailable();
   const { data, error } = await supabaseAdmin.from('HomeDocument').select('id')
@@ -3042,13 +3041,13 @@ async function visibleMaintenanceDocuments(homeId, userId, documentIds) {
   return new Set((data || []).map(document => document.id));
 }
 
-async function validateMaintenanceDocument(homeId, userId, documentId) {
+async function validateMaintenanceDocument(homeId, userId, access, documentId) {
   if (Joi.string().uuid().allow(null).optional().validate(documentId).error) {
     throw Object.assign(new Error('Invalid maintenance document.'), { statusCode: 400 });
   }
   if (documentId == null) return documentId;
   const id = documentId.toLowerCase();
-  if (!(await visibleMaintenanceDocuments(homeId, userId, [id])).has(id)) {
+  if (!(await visibleMaintenanceDocuments(homeId, userId, access, [id])).has(id)) {
     throw Object.assign(new Error('Document not found or unavailable for this home.'), { statusCode: 404 });
   }
   return id;
@@ -3056,8 +3055,8 @@ async function validateMaintenanceDocument(homeId, userId, documentId) {
 
 // Maintenance permission does not grant document permission. Resolve references
 // in one batch, without exposing restricted document IDs or their storage paths.
-async function serializeMaintenance(homeId, userId, tasks) {
-  const visible = await visibleMaintenanceDocuments(homeId, userId, tasks.map(task => task.document_id));
+async function serializeMaintenance(homeId, userId, access, tasks) {
+  const visible = await visibleMaintenanceDocuments(homeId, userId, access, tasks.map(task => task.document_id));
   return tasks.map(task => task.document_id && !visible.has(task.document_id) ? { ...task, document_id: null } : task);
 }
 
@@ -3102,7 +3101,7 @@ router.get('/:id/maintenance', verifyToken, requireSharedHomeContent, async (req
       return res.status(500).json({ error: 'Failed to fetch maintenance' });
     }
 
-    res.json({ tasks: await serializeMaintenance(homeId, userId, data || []) });
+    res.json({ tasks: await serializeMaintenance(homeId, userId, access, data || []) });
   } catch (err) {
     logger.error('Maintenance fetch error', { error: err.message });
     if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
@@ -3155,7 +3154,7 @@ router.post('/:id/maintenance', verifyToken, requireSharedHomeContent, async (re
     if (clientRequestId != null && Joi.string().uuid().validate(clientRequestId).error) {
       return res.status(400).json({ error: 'Invalid maintenance request' });
     }
-    const documentId = await validateMaintenanceDocument(homeId, userId, document_id);
+    const documentId = await validateMaintenanceDocument(homeId, userId, access, document_id);
 
     const logId = clientRequestId == null ? null : crypto.createHash('sha256')
       .update('pantopus:maintenance-log:v1:' + homeId.toLowerCase() + ':' + userId.toLowerCase() + ':' + clientRequestId.toLowerCase())
@@ -3195,7 +3194,7 @@ router.post('/:id/maintenance', verifyToken, requireSharedHomeContent, async (re
           (row.performed_at !== undefined && Date.parse(existing.performed_at) !== Date.parse(row.performed_at))) {
         return res.status(409).json({ error: 'This maintenance request no longer matches the saved entry. Start a new entry for different details.' });
       }
-      return res.status(201).json({ task: (await serializeMaintenance(homeId, userId, [existing]))[0] });
+      return res.status(201).json({ task: (await serializeMaintenance(homeId, userId, access, [existing]))[0] });
     };
     if (logId) {
       const existing = await readRetry();
@@ -3252,7 +3251,7 @@ router.put('/:id/maintenance/:taskId', verifyToken, requireSharedHomeContent, as
       if (req.body && req.body[key] !== undefined) updates[key] = req.body[key];
     }
     if (updates.document_id !== undefined) {
-      updates.document_id = await validateMaintenanceDocument(homeId, userId, updates.document_id);
+      updates.document_id = await validateMaintenanceDocument(homeId, userId, access, updates.document_id);
     }
 
     if (maintenanceCostSchema.validate(updates.cost).error) {
@@ -3310,7 +3309,7 @@ router.put('/:id/maintenance/:taskId', verifyToken, requireSharedHomeContent, as
     // returns a document reference the editor can no longer view. Omission keeps
     // the stored link; only an explicit null detaches it, without deleting bytes.
     const visibleDocuments = updates.document_id === undefined
-      ? await visibleMaintenanceDocuments(homeId, userId, [current.document_id])
+      ? await visibleMaintenanceDocuments(homeId, userId, access, [current.document_id])
       : new Set([updates.document_id]);
 
     const { data, error } = await supabaseAdmin
