@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { FileText, Plus, X, Trash2 } from 'lucide-react';
 import Image from 'next/image';
 import * as api from '@pantopus/api';
@@ -66,6 +67,10 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
   const [failedPage, setFailedPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [showCreate, setShowCreate] = useState(false);
+  // The New Invoice dialog renders on document.body: AppShell's <main> is its own stacking context, so from
+  // inside it the header and the floating + button stayed above the dialog (the + covered Send on phones).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const listGeneration = useRef(0);
   const listBusy = useRef(false);
   const listScope = useRef<string | null>(null);
@@ -321,8 +326,8 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
       </>}
 
       {/* Create Invoice Modal */}
-      {canManage && showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      {canManage && showCreate && mounted && createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
           <div className="w-full max-w-lg mx-4 bg-app-surface rounded-xl shadow-2xl border border-app-border max-h-[90vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-app-border-subtle">
               <h3 className="text-base font-semibold text-app-text">New Invoice</h3>
@@ -377,15 +382,15 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
               <div>
                 <label className="text-xs text-app-text-secondary mb-1 block">Line Items</label>
                 {lineItems.map((item, i) => (
-                  <div key={i} className="flex items-center gap-2 mb-2">
+                  <div key={i} className="flex flex-wrap sm:flex-nowrap items-center gap-2 mb-2">
                     <input type="text" value={item.description} onChange={e => updateLineItem(i, 'description', e.target.value)} placeholder="Description" aria-label={`Line ${i + 1} description`}
-                      className="flex-[2] text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                      className="w-full min-w-0 sm:flex-[2] text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
                     <input type="text" value={item.amount} onChange={e => updateLineItem(i, 'amount', e.target.value)} placeholder="$0.00" inputMode="decimal" aria-label={`Line ${i + 1} unit amount`}
-                      className="flex-1 text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                      className="min-w-0 flex-1 text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
                     <input type="text" value={item.quantity} onChange={e => updateLineItem(i, 'quantity', e.target.value)} placeholder="1" inputMode="numeric" aria-label={`Line ${i + 1} quantity`}
-                      className="w-12 text-sm px-2 py-2 border border-app-border rounded-lg bg-app-surface text-app-text text-center focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                      className="w-12 shrink-0 text-sm px-2 py-2 border border-app-border rounded-lg bg-app-surface text-app-text text-center focus:outline-none focus:ring-1 focus:ring-violet-500" />
                     {lineItems.length > 1 && (
-                      <button aria-label="Remove line item" onClick={() => setLineItems(prev => prev.filter((_, j) => j !== i))} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></button>
+                      <button aria-label="Remove line item" onClick={() => setLineItems(prev => prev.filter((_, j) => j !== i))} className="shrink-0 text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4" /></button>
                     )}
                   </div>
                 ))}
@@ -416,7 +421,8 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
