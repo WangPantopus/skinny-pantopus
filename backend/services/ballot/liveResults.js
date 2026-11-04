@@ -15,7 +15,8 @@
 //   • only numbers read from the state's site, with the state's own publish
 //     time; never "won", "leading" or "projected";
 //   • a race shows only when the address's district number matches it
-//     exactly, in the same state; statewide measures are on every ballot;
+//     exactly, in the same state; statewide measures and Washington's
+//     Supreme Court seats are on every ballot;
 //   • "no votes counted yet" only from a read that saw none, and a count
 //     that could not be re-checked for STALE_AFTER_MS is not shown at all;
 //   • the count never steps back to one the state posted earlier.
@@ -113,10 +114,17 @@ function measureLabel(name) {
 }
 
 // Washington groups its contests: "State Measures", "U.S. Congressional
-// Representative" ("Congressional District 3 - U.S. Representative") and
-// "Legislative" ("Legislative District 17 - State Representative Pos. 1").
+// Representative" ("Congressional District 3 - U.S. Representative"),
+// "Legislative" ("Legislative District 17 - State Representative Pos. 1")
+// and "Judicial" ("Supreme Court - Justice Position #01"). Supreme Court
+// seats are statewide; the other courts' districts aren't known here, so
+// they stay on the official page.
 function classifyByGroup(name, heading) {
   if (/^State Measures$/i.test(heading)) return { kind: 'measure', district: null, label: measureLabel(name) };
+  if (/^Judicial$/i.test(heading)) {
+    const seat = /^Supreme Court\b.*\bPosition\s*#?\s*(\d+)/i.exec(name);
+    return seat ? { kind: 'supreme_court', district: null, label: `State Supreme Court, Position ${Number(seat[1])}` } : null;
+  }
   if (/^U\.S\. Congressional Representative$/i.test(heading)) {
     const district = /Congressional District (\d+)/i.exec(name);
     return district ? { kind: 'house', district: String(Number(district[1])), label: `U.S. House, District ${Number(district[1])}` } : null;
@@ -154,8 +162,9 @@ function classifyByName(name) {
 
 /**
  * The races a card can show, from the site's results data: statewide
- * measures, U.S. House seats and legislative seats, each with its district
- * number. Every other contest stays on the official results page.
+ * measures, Washington's Supreme Court seats, U.S. House seats and
+ * legislative seats, each with its district number. Every other contest
+ * stays on the official results page.
  */
 function racesFrom(data, classify = classifyByGroup) {
   const election = data && data.election;
@@ -285,7 +294,8 @@ function postedLabel(iso, zone, today) {
   return LOCAL_DATE(zone).format(at) === today ? clock : `${LOCAL_MONTH_DAY(zone).format(at)}, ${clock}`;
 }
 
-const KIND_ORDER = { house: 0, state_senate: 1, state_house: 2, measure: 3 };
+const KIND_ORDER = { house: 0, state_senate: 1, state_house: 2, supreme_court: 3, measure: 4 };
+const STATEWIDE = new Set(['supreme_court', 'measure']);
 
 /**
  * The card's lines for one address from one count: `{ header, lines }`,
@@ -294,7 +304,7 @@ const KIND_ORDER = { house: 0, state_senate: 1, state_house: 2, measure: 3 };
 function cardLines(snapshot, { districts, fips, zone, today }) {
   const own = districts && districts.state_fips === fips ? districts : {};
   const wanted = snapshot.races.filter((race) => {
-    if (race.kind === 'measure') return true;
+    if (STATEWIDE.has(race.kind)) return true;
     if (race.kind === 'house') return race.district === own.congressional;
     if (race.kind === 'state_senate') return race.district === own.state_upper;
     return race.district === own.state_lower;
