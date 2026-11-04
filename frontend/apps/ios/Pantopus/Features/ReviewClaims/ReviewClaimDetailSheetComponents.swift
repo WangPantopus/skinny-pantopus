@@ -26,12 +26,6 @@ struct ChallengeComposerSheet: View {
     private let charLimit = 600
 
     var body: some View {
-        NavigationStack {
-            content.toolbar(.hidden, for: .navigationBar)
-        }
-    }
-
-    private var content: some View {
         VStack(spacing: Spacing.s4) {
             Capsule()
                 .fill(Theme.Color.appBorderStrong)
@@ -60,12 +54,6 @@ struct ChallengeComposerSheet: View {
         .background(Theme.Color.appSurface)
         .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.fraction(0.78), .large])
         .presentationDragIndicator(.hidden)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") { questionFocused = false }
-            }
-        }
         .accessibilityIdentifier("reviewClaimDetail_challengeComposer")
     }
 
@@ -91,6 +79,9 @@ struct ChallengeComposerSheet: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
             Spacer(minLength: Spacing.s0)
+            if questionFocused {
+                SheetKeyboardDoneButton { questionFocused = false }
+            }
         }
     }
 
@@ -171,7 +162,7 @@ struct ChallengeComposerSheet: View {
     }
 
     private var actions: some View {
-        actionsLayout {
+        dynamicTypeSize.claimActionLayout {
             Button(action: onBack) {
                 Text("Back")
                     .scaledFont(14, weight: .semibold)
@@ -210,12 +201,6 @@ struct ChallengeComposerSheet: View {
             .disabled(!canSend || isSubmitting)
             .accessibilityIdentifier("reviewClaimDetail_sendChallenge")
         }
-    }
-
-    private var actionsLayout: AnyLayout {
-        dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: Spacing.s2))
-            : AnyLayout(HStackLayout(spacing: Spacing.s2))
     }
 
     private func fieldLabel(_ text: String, required: Bool) -> some View {
@@ -330,12 +315,6 @@ struct ReviewClaimNoteCaptureSheet: View {
     let onCancel: () -> Void
 
     var body: some View {
-        NavigationStack {
-            content.toolbar(.hidden, for: .navigationBar)
-        }
-    }
-
-    private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s4) {
                 HStack {
@@ -343,9 +322,13 @@ struct ReviewClaimNoteCaptureSheet: View {
                         .scaledFont(18, weight: .bold)
                         .foregroundStyle(Theme.Color.appText)
                     Spacer(minLength: Spacing.s0)
+                    if noteFocused {
+                        SheetKeyboardDoneButton { noteFocused = false }
+                    }
                     Button(action: onCancel) {
                         Icon(.x, size: 22, color: Theme.Color.appTextSecondary)
                             .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Close")
@@ -399,15 +382,27 @@ struct ReviewClaimNoteCaptureSheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Theme.Color.appSurface)
         .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") { noteFocused = false }
-            }
-        }
     }
 
     private var primaryBackground: Color {
         primaryRole == .destructive ? Theme.Color.errorSolid : Theme.Color.primarySolid
+    }
+}
+
+/// Closes the keyboard from a review sheet's header while its editor has focus. The keyboard's own floating Done
+/// covered the bottom of Save request on iOS 27.1 (the closed iPhone Duo), so the sheets keep it up here.
+private struct SheetKeyboardDoneButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text("Done")
+                .scaledFont(15, weight: .semibold)
+                .foregroundStyle(Theme.Color.primaryInk)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("reviewClaimDetail_keyboardDone")
     }
 }

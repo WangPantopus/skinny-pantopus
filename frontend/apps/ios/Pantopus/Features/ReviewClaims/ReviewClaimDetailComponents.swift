@@ -179,8 +179,9 @@ struct ClaimantCard: View {
     let model: ClaimantCardModel
 
     var body: some View {
+        let header = dynamicTypeSize.claimHeaderLayout(alignment: .top)
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            claimantLayout {
+            header {
                 avatar
                 VStack(alignment: .leading, spacing: 2) {
                     nameLayout {
@@ -224,12 +225,6 @@ struct ClaimantCard: View {
                 .stroke(Theme.Color.appBorderSubtle, lineWidth: 1)
         )
         .shadow(color: Theme.Color.appText.opacity(0.04), radius: 3, y: 1)
-    }
-
-    private var claimantLayout: AnyLayout {
-        dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.s3))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: Spacing.s3))
     }
 
     private var nameLayout: AnyLayout {

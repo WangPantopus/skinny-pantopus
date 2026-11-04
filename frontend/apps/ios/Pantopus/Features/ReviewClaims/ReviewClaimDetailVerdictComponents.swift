@@ -139,7 +139,7 @@ struct VerdictBar: View {
             .accessibilityIdentifier("reviewClaimDetail_accept")
             .accessibilityLabel(acceptLabel)
 
-            secondaryActionsLayout {
+            dynamicTypeSize.claimActionLayout {
                 VerdictButton(
                     style: .challenge,
                     label: "Request info",
@@ -172,12 +172,6 @@ struct VerdictBar: View {
                 .stroke(Theme.Color.appBorderSubtle, lineWidth: 1)
         )
         .shadow(color: Theme.Color.appText.opacity(0.08), radius: 12, y: 4)
-    }
-
-    private var secondaryActionsLayout: AnyLayout {
-        dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: Spacing.s2))
-            : AnyLayout(HStackLayout(spacing: Spacing.s2))
     }
 }
 
