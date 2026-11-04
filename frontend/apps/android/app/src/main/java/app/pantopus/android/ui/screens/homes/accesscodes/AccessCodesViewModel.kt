@@ -117,11 +117,6 @@ class AccessCodesViewModel
         /** Pull-to-refresh. */
         fun refresh() = reload()
 
-        /** Back from adding, editing or deleting a code: read the list again (the first read stays with [load]). */
-        fun refreshIfLoaded() {
-            if (loadedOnce) reload()
-        }
-
         /** Secret values only live in the foreground visit that fetched them. */
         fun resume() {
             active = true
