@@ -6,6 +6,8 @@
 //  whole list pulled up (F2: Your plans, then each day, then More nearby
 //  with Pulse and Connections while the Pulse redesign is on), a tapped
 //  pin's card (F3), "Nothing planned yet" (F4) and "See plans near you" (F5).
+//  In the column beside the map (the open iPhone Duo) it is the whole list,
+//  scrolling, with no stops: a tapped pin opens its plan in the column.
 //
 
 import SwiftUI
@@ -14,6 +16,8 @@ struct PlansSheetContent: View {
     let viewModel: PlansMapViewModel
     let actions: PlansMapActions
     let onStop: (PlansSheetStop) -> Void
+    /// In the list's column beside the map instead of the sheet over it.
+    var inColumn = false
 
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -32,7 +36,7 @@ struct PlansSheetContent: View {
     }
 
     @ViewBuilder private var ready: some View {
-        if let id = viewModel.selectedId {
+        if let id = viewModel.selectedId, !inColumn {
             PlanPinCard(viewModel: viewModel, planId: id, actions: actions)
         } else if !viewModel.listLoaded, let error = viewModel.listError {
             errorState(error)
@@ -40,10 +44,10 @@ struct PlansSheetContent: View {
             loading
         } else if viewModel.isEmpty {
             PlansEmptyCard(viewModel: viewModel, actions: actions)
-        } else if viewModel.sheetStop == .peek {
+        } else if viewModel.sheetStop == .peek, !inColumn {
             peek
         } else {
-            PlansListSheet(viewModel: viewModel, actions: actions, onStop: onStop)
+            PlansListSheet(viewModel: viewModel, actions: actions, onStop: onStop, showsMapButton: !inColumn)
         }
     }
 
@@ -191,6 +195,8 @@ struct PlansListSheet: View {
     let viewModel: PlansMapViewModel
     let actions: PlansMapActions
     let onStop: (PlansSheetStop) -> Void
+    /// "Back to the map", which a list beside the map doesn't need.
+    var showsMapButton = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -232,14 +238,16 @@ struct PlansListSheet: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             // Ask is the chrome's sparkle just above: the list stops under it now.
-            Button { onStop(.peek) } label: {
-                Icon(.map, size: 20, color: Theme.Color.appText)
-                    .frame(width: 44, height: 44)
-                    .background(Circle().fill(Theme.Color.appSurfaceSunken))
+            if showsMapButton {
+                Button { onStop(.peek) } label: {
+                    Icon(.map, size: 20, color: Theme.Color.appText)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(Theme.Color.appSurfaceSunken))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back to the map")
+                .accessibilityIdentifier("plansBackToMap")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Back to the map")
-            .accessibilityIdentifier("plansBackToMap")
         }
         .padding(.bottom, Spacing.s2)
     }

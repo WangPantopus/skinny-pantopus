@@ -2,12 +2,14 @@
 //  PlansMapView.swift
 //  Pantopus
 //
-//  Nearby on the map (board F1), when the `plans` flag is on: the MapKit
-//  canvas, full screen under the floating chrome, with the Plans pins, areas
-//  and clusters of board P1 and the "you" dot from the system, and the
-//  three-stop sheet (`PlansMapSheet`). The sheet holds the list (F2), a
-//  tapped pin's card (F3), "Nothing planned yet" (F4) and "See plans near
-//  you" (F5).
+//  Nearby on the map (board F1), when the `plans` flag is on: the map
+//  (`PlansMapCanvas`: the pins, areas and clusters of board P1 and the "you"
+//  dot), full screen under the floating chrome, and the three-stop sheet
+//  (`PlansMapSheet`). The sheet holds the list (F2), a tapped pin's card
+//  (F3), "Nothing planned yet" (F4) and "See plans near you" (F5). On a
+//  wide screen (the iPhone Duo open, held sideways) the Plans tab shows the
+//  list in a column beside the map instead (`PlansListColumn`,
+//  `PlansMapBeside`).
 //
 
 import MapKit
@@ -20,21 +22,16 @@ struct PlansMapView: View {
     @State private var camera: MapCameraPosition = .automatic
     /// The area pill and chips' height: the sheet's full stop sits under them, and the first look keeps pins out from under them.
     @State private var chromeHeight: CGFloat = 0
-    @State private var showsAreaPicker = false
-    /// When a pin was last tapped: the same touch also reaches the map's own
-    /// tap (which clears a selection) and must not undo the pin's.
-    @State private var pinTappedAt: Date?
     @State private var flags = PlansFlags.shared
-    /// The assistant, opened from the header about plans.
-    @State private var askTopic: AIAskTopic?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let tabActions: PlansMapActions
+    private let actions: PlansMapActions
 
-    init(viewModel: PlansMapViewModel = PlansMapViewModel(), actions: PlansMapActions) {
+    /// The Plans tab holds `viewModel`, so a new layout of this screen keeps its plans, filters and selection.
+    init(viewModel: PlansMapViewModel, actions: PlansMapActions) {
         _viewModel = State(initialValue: viewModel)
         _drag = State(initialValue: PlansSheetDrag(viewModel: viewModel))
-        tabActions = actions
+        self.actions = actions
     }
 
     var body: some View {
@@ -49,9 +46,10 @@ struct PlansMapView: View {
                 PlansMapTopBar(
                     viewModel: viewModel,
                     showsPlaydates: flags.playdates && viewModel.showsPlaydateFilter,
-                    onAsk: actions.ask
-                ) { showsAreaPicker = true }
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chromeHeight = $0 }
+                    onAsk: actions.ask,
+                    onAreaTap: actions.areaPicker
+                )
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chromeHeight = $0 }
             }
             .ignoresSafeArea(edges: .bottom)
             // Over the map and the chrome, but not in their stack: a child taller than the safe area
@@ -75,12 +73,7 @@ struct PlansMapView: View {
         .refreshesOnStoreChange(affects: { PlansStoreReads.affects($0) }, perform: { await viewModel.start() })
         .onChange(of: viewModel.recenterRequest) { _, _ in recenter() }
         .onChange(of: reduceMotion, initial: true) { _, reduce in drag.reduceMotion = reduce }
-        .sheet(isPresented: $showsAreaPicker) {
-            PlansAreaPicker(viewModel: viewModel) { showsAreaPicker = false }
-                .presentationDetents([.medium, .large])
-                .presentationBackground(Theme.Color.appSurface)
-        }
-        .askPantopus($askTopic)
+        .onAppear(perform: restoreCamera)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plansMap")
@@ -89,131 +82,30 @@ struct PlansMapView: View {
     // MARK: - Map
 
     private var mapLayer: some View {
-        Map(position: $camera, interactionModes: [.pan, .zoom]) {
-            UserAnnotation()
-            ForEach(areas, id: \.id) { area in
-                MapCircle(center: area.coordinate, radius: area.radius)
-                    .foregroundStyle(area.kind.color.opacity(0.2))
-            }
-            ForEach(viewModel.markers) { marker in
-                switch marker {
-                case let .pin(pin):
-                    Annotation("", coordinate: marker.coordinate, anchor: .center) {
-                        pinButton(pin)
-                    }
-                    .annotationTitles(.hidden)
-                case let .fan(pins):
-                    Annotation("", coordinate: marker.coordinate, anchor: .center) {
-                        // Plans sharing one point sit side by side, the point between them.
-                        HStack(spacing: PlansClustering.fanStep - PlanPinView.width) {
-                            ForEach(pins) { pin in
-                                pinButton(pin).zIndex(pin.id == viewModel.selectedId ? 1 : 0)
-                            }
-                        }
-                    }
-                    .annotationTitles(.hidden)
-                case let .cluster(cluster):
-                    Annotation("", coordinate: marker.coordinate, anchor: .center) {
-                        Button { zoom(to: cluster) } label: {
-                            PlanClusterView(count: cluster.count, kinds: cluster.kinds, badge: cluster.badge)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(PlansPinSpeech.label(for: cluster))
-                        .accessibilityHint("Zooms in")
-                    }
-                    .annotationTitles(.hidden)
-                }
-            }
-        }
-        // F4 and F5 dim the map with MapKit's own muted style: a filter on the live map redrew all
-        // of it off screen on every frame, and an overlay that ignores the safe area moved the map down.
-        .mapStyle(.standard(emphasis: dimsMap ? .muted : .automatic, pointsOfInterest: .excludingAll))
-        .onMapCameraChange(frequency: .onEnd) { context in
-            viewModel.cameraChanged(context.region)
-        }
-        .onTapGesture {
-            if let pinTappedAt, Date().timeIntervalSince(pinTappedAt) < 0.5 { return }
+        PlansMapCanvas(
+            viewModel: viewModel,
+            camera: $camera,
+            selectedId: viewModel.selectedId,
+            pinHint: "Opens the plan's card",
+            onPin: select,
+            onCluster: zoom(to:)
+        ) {
             if viewModel.selectedId != nil { withSheetAnimation { viewModel.clearSelection() } }
         }
     }
 
-    /// F4 and F5 mute the map under their sheet.
-    private var dimsMap: Bool {
-        viewModel.phase == .needsLocation || viewModel.isEmpty
-    }
-
-    /// The area under the selected pin (about 500 m), and every playdate's
-    /// neighborhood (about 1 km), which playdates always show.
-    private var areas: [PlansArea] {
-        viewModel.pins.compactMap { pin in
-            guard viewModel.kindFilter == nil || pin.kind == viewModel.kindFilter else { return nil }
-            let isSelected = pin.id == viewModel.selectedId
-            guard isSelected || (pin.kind == .playdate && !pin.isExactPoint) else { return nil }
-            return PlansArea(
-                id: pin.id,
-                kind: pin.kind,
-                coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude),
-                radius: pin.kind == .playdate && !pin.isExactPoint ? 500 : 250
-            )
-        }
-    }
-
-    private func look(for pin: PlanPinDTO) -> PlanPinLook {
-        let selected = pin.id == viewModel.selectedId
-        let badge: PlanPinLook.Badge? = if pin.isHosting {
-            .hosting
-        } else if pin.isIn {
-            .going
-        } else if pin.viewerRequestStatus == .pending || pin.viewerRequestStatus == .waitlisted {
-            .waiting
-        } else {
-            nil
-        }
-        let calendar = PlanFormat.calendar(for: pin.timezone ?? card(for: pin.id)?.timezone)
-        let tag = PlanFormat.pinTag(
-            state: pin.state,
-            isFull: pin.isFull && !pin.isIn && !pin.isHosting,
-            startsAt: pin.startsAtDate,
-            dayPart: pin.dayPart,
-            calendar: calendar
-        )
-        return PlanPinLook(
-            kind: pin.kind,
-            // "Your plan · Sun 1:25", as the posted pin reads (board H8) and Android's.
-            tag: pin.isHosting && selected ? "Your plan · \(tag)" : tag,
-            isSelected: selected,
-            isDimmed: viewModel.selectedId != nil && !selected,
-            isFull: pin.isFull && !pin.isIn && !pin.isHosting,
-            isLive: pin.state == .live,
-            badge: badge
-        )
-    }
-
-    private func pinButton(_ pin: PlanPinDTO) -> some View {
-        Button { select(pin) } label: {
-            PlanPinView(look: look(for: pin))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(PlansPinSpeech.label(for: pin, card: card(for: pin.id), center: viewModel.center))
-        .accessibilityHint("Opens the plan's card")
-        .accessibilityIdentifier("planPin.\(pin.id)")
-    }
-
-    private func card(for id: String) -> PlanCardDTO? {
-        viewModel.cards.first { $0.id == id } ?? viewModel.yourPlans.first { $0.id == id }
-    }
-
     private func select(_ pin: PlanPinDTO) {
-        pinTappedAt = Date()
         withSheetAnimation { viewModel.select(pin) }
-        // Keep the pin above the half-open sheet: center the camera below it.
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) { showAboveCard(pin) }
+    }
+
+    /// Keep the pin above the half-open sheet: center the camera below it.
+    private func showAboveCard(_ pin: PlanPinDTO) {
         let span = viewModel.lastRegion?.span ?? MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) {
-            camera = .region(MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: pin.latitude - span.latitudeDelta * 0.22, longitude: pin.longitude),
-                span: span
-            ))
-        }
+        camera = .region(MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: pin.latitude - span.latitudeDelta * 0.22, longitude: pin.longitude),
+            span: span
+        ))
     }
 
     private func zoom(to cluster: PlansCluster) {
@@ -251,6 +143,17 @@ struct PlansMapView: View {
         let window = openMap(mapSize: mapSize, topInset: topInset)
         guard let region = PlansCameraFit.region(showing: points, in: window, mapSize: mapSize) else { return }
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.4)) { camera = .region(region) }
+    }
+
+    /// A map made again for the same plans (a new layout of this screen) opens where the last one was left, at its
+    /// zoom, instead of on its own first look; with a pin selected (its card in the sheet), with that pin above the card.
+    private func restoreCamera() {
+        guard camera == .automatic else { return }
+        if let id = viewModel.selectedId, let pin = viewModel.pin(for: id) {
+            showAboveCard(pin)
+        } else if let last = viewModel.lastCamera {
+            camera = .camera(last)
+        }
     }
 
     private func recenter() {
@@ -303,27 +206,20 @@ enum PlanOpenIntent: Hashable {
     case invite(token: String)
 }
 
-extension PlansMapView {
-    /// The tab's actions, with Ask opening the assistant over the map.
-    private var actions: PlansMapActions {
-        var actions = tabActions
-        actions.ask = { askTopic = .plans() }
-        return actions
-    }
-}
-
 /// The actions the map hands to the Plans tab's stack.
 struct PlansMapActions {
     /// Open a plan (J1 and the screens after it), from its card when one is on screen.
     let openPlan: @MainActor (PlanCardDTO?, String, PlanOpenIntent) -> Void
     /// Start hosting, optionally with a kind (and a game) chosen.
     let host: @MainActor (PlansHostStart?) -> Void
+    /// "Area and time" (the area pill), the sheet over the tab.
+    let areaPicker: @MainActor () -> Void
     /// "More nearby": Pulse. Nil drops the "More nearby" rows (the Pulse
     /// redesign is off, and the Nearby tab beside Plans has them).
     var openPulse: (@MainActor () -> Void)?
     /// "More nearby": Connections.
     var openConnections: (@MainActor () -> Void)?
-    /// "Ask Pantopus" about plans (the header's trailing button); the map fills it in.
+    /// "Ask Pantopus" about plans (the header's trailing button), the assistant over the tab.
     var ask: (@MainActor () -> Void)?
 }
 
@@ -365,14 +261,6 @@ enum PlansCameraFit {
             span: MKCoordinateSpan(latitudeDelta: latitudePerPoint * mapSize.height, longitudeDelta: perPoint * mapSize.width)
         )
     }
-}
-
-/// An area circle on the map.
-private struct PlansArea {
-    let id: String
-    let kind: PlanKind
-    let coordinate: CLLocationCoordinate2D
-    let radius: CLLocationDistance
 }
 
 /// What VoiceOver reads for a pin: "Watch party, Sunday 1:25 PM, about 1 mile, 3 spots left".

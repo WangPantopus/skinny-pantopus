@@ -113,6 +113,9 @@ public final class PulsePostDetailViewModel {
     /// Render-state.
     public internal(set) var state: PulsePostDetailState = .loading
 
+    /// Where the reader was down the post. The tab keeps this model through a fold, which rebuilds the screen.
+    public let scrollPlace = ScrollPlace()
+
     /// Inline composer's draft text. Bound from the view.
     public var composerText: String = "" {
         didSet {

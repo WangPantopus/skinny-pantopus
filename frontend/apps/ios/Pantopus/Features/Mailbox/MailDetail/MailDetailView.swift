@@ -14,6 +14,8 @@ import SwiftUI
 
 public struct MailDetailView: View {
     @State private var viewModel: MailDetailViewModel
+    /// A laid-open booklet's Back puts the Mailbox back beside it instead of closing it.
+    @Environment(\.mailPieceBack) private var backOverride
     private let mailId: String
     private let onBack: () -> Void
     private let onOpenSenderProfile: (@MainActor (String) -> Void)?
@@ -50,8 +52,11 @@ public struct MailDetailView: View {
     /// "Verify your home" on a Home letter that waits for proof of address.
     private let onVerifyHome: (@MainActor (String) -> Void)?
 
+    /// - Parameter viewModel: the page's model when it's kept elsewhere (the Mail tab keeps it across folds); a new
+    ///   one otherwise.
     public init(
         mailId: String,
+        viewModel: MailDetailViewModel? = nil,
         onBack: @escaping () -> Void,
         onOpenSenderProfile: (@MainActor (String) -> Void)? = nil,
         onOpenSenderBusiness: (@MainActor (String) -> Void)? = nil,
@@ -66,7 +71,7 @@ public struct MailDetailView: View {
         onVerifyHome: (@MainActor (String) -> Void)? = nil
     ) {
         self.mailId = mailId
-        _viewModel = State(initialValue: MailDetailViewModel(mailId: mailId))
+        _viewModel = State(initialValue: viewModel ?? MailDetailViewModel(mailId: mailId))
         self.onBack = onBack
         self.onOpenSenderProfile = onOpenSenderProfile
         self.onOpenSenderBusiness = onOpenSenderBusiness
@@ -85,7 +90,7 @@ public struct MailDetailView: View {
         Group {
             switch viewModel.state {
             case .loading:
-                LoadingLayout(onBack: onBack)
+                LoadingLayout(onBack: back)
             case let .loaded(content):
                 loaded(content)
             case let .error(message):
@@ -205,6 +210,15 @@ public struct MailDetailView: View {
         return "Dismiss \"\(content.title)\"?"
     }
 
+    /// The top bar's Back: closes the page, or does what the Mail tab asks instead (`mailPieceBack`).
+    private func back() {
+        if let backOverride {
+            backOverride.back()
+        } else {
+            onBack()
+        }
+    }
+
     /// The sender card's tap: the business's page for a letter sent as a
     /// business, the person's profile otherwise.
     private func openSender(_ content: MailDetailContent) -> (@MainActor (String) -> Void)? {
@@ -254,7 +268,7 @@ public struct MailDetailView: View {
                 content: content,
                 booklet: booklet,
                 ackInFlight: viewModel.ackInFlight,
-                onBack: { onBack() },
+                onBack: { back() },
                 onAcknowledge: { Task { await viewModel.acknowledge() } },
                 onOpenSenderProfile: openSender(content),
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
@@ -274,7 +288,7 @@ public struct MailDetailView: View {
                 content: content,
                 certified: certified,
                 ackInFlight: viewModel.ackInFlight,
-                onBack: { onBack() },
+                onBack: { back() },
                 onAcknowledge: { Task { await viewModel.acknowledge() } },
                 onOpenSenderProfile: openSender(content),
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
@@ -298,7 +312,7 @@ public struct MailDetailView: View {
                 content: content,
                 community: community,
                 rsvpInFlight: viewModel.rsvpInFlight,
-                onBack: { onBack() },
+                onBack: { back() },
                 onRsvp: { status in Task { await viewModel.setRsvp(status) } },
                 onOpenSenderProfile: openSender(content),
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } }
@@ -315,7 +329,7 @@ public struct MailDetailView: View {
                 content: content,
                 coupon: coupon,
                 redeemInFlight: viewModel.couponRedeemInFlight,
-                onBack: { onBack() },
+                onBack: { back() },
                 onRedeem: { Task { await viewModel.redeemCoupon() } },
                 onOpenSenderProfile: openSender(content),
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
@@ -333,7 +347,7 @@ public struct MailDetailView: View {
                 content: content,
                 gig: gig,
                 bidInFlight: viewModel.gigBidInFlight,
-                onBack: { onBack() },
+                onBack: { back() },
                 onAccept: { Task { await viewModel.acceptGigBid() } },
                 onOpenSenderProfile: openSender(content),
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
@@ -353,7 +367,7 @@ public struct MailDetailView: View {
                 content: content,
                 memory: memory,
                 saveInFlight: viewModel.saveToVaultInFlight,
-                onBack: { onBack() },
+                onBack: { back() },
                 onSaveMemory: { Task { await viewModel.saveMemoryToVault() } },
                 onOpenSenderProfile: openSender(content),
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
@@ -371,7 +385,7 @@ public struct MailDetailView: View {
                 content: content,
                 package: package,
                 ackInFlight: viewModel.ackInFlight,
-                onBack: { onBack() },
+                onBack: { back() },
                 onAcknowledgeDelivery: { Task { await viewModel.acknowledge() } },
                 onOpenSenderProfile: openSender(content),
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
@@ -394,7 +408,7 @@ public struct MailDetailView: View {
                 content: content,
                 party: party,
                 rsvpInFlight: viewModel.partyRsvpInFlight,
-                onBack: { onBack() },
+                onBack: { back() },
                 onSetRsvp: { status in Task { await viewModel.setPartyRsvp(status) } },
                 onAdjustPlusOne: { count in Task { await viewModel.setPartyPlusOneCount(count) } },
                 onClaimBring: { index in Task { await viewModel.togglePartyBringClaim(at: index, byName: "You") } },
@@ -414,7 +428,7 @@ public struct MailDetailView: View {
                 content: content,
                 records: records,
                 fileInFlight: viewModel.recordsFileInFlight,
-                onBack: { onBack() },
+                onBack: { back() },
                 onFileInVault: { Task { await viewModel.fileRecordToVault() } },
                 onOpenSenderProfile: openSender(content),
                 onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
@@ -472,7 +486,11 @@ public struct MailDetailView: View {
             onOpenEnclosure: { enclosure in Task { await viewModel.openEnclosure(enclosure) } },
             onOpenPiece: { id in onOpenMail?(id) },
             onRetryBundle: { Task { await viewModel.loadBundle() } },
-            onRestore: { Task { await viewModel.restore() } }
+            onRestore: { Task { await viewModel.restore() } },
+            bookletPlace: viewModel.bookletPlace,
+            onBookletPlace: { viewModel.bookletPlace = $0 },
+            keptScrollOffset: viewModel.keptScrollOffset,
+            onScrollOffset: { viewModel.keptScrollOffset = $0 }
         )
     }
 
@@ -485,7 +503,7 @@ public struct MailDetailView: View {
                 headline: "This is your home's mail",
                 message: message,
                 ctaTitle: proofHome == nil || onVerifyHome == nil ? "Try again" : "Verify your home",
-                onBack: onBack
+                onBack: back
             ) {
                 if let proofHome, let onVerifyHome {
                     onVerifyHome(proofHome)
@@ -495,11 +513,11 @@ public struct MailDetailView: View {
             }
         }
         if viewModel.isNotFound {
-            return ErrorLayout(headline: "Couldn't open this mail", message: message, ctaTitle: "Back to Mail", onBack: onBack) {
+            return ErrorLayout(headline: "Couldn't open this mail", message: message, ctaTitle: "Back to Mail", onBack: back) {
                 onBack()
             }
         }
-        return ErrorLayout(headline: "Couldn't open this mail", message: message, ctaTitle: "Try again", onBack: onBack) {
+        return ErrorLayout(headline: "Couldn't open this mail", message: message, ctaTitle: "Try again", onBack: back) {
             Task { await viewModel.refresh() }
         }
     }
@@ -508,7 +526,7 @@ public struct MailDetailView: View {
         GenericMailDetailLayout(
             content: content,
             ackInFlight: viewModel.ackInFlight,
-            onBack: { onBack() },
+            onBack: { back() },
             onAcknowledge: { Task { await viewModel.acknowledge() } },
             onOpenSenderProfile: openSender(content),
             onSaveToVault: { Task { await viewModel.openSaveToVaultPicker() } },
@@ -533,6 +551,7 @@ public struct MailDetailView: View {
 // MARK: - Loading / Error / Toast
 
 private struct LoadingLayout: View {
+    @Environment(\.mailPieceShowsBack) private var showsBack
     let onBack: () -> Void
 
     var body: some View {
@@ -541,7 +560,7 @@ private struct LoadingLayout: View {
                 config: MailTopBarConfig(
                     eyebrow: nil,
                     trust: .neutral,
-                    onBack: { @Sendable in Task { @MainActor in onBack() } }
+                    onBack: showsBack ? { @Sendable in Task { @MainActor in onBack() } } : nil
                 )
             )
             VStack(alignment: .leading, spacing: Spacing.s3) {
@@ -558,6 +577,7 @@ private struct LoadingLayout: View {
 }
 
 private struct ErrorLayout: View {
+    @Environment(\.mailPieceShowsBack) private var showsBack
     let headline: String
     let message: String
     let ctaTitle: String
@@ -570,7 +590,7 @@ private struct ErrorLayout: View {
                 config: MailTopBarConfig(
                     eyebrow: nil,
                     trust: .warning,
-                    onBack: { @Sendable in Task { @MainActor in onBack() } }
+                    onBack: showsBack ? { @Sendable in Task { @MainActor in onBack() } } : nil
                 )
             )
             EmptyState(

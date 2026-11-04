@@ -12,6 +12,12 @@ public final class ChatSearchViewModel {
     public private(set) var isLoadingMore = false
     public var failureMessage: String?
     public private(set) var searchFailed = false
+    /// The search screen has opened, with the keyboard. A fold or a turn puts
+    /// up a new screen for this model, which leaves the keyboard down.
+    @ObservationIgnored var hasOpened = false
+    /// The result at the top of the list, where a new screen for this model
+    /// opens the list. Not observed: it changes as the list scrolls.
+    @ObservationIgnored var topResult: ChatSearchResult?
     public var hasMore: Bool {
         namesCursor != nil || messagesCursor != nil
     }
