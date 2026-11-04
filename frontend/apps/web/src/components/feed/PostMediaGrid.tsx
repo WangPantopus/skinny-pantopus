@@ -185,5 +185,7 @@ export function PostMediaPreview({ url, thumbnailUrl, slot, onPress, imageClassN
       <VideoPlayOverlay />
     </div>
   );
-  return <FeedMediaImage src={thumbnailUrl || url} alt="" className={imageClassName ?? "h-full w-full object-cover"} loading="lazy" />;
+  // Stored thumbnails are 200px square crops. A feed card is over 600px wide;
+  // resize the original to the display size instead of enlarging that crop.
+  return <FeedMediaImage src={url} alt="" className={imageClassName ?? "h-full w-full object-cover"} loading="lazy" />;
 }
