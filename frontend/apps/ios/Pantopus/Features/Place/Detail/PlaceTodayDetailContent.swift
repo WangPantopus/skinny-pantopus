@@ -34,6 +34,8 @@ struct TodayTabExtras {
     var onOpenTask: ((_ homeId: String, _ taskId: String) -> Void)?
     /// Needs you (AI phase 3): under the sky, above "Coming up at home".
     var needsYou: TodayNeedsYouModel?
+    /// What the tab says first about the place (a claim's status, "Saved place"): first in the leading column.
+    var lead: AnyView?
 }
 
 struct PlaceTodayDetailContent: View {
@@ -112,27 +114,48 @@ struct PlaceTodayDetailContent: View {
         }
     }
 
+    /// One column in this order; on the open Duo, the day outside (advisories, the sky, the sun, air, "Good
+    /// day for…" and the full conditions) beside the day at home (Needs you, the agenda, plans, the ballot,
+    /// setup and Ask).
     private func todaySections(proxy: ScrollViewProxy) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            advisories
-            sky(proxy: proxy)
-            sunCard
-            if let needsYou = tab?.needsYou {
-                TodayNeedsYouCard(model: needsYou, hiddenTaskIds: agendaTaskIds, onOpenTask: tab?.onOpenTask)
+        PlaceColumns {
+            if let lead = tab?.lead {
+                lead.placeColumn(.leading, order: 0)
             }
-            agendaSection(proxy: proxy)
-            // The person's plans today (Directions, On my way, Message guests) right under the agenda.
-            if tab != nil, PlansFlags.shared.plans {
-                PlansTodayCards(gapAbove: true)
+            VStack(alignment: .leading, spacing: 0) {
+                advisories
+                sky(proxy: proxy)
+                sunCard
             }
-            airTile(proxy: proxy)
-            goodDay
-            ballotWeek
-            setup(proxy: proxy)
+            .placeColumn(.leading, order: 1)
+            VStack(alignment: .leading, spacing: 0) {
+                if let needsYou = tab?.needsYou {
+                    TodayNeedsYouCard(model: needsYou, hiddenTaskIds: agendaTaskIds, onOpenTask: tab?.onOpenTask)
+                }
+                agendaSection(proxy: proxy)
+                // The person's plans today (Directions, On my way, Message guests) right under the agenda.
+                if tab != nil, PlansFlags.shared.plans {
+                    PlansTodayCards(gapAbove: true)
+                }
+            }
+            // Level with the sky when it starts the column.
+            .placeColumn(.trailing, order: 2, trimsTop: Spacing.s3)
+            VStack(alignment: .leading, spacing: 0) {
+                airTile(proxy: proxy)
+                goodDay
+            }
+            .placeColumn(.leading, order: 3)
+            VStack(alignment: .leading, spacing: 0) {
+                ballotWeek
+                setup(proxy: proxy)
+            }
+            .placeColumn(.trailing, order: 4)
             fullConditions
+                .placeColumn(.leading, order: 5)
             if let tab {
                 AskPantopusBox(action: tab.onAsk)
                     .padding(.top, 24)
+                    .placeColumn(.trailing, order: 6)
             }
         }
     }
@@ -679,8 +702,12 @@ extension PlaceTodayDetailContent {
 extension PlaceTodayDetailContent {
     /// The full readings and every source: the daily forecast, the AQI gauge,
     /// every alert with its official text and the calendar's source.
-    @ViewBuilder
     var fullConditions: some View {
+        VStack(alignment: .leading, spacing: 0) { fullConditionsRows }
+    }
+
+    @ViewBuilder
+    private var fullConditionsRows: some View {
         PlaceGroupSurface {
             PlaceFoldRow(
                 title: "Sources and full conditions",
@@ -689,7 +716,8 @@ extension PlaceTodayDetailContent {
                 identifier: "today.fullConditions"
             ) { EmptyView() }
         }
-        .padding(.top, setupVisible ? 12 : 24)
+        // Right under setup on a phone; under "Good day for…" in two columns.
+        .modifier(PlaceColumnGap(oneColumn: setupVisible ? 12 : 24, twoColumns: 24))
         .id("todayFullConditions")
         if conditionsOpen {
             VStack(alignment: .leading, spacing: 0) {

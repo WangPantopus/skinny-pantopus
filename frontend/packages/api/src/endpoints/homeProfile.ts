@@ -197,7 +197,7 @@ export async function createHomeEvent(homeId: string, data: {
 // ---- HomeDocument ----
 
 export async function getHomeDocuments(homeId: string) {
-  return get<{ documents: any[] }>(`/api/homes/${homeId}/documents`);
+  return get<{ documents: any[]; permissions?: string[] }>(`/api/homes/${homeId}/documents`);
 }
 
 export async function deleteHomeDocument(homeId: string, documentId: string) {
