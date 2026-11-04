@@ -21,8 +21,8 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import * as api from '@pantopus/api';
-import { clearAuthToken, refreshAuthSession, type AuthRefreshResult } from '@pantopus/api';
+import { logout } from '@pantopus/api/endpoints/auth';
+import { clearAuthToken, refreshAuthSession, type AuthRefreshResult } from '@pantopus/api/client';
 import { safeRedirectPath } from '@/lib/auth-utils';
 import {
   SESSION_REFRESH_GUARD_KEY,
@@ -75,7 +75,7 @@ function clearGuard(): void {
 /** Best-effort server logout so the path-scoped refresh cookie is cleared too. */
 async function signOutLocally(): Promise<void> {
   try {
-    await api.auth.logout();
+    await logout();
   } catch {
     // Backend unreachable, rate-limited or already signed out, so the server did
     // not clear the cookies. Drop the JS-readable session flag here: while it is
