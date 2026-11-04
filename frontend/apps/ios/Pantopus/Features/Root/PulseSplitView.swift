@@ -98,7 +98,8 @@ struct PulsePostPlaceholder: View {
                 .frame(maxWidth: 260)
         }
         .padding(Spacing.s5)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Half folded, beside the fold rather than on it.
+        .centeredClearOfFold()
         .background(Theme.Color.appBg)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("pulsePostPlaceholder")

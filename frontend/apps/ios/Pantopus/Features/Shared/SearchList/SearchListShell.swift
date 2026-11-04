@@ -43,6 +43,17 @@ public struct SearchListShell<Result: Hashable & Sendable, Row: View>: View {
     private let filters: AnyView?
     private let row: (Result) -> Row
     private let onCancel: () -> Void
+    /// The field takes the keyboard when the search opens. A caller whose
+    /// search outlives this screen (Messages keeps its search across a fold or
+    /// a turn of the iPhone Duo) passes false once it has opened, so the
+    /// rebuilt screen doesn't put the keyboard back over what was being read.
+    private let focusesOnOpen: Bool
+    /// The result at the top of the list, kept by a caller whose search
+    /// outlives this screen: the rebuilt list opens there, not at its top.
+    private let topResult: Binding<Result?>?
+    /// `topResult` as this screen was made, before its own first layout
+    /// moves it: where the rebuilt list goes back to.
+    @State private var returnTopResult: Result?
 
     /// 250ms-debounced echo of `query`. The shell uses this to gate
     /// the transition from "typing-shimmer" to "show empty" so the user
@@ -62,9 +73,14 @@ public struct SearchListShell<Result: Hashable & Sendable, Row: View>: View {
         onRecentTap: @escaping (String) -> Void = { _ in },
         filters: AnyView? = nil,
         emptyState: EmptyStateContent,
+        focusesOnOpen: Bool = true,
+        topResult: Binding<Result?>? = nil,
         @ViewBuilder row: @escaping (Result) -> Row,
         onCancel: @escaping () -> Void
     ) {
+        self.focusesOnOpen = focusesOnOpen
+        self.topResult = topResult
+        _returnTopResult = State(initialValue: topResult?.wrappedValue)
         self.placeholder = placeholder
         _query = query
         self.results = results
@@ -97,7 +113,7 @@ public struct SearchListShell<Result: Hashable & Sendable, Row: View>: View {
             debouncedQuery = query
         }
         .onAppear {
-            guard !focusedOnOpen else { return }
+            guard focusesOnOpen, !focusedOnOpen else { return }
             focusedOnOpen = true
             fieldFocused = true
         }
@@ -248,19 +264,36 @@ public struct SearchListShell<Result: Hashable & Sendable, Row: View>: View {
     }
 
     private var resultsSection: some View {
-        ScrollView {
-            LazyVStack(spacing: Spacing.s0) {
-                ForEach(results, id: \.self) { result in
-                    row(result)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: Spacing.s0) {
+                    ForEach(results, id: \.self) { result in
+                        row(result)
+                    }
                 }
+                .scrollTargetLayout(isEnabled: topResult != nil)
+                // While the field has the keyboard, a tap on the results only
+                // closes it (founder request 2026-10-29); tap again to open one.
+                .closesKeyboardFirst(fieldFocused)
             }
-            // While the field has the keyboard, a tap on the results only
-            // closes it (founder request 2026-10-29); tap again to open one.
-            .closesKeyboardFirst(fieldFocused)
+            .modifier(SearchListTopResult(topResult: topResult))
+            .scrollDismissesKeyboard(.immediately)
+            .background(Theme.Color.appBg)
+            .accessibilityIdentifier("searchListResults")
+            .task { await returnToTopResult(proxy) }
         }
-        .scrollDismissesKeyboard(.immediately)
-        .background(Theme.Color.appBg)
-        .accessibilityIdentifier("searchListResults")
+    }
+
+    /// A caller's kept list goes back to its top result once this screen's
+    /// rows have laid out.
+    private func returnToTopResult(_ proxy: ScrollViewProxy) async {
+        guard let result = returnTopResult else { return }
+        returnTopResult = nil
+        for delayMs: UInt64 in [16, 120] {
+            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+            guard !Task.isCancelled else { return }
+            proxy.scrollTo(result, anchor: .top)
+        }
     }
 
     private var emptySection: some View {
@@ -270,5 +303,18 @@ public struct SearchListShell<Result: Hashable & Sendable, Row: View>: View {
             subcopy: emptyState.subcopy
         )
         .accessibilityIdentifier("searchListEmpty")
+    }
+}
+
+/// Keeps the results list's place in the caller's `topResult`, when it has one.
+private struct SearchListTopResult<Result: Hashable>: ViewModifier {
+    let topResult: Binding<Result?>?
+
+    func body(content: Content) -> some View {
+        if let topResult {
+            content.scrollPosition(id: topResult, anchor: .top)
+        } else {
+            content
+        }
     }
 }

@@ -61,7 +61,8 @@ struct ChatConversationPlaceholder: View {
                 .frame(maxWidth: 260)
         }
         .padding(Spacing.s5)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Half folded, beside the fold rather than on it.
+        .centeredClearOfFold()
         .background(Theme.Color.appSurface)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("chatConversationPlaceholder")

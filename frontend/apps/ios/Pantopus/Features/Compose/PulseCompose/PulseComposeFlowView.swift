@@ -14,9 +14,37 @@ private enum PulseComposeFlowStep: Equatable {
     case draft(PulsePostingTarget, PulseComposePurpose?)
 }
 
+/// Where a composer is in its flow, and its draft. A screen that a fold or a
+/// turn of the iPhone Duo rebuilds keeps one per open composer (the Nearby
+/// tab's Pulse and Messages show the composer beside the feed or the list
+/// open, alone closed): the rebuilt composer carries on at the same step with
+/// the same draft, photos included, instead of starting over.
+@Observable
+@MainActor
+public final class PulseComposeSession {
+    fileprivate var step: PulseComposeFlowStep
+    /// The draft step's form, for the target and purpose it was made for.
+    @ObservationIgnored private var draft: (step: PulseComposeFlowStep, model: PulseComposeViewModel)?
+
+    /// - Parameter editing: The composer edits a saved post, which opens on its draft.
+    public init(editing: Bool = false) {
+        step = editing ? .draft(.connections, nil) : .targetPicker
+    }
+
+    /// The draft for this step: the one made earlier, or a new one.
+    fileprivate func draftModel(for step: PulseComposeFlowStep, make: () -> PulseComposeViewModel) -> PulseComposeViewModel {
+        if let draft, draft.step == step { return draft.model }
+        let model = make()
+        draft = (step, model)
+        return model
+    }
+}
+
 /// Entry point for creating a new Pulse post. Wraps the RN mobile flow.
 public struct PulseComposeFlowView: View {
-    @State private var step: PulseComposeFlowStep = .targetPicker
+    /// This composer's own session, unless the caller keeps one (`session`).
+    @State private var ownSession: PulseComposeSession
+    private let session: PulseComposeSession?
 
     private let prefillFeedIntent: PulseIntent?
     private let editingPostId: String?
@@ -42,9 +70,12 @@ public struct PulseComposeFlowView: View {
         prefillTitle: String? = nil,
         prefillBody: String? = nil,
         prefillDraft: PulseComposeDraft? = nil,
+        session: PulseComposeSession? = nil,
         onCancel: @escaping @MainActor () -> Void = {},
         onPosted: @escaping @MainActor (String?) -> Void = { _ in }
     ) {
+        _ownSession = State(initialValue: PulseComposeSession(editing: editingPostId != nil))
+        self.session = session
         self.prefillFeedIntent = prefillFeedIntent
         self.editingPostId = editingPostId
         self.taskShare = taskShare
@@ -53,14 +84,15 @@ public struct PulseComposeFlowView: View {
         self.prefillDraft = prefillDraft
         self.onCancel = onCancel
         self.onPosted = onPosted
-        if editingPostId != nil {
-            _step = State(initialValue: .draft(.connections, nil))
-        }
+    }
+
+    private var current: PulseComposeSession {
+        session ?? ownSession
     }
 
     public var body: some View {
         Group {
-            switch step {
+            switch current.step {
             case .targetPicker:
                 PulsePostTargetPickerView(
                     onSelect: handleTargetSelected,
@@ -71,9 +103,9 @@ public struct PulseComposeFlowView: View {
                 PulsePostPurposePickerView(
                     target: target,
                     onSelect: { purpose in
-                        step = .draft(target, purpose)
+                        current.step = .draft(target, purpose)
                     },
-                    onBack: { step = .targetPicker }
+                    onBack: { current.step = .targetPicker }
                 )
                 // Back returns to the first step; a swipe from the edge would close the composer.
                 .swipeBackDisabled()
@@ -94,16 +126,20 @@ public struct PulseComposeFlowView: View {
             ?? .ask
 
         PulseComposeView(
-            intent: initialIntent,
-            identity: identity(for: target),
-            postingTarget: target,
-            composePurpose: resolvedPurpose,
-            postId: editingPostId,
+            viewModel: current.draftModel(for: .draft(target, purpose)) {
+                PulseComposeViewModel(
+                    intent: initialIntent,
+                    identity: identity(for: target),
+                    postingTarget: target,
+                    composePurpose: resolvedPurpose,
+                    postId: editingPostId,
+                    taskShare: taskShare,
+                    prefillTitle: prefillTitle,
+                    prefillBody: prefillBody,
+                    prefillDraft: prefillDraft
+                )
+            },
             managesDismiss: false,
-            taskShare: taskShare,
-            prefillTitle: prefillTitle,
-            prefillBody: prefillBody,
-            prefillDraft: prefillDraft,
             onCancel: onCancel,
             onPosted: onPosted
         )
@@ -113,18 +149,18 @@ public struct PulseComposeFlowView: View {
         // A task share always lands on the Local Update draft — RN skips
         // the purpose grid entirely (`gig/[id].tsx:541-542`).
         if taskShare != nil {
-            step = .draft(target, .localUpdate)
+            current.step = .draft(target, .localUpdate)
             return
         }
         if target.isNetworkTarget {
-            step = .draft(target, nil)
+            current.step = .draft(target, nil)
             return
         }
         if let prefill = prefillPurpose(for: target) {
-            step = .draft(target, prefill)
+            current.step = .draft(target, prefill)
             return
         }
-        step = .purposePicker(target)
+        current.step = .purposePicker(target)
     }
 
     private func prefillPurpose(for target: PulsePostingTarget) -> PulseComposePurpose? {
