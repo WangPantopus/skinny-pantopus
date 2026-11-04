@@ -453,12 +453,14 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         {/* Mobile: hamburger + brand */}
         {isMobile && (
           <>
-            <button onClick={() => sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: !mobileOpen })} className="p-[8px] hover-bg-app rounded-lg transition mr-[8px]" aria-label="Toggle menu">
+            <button onClick={() => sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: !mobileOpen })} className="shrink-0 p-[8px] hover-bg-app rounded-lg transition mr-[8px]" aria-label="Toggle menu" aria-expanded={mobileOpen} aria-controls="mobile-navigation">
               {mobileOpen ? <X className="w-[20px] h-[20px] text-app-muted" /> : <Menu className="w-[20px] h-[20px] text-app-muted" />}
             </button>
-            <button onClick={() => router.push('/app/hub')} className="flex items-center gap-[8px] mr-auto">
-              <PantopusMark size={24} />
-              <span className="text-[18px] leading-[28px] font-semibold text-app">Pantopus</span>
+            {/* min-w-0 lets the wordmark truncate before the buttons move; mr-auto, not flex-1, keeps its tap
+             *  target to the logo and name, so a tap on the empty bar does not open the Hub. */}
+            <button onClick={() => router.push('/app/hub')} className="mr-auto flex min-w-0 items-center gap-[8px]" aria-label="Pantopus Hub">
+              <PantopusMark size={24} className="shrink-0" />
+              <span className="truncate text-[18px] leading-[28px] font-semibold text-app">Pantopus</span>
             </button>
           </>
         )}
@@ -479,12 +481,12 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         </form>
 
         {/* Search icon (mobile) */}
-        <button onClick={() => router.push('/app/discover')} className="md:hidden p-[8px] hover-bg-app rounded-lg" aria-label="Search">
+        <button onClick={() => router.push('/app/discover')} className="md:hidden shrink-0 p-[8px] hover-bg-app rounded-lg" aria-label="Search">
           <Search className="w-[20px] h-[20px] text-app-muted" />
         </button>
 
         {/* Right actions */}
-        <div className="flex items-center gap-1 max-lg:gap-[4px]">
+        <div className="flex shrink-0 items-center gap-1 max-lg:gap-[4px]">
           <div onMouseEnter={prefetchNotifications} onFocus={prefetchNotifications} className="contents">
             {audienceProfileFlag ? (
               // Two streams (unified-IA §6.1): Personal bell scoped to
@@ -590,8 +592,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
        * ═══════════════════════════════════════════════════════ */}
       {isMobile && mobileOpen && (
         <>
-          <div className="fixed inset-0 z-[998] bg-black/30 animate-fade-in" onClick={() => sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: false })} />
-          <aside className="fixed top-14 left-0 bottom-0 w-72 bg-surface border-r border-app z-[999] flex flex-col overflow-hidden shadow-xl animate-slide-in-left">
+          <button type="button" aria-label="Close menu" className="fixed inset-0 z-[998] bg-black/30 animate-fade-in" onClick={() => sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: false })} />
+          <aside id="mobile-navigation" aria-label="Navigation" className="fixed top-14 left-0 bottom-0 w-72 max-w-[calc(100vw-16px)] bg-surface border-r border-app z-[999] flex flex-col overflow-hidden shadow-xl animate-slide-in-left">
             {/* Context switcher */}
             <div className="px-3 py-3 border-b border-app">
               <ProfileToggle activeHomeId={homeId} activeBusinessId={businessId} />
