@@ -23,6 +23,7 @@ import app.pantopus.android.ui.screens.business_profile.BusinessProfileMapper
 import app.pantopus.android.ui.screens.businesses.MyBusinessesViewModel
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -84,19 +85,33 @@ class BusinessOwnerViewModel
         private val _toast = MutableStateFlow<String?>(null)
         val toast: StateFlow<String?> = _toast.asStateFlow()
 
+        private var loadJob: Job? = null
+        private var generation = 0
+        private var active = true
+
         fun consumeToast() {
             _toast.value = null
         }
 
         fun load() {
             if (_state.value is BusinessOwnerUiState.Loaded) return
-            _state.value = BusinessOwnerUiState.Loading
-            viewModelScope.launch { fetch() }
+            refresh()
         }
 
         fun refresh() {
-            if (_state.value !is BusinessOwnerUiState.Loaded) _state.value = BusinessOwnerUiState.Loading
-            viewModelScope.launch { fetch() }
+            active = true
+            val request = ++generation
+            loadJob?.cancel()
+            _state.value = BusinessOwnerUiState.Loading
+            loadJob = viewModelScope.launch { fetch(request) }
+        }
+
+        fun pause() {
+            active = false
+            generation++
+            loadJob?.cancel()
+            _state.value = BusinessOwnerUiState.Loading
+            _toast.value = null
         }
 
         /** Test / preview hook: seed the loaded state directly. */
@@ -119,13 +134,16 @@ class BusinessOwnerViewModel
 
             // Optimistic update.
             _state.value = BusinessOwnerUiState.Loaded(current.content.applyingReply(trimmed, reviewId))
+            val request = generation
 
             viewModelScope.launch {
                 val result = businesses.respondToReview(businessId, reviewId, trimmed)
-                if (result is NetworkResult.Failure) {
-                    if (_state.value is BusinessOwnerUiState.Loaded) {
-                        // Roll back to the pre-optimistic content.
-                        _state.value = current
+                if (result is NetworkResult.Failure && isCurrent(request)) {
+                    updateContent(request) { latest ->
+                        val original = current.content.reviews.firstOrNull { it.id == reviewId }
+                        val restored = latest.reviews.map { if (it.id == reviewId) original ?: it else it }
+                        val pending = restored.count { it.reply == null }
+                        latest.copy(reviews = restored, reviewsToReplyLabel = if (pending > 0) "$pending to reply" else null)
                     }
                     // Say so, rather than letting the reply silently vanish (as on iOS).
                     _toast.value = "Your reply wasn't posted. ${result.error.message.ifBlank { "Please try again." }}"
@@ -155,6 +173,7 @@ class BusinessOwnerViewModel
             val current = _state.value as? BusinessOwnerUiState.Loaded ?: return
             val offer = current.content.foundingOffer ?: return
             if (offer.isClaiming) return
+            val request = generation
             _state.value =
                 BusinessOwnerUiState.Loaded(
                     current.content.copy(foundingOffer = offer.copy(isClaiming = true)),
@@ -162,6 +181,8 @@ class BusinessOwnerViewModel
             viewModelScope.launch {
                 when (val result = founding.claim(businessId)) {
                     is NetworkResult.Success -> {
+                        prefs.edit().putBoolean(foundingDismissedKey, true).apply()
+                        if (!isCurrent(request)) return@launch
                         val number = result.data.slotNumber
                         _toast.value =
                             if (number != null) {
@@ -171,10 +192,10 @@ class BusinessOwnerViewModel
                             }
                         // The banner is gone for good once claimed — persist
                         // so a refresh race can't bring it back.
-                        prefs.edit().putBoolean(foundingDismissedKey, true).apply()
                         refresh()
                     }
                     is NetworkResult.Failure -> {
+                        if (!isCurrent(request)) return@launch
                         _toast.value =
                             result.error.message.ifBlank { "Failed to claim founding offer" }
                         val latest = _state.value as? BusinessOwnerUiState.Loaded ?: return@launch
@@ -200,81 +221,121 @@ class BusinessOwnerViewModel
 
         // MARK: - Fetch
 
-        private suspend fun fetch() {
-            // 1. Public render (primary) — the same projection the Business
-            //    Profile screen renders, so the owner / preview frames agree.
-            val detail = businesses.business(businessId)
-            if (detail is NetworkResult.Failure) {
-                _state.value = mapDetailFailure(detail.error)
-                return
-            }
-            val payload = (detail as NetworkResult.Success).data
-            val publicProfile =
-                coroutineScope {
-                    val publicDeferred =
-                        async {
-                            payload.business.username
-                                ?.takeIf { it.isNotEmpty() }
-                                ?.let { (businesses.publicBusiness(it) as? NetworkResult.Success)?.data }
+        private suspend fun fetch(request: Int) =
+            coroutineScope {
+                // The current dashboard authority and business detail are independent reads.
+                val dashboardRead = async { businesses.dashboard(businessId) }
+                val detail = businesses.business(businessId)
+                if (detail is NetworkResult.Failure) {
+                    publish(request, mapDetailFailure(detail.error))
+                    return@coroutineScope
+                }
+                val payload = (detail as NetworkResult.Success).data
+                val publicRead =
+                    async {
+                        payload.business.username
+                            ?.takeIf { it.isNotEmpty() }
+                            ?.let { (businesses.publicBusiness(it) as? NetworkResult.Success)?.data }
+                    }
+                val dash = dashboardRead.await()
+                if (dash is NetworkResult.Failure) {
+                    publish(request, mapDashboardFailure(dash.error))
+                    return@coroutineScope
+                }
+                val dashboard = (dash as NetworkResult.Success).data
+                val publicData = publicRead.await()
+                val renderData =
+                    publicData ?: when (val result = ownerProfileData(payload)) {
+                        is NetworkResult.Success -> result.data
+                        is NetworkResult.Failure -> {
+                            publish(request, mapDetailFailure(result.error))
+                            return@coroutineScope
                         }
-                    val reviewsDeferred =
-                        async { (profiles.publicProfile(businessId) as? NetworkResult.Success)?.data }
-                    val publicData = publicDeferred.await()
-                    val renderData =
-                        publicData ?: when (val result = ownerProfileData(payload)) {
-                            is NetworkResult.Success -> result.data
-                            is NetworkResult.Failure -> {
-                                _state.value = mapDetailFailure(result.error)
-                                return@coroutineScope null
-                            }
-                        }
-                    BusinessProfileMapper.build(payload, renderData, reviewsDeferred.await())
-                        .copy(hasPublicPage = publicData != null)
-                } ?: return
-
-            // 2. Owner-scoped dashboard (required) — publish state + strength.
-            val dash = businesses.dashboard(businessId)
-            if (dash is NetworkResult.Failure) {
-                _state.value = mapDashboardFailure(dash.error)
-                return
+                    }
+                if (!isCurrent(request)) return@coroutineScope
+                val profile = BusinessProfileMapper.build(payload, renderData, null).copy(hasPublicPage = publicData != null)
+                publish(request, BusinessOwnerUiState.Loaded(buildContent(profile, dashboard, null, emptyList())))
+                loadOverlays(request, payload, renderData, publicData != null)
             }
-            val dashboard = (dash as NetworkResult.Success).data
 
-            // 3. Tiles + reviews (best-effort overlays).
-            val insights = (businesses.insights(businessId) as? NetworkResult.Success)?.data
-            val ownerReviews =
-                (businesses.reviews(businessId) as? NetworkResult.Success)?.data?.reviews ?: emptyList()
+        /** Optional sections must not hold the business page behind their network latency. */
+        private suspend fun loadOverlays(
+            request: Int,
+            detail: BusinessDetailResponse,
+            renderData: BusinessPublicResponse,
+            hasPublicPage: Boolean,
+        ) = coroutineScope {
+            launch {
+                val reviews = (profiles.publicProfile(businessId) as? NetworkResult.Success)?.data ?: return@launch
+                updateContent(request) {
+                    it.copy(publicProfile = BusinessProfileMapper.build(detail, renderData, reviews).copy(hasPublicPage = hasPublicPage))
+                }
+            }
+            launch {
+                val insights = (businesses.insights(businessId) as? NetworkResult.Success)?.data ?: return@launch
+                updateContent(request) { it.copy(insights = insightTiles(insights)) }
+            }
+            launch {
+                val reviews = (businesses.reviews(businessId) as? NetworkResult.Success)?.data?.reviews ?: return@launch
+                val mapped = reviews.map(::ownerReview)
+                val pending = mapped.count { it.reply == null }
+                updateContent(request) {
+                    it.copy(reviews = mapped, reviewsToReplyLabel = if (pending > 0) "$pending to reply" else null)
+                }
+            }
+            launch {
+                val offer = loadFoundingOffer()
+                updateContent(request) { it.copy(foundingOffer = offer) }
+            }
+        }
 
-            // 4. Founding-offer banner (best-effort; RN fetches it on the
-            //    same dashboard load and hides the banner on any failure).
-            val foundingOffer = loadFoundingOffer()
+        private fun isCurrent(request: Int): Boolean = active && request == generation
 
-            _state.value =
-                BusinessOwnerUiState.Loaded(
-                    buildContent(publicProfile, dashboard, insights, ownerReviews, foundingOffer),
-                )
+        private fun publish(
+            request: Int,
+            state: BusinessOwnerUiState,
+        ) {
+            if (isCurrent(request)) _state.value = state
+        }
+
+        private fun updateContent(
+            request: Int,
+            update: (BusinessOwnerContent) -> BusinessOwnerContent,
+        ) {
+            if (!isCurrent(request)) return
+            val current = _state.value as? BusinessOwnerUiState.Loaded ?: return
+            _state.value = BusinessOwnerUiState.Loaded(update(current.content))
         }
 
         /** Drafts have no public projection, but their saved hours and services still exist. */
-        private suspend fun ownerProfileData(payload: BusinessDetailResponse): NetworkResult<BusinessPublicResponse> {
-            val location =
-                payload.profile?.primaryLocation
-                    ?: payload.locations.firstOrNull { it.isPrimary == true }
-                    ?: payload.locations.firstOrNull()
-            val hours =
-                if (location != null) {
-                    when (val result = businesses.locationHours(businessId, location.id)) {
-                        is NetworkResult.Success -> result.data.hours
-                        is NetworkResult.Failure -> return result
+        private suspend fun ownerProfileData(payload: BusinessDetailResponse): NetworkResult<BusinessPublicResponse> =
+            coroutineScope {
+                val location =
+                    payload.profile?.primaryLocation
+                        ?: payload.locations.firstOrNull { it.isPrimary == true }
+                        ?: payload.locations.firstOrNull()
+                val hoursRead =
+                    async {
+                        if (location == null) {
+                            NetworkResult.Success(emptyList())
+                        } else {
+                            when (val result = businesses.locationHours(businessId, location.id)) {
+                                is NetworkResult.Success -> NetworkResult.Success(result.data.hours)
+                                is NetworkResult.Failure -> result
+                            }
+                        }
                     }
-                } else {
-                    emptyList()
+                val catalogRead = async { businesses.catalogItems(businessId) }
+                val hours =
+                    when (val result = hoursRead.await()) {
+                        is NetworkResult.Success -> result.data
+                        is NetworkResult.Failure -> return@coroutineScope result
+                    }
+                when (val result = catalogRead.await()) {
+                    is NetworkResult.Success -> NetworkResult.Success(BusinessPublicResponse(hours = hours, catalog = result.data.items))
+                    is NetworkResult.Failure -> result
                 }
-            return when (val result = businesses.catalogItems(businessId)) {
-                is NetworkResult.Success -> NetworkResult.Success(BusinessPublicResponse(hours = hours, catalog = result.data.items))
-                is NetworkResult.Failure -> result
             }
-        }
 
         private fun mapDetailFailure(error: NetworkError): BusinessOwnerUiState =
             when (error) {
