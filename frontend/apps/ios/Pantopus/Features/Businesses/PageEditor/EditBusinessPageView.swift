@@ -67,6 +67,8 @@ public struct EditBusinessPageView: View {
         .background(Theme.Color.appBg)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .accessibilityIdentifier("editBusinessPage")
+        // Back asks before unsaved edits are dropped; the edge swipe would leave without asking.
+        .swipeBackDisabled(viewModel.hasUnsavedChanges || viewModel.hasInFlightOperation)
         .task { await viewModel.load() }
         .alert(
             "Discard unsaved edits?",
