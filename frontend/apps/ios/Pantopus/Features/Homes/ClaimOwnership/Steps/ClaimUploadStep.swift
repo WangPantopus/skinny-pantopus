@@ -31,6 +31,8 @@ struct ClaimUploadSlotModel: Identifiable, Equatable {
 /// The Evidence step body as a pure function of its state. `ClaimUploadStep`
 /// builds this from the view model; snapshot tests render it from fixtures.
 struct ClaimUploadStepContent: View {
+    @ScaledMetric(relativeTo: .caption2) private var overlineSize = PantopusTextStyle.overline.size
+
     let homeLabel: String
     let slots: [ClaimUploadSlotModel]
     @Binding var statement: String
@@ -62,7 +64,7 @@ struct ClaimUploadStepContent: View {
 
             if !documentOptions.isEmpty {
                 VStack(alignment: .leading, spacing: Spacing.s3) {
-                    Text("1. Select document type", style: .overline)
+                    Text("1. Select document type", style: .overline, font: .system(size: overlineSize, weight: .semibold))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                     ClaimDocumentTypePicker(
                         options: documentOptions,
@@ -74,7 +76,7 @@ struct ClaimUploadStepContent: View {
 
             if documentOptions.isEmpty || selectedDocumentType != nil {
                 VStack(alignment: .leading, spacing: Spacing.s3) {
-                    Text(uploadSectionLabel, style: .overline)
+                    Text(uploadSectionLabel, style: .overline, font: .system(size: overlineSize, weight: .semibold))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                     ForEach(slots) { slot in
                         UploadSlot(
@@ -143,7 +145,7 @@ private struct InfoBanner: View {
         HStack(alignment: .top, spacing: Spacing.s2) {
             Icon(.info, size: 18, color: Theme.Color.primaryInk)
             Text(text)
-                .font(.system(size: 12.5))
+                .scaledFont(12.5)
                 .foregroundStyle(Theme.Color.primaryInkStrong)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -254,7 +256,7 @@ private struct EncryptionFooter: View {
         HStack(alignment: .top, spacing: Spacing.s2) {
             Icon(.lock, size: 12, color: Theme.Color.appTextSecondary)
             Text(ClaimUploadCopy.encryptionFooter)
-                .font(.system(size: 11.5))
+                .scaledFont(11.5)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -270,7 +272,7 @@ struct ClaimUploadErrorBanner: View {
         HStack(spacing: Spacing.s2) {
             Icon(.alertCircle, size: 18, color: Theme.Color.error)
             Text(message)
-                .pantopusTextStyle(.caption)
+                .scaledFont(12, weight: .regular)
                 .foregroundStyle(Theme.Color.error)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

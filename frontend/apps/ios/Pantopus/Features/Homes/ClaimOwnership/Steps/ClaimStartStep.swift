@@ -78,12 +78,14 @@ struct ClaimStartStep: View {
 /// verified owner and the viewer is not a member, so a non-member can
 /// ask the owners to add them instead of filing an ownership claim.
 private struct ClaimMethodPicker: View {
+    @ScaledMetric(relativeTo: .caption2) private var overlineSize = PantopusTextStyle.overline.size
+
     let selected: ClaimStartMethod
     let onSelect: @MainActor (ClaimStartMethod) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
-            Text("Verification method", style: .overline)
+            Text("Verification method", style: .overline, font: .system(size: overlineSize, weight: .semibold))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .accessibilityAddTraits(.isHeader)
 
@@ -129,11 +131,11 @@ private struct ClaimMethodPicker: View {
                     }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(label)
-                        .pantopusTextStyle(.body)
+                        .scaledFont(16, weight: .regular)
                         .foregroundStyle(isSelected ? Theme.Color.primaryInk : Theme.Color.appText)
                         .multilineTextAlignment(.leading)
                     Text(subcopy)
-                        .pantopusTextStyle(.caption)
+                        .scaledFont(12, weight: .regular)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .multilineTextAlignment(.leading)
                 }
@@ -184,10 +186,10 @@ private struct ContestedClaimNotice: View {
                     }
                 VStack(alignment: .leading, spacing: Spacing.s1) {
                     Text(claim.title)
-                        .pantopusTextStyle(.body)
+                        .scaledFont(16, weight: .regular)
                         .foregroundStyle(Theme.Color.warning)
                     Text(claim.body)
-                        .pantopusTextStyle(.caption)
+                        .scaledFont(12, weight: .regular)
                         .foregroundStyle(Theme.Color.appTextStrong)
                 }
             }
@@ -211,13 +213,13 @@ private struct ClaimantChip: View {
     var body: some View {
         HStack(spacing: Spacing.s3) {
             Text(claim.claimantInitials)
-                .pantopusTextStyle(.caption)
+                .scaledFont(12, weight: .regular)
                 .foregroundStyle(Theme.Color.business)
                 .frame(width: 28, height: 28)
                 .background(Theme.Color.businessBg)
                 .clipShape(Circle())
             Text("\(claim.claimantName) · \(claim.filedLabel) · \(claim.statusLabel)")
-                .pantopusTextStyle(.caption)
+                .scaledFont(12, weight: .regular)
                 .foregroundStyle(Theme.Color.appTextStrong)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Icon(.lock, size: 13, color: Theme.Color.appTextMuted)
@@ -256,10 +258,10 @@ private struct WhyWeAskSection: View {
                         }
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Why we ask")
-                            .pantopusTextStyle(.body)
+                            .scaledFont(16, weight: .regular)
                             .foregroundStyle(Theme.Color.primaryInkStrong)
                         Text("Documents help a reviewer check your connection to this Home.")
-                            .pantopusTextStyle(.caption)
+                            .scaledFont(12, weight: .regular)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                     }
                     Spacer(minLength: Spacing.s0)
@@ -281,7 +283,7 @@ private struct WhyWeAskSection: View {
                     "A reviewer checks the ownership document for this Home. Uploading does not verify your identity " +
                         "or residency. Evidence access is limited to the claimant and authorized reviewers."
                 )
-                .pantopusTextStyle(.caption)
+                .scaledFont(12, weight: .regular)
                 .foregroundStyle(Theme.Color.appTextStrong)
                 .padding(.leading, Spacing.s10)
                 .accessibilityIdentifier("claimOwnershipWhyWeAskDetail")
