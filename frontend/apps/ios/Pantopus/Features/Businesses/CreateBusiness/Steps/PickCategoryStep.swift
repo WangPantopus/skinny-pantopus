@@ -9,9 +9,8 @@
 //  payload exists) → step-preview meta row. The sticky-CTA
 //  "Continue" button is owned by `WizardShell`.
 //
-//  When the user types into the search field, the wizard view swaps
-//  this step out for `PickCategorySearchStep`; the populated frame
-//  re-renders the moment the query clears.
+//  Keep the search field mounted while replacing the grid with results,
+//  so typing the first character does not dismiss the keyboard.
 //
 
 import SwiftUI
@@ -29,16 +28,20 @@ struct PickCategoryStep: View {
 
         BusinessSearchField(text: $viewModel.searchText, focused: false)
 
-        BusinessCategoryGrid(selectedId: viewModel.selectedCategoryId) {
-            viewModel.selectCategory($0)
-        }
+        if viewModel.isSearchActive {
+            PickCategorySearchStep(viewModel: viewModel)
+        } else {
+            BusinessCategoryGrid(selectedId: viewModel.selectedCategoryId) {
+                viewModel.selectCategory($0)
+            }
 
-        if !viewModel.whatYouGetItems.isEmpty,
-           let selected = viewModel.selectedCategoryId {
-            WhatYouGetStrip(category: selected, items: viewModel.whatYouGetItems)
-        }
+            if !viewModel.whatYouGetItems.isEmpty,
+               let selected = viewModel.selectedCategoryId {
+                WhatYouGetStrip(category: selected, items: viewModel.whatYouGetItems)
+            }
 
-        StepPreviewMeta()
+            StepPreviewMeta()
+        }
     }
 }
 
