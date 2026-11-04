@@ -171,7 +171,6 @@ data class EditBusinessPageLocation(
     val error: String? = null,
     val mapVerified: Boolean,
     val pinDirty: Boolean = false,
-    val hideExactAddress: Boolean,
 ) {
     /**
      * `City, ST ZIP` — display-only projection of the locality parts. Never

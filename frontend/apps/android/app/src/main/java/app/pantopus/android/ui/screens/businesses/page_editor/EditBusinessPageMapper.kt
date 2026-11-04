@@ -447,7 +447,6 @@ internal object EditBusinessPageMapper {
             state = field(location?.state, "State"),
             zip = field(location?.zipcode, "ZIP"),
             mapVerified = location?.location != null,
-            hideExactAddress = false,
         )
 
     private fun lastPublishedLabel(publishedAt: String?): String {
