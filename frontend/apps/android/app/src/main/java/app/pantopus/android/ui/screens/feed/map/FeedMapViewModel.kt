@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.models.postsmap.PostsMapResponse
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.refusesStoredCopy
 import app.pantopus.android.data.location.LocationProvider
+import app.pantopus.android.data.location.PASSIVE_LOCATION_TIMEOUT_MILLIS
 import app.pantopus.android.data.location.UserCoordinate
 import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.postsmap.PostsMapRepository
@@ -312,7 +313,9 @@ class FeedMapViewModel
         private suspend fun initializeMap() {
             if (userCoordinate == null) {
                 userCoordinate = locationProvider.cachedCoordinate()
-                if (selectedArea == null && userCoordinate == null) userCoordinate = locationProvider.requestCurrent()
+                if (selectedArea == null && userCoordinate == null) {
+                    userCoordinate = locationProvider.requestCurrent(timeoutMillis = PASSIVE_LOCATION_TIMEOUT_MILLIS)
+                }
             }
             val center =
                 selectedArea ?: userCoordinate?.let { it.latitude to it.longitude } ?: defaultArea

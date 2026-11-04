@@ -26,6 +26,7 @@ import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.feed.FeedActionsRepository
 import app.pantopus.android.data.feed.FeedModerationStore
 import app.pantopus.android.data.location.LocationProvider
+import app.pantopus.android.data.location.PASSIVE_LOCATION_TIMEOUT_MILLIS
 import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.posts.FeedQuery
 import app.pantopus.android.data.posts.PostsRepository
@@ -1402,7 +1403,7 @@ class PulseFeedViewModel
 
         private suspend fun awaitFreshCoordinates(): Pair<Double, Double>? {
             val cached = locationProvider.cachedCoordinate()
-            val fresh = cached ?: locationProvider.requestCurrent(timeoutMillis = 4_000)
+            val fresh = cached ?: locationProvider.requestCurrent(timeoutMillis = PASSIVE_LOCATION_TIMEOUT_MILLIS)
             val coordinate = fresh ?: return null
             resolvedLatitude = coordinate.latitude
             resolvedLongitude = coordinate.longitude
