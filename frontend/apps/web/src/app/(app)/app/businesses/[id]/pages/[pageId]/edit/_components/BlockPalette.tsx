@@ -9,11 +9,11 @@ interface BlockPaletteProps {
 
 export default function BlockPalette({ onAddBlock }: BlockPaletteProps) {
   return (
-    <aside id="business-block-palette" className="w-56 bg-app-surface border-r border-app-border flex flex-col flex-shrink-0 overflow-hidden">
+    <aside id="business-block-palette" className="w-full md:w-56 max-h-40 md:max-h-none bg-app-surface border-b md:border-b-0 md:border-r border-app-border flex flex-col flex-shrink-0 overflow-hidden">
       <div className="px-3 py-2 border-b border-app-border-subtle">
         <div className="text-xs font-semibold text-app-text-secondary uppercase tracking-wider">Add Blocks</div>
       </div>
-      <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+      <div className="flex-1 min-h-0 overflow-y-auto p-2 grid grid-cols-2 md:block gap-0.5 md:space-y-0.5">
         {BLOCK_TYPE_REGISTRY.filter((reg) => !BLOCKS_NOT_SHOWN_TO_VISITORS.has(reg.type)).map((reg) => (
           <button
             key={reg.type}
@@ -29,7 +29,7 @@ export default function BlockPalette({ onAddBlock }: BlockPaletteProps) {
         ))}
       </div>
       {/* Keyboard shortcuts hint */}
-      <div className="px-3 py-2 border-t border-app-border-subtle text-[10px] text-app-text-muted space-y-0.5">
+      <div className="hidden md:block px-3 py-2 border-t border-app-border-subtle text-[10px] text-app-text-muted space-y-0.5">
         <div><kbd className="px-1 py-0.5 bg-app-surface-sunken rounded text-[9px]">⌘S</kbd> Save</div>
         <div><kbd className="px-1 py-0.5 bg-app-surface-sunken rounded text-[9px]">⌘Z</kbd> Undo <kbd className="px-1 py-0.5 bg-app-surface-sunken rounded text-[9px]">⌘⇧Z</kbd> Redo</div>
         <div><kbd className="px-1 py-0.5 bg-app-surface-sunken rounded text-[9px]">⌘D</kbd> Duplicate <kbd className="px-1 py-0.5 bg-app-surface-sunken rounded text-[9px]">Del</kbd> Delete</div>
