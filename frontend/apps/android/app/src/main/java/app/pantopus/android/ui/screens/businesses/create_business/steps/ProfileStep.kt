@@ -87,23 +87,19 @@ fun ProfileStep(
 
     LocationSection(state = state, callbacks = callbacks)
 
+    state.submitError?.let { error ->
+        SubmissionMessage(
+            message = error,
+            color = PantopusColors.error,
+            tag = "createBusinessSubmitError",
+        )
+    }
+
     if (!state.locationSkipped) {
         HoursSection(state = state, callbacks = callbacks)
     }
 
     LogoSection(state = state, callbacks = callbacks)
-
-    state.submitError?.let { error ->
-        Text(
-            text = error,
-            style = PantopusTextStyle.caption,
-            color = PantopusColors.error,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .testTag("createBusinessSubmitError"),
-        )
-    }
 }
 
 @Composable
