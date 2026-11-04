@@ -49,6 +49,7 @@ const FILTER_OPTIONS: { key: string | undefined; label: string }[] = [
   { key: 'overdue', label: 'Overdue' },
   { key: 'void', label: 'Void' },
 ];
+const PAGE_SIZE = 50;
 
 interface Props {
   businessId: string;
@@ -58,8 +59,18 @@ interface Props {
 export default function InvoicesTab({ businessId, canManage }: Props) {
   const [invoices, setInvoices] = useState<BusinessInvoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadedPage, setLoadedPage] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [failedPage, setFailedPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [showCreate, setShowCreate] = useState(false);
+  const listGeneration = useRef(0);
+  const listBusy = useRef(false);
+  const listScope = useRef<string | null>(null);
+  const scope = `${businessId}:${statusFilter || ''}`;
+  listScope.current = scope;
 
   // Create form
   // The recipient is picked from people the crew already knows; their id is what's sent.
@@ -67,6 +78,8 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
   const [recipientQuery, setRecipientQuery] = useState('');
   const [recipientOptions, setRecipientOptions] = useState<InvoiceRecipient[]>([]);
   const [recipientsLoading, setRecipientsLoading] = useState(false);
+  const [recipientError, setRecipientError] = useState<string | null>(null);
+  const [recipientRetry, setRecipientRetry] = useState(0);
   const [memo, setMemo] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [lineItems, setLineItems] = useState([{ description: '', amount: '', quantity: '1' }]);
@@ -75,37 +88,64 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
   // the server answers with the invoice it already sent instead of sending another.
   const pendingCreate = useRef<{ draft: string; id: string } | null>(null);
 
-  const loadInvoices = useCallback(async () => {
-    setLoading(true);
+  const retireList = useCallback(() => {
+    listScope.current = null; listGeneration.current++; listBusy.current = false;
+  }, []);
+
+  const loadInvoices = useCallback(async (page = 1) => {
+    if (listScope.current !== scope || (page > 1 && listBusy.current)) return;
+    const request = ++listGeneration.current;
+    listBusy.current = true;
+    setLoadError(null);
+    if (page === 1) {
+      setLoading(true); setLoadingMore(false); setInvoices([]); setLoadedPage(0); setHasMore(false);
+    } else setLoadingMore(true);
     try {
       const result = await api.businesses.getBusinessInvoices(businessId, {
-        page: 1,
-        page_size: 50,
+        page,
+        page_size: PAGE_SIZE,
         ...(statusFilter ? { status: statusFilter } : {}),
       });
-      setInvoices(result.invoices || []);
-    } catch {
-      setInvoices([]);
+      if (request !== listGeneration.current || listScope.current !== scope) return;
+      if (!Array.isArray(result.invoices) || !Number.isFinite(result.pagination?.total)) throw new Error('Could not load invoices. Please retry.');
+      setInvoices(prev => page === 1 ? result.invoices
+        : [...new Map([...prev, ...result.invoices].map(invoice => [invoice.id, invoice])).values()]);
+      setLoadedPage(page);
+      setHasMore(result.invoices.length > 0 && page * PAGE_SIZE < result.pagination.total);
+    } catch (err: unknown) {
+      if (request !== listGeneration.current || listScope.current !== scope) return;
+      setLoadError(err instanceof Error ? err.message : 'Could not load invoices. Please retry.');
+      setFailedPage(page);
     } finally {
-      setLoading(false);
+      if (request === listGeneration.current && listScope.current === scope) {
+        listBusy.current = false; setLoading(false); setLoadingMore(false);
+      }
     }
-  }, [businessId, statusFilter]);
+  }, [businessId, statusFilter, scope]);
 
-  useEffect(() => { loadInvoices(); }, [loadInvoices]);
+  useEffect(() => {
+    listScope.current = scope;
+    void loadInvoices();
+    return retireList;
+  }, [loadInvoices, scope, retireList]);
 
   // Matches as the owner types; with nothing typed, the most recent people the crew knows.
   useEffect(() => {
     if (!showCreate || recipient) return;
     let current = true;
-    setRecipientsLoading(true);
+    setRecipientsLoading(true); setRecipientError(null); setRecipientOptions([]);
     const timer = setTimeout(() => {
       api.businesses.getInvoiceRecipients(businessId, recipientQuery.trim() || undefined)
-        .then((res) => { if (current) setRecipientOptions(res.people || []); })
-        .catch(() => { if (current) setRecipientOptions([]); })
+        .then((res) => {
+          if (!current) return;
+          if (!Array.isArray(res.people)) throw new Error('Could not load recipients. Please retry.');
+          setRecipientOptions(res.people);
+        })
+        .catch((err: unknown) => { if (current) setRecipientError(err instanceof Error ? err.message : 'Could not load recipients. Please retry.'); })
         .finally(() => { if (current) setRecipientsLoading(false); });
     }, recipientQuery ? 250 : 0);
     return () => { current = false; clearTimeout(timer); };
-  }, [businessId, showCreate, recipient, recipientQuery]);
+  }, [businessId, showCreate, recipient, recipientQuery, recipientRetry]);
 
   const handleVoid = async (invoiceId: string) => {
     const ok = await confirmStore.open({
@@ -203,7 +243,14 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
       {/* Invoice list */}
       {loading ? (
         <div className="flex items-center justify-center py-16"><div className="animate-spin h-8 w-8 border-2 border-violet-600 border-t-transparent rounded-full" /></div>
-      ) : invoices.length === 0 ? (
+      ) : <>
+      {loadError && (
+        <div role="alert" className="text-center py-6">
+          <p className="text-sm text-red-600">{loadError}</p>
+          <button onClick={() => void loadInvoices(failedPage)} className="text-sm text-violet-600 font-medium mt-3 hover:underline">Retry</button>
+        </div>
+      )}
+      {invoices.length === 0 ? !loadError && (
         <div className="text-center py-16">
           <FileText className="w-12 h-12 mx-auto text-app-text-muted mb-3" />
           <p className="text-sm text-app-text-secondary">{statusFilter ? `No ${statusFilter} invoices` : 'No invoices yet'}</p>
@@ -258,6 +305,13 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
           })}
         </div>
       )}
+      {hasMore && !loadError && (
+        <button onClick={() => void loadInvoices(loadedPage + 1)} disabled={loadingMore}
+          className="w-full py-3 text-sm text-violet-600 font-medium hover:underline disabled:opacity-50 mt-2">
+          {loadingMore ? 'Loading...' : 'Load more invoices'}
+        </button>
+      )}
+      </>}
 
       {/* Create Invoice Modal */}
       {canManage && showCreate && (
@@ -287,7 +341,12 @@ export default function InvoicesTab({ businessId, canManage }: Props) {
                       autoComplete="off"
                       className="w-full text-sm px-3 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-violet-500" />
                     <div className="mt-1 max-h-48 overflow-y-auto border border-app-border-subtle rounded-lg divide-y divide-app-border-subtle">
-                      {recipientOptions.length === 0 ? (
+                      {recipientError ? (
+                        <div role="alert" className="px-3 py-2">
+                          <p className="text-xs text-red-600">{recipientError}</p>
+                          <button type="button" onClick={() => setRecipientRetry(value => value + 1)} className="text-xs text-violet-600 font-medium mt-2 hover:underline">Retry recipient search</button>
+                        </div>
+                      ) : recipientOptions.length === 0 ? (
                         <p className="px-3 py-2 text-xs text-app-text-muted">
                           {recipientsLoading
                             ? 'Searching…'
