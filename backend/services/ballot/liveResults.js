@@ -87,6 +87,14 @@ async function electionIdFor(reader) {
   return reader.electionId;
 }
 
+// A candidate's party as the state words it: Washington's "(Prefers
+// Democratic Party)" reads "Prefers Democratic Party", and Utah's
+// "Democratic" stays as it is. Nonpartisan races and measures have none.
+function partyOf(option) {
+  const label = textOf(option && option.party && option.party.name).replace(/^\((.*)\)$/, '$1').trim();
+  return label || null;
+}
+
 // The site's text fields are lists of translations.
 function textOf(value) {
   if (Array.isArray(value)) {
@@ -192,6 +200,7 @@ function racesFrom(data, classify = classifyByGroup) {
         name: optionName,
         votes: Number(o && o.voteCount) || 0,
         writeIn: Boolean(o && o.isWriteIn) || /^write-?in$/i.test(optionName),
+        party: partyOf(o),
       };
     });
     // The site's own total: every option's votes, write-ins included.
@@ -316,8 +325,22 @@ function measureOrder(options) {
   return [...options].sort((a, b) => rank(a) - rank(b));
 }
 
+// Only the two major parties' own labels get a color (blue, red), matched
+// whole so a "Prefers Independent Republican Party" stays neutral like every
+// other party; nonpartisan races and measures have no party at all.
+const PARTY_TONES = [
+  ['democratic', /^(prefers )?democratic( party)?$/i],
+  ['republican', /^(prefers )?republican( party)?$/i],
+];
+
+function partyTone(label) {
+  const match = label && PARTY_TONES.find(([, re]) => re.test(label));
+  return match ? match[0] : null;
+}
+
 // One race as apps draw it: every word and number already written, and each
-// choice's share of the race's votes (write-ins included) for its bar.
+// choice's share of the race's votes (write-ins included) for its bar, with
+// the candidate's party as the state words it.
 function drawnRace(race) {
   const measure = race.kind === 'measure' && race.options.length === 2;
   return {
@@ -330,6 +353,8 @@ function drawnRace(race) {
       votes_label: o.votes.toLocaleString('en-US'),
       percent_label: percent(o.votes, race.total),
       share: Math.round((o.votes / race.total) * 10000) / 10000,
+      party_label: o.party,
+      party_tone: partyTone(o.party),
     })),
   };
 }

@@ -116,7 +116,14 @@ function readCountOption(v: unknown): BallotCountOption | null {
   const o = record(v);
   const share = o && num(o.share);
   if (!o || !text(o.name) || !text(o.votes_label) || !text(o.percent_label) || share === null) return null;
-  return { name: o.name as string, votes_label: o.votes_label as string, percent_label: o.percent_label as string, share };
+  return {
+    name: o.name as string,
+    votes_label: o.votes_label as string,
+    percent_label: o.percent_label as string,
+    share,
+    party_label: text(o.party_label),
+    party_tone: o.party_tone === 'democratic' || o.party_tone === 'republican' ? o.party_tone : null,
+  };
 }
 
 function readCountRace(v: unknown): BallotCountRace | null {
