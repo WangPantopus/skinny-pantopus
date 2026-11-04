@@ -122,6 +122,8 @@ class PlanDetailViewModel
         private var loadJob: Job? = null
         private var requestsJob: Job? = null
         private var askedOnOpen = false
+        private var active = true
+        private var readGeneration = 0L
 
         init {
             repository.card(planId)?.let { card -> _ui.update { it.copy(state = PlanDetailUiState.Ready(card, fresh = false)) } }
@@ -129,7 +131,7 @@ class PlanDetailViewModel
 
         /** Every appearance: read the plan fresh (opening an invitation first, once). */
         fun load() {
-            if (loadJob?.isActive == true) return
+            if (!active || loadJob?.isActive == true) return
             loadJob =
                 viewModelScope.launch {
                     claimInviteOnce()
@@ -144,8 +146,11 @@ class PlanDetailViewModel
         private suspend fun claimInviteOnce() {
             val token = inviteToken ?: return
             if (inviteClaimed) return
+            val generation = readGeneration
+            val result = repository.claimInvite(planId, token)
+            if (!active || generation != readGeneration) return
             inviteClaimed = true
-            when (val result = repository.claimInvite(planId, token)) {
+            when (result) {
                 is NetworkResult.Success ->
                     result.data.plan?.let { plan -> _ui.update { it.copy(state = PlanDetailUiState.Ready(plan, fresh = false)) } }
                 is NetworkResult.Failure -> {
@@ -170,16 +175,26 @@ class PlanDetailViewModel
             }
 
         private suspend fun read() {
-            when (val read = repository.read(planId)) {
+            if (!active) return
+            val generation = readGeneration
+            val read = repository.read(planId)
+            if (!active || generation != readGeneration) return
+            when (read) {
                 is PlanRead.Found -> show(read.plan)
                 is PlanRead.Locked -> _ui.update { it.copy(state = PlanDetailUiState.PlaydateLocked(read.city, read.invitedBy)) }
                 PlanRead.Missing -> _ui.update { it.copy(state = PlanDetailUiState.Gone) }
                 is PlanRead.Failed ->
                     _ui.update {
-                        if (it.state is PlanDetailUiState.Ready) {
+                        val refused = read.error is NetworkError.Forbidden || read.error == NetworkError.Unauthorized
+                        if (it.state is PlanDetailUiState.Ready && !refused) {
                             it.copy(notice = read.error.planMessage)
                         } else {
-                            it.copy(state = PlanDetailUiState.Failed(read.error.planMessage))
+                            it.copy(
+                                state = PlanDetailUiState.Failed(read.error.planMessage),
+                                requests = null,
+                                others = emptyList(),
+                                reveal = false,
+                            )
                         }
                     }
             }
@@ -209,9 +224,11 @@ class PlanDetailViewModel
         private fun loadRequests() {
             requestsJob?.cancel()
             _ui.update { it.copy(requests = null) }
+            val generation = readGeneration
             requestsJob =
                 viewModelScope.launch {
-                    (repository.requests(planId) as? NetworkResult.Success)?.data?.let { reply -> _ui.update { it.copy(requests = reply) } }
+                    val reply = (repository.requests(planId) as? NetworkResult.Success)?.data
+                    if (active && generation == readGeneration) _ui.update { it.copy(requests = reply) }
                 }
         }
 
@@ -265,10 +282,25 @@ class PlanDetailViewModel
 
         /** The page is on screen (resumed) or not: a plain push about this plan stays quiet meanwhile. */
         fun onScreen(visible: Boolean) {
+            active = visible
             if (visible) {
                 events.viewedPlanId = planId
-            } else if (events.viewedPlanId == planId) {
-                events.viewedPlanId = null
+            } else {
+                if (events.viewedPlanId == planId) events.viewedPlanId = null
+                readGeneration += 1
+                loadJob?.cancel()
+                loadJob = null
+                requestsJob?.cancel()
+                requestsJob = null
+                val card = repository.card(planId)
+                _ui.update {
+                    it.copy(
+                        state = card?.let { plan -> PlanDetailUiState.Ready(plan, fresh = false) } ?: PlanDetailUiState.Loading,
+                        requests = null,
+                        others = emptyList(),
+                        reveal = false,
+                    )
+                }
             }
         }
 
@@ -283,7 +315,9 @@ class PlanDetailViewModel
         // ---- Ask (J3, J4) ----
 
         fun openAsk() {
-            val plan = (_ui.value.state as? PlanDetailUiState.Ready)?.plan ?: return
+            val ready = _ui.value.state as? PlanDetailUiState.Ready ?: return
+            if (!ready.fresh) return
+            val plan = ready.plan
             // Only a request still waiting fills the sheet ("Change who's coming"); a withdrawn or declined one starts fresh.
             val mine = plan.myRequest?.takeIf { plan.standing == PlanViewerStanding.REQUESTED }
             _ui.update {
@@ -318,6 +352,7 @@ class PlanDetailViewModel
                 return
             }
             _ui.update { it.copy(ask = draft.copy(sending = true, error = null)) }
+            val generation = readGeneration
             viewModelScope.launch {
                 val body =
                     if (playdate) {
@@ -335,6 +370,7 @@ class PlanDetailViewModel
                     is NetworkResult.Success -> {
                         val status = PlanRequestStatus.from(result.data.request?.status)
                         _ui.update { it.copy(askOpen = false, ask = it.ask.copy(sending = false)) }
+                        if (!active || generation != readGeneration) return@launch
                         result.data.plan?.let { reply -> _ui.update { it.copy(state = PlanDetailUiState.Ready(reply, fresh = false)) } }
                         if (status == PlanRequestStatus.ACCEPTED) _ui.update { it.copy(reveal = true) }
                         read()
