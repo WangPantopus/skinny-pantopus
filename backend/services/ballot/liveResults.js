@@ -413,19 +413,21 @@ function cardLines(snapshot, { districts, fips, zone, today }) {
 
 /**
  * The live count for a card, or null when there is none to show. Waits up
- * to WAIT_MS for a read when the last one is over a minute old.
+ * to WAIT_MS for a read when the last one is over a minute old, or only up
+ * to `waitMs` when the card has less time than that left (none at 0).
  */
-async function forCard({ stateCode, electionDate, districts, zone, today, electionNight }) {
+async function forCard({ stateCode, electionDate, districts, zone, today, electionNight, waitMs = WAIT_MS }) {
   const source = sourceFor(stateCode, electionDate);
   if (!source) return null;
   const reader = readerFor(source);
   keepReading(reader, electionNight ? FAST_MS : SLOW_MS);
-  if (!reader.snapshot || Date.now() - reader.snapshot.checkedAt > FRESH_MS) {
+  const wait = Math.min(WAIT_MS, waitMs);
+  if (wait > 0 && (!reader.snapshot || Date.now() - reader.snapshot.checkedAt > FRESH_MS)) {
     let timer = null;
     await Promise.race([
       refresh(reader),
       new Promise((resolve) => {
-        timer = setTimeout(resolve, WAIT_MS);
+        timer = setTimeout(resolve, wait);
         if (typeof timer.unref === 'function') timer.unref();
       }),
     ]);
