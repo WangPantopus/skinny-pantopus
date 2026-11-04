@@ -163,12 +163,7 @@ internal fun EditAccessCodeFormContent(
             onCommit = onCommit,
         ) {
             if (!state.isLoaded) {
-                Text(state.loadError ?: "Checking access…", color = PantopusColors.appTextSecondary)
-                if (state.loadError != null) {
-                    TextButton(onClick = onRetry) { Text("Try again") }
-                } else {
-                    CircularProgressIndicator()
-                }
+                AccessCodeLoading(error = state.loadError, onRetry = onRetry)
             } else {
                 if (state.awaitingCreateConfirmation) {
                     Text(
@@ -268,6 +263,19 @@ internal fun EditAccessCodeFormContent(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun AccessCodeLoading(
+    error: String?,
+    onRetry: () -> Unit,
+) {
+    Text(error ?: "Checking access…", color = PantopusColors.appTextSecondary)
+    if (error != null) {
+        TextButton(onClick = onRetry) { Text("Try again") }
+    } else {
+        CircularProgressIndicator()
     }
 }
 
