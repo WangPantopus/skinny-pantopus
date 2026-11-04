@@ -42,6 +42,8 @@ data class HomeEmergencyDto(
 @JsonClass(generateAdapter = true)
 data class GetHomeEmergenciesResponse(
     val emergencies: List<HomeEmergencyDto>,
+    /** Effective authority from this same sensitive read; older servers leave the screen read-only. */
+    val canManage: Boolean = false,
 ) {
     init {
         // Moshi can decode null array members despite the Kotlin element type.
