@@ -13,6 +13,8 @@ struct PostPageDestination: View {
     let postId: String
     /// The signed-in person's id, "" when signed out.
     let currentUserId: String
+    /// The post's model when the stack keeps it (Messages, through a fold or a turn); a new one otherwise.
+    var viewModel: PulsePostDetailViewModel?
     let onBack: @MainActor () -> Void
     let onOpenProfile: @MainActor (String) -> Void
     /// Opens the composer on one of your own posts.
@@ -22,6 +24,7 @@ struct PostPageDestination: View {
         PulsePostDetailView(
             postId: postId,
             currentUserId: currentUserId.isEmpty ? nil : currentUserId,
+            viewModel: viewModel,
             onBack: onBack,
             onOpenProfile: onOpenProfile,
             onEdit: onEdit,
