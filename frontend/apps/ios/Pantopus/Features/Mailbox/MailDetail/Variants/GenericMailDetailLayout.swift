@@ -46,14 +46,18 @@ struct GenericMailDetailLayout: View {
 
     var body: some View {
         if let letter = content.letter, let letterHooks {
-            letterPage(letter, hooks: letterHooks)
+            ScrollViewReader { scroll in
+                letterPage(letter, hooks: letterHooks) {
+                    scroll.scrollTo(content.mailId, anchor: .top)
+                }
+            }
         } else {
             cards
         }
     }
 
     /// The envelope, Pantopus's note, the letter (or a bundle's pieces) and the actions.
-    private func letterPage(_ letter: MailLetter, hooks: MailLetterPageHooks) -> some View {
+    private func letterPage(_ letter: MailLetter, hooks: MailLetterPageHooks, onShowPage: @escaping () -> Void) -> some View {
         MailItemDetailShell(
             topBar: letterTopBar,
             hero: {
@@ -70,7 +74,7 @@ struct GenericMailDetailLayout: View {
             },
             body: {
                 if letter.card == nil {
-                    letterBody(letter, hooks: hooks)
+                    letterBody(letter, hooks: hooks, onShowPage: onShowPage)
                 }
             },
             actions: {
@@ -89,7 +93,7 @@ struct GenericMailDetailLayout: View {
 
     /// Pantopus's note clipped to the letter, and the letter (or a booklet's
     /// pages, or a bundle's pieces).
-    private func letterBody(_ letter: MailLetter, hooks: MailLetterPageHooks) -> some View {
+    private func letterBody(_ letter: MailLetter, hooks: MailLetterPageHooks, onShowPage: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s0) {
             if let summary = letter.summary {
                 // Clipped to the top of the letter, over its edge.
@@ -101,7 +105,8 @@ struct GenericMailDetailLayout: View {
             }
             if let booklet = content.bookletDetail {
                 // A booklet pages through.
-                BookletPager(pages: booklet.pages, pageCount: booklet.pageCount, ocrTexts: booklet.ocrTexts)
+                BookletPager(pages: booklet.pages, pageCount: booklet.pageCount, ocrTexts: booklet.ocrTexts, onShowPage: onShowPage)
+                    .id(content.mailId)
                     .padding(.top, Spacing.s2)
             } else if letter.kind == .bundle {
                 MailBundleContents(

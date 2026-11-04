@@ -10,8 +10,7 @@
 import SwiftUI
 import UIKit
 
-/// Rendering mode for the pager. Exposed at the view init so the variant
-/// view can persist the mode in its caller (e.g. across re-renders).
+/// Page or thumbnail presentation of a booklet.
 public enum BookletPagerMode: Sendable, Hashable {
     case page
     case grid
@@ -23,6 +22,7 @@ public struct BookletPager: View {
     private let pages: [URL]
     private let pageCount: Int
     private let ocrTexts: [String]
+    private let onShowPage: () -> Void
     @State private var currentIndex: Int
     @State private var mode: BookletPagerMode
 
@@ -31,11 +31,13 @@ public struct BookletPager: View {
         pageCount: Int? = nil,
         ocrTexts: [String] = [],
         initialPage: Int = 0,
-        initialMode: BookletPagerMode = .page
+        initialMode: BookletPagerMode = .page,
+        onShowPage: @escaping () -> Void = {}
     ) {
         self.pages = pages
         self.pageCount = max(pageCount ?? pages.count, pages.count)
         self.ocrTexts = ocrTexts
+        self.onShowPage = onShowPage
         _currentIndex = State(initialValue: max(0, min(initialPage, max(0, pages.count - 1))))
         _mode = State(initialValue: initialMode)
     }
@@ -77,7 +79,6 @@ public struct BookletPager: View {
         }
     }
 
-    /// A17.2 — per-page OCR transcript, when the sample data carries one.
     private func ocrText(for index: Int) -> String? {
         guard ocrTexts.indices.contains(index) else { return nil }
         let text = ocrTexts[index]
@@ -228,6 +229,7 @@ public struct BookletPager: View {
                     Button {
                         currentIndex = idx
                         mode = .page
+                        onShowPage()
                     } label: {
                         ThumbnailCell(
                             url: url,
@@ -246,6 +248,7 @@ public struct BookletPager: View {
                 Spacer()
                 Button {
                     mode = .page
+                    onShowPage()
                 } label: {
                     HStack(spacing: Spacing.s1) {
                         Icon(.chevronLeft, size: 12, color: Theme.Color.primaryInk)
@@ -279,29 +282,32 @@ private struct BookletPageImage: View {
     let url: URL
     let pageNumber: Int
     let hasNextPage: Bool
+    @State private var retryAttempt = 0
 
     var body: some View {
         BookletPaperPageChrome(hasNextPage: hasNextPage) {
-            CachedAsyncImage(url: url, keepsOnDisk: false) { phase in
+            // About the largest a page is shown (a thumbnail, 600), not the scan's full ~31 MB bitmap.
+            CachedAsyncImage(url: url, keepsOnDisk: false, maxPixelSize: 2048) { phase in
                 switch phase {
                 case let .success(image):
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .accessibilityLabel("Booklet page \(pageNumber)")
                 case .failure:
-                    fallback(icon: .alertCircle, label: "Couldn't load page")
+                    fallback(icon: .alertCircle, label: "Couldn't load page", canRetry: true)
                 case .empty:
                     fallback(icon: .fileType, label: "Loading...")
                 @unknown default:
                     fallback(icon: .fileType, label: "")
                 }
             }
+            .id(retryAttempt)
         }
-        .accessibilityLabel("Booklet page \(pageNumber)")
     }
 
-    private func fallback(icon: PantopusIcon, label: String) -> some View {
+    private func fallback(icon: PantopusIcon, label: String, canRetry: Bool = false) -> some View {
         ZStack {
             Theme.Color.appSurfaceSunken
             VStack(spacing: Spacing.s2) {
@@ -310,8 +316,25 @@ private struct BookletPageImage: View {
                     Text(label)
                         .scaledFont(11)
                         .foregroundStyle(Theme.Color.appTextSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                if canRetry {
+                    Button {
+                        retryAttempt += 1
+                    } label: {
+                        Text("Try again")
+                            .scaledFont(11, weight: .semibold)
+                            .foregroundStyle(Theme.Color.primaryInk)
+                            .padding(.horizontal, Spacing.s3)
+                            .padding(.vertical, Spacing.s2)
+                            .frame(minHeight: 44)
+                            .background(Theme.Color.primary50, in: RoundedRectangle(cornerRadius: Radii.pill))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Retry page \(pageNumber)")
                 }
             }
+            .padding(Spacing.s4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -330,7 +353,7 @@ private struct ThumbnailCell: View {
                 foldSize: Spacing.s4,
                 cornerRadius: Radii.sm
             ) {
-                CachedAsyncImage(url: url, keepsOnDisk: false) { phase in
+                CachedAsyncImage(url: url, keepsOnDisk: false, maxPixelSize: 600) { phase in
                     switch phase {
                     case let .success(image):
                         image
@@ -374,8 +397,7 @@ private struct ThumbnailCell: View {
     }
 }
 
-/// The supplied per-page transcript. Only show actions we can perform;
-/// the stored payload does not supply an OCR confidence score.
+/// The supplied transcript, with the supported Copy action.
 private struct BookletOCRCard: View {
     let text: String
     @State private var copied = false
@@ -424,8 +446,7 @@ private struct BookletOCRCard: View {
         }
     }
 
-    /// Transcript lines map onto the JSX kinds by position: line 0 is the
-    /// overline, line 1 the title, the remainder body copy.
+    /// Transcript lines supply an overline, a title, then body copy.
     private var transcript: some View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(Array(text.components(separatedBy: "\n").enumerated()), id: \.offset) { idx, line in
