@@ -59,6 +59,8 @@ public struct BusinessPageBlocksView: View {
         }
         .background(Theme.Color.appBg)
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
+        // Back asks before unsaved edits are dropped; the edge swipe would leave without asking.
+        .swipeBackDisabled(viewModel.hasChanges || viewModel.isSaving || viewModel.isPublishing)
         .navigationTitle(pageTitle.isEmpty ? "Page editor" : pageTitle)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
@@ -84,11 +86,9 @@ public struct BusinessPageBlocksView: View {
         }
         .task { await viewModel.load() }
         .refreshable { await viewModel.refresh() }
-        .alert("Discard unsaved changes?", isPresented: $showsDiscardConfirm) {
+        .alert("Discard unsaved edits?", isPresented: $showsDiscardConfirm) {
             Button("Discard edits", role: .destructive) { requestBack(discardingChanges: true) }
             Button("Keep editing", role: .cancel) {}
-        } message: {
-            Text("Edits will be lost.")
         }
         .sheet(isPresented: pickerBinding) {
             BusinessPageBlockTypePicker(
@@ -109,11 +109,8 @@ public struct BusinessPageBlocksView: View {
                 onClose: { viewModel.editingIndex = nil }
             )
         }
-        .confirmationDialog(
-            "Delete block",
-            isPresented: deleteBinding,
-            titleVisibility: .visible
-        ) {
+        // An alert keeps Cancel; iOS 27 shows a confirmation dialog as a popover with only the destructive choice.
+        .alert("Delete block", isPresented: deleteBinding) {
             Button("Delete block", role: .destructive) {
                 if let index = viewModel.pendingDeleteIndex {
                     viewModel.deleteBlock(at: index)
@@ -222,7 +219,7 @@ public struct BusinessPageBlocksView: View {
 
     private func requestBack(discardingChanges: Bool = false) {
         guard !viewModel.isSaving, !viewModel.isPublishing else {
-            viewModel.toastMessage = "Please wait for your changes to finish saving."
+            viewModel.toastMessage = "Wait for the current update to finish, then try again."
             return
         }
         if viewModel.hasChanges, !discardingChanges {
