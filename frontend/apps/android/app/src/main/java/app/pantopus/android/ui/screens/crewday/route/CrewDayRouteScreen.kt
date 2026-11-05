@@ -1,4 +1,5 @@
 @file:Suppress("LongMethod", "TooManyFunctions", "MatchingDeclarationName")
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 
 package app.pantopus.android.ui.screens.crewday.route
 
@@ -6,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -351,7 +353,8 @@ private fun RouteRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            // The chips wrap to a new line rather than squeeze (200% text: one chip fills the width).
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 CrewDayToneChip(
                     text = routeStatus(home, zone),
                     tone = tone,
