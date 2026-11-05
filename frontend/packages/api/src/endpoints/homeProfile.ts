@@ -321,8 +321,8 @@ export async function deleteHomeEmergency(homeId: string, emergencyId: string) {
 
 // ---- HomeAccessSecret ----
 
-export async function getHomeAccessSecrets(homeId: string) {
-  return get<{ secrets: any[] }>(`/api/homes/${homeId}/access`);
+export async function getHomeAccessSecrets(homeId: string, signal?: AbortSignal) {
+  return get<{ secrets: any[] }>(`/api/homes/${homeId}/access`, undefined, { signal });
 }
 
 export async function createHomeAccessSecret(

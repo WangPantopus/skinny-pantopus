@@ -390,6 +390,10 @@ async function roomMembership(roomId, userId, asBusinessUserId, { activeOnly = f
       if (own) await dropStaffMembership(roomId, userId, businessUserId);
       return business;
     }
+    // An explicit business identity cannot fall back to the person's own
+    // membership. Room details and the first history page must enforce the
+    // same identity as subsequent sync, preferences, reads and sends.
+    if (named) return null;
   }
   if (!own || (activeOnly && own.is_active === false)) return null;
   return own;

@@ -397,7 +397,7 @@ struct PlanHostingSection: View {
 
     private var going: some View {
         let guests = (viewModel.plan?.people ?? []).filter { !$0.isHost }
-        let filled = guests.reduce(0) { $0 + max($1.partySize, 1) }
+        let filled = card.goingCount
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text.planOverline("Going · \(filled) of \(card.spots)")
@@ -408,7 +408,12 @@ struct PlanHostingSection: View {
             }
             .padding(.bottom, Spacing.s1)
             PlanSlotMeter(spots: card.spots, filled: filled).padding(.bottom, 6)
-            if guests.isEmpty {
+            if guests.isEmpty, filled > 0 {
+                Text(viewModel.isLoadingDetails ? "Loading guest details…" : "Pull down to load guest details.")
+                    .planFont(.small)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .padding(.vertical, Spacing.s2)
+            } else if guests.isEmpty {
                 Text((card.requestsCount ?? 0) > 0 ? "Nobody's in yet." : "Nobody yet. We'll tell you when someone asks.")
                     .planFont(.small)
                     .foregroundStyle(Theme.Color.appTextSecondary)

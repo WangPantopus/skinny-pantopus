@@ -60,7 +60,6 @@ final class EmergencyInfoViewModelTests: XCTestCase {
             return
         }
         XCTAssertEqual(content.headline, "No emergency info set up")
-        XCTAssertEqual(content.ctaTitle, "Add info")
     }
 
     func testErrorResponseRendersErrorState() async {

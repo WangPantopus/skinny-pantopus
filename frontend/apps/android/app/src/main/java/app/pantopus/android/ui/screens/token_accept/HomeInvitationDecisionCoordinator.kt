@@ -99,6 +99,8 @@ class HomeInvitationDecisionCoordinator(
         originalId: String,
     ) = operation { opening ->
         verify(pending?.request?.requestId == originalId)
+        // A cold open can restore the saved answer before its session read fails. Retry that read too.
+        if (serverSession == null) readSession(opening)
         resolveOriginal(action, opening)
     }
 

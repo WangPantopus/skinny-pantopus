@@ -23,7 +23,7 @@ test.each([
   expect(rpc).toHaveBeenCalledTimes(1);
   if (!action) {
     expect(rpc).toHaveBeenCalledWith('get_home_access_secrets', { p_home_id: 'home', p_actor_id: 'real-actor' });
-    expect(res.body).toEqual({ secrets: [secret] });
+    expect(res.body).toEqual({ secrets: [secret], canManage: false, allowedVisibilities: [] });
   } else {
     expect(rpc).toHaveBeenCalledWith('mutate_home_access_secret', expect.objectContaining({
       p_home_id: 'home', p_actor_id: 'real-actor', p_action: action,

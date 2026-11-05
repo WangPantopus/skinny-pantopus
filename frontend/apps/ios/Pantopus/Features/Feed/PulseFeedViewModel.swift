@@ -1139,9 +1139,10 @@ public final class PulseFeedViewModel {
             return (FeedArea(latitude: cached.latitude, longitude: cached.longitude), nil)
         }
         // Asking for location is "Use my location"'s job. Opening Pulse uses a fresh fix only
-        // when it needs no prompt; otherwise the server falls back to the person's own place.
+        // when it needs no prompt. Keep that passive wait brief: a slow GPS fix must not
+        // hold up the feed when the server can fall back to the person's own place.
         if locationProvider.canLocateWithoutAsking,
-           let fresh = await locationProvider.requestCurrent(timeoutSeconds: 4) {
+           let fresh = await locationProvider.requestCurrent(timeoutSeconds: passiveLocationTimeoutSeconds) {
             resolvedLatitude = fresh.latitude
             resolvedLongitude = fresh.longitude
             return (FeedArea(latitude: fresh.latitude, longitude: fresh.longitude), nil)
