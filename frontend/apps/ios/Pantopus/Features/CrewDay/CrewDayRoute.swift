@@ -33,8 +33,7 @@ public enum CrewDayRoute: Hashable {
     /// The screen draws its own bar (`PlanNavBar`, the wizard's), so the stack hides its own.
     var drawsOwnHeader: Bool {
         switch self {
-        case .crewList, .newCrewDay, .crewDay, .invitation, .book: true
-        case .booking, .mine, .ask: false
+        case .crewList, .newCrewDay, .crewDay, .invitation, .book, .booking, .mine, .ask: true
         }
     }
 }
@@ -89,8 +88,24 @@ enum CrewDayRouter {
                     push(.crewDay(.booking(bookingId: bookingId)))
                 }
             )
-        case .booking, .mine, .ask:
-            NotYetAvailableView(tabName: "Crew Day", icon: .truck, onBack: pop)
+        case let .booking(bookingId):
+            CrewDayBookingView(
+                viewModel: CrewDayBookingViewModel(bookingId: bookingId),
+                onBack: pop,
+                onOpenInvoice: { push(.invoiceDetail(invoiceId: $0)) },
+                onOpenMine: { push(.crewDay(.mine)) },
+                onAsk: { push(.crewDay(.ask)) }
+            )
+        case .mine:
+            CrewDaysMineView(
+                viewModel: CrewDaysMineViewModel(),
+                onBack: pop,
+                onOpenBooking: { push(.crewDay(.booking(bookingId: $0))) },
+                onOpenInvitation: { push(.crewDay(.invitation(code: $0))) },
+                onAsk: { push(.crewDay(.ask)) }
+            )
+        case .ask:
+            CrewDayAskView(model: CrewDayAskModel(), onBack: pop) { push(.addHome) }
         }
     }
 }

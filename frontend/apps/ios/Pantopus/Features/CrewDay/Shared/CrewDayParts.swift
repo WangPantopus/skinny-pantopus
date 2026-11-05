@@ -156,7 +156,7 @@ struct CrewDayPromiseRow: View {
 
 /// A small status chip ("Open", "Waiting for approval", "Paid out").
 struct CrewDayChip: View {
-    enum Tone { case neutral, good, waiting, bad, business }
+    enum Tone { case neutral, good, waiting, bad, business, info }
 
     let text: String
     var tone: Tone = .neutral
@@ -178,6 +178,7 @@ struct CrewDayChip: View {
         case .waiting: Theme.Color.warningDeep
         case .bad: Theme.Color.error
         case .business: Theme.Color.business
+        case .info: Theme.Color.info
         }
     }
 
@@ -188,6 +189,7 @@ struct CrewDayChip: View {
         case .waiting: Theme.Color.warningBg
         case .bad: Theme.Color.errorBg
         case .business: Theme.Color.businessBg
+        case .info: Theme.Color.infoBg
         }
     }
 }
