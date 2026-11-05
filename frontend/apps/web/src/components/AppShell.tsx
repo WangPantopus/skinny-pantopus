@@ -357,6 +357,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const isSettingsRoute = pathname.startsWith('/app/profile/settings') || pathname.startsWith('/app/settings');
   const isMyPostsRoute = pathname.startsWith('/app/my-pulse');
   const isConnectionsRoute = pathname.startsWith('/app/connections');
+  // Launch cut #13: the household's Crew Days (screen 10), only while `crew_day` is on.
+  const isCrewDaysRoute = pathname.startsWith('/app/crew-days');
 
   // ── Memoized inline style objects (avoid new identity per render) ──
   const topBarStyle = useMemo(() => ({ left: sidebarWidth }), [sidebarWidth]);
@@ -576,6 +578,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             {/* Your posts and the ones you saved (the my-x screens left the main nav; native: drawer "My Pulse", You → "My posts") */}
             <SidebarItem icon={NavIcons.myPulse} label="My posts" active={isMyPostsRoute} onClick={() => router.push('/app/my-pulse')} showLabel={showLabels} testId="sidebar-my-posts" />
 
+            {/* Crew Days: the household's bookings and street requests (launch cut #13, only while `crew_day` is on) */}
+            {launchFeatures.crewDay ? <SidebarItem icon={NavIcons.crewDays} label="Crew Days" active={isCrewDaysRoute} onClick={() => router.push('/app/crew-days')} showLabel={showLabels} testId="sidebar-crew-days" /> : null}
+
             {/* Settings */}
             <SidebarItem icon={NavIcons.settings} label="Settings" active={isSettingsRoute} onClick={() => router.push('/app/profile/settings')} showLabel={showLabels} />
 
@@ -656,6 +661,18 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                 }}
                 showLabel
               />
+              {launchFeatures.crewDay ? (
+                <SidebarItem
+                  icon={NavIcons.crewDays}
+                  label="Crew Days"
+                  active={isCrewDaysRoute}
+                  onClick={() => {
+                    router.push('/app/crew-days');
+                    sidebarDispatch({ type: 'SET_MOBILE_OPEN', value: false });
+                  }}
+                  showLabel
+                />
+              ) : null}
               <SidebarItem
                 icon={NavIcons.settings}
                 label="Settings"
