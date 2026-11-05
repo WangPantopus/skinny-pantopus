@@ -1,18 +1,24 @@
 // ============================================================
-// API CLIENT - Axios Configuration
-// Connects frontend to backend API
+// API CLIENT
+// Connects frontend to backend API (fetch transport: ./http)
 // Supports both web (localStorage) and mobile (SecureStore etc.)
 // ============================================================
 
-import axios, {
-  AxiosAdapter,
-  AxiosInstance,
-  AxiosError,
-  AxiosRequestConfig,
-  InternalAxiosRequestConfig,
-} from 'axios';
-import type { ApiResponse } from '@pantopus/types';
 import { API_BASE_URL } from '@pantopus/utils';
+import {
+  HttpError,
+  buildFullPath,
+  buildURL,
+  dispatchRequest,
+  fetchAdapter,
+  mergeHeaders,
+  responseHeaders,
+  setHeader,
+  type HttpAdapter,
+  type HttpHeaders,
+  type HttpRequestConfig,
+  type HttpResponse,
+} from './http';
 
 // ============ PLATFORM DETECTION (AUTH-3.3) ============
 // Web uses httpOnly cookies for auth; mobile continues using Bearer tokens.
@@ -71,7 +77,7 @@ export interface AuthClientEvent {
   reason?: string;
 }
 
-export interface ApiRequestConfig extends AxiosRequestConfig {
+export interface ApiRequestConfig extends HttpRequestConfig {
   // Background polling can opt into warn-level dev logging so transient
   // 5xxs do not trigger framework error overlays.
   suppressDevErrorOverlay?: boolean;
@@ -101,7 +107,7 @@ function _emitTokenChange(token: string | null): void {
   }
 }
 
-type SessionBoundRequest = InternalAxiosRequestConfig & { _authSessionMarker?: string };
+type SessionBoundRequest = ApiRequestConfig & { _authSessionMarker?: string; _retry?: boolean };
 
 function currentRequestSession(): string {
   let marker = '';
@@ -118,7 +124,7 @@ export function authSessionMarker(): string {
   return currentRequestSession();
 }
 
-function requestSessionChanged(request?: InternalAxiosRequestConfig): boolean {
+function requestSessionChanged(request?: HttpRequestConfig): boolean {
   const marker = (request as SessionBoundRequest | undefined)?._authSessionMarker;
   return _isWeb && marker !== undefined && marker !== currentRequestSession();
 }
@@ -379,7 +385,7 @@ export function getApiBaseUrl(): string {
 
 /**
  * Auth headers for a raw fetch (e.g. a streaming response), matching the
- * transport the axios client uses: on the web the httpOnly session cookie
+ * transport the API client uses: on the web the httpOnly session cookie
  * plus the CSRF header for writes, never a Bearer token; elsewhere the
  * stored Bearer token.
  */
@@ -500,18 +506,21 @@ export function setTokenCache(token: string | null): void {
   _emitTokenChange(token);
 }
 
-// ============ AXIOS INSTANCE ============
+// ============ CLIENT DEFAULTS ============
 
-const apiClient: AxiosInstance = axios.create({
+const ACCEPT = 'application/json, text/plain, */*';
+
+const clientDefaults: { baseURL: string; timeout: number; headers: HttpHeaders } = {
   // Web: use relative URLs so requests go through the Next.js rewrite
   // proxy (same-origin → cookies sent automatically, no CORS needed).
   // Mobile: use the full backend URL directly.
   baseURL: _isWeb ? '' : API_BASE_URL,
   timeout: 30000,
   headers: {
+    Accept: ACCEPT,
     'Content-Type': 'application/json',
   },
-});
+};
 
 // ============ STARTUP SESSION RECOVERY (web) ============
 // An app document loaded after the 1-hour access cookie expired starts
@@ -564,17 +573,17 @@ async function awaitStartupRecovery(): Promise<void> {
 // its scripts download (apps/web src/lib/early-reads.ts). This page's first
 // request for the same URL takes that response instead of asking again: once,
 // only a successful one, only while it is fresh and only for the session that
-// started it. Interceptors run as for any request.
+// started it. The request and response steps run as for any request.
 
 type EarlyReads = { marker: string; at: number; reads: Record<string, Promise<Response | null> | undefined> };
 const EARLY_READ_MAX_AGE_MS = 30_000;
 
-function takeEarlyRead(config: InternalAxiosRequestConfig): Promise<Response | null> | null {
+function takeEarlyRead(config: HttpRequestConfig): Promise<Response | null> | null {
   if (!_isWeb || typeof window === 'undefined' || _authChangeSequence !== 0) return null;
   if ((config.method || 'get').toLowerCase() !== 'get') return null;
   const early = (window as unknown as { __pantopusEarly?: EarlyReads }).__pantopusEarly;
   if (!early?.reads) return null;
-  const url = apiClient.getUri(config);
+  const url = buildURL(buildFullPath(config.baseURL, config.url), config.params);
   const read = early.reads[url];
   if (!read) return null;
   delete early.reads[url];
@@ -584,69 +593,61 @@ function takeEarlyRead(config: InternalAxiosRequestConfig): Promise<Response | n
   return read;
 }
 
-// axios's own choice of transport, resolved per request as axios does.
-const defaultAdapters = apiClient.defaults.adapter;
-const networkAdapter: AxiosAdapter = (config) => axios.getAdapter(defaultAdapters)(config);
-apiClient.defaults.adapter = async (config) => {
+// The network unless an early read answers.
+const earlyReadAdapter: HttpAdapter = async (config) => {
   const early = takeEarlyRead(config);
   if (early) {
     const response = await early.catch(() => null);
     if (response?.ok) {
       try {
         const data = await response.json();
-        const headers: Record<string, string> = {};
-        response.headers.forEach((value, name) => { headers[name] = value; });
-        return { data, status: response.status, statusText: response.statusText, headers, config, request: null };
+        return { data, status: response.status, statusText: response.statusText, headers: responseHeaders(response), config };
       } catch { /* not JSON: ask the network */ }
     }
   }
-  return networkAdapter(config);
+  return fetchAdapter(config);
 };
 
-// ============ REQUEST INTERCEPTOR ============
+// ============ REQUEST STEPS ============
+// Every request runs these before it is sent; a failure here is handled as a
+// failed request (handleRequestError), as is a retry's.
 
-apiClient.interceptors.request.use(
-  async (config: InternalAxiosRequestConfig) => {
-    await awaitStartupRecovery();
-    if (requestSessionChanged(config)) return Promise.reject(sessionChangedError());
-    if (_isWeb) (config as SessionBoundRequest)._authSessionMarker = currentRequestSession();
-    if (_isWeb) {
-      // Web: auth token is in httpOnly cookie, sent automatically via
-      // same-origin proxy. Tell backend not to include tokens in JSON body.
-      if (config.headers) {
-        config.headers['x-token-transport'] = 'cookie';
-      }
-      // Attach CSRF token for mutating requests.
-      const method = (config.method || '').toUpperCase();
-      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-        const csrf = getCookie('pantopus_csrf');
-        if (csrf && config.headers) {
-          config.headers['x-csrf-token'] = csrf;
-        }
-      }
-    } else {
-      // Mobile / SSR: use Bearer token from storage
-      const token = _tokenCache || _storage.getToken();
-      if (token && config.headers) {
-        config.headers.Authorization = `Bearer ${token}`;
+async function prepareRequest(config: SessionBoundRequest): Promise<SessionBoundRequest> {
+  await awaitStartupRecovery();
+  if (requestSessionChanged(config)) throw sessionChangedError();
+  if (_isWeb) config._authSessionMarker = currentRequestSession();
+  const headers = (config.headers ??= {});
+  if (_isWeb) {
+    // Web: auth token is in httpOnly cookie, sent automatically via
+    // same-origin proxy. Tell backend not to include tokens in JSON body.
+    setHeader(headers, 'x-token-transport', 'cookie');
+    // Attach CSRF token for mutating requests.
+    const method = (config.method || '').toUpperCase();
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      const csrf = getCookie('pantopus_csrf');
+      if (csrf) {
+        setHeader(headers, 'x-csrf-token', csrf);
       }
     }
-
-    if (isDev && !isPrivateHomeRequest(config.url)) {
-      console.info('[API request]', {
-        method: config.method?.toUpperCase(),
-        url: `${config.baseURL || ''}${config.url || ''}`,
-        params: redactSensitive(config.params),
-        data: redactSensitive(config.data),
-      });
+  } else {
+    // Mobile / SSR: use Bearer token from storage
+    const token = _tokenCache || _storage.getToken();
+    if (token) {
+      setHeader(headers, 'Authorization', `Bearer ${token}`);
     }
-
-    return config;
-  },
-  (error: AxiosError) => {
-    return Promise.reject(error);
   }
-);
+
+  if (isDev && !isPrivateHomeRequest(config.url)) {
+    console.info('[API request]', {
+      method: config.method?.toUpperCase(),
+      url: `${config.baseURL || ''}${config.url || ''}`,
+      params: redactSensitive(config.params),
+      data: redactSensitive(config.data),
+    });
+  }
+
+  return config;
+}
 
 // ============ TOKEN REFRESH MUTEX ============
 // Prevents concurrent 401 responses from triggering parallel refresh attempts.
@@ -676,20 +677,24 @@ async function doTokenRefresh(): Promise<AuthRefreshResult> {
   }
 
   // Use relative URL on web (same-origin proxy), absolute on mobile.
-  // Raw axios avoids the response interceptor recursing on 401.
+  // A bare request (no request steps, no early reads) avoids the 401
+  // handling recursing on the refresh itself.
   const baseURL = _isWeb ? '' : (apiClient.defaults.baseURL || API_BASE_URL);
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = { Accept: ACCEPT, 'Content-Type': 'application/json' };
   if (_isWeb) headers['x-token-transport'] = 'cookie';
   const controller = _isWeb ? new AbortController() : null;
   if (controller) _webRefreshController = controller;
   const sessionMarker = _isWeb ? currentRequestSession() : null;
 
   try {
-    const { data } = await axios.post(
-      `${baseURL}/api/users/refresh`,
-      _isWeb ? {} : { refreshToken },
-      { headers, timeout: 10000, ...(controller ? { signal: controller.signal } : {}) }
-    );
+    const { data } = await dispatchRequest({
+      method: 'post',
+      url: `${baseURL}/api/users/refresh`,
+      data: _isWeb ? {} : { refreshToken },
+      headers,
+      timeout: 10000,
+      ...(controller ? { signal: controller.signal } : {}),
+    });
     if (_isWeb && sessionMarker !== currentRequestSession()) {
       return { status: 'transient', code: 'AUTH_SESSION_CHANGED', message: 'Account changed during refresh' };
     }
@@ -717,7 +722,7 @@ async function doTokenRefresh(): Promise<AuthRefreshResult> {
       message: 'Refresh response did not contain a usable session',
     };
   } catch (error) {
-    if (axios.isAxiosError(error)) {
+    if (error instanceof HttpError) {
       const statusCode = error.response?.status;
       const responseData: any = error.response?.data;
       const message = responseData?.error || responseData?.message || error.message;
@@ -780,226 +785,274 @@ export async function refreshAuthSession(options?: { trigger?: string }): Promis
   return _refreshPromise;
 }
 
-// ============ RESPONSE INTERCEPTOR ============
+// ============ RESPONSE STEPS ============
+// A response that arrived (2xx, or any status the request's validateStatus
+// accepts) goes through handleResponse. Every failure goes through
+// handleRequestError: the request steps', the network's and a status's.
 
-apiClient.interceptors.response.use(
-  (response) => {
-    if (requestSessionChanged(response.config)) return Promise.reject(sessionChangedError());
-    if (isDev && !isPrivateHomeRequest(response.config.url)) {
-      console.info('[API response]', {
-        status: response.status,
-        url: `${response.config.baseURL || ''}${response.config.url || ''}`,
-        data: redactSensitive(response.data),
-      });
-    }
-    return response;
-  },
-  async (error: AxiosError<ApiResponse>) => {
-    if (error.code === 'AUTH_SESSION_CHANGED') return Promise.reject(error);
-    const originalRequest = error.config;
-    if (requestSessionChanged(originalRequest)) return Promise.reject(sessionChangedError());
-    let refreshResult: AuthRefreshResult | null = null;
-    let didInvalidateSession = false;
-
-    // Handle 401 Unauthorized — try refresh token first for persistent sessions
-    if (error.response?.status === 401 && originalRequest && !(originalRequest as any)._retry) {
-      const reqUrl = originalRequest.url || '';
-      // Only skip refresh-and-retry for actual auth endpoints whose 401s are
-      // expected (wrong credentials, expired codes, etc.). Use exact path
-      // suffixes to avoid false positives like /login-history or /login-stats.
-      const AUTH_ENDPOINT_SUFFIXES = [
-        '/login',
-        '/register',
-        '/refresh',
-        '/logout',
-        '/oauth/callback',
-        '/oauth/token',
-      ];
-      const normalizedUrl = reqUrl.split('?')[0];
-      const isAuthEndpoint = AUTH_ENDPOINT_SUFFIXES.some(
-        (suffix) => normalizedUrl === suffix || normalizedUrl.endsWith(suffix)
-      );
-      if (!isAuthEndpoint) {
-        const refreshToken = getRefreshToken();
-        // On web, refresh token is in httpOnly cookie (getRefreshToken returns null)
-        // but doTokenRefresh will send it via withCredentials.
-        // A logged-out web request must not refresh and invalidate the session
-        // again: that can remount private readers and repeat the same 401 loop.
-        // The session flag still permits recovery when only access has expired.
-        const canRefresh = _isWeb
-          ? hasActiveSession()
-          : (refreshToken && _storage.getRefreshToken);
-        if (canRefresh) {
-          try {
-            // Mutex: reuse in-flight refresh promise or start a new one
-            refreshResult = await refreshAuthSession({ trigger: 'response_401' });
-            if (requestSessionChanged(originalRequest)) return Promise.reject(sessionChangedError());
-            if (refreshResult.status === 'success' && refreshResult.accessToken) {
-              (originalRequest as any)._retry = true;
-              // On web, auth is via httpOnly cookies — don't set a Bearer header.
-              // On mobile, set the new access token.
-              if (!_isWeb && originalRequest.headers) {
-                originalRequest.headers.Authorization = `Bearer ${refreshResult.accessToken}`;
-              }
-              return apiClient(originalRequest);
-            }
-          } catch {
-            // Refresh threw unexpectedly — fall through to clear and redirect
-            if (!requestSessionChanged(originalRequest)) _refreshPromise = null;
-          }
-        }
-        if (requestSessionChanged(originalRequest)) return Promise.reject(sessionChangedError());
-        if (refreshResult?.status === 'invalid') {
-          didInvalidateSession = true;
-          emitAuthEvent({
-            type: 'session_invalidated',
-            trigger: 'response_401',
-            reason: refreshResult.code || 'refresh_invalid',
-            code: refreshResult.code,
-            message: refreshResult.message,
-            statusCode: refreshResult.statusCode,
-          });
-          if (_onUnauthorized) {
-            try {
-              await _onUnauthorized();
-            } catch {
-              // Unauthorized hooks are for cleanup/navigation only; they must
-              // not replace the original API error observed by the caller.
-            } finally {
-              // Run after the hook so consumers can still read tokens for best-effort server logout.
-              if (!requestSessionChanged(originalRequest)) await clearAuthSession();
-            }
-          } else if (typeof window !== 'undefined' && window.location) {
-            await clearAuthSession();
-            const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-            window.location.href = `/login?redirectTo=${encodeURIComponent(returnTo)}`;
-          } else {
-            await clearAuthSession();
-          }
-        } else if (refreshResult?.status === 'transient') {
-          // The refresh endpoint is temporarily unreachable (5xx, timeout, network).
-          // The session may still be valid — don't clear it, but emit an event so
-          // consumers know the 401 could not be resolved by refresh.
-          emitAuthEvent({
-            type: 'session_refresh_failed',
-            trigger: 'response_401',
-            status: 'transient',
-            code: refreshResult.code,
-            message: refreshResult.message,
-            statusCode: refreshResult.statusCode,
-          });
-        }
-      }
-    }
-
-    const responseData: any = error.response?.data;
-    const detailsRaw: any = responseData?.details;
-    const validationDetails: Array<{ field: string; message: string; code?: string }> = Array.isArray(detailsRaw)
-      ? detailsRaw
-          .map((detail: any) => {
-            if (typeof detail === 'string') {
-              return { field: '', message: detail };
-            }
-            if (detail?.message) {
-              return {
-                field: detail?.field || '',
-                message: detail.message,
-                code: detail?.code,
-              };
-            }
-            return null as null;
-          })
-          .filter((detail): detail is { field: string; message: string; code?: string } => Boolean(detail))
-      : [];
-
-    const validationErrors: string[] = Array.isArray(detailsRaw)
-      ? detailsRaw
-          .map((detail: any) => {
-            if (typeof detail === 'string') return detail;
-            if (detail?.field && detail?.message) return `${detail.field}: ${detail.message}`;
-            if (detail?.message) return detail.message;
-            return null;
-          })
-          .filter(Boolean)
-      : [];
-
-    const isValidationError = error.response?.data?.error === 'Validation failed';
-    const status = error.response?.status;
-    const requestUrl = `${error.config?.baseURL || ''}${error.config?.url || ''}`;
-    const isNetworkError = !error.response;
-    // Newer endpoints separate their stable recovery code from human copy.
-    // Keep the legacy error-field fallback for older response envelopes.
-    const errorCode = typeof responseData?.code === 'string' ? responseData.code
-      : typeof responseData?.error === 'string' ? responseData.error : error.code;
-    const userFacingMessage = typeof responseData?.message === 'string' ? responseData.message : '';
-    const machineError = typeof responseData?.error === 'string' ? responseData.error : '';
-    // Transport and proxy failures carry no API envelope. Screens show this
-    // message, so use plain copy rather than axios's "Request failed with status
-    // code 500" or the request URL; the dev log below keeps the status and URL.
-    const transportMessage = error.code === 'ERR_CANCELED'
-      ? error.message
-      : isNetworkError
-        ? 'Network error. Please check your connection and try again.'
-        : plainMessageForStatus(status);
-    // A bare `error` field is shown only when it reads as copy: machine codes
-    // (`NOT_FOUND`) and 5xx internals (driver or provider text) get plain copy.
-    // A 503's text is the backend's deliberate "try again" wording, so it stays.
-    // `message` is the backend's deliberate user-facing field and always wins.
-    const isServerInternal = typeof status === 'number' && status >= 500 && status !== 503;
-    const readableMachineError = machineError && !looksLikeMachineCode(machineError) && !isServerInternal
-      ? machineError
-      : '';
-    const errorMessage = isValidationError && validationErrors.length > 0
-      ? validationErrors[0]
-      : (
-          userFacingMessage ||
-          readableMachineError ||
-          transportMessage ||
-          'An error occurred'
-        );
-
-    if (isDev && !isPrivateHomeRequest(error.config?.url)) {
-      let responseSafe: unknown;
-      try {
-        responseSafe = redactSensitive(error.response?.data);
-      } catch {
-        responseSafe = error.response?.data ?? null;
-      }
-      const logPayload = {
-        status: status ?? null,
-        url: requestUrl || null,
-        message: String(errorMessage || 'An error occurred'),
-        code: error.code ?? null,
-        networkError: isNetworkError,
-        response: responseSafe,
-      };
-      const suppressDevErrorOverlay = Boolean(
-        (error.config as ApiRequestConfig | undefined)?.suppressDevErrorOverlay
-      );
-      // console.error triggers red error overlays in Expo/RN and Next.js.
-      // Background polling can opt into warn-level logging so transient 5xxs
-      // do not take over the screen during normal app use.
-      if (status && status >= 500 && !suppressDevErrorOverlay) {
-        console.error('[API error]', logPayload);
-      } else {
-        console.warn('[API error]', logPayload);
-      }
-    }
-
-    return Promise.reject(new ApiRequestError({
-      message: errorMessage,
-      code: errorCode,
-      statusCode: status,
-      data: error.response?.data,
-      validationErrors,
-      validationDetails,
-      authRefreshStatus: refreshResult?.status,
-      authRefreshCode: refreshResult?.code,
-      authRefreshStatusCode: refreshResult?.statusCode,
-      authInvalidated: didInvalidateSession,
-    }));
+function handleResponse<T>(response: HttpResponse<T>): HttpResponse<T> {
+  if (requestSessionChanged(response.config)) throw sessionChangedError();
+  if (isDev && !isPrivateHomeRequest(response.config.url)) {
+    console.info('[API response]', {
+      status: response.status,
+      url: `${response.config.baseURL || ''}${response.config.url || ''}`,
+      data: redactSensitive(response.data),
+    });
   }
-);
+  return response;
+}
+
+type RequestFailure = { code?: string; message?: string; config?: SessionBoundRequest; response?: HttpResponse };
+
+async function handleRequestError(failure: unknown): Promise<HttpResponse> {
+  const error = failure as RequestFailure;
+  if (error.code === 'AUTH_SESSION_CHANGED') return Promise.reject(error);
+  const originalRequest = error.config;
+  if (requestSessionChanged(originalRequest)) return Promise.reject(sessionChangedError());
+  let refreshResult: AuthRefreshResult | null = null;
+  let didInvalidateSession = false;
+
+  // Handle 401 Unauthorized — try refresh token first for persistent sessions
+  if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+    const reqUrl = originalRequest.url || '';
+    // Only skip refresh-and-retry for actual auth endpoints whose 401s are
+    // expected (wrong credentials, expired codes, etc.). Use exact path
+    // suffixes to avoid false positives like /login-history or /login-stats.
+    const AUTH_ENDPOINT_SUFFIXES = [
+      '/login',
+      '/register',
+      '/refresh',
+      '/logout',
+      '/oauth/callback',
+      '/oauth/token',
+    ];
+    const normalizedUrl = reqUrl.split('?')[0];
+    const isAuthEndpoint = AUTH_ENDPOINT_SUFFIXES.some(
+      (suffix) => normalizedUrl === suffix || normalizedUrl.endsWith(suffix)
+    );
+    if (!isAuthEndpoint) {
+      const refreshToken = getRefreshToken();
+      // On web, refresh token is in httpOnly cookie (getRefreshToken returns null)
+      // but doTokenRefresh will send it via withCredentials.
+      // A logged-out web request must not refresh and invalidate the session
+      // again: that can remount private readers and repeat the same 401 loop.
+      // The session flag still permits recovery when only access has expired.
+      const canRefresh = _isWeb
+        ? hasActiveSession()
+        : (refreshToken && _storage.getRefreshToken);
+      if (canRefresh) {
+        try {
+          // Mutex: reuse in-flight refresh promise or start a new one
+          refreshResult = await refreshAuthSession({ trigger: 'response_401' });
+          if (requestSessionChanged(originalRequest)) return Promise.reject(sessionChangedError());
+          if (refreshResult.status === 'success' && refreshResult.accessToken) {
+            originalRequest._retry = true;
+            // On web, auth is via httpOnly cookies — don't set a Bearer header.
+            // On mobile, set the new access token.
+            if (!_isWeb && originalRequest.headers) {
+              setHeader(originalRequest.headers, 'Authorization', `Bearer ${refreshResult.accessToken}`);
+            }
+            // Not awaited: the retry's own failure reaches the caller as it is.
+            return request(originalRequest);
+          }
+        } catch {
+          // Refresh threw unexpectedly — fall through to clear and redirect
+          if (!requestSessionChanged(originalRequest)) _refreshPromise = null;
+        }
+      }
+      if (requestSessionChanged(originalRequest)) return Promise.reject(sessionChangedError());
+      if (refreshResult?.status === 'invalid') {
+        didInvalidateSession = true;
+        emitAuthEvent({
+          type: 'session_invalidated',
+          trigger: 'response_401',
+          reason: refreshResult.code || 'refresh_invalid',
+          code: refreshResult.code,
+          message: refreshResult.message,
+          statusCode: refreshResult.statusCode,
+        });
+        if (_onUnauthorized) {
+          try {
+            await _onUnauthorized();
+          } catch {
+            // Unauthorized hooks are for cleanup/navigation only; they must
+            // not replace the original API error observed by the caller.
+          } finally {
+            // Run after the hook so consumers can still read tokens for best-effort server logout.
+            if (!requestSessionChanged(originalRequest)) await clearAuthSession();
+          }
+        } else if (typeof window !== 'undefined' && window.location) {
+          await clearAuthSession();
+          const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+          window.location.href = `/login?redirectTo=${encodeURIComponent(returnTo)}`;
+        } else {
+          await clearAuthSession();
+        }
+      } else if (refreshResult?.status === 'transient') {
+        // The refresh endpoint is temporarily unreachable (5xx, timeout, network).
+        // The session may still be valid — don't clear it, but emit an event so
+        // consumers know the 401 could not be resolved by refresh.
+        emitAuthEvent({
+          type: 'session_refresh_failed',
+          trigger: 'response_401',
+          status: 'transient',
+          code: refreshResult.code,
+          message: refreshResult.message,
+          statusCode: refreshResult.statusCode,
+        });
+      }
+    }
+  }
+
+  const responseData: any = error.response?.data;
+  const detailsRaw: any = responseData?.details;
+  const validationDetails: Array<{ field: string; message: string; code?: string }> = Array.isArray(detailsRaw)
+    ? detailsRaw
+        .map((detail: any) => {
+          if (typeof detail === 'string') {
+            return { field: '', message: detail };
+          }
+          if (detail?.message) {
+            return {
+              field: detail?.field || '',
+              message: detail.message,
+              code: detail?.code,
+            };
+          }
+          return null as null;
+        })
+        .filter((detail): detail is { field: string; message: string; code?: string } => Boolean(detail))
+    : [];
+
+  const validationErrors: string[] = Array.isArray(detailsRaw)
+    ? detailsRaw
+        .map((detail: any) => {
+          if (typeof detail === 'string') return detail;
+          if (detail?.field && detail?.message) return `${detail.field}: ${detail.message}`;
+          if (detail?.message) return detail.message;
+          return null;
+        })
+        .filter(Boolean)
+    : [];
+
+  const isValidationError = error.response?.data?.error === 'Validation failed';
+  const status = error.response?.status;
+  const requestUrl = `${error.config?.baseURL || ''}${error.config?.url || ''}`;
+  const isNetworkError = !error.response;
+  // Newer endpoints separate their stable recovery code from human copy.
+  // Keep the legacy error-field fallback for older response envelopes.
+  const errorCode = typeof responseData?.code === 'string' ? responseData.code
+    : typeof responseData?.error === 'string' ? responseData.error : error.code;
+  const userFacingMessage = typeof responseData?.message === 'string' ? responseData.message : '';
+  const machineError = typeof responseData?.error === 'string' ? responseData.error : '';
+  // Transport and proxy failures carry no API envelope. Screens show this
+  // message, so use plain copy rather than the transport's "Request failed with status
+  // code 500" or the request URL; the dev log below keeps the status and URL.
+  const transportMessage = error.code === 'ERR_CANCELED'
+    ? error.message
+    : isNetworkError
+      ? 'Network error. Please check your connection and try again.'
+      : plainMessageForStatus(status);
+  // A bare `error` field is shown only when it reads as copy: machine codes
+  // (`NOT_FOUND`) and 5xx internals (driver or provider text) get plain copy.
+  // A 503's text is the backend's deliberate "try again" wording, so it stays.
+  // `message` is the backend's deliberate user-facing field and always wins.
+  const isServerInternal = typeof status === 'number' && status >= 500 && status !== 503;
+  const readableMachineError = machineError && !looksLikeMachineCode(machineError) && !isServerInternal
+    ? machineError
+    : '';
+  const errorMessage = isValidationError && validationErrors.length > 0
+    ? validationErrors[0]
+    : (
+        userFacingMessage ||
+        readableMachineError ||
+        transportMessage ||
+        'An error occurred'
+      );
+
+  if (isDev && !isPrivateHomeRequest(error.config?.url)) {
+    let responseSafe: unknown;
+    try {
+      responseSafe = redactSensitive(error.response?.data);
+    } catch {
+      responseSafe = error.response?.data ?? null;
+    }
+    const logPayload = {
+      status: status ?? null,
+      url: requestUrl || null,
+      message: String(errorMessage || 'An error occurred'),
+      code: error.code ?? null,
+      networkError: isNetworkError,
+      response: responseSafe,
+    };
+    const suppressDevErrorOverlay = Boolean(error.config?.suppressDevErrorOverlay);
+    // console.error triggers red error overlays in Expo/RN and Next.js.
+    // Background polling can opt into warn-level logging so transient 5xxs
+    // do not take over the screen during normal app use.
+    if (status && status >= 500 && !suppressDevErrorOverlay) {
+      console.error('[API error]', logPayload);
+    } else {
+      console.warn('[API error]', logPayload);
+    }
+  }
+
+  return Promise.reject(new ApiRequestError({
+    message: errorMessage,
+    code: errorCode,
+    statusCode: status,
+    data: error.response?.data,
+    validationErrors,
+    validationDetails,
+    authRefreshStatus: refreshResult?.status,
+    authRefreshCode: refreshResult?.code,
+    authRefreshStatusCode: refreshResult?.statusCode,
+    authInvalidated: didInvalidateSession,
+  }));
+}
+
+// ============ CLIENT ============
+// `apiClient.get/post/put/patch/delete/request` resolve to `{ data, status,
+// headers }` and reject with an ApiRequestError, as the axios instance did.
+
+/** The request's settings over the client's; its own headers win, by name in any case. */
+function withDefaults(config: ApiRequestConfig): SessionBoundRequest {
+  return {
+    ...config,
+    method: (config.method || 'get').toLowerCase(),
+    baseURL: config.baseURL !== undefined ? config.baseURL : clientDefaults.baseURL,
+    timeout: config.timeout !== undefined ? config.timeout : clientDefaults.timeout,
+    headers: mergeHeaders(clientDefaults.headers, config.headers),
+  };
+}
+
+async function request<T = any>(config: ApiRequestConfig): Promise<HttpResponse<T>> {
+  const merged = withDefaults(config);
+  let response: HttpResponse<T>;
+  try {
+    response = await dispatchRequest(await prepareRequest(merged), earlyReadAdapter);
+  } catch (error) {
+    return handleRequestError(error);
+  }
+  return handleResponse(response);
+}
+
+const bodyOf = (config?: ApiRequestConfig) =>
+  config && Object.prototype.hasOwnProperty.call(config, 'data') ? config.data : undefined;
+
+const apiClient = {
+  defaults: clientDefaults,
+  request,
+  get: <T = any>(url: string, config?: ApiRequestConfig) =>
+    request<T>({ ...config, method: 'get', url, data: bodyOf(config) }),
+  delete: <T = any>(url: string, config?: ApiRequestConfig) =>
+    request<T>({ ...config, method: 'delete', url, data: bodyOf(config) }),
+  post: <T = any>(url: string, data?: any, config?: ApiRequestConfig) =>
+    request<T>({ ...config, method: 'post', url, data }),
+  put: <T = any>(url: string, data?: any, config?: ApiRequestConfig) =>
+    request<T>({ ...config, method: 'put', url, data }),
+  patch: <T = any>(url: string, data?: any, config?: ApiRequestConfig) =>
+    request<T>({ ...config, method: 'patch', url, data }),
+};
 
 export default apiClient;
 
