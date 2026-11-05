@@ -79,7 +79,8 @@ public struct EmptyState: View {
             }
         }
         .padding(.horizontal, Spacing.s6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Off the iPhone Duo's fold while it is half folded; elsewhere centered as before.
+        .centeredClearOfFold()
         .background(Theme.Color.appBg)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilitySummary)
