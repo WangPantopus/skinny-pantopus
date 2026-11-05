@@ -65,10 +65,12 @@ import java.time.Instant
 fun MaintenanceDetailScreen(
     onBack: () -> Unit,
     onEdit: () -> Unit,
+    onOpenDocument: (String) -> Unit = {},
     viewModel: MaintenanceDetailViewModel = hiltViewModel(),
 ) {
     HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val canEdit by viewModel.canEdit.collectAsStateWithLifecycle()
     ReportContentShown("home_maintenance_entry", state is MaintenanceDetailUiState.Loaded)
     val isMutating by viewModel.isMutating.collectAsStateWithLifecycle()
     val actionError by viewModel.actionError.collectAsStateWithLifecycle()
@@ -87,15 +89,18 @@ fun MaintenanceDetailScreen(
 
     MaintenanceDetailContent(
         state = state,
+        canEdit = canEdit,
         isMutating = isMutating,
         actionError = actionError,
         onBack = onBack,
         onEdit = onEdit,
         onRetry = viewModel::refresh,
         onDelete = viewModel::delete,
+        onOpenDocument = onOpenDocument,
     )
 }
 
+@Suppress("LongParameterList")
 @Composable
 internal fun MaintenanceDetailContent(
     state: MaintenanceDetailUiState,
@@ -105,10 +110,12 @@ internal fun MaintenanceDetailContent(
     onEdit: () -> Unit,
     onRetry: () -> Unit,
     onDelete: () -> Unit,
+    onOpenDocument: (String) -> Unit = {},
+    canEdit: Boolean = true,
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    LaunchedEffect(state) {
-        if (state !is MaintenanceDetailUiState.Loaded) showDeleteConfirm = false
+    LaunchedEffect(state, canEdit) {
+        if (state !is MaintenanceDetailUiState.Loaded || !canEdit) showDeleteConfirm = false
     }
     HomeOfflineContent(modifier = Modifier.testTag("maintenanceDetail")) {
         when (state) {
@@ -123,11 +130,13 @@ internal fun MaintenanceDetailContent(
                 LoadedBody(
                     task = state.task,
                     draft = state.draft,
+                    canEdit = canEdit,
                     isMutating = isMutating,
                     actionError = actionError,
                     onBack = onBack,
                     onEdit = onEdit,
                     onDelete = { showDeleteConfirm = true },
+                    onOpenDocument = onOpenDocument,
                 )
         }
     }
@@ -209,15 +218,18 @@ private fun ErrorBody(
     )
 }
 
+@Suppress("LongParameterList")
 @Composable
 private fun LoadedBody(
     task: MaintenanceTaskDto,
     draft: MaintenanceDraft?,
+    canEdit: Boolean,
     isMutating: Boolean,
     actionError: String?,
     onBack: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onOpenDocument: (String) -> Unit,
 ) {
     val projection = remember(task) { MaintenanceListViewModel.project(task, Instant.now()) }
     ContentDetailShell(
@@ -241,7 +253,9 @@ private fun LoadedBody(
                 if (photos.isNotEmpty()) {
                     PhotoGrid(photos = photos)
                 }
-                draft?.receipt?.let { ReceiptBlock(file = it) }
+                task.documentId?.let { documentId ->
+                    ReceiptBlock(onOpen = { onOpenDocument(documentId) })
+                }
                 if (actionError != null) {
                     Text(
                         text = actionError,
@@ -250,11 +264,13 @@ private fun LoadedBody(
                         modifier = Modifier.testTag("maintenanceDetail_actionError"),
                     )
                 }
-                DetailActions(
-                    isMutating = isMutating,
-                    onEdit = onEdit,
-                    onDelete = onDelete,
-                )
+                if (canEdit) {
+                    DetailActions(
+                        isMutating = isMutating,
+                        onEdit = onEdit,
+                        onDelete = onDelete,
+                    )
+                }
             }
         },
     )
@@ -453,7 +469,7 @@ private fun PhotoGrid(photos: List<MaintenanceDraftFile>) {
 }
 
 @Composable
-private fun ReceiptBlock(file: MaintenanceDraftFile) {
+private fun ReceiptBlock(onOpen: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = "RECEIPT",
@@ -468,6 +484,7 @@ private fun ReceiptBlock(file: MaintenanceDraftFile) {
                     .clip(RoundedCornerShape(Radii.md))
                     .background(PantopusColors.appSurface)
                     .border(BorderStroke(1.dp, PantopusColors.appBorderSubtle), RoundedCornerShape(Radii.md))
+                    .clickable(onClick = onOpen)
                     .padding(Spacing.s3)
                     .testTag("maintenanceDetail_receipt"),
             verticalAlignment = Alignment.CenterVertically,
@@ -481,8 +498,7 @@ private fun ReceiptBlock(file: MaintenanceDraftFile) {
                 contentAlignment = Alignment.Center,
             ) {
                 PantopusIconImage(
-                    icon =
-                        if (file.mimeType == "application/pdf") PantopusIcon.FileText else PantopusIcon.Image,
+                    icon = PantopusIcon.FileText,
                     contentDescription = null,
                     size = 18.dp,
                     tint = PantopusColors.appTextSecondary,
@@ -491,13 +507,13 @@ private fun ReceiptBlock(file: MaintenanceDraftFile) {
             Spacer(modifier = Modifier.width(Spacing.s3))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = file.filename,
+                    text = "Open receipt",
                     style = PantopusTextStyle.body,
                     color = PantopusColors.appText,
                     maxLines = 1,
                 )
                 Text(
-                    text = if (file.mimeType == "application/pdf") "PDF" else "Image",
+                    text = "Saved in Home Documents",
                     style = PantopusTextStyle.caption,
                     color = PantopusColors.appTextSecondary,
                 )

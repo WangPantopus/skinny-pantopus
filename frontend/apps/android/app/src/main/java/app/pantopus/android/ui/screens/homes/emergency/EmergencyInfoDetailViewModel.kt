@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.models.homes.HomeEmergencyDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,6 +30,7 @@ sealed interface EmergencyInfoDetailUiState {
 
     data class Loaded(
         val draft: EmergencyFormDraft,
+        val canManage: Boolean = false,
         val isDeleting: Boolean = false,
         val showsDeleteConfirm: Boolean = false,
         val deleteError: String? = null,
@@ -69,30 +71,48 @@ class EmergencyInfoDetailViewModel
         val isDeleted: StateFlow<Boolean> = _isDeleted.asStateFlow()
 
         private var onChanged: () -> Unit = {}
+        private var active = true
+        private var readGeneration = 0L
+        private var readJob: Job? = null
 
         fun configure(onChanged: () -> Unit = {}) {
             this.onChanged = onChanged
         }
 
         fun load() {
+            active = true
+            val generation = ++readGeneration
+            readJob?.cancel()
             _state.value = EmergencyInfoDetailUiState.Loading
-            viewModelScope.launch {
-                when (val result = repo.getHomeEmergencies(homeId)) {
-                    is NetworkResult.Success -> {
-                        val dto = result.data.emergencies.firstOrNull { it.id == emergencyId }
-                        _state.value =
-                            when {
-                                dto == null -> EmergencyInfoDetailUiState.Missing
-                                else -> EmergencyInfoDetailUiState.Loaded(draft = projectDraft(dto))
-                            }
+            readJob =
+                viewModelScope.launch {
+                    val result = repo.getHomeEmergencies(homeId)
+                    if (!active || generation != readGeneration) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            val dto = result.data.emergencies.firstOrNull { it.id == emergencyId }
+                            _state.value =
+                                when {
+                                    dto == null -> EmergencyInfoDetailUiState.Missing
+                                    else -> EmergencyInfoDetailUiState.Loaded(draft = projectDraft(dto), canManage = result.data.canManage)
+                                }
+                        }
+                        is NetworkResult.Failure ->
+                            _state.value =
+                                EmergencyInfoDetailUiState.Error(
+                                    result.error.message ?: "Couldn't load this item.",
+                                )
                     }
-                    is NetworkResult.Failure ->
-                        _state.value =
-                            EmergencyInfoDetailUiState.Error(
-                                result.error.message ?: "Couldn't load this item.",
-                            )
                 }
-            }
+        }
+
+        /** Do not retain a medical/contact entry while its current permission is unknown. */
+        fun suspendContent() {
+            active = false
+            readGeneration += 1
+            readJob?.cancel()
+            readJob = null
+            _state.value = EmergencyInfoDetailUiState.Loading
         }
 
         /** Apply a local edit returned by the form. */

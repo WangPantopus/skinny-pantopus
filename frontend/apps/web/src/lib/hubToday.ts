@@ -1,7 +1,7 @@
 import * as api from '@pantopus/api';
 import { queryKeys } from '@/lib/query-keys';
 
-// Today (/app/today and /app/hub/today), the Hub's Today card and the sidebar
+// Today (/app/today and /app/hub/today) and the sidebar
 // share the briefing's two-minute window. Hovering or focusing the tab must
 // not shorten the page's cache lifetime.
 export function hubTodayQuery() {

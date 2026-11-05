@@ -33,11 +33,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.shared.content_detail.ContentDetailShell
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -74,7 +73,7 @@ fun EmergencyInfoDetailScreen(
         viewModel.configure(onChanged = onChanged)
     }
 
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.load() }
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
 
     LaunchedEffect(isDeleted) {
         if (isDeleted) onBack()
@@ -202,11 +201,13 @@ private fun LoadedShell(
                         color = PantopusColors.error,
                     )
                 }
-                ActionsRow(
-                    isDeleting = state.isDeleting,
-                    onEdit = onEdit,
-                    onDelete = onAskDelete,
-                )
+                if (state.canManage) {
+                    ActionsRow(
+                        isDeleting = state.isDeleting,
+                        onEdit = onEdit,
+                        onDelete = onAskDelete,
+                    )
+                }
             }
         },
     )
@@ -335,8 +336,9 @@ private fun MetaCard(draft: EmergencyFormDraft) {
                 .background(PantopusColors.appSurface)
                 .border(1.dp, PantopusColors.appBorderSubtle, RoundedCornerShape(Radii.lg)),
     ) {
-        draft.verifiedByUserId?.takeIf { it.isNotEmpty() }?.let { uid ->
-            MetaRow(label = "Verified by", value = uid, icon = PantopusIcon.UserRound)
+        draft.verifiedByUserId?.takeIf { it.isNotEmpty() }?.let {
+            // The emergency response supplies an internal id, not a permitted display name.
+            MetaRow(label = "Verified by", value = "Household member", icon = PantopusIcon.UserRound)
             HorizontalDivider(color = PantopusColors.appBorderSubtle, thickness = 1.dp)
         }
         MetaRow(

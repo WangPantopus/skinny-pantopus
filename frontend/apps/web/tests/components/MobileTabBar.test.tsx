@@ -10,7 +10,6 @@ describe('MobileTabBar route mapping', () => {
   it.each([
     ['/app/place', 'place'],
     ['/app/place/risk', 'place'],
-    ['/app/hub', 'place'],
     ['/app/homes/abc/privacy', 'place'],
     ['/app/today', 'today'],
     ['/app/hub/today', 'today'],

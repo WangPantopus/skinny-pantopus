@@ -29,6 +29,9 @@ public final class EmergencyInfoDetailViewModel {
     }
 
     public private(set) var state: State = .loading
+    public private(set) var canManage = false
+    private var readGeneration = 0
+    private var isVisible = true
     public private(set) var isDeleting: Bool = false
     public private(set) var isDeleted: Bool = false
     public var showsDeleteConfirm: Bool = false
@@ -56,11 +59,16 @@ public final class EmergencyInfoDetailViewModel {
     }
 
     public func load() async {
+        isVisible = true
+        readGeneration &+= 1
+        let generation = readGeneration
+        canManage = false
         state = .loading
         do {
             let response: GetHomeEmergenciesResponse = try await api.request(
                 HomesEndpoints.emergencies(homeId: homeId)
             )
+            guard generation == readGeneration, !Task.isCancelled else { return }
             guard let dto = response.emergencies.first(where: { $0.id == emergencyId }) else {
                 state = .missing
                 return
@@ -68,7 +76,9 @@ public final class EmergencyInfoDetailViewModel {
             // Legacy list-of-rows types (shutoff_water etc.) render their
             // raw fields under the generic "Other" category.
             state = .loaded(EmergencyFormDraft.display(dto: dto))
+            canManage = response.canManage == true
         } catch {
+            guard generation == readGeneration, !Task.isCancelled else { return }
             state = .error(
                 (error as? APIError)?.errorDescription
                     ?? "Couldn't load this item."
@@ -76,10 +86,19 @@ public final class EmergencyInfoDetailViewModel {
         }
     }
 
+    public func suspend() {
+        isVisible = false
+        readGeneration &+= 1
+        canManage = false
+        state = .loading
+        showsDeleteConfirm = false
+        toast = nil
+    }
+
     /// Show the saved entry. Called by the form's `onUpdated` after the
     /// server confirmed the PUT.
     public func apply(updated: EmergencyFormDraft) {
-        state = .loaded(updated)
+        if isVisible { state = .loaded(updated) }
         onChanged()
     }
 

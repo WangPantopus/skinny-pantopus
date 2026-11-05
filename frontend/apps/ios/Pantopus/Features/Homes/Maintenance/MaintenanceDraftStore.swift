@@ -2,22 +2,9 @@
 //  MaintenanceDraftStore.swift
 //  Pantopus
 //
-//  P2.9 — Session-scoped store for the maintenance form's *extras* that
-//  the backend does not yet persist: photos, receipt and performed-by
-//  kind. Saved notes, category and contact come from HomeMaintenanceLog;
-//  the retained draft copies do not override those canonical fields.
-//
-//  The list / detail screens read the matching draft (keyed by the
-//  server-returned task id) so a freshly-logged maintenance entry shows
-//  its photos + notes + receipt in the 2×2 grid the design specifies.
-//  When the app is force-closed the drafts are dropped — that's
-//  acceptable since these fields aren't part of the contract today and
-//  the next refresh from the server will return the canonical row
-//  without them.
-//
-//  When the backend grows columns for these fields, the consumers will
-//  flip to reading them off `MaintenanceTaskDTO` directly and this
-//  store can be deleted in one diff.
+//  Session-scoped performer hints for the maintenance form. Server fields
+//  remain authoritative. Saved receipts use HomeMaintenanceLog.document_id
+//  and Home Documents; attachment bytes are never presented as saved drafts.
 //
 
 import Foundation

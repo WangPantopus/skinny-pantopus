@@ -39,8 +39,6 @@ public struct PublicProfileView: View {
     @State var showTrustExplainer = false
     /// The editor, opened from your own profile's Edit profile.
     @State var showEditProfile = false
-    /// Your own profile's extras (`PublicProfileView+Owner.swift`); nil signed out.
-    @State var owner: OwnerPageModel?
     /// "Preview your profile as", then the preview it opens.
     @State var showPreviewMenu = false
     @State var pickedPreview: ProfileAudience?
@@ -95,7 +93,6 @@ public struct PublicProfileView: View {
             initialValue: viewModel
                 ?? PublicProfileViewModel(userId: userId, currentUserId: viewer, previewAudience: previewAudience)
         )
-        _owner = State(initialValue: previewAudience == nil ? viewer.map { OwnerPageModel(userId: $0) } : nil)
         self.onClose = onClose
         self.onOwnerDestination = onOwnerDestination
         self.expandMonthlyReceipt = expandMonthlyReceipt
@@ -107,6 +104,12 @@ public struct PublicProfileView: View {
         self.onOpenGig = onOpenGig
         self.onOpenProfile = onOpenProfile
         self.onOpenPost = onOpenPost
+    }
+
+    /// Your own profile's extras (`PublicProfileView+Owner.swift`), kept by
+    /// the profile's model; nil signed out.
+    var owner: OwnerPageModel? {
+        viewModel.ownerPage
     }
 
     public var body: some View {
@@ -357,6 +360,10 @@ public struct PublicProfileView: View {
         }
         .accessibilityIdentifier("publicProfile")
         .task { await viewModel.load() }
+        // A fold or a turn makes this screen anew around the same model: it
+        // reads again only once the profile has left the screen.
+        .onAppear { viewModel.presentationDidAppear() }
+        .onDisappear { viewModel.presentationDidDisappear() }
     }
 
     /// Names the person being blocked, like the chat block confirm. `nil`
@@ -571,8 +578,7 @@ public struct PublicProfileView: View {
                 .padding(.top, Spacing.s5)
         case .work:
             LocalProfileWorkSection(
-                userId: payload.profile.id,
-                isOwnProfile: payload.isOwner,
+                models: viewModel.workModels(userId: payload.profile.id, isOwnProfile: payload.isOwner),
                 showsPortfolio: payload.isOwner || (viewModel.portfolioCount ?? 0) > 0,
                 showsTasks: LaunchFeatures.openGigs && (payload.profile.gigsPosted ?? 0) > 0,
                 showsReviews: (payload.profile.reviewCount ?? 0) > 0,

@@ -22,6 +22,7 @@ struct LogMaintenanceFormView: View {
     @State private var photoPickerSelection: [PhotosPickerItem] = []
     @State private var photoPickerShown: Bool = false
     @State private var receiptPickerShown: Bool = false
+    @State private var errorToast: ToastMessage?
     private let onClose: @Sendable () -> Void
     private let onSubmitted: @Sendable (String) -> Void
 
@@ -93,6 +94,20 @@ struct LogMaintenanceFormView: View {
             }
         }
         .accessibilityIdentifier("logMaintenanceForm")
+        .onChange(of: viewModel.submitError) { _, error in
+            errorToast = error.map { ToastMessage(text: $0, kind: .error) }
+        }
+        .overlay(alignment: .bottom) {
+            if let errorToast {
+                ToastView(message: errorToast)
+                    .padding(.bottom, Spacing.s12)
+                    .dismissToast(after: errorToast, minimum: 5) {
+                        self.errorToast = nil
+                    }
+            }
+        }
+        .disabled(viewModel.isSubmitting)
+        .interactiveDismissDisabled(viewModel.isSubmitting || viewModel.isDirty)
         .onAppear { Analytics.track(.screenLogMaintenanceViewed) }
         .task { await viewModel.loadIfNeeded() }
     }
@@ -119,17 +134,7 @@ struct LogMaintenanceFormView: View {
         switch result {
         case let .success(urls):
             guard let url = urls.first else { return }
-            let didStart = url.startAccessingSecurityScopedResource()
-            defer { if didStart { url.stopAccessingSecurityScopedResource() } }
-            guard let data = try? Data(contentsOf: url) else { return }
-            let mime = url.pathExtension.lowercased() == "pdf" ? "application/pdf" : "image/jpeg"
-            viewModel.pickReceipt(
-                MaintenanceDraftFile(
-                    filename: url.lastPathComponent,
-                    mimeType: mime,
-                    data: data
-                )
-            )
+            Task { await viewModel.readReceipt(url) }
         case .failure:
             // User cancelled — no-op.
             break
@@ -430,7 +435,7 @@ private struct PhotosGroup: View {
     var body: some View {
         FormFieldGroup("Photos") {
             VStack(alignment: .leading, spacing: Spacing.s2) {
-                Text("Up to 4 photos.")
+                Text("Photos aren't saved here yet. To keep an image with this entry, attach it as the receipt below.")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 LazyVGrid(columns: [
@@ -445,6 +450,7 @@ private struct PhotosGroup: View {
                     }
                 }
                 .accessibilityIdentifier("logMaintenance_photos")
+                .disabled(true)
             }
         }
     }
@@ -553,6 +559,19 @@ private struct ReceiptGroup: View {
                             .stroke(Theme.Color.appBorderSubtle, lineWidth: 1)
                     )
                     .accessibilityIdentifier("logMaintenance_receipt")
+                } else if viewModel.isReadingReceipt {
+                    ProgressView("Opening receipt…")
+                } else if viewModel.existingReceiptId != nil, !viewModel.receiptChanged {
+                    HStack {
+                        Icon(.fileText, size: 18, color: Theme.Color.appTextSecondary)
+                        Text("Saved receipt")
+                        Spacer()
+                        Button("Replace", action: onPick)
+                            .accessibilityIdentifier("logMaintenance_receipt_replace")
+                        Button("Remove") { viewModel.pickReceipt(nil) }
+                            .accessibilityIdentifier("logMaintenance_receipt_remove")
+                    }
+                    .padding(Spacing.s3)
                 } else {
                     Button(action: onPick) {
                         HStack(spacing: Spacing.s2) {

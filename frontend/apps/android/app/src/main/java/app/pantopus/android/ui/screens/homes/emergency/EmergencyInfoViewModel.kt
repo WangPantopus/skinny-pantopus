@@ -27,6 +27,7 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.RowTrailing
 import app.pantopus.android.ui.screens.shared.list_of_rows.TopBarAction
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -116,6 +117,9 @@ class EmergencyInfoViewModel
         private val _dialRequest = MutableStateFlow<String?>(null)
         val dialRequest: StateFlow<String?> = _dialRequest.asStateFlow()
 
+        private val _canManage = MutableStateFlow(false)
+        val canManage: StateFlow<Boolean> = _canManage.asStateFlow()
+
         /** Ask the screen to dial [number]; blank input is a no-op. */
         fun dial(number: String?) {
             if (number.isNullOrBlank()) return
@@ -135,6 +139,8 @@ class EmergencyInfoViewModel
 
         // A delayed success must not restore private rows after a newer access denial.
         private var fetchGeneration = 0L
+        private var readJob: Job? = null
+        private var active = true
         private var onAction: (HomeEmergencyDto) -> Unit = {}
         private var onAdd: () -> Unit = {}
         private var onShare: () -> Unit = {}
@@ -153,25 +159,51 @@ class EmergencyInfoViewModel
         }
 
         fun load() {
+            active = true
             refresh()
         }
 
         fun refresh() {
+            if (!active) return
             val generation = ++fetchGeneration
+            readJob?.cancel()
+            emergencies = null
+            _banner.value = null
+            _chipStrip.value = chipStripFromState()
+            _dialRequest.value = null
+            _canManage.value = false
             _state.value = ListOfRowsUiState.Loading
-            viewModelScope.launch {
-                val result = repo.getHomeEmergencies(homeId)
-                if (generation != fetchGeneration) return@launch
-                when (result) {
-                    is NetworkResult.Success -> applySuccess(result.data.emergencies)
-                    is NetworkResult.Failure -> {
-                        emergencies = null
-                        _banner.value = null
-                        _chipStrip.value = chipStripFromState()
-                        _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
+            readJob =
+                viewModelScope.launch {
+                    val result = repo.getHomeEmergencies(homeId)
+                    if (!active || generation != fetchGeneration) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            _canManage.value = result.data.canManage
+                            applySuccess(result.data.emergencies)
+                        }
+                        is NetworkResult.Failure -> {
+                            emergencies = null
+                            _banner.value = null
+                            _chipStrip.value = chipStripFromState()
+                            _state.value = ListOfRowsUiState.Error(result.error.displayMessage("Couldn't load the list."))
+                        }
                     }
                 }
-            }
+        }
+
+        /** Sensitive entries and share/print payloads must be authorized again on every return. */
+        fun suspendContent() {
+            active = false
+            fetchGeneration += 1
+            readJob?.cancel()
+            readJob = null
+            emergencies = null
+            _canManage.value = false
+            _dialRequest.value = null
+            _banner.value = null
+            _chipStrip.value = chipStripFromState()
+            _state.value = ListOfRowsUiState.Loading
         }
 
         fun selectFilter(id: String) {

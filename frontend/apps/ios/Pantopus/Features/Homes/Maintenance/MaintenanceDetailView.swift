@@ -9,8 +9,7 @@
 //  re-fetching is cheap, mirroring `BillDetailView`).
 //
 //  The shell renders: category-tinted header + key/value detail grid +
-//  vendor + cost + completion date + notes block + 2×2 photo grid +
-//  receipt thumbnail. Bottom actions are Edit + Delete; both wired via
+//  vendor + cost + completion date + notes block + saved receipt. Bottom actions are Edit + Delete; both wired via
 //  the existing `PUT /api/homes/:id/maintenance/:taskId` and
 //  `DELETE /api/homes/:id/maintenance/:taskId` endpoints.
 //
@@ -132,6 +131,7 @@ final class MaintenanceDetailViewModel {
 public struct MaintenanceDetailView: View {
     @State private var viewModel: MaintenanceDetailViewModel
     @State private var showDeleteConfirm: Bool = false
+    @State private var receiptId: String?
     private let onBack: @Sendable () -> Void
     private let onEdit: @Sendable () -> Void
 
@@ -164,8 +164,10 @@ public struct MaintenanceDetailView: View {
                     isMutating: viewModel.isMutating,
                     actionError: viewModel.actionError,
                     onBack: onBack,
-                    onEdit: onEdit
-                ) { showDeleteConfirm = true }
+                    onEdit: onEdit,
+                    onReceipt: { receiptId = task.documentId },
+                    onDelete: { showDeleteConfirm = true }
+                )
             case let .error(message):
                 let vm = viewModel
                 ErrorBody(
@@ -179,6 +181,11 @@ public struct MaintenanceDetailView: View {
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .onAppear { Analytics.track(.screenMaintenanceDetailViewed) }
         .task { await viewModel.load() }
+        .sheet(isPresented: Binding(get: { receiptId != nil }, set: { if !$0 { receiptId = nil } })) {
+            if let receiptId {
+                DocumentDetailView(homeId: viewModel.homeId, documentId: receiptId, onBack: dismissReceipt)
+            }
+        }
         // Someone changed this Home (`sync:changed`) or the socket came back: re-check the open entry,
         // which stays on screen meanwhile (Instant Screens).
         .refreshesOnStoreChange(affects: { $0.names(topic: ScreenTopic.home(viewModel.homeId), kind: .homes) }, perform: {
@@ -197,6 +204,10 @@ public struct MaintenanceDetailView: View {
         } message: {
             Text("It won't appear in the maintenance log anymore.")
         }
+    }
+
+    private func dismissReceipt() {
+        receiptId = nil
     }
 }
 
@@ -257,6 +268,7 @@ private struct LoadedBody: View {
     let actionError: String?
     let onBack: @Sendable () -> Void
     let onEdit: @Sendable () -> Void
+    let onReceipt: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -274,11 +286,21 @@ private struct LoadedBody: View {
                     if let notes = task.notes, !notes.isEmpty {
                         NotesBlock(notes: notes)
                     }
-                    if let photos = draft?.photos, !photos.isEmpty {
-                        PhotoGrid(photos: photos)
-                    }
-                    if let receipt = draft?.receipt {
-                        ReceiptBlock(file: receipt)
+                    if task.documentId != nil {
+                        Button(action: onReceipt) {
+                            HStack(spacing: Spacing.s3) {
+                                Icon(.fileText, size: 20, color: Theme.Color.primaryInk)
+                                Text("View receipt")
+                                    .pantopusTextStyle(.body)
+                                Spacer()
+                                Icon(.chevronRight, size: 18, color: Theme.Color.appTextSecondary)
+                            }
+                            .padding(Spacing.s4)
+                            .background(Theme.Color.appSurface)
+                            .clipShape(RoundedRectangle(cornerRadius: Radii.md))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("maintenanceDetail_receipt")
                     }
                     if let actionError {
                         Text(actionError)
@@ -441,93 +463,6 @@ private struct NotesBlock: View {
                         .stroke(Theme.Color.appBorderSubtle, lineWidth: 1)
                 )
                 .accessibilityIdentifier("maintenanceDetail_notes")
-        }
-    }
-}
-
-private struct PhotoGrid: View {
-    let photos: [MaintenanceDraftFile]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text("Photos", style: .overline)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .accessibilityAddTraits(.isHeader)
-            LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: Spacing.s2),
-                GridItem(.flexible(), spacing: Spacing.s2)
-            ], spacing: Spacing.s2) {
-                ForEach(photos) { photo in
-                    PhotoCell(file: photo)
-                }
-            }
-            .accessibilityIdentifier("maintenanceDetail_photos")
-        }
-    }
-}
-
-private struct PhotoCell: View {
-    let file: MaintenanceDraftFile
-
-    var body: some View {
-        ZStack {
-            if let image = UIImage(data: file.data) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 120)
-                    .clipShape(RoundedRectangle(cornerRadius: Radii.md))
-            } else {
-                RoundedRectangle(cornerRadius: Radii.md)
-                    .fill(Theme.Color.appSurfaceMuted)
-                    .frame(height: 120)
-                    .overlay(Icon(.image, size: 24, color: Theme.Color.appTextSecondary))
-            }
-        }
-        .accessibilityIdentifier("maintenanceDetail_photo_\(file.id.uuidString)")
-        .accessibilityLabel("Photo")
-    }
-}
-
-private struct ReceiptBlock: View {
-    let file: MaintenanceDraftFile
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text("Receipt", style: .overline)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .accessibilityAddTraits(.isHeader)
-            HStack(spacing: Spacing.s3) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: Radii.sm)
-                        .fill(Theme.Color.appSurfaceMuted)
-                        .frame(width: 40, height: 40)
-                    Icon(
-                        file.mimeType == "application/pdf" ? .fileText : .image,
-                        size: 18,
-                        color: Theme.Color.appTextSecondary
-                    )
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(file.filename)
-                        .pantopusTextStyle(.body)
-                        .foregroundStyle(Theme.Color.appText)
-                        .lineLimit(1)
-                    Text(file.mimeType == "application/pdf" ? "PDF" : "Image")
-                        .pantopusTextStyle(.caption)
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                }
-                Spacer()
-            }
-            .padding(Spacing.s3)
-            .background(Theme.Color.appSurface)
-            .clipShape(RoundedRectangle(cornerRadius: Radii.md))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radii.md)
-                    .stroke(Theme.Color.appBorderSubtle, lineWidth: 1)
-            )
-            .accessibilityIdentifier("maintenanceDetail_receipt")
         }
     }
 }

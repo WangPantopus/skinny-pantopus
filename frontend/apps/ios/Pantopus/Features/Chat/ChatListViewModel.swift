@@ -2,7 +2,7 @@ import Foundation
 import Logging
 import Observation
 
-// swiftlint:disable type_body_length
+// swiftlint:disable file_length type_body_length
 
 @Observable
 @MainActor
@@ -44,6 +44,14 @@ public final class ChatListViewModel {
     private var mutedKeys: Set<String> = []
     private var badgeTask: Task<Void, Never>?
     private var messageTask: Task<Void, Never>?
+    /// When the list's latest read that answered was sent. A new screen for
+    /// the list (a fold or a turn), or the list back on screen, reads again
+    /// only if a change signal named Messages since (`load()`).
+    private var listReadSentAt: Date?
+    /// The screens showing this list (`presentationDidAppear()`).
+    private var presentationCount = 0
+    /// The teardown waiting a moment after the last screen left.
+    private var pendingTeardown: Task<Void, Never>?
     init(
         api: APIClient = .shared,
         socket: SocketClient = .shared,
@@ -76,7 +84,49 @@ public final class ChatListViewModel {
                 ChatPerformance.mark("InboxCached", rows: allRows.count)
             }
         }
+        // `ScreenStoreLive` marks Messages for every chat change it is told
+        // of (a message, a read, a membership, a mute) and after any drop of
+        // the socket: with none since the list's last read, it has them all.
+        if let listReadSentAt, showsAnswer,
+           !store.wasMarked(topics: [ScreenTopic.chats], kind: .messagesList, since: listReadSentAt) {
+            allRows = Self.relabelingTimes(allRows, activity: activityDates)
+            applyFilter()
+            return
+        }
         await fetch(force: false)
+    }
+
+    /// The list shows the server's answer (conversations or none), not a load or an error.
+    private var showsAnswer: Bool {
+        switch state {
+        case .loaded, .empty: true
+        case .loading, .error: false
+        }
+    }
+
+    /// The Inbox tab keeps this list above its two layouts: a fold or a turn
+    /// puts up a new list screen, which can appear before the old one
+    /// leaves. The list stops listening only when the last screen showing it
+    /// leaves.
+    func presentationDidAppear() {
+        presentationCount += 1
+        pendingTeardown?.cancel()
+        pendingTeardown = nil
+    }
+
+    /// The old screen can also leave before the new one appears: the list
+    /// waits a moment before it stops listening, so a fold or a turn keeps
+    /// it live. Leaving the list tears it down as before, a moment later.
+    func presentationDidDisappear() {
+        presentationCount = max(presentationCount - 1, 0)
+        guard presentationCount == 0 else { return }
+        pendingTeardown?.cancel()
+        pendingTeardown = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard let self, !Task.isCancelled, presentationCount == 0 else { return }
+            pendingTeardown = nil
+            teardown()
+        }
     }
 
     private var localCacheScope: String? {
@@ -222,6 +272,7 @@ public final class ChatListViewModel {
         let cacheCheckpoint = ChatLocalStore.shared.inboxCheckpoint
         let scope = localCacheScope
         let minimumCount = inboxResponse?.conversations.count ?? 0
+        let sentAt = Date()
         async let conversationsTask: (response: UnifiedConversationsResponse, confirmedAt: Date)? = optional(
             refuseInbox: true,
             isCurrent: {
@@ -281,6 +332,7 @@ public final class ChatListViewModel {
               session == AuthManager.shared.requestSessionGeneration, !Task.isCancelled else { return }
         inboxConfirmedAt = response.confirmedAt
         apply(response.response, stats: stats)
+        listReadSentAt = sentAt
         ChatPerformance.mark("InboxNetwork", rows: allRows.count)
         if let scope {
             await ChatLocalStore.shared.saveInbox(
@@ -491,6 +543,7 @@ public final class ChatListViewModel {
             cacheGeneration = current
             inboxResponse = nil
             inboxConfirmedAt = nil
+            listReadSentAt = nil
             allRows = []
             activityDates = [:]
             state = .loading

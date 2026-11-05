@@ -30,7 +30,9 @@ import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.api.models.homes.HomeEmergencyDto
 import app.pantopus.android.ui.components.shareFile
 import app.pantopus.android.ui.components.shareText
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
+import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -65,7 +67,10 @@ fun EmergencyInfoScreen(
     val chipStrip by viewModel.chipStrip.collectAsStateWithLifecycle()
     val banner by viewModel.banner.collectAsStateWithLifecycle()
     val dialRequest by viewModel.dialRequest.collectAsStateWithLifecycle()
+    val canManage by viewModel.canManage.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    HomeCopyLifecycle(viewModel::load, viewModel::suspendContent)
 
     LaunchedEffect(Unit) {
         viewModel.configureNavigation(
@@ -84,7 +89,6 @@ fun EmergencyInfoScreen(
                 }
             },
         )
-        viewModel.load()
         Analytics.track(AnalyticsEvent.ScreenEmergencyInfoViewed)
     }
 
@@ -103,12 +107,14 @@ fun EmergencyInfoScreen(
     Box(modifier = Modifier.fillMaxSize().testTag("emergencyInfoList")) {
         ListOfRowsScreen(
             title = "Emergency info",
-            state = state,
+            state =
+                (state as? ListOfRowsUiState.Empty)?.takeUnless { canManage }?.copy(ctaTitle = null, onCta = null)
+                    ?: state,
             onRefresh = { viewModel.refresh() },
             onEndReached = { },
             chipStrip = chipStrip.copy(selectedId = selectedFilter),
             topBarAction = viewModel.topBarAction,
-            fab = viewModel.fab(),
+            fab = viewModel.fab().takeIf { canManage },
             onBack = onBack,
             banner = banner,
             customHeader = { EmergencyCall911Banner(onCall = viewModel::dialEmergencyNumber) },
