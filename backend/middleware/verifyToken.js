@@ -43,12 +43,42 @@ function setCachedRole(userId, role, accountType, sessionsValidAfter = null) {
   });
 }
 
+// One account read per user at a time: requests that arrive together (an app opening its screens at once)
+// share it. A read overtaken by an invalidation still answers the requests already waiting for it, as their own
+// reads did, but isn't cached. The promise never rejects (a read started early may go unused); a thrown error
+// comes back as `thrown` for the request to rethrow.
+const _accountReads = new Map(); // userId -> { promise, stale }
+
+function readAccount(userId) {
+  let read = _accountReads.get(userId);
+  if (!read) {
+    read = { stale: false };
+    read.promise = Promise.resolve(supabaseAdmin
+      .from('User')
+      .select('role, account_type, sessions_valid_after')
+      .eq('id', userId)
+      .maybeSingle())
+      .then((result) => ({ row: result?.data || null, error: result?.error || null }))
+      .catch((thrown) => ({ thrown }))
+      .finally(() => {
+        if (_accountReads.get(userId) === read) _accountReads.delete(userId);
+      });
+    _accountReads.set(userId, read);
+  }
+  return read;
+}
+
 /**
  * Invalidate cached role for a user. Call after role changes.
  * @param {string} userId
  */
 function invalidateRoleCache(userId) {
   _roleCache.delete(userId);
+  const read = _accountReads.get(userId);
+  if (read) {
+    read.stale = true;
+    _accountReads.delete(userId);
+  }
 }
 
 // ============ SESSION CLAIMS / REVOCATION (persistent login, design §6.4) ============
@@ -137,7 +167,15 @@ const verifyToken = async (req, res, next) => {
 
     // Verify the token on this server (signature, expiry, audience, issuer, and a session our registry
     // knows); Supabase's getUser decides whatever that can't (services/accessTokenVerifier.js).
-    const verified = await verifyAccessToken(token, { authClient: supabase });
+    // Once its signature verifies here, the account read below starts beside the registry read rather than
+    // after it; it's used only if the token is accepted.
+    let earlyRead = null;
+    const verified = await verifyAccessToken(token, {
+      authClient: supabase,
+      onLocalClaims: (claims) => {
+        if (!getCachedRole(claims.sub)) earlyRead = { userId: claims.sub, read: readAccount(claims.sub) };
+      },
+    });
 
     // Supabase Auth didn't answer (its rate limit, shared by everyone on hosted; a 5xx; the
     // network): the token wasn't checked, so nothing gets through. A 401 here would blame the
@@ -168,11 +206,9 @@ const verifyToken = async (req, res, next) => {
       sessionsValidAfter = cached.sessionsValidAfter;
     } else {
       logger.debug('auth.role_cache_miss', { user_id: data.user.id });
-      const { data: userRow, error: userRowError } = await supabaseAdmin
-        .from('User')
-        .select('role, account_type, sessions_valid_after')
-        .eq('id', data.user.id)
-        .maybeSingle();
+      const read = earlyRead?.userId === data.user.id ? earlyRead.read : readAccount(data.user.id);
+      const { row: userRow, error: userRowError, thrown } = await read.promise;
+      if (thrown) throw thrown;
       // A failed read must not erase a sign-out watermark or silently cache
       // a default role. The current database baseline includes this column.
       if (userRowError) throw authSessionService.authUnavailableError(userRowError);
@@ -185,7 +221,7 @@ const verifyToken = async (req, res, next) => {
       if (userRow.role) userRole = userRow.role;
       if (userRow.account_type) userAccountType = userRow.account_type;
       if (userRow.sessions_valid_after) sessionsValidAfter = userRow.sessions_valid_after;
-      setCachedRole(data.user.id, userRole, userAccountType, sessionsValidAfter);
+      if (!read.stale) setCachedRole(data.user.id, userRole, userAccountType, sessionsValidAfter);
     }
 
     // Persistent login (design §6.4): session_id / iat / aal from the JWT,

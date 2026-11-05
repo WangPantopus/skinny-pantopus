@@ -288,6 +288,10 @@ async function setSessionContext(sessionId, context) {
 const SESSION_STATE_TTL_MS = 15_000;
 const SESSION_STATE_MAX = 5000;
 const _sessionStateCache = new Map(); // sessionId -> { value, ts }
+// One registry read per session at a time: requests that arrive together (an app opening its screens at once)
+// share it. An invalidation drops the read in flight, so its answer isn't cached; requests already waiting for
+// it still get it, as they did from their own reads.
+const _sessionStateReads = new Map(); // sessionId -> Promise
 
 /**
  * @returns {Promise<{known:boolean, revoked:boolean, context:string|null, row:object|null}>}
@@ -299,25 +303,40 @@ async function getSessionStateCached(sessionId) {
   if (signOutPending(sessionId)) return { known: true, revoked: true, context: null, row: null };
   const hit = _sessionStateCache.get(sessionId);
   if (hit && Date.now() - hit.ts <= SESSION_STATE_TTL_MS) return hit.value;
-  const row = await getSessionById(sessionId);
-  const value = {
-    known: Boolean(row),
-    revoked: Boolean(row?.revoked_at),
-    context: row?.context || null,
-    row: row || null,
-  };
-  if (_sessionStateCache.size >= SESSION_STATE_MAX && !_sessionStateCache.has(sessionId)) {
-    const firstKey = _sessionStateCache.keys().next().value;
-    _sessionStateCache.delete(firstKey);
+  let read = _sessionStateReads.get(sessionId);
+  if (!read) {
+    read = getSessionById(sessionId).then((row) => {
+      const value = {
+        known: Boolean(row),
+        revoked: Boolean(row?.revoked_at),
+        context: row?.context || null,
+        row: row || null,
+      };
+      if (_sessionStateReads.get(sessionId) === read) {
+        if (_sessionStateCache.size >= SESSION_STATE_MAX && !_sessionStateCache.has(sessionId)) {
+          const firstKey = _sessionStateCache.keys().next().value;
+          _sessionStateCache.delete(firstKey);
+        }
+        _sessionStateCache.set(sessionId, { value, ts: Date.now() });
+      }
+      return value;
+    }).finally(() => {
+      if (_sessionStateReads.get(sessionId) === read) _sessionStateReads.delete(sessionId);
+    });
+    _sessionStateReads.set(sessionId, read);
   }
-  _sessionStateCache.set(sessionId, { value, ts: Date.now() });
-  return value;
+  return read;
 }
 
 /** Drop cached state for one session (or all when omitted). */
 function invalidateSessionStateCache(sessionId) {
-  if (sessionId === undefined) _sessionStateCache.clear();
-  else _sessionStateCache.delete(sessionId);
+  if (sessionId === undefined) {
+    _sessionStateCache.clear();
+    _sessionStateReads.clear();
+  } else {
+    _sessionStateCache.delete(sessionId);
+    _sessionStateReads.delete(sessionId);
+  }
 }
 
 /** Drop cached state for every session of one user, e.g. after another process revoked one. */
@@ -327,6 +346,8 @@ function invalidateSessionStateCacheForUser(userId) {
   for (const [sessionId, entry] of _sessionStateCache) {
     if (String(entry.value.row?.user_id || '').toLowerCase() === id) _sessionStateCache.delete(sessionId);
   }
+  // A read in flight doesn't know its user yet; dropping them all only means the next requests read again.
+  _sessionStateReads.clear();
 }
 
 // Sign-outs this process accepted but could not save yet: a local /logout
@@ -354,7 +375,10 @@ function signOutPending(sessionId) {
 function emitRevoked(userId, sessionIds, reason) {
   const ids = (sessionIds || []).filter(Boolean);
   if (ids.length === 0) return;
-  ids.forEach((id) => _sessionStateCache.delete(id));
+  ids.forEach((id) => {
+    _sessionStateCache.delete(id);
+    _sessionStateReads.delete(id);
+  });
   try {
     authEvents.emit('session_revoked', { userId, sessionIds: ids, reason });
   } catch (err) {

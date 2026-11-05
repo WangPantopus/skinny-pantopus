@@ -291,6 +291,11 @@ router.get('/resolve', verifyToken, async (req, res) => {
   const userId = req.user.id;
 
   try {
+    // The home locations (step 2) are read alongside the viewing location: one round trip instead of two when the
+    // viewing location is stale. They count only when step 2 is reached (the catch only marks an unused read handled).
+    const homesRead = Promise.resolve(supabaseAdmin.rpc('get_user_home_locations', { p_user_id: userId }));
+    homesRead.catch(() => {});
+
     // 1. Check for existing VL
     const { data: vlRow, error: locationError } = await supabaseAdmin
       .from('UserViewingLocation')
@@ -316,8 +321,7 @@ router.get('/resolve', verifyToken, async (req, res) => {
     }
 
     // 2. Try user's primary home
-    const { data: homeRows, error: homeError } = await supabaseAdmin
-      .rpc('get_user_home_locations', { p_user_id: userId });
+    const { data: homeRows, error: homeError } = await homesRead;
     if (homeError) throw homeError;
 
     if (homeRows && homeRows.length > 0) {
