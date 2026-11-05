@@ -1419,6 +1419,96 @@ async function sendPersonaPaymentFailedEmail({
 }
 
 // ============================================================
+//  CREW DAY EMAILS
+// ============================================================
+
+/**
+ * A Crew Day notice by email (services/crewDay/notices.js, docs/product/crew-day-build/02-contract.md §6): the
+ * notice's title and body, the day it is about, and a button to the page the notice opens. A receipt adds its rows.
+ * @param {Object} opts
+ * @param {string} opts.toEmail
+ * @param {string} opts.subject - the notice's title
+ * @param {string} [opts.lead] - the notice's body
+ * @param {string[]} [opts.facts] - the card: the day's title first, then its date and anything else
+ * @param {{ label: string, value: string, strong?: boolean }[]} [opts.rows] - a receipt's lines and total
+ * @param {string} opts.button
+ * @param {string} opts.link - absolute
+ * @param {string} opts.footer - why this person got it
+ * @param {string} [opts.settingsLink] - the account settings with the Email Notifications switch
+ */
+async function sendCrewDayEmail({ toEmail, subject, lead, facts = [], rows = [], button, link, footer, settingsLink }) {
+  const [title, ...otherFacts] = facts;
+  const card = facts.length || rows.length ? `
+      <div style="border:1px solid #e5e7eb; border-radius:12px; padding:16px 18px;">
+        ${title ? `<p style="color:#111827; font-size:16px; font-weight:600; line-height:1.4; margin:0 0 6px;">${escapeHtml(title)}</p>` : ''}
+        ${otherFacts.map((fact) => `<p style="color:#4b5563; font-size:14px; line-height:1.5; margin:0;">${escapeHtml(fact)}</p>`).join('\n        ')}
+        ${rows.length ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:${facts.length ? '12px' : '0'}; border-top:${facts.length ? '1px solid #e5e7eb' : '0'};">
+          ${rows.map((row) => `<tr>
+            <td style="color:${row.strong ? '#111827' : '#4b5563'}; font-size:14px; font-weight:${row.strong ? '600' : '400'}; padding:8px 0 0;">${escapeHtml(row.label)}</td>
+            <td style="color:${row.strong ? '#111827' : '#4b5563'}; font-size:14px; font-weight:${row.strong ? '600' : '400'}; padding:8px 0 0; text-align:right; white-space:nowrap;">${escapeHtml(row.value)}</td>
+          </tr>`).join('\n          ')}
+        </table>` : ''}
+      </div>` : '';
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0; padding:0; background-color:#f9fafb; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:480px; margin:40px auto; background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+
+    <!-- Header -->
+    <div style="background:#111827; padding:28px 32px 24px; text-align:center;">
+      <p style="color:#9ca3af; font-size:12px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; margin:0 0 8px;">Crew Day</p>
+      <h1 style="color:#ffffff; font-size:20px; font-weight:600; line-height:1.3; margin:0;">${escapeHtml(subject)}</h1>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:32px;">
+      ${lead ? `<p style="color:#374151; font-size:15px; line-height:1.6; margin:0 0 20px;">${escapeHtml(lead)}</p>` : ''}
+      ${card}
+
+      <!-- CTA -->
+      <div style="text-align:center; margin:28px 0 4px;">
+        <a href="${escapeHtml(link)}" style="display:inline-block; background:#111827; color:#ffffff; font-size:15px; font-weight:600; padding:14px 32px; border-radius:10px; text-decoration:none;">
+          ${escapeHtml(button)}
+        </a>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="background:#f9fafb; border-top:1px solid #e5e7eb; padding:16px 32px; text-align:center;">
+      <p style="color:#9ca3af; font-size:11px; margin:0;">
+        ${escapeHtml(footer)}
+      </p>
+      ${settingsLink ? `<p style="color:#d1d5db; font-size:10px; margin:8px 0 0;">
+        <a href="${escapeHtml(settingsLink)}" style="color:#9ca3af; text-decoration:underline;">Email settings</a>
+      </p>` : ''}
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const text = [
+    subject,
+    '',
+    ...(lead ? [lead, ''] : []),
+    ...facts,
+    ...rows.map((row) => `${row.label}: ${row.value}`),
+    ...(facts.length || rows.length ? [''] : []),
+    `${button}: ${link}`,
+    '',
+    footer,
+    ...(settingsLink ? [`Email settings: ${settingsLink}`] : []),
+  ].join('\n');
+
+  return sendEmail({ to: toEmail, subject, html, text });
+}
+
+// ============================================================
 //  HELPERS
 // ============================================================
 
@@ -1449,6 +1539,7 @@ module.exports = {
   sendCardWaitingEmail,
   planInviteEmailContent,
   sendPlanInviteEmail,
+  sendCrewDayEmail,
   sendPasswordResetEmail,
   sendVerificationEmail,
   sendMonthlyReceipt,
