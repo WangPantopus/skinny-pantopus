@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.location.LocationProvider
+import app.pantopus.android.data.location.PASSIVE_LOCATION_TIMEOUT_MILLIS
 import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -57,13 +58,19 @@ class PlanLocationResolver
                 ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
             }
 
-        /** The point to browse from now, or null when there is none yet (board F5). */
-        suspend fun resolve(): PlanLocation? {
+        /**
+         * The point to browse from now, or null when there is none yet (board F5). [waitForFix] false is opening the
+         * map. While the home or a saved place can stand in, a fix the provider doesn't have yet gets only a brief
+         * wait, as Pulse's does, so a first fix (indoors, after a cold start) no longer keeps Plans empty for up to six
+         * seconds. With nothing to stand in, it waits the rest of the time for a real fix, as before.
+         */
+        suspend fun resolve(waitForFix: Boolean = true): PlanLocation? {
             if (prefersHome) return home() ?: if (hasLocationPermission()) fromGps() else null
             if (!hasLocationPermission()) return null
             // Location is allowed but no fix came in time (indoors, a cold start): browse from the home or a saved
             // place meanwhile instead of asking again for a permission the person already gave.
-            return fromGps() ?: home()
+            if (waitForFix) return fromGps() ?: home()
+            return fromGps(PASSIVE_LOCATION_TIMEOUT_MILLIS) ?: home() ?: fromGps(FIX_TIMEOUT_MS - PASSIVE_LOCATION_TIMEOUT_MILLIS)
         }
 
         /** The person's home or, without one, their first saved place. */
@@ -99,8 +106,8 @@ class PlanLocationResolver
             return PlanGpsFix(coordinate.latitude, coordinate.longitude, Instant.now())
         }
 
-        private suspend fun fromGps(): PlanLocation? {
-            val coordinate = gps.cachedCoordinate() ?: gps.requestCurrent(FIX_TIMEOUT_MS) ?: return null
+        private suspend fun fromGps(timeoutMs: Long = FIX_TIMEOUT_MS): PlanLocation? {
+            val coordinate = gps.cachedCoordinate() ?: gps.requestCurrent(timeoutMs) ?: return null
             val payload = viewing.currentCopy() ?: (viewing.current() as? NetworkResult.Success)?.data
             val label = payload?.viewingLocation?.city ?: payload?.homes?.firstOrNull()?.city
             return PlanLocation(coordinate.latitude, coordinate.longitude, label, PlanLocation.Source.GPS)
