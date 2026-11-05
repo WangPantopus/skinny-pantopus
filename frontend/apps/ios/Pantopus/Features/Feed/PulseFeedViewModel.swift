@@ -259,6 +259,11 @@ public final class PulseFeedViewModel {
     /// the list there. Not observed: they change as the list scrolls.
     @ObservationIgnored var readingPostId: String?
     @ObservationIgnored var readsFeedTop = true
+    /// The feed's screens: a fold or a turn of the iPhone Duo moves the feed between one stack and two columns
+    /// (`PulseTabRoot` says when), beside an open post or under it.
+    let screens = PulseScreenRebuilds()
+    /// The last `load()` ran to its end (a screen that leaves mid-read cancels it).
+    @ObservationIgnored private var lastLoadFinished = false
 
     private struct PendingFirstPage {
         let response: FeedResponse
@@ -313,9 +318,17 @@ public final class PulseFeedViewModel {
         }
     }
 
+    /// The screen showing now was rebuilt by a fold or a turn, with the posts already read: it reads nothing again.
+    /// Coming back to the feed later reads what is out of date, as before.
+    var showsRebuiltScreen: Bool {
+        lastLoadFinished && screens.isRebuilding
+    }
+
     /// First-time load. Refetches when still empty so a location fix can
     /// populate the feed after permissions are granted.
     public func load() async {
+        lastLoadFinished = false
+        defer { lastLoadFinished = !Task.isCancelled }
         if case .loaded = state {
             // Coming back: a quiet re-read once the first page is out of date
             // (Nearby: 2 minutes, or marked); new posts wait behind the pill.
