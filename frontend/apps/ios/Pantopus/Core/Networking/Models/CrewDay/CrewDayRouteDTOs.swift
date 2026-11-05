@@ -37,6 +37,8 @@ public struct CrewDayHomeDTO: Decodable, Sendable, Hashable, Identifiable {
     public let releaseAskedAt: String?
     public let doneAt: String?
     public let photoCount: Int
+    /// What Pantopus support took off a paid home (a paid home's charge was `priceCents` − this); 0 when nothing.
+    public let refundedCents: Int
     /// `not_yet`, `scheduled`, `paused`, `charged`, `partially_refunded`, `refunded`, `failed` or `none`.
     public let chargeState: String?
     public let chargeDueAt: String?
@@ -90,6 +92,7 @@ public struct CrewDayHomeDTO: Decodable, Sendable, Hashable, Identifiable {
         releaseAskedAt = try c.decodeIfPresent(String.self, forKey: .releaseAskedAt)
         doneAt = try c.decodeIfPresent(String.self, forKey: .doneAt)
         photoCount = try c.decodeIfPresent(Int.self, forKey: .photoCount) ?? 0
+        refundedCents = try c.decodeIfPresent(Int.self, forKey: .refundedCents) ?? 0
         chargeState = try c.decodeIfPresent(String.self, forKey: .chargeState)
         chargeDueAt = try c.decodeIfPresent(String.self, forKey: .chargeDueAt)
         problem = try? c.decodeIfPresent(CrewDayBookingDTO.Problem.self, forKey: .problem)
@@ -115,6 +118,7 @@ public struct CrewDayHomeDTO: Decodable, Sendable, Hashable, Identifiable {
         case releaseAskedAt = "release_asked_at"
         case doneAt = "done_at"
         case photoCount = "photo_count"
+        case refundedCents = "refunded_cents"
         case chargeState = "charge_state"
         case chargeDueAt = "charge_due_at"
         case newDateChoice = "new_date_choice"

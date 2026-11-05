@@ -151,6 +151,10 @@ enum CrewDayRouteCopy {
 
     /// "Done 9:48 AM · 3 photos", "On the way · told 10–11 AM", "Can't get in · 9:30 AM", "Waiting".
     static func status(_ home: CrewDayHomeDTO, timezone: String?) -> String {
+        // A paid home Pantopus support took money off says what was charged, as the web does.
+        if home.status == "paid", home.refundedCents > 0, let price = home.priceCents {
+            return "Paid \(CrewDayFormat.price(price - home.refundedCents)) · \(CrewDayFormat.price(home.refundedCents)) refunded"
+        }
         switch tone(home) {
         case .done:
             let at = CrewDayFormat.time(CrewDayFormat.instant(home.doneAt), timezone: timezone)

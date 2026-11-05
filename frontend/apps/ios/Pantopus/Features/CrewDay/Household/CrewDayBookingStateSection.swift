@@ -246,7 +246,8 @@ struct CrewDayBookingStateSection: View {
 
     private var cardFailed: some View {
         CrewDayStateCard(tone: .error, icon: .circleAlert, title: "Your card didn't go through") {
-            CrewDayStateText(text: price.map { "Pay \($0) to \(crew) in Pantopus." } ?? "Pay \(crew) in Pantopus.")
+            let due = CrewDayBookingPageCopy.amountDue(booking)
+            CrewDayStateText(text: due.map { "Pay \($0) to \(crew) in Pantopus." } ?? "Pay \(crew) in Pantopus.")
             if let invoiceId = booking.invoiceId {
                 Button("Pay now") { onOpenInvoice(invoiceId) }
                     .crewDayButton(.primary)

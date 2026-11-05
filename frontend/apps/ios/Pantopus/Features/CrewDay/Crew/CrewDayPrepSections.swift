@@ -328,13 +328,14 @@ enum CrewDayPrepCopy {
         return CrewDayFormat.calendar(card.timezone).isDateInToday(day) ? "Today's route" : "Tomorrow's route is ready"
     }
 
-    /// "All 6 homes done · Tue, Nov 17".
+    /// "Every home is done · Tue, Nov 17", or "4 of 6 homes done · Tue, Nov 17".
     static func afterTitle(_ page: CrewDayCrewPageDTO) -> String {
         let done = page.bookings.filter { ["done", "paid", "payment_failed", "refunded"].contains($0.status) }.count
         let day = CrewDayFormat.shortDay(page.day.card.serviceDate, timezone: page.day.card.timezone)
-        let lead = done == page.bookings.count
-            ? (done == 1 ? "1 home done" : "All \(CrewDayFormat.homes(done)) done")
-            : "\(done) of \(page.bookings.count) homes done"
+        // No count once every home is done: a home refunded in full before its charge has left the list (the web's words).
+        let lead = done < page.bookings.count
+            ? "\(done) of \(page.bookings.count) homes done"
+            : page.bookings.isEmpty ? "This day is over" : page.bookings.count == 1 ? "The home is done" : "Every home is done"
         return "\(lead) · \(day)"
     }
 
