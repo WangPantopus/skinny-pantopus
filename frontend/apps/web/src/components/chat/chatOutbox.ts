@@ -1,4 +1,5 @@
-import * as api from '@pantopus/api';
+import { getChatRoom, findOrCreateTopic, sendMessage } from '@pantopus/api/endpoints/chat';
+import { uploadChatMedia } from '@pantopus/api/endpoints/upload';
 import type { ChatMessage, ChatRoomWithDetails } from '@pantopus/types';
 import { activateChatStorage, assertChatOutboxCapacity, consumeChatDraft, deleteChatRecords, isChatStorageActiveFor, isChatStorageCurrent, listChatRecordKeys, readChatBytes,
   readChatRecord, suspendChatStorage, writeChatRecords, type ChatDraftCommit, type ChatStorageScope } from './chatStorage';
@@ -260,14 +261,14 @@ async function drain(): Promise<void> {
       publish();
       try {
         if (message.replyToId && message.otherUserId) {
-          const result = await api.chat.getChatRoom(message.roomId, { asBusinessUserId: message.asBusinessUserId });
+          const result = await getChatRoom(message.roomId, { asBusinessUserId: message.asBusinessUserId });
           if (!current(saved)) return;
           const audience = directReplyRoomStatus(result.room, message.roomId, message.asBusinessUserId || actorId, message.otherUserId);
           if (audience !== 'ready') throw Object.assign(new Error(audience === 'unsupported' ? REPLY_AUDIENCE_REFUSAL
             : 'The original conversation could not yet be verified. Your reply is saved and will retry.'), { statusCode: audience === 'unsupported' ? 403 : 503 });
         }
         if (message.topicRequest && message.otherUserId && !message.topicId) {
-          const result = await api.chat.findOrCreateTopic(message.otherUserId, message.topicRequest);
+          const result = await findOrCreateTopic(message.otherUserId, message.topicRequest);
           if (!current(saved)) return;
           message = { ...message, topicId: result.topic.id };
           await save(saved, message);
@@ -279,14 +280,14 @@ async function drain(): Promise<void> {
             return new File([bytes], file.name, { type: file.type, lastModified: file.lastModified });
           }));
           if (!current(saved)) return;
-          const result = await api.upload.uploadChatMedia(message.roomId, files, message.clientMessageId);
+          const result = await uploadChatMedia(message.roomId, files, message.clientMessageId);
           message = { ...message, uploadedFiles: result.media as UploadedFile[] };
           await save(saved, message);
         }
         if (!current(saved)) return;
         const uploaded = message.uploadedFiles ?? [];
         const type = message.messageType || (uploaded.length ? (uploaded.length === 1 && uploaded[0].mime_type?.startsWith('image/') ? 'image' : 'file') : 'text');
-        const result = await api.chat.sendMessage({ roomId: message.roomId, messageText: message.text || undefined,
+        const result = await sendMessage({ roomId: message.roomId, messageText: message.text || undefined,
           messageType: type, metadata: message.metadata, clientMessageId: message.clientMessageId, replyToId: message.replyToId,
           topicId: message.topicId, asBusinessUserId: message.asBusinessUserId,
           ...(uploaded.length ? { fileIds: uploaded.map((file) => file.id) } : {}) });

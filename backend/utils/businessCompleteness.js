@@ -34,25 +34,29 @@ const SERVICE_AREA_ENTITY_TYPES = new Set(['home_service', 'sole_proprietor']);
  *   Verification tier:                                  +5 to +15
  *     self_attested: +5, document_verified: +10, government_verified: +15
  */
-async function calculateProfileCompleteness(businessUserId) {
+// The dashboard already read these rows. Reuse only that request's inputs; this is not an authority or data cache.
+async function calculateProfileCompleteness(businessUserId, { profile: loadedProfile, locations: loadedLocations, user: loadedUser, hoursRead } = {}) {
   try {
     const [profileResult, locationsResult, userResult] = await Promise.all([
-      supabaseAdmin
+      loadedProfile !== undefined ? { data: loadedProfile } : supabaseAdmin
         .from('BusinessProfile')
         .select('description, logo_file_id, banner_file_id, categories, public_phone, public_email, website, social_links, verification_status, business_type, service_area')
         .eq('business_user_id', businessUserId)
         .single(),
-      supabaseAdmin
+      loadedLocations !== undefined ? { data: loadedLocations } : supabaseAdmin
         .from('BusinessLocation')
         .select('id, location')
         .eq('business_user_id', businessUserId)
         .eq('is_active', true),
-      supabaseAdmin
+      loadedUser !== undefined ? { data: loadedUser } : supabaseAdmin
         .from('User')
         .select('tagline')
         .eq('id', businessUserId)
         .single(),
     ]);
+    for (const result of [profileResult, locationsResult, userResult]) {
+      if (result.error) throw result.error;
+    }
 
     const profile = profileResult.data;
     const locations = locationsResult.data || [];
@@ -75,19 +79,18 @@ async function calculateProfileCompleteness(businessUserId) {
       catalogQuery = catalogQuery.eq('kind', 'donation');
     }
 
-    const catalogResult = await catalogQuery;
+    // These reads are independent. The dashboard also shares the hours read with its checklist.
+    const [catalogResult, hoursResult] = await Promise.all([
+      catalogQuery,
+      hoursRead || (locations.length > 0
+        ? supabaseAdmin.from('BusinessHours').select('id', { count: 'exact', head: true })
+          .in('location_id', locations.map((location) => location.id))
+        : { count: 0 }),
+    ]);
+    if (catalogResult.error) throw catalogResult.error;
+    if (hoursResult.error) throw hoursResult.error;
     const catalogCount = catalogResult.count || 0;
-
-    // Check if any location has hours
-    let hasHours = false;
-    if (locations.length > 0) {
-      const locationIds = locations.map((l) => l.id);
-      const { count: hoursCount } = await supabaseAdmin
-        .from('BusinessHours')
-        .select('id', { count: 'exact', head: true })
-        .in('location_id', locationIds);
-      hasHours = (hoursCount || 0) > 0;
-    }
+    const hasHours = (hoursResult.count || 0) > 0;
 
     let score = 0;
 
@@ -144,7 +147,8 @@ async function calculateProfileCompleteness(businessUserId) {
     return Math.min(score, 100);
   } catch (err) {
     logger.error('calculateProfileCompleteness failed', { businessUserId, error: err.message });
-    return 0;
+    // A failed read is not a zero score, and must never overwrite the stored discovery score.
+    throw Object.assign(new Error('Business completeness could not be checked right now.'), { statusCode: 503 });
   }
 }
 

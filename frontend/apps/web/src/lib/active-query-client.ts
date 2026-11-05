@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
-import * as api from '@pantopus/api';
+import { authSessionMarker } from '@pantopus/api/client';
 
 // The query client of the session that is signed in now (lib/query-provider.tsx
 // replaces it at sign-out and account switches). Code outside React, such as
@@ -13,7 +13,7 @@ const sessions = new WeakMap<QueryClient, string | null>();
 let current: QueryClient | null = null;
 
 function sessionMarker(): string | null {
-  return typeof api.authSessionMarker === 'function' ? api.authSessionMarker() : null;
+  return typeof authSessionMarker === 'function' ? authSessionMarker() : null;
 }
 
 export function activeQueryClient(): QueryClient | null {

@@ -32,6 +32,9 @@ public enum EditAccessCodeA11y {
 public struct EditAccessCodeFormView: View {
     @State private var viewModel: EditAccessCodeFormViewModel
     @State private var confirmingDelete = false
+    @State private var isVisible = false
+    @State private var needsForegroundRead = false
+    @Environment(\.scenePhase) private var scenePhase
     private let onClose: @MainActor () -> Void
 
     init(
@@ -52,26 +55,43 @@ public struct EditAccessCodeFormView: View {
 
     public var body: some View {
         FormShell(
-            title: viewModel.title,
-            rightActionLabel: viewModel.commitLabel,
-            isValid: viewModel.isValid,
+            title: viewModel.isEditing && canShowContent && !viewModel.canManage ? "Access code" : viewModel.title,
+            // Save appears only once the current read allows changes, as on Android.
+            rightActionLabel: viewModel.canManage ? viewModel.commitLabel : nil,
+            isValid: viewModel.isValid && canSaveScope && canShowContent,
             isDirty: viewModel.isDirty,
-            isSaving: viewModel.isSaving,
+            isSaving: viewModel.isSaving || viewModel.isRechecking,
             onClose: onClose,
-            onCommit: { Task { await viewModel.submit() } },
-            content: {
-                categorySection
-                detailsSection
-                notesSection
-                sharedWithSection
-                if viewModel.isEditing { deleteButton }
-            }
+            onCommit: { commit() },
+            content: { formContent }
         )
         .accessibilityIdentifier(EditAccessCodeA11y.screen)
         .sensitiveScreen()
         .formShakeOnChange(of: viewModel.shakeTrigger)
         .overlay(alignment: .bottom) { toastOverlay }
-        .task { await viewModel.load() }
+        .disabled(viewModel.isSaving || viewModel.isRechecking)
+        .interactiveDismissDisabled(viewModel.isSaving || viewModel.isDirty)
+        .task { await refresh() }
+        .onAppear {
+            isVisible = true
+            needsForegroundRead = false
+        }
+        .onDisappear {
+            isVisible = false
+            confirmingDelete = false
+            viewModel.suspend()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard isVisible else { return }
+            if phase == .background {
+                needsForegroundRead = true
+                confirmingDelete = false
+                viewModel.suspend()
+            } else if phase == .active, needsForegroundRead {
+                needsForegroundRead = false
+                Task { await refresh() }
+            }
+        }
         .onChange(of: viewModel.shouldDismiss) { _, dismiss in
             if dismiss {
                 viewModel.acknowledgeDismiss()
@@ -82,6 +102,56 @@ public struct EditAccessCodeFormView: View {
 
     // MARK: - Sections
 
+    private var canShowContent: Bool {
+        guard viewModel.hasCurrentAccess, !viewModel.isLoading, !viewModel.isConfirmingAccess else { return false }
+        if case .editing = viewModel.state { return true }
+        return false
+    }
+
+    private var canSaveScope: Bool {
+        viewModel.canManage && viewModel.availableVisibilities.contains(viewModel.visibility)
+    }
+
+    @ViewBuilder private var formContent: some View {
+        if viewModel.isLoading || viewModel.isConfirmingAccess {
+            EditAccessCodeFormSkeleton()
+        } else if canShowContent {
+            if !viewModel.canManage {
+                Text("You can view and copy this code. Editing is unavailable with your current access.")
+                    .pantopusTextStyle(.small)
+            }
+            categorySection.disabled(!viewModel.canManage)
+            detailsSection
+            notesSection.disabled(!viewModel.canManage)
+            sharedWithSection.disabled(!viewModel.canManage)
+            if viewModel.canManage, !canSaveScope {
+                Text("Choose a sharing option allowed by your current access.")
+                    .pantopusTextStyle(.caption)
+            }
+            if viewModel.isEditing, viewModel.canManage { deleteButton }
+        } else {
+            if let message = viewModel.accessError {
+                Text(message)
+            } else if case let .error(message) = viewModel.state {
+                Text(message)
+            }
+            Button("Try again") { Task { await refresh() } }
+        }
+    }
+
+    private func refresh() async {
+        await viewModel.load()
+    }
+
+    private func commit(deleting: Bool = false) {
+        Task {
+            guard !viewModel.isSaving, !viewModel.isRechecking else { return }
+            guard await viewModel.confirmAccess(), !viewModel.isSaving, canShowContent, isVisible, scenePhase == .active else { return }
+            guard deleting || canSaveScope else { return }
+            if deleting { await viewModel.delete() } else { await viewModel.submit() }
+        }
+    }
+
     /// Removing a code takes it away from everyone it's shared with, so it asks first.
     private var deleteButton: some View {
         Button("Delete code", role: .destructive) { confirmingDelete = true }
@@ -89,7 +159,7 @@ public struct EditAccessCodeFormView: View {
             .disabled(viewModel.isSaving)
             .accessibilityIdentifier(EditAccessCodeA11y.deleteButton)
             .confirmationDialog("Delete this code?", isPresented: $confirmingDelete, titleVisibility: .visible) {
-                Button("Delete code", role: .destructive) { Task { await viewModel.delete() } }
+                Button("Delete code", role: .destructive) { commit(deleting: true) }
             } message: {
                 Text("Everyone it's shared with loses it, including guests with a pass.")
             }
@@ -114,12 +184,14 @@ public struct EditAccessCodeFormView: View {
                 contentType: .oneTimeCode,
                 identifier: EditAccessCodeA11y.labelField
             )
+            .disabled(!viewModel.canManage)
             ValueField(
                 value: valueBinding,
                 isRevealed: viewModel.isRevealed,
+                canEdit: viewModel.canManage,
                 state: fieldState(for: viewModel.fields[.value]),
-                onToggleReveal: { viewModel.toggleReveal() },
-                onCopy: { viewModel.copyValue() }
+                onToggleReveal: { if canShowContent { viewModel.toggleReveal() } },
+                onCopy: { if canShowContent { viewModel.copyValue() } }
             )
         }
     }
@@ -139,15 +211,15 @@ public struct EditAccessCodeFormView: View {
                 ForEach(AccessVisibility.displayOrder, id: \.self) { scope in
                     VisibilityRow(
                         scope: scope,
-                        isSelected: viewModel.visibility == scope,
-                        rosterSummary: viewModel.rosterSummary(for: scope)
+                        isSelected: viewModel.visibility == scope
                     ) {
                         viewModel.selectVisibility(scope)
                     }
+                    .disabled(!viewModel.availableVisibilities.contains(scope))
                 }
-                if !viewModel.sharedWithNames().isEmpty {
-                    MemberPreviewStrip(names: viewModel.sharedWithNames())
-                }
+                Text("These choices do not grant new Home permissions. Access follows each person’s current permissions.")
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
             }
         }
     }
@@ -195,80 +267,13 @@ public struct EditAccessCodeFormView: View {
     }
 }
 
-// MARK: - Category grid
-
-/// 3-column grid of category tiles. Selected tile carries the
-/// category's tinted background + a 2pt primary600 border so the
-/// selection is unambiguous against the white card.
-@MainActor
-private struct AccessCodeCategoryGrid: View {
-    let selected: AccessCategory
-    let onSelect: (AccessCategory) -> Void
-
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: Spacing.s2), count: 3)
-
-    var body: some View {
-        LazyVGrid(columns: columns, spacing: Spacing.s2) {
-            ForEach(AccessCategory.displayOrder, id: \.self) { category in
-                CategoryTile(
-                    category: category,
-                    isSelected: category == selected
-                ) {
-                    onSelect(category)
-                }
-            }
-        }
-        .accessibilityIdentifier(EditAccessCodeA11y.categoryGrid)
-    }
-}
-
-@MainActor
-private struct CategoryTile: View {
-    let category: AccessCategory
-    let isSelected: Bool
-    let onSelect: () -> Void
-
-    var body: some View {
-        Button(action: onSelect) {
-            VStack(spacing: Spacing.s2) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                        .fill(category.background)
-                        .frame(width: 40, height: 40)
-                    Icon(category.icon, size: 20, color: category.foreground)
-                }
-                Text(category.label)
-                    .pantopusTextStyle(.caption)
-                    .foregroundStyle(Theme.Color.appText)
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, minHeight: 80)
-            .padding(.vertical, Spacing.s2)
-            .background(
-                RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                    .fill(isSelected ? category.background.opacity(0.4) : Theme.Color.appSurface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                    .stroke(
-                        isSelected ? Theme.Color.primary600 : Theme.Color.appBorder,
-                        lineWidth: isSelected ? 2 : 1
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("\(EditAccessCodeA11y.categoryOption)_\(category.rawValue)")
-        .accessibilityLabel(category.label)
-        .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
-    }
-}
-
 // MARK: - Value field (masked + reveal + copy)
 
 @MainActor
 private struct ValueField: View {
     @Binding var value: String
     let isRevealed: Bool
+    let canEdit: Bool
     let state: PantopusFieldState
     let onToggleReveal: () -> Void
     let onCopy: () -> Void
@@ -282,6 +287,7 @@ private struct ValueField: View {
                 .foregroundStyle(Theme.Color.appTextSecondary)
             HStack(spacing: Spacing.s2) {
                 input
+                    .disabled(!canEdit)
                 Button(action: onToggleReveal) {
                     Icon(
                         isRevealed ? .eyeOff : .eye,
@@ -384,7 +390,6 @@ private struct NotesField: View {
 private struct VisibilityRow: View {
     let scope: AccessVisibility
     let isSelected: Bool
-    let rosterSummary: String
     let onSelect: () -> Void
 
     var body: some View {
@@ -392,7 +397,7 @@ private struct VisibilityRow: View {
             HStack(alignment: .top, spacing: Spacing.s3) {
                 radio
                 VStack(alignment: .leading, spacing: Spacing.s1) {
-                    Text(rosterSummary)
+                    Text(scope.headline)
                         .pantopusTextStyle(.body)
                         .foregroundStyle(Theme.Color.appText)
                     Text(scope.subcopy)
@@ -435,34 +440,6 @@ private struct VisibilityRow: View {
                     .frame(width: 12, height: 12)
             }
         }
-    }
-}
-
-// MARK: - Member preview strip
-
-@MainActor
-private struct MemberPreviewStrip: View {
-    let names: [String]
-
-    var body: some View {
-        HStack(spacing: Spacing.s1) {
-            Icon(.users, size: 12, color: Theme.Color.appTextSecondary)
-            Text(displayText)
-                .pantopusTextStyle(.caption)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .lineLimit(2)
-            Spacer(minLength: Spacing.s0)
-        }
-        .padding(.top, Spacing.s1)
-    }
-
-    private var displayText: String {
-        if names.count <= 3 {
-            return names.joined(separator: ", ")
-        }
-        let head = names.prefix(3).joined(separator: ", ")
-        let extra = names.count - 3
-        return "\(head) +\(extra) more"
     }
 }
 

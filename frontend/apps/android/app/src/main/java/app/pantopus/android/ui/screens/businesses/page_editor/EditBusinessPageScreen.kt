@@ -702,9 +702,6 @@ private fun LocationSection(
                     pinDirty = content.location.pinDirty,
                 )
             }
-            if (content.mode is EditBusinessPageMode.Published) {
-                HideAddressRow(on = content.location.hideExactAddress)
-            }
         }
     }
 }
@@ -1003,61 +1000,6 @@ private fun PromptBlock(
                 text = prompt.ctaLabel,
                 style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
                 color = PantopusColors.appTextInverse,
-            )
-        }
-    }
-}
-
-@Composable
-private fun HideAddressRow(on: Boolean) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(Radii.md))
-                .background(PantopusColors.appSurface)
-                .border(width = 1.dp, color = PantopusColors.appBorder, shape = RoundedCornerShape(Radii.md))
-                .padding(14.dp)
-                .semantics {
-                    contentDescription =
-                        "Hide exact address until contact, ${if (on) "on" else "off"}"
-                },
-        verticalAlignment = Alignment.Top,
-    ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = "Hide exact address until contact",
-                style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
-                color = PantopusColors.appText,
-            )
-            Text(
-                text = "Show street name only on the public page.",
-                style = TextStyle(fontSize = 11.5.sp),
-                color = PantopusColors.appTextSecondary,
-            )
-        }
-        // Simple capsule toggle visualization.
-        Box(
-            modifier =
-                Modifier
-                    .width(44.dp)
-                    .height(26.dp)
-                    .clip(RoundedCornerShape(Radii.pill))
-                    .background(if (on) PantopusColors.business else PantopusColors.appSurfaceSunken)
-                    .border(
-                        width = 1.dp,
-                        color = PantopusColors.appBorder,
-                        shape = RoundedCornerShape(Radii.pill),
-                    ),
-            contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .padding(2.dp)
-                        .size(22.dp)
-                        .clip(RoundedCornerShape(Radii.pill))
-                        .background(PantopusColors.appSurface),
             )
         }
     }

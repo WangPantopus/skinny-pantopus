@@ -30,6 +30,7 @@ import {
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { queryKeys } from '@/lib/query-keys';
+import { hubTodayQuery } from '@/lib/hubToday';
 import { withoutLaunchCutTodayRows } from '@/lib/featureFlags';
 import type { HubToday } from '@pantopus/types';
 import BallotTodaySection, { useBallotToday } from '@/components/ballot/BallotTodaySection';
@@ -136,9 +137,7 @@ export default function HubTodayPage() {
   const hasToken = mounted && !!getAuthToken();
 
   const query = useQuery<HubToday | null>({
-    queryKey: queryKeys.hubToday(),
-    queryFn: () => api.hub.getHubToday({ retries: 1, retryDelayMs: 800 }),
-    staleTime: 120_000,
+    ...hubTodayQuery(),
     enabled: hasToken,
   });
 

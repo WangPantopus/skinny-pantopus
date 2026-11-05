@@ -84,6 +84,10 @@ class AccessCodesViewModel
 
         private var secrets: List<HomeAccessSecretDto> = emptyList()
         private var loadedOnce: Boolean = false
+        private var active = true
+        private var generation = 0
+        private var readJob: Job? = null
+        private var hasCurrentSecrets = false
         private var toastJob: Job? = null
         private var copyHandler: ((String) -> Unit) = { _ -> }
 
@@ -113,9 +117,17 @@ class AccessCodesViewModel
         /** Pull-to-refresh. */
         fun refresh() = reload()
 
-        /** Back from adding, editing or deleting a code: read the list again (the first read stays with [load]). */
-        fun refreshIfLoaded() {
-            if (loadedOnce) reload()
+        /** Secret values only live in the foreground visit that fetched them. */
+        fun resume() {
+            active = true
+            reload()
+        }
+
+        fun pause() {
+            active = false
+            generation++
+            readJob?.cancel()
+            clearSecrets()
         }
 
         /** Update the live chip selection. Rebuilds sections in place. */
@@ -128,6 +140,7 @@ class AccessCodesViewModel
 
         /** Toggle redaction for a specific secret. */
         fun toggleReveal(secretId: String) {
+            if (!hasCurrentSecrets || secrets.none { it.id == secretId }) return
             _revealed.value =
                 if (_revealed.value.contains(secretId)) {
                     _revealed.value - secretId
@@ -139,6 +152,7 @@ class AccessCodesViewModel
 
         /** Copy the secret's literal value via the bound clipboard helper. */
         fun copyValue(secretId: String) {
+            if (!hasCurrentSecrets) return
             val secret = secrets.firstOrNull { it.id == secretId } ?: return
             copyHandler(secret.secretValue)
             showToast("Code copied")
@@ -146,6 +160,7 @@ class AccessCodesViewModel
 
         /** Open the kebab menu for a secret (currently routes to Edit). */
         fun openKebab(secretId: String) {
+            if (!hasCurrentSecrets || secrets.none { it.id == secretId }) return
             onSelect(AccessCodesTarget.EditCode(homeId = homeId, secretId = secretId))
         }
 
@@ -162,22 +177,38 @@ class AccessCodesViewModel
         // ─── Fetching ──────────────────────────────────────────────
 
         private fun reload() {
-            _state.value = ListOfRowsUiState.Loading
-            viewModelScope.launch {
-                val result = repo.getHomeAccessSecrets(homeId)
-                when (result) {
-                    is NetworkResult.Success -> {
-                        secrets = result.data.secrets
-                        loadedOnce = true
-                        rebuildChipStrip()
-                        applyState()
-                    }
-                    is NetworkResult.Failure -> {
-                        _state.value =
-                            ListOfRowsUiState.Error("Couldn't load access codes. Try again.")
+            if (!active) return
+            val request = ++generation
+            readJob?.cancel()
+            clearSecrets()
+            readJob =
+                viewModelScope.launch {
+                    val result = repo.getHomeAccessSecrets(homeId)
+                    if (!active || generation != request) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            secrets = result.data.secrets
+                            hasCurrentSecrets = true
+                            loadedOnce = true
+                            rebuildChipStrip()
+                            applyState()
+                        }
+                        is NetworkResult.Failure -> {
+                            _state.value =
+                                ListOfRowsUiState.Error("Couldn't load access codes. Try again.")
+                        }
                     }
                 }
-            }
+        }
+
+        private fun clearSecrets() {
+            secrets = emptyList()
+            hasCurrentSecrets = false
+            _revealed.value = emptySet()
+            _chipStrip.value = null
+            toastJob?.cancel()
+            _toast.value = null
+            _state.value = ListOfRowsUiState.Loading
         }
 
         // ─── Toast ─────────────────────────────────────────────────
@@ -195,6 +226,11 @@ class AccessCodesViewModel
         // ─── Chip strip ────────────────────────────────────────────
 
         private fun rebuildChipStrip() {
+            // Counts describe the current read only; a pending or failed read shows no chips.
+            if (!hasCurrentSecrets) {
+                _chipStrip.value = null
+                return
+            }
             val counts = countsByCategory()
             val chips =
                 buildList {
@@ -234,6 +270,7 @@ class AccessCodesViewModel
         // ─── State projection ──────────────────────────────────────
 
         internal fun applyState() {
+            if (!hasCurrentSecrets) return
             val visibleCategories: List<AccessCategory> =
                 when (_selectedChip.value) {
                     AccessCodesChip.ALL -> AccessCategory.displayOrder

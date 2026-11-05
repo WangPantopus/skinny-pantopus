@@ -122,8 +122,8 @@ internal fun ColumnScope.PlanHostBody(
             GhostButton(title = "Share", onClick = { context.sharePlan(plan) }, modifier = Modifier.weight(1f))
         }
         Column {
-            PlanTextButton(title = "Change the time or place", onClick = onChange)
-            PlanTextButton(title = "Cancel plan", onClick = onCancel, danger = true)
+            PlanTextButton(title = "Change the time or place", onClick = onChange, enabled = !busy)
+            PlanTextButton(title = "Cancel plan", onClick = onCancel, danger = true, enabled = !busy)
         }
     }
 }
@@ -311,7 +311,12 @@ private fun GoingSection(
         PlanSpotsMeter(spots = plan.spots, taken = taken, modifier = Modifier.padding(bottom = 6.dp))
         if (guests.isEmpty()) {
             Text(
-                text = if (asked) "Nobody's in yet." else "Nobody yet. We'll tell you when someone asks.",
+                text =
+                    when {
+                        plan.people == null -> "Guest details aren't available yet."
+                        asked -> "Nobody's in yet."
+                        else -> "Nobody yet. We'll tell you when someone asks."
+                    },
                 style = PantopusTextStyle.small,
                 color = PantopusColors.appTextSecondary,
                 modifier = Modifier.padding(top = Spacing.s2),
