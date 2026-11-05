@@ -10,13 +10,17 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
+import dynamic from 'next/dynamic';
 import type { Socket } from 'socket.io-client';
 import { getAuthToken } from '@pantopus/api';
 import * as api from '@pantopus/api';
 import { useSocket, useSocketConnected } from '@/contexts/SocketContext';
 import { launchFeatures } from '@/lib/featureFlags';
-import { useMailUnread } from '@/lib/mailbox-queries';
 import { afterInboxRows } from '@/lib/shellReads';
+
+// Launch cut #10 (Mailbox): the Mail tab's count. Loaded only while Mailbox is
+// on, so the shell's first scripts leave the Mailbox's queries out.
+const MailUnreadReader = dynamic(() => import('@/components/mailbox/MailUnreadReader'), { ssr: false });
 
 // ── Types ────────────────────────────────────────────────────
 export interface BadgeCounts {
@@ -66,23 +70,13 @@ const BadgeContext = createContext<BadgeContextValue>({
 
 // ── Provider ─────────────────────────────────────────────────
 const FALLBACK_POLL_MS = 15_000;
-// Mail arrives in one morning round plus the odd special delivery, and no
-// socket event announces it, so the Mail badge reads the drawers each minute
-// while the page is visible (and when the window regains focus).
-const MAIL_POLL_MS = 60_000;
 
 export function BadgeProvider({ children }: { children: ReactNode }) {
   const socket = useSocket();
   const connected = useSocketConnected();
   const [counts, setCounts] = useState<BadgeCounts>(defaultCounts);
-  // Launch cut #10 (Mailbox): the Mail tab's count. It shares the Mailbox's
-  // drawers request, so opening a piece there lowers it at once; a failed
-  // read keeps the last count.
-  const { data: unreadMail = 0 } = useMailUnread({
-    enabled: launchFeatures.mailbox && !!getAuthToken(),
-    refetchInterval: MAIL_POLL_MS,
-    refetchOnWindowFocus: true,
-  });
+  // The Mail tab's count, from MailUnreadReader (rendered below while Mailbox is on).
+  const [unreadMail, setUnreadMail] = useState(0);
   const socketNotifications = useRef<number | null>(null);
   // When this session's last full badge read succeeded, and the notification
   // total it saw. The socket's own badge:update on connect carries the same
@@ -274,6 +268,7 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
 
   return (
     <BadgeContext.Provider value={contextValue}>
+      {launchFeatures.mailbox && <MailUnreadReader onCount={setUnreadMail} />}
       {children}
     </BadgeContext.Provider>
   );
