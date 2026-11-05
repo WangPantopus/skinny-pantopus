@@ -156,9 +156,15 @@ public struct FormShell<Content: View>: View {
                     VStack(alignment: .leading, spacing: Spacing.s5) {
                         content
                     }
-                    .padding(.vertical, Spacing.s4)
+                    .padding(.top, Spacing.s4)
+                    // Scroll views inside the form (chip rows) keep no bottom margin.
+                    .contentMargins(.bottom, Spacing.s0, for: .scrollContent)
                     .id(formShellContentTopID)
                 }
+                // The room below the form is a scroll-content margin rather than padding: a text field taking focus
+                // is scrolled only until its bare text line clears the bottom button or the keyboard, and the margin
+                // keeps the rest of its box and a helper line under it in view too.
+                .contentMargins(.bottom, Spacing.s8, for: .scrollContent)
                 .scrollDismissesKeyboard(.interactively)
                 .background(Theme.Color.appBg)
                 .onChange(of: scrollsToTopOnChange) { _, value in

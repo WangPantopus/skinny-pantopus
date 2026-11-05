@@ -56,8 +56,12 @@ public struct WizardShell<Content: View>: View {
                 }
                 .padding(.horizontal, Spacing.s4)
                 .padding(.top, Spacing.s4)
-                .padding(.bottom, Spacing.s8)
+                // Scroll views inside a step (chip rows) keep no bottom margin.
+                .contentMargins(.bottom, Spacing.s0, for: .scrollContent)
             }
+            // A scroll-content margin rather than padding, as in FormShell: a field taking focus then keeps its whole
+            // box and a helper line clear of the sticky button or the keyboard, not just its bare text line.
+            .contentMargins(.bottom, Spacing.s8, for: .scrollContent)
             .scrollDismissesKeyboard(.interactively)
             .background(Theme.Color.appBg)
             .id(scrollResetID)
