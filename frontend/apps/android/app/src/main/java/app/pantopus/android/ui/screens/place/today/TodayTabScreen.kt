@@ -48,6 +48,8 @@ import app.pantopus.android.ui.components.RefreshFailedLine
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.RefreshOnStoreChange
 import app.pantopus.android.ui.components.StatusChip
+import app.pantopus.android.ui.screens.crewday.today.CrewDayTodayActions
+import app.pantopus.android.ui.screens.crewday.today.CrewDayTodayCards
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.homes.waitingLabel
 import app.pantopus.android.ui.screens.place.PlaceVerifyBanner
@@ -92,6 +94,8 @@ fun TodayTabScreen(
     /** "Check claim status" on a claim in review: the claim's Waiting Room, by its Home's id. */
     onCheckClaim: (homeId: String) -> Unit = {},
     plans: PlansTodayActions? = null,
+    /** Crew Day's cards (screen 9), right above the Plans cards; null (or the `crew_day` key off) hides them. */
+    crewDays: CrewDayTodayActions? = null,
     onAsk: ((AIScreenContext) -> Unit)? = null,
     /** The side menu, on every tab (founder decision 2026-10-20); null hides the button. */
     onOpenMenu: (() -> Unit)? = null,
@@ -224,16 +228,20 @@ fun TodayTabScreen(
                                         onOpenTask = homeId?.let { home -> { task -> onOpenTask(home, task) } },
                                         onOpenPlan = plans?.onOpenPlan,
                                     ),
-                                // Nearby Plans (A1, A2, A5): today's plan and the day-after cards, in "Coming up at home".
+                                // Crew Day (screen 9) and Nearby Plans (A1, A2, A5): the booking and street cards, then
+                                // today's plan and the day-after cards, in "Coming up at home".
                                 plansBlock =
-                                    plans?.let { actions ->
-                                        plansViewModel?.let { vm ->
-                                            {
+                                    if (crewDays == null && (plans == null || plansViewModel == null)) {
+                                        null
+                                    } else {
+                                        {
+                                            crewDays?.let { CrewDayTodayCards(actions = it, modifier = Modifier.padding(top = 12.dp)) }
+                                            if (plans != null && plansViewModel != null) {
                                                 PlansTodayCards(
-                                                    actions = actions,
+                                                    actions = plans,
                                                     title = "Your plans today",
                                                     modifier = Modifier.padding(top = 12.dp),
-                                                    viewModel = vm,
+                                                    viewModel = plansViewModel,
                                                 )
                                             }
                                         }

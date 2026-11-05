@@ -55,7 +55,11 @@ import app.pantopus.android.ui.theme.Spacing
 
 /** The active hub context the drawer renders for. */
 sealed interface NavigationDrawerContext {
-    data class Personal(val name: String) : NavigationDrawerContext
+    /**
+     * [hasBusiness]: the person is an owner or a team seat on at least one business (`GET
+     * /api/businesses/my-businesses`), so the menu shows the Business section (Crew Day: the crew's Crew Days).
+     */
+    data class Personal(val name: String, val hasBusiness: Boolean = false) : NavigationDrawerContext
 
     data class Home(val id: String, val title: String, val subtitle: String) : NavigationDrawerContext
 
@@ -91,6 +95,12 @@ enum class NavigationDrawerDestination {
     WalletAndPayments,
     Settings,
     HelpSupport,
+
+    /** Crew Day: the person's own bookings and street requests (screen 10). */
+    CrewDays,
+
+    /** Crew Day: the crew's street days for its business (screen 13), from the Business section. */
+    BusinessCrewDays,
 
     // Home
     HomeProperty,
@@ -140,6 +150,8 @@ enum class NavigationDrawerDestination {
                 HomeBills, HomePackages -> LaunchFeatures.householdExtras
                 // Launch cut #10 (Mailbox): the personal and home mailbox rows.
                 Mailbox, HomeMailbox -> LaunchFeatures.mailbox
+                // Launch cut #13 (Crew Day).
+                CrewDays, BusinessCrewDays -> LaunchFeatures.crewDay
                 else -> true
             }
 }
@@ -221,7 +233,13 @@ private fun item(
 
 fun NavigationDrawerContext.sections(): List<NavigationDrawerSection> =
     when (this) {
-        is NavigationDrawerContext.Personal -> personalSections
+        // The Business section follows Manage, for someone on a business's team (Crew Day).
+        is NavigationDrawerContext.Personal ->
+            if (hasBusiness) {
+                personalSections.flatMap { if (it.id == "manage") listOf(it, businessSection) else listOf(it) }
+            } else {
+                personalSections
+            }
         is NavigationDrawerContext.Home -> homeSections
         is NavigationDrawerContext.Business -> businessSections
     }.mapNotNull { section ->
@@ -261,6 +279,7 @@ private val personalSections: List<NavigationDrawerSection> =
             overline = "Your Stuff",
             items =
                 listOf(
+                    item(PantopusIcon.CalendarCheck, "Crew Days", NavigationDrawerDestination.CrewDays),
                     item(PantopusIcon.Radio, "My Beacon", NavigationDrawerDestination.MyBeacon),
                     item(PantopusIcon.Tag, "My Listings", NavigationDrawerDestination.MyListings),
                     item(PantopusIcon.FileText, "My Pulse", NavigationDrawerDestination.MyPulse),
@@ -280,6 +299,26 @@ private val personalSections: List<NavigationDrawerSection> =
                     item(PantopusIcon.HelpCircle, "Help & Support", NavigationDrawerDestination.HelpSupport),
                 ),
         ),
+    )
+
+/**
+ * The personal menu's Business section (Crew Day): the crew's Crew Days. Its label repeats the personal row's, so its
+ * slug is its own (`navDrawer.item.business-crew-days`), as on iOS.
+ */
+private val businessSection: NavigationDrawerSection =
+    NavigationDrawerSection(
+        id = "business",
+        overline = "Business",
+        items =
+            listOf(
+                NavigationDrawerItem(
+                    slug = "business-crew-days",
+                    icon = PantopusIcon.Truck,
+                    label = "Crew Days",
+                    isActive = false,
+                    destination = NavigationDrawerDestination.BusinessCrewDays,
+                ),
+            ),
     )
 
 private val homeSections: List<NavigationDrawerSection> =

@@ -34,6 +34,7 @@ import app.pantopus.android.data.api.services.BusinessesApi
 import app.pantopus.android.data.api.services.ChatApi
 import app.pantopus.android.data.api.services.ConnectApi
 import app.pantopus.android.data.api.services.ConnectionsApi
+import app.pantopus.android.data.api.services.CrewDaysApi
 import app.pantopus.android.data.api.services.EarnOffersApi
 import app.pantopus.android.data.api.services.FeedActionsApi
 import app.pantopus.android.data.api.services.FilesApi
@@ -782,6 +783,11 @@ object NetworkModule {
     @Provides
     @Singleton
     fun providePlansApi(retrofit: Retrofit): PlansApi = retrofit.create(PlansApi::class.java)
+
+    /** Crew Day (`/api/crew-days/…`), behind the `crew_day` launch key. */
+    @Provides
+    @Singleton
+    fun provideCrewDaysApi(retrofit: Retrofit): CrewDaysApi = retrofit.create(CrewDaysApi::class.java)
 
     /** Pulse's own routes (`/api/pulse/…`): the asker's keep-open and close (S7). */
     @Provides
