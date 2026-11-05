@@ -35,6 +35,7 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
     public let createdAt: String?
     public let updatedAt: String?
     public let createdBy: String?
+    public let documentId: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -52,6 +53,7 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case createdBy = "created_by"
+        case documentId = "document_id"
     }
 
     public init(from decoder: any Decoder) throws {
@@ -71,6 +73,7 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
         createdBy = try container.decodeIfPresent(String.self, forKey: .createdBy)
+        documentId = try container.decodeIfPresent(String.self, forKey: .documentId)
     }
 
     public init(
@@ -88,7 +91,8 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         status: String = "scheduled",
         createdAt: String? = nil,
         updatedAt: String? = nil,
-        createdBy: String? = nil
+        createdBy: String? = nil,
+        documentId: String? = nil
     ) {
         self.id = id
         self.homeId = homeId
@@ -105,6 +109,7 @@ public struct MaintenanceTaskDTO: Decodable, Sendable, Hashable, Identifiable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.createdBy = createdBy
+        self.documentId = documentId
     }
 
     private static func decodeOptionalDecimal<K: CodingKey>(
@@ -149,6 +154,7 @@ public struct CreateMaintenanceRequest: Encodable, Sendable, Equatable {
     public let performedAt: String?
     public let status: String?
     public var clientRequestId: String?
+    public var documentId: String?
 
     private enum CodingKeys: String, CodingKey {
         case task
@@ -162,6 +168,7 @@ public struct CreateMaintenanceRequest: Encodable, Sendable, Equatable {
         case performedAt = "performed_at"
         case status
         case clientRequestId
+        case documentId = "document_id"
     }
 
     public init(
@@ -204,6 +211,7 @@ public struct CreateMaintenanceRequest: Encodable, Sendable, Equatable {
         if let performedAt { try c.encode(performedAt, forKey: .performedAt) }
         if let status { try c.encode(status, forKey: .status) }
         if let clientRequestId { try c.encode(clientRequestId, forKey: .clientRequestId) }
+        if let documentId { try c.encode(documentId, forKey: .documentId) }
     }
 }
 
@@ -222,6 +230,8 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
     public let status: String?
     public let clearVendor: Bool
     public let clearCost: Bool
+    public var documentId: String?
+    public var clearDocument: Bool = false
 
     private enum CodingKeys: String, CodingKey {
         case task
@@ -234,6 +244,7 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
         case dueDate = "due_date"
         case performedAt = "performed_at"
         case status
+        case documentId = "document_id"
     }
 
     public init(
@@ -266,8 +277,8 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
 
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
-        if let task { try c.encode(task, forKey: .task) }
-        if let notes { try c.encode(notes, forKey: .notes) }
+        try c.encodeIfPresent(task, forKey: .task)
+        try c.encodeIfPresent(notes, forKey: .notes)
         if let category { try c.encode(category, forKey: .category) }
         if let performerContact { try c.encode(performerContact, forKey: .performerContact) }
         if let vendor { try c.encode(vendor, forKey: .vendor) } else if clearVendor { try c.encodeNil(forKey: .vendor) }
@@ -278,5 +289,6 @@ public struct UpdateMaintenanceRequest: Encodable, Sendable {
         if let dueDate { try c.encode(dueDate, forKey: .dueDate) }
         if let performedAt { try c.encode(performedAt, forKey: .performedAt) }
         if let status { try c.encode(status, forKey: .status) }
+        if let documentId { try c.encode(documentId, forKey: .documentId) } else if clearDocument { try c.encodeNil(forKey: .documentId) }
     }
 }

@@ -17,7 +17,10 @@ import SwiftUI
 
 public struct EmergencyInfoDetailView: View {
     @State private var viewModel: EmergencyInfoDetailViewModel
-    @State private var showsEditSheet = false
+    @State private var editingDraft: EmergencyFormDraft?
+    @State private var isVisible = false
+    @State private var needsForegroundRead = false
+    @Environment(\.scenePhase) private var scenePhase
     private let homeId: String
     private let onBack: @Sendable () -> Void
 
@@ -67,6 +70,24 @@ public struct EmergencyInfoDetailView: View {
         }
         .pantopusAnimation(.componentState, value: viewModel.toast)
         .task { await viewModel.load() }
+        .onAppear {
+            isVisible = true
+            needsForegroundRead = false
+        }
+        .onDisappear {
+            isVisible = false
+            viewModel.suspend()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard isVisible else { return }
+            if phase == .background {
+                needsForegroundRead = true
+                viewModel.suspend()
+            } else if phase == .active, needsForegroundRead {
+                needsForegroundRead = false
+                Task { await viewModel.load() }
+            }
+        }
         .confirmationDialog(
             "Delete this emergency item?",
             isPresented: $viewModel.showsDeleteConfirm,
@@ -80,22 +101,26 @@ public struct EmergencyInfoDetailView: View {
         } message: {
             Text("This removes it from the household emergency plan. Anyone with access will no longer see it.")
         }
-        .sheet(isPresented: $showsEditSheet) {
-            if case let .loaded(draft) = viewModel.state {
-                NavigationStack {
-                    AddEmergencyInfoFormView(
-                        viewModel: AddEmergencyInfoFormViewModel(
-                            homeId: homeId,
-                            mode: .edit(draft),
-                            // swiftlint:disable:next trailing_closure
-                            onUpdated: { [viewModel] updated in
-                                Task { @MainActor in viewModel.apply(updated: updated) }
-                            }
-                        )
+        // swiftlint:disable:next trailing_closure
+        .sheet(item: $editingDraft, onDismiss: reloadIfVisible, content: { draft in
+            NavigationStack {
+                AddEmergencyInfoFormView(
+                    viewModel: AddEmergencyInfoFormViewModel(
+                        homeId: homeId,
+                        mode: .edit(draft),
+                        // swiftlint:disable:next trailing_closure
+                        onUpdated: { [viewModel] updated in
+                            Task { @MainActor in viewModel.apply(updated: updated) }
+                        }
                     )
-                }
+                )
             }
-        }
+        })
+    }
+
+    private func reloadIfVisible() {
+        guard isVisible, scenePhase == .active else { return }
+        Task { await viewModel.load() }
     }
 
     // MARK: - Shells
@@ -168,10 +193,12 @@ public struct EmergencyInfoDetailView: View {
                         DetailsCard(text: draft.details)
                     }
                     MetaCard(draft: draft)
-                    ActionsRow(
-                        onEdit: { showsEditSheet = true },
-                        onDelete: { viewModel.showsDeleteConfirm = true }
-                    )
+                    if viewModel.canManage {
+                        ActionsRow(
+                            onEdit: { editingDraft = draft },
+                            onDelete: { viewModel.showsDeleteConfirm = true }
+                        )
+                    }
                 }
                 .padding(.horizontal, Spacing.s4)
             }
@@ -279,7 +306,7 @@ private struct MetaCard: View {
     var body: some View {
         VStack(spacing: Spacing.s0) {
             if let verified = draft.verifiedByUserId, !verified.isEmpty {
-                row(label: "Verified by", value: verified, icon: .userRound)
+                row(label: "Verified by", value: "Household member", icon: .userRound)
                 Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
             }
             row(

@@ -93,9 +93,10 @@ extension AuthManager {
     ///   missing or within 120 s of expiry, then `GET /api/users/profile`.
     ///   A 401 whose refresh also failed ends the session with the server's
     ///   reason; a transient failure keeps the cached identity (offline-first).
-    ///   A slow or failing server never holds the launch screen past
-    ///   `launchRestoreCap`: with a cached identity the app opens on it and the
-    ///   restore finishes in the background.
+    ///   With a cached identity and an access token the app opens on it at
+    ///   once and the restore finishes in the background. With only a refresh
+    ///   token, a slow or failing server never holds the launch screen past
+    ///   `launchRestoreCap`.
     func restoreSession() async {
         let access = nonEmpty(store.get(SecureStoreKey.accessToken))
         let refresh = nonEmpty(store.get(SecureStoreKey.refreshToken))
@@ -120,6 +121,19 @@ extension AuthManager {
         }
 
         setAccessToken(access)
+        // The splash waited here for the profile read, and for a token refresh
+        // first when the hour-long access token had lapsed: one or two round
+        // trips on every cold launch. With the saved identity and an access
+        // token the app opens on it at once, on the copies its screens saved
+        // (Instant Screens). Their first reads wait for the same single-flight
+        // refresh (`APIClient` renews a lapsing token before sending), and the
+        // restore finishes in the background: a fresh profile replaces the
+        // saved one and a rejected session still signs out.
+        if access != nil, let cached = loadCachedUser() {
+            setState(.signedIn(cached))
+            await renewAndHydrate(hadAccessToken: true)
+            return
+        }
         guard loadCachedUser() != nil else {
             await renewAndHydrate(hadAccessToken: access != nil)
             return

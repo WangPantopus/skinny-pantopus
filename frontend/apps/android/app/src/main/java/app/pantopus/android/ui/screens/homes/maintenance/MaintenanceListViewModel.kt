@@ -136,6 +136,9 @@ class MaintenanceListViewModel
         private val _state = MutableStateFlow<ListOfRowsUiState>(ListOfRowsUiState.Loading)
         val state: StateFlow<ListOfRowsUiState> = _state.asStateFlow()
 
+        private val _canEdit = MutableStateFlow(false)
+        val canEdit: StateFlow<Boolean> = _canEdit.asStateFlow()
+
         private val _selectedTab = MutableStateFlow(MaintenanceTab.Scheduled.id)
         val selectedTab: StateFlow<String> = _selectedTab.asStateFlow()
 
@@ -202,6 +205,7 @@ class MaintenanceListViewModel
         }
 
         private fun clearCopy() {
+            _canEdit.value = false
             tasks = null
             _tabs.value = initialTabs()
             _banner.value = null
@@ -240,6 +244,7 @@ class MaintenanceListViewModel
             generation: Long,
         ): Stored<GetHomeMaintenanceResponse> {
             val refusal = gate.checkForRead(force) { if (generation == readGeneration) clearCopy() }
+            if (generation == readGeneration) _canEdit.value = refusal == null && gate.can("home.edit")
             if (refusal != null) return Stored(failure = refusal)
             if (generation != readGeneration) return Stored()
             val stored = repo.getHomeMaintenanceStored(homeId, force || !gate.showsCopy)

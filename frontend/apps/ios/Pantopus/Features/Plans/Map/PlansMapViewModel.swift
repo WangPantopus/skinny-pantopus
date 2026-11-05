@@ -110,8 +110,20 @@ final class PlansMapViewModel {
             return
         }
         homeCenter = await Self.homeCoordinate(store: store)
-        if location.canLocateWithoutAsking, let fix = await location.requestCurrent(timeoutSeconds: 4) {
-            await use(fix, source: .gps)
+        if location.canLocateWithoutAsking {
+            // Opening Plans takes a fix only when it needs no prompt. While the home can stand in, it waits for one
+            // only as briefly as Pulse does: a first fix (indoors, after a cold start) kept the map and list empty for
+            // up to four seconds. With location allowed it then opens around the home instead of asking for a
+            // permission already given, as on Android. With no home it waits the rest of the time for a real fix.
+            if let fix = await location.requestCurrent(timeoutSeconds: passiveLocationTimeoutSeconds) {
+                await use(fix, source: .gps)
+            } else if let homeCenter {
+                await use(homeCenter, source: .home)
+            } else if let fix = await location.requestCurrent(timeoutSeconds: 4 - passiveLocationTimeoutSeconds) {
+                await use(fix, source: .gps)
+            } else {
+                phase = .needsLocation
+            }
         } else if prefersHome, let homeCenter {
             await use(homeCenter, source: .home)
         } else {

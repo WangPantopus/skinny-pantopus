@@ -26,7 +26,7 @@ const mockPrefetch = jest.fn();
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, prefetch: mockPrefetch }),
-  usePathname: () => '/app/hub',
+  usePathname: () => '/app/place',
   useSearchParams: () => new URLSearchParams(),
 }));
 
@@ -57,7 +57,7 @@ describe('Audience primary-nav tab (P2.2)', () => {
     const { PersonalSidebarContent } = require('../src/components/AppShell');
     return renderWithClient(
       <PersonalSidebarContent
-        currentPath="/app/hub"
+        currentPath="/app/place"
         showLabels
         chatUnread={0}
         offersPending={0}
@@ -144,7 +144,6 @@ describe('AudienceZoneHeader coverage (P2.2)', () => {
     'app/(app)/app/my-gigs/page.tsx',
     'app/(app)/app/my-bids/page.tsx',
     'app/(app)/app/profile/page.tsx',
-    'app/(app)/app/hub/page.tsx',
   ];
 
   test.each(AUDIENCE_PAGES)(

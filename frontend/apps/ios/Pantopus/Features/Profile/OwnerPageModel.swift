@@ -70,6 +70,8 @@ public final class OwnerPageModel {
     public private(set) var connectionCount: Int?
     /// Tips dismissed on this device.
     public private(set) var dismissedTips: Set<ProfileOwnerTip> = []
+    /// Reads of the current `load` that failed.
+    private var failedReads = 0
 
     private let userId: String
     private let client: APIClient
@@ -86,8 +88,11 @@ public final class OwnerPageModel {
         dismissedTips = Set(saved.compactMap(ProfileOwnerTip.init(rawValue:)))
     }
 
-    /// Reads everything at once; a failed read keeps what was shown.
-    public func load(force: Bool = false) async {
+    /// Reads everything at once; a failed read keeps what was shown. True when
+    /// every read answered.
+    @discardableResult
+    public func load(force: Bool = false) async -> Bool {
+        failedReads = 0
         let period = Self.receiptPeriod(now: Date())
         let lp: Task<OwnLocalProfileResponse?, Never> = start { try await self.you(LocalProfileEndpoints.me, force: force) }
         let receipt: Task<MonthlyReceiptDTO?, Never> = start {
@@ -105,6 +110,7 @@ public final class OwnerPageModel {
         inviteProgress = await progress.value ?? inviteProgress
         inviteCode = await code.value?.inviteCode ?? inviteCode
         connectionCount = await connections.value.map(\.relationships.count) ?? connectionCount
+        return failedReads == 0
     }
 
     /// The month the receipt covers: the previous calendar month, 1-based
@@ -213,6 +219,7 @@ public final class OwnerPageModel {
                 return try await operation()
             } catch {
                 self.logger.warning("Owner page read failed: \(error)")
+                self.failedReads += 1
                 return nil
             }
         }

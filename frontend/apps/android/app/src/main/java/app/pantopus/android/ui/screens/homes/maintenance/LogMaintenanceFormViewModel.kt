@@ -2,6 +2,9 @@
 
 package app.pantopus.android.ui.screens.homes.maintenance
 
+import android.content.ContentResolver
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -9,17 +12,24 @@ import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.analytics.AnalyticsResult
+import app.pantopus.android.data.api.models.homes.CreateDocumentRequest
 import app.pantopus.android.data.api.models.homes.CreateHomeEventRequest
 import app.pantopus.android.data.api.models.homes.CreateMaintenanceRequest
 import app.pantopus.android.data.api.models.homes.MaintenanceTaskDto
 import app.pantopus.android.data.api.models.homes.UpdateMaintenanceRequest
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
+import app.pantopus.android.ui.screens.homes.documents.readDocumentBytes
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okio.ByteString.Companion.toByteString
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
@@ -66,6 +76,7 @@ data class LogMaintenanceFormState(
     val notes: String = "",
     val photos: List<MaintenanceDraftFile> = emptyList(),
     val receipt: MaintenanceDraftFile? = null,
+    val isReadingReceipt: Boolean = false,
     val nextDueEnabled: Boolean = false,
     val nextDueDate: Instant = Instant.now().plusSeconds(SECONDS_IN_30_DAYS),
     val recurrence: MaintenanceRecurrence = MaintenanceRecurrence.None,
@@ -83,7 +94,7 @@ data class LogMaintenanceFormState(
             }
 
     val canSubmit: Boolean
-        get() = title.isNotBlank() && costError == null && !isSubmitting && !isLoadingExisting && hasLoadedExisting
+        get() = title.isNotBlank() && costError == null && !isSubmitting && !isReadingReceipt && !isLoadingExisting && hasLoadedExisting
 
     /** Slot grid for the 2x2 photos card — pads up to four slots. */
     fun photoSlots(): List<PhotoSlot> =
@@ -116,8 +127,8 @@ sealed interface LogMaintenanceFormEvent {
  * `POST /api/homes/:id/events` so the household calendar surfaces the
  * upcoming task.
  *
- * Notes use the existing HomeMaintenanceLog.notes API field. Other draft
- * extras remain local; reopening notes uses the authoritative server value.
+ * Notes and receipt links use the existing HomeMaintenanceLog fields. Receipt bytes
+ * are uploaded to Home Documents before committing the link; retries reuse both IDs.
  */
 @HiltViewModel
 class LogMaintenanceFormViewModel
@@ -146,6 +157,8 @@ class LogMaintenanceFormViewModel
         private var hasPersistedCategory = false
         private var initial: LogMaintenanceFormState = _form.value
         private var pendingCreate: Pair<CreateMaintenanceRequest, String>? = null
+        private var uploadedReceipt: Pair<String, String>? = null
+        private var receiptRead: Job? = null
 
         private val _isDirty = MutableStateFlow(false)
         val isDirty: StateFlow<Boolean> = _isDirty.asStateFlow()
@@ -220,8 +233,16 @@ class LogMaintenanceFormViewModel
                     performerContact = task.performerContact.orEmpty(),
                     costText = task.cost?.let { formatCost(it) }.orEmpty(),
                     notes = task.notes.orEmpty(),
-                    photos = stored?.photos ?: emptyList(),
-                    receipt = stored?.receipt,
+                    receipt =
+                        task.documentId?.let {
+                            MaintenanceDraftFile(
+                                id = it,
+                                filename = "Saved receipt",
+                                mimeType = "application/octet-stream",
+                                bytes = byteArrayOf(),
+                                documentId = it,
+                            )
+                        },
                     nextDueEnabled = task.dueDate != null,
                     nextDueDate = parsedDue,
                     recurrence = MaintenanceRecurrence.fromRaw(task.recurrence),
@@ -266,7 +287,47 @@ class LogMaintenanceFormViewModel
 
         fun removePhoto(id: String) = mutate { it.copy(photos = it.photos.filterNot { p -> p.id == id }) }
 
-        fun pickReceipt(file: MaintenanceDraftFile?) = mutate { it.copy(receipt = file) }
+        fun pickReceipt(file: MaintenanceDraftFile?) {
+            receiptRead?.cancel()
+            mutate { it.copy(receipt = file, isReadingReceipt = false, submitError = null) }
+        }
+
+        /** Providers may be remote, slow, or report an incorrect size. Keep bounded reads off the UI thread. */
+        fun readReceipt(
+            resolver: ContentResolver,
+            uri: Uri,
+        ) {
+            receiptRead?.cancel()
+            _form.value = _form.value.copy(isReadingReceipt = true, submitError = null)
+            receiptRead =
+                viewModelScope.launch {
+                    try {
+                        val file =
+                            withContext(Dispatchers.IO) {
+                                val name =
+                                    resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+                                        if (it.moveToFirst()) it.getString(0) else null
+                                    }?.takeIf { it.isNotBlank() } ?: "receipt"
+                                val mime = resolver.getType(uri) ?: "application/octet-stream"
+                                require(mime == "application/pdf" || mime.startsWith("image/"))
+                                MaintenanceDraftFile(
+                                    filename = name,
+                                    mimeType = mime,
+                                    bytes = readDocumentBytes { resolver.openInputStream(uri) }.toByteArray(),
+                                )
+                            }
+                        mutate { it.copy(receipt = file, isReadingReceipt = false) }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        _form.value =
+                            _form.value.copy(
+                                isReadingReceipt = false,
+                                submitError = "Choose a readable, nonempty PDF or image of 25 MB or less.",
+                            )
+                    }
+                }
+        }
 
         fun cancel() {
             _event.value = LogMaintenanceFormEvent.Dismiss
@@ -288,8 +349,13 @@ class LogMaintenanceFormViewModel
         fun submit() {
             val current = _form.value
             if (!current.canSubmit) return
+            if (current.photos.isNotEmpty()) {
+                _form.value = current.copy(submitError = "Remove separate photos and use Attach receipt to save one PDF or image.")
+                return
+            }
             _form.value = current.copy(isSubmitting = true, submitError = null)
             viewModelScope.launch {
+                val receiptId = uploadReceipt(current) ?: if (current.receipt != null) return@launch else null
                 val contact =
                     if (current.performedBy == MaintenancePerformedBy.Contractor) current.performerContact.trim() else ""
                 val req =
@@ -304,6 +370,7 @@ class LogMaintenanceFormViewModel
                         dueDate = if (current.nextDueEnabled) formatDay(current.nextDueDate) else null,
                         status = "completed",
                         performedAt = current.dateCompleted.toString(),
+                        documentId = receiptId,
                     )
                 val result =
                     when (val m = mode) {
@@ -315,28 +382,19 @@ class LogMaintenanceFormViewModel
                             repo.updateHomeMaintenance(
                                 homeId,
                                 m.taskId,
-                                UpdateMaintenanceRequest(
-                                    task = req.task.takeIf { it != initial.title.trim() },
-                                    notes = req.notes.takeIf { current.notes != initial.notes },
-                                    category = req.category.takeIf { current.category != initial.category || !hasPersistedCategory },
-                                    performerContact =
-                                        req.performerContact.takeIf {
-                                            current.performerContact != initial.performerContact ||
-                                                current.performedBy != initial.performedBy
-                                        },
-                                    vendor = req.vendor.takeIf { it != encodeVendor(initial) },
-                                    cost = req.cost.takeIf { current.costText != initial.costText },
-                                    recurrence = req.recurrence,
-                                    dueDate = req.dueDate,
-                                    status = null,
-                                    performedAt = req.performedAt.takeIf { current.dateCompleted != initial.dateCompleted },
-                                    clearVendor = req.vendor == null && encodeVendor(initial) != null,
-                                    clearCost = current.costText.isBlank() && parseCost(initial.costText) != null,
-                                ),
+                                updateRequest(current, req, receiptId),
                             )
                     }
                 when (result) {
                     is NetworkResult.Success -> {
+                        if (!receiptWasSaved(current, result.data.task.documentId, receiptId)) {
+                            _form.value =
+                                current.copy(
+                                    isSubmitting = false,
+                                    submitError = "The receipt link was not saved. Your document is in Home Documents. Try again.",
+                                )
+                            return@launch
+                        }
                         pendingCreate = null
                         val taskId = result.data.task.id
                         persistExtras(taskId, current)
@@ -364,6 +422,64 @@ class LogMaintenanceFormViewModel
                     }
                 }
             }
+        }
+
+        private fun receiptWasSaved(
+            current: LogMaintenanceFormState,
+            returnedId: String?,
+            expectedId: String?,
+        ): Boolean = current.receipt == initial.receipt || returnedId == expectedId
+
+        private fun updateRequest(
+            current: LogMaintenanceFormState,
+            req: CreateMaintenanceRequest,
+            receiptId: String?,
+        ): UpdateMaintenanceRequest =
+            UpdateMaintenanceRequest(
+                task = req.task.takeIf { it != initial.title.trim() },
+                notes = req.notes.takeIf { current.notes != initial.notes },
+                category = req.category.takeIf { current.category != initial.category || !hasPersistedCategory },
+                performerContact =
+                    req.performerContact.takeIf {
+                        current.performerContact != initial.performerContact ||
+                            current.performedBy != initial.performedBy
+                    },
+                vendor = req.vendor.takeIf { it != encodeVendor(initial) },
+                cost = req.cost.takeIf { current.costText != initial.costText },
+                recurrence = req.recurrence,
+                dueDate = req.dueDate,
+                status = null,
+                performedAt = req.performedAt.takeIf { current.dateCompleted != initial.dateCompleted },
+                clearVendor = req.vendor == null && encodeVendor(initial) != null,
+                clearCost = current.costText.isBlank() && parseCost(initial.costText) != null,
+                documentId = receiptId.takeIf { current.receipt != initial.receipt },
+                clearDocument = current.receipt == null && initial.receipt != null,
+            )
+
+        private suspend fun uploadReceipt(current: LogMaintenanceFormState): String? {
+            val file = current.receipt ?: return null
+            val savedId = file.documentId ?: uploadedReceipt?.takeIf { it.first == file.id }?.second
+            if (savedId != null) return savedId
+            val request =
+                CreateDocumentRequest(
+                    docType = "receipt",
+                    title = file.filename.take(MAX_RECEIPT_TITLE_LENGTH),
+                    mimeType = file.mimeType,
+                    sizeBytes = file.bytes.size.toLong(),
+                    visibility = "members",
+                )
+            val result = repo.uploadHomeDocument(homeId, file.id, file.filename, file.bytes.toByteString(), request)
+            val document = (result as? NetworkResult.Success)?.data?.document
+            if (document?.id == file.id && document.fileId == file.id && document.contentUrl != null) {
+                uploadedReceipt = file.id to document.id
+                return document.id
+            }
+            _form.value =
+                current.copy(
+                    isSubmitting = false,
+                    submitError = (result as? NetworkResult.Failure)?.error?.message ?: "The receipt was not uploaded. Try again.",
+                )
+            return null
         }
 
         private suspend fun postCalendarReminder(
@@ -394,8 +510,6 @@ class LogMaintenanceFormViewModel
                     performerName = current.performerName.trim(),
                     performerContact = current.performerContact.trim(),
                     notes = current.notes.trim(),
-                    photos = current.photos,
-                    receipt = current.receipt,
                 ),
             )
         }
@@ -413,6 +527,7 @@ class LogMaintenanceFormViewModel
         // MARK: - Static helpers exposed for tests
 
         companion object {
+            private const val MAX_RECEIPT_TITLE_LENGTH = 255
             private val costPattern = Regex("""^\$?(?:(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?|\.\d{1,2})$""")
             private val maximumCost = BigDecimal("9999999999.99")
             private val dayFormatter: DateTimeFormatter =

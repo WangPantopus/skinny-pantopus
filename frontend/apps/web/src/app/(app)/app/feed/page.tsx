@@ -14,13 +14,19 @@ import {
 import type { ReactNode } from 'react';
 import type { FeedSurface, Post, PostType } from '@pantopus/api';
 import { getPostTypeConfig } from '@pantopus/ui-utils';
-import {
-  PostComposer, EditPostDialog, PostCard, PostDetailPanel, FeedFilters, NearbyProvidersCard,
-  NeighborhoodPulse, EmptyFeed, SparseFeedSummary, PostSkeleton,
-  TopicChipRow, SportsEventModule,
-} from '@/components/feed';
-import type { SportsStarter } from '@/components/feed/EmptyFeed';
-import ReportModal from '@/components/ui/ReportModal';
+// Each from its own file, not the '@/components/feed' index: importing anything through
+// the index brings everything it re-exports into this page's first scripts, the closed
+// panels below included.
+import PostComposer from '@/components/feed/PostComposer';
+import PostCard from '@/components/feed/PostCard';
+import FeedFilters from '@/components/feed/FeedFilters';
+import NearbyProvidersCard from '@/components/feed/NearbyProvidersCard';
+import NeighborhoodPulse from '@/components/feed/NeighborhoodPulse';
+import EmptyFeed, { type SportsStarter } from '@/components/feed/EmptyFeed';
+import SparseFeedSummary from '@/components/feed/SparseFeedSummary';
+import PostSkeleton from '@/components/feed/PostSkeleton';
+import TopicChipRow from '@/components/feed/TopicChipRow';
+import SportsEventModule from '@/components/feed/SportsEventModule';
 import ErrorState from '@/components/ui/ErrorState';
 import { useAreaPicker } from '@/hooks/useAreaPicker';
 import { useFeedPreferences } from '@/hooks/useFeedPreferences';
@@ -42,6 +48,12 @@ import './pulse.css';
 
 const FeedMap = dynamic(() => import('./FeedMap'), { ssr: false });
 const InquiryChatDrawer = dynamic(() => import('@/components/discover/InquiryChatDrawer'), { ssr: false });
+// Closed until someone opens a post, edits one or reports one, so they stay out of the feed's
+// first scripts: the post panel (with its comment thread) and the report form load right after
+// the first render, the editor on the first edit.
+const PostDetailPanel = dynamic(() => import('@/components/feed/PostDetailPanel'), { ssr: false });
+const EditPostDialog = dynamic(() => import('@/components/feed/EditPostDialog'), { ssr: false });
+const ReportModal = dynamic(() => import('@/components/ui/ReportModal'), { ssr: false });
 
 /** Map mode: the reveal capsule's bottom edge (top-2 + h-8), where the map's top pills start while the header is away. */
 const REVEAL_CAPSULE_BOTTOM_PX = 40;

@@ -24,7 +24,7 @@ type Tab = {
 const starts = (path: string, ...prefixes: string[]) => prefixes.some((p) => path === p || path.startsWith(`${p}/`));
 
 export const MOBILE_TABS: Tab[] = [
-  { key: 'place', label: 'Place', href: '/app/place', icon: NavIcons.place, matches: (p) => starts(p, '/app/place', '/app/hub', '/app/homes') && !starts(p, '/app/hub/today') },
+  { key: 'place', label: 'Place', href: '/app/place', icon: NavIcons.place, matches: (p) => starts(p, '/app/place', '/app/homes') },
   { key: 'today', label: 'Today', href: '/app/today', icon: NavIcons.today, matches: (p) => starts(p, '/app/today', '/app/hub/today') },
   // Nearby opens on its Pulse segment; Neighborhood is /app/nearby, and Connections is in the menu (founder decision 2026-10-20).
   { key: 'nearby', label: 'Nearby', href: '/app/feed', icon: NavIcons.nearby, matches: (p) => starts(p, '/app/nearby', '/app/neighborhood', '/app/feed', '/app/beacons', '/app/gigs', '/app/marketplace') },

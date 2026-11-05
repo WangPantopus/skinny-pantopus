@@ -67,8 +67,14 @@ public struct HomeAccessSecretDTO: Decodable, Sendable, Hashable, Identifiable {
 public struct HomeAccessSecretsResponse: Decodable, Sendable, Hashable {
     public let secrets: [HomeAccessSecretDTO]
 
-    public init(secrets: [HomeAccessSecretDTO]) {
+    /// Current capabilities from the same locked secret read. Older servers may omit them.
+    public let canManage: Bool?
+    public let allowedVisibilities: [String]?
+
+    public init(secrets: [HomeAccessSecretDTO], canManage: Bool? = nil, allowedVisibilities: [String]? = nil) {
         self.secrets = secrets
+        self.canManage = canManage
+        self.allowedVisibilities = allowedVisibilities
     }
 }
 

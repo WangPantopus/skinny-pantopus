@@ -20,6 +20,9 @@ public struct InboxTabRoot: View {
     @State private var path = RouteStack<InboxRoute>()
     /// A fold replaces the navigation presentation, not its conversations.
     @State private var conversationModels = InboxConversationModels()
+    /// Nor the chat list: its new screen keeps the rows and reads again only
+    /// when something changed.
+    @State private var chatListModel = ChatListViewModel()
     @State private var router = DeepLinkRouter.shared
     /// P6.6 — "Invite to Pantopus" opens the system share sheet with the
     /// store link prefilled.
@@ -398,6 +401,7 @@ private extension InboxTabRoot {
 
     func chatList(onEmptyChange: @escaping @MainActor (Bool) -> Void = { _ in }) -> some View {
         ChatListView(
+            viewModel: chatListModel,
             onOpenConversation: { row in
                 ChatPerformance.signposter.emitEvent("ThreadTap")
                 path.open(.conversation(destination(from: row)), sideBySide: isSideBySide)

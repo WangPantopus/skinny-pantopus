@@ -24,9 +24,10 @@ import SwiftUI
 public struct ProfilePortfolioSection: View {
     @State private var viewModel: ProfilePortfolioViewModel
 
-    public init(userId: String, isOwnProfile: Bool) {
+    /// `viewModel`: the section's model when the profile keeps it (through a fold or a turn); a new one otherwise.
+    public init(userId: String, isOwnProfile: Bool, viewModel: ProfilePortfolioViewModel? = nil) {
         _viewModel = State(
-            initialValue: ProfilePortfolioViewModel(userId: userId, isOwnProfile: isOwnProfile)
+            initialValue: viewModel ?? ProfilePortfolioViewModel(userId: userId, isOwnProfile: isOwnProfile)
         )
     }
 
@@ -399,8 +400,12 @@ public struct ProfileGigsSection: View {
     @State private var viewModel: ProfileGigsViewModel
     private let onOpenGig: @MainActor (String) -> Void
 
-    public init(userId: String, onOpenGig: @escaping @MainActor (String) -> Void) {
-        _viewModel = State(initialValue: ProfileGigsViewModel(userId: userId))
+    public init(
+        userId: String,
+        viewModel: ProfileGigsViewModel? = nil,
+        onOpenGig: @escaping @MainActor (String) -> Void
+    ) {
+        _viewModel = State(initialValue: viewModel ?? ProfileGigsViewModel(userId: userId))
         self.onOpenGig = onOpenGig
     }
 
@@ -507,8 +512,12 @@ public struct ProfileGigReviewsSection: View {
     @State private var viewModel: ProfileGigReviewsViewModel
     private let onOpenReviewer: @MainActor (String) -> Void
 
-    public init(userId: String, onOpenReviewer: @escaping @MainActor (String) -> Void = { _ in }) {
-        _viewModel = State(initialValue: ProfileGigReviewsViewModel(userId: userId))
+    public init(
+        userId: String,
+        viewModel: ProfileGigReviewsViewModel? = nil,
+        onOpenReviewer: @escaping @MainActor (String) -> Void = { _ in }
+    ) {
+        _viewModel = State(initialValue: viewModel ?? ProfileGigReviewsViewModel(userId: userId))
         self.onOpenReviewer = onOpenReviewer
     }
 

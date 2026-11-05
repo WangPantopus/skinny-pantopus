@@ -6,24 +6,7 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * P2.9 — Session-scoped store for the maintenance form's *extras* the
- * backend does not yet persist: photos, receipt and performed-by kind.
- * Saved notes, category and contact come from HomeMaintenanceLog; retained
- * draft copies do not override those canonical fields.
- *
- * The detail screen reads the matching draft (keyed by the
- * server-returned task id) so a freshly-logged maintenance entry
- * surfaces its photos + notes + receipt in the 2×2 grid the design
- * specifies. When the app process restarts the drafts are dropped —
- * that's acceptable because these fields aren't part of the backend
- * contract today; the next refresh from the server will return the
- * canonical row without them.
- *
- * When the backend grows columns for these fields, the consumers will
- * flip to reading them off [MaintenanceTaskDto] directly and this
- * store can be deleted in one diff.
- */
+/** Session-only presentation details. Saved attachments are read from the maintenance document_id. */
 
 /** One captured photo or receipt file, kept entirely in-memory. */
 data class MaintenanceDraftFile(
@@ -31,6 +14,7 @@ data class MaintenanceDraftFile(
     val filename: String,
     val mimeType: String,
     val bytes: ByteArray,
+    val documentId: String? = null,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -38,6 +22,7 @@ data class MaintenanceDraftFile(
         return id == other.id &&
             filename == other.filename &&
             mimeType == other.mimeType &&
+            documentId == other.documentId &&
             bytes.contentEquals(other.bytes)
     }
 
@@ -45,6 +30,7 @@ data class MaintenanceDraftFile(
         var result = id.hashCode()
         result = 31 * result + filename.hashCode()
         result = 31 * result + mimeType.hashCode()
+        result = 31 * result + (documentId?.hashCode() ?: 0)
         result = 31 * result + bytes.contentHashCode()
         return result
     }
