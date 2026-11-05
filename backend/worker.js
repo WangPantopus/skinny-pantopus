@@ -15,6 +15,8 @@ require('dotenv').config({ path: dotenvPath });
 require('./config/stagingRuntime').validateStagingRuntime();
 
 const logger = require('./utils/logger');
+// Notes event-loop lag each second (utils/dbTiming.js).
+require('./utils/dbTiming').startLagMonitor();
 const { initPgBoss, stopPgBoss } = require('./jobs/pgBossManager');
 const { registerPgBossJobs } = require('./jobs/pgBossJobs');
 const { startJobs } = require('./jobs');

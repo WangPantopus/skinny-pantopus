@@ -67,6 +67,7 @@ const {
 
 // Import APM middleware
 const { apmMiddleware, getMetrics } = require('./middleware/apm');
+const dbTiming = require('./utils/dbTiming');
 const { getSnapshot: getAddressVerificationMetrics } = require('./services/addressValidation/addressVerificationMetrics');
 
 // Import socket server
@@ -380,6 +381,8 @@ app.use('/api/users/register', authEndpointLimiter);
 // Read only once a write is through the limiters above: 1 MB of JSON by default,
 // more only on the routes that need it (middleware/bodyLimits.js).
 app.use('/api', require('./middleware/bodyLimits'));
+// A body is read through stream callbacks, which don't carry the request's database ledger; continue in it.
+app.use('/api', (req, res, next) => dbTiming.resume(req.dbLedger, next));
 
 // ============ API ROUTES ============
 
@@ -591,6 +594,9 @@ const HOST = process.env.HOST || '0.0.0.0'; // 0.0.0.0 = accept connections from
 // run inside the listen callback, so in production the process bound the port,
 // began serving requests, and only then process.exit(1)'d on missing keys.
 require('./config/addressVerification').validate();
+
+// Notes event-loop lag each second, for the slow-request line (utils/dbTiming.js).
+dbTiming.startLagMonitor();
 
 server.listen(PORT, HOST, async () => {
   logger.info(`🚀 Pantopus Backend Server started`, {
