@@ -231,11 +231,11 @@ extension PublicProfileView {
         if viewModel.isOwnProfileLoaded { await owner?.load(force: true) }
     }
 
-    /// Loads your extras once the page turns out to be yours; a monthly
-    /// receipt push opens your month.
+    /// Loads your extras once the page turns out to be yours (once a visit:
+    /// a fold or a turn reads nothing); a monthly receipt push opens your month.
     func ownerPageAppeared() async {
         guard viewModel.isOwnProfileLoaded, let owner else { return }
-        await owner.load()
+        await viewModel.loadOwnerPage()
         if expandMonthlyReceipt, owner.monthlyReceipt != nil { showMonth = true }
     }
 
