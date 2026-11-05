@@ -8,10 +8,12 @@
 import { get, patch, post } from '../client';
 import type {
   CreateCrewDayBookingRequest,
+  CreateCrewDayRequestRequest,
   CrewDayBookingPage,
   CrewDayMine,
   CrewDayQuote,
   CrewDayQuoteRequest,
+  CrewDayRequestCard,
   PublicCrewDay,
 } from '@pantopus/types';
 
@@ -93,6 +95,11 @@ export function reportProblem(
   data: { kind?: 'missed' | 'damage' | 'no_show' | 'charge' | 'other'; note: string; photo_paths: string[] },
 ): BookingReply {
   return post(`${booking(bookingId)}/problem`, data);
+}
+
+/** "Ask for a Crew Day on my street": a service for the street of one of my homes (default: the first). */
+export function createRequest(data: CreateCrewDayRequestRequest) {
+  return post<{ request: CrewDayRequestCard }>(`${BASE}/requests`, data);
 }
 
 /** A photo for a problem (household) or a finished home (crew): JPEG, PNG or HEIC up to 10 MB → its stored path. */

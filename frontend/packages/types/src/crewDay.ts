@@ -301,6 +301,14 @@ export interface CrewDayRequestCard {
   offer: { crew_day_id: string; code: string } | null;
 }
 
+/** POST /api/crew-days/requests. `months` are "YYYY-MM" in the next six, or ["any"]. */
+export interface CreateCrewDayRequestRequest {
+  service: CrewDayService;
+  home_id?: string;
+  months: string[];
+  note?: string;
+}
+
 export interface CrewDayMine {
   upcoming: CrewDayBookingCard[];
   requests: CrewDayRequestCard[];

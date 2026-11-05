@@ -39,8 +39,11 @@ import {
   formatPrice,
   formatWindow,
   includedItems,
+  toPublicCrewDay,
+  type PublicCrewDay,
 } from '@/lib/crewDay';
 import {
+  CREW_DAY_OVERLINE,
   CREW_DAY_PRIMARY_BUTTON,
   CREW_DAY_SECONDARY_BUTTON,
   CrewDayCard,
@@ -49,10 +52,13 @@ import {
   ServiceTag,
   StreetMiniMap,
 } from './CrewDayParts';
+import CrewDayShareSheet from './CrewDayShareSheet';
 
-// Screen 5, Your Crew Day (board `CrewDay` and its `Cd*` states), and screen 8, Change or cancel (board `Cancel`):
-// one page per booking. The state card says where the booking stands in honest words ("Requested" isn't "Booked",
-// "Paused" isn't "Refunded"); every answer comes back as `{ booking }` and replaces the page.
+// Screen 5, Your Crew Day (board `CrewDay` and its `Cd*` states), screen 8, Change or cancel (board `Cancel`), and
+// screen 12, the share kit (board `Share`): one page per booking. The state card says where the booking stands in
+// honest words ("Requested" isn't "Booked", "Paused" isn't "Refunded"); every answer comes back as `{ booking }` and
+// replaces the page. "Change my home details" re-prices the home in the sheet from the day's price list (the public
+// read): the household sees the new total before it saves, and a look-first option goes back to the crew.
 
 type Tone = 'success' | 'warning' | 'info' | 'error' | 'neutral';
 
@@ -173,22 +179,36 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
   const query = useQuery({ queryKey: key, queryFn: () => api.crewDays.getBooking(bookingId), staleTime: 15_000 });
   const b = query.data;
   const [busy, setBusy] = useState<string | null>(null);
-  const [sheet, setSheet] = useState(false);
+  const [sheet, setSheet] = useState<'menu' | 'details' | null>(null);
+  const [sharing, setSharing] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
   const [note, setNote] = useState('');
   const [dateChoice, setDateChoice] = useState<string | null>(null);
+  const [detailsOption, setDetailsOption] = useState<string | null>(null);
+  const [detailsAddOns, setDetailsAddOns] = useState<string[]>([]);
+  // The day's price list and its "from" price, for the share kit and "Change my home details".
+  const code = b?.crew_day.code ?? '';
+  const publicDay = useQuery({
+    queryKey: ['crew-day', 'public', code],
+    queryFn: async (): Promise<PublicCrewDay> => toPublicCrewDay((await api.crewDays.getPublicCrewDay(code)) as unknown as Record<string, unknown>),
+    enabled: Boolean(code) && (sharing || sheet === 'details'),
+    staleTime: 60_000,
+  });
 
-  const apply = async (label: string, run: () => Promise<{ booking: CrewDayBookingPage }>, done?: string) => {
-    if (busy) return;
+  /** Runs one write; the booking it answers replaces the page. False when it didn't go through (a toast says why). */
+  const apply = async (label: string, run: () => Promise<{ booking: CrewDayBookingPage }>, done?: string): Promise<boolean> => {
+    if (busy) return false;
     setBusy(label);
     try {
       const { booking } = await run();
       queryClient.setQueryData(key, booking);
       void queryClient.invalidateQueries({ queryKey: ['crew-day', 'mine'] });
       if (done) toast.success(done);
+      return true;
     } catch (err) {
       const e = err as { code?: string; message?: string };
       toast.error(e?.message && !/^[A-Z_]+$/.test(e.message) ? e.message : "That didn't go through. Check your connection and try again.");
+      return false;
     } finally {
       setBusy(null);
     }
@@ -494,10 +514,12 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
   const included = includedItems(b.crew_day);
 
   const saveNote = () =>
-    void apply('note', () => api.crewDays.updateBooking(b.id, { access_note: note.trim() }), 'Note saved.').then(() => setEditingNote(false));
+    void apply('note', () => api.crewDays.updateBooking(b.id, { access_note: note.trim() }), 'Note saved.').then((saved) => {
+      if (saved) setEditingNote(false);
+    });
 
   const cancel = async () => {
-    setSheet(false);
+    setSheet(null);
     const yes = await confirmStore.open({
       title: `Cancel your ${b.crew_day.title.replace(/ on .*/, '')} booking?`,
       description: 'Nothing has been charged.',
@@ -509,9 +531,35 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
   };
 
   const askRelease = async () => {
-    setSheet(false);
+    setSheet(null);
     await apply('release', () => api.crewDays.askRelease(b.id), `We asked ${crew} to release your home.`);
     void messageCrew();
+  };
+
+  // "Change my home details": the option and add-ons, re-priced from the day's list before anything is saved.
+  const openDetails = () => {
+    setDetailsOption(b.option.id);
+    setDetailsAddOns(b.add_ons.map((a) => a.id));
+    setSheet('details');
+  };
+  const listDay = publicDay.data ?? null;
+  const pickedOption = listDay?.price_options.find((o) => o.id === detailsOption) ?? null;
+  const pickedAddOns = listDay?.add_ons.filter((a) => detailsAddOns.includes(a.id)) ?? [];
+  const newPrice =
+    pickedOption && !pickedOption.needs_look && pickedOption.price_cents != null
+      ? pickedOption.price_cents + pickedAddOns.reduce((sum, a) => sum + a.price_cents, 0)
+      : null;
+  const sameAddOns =
+    detailsAddOns.length === b.add_ons.length && b.add_ons.every((a) => detailsAddOns.includes(a.id));
+  const detailsChanged = Boolean(pickedOption) && (detailsOption !== b.option.id || !sameAddOns);
+  const saveDetails = async () => {
+    if (!pickedOption || !detailsChanged) return;
+    const saved = await apply(
+      'details',
+      () => api.crewDays.updateBooking(b.id, { option_id: pickedOption.id, add_on_ids: detailsAddOns }),
+      pickedOption.needs_look ? `We asked ${crew} for your new price.` : `Saved. Your price is ${newPrice != null ? formatPrice(newPrice) : 'updated'}.`,
+    );
+    if (saved) setSheet(null);
   };
 
   return (
@@ -635,43 +683,131 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
 
       <nav aria-label="More for this booking" className="flex flex-col divide-y divide-app-border overflow-hidden rounded-[1.25rem] border border-app-border bg-app-surface">
         <ActionRow icon={MessageCircle} label="Message the crew" onClick={() => void messageCrew()} />
-        {b.can_change || b.can_cancel || b.can_ask_release ? <ActionRow icon={Pencil} label="Change or cancel" onClick={() => setSheet(true)} /> : null}
-        {b.share && !ended ? (
-          <ActionRow
-            icon={Share}
-            label="Share with neighbors"
-            onClick={async () => {
-              const share = b.share!;
-              try {
-                if (typeof navigator.share === 'function') await navigator.share({ title: b.crew_day.title, text: share.message.replace(share.url, '').trim(), url: share.url });
-                else {
-                  await navigator.clipboard.writeText(share.message);
-                  toast.success('Link copied. Paste it in a text or your street group.');
-                }
-              } catch (err) {
-                if ((err as { name?: string })?.name !== 'AbortError') toast.error("Couldn't share the link. Try again.");
-              }
-            }}
-          />
-        ) : null}
+        {b.can_change || b.can_cancel || b.can_ask_release ? <ActionRow icon={Pencil} label="Change or cancel" onClick={() => setSheet('menu')} /> : null}
+        {b.share && !ended ? <ActionRow icon={Share} label="Share with neighbors" onClick={() => setSharing(true)} /> : null}
         <ActionRow icon={ShieldCheck} label="Who sees what" href="/crew-day/who-sees-what" />
       </nav>
 
-      <BottomSheet open={sheet} onClose={() => setSheet(false)} title="Change or cancel">
+      {b.share && !ended ? (
+        <CrewDayShareSheet
+          open={sharing}
+          onClose={() => setSharing(false)}
+          code={b.crew_day.code}
+          title={b.crew_day.title}
+          street={b.crew_day.street_label}
+          serviceDate={b.service_date}
+          priceFromCents={publicDay.data?.price_from_cents ?? null}
+          share={b.share}
+        />
+      ) : null}
+
+      <BottomSheet open={sheet === 'details'} onClose={() => setSheet(null)} title="Change my home details">
+        <div className="flex flex-col gap-4 pb-2">
+          {publicDay.isLoading ? <p className="text-sm text-app-text-secondary">Loading the price list…</p> : null}
+          {publicDay.isError ? (
+            <div role="alert" className="flex flex-col gap-3">
+              <p className="text-sm leading-5 text-app-text-strong">We couldn&apos;t load the price list. Check your connection and try again.</p>
+              <button type="button" onClick={() => void publicDay.refetch()} className={CREW_DAY_SECONDARY_BUTTON}>
+                Try again
+              </button>
+            </div>
+          ) : null}
+          {listDay ? (
+            <>
+              <fieldset className="min-w-0">
+                <legend className={`mb-2 ${CREW_DAY_OVERLINE}`}>
+                  {listDay.price_options.some((o) => /stor(y|ies)/i.test(o.label)) ? 'How many stories?' : 'Which fits your home?'}
+                </legend>
+                <CrewDayCard className="divide-y divide-app-border overflow-hidden">
+                  {listDay.price_options.map((o) => (
+                    <label key={o.id} className={`flex min-h-14 cursor-pointer gap-3 px-[0.875rem] py-3 hover:bg-app-hover ${o.needs_look ? 'items-start' : 'items-center'}`}>
+                      <input
+                        type="radio"
+                        name="cd-change-option"
+                        checked={detailsOption === o.id}
+                        onChange={() => setDetailsOption(o.id)}
+                        className="h-[1.375rem] w-[1.375rem] flex-none accent-[rgb(var(--accent-primary-fill))]"
+                      />
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="text-base leading-[1.3125rem]">{o.label}</span>
+                        {o.needs_look ? (
+                          <span className="text-[0.8125rem] leading-[1.125rem] text-app-text-secondary">The crew confirms the price after a look</span>
+                        ) : null}
+                      </span>
+                      {!o.needs_look && o.price_cents != null ? (
+                        <span className="flex-none text-base font-semibold leading-[1.3125rem] [font-variant-numeric:tabular-nums]">{formatPrice(o.price_cents)}</span>
+                      ) : null}
+                    </label>
+                  ))}
+                </CrewDayCard>
+              </fieldset>
+              {listDay.add_ons.length > 0 ? (
+                <fieldset className="min-w-0">
+                  <legend className={`mb-2 ${CREW_DAY_OVERLINE}`}>Add-ons</legend>
+                  <CrewDayCard className="divide-y divide-app-border overflow-hidden">
+                    {listDay.add_ons.map((a) => (
+                      <label key={a.id} className="flex min-h-14 cursor-pointer items-center gap-3 px-[0.875rem] py-3 hover:bg-app-hover">
+                        <input
+                          type="checkbox"
+                          checked={detailsAddOns.includes(a.id)}
+                          onChange={() =>
+                            setDetailsAddOns((list) => (list.includes(a.id) ? list.filter((id) => id !== a.id) : [...list, a.id]))
+                          }
+                          className="h-[1.375rem] w-[1.375rem] flex-none accent-[rgb(var(--accent-primary-fill))]"
+                        />
+                        <span className="min-w-0 flex-1 text-base leading-[1.3125rem]">{a.label}</span>
+                        <span className="flex-none text-base font-semibold leading-[1.3125rem] [font-variant-numeric:tabular-nums]">+{formatPrice(a.price_cents)}</span>
+                      </label>
+                    ))}
+                  </CrewDayCard>
+                </fieldset>
+              ) : null}
+              <p className="text-[0.9375rem] leading-[1.375rem] text-app-text-strong">
+                {pickedOption?.needs_look
+                  ? `${crew} confirms your new price after a look. You approve it before anything changes, and nothing is charged until the work is done.`
+                  : newPrice != null
+                    ? detailsChanged
+                      ? `Your new price: ${formatPrice(newPrice)}, including tax${price && newPrice !== b.price_cents ? ` (was ${price})` : ''}. Nothing is charged until the work is done.`
+                      : `Your price: ${formatPrice(newPrice)}, including tax. Nothing is charged until the work is done.`
+                    : null}
+              </p>
+              <div className="flex flex-col gap-2.5">
+                <button type="button" disabled={!detailsChanged || !!busy} onClick={() => void saveDetails()} className={CREW_DAY_PRIMARY_BUTTON}>
+                  {busy === 'details'
+                    ? 'Saving…'
+                    : !detailsChanged
+                      ? 'Nothing changed yet'
+                      : pickedOption?.needs_look
+                        ? 'Ask for my price'
+                        : newPrice != null
+                          ? `Change to ${formatPrice(newPrice)}`
+                          : 'Save'}
+                </button>
+                <button type="button" onClick={() => setSheet('menu')} className={CREW_DAY_SECONDARY_BUTTON}>
+                  Back
+                </button>
+              </div>
+            </>
+          ) : null}
+        </div>
+      </BottomSheet>
+
+      <BottomSheet open={sheet === 'menu'} onClose={() => setSheet(null)} title="Change or cancel">
         <ul className="flex flex-col divide-y divide-app-border">
           {b.can_change ? (
             <li>
-              <Link href={`/crew-day/${encodeURIComponent(b.crew_day.code)}/price`} className="flex items-start gap-3 py-3">
+              <button type="button" onClick={openDetails} className="flex w-full items-start gap-3 py-3 text-left">
                 <SheetIcon icon={House} />
                 <SheetText title="Change my home details" body="Stories and add-ons. You approve any new price first." />
-              </Link>
+                <ChevronRight className="mt-2.5 h-4 w-4 flex-none text-app-text-secondary" aria-hidden="true" />
+              </button>
             </li>
           ) : null}
           <li>
             <button
               type="button"
               onClick={() => {
-                setSheet(false);
+                setSheet(null);
                 setNote(b.access_note || '');
                 setEditingNote(true);
               }}

@@ -492,6 +492,7 @@ export type {
   CrewDayBookingPage,
   CrewDayBookingCard,
   CrewDayRequestCard,
+  CreateCrewDayRequestRequest,
   CrewDayMine,
 } from './crewDay';
 
