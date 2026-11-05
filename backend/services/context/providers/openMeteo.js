@@ -290,7 +290,9 @@ async function fetchWeather(latitude, longitude) {
     const daily = normalizeDaily(raw.daily, offsetSeconds);
 
     // ── Cache each data set ──
-    await Promise.all([
+    // Written in the background (setContextCache never rejects): a slow database write must not hold
+    // the forecast the caller is waiting for, nor a Place section's time budget.
+    void Promise.all([
       current && setContextCache(PROVIDER, 'weather_current', geohash, current, TTL_CURRENT),
       hourly.length > 0 && setContextCache(PROVIDER, 'weather_hourly', geohash, hourly, TTL_HOURLY),
       daily.length > 0 && setContextCache(PROVIDER, 'weather_daily', geohash, daily, TTL_DAILY),
