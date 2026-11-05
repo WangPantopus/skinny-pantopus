@@ -147,7 +147,53 @@ async function readiness(businessUserId) {
   };
 }
 
+/**
+ * The person's homes in Pantopus with their points: households they belong to in a trusted state (never a pending
+ * claim) and homes they own (the same rule as Plans' viewer).
+ */
+async function myHomes(userId) {
+  const homeColumns = 'id, address, address2, city, state, zipcode, location, map_center_lat, map_center_lng';
+  const [occupancies, owned] = await Promise.all([
+    supabaseAdmin.from('HomeOccupancy').select(`verification_status, verification_source, home:home_id (${homeColumns})`)
+      .eq('user_id', userId).eq('is_active', true),
+    supabaseAdmin.from('Home').select(homeColumns).eq('owner_id', userId),
+  ]);
+  if (occupancies.error) throw unavailable('homes', occupancies.error);
+  if (owned.error) throw unavailable('homes', owned.error);
+  const parsePostGISPoint = require('../../utils/parsePostGISPoint');
+  const homes = new Map();
+  const add = (home) => {
+    if (!home || homes.has(String(home.id))) return;
+    const point = parsePostGISPoint(home.location);
+    const latitude = Number(point?.latitude ?? home.map_center_lat);
+    const longitude = Number(point?.longitude ?? home.map_center_lng);
+    homes.set(String(home.id), {
+      id: home.id, line: home.address2 ? `${home.address}, ${home.address2}` : home.address, city: home.city,
+      state: home.state, zip: home.zipcode,
+      point: Number.isFinite(latitude) && Number.isFinite(longitude) ? { latitude, longitude } : null,
+    });
+  };
+  for (const row of occupancies.data || []) {
+    if (['verified', 'provisional', 'provisional_bootstrap'].includes(row.verification_status)
+      && row.verification_source !== 'probation') add(row.home);
+  }
+  for (const home of owned.data || []) add(home);
+  return [...homes.values()];
+}
+
+/** The household's saved card, if this Stripe payment method is theirs (the add-card flow stores it locally). */
+async function savedCard(userId, paymentMethodId) {
+  if (!paymentMethodId) return null;
+  const { data, error } = await supabaseAdmin.from('PaymentMethod')
+    .select('stripe_payment_method_id, card_brand, card_last4, payment_method_type')
+    .eq('user_id', userId).eq('stripe_payment_method_id', paymentMethodId).maybeSingle();
+  if (error) throw unavailable('payment_method', error);
+  return data || null;
+}
+
 module.exports = {
+  myHomes,
+  savedCard,
   unavailable,
   getDay,
   getDayByCode,
