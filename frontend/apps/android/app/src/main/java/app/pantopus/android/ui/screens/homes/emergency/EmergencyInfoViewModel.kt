@@ -565,13 +565,15 @@ class EmergencyInfoViewModel
 
             private fun detailString(dto: HomeEmergencyDto): String {
                 val details = dto.details
-                val detail = dto.noteText.orEmpty()
+                val detail = details?.get("detail").orEmpty()
                 val phone = details?.get("phone").orEmpty()
-                val note = details?.get("note").orEmpty()
+                // An older web entry holds its note as `notes`.
+                val note = details?.get("notes")?.takeIf { it.isNotEmpty() } ?: details?.get("note").orEmpty()
                 return when {
                     detail.isNotEmpty() -> detail
                     phone.isNotEmpty() && note.isNotEmpty() -> "$phone · $note"
                     phone.isNotEmpty() -> phone
+                    note.isNotEmpty() -> note
                     !dto.location.isNullOrEmpty() -> dto.location
                     else -> ""
                 }

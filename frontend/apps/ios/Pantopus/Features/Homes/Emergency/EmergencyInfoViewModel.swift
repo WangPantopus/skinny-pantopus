@@ -475,17 +475,18 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
         )
     }
 
-    /// Compose the row's body string from the DTO. Prefers the note
-    /// (`details.detail`, or an older web entry's `details.notes`),
-    /// falling back to the phone, then `location`, then an empty string.
+    /// Compose the row's body string from the DTO. Prefers
+    /// `details.detail` (a free-form sentence), then the phone with an
+    /// older web entry's `notes` (or `note`), then that note alone, then
+    /// `location`, then an empty string.
     private nonisolated static func detailString(dto: HomeEmergencyDTO) -> String {
-        if let note = dto.noteText { return note }
+        if let detail = dto.details["detail"], !detail.isEmpty { return detail }
+        let note = [dto.details["notes"], dto.details["note"]].compactMap(\.self).first { !$0.isEmpty }
         if let phone = dto.details["phone"], !phone.isEmpty {
-            if let note = dto.details["note"], !note.isEmpty {
-                return "\(phone) · \(note)"
-            }
+            if let note { return "\(phone) · \(note)" }
             return phone
         }
+        if let note { return note }
         if let location = dto.location, !location.isEmpty { return location }
         return ""
     }

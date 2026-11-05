@@ -75,13 +75,15 @@ object EmergencyCardPdf {
 
     private fun detailOf(dto: HomeEmergencyDto): String {
         val details = dto.details
-        val detail = dto.noteText.orEmpty()
+        val detail = details?.get("detail").orEmpty()
         if (detail.isNotEmpty()) return detail
+        // An older web entry holds its note as `notes`.
+        val note = details?.get("notes")?.takeIf { it.isNotEmpty() } ?: details?.get("note").orEmpty()
         val phone = details?.get("phone").orEmpty()
         if (phone.isNotEmpty()) {
-            val note = details?.get("note").orEmpty()
             return if (note.isNotEmpty()) "$phone · $note" else phone
         }
+        if (note.isNotEmpty()) return note
         return dto.location.orEmpty()
     }
 
