@@ -3,13 +3,18 @@
 // The profile switcher's menu (ProfileToggle.tsx): loaded on its first open, so
 // every page's first scripts leave it out. It is there only while open.
 
-import { useLayoutEffect, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Check, Shield } from 'lucide-react';
 import { IdentityIcons } from '@/lib/icons';
 import { launchFeatures } from '@/lib/featureFlags';
 import type { BusinessOption, HomeOption, ProfessionalOption } from './ProfileToggle';
+
+// Above the phone's side drawer it also opens from (AppShell: its backdrop z-[998], the drawer z-[999]),
+// as other layers over drawers are; toasts (z-[9999]) stay above it.
+const BACKDROP_LAYER = 'z-[1000]';
+const MENU_LAYER = 'z-[1001]';
 
 // Dropdown dimensions (w-64 = 16rem = 256px)
 const DROPDOWN_WIDTH = 256;
@@ -54,6 +59,7 @@ export default function ProfileMenu({
 }) {
   const router = useRouter();
   const [dropdownStyle, setDropdownStyle] = useState<{ top: number; left: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   // Position dropdown when open (useLayoutEffect so position is set before paint)
   useLayoutEffect(() => {
@@ -72,15 +78,32 @@ export default function ProfileMenu({
     });
   }, [compact, buttonRef]);
 
+  // Keyboard: the menu takes focus once placed, and Escape closes it, back on its button.
+  const placed = dropdownStyle !== null;
+  useEffect(() => {
+    if (placed) menuRef.current?.querySelector('button')?.focus({ preventScroll: true });
+  }, [placed]);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      onClose();
+      buttonRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose, buttonRef]);
+
   // Rendered via portal to escape sidebar overflow-hidden
   if (typeof document === 'undefined' || !dropdownStyle) return null;
   return createPortal(
         <>
           {/* Backdrop */}
-          <div className="fixed inset-0 z-[70]" onClick={() => onClose()} aria-hidden />
+          <div className={`fixed inset-0 ${BACKDROP_LAYER}`} onClick={() => onClose()} aria-hidden />
 
           <div
-            className="fixed w-64 bg-surface border border-app rounded-xl shadow-lg z-[80] overflow-hidden max-h-[70vh] overflow-y-auto"
+            ref={menuRef}
+            className={`fixed w-64 bg-surface border border-app rounded-xl shadow-lg ${MENU_LAYER} overflow-hidden max-h-[70vh] overflow-y-auto`}
             style={{ top: dropdownStyle.top, left: dropdownStyle.left }}
           >
             {/* Personal */}
