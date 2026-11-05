@@ -20,6 +20,8 @@ public struct PulsePostDetailLoadedContent: View {
     /// The comment box, the one text field under the post, has the keyboard.
     @FocusState private var composerFocused: Bool
     private let onComposerFocusChange: (@MainActor (Bool) -> Void)?
+    /// Giving the comment box the keyboard back is still under way (`returnToComposer`).
+    private let onComposerReturnPending: (@MainActor () -> Void)?
     /// Organically matched local businesses — empty hides the card.
     private let nearbyProviders: [NearbyProviderRow]
     private let onOpenBusiness: @MainActor (String) -> Void
@@ -49,6 +51,7 @@ public struct PulsePostDetailLoadedContent: View {
         scrollPlace: ScrollPlace? = nil,
         returnsToComposer: Bool = false,
         onComposerFocusChange: (@MainActor (Bool) -> Void)? = nil,
+        onComposerReturnPending: (@MainActor () -> Void)? = nil,
         nearbyProviders: [NearbyProviderRow] = [],
         onOpenBusiness: @escaping @MainActor (String) -> Void = { _ in },
         onBack: @escaping @MainActor () -> Void = {},
@@ -73,6 +76,7 @@ public struct PulsePostDetailLoadedContent: View {
         self.scrollPlace = scrollPlace
         _returnsToComposer = State(initialValue: returnsToComposer)
         self.onComposerFocusChange = onComposerFocusChange
+        self.onComposerReturnPending = onComposerReturnPending
         self.nearbyProviders = nearbyProviders
         self.onOpenBusiness = onOpenBusiness
         self.onBack = onBack
@@ -195,21 +199,21 @@ public struct PulsePostDetailLoadedContent: View {
     }
 
     /// A fold or a turn rebuilt the screen while the comment box had the keyboard: it gets it back, once the box is
-    /// in the window (closed, the window takes a moment to settle on the outer screen). Until it has it, the post's
-    /// model keeps that the box should, so a second rebuild on the way (half folded to upright passes through open
-    /// sideways) gives it back too; and while the screen settles, a box that loses it again gets it back.
+    /// in the window (closed, the window takes a moment to settle on the outer screen). Until it has it, a screen
+    /// made in the next moment gives it back too: half folded to upright passes through open sideways, two rebuilds.
+    /// While the screen settles (the first half second), a box that loses it again gets it back; after that, only one
+    /// that never had it, so the keyboard closed on purpose stays closed.
     private func returnToComposer() async {
         guard returnsToComposer else { return }
         returnsToComposer = false
-        onComposerFocusChange?(true)
-        for delayMs: UInt64 in [80, 170, 250, 500] {
+        var landed = false
+        for (delayMs, settling): (UInt64, Bool) in [(80, true), (170, true), (250, true), (500, false)] {
+            if !composerFocused { onComposerReturnPending?() }
             try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
             guard !Task.isCancelled else { return }
-            if !composerFocused { composerFocused = true }
+            landed = landed || composerFocused
+            if !composerFocused, settling || !landed { composerFocused = true }
         }
-        // Still without it, on a screen that stayed: the box doesn't have the keyboard after all.
-        try? await Task.sleep(nanoseconds: 250 * 1_000_000)
-        if !Task.isCancelled, !composerFocused { onComposerFocusChange?(false) }
     }
 }
 
