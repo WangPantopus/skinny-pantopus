@@ -1377,6 +1377,20 @@ async function composeBallotElection(home, ballot, deadline) {
   }
 }
 
+// The "Your ballot" card from the checked reference data alone, with no
+// boundary lookup, live count, database or network read: what a Place shows
+// when its civic_election section runs out of time, so the card (and "This
+// season" with it) doesn't disappear. Null where no card applies.
+function composeCivicElectionFromReference(home) {
+  try {
+    const data = ballotSummary.summaryFromReference(home);
+    return data ? [ballotElectionSection(data)] : null;
+  } catch (err) {
+    logger.warn('placeSections: ballot card from reference data failed', { homeId: home && home.id, error: err.message });
+    return null;
+  }
+}
+
 // `budgetMs`: the section's time budget on a Place, which the card's live
 // count must not run past (see ballot/summary.js withLiveResults).
 async function composeCivicElection(home, { ballot = false, budgetMs = null } = {}) {
@@ -1589,6 +1603,7 @@ module.exports = {
   composeEnvironmentalHazards,
   composeCivicDistricts,
   composeCivicElection,
+  composeCivicElectionFromReference,
   // The preview's election row for a point (placePreviewService).
   ballotElectionSection,
   composeSeismic,

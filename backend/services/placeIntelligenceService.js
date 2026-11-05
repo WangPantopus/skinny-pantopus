@@ -1540,18 +1540,44 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   // cache for the next look.
   const budgetMs = sectionBudgetMs();
   const late = [];
+  // When the budget fallbacks ran (near budgetMs unless the process itself was
+  // held up) and when every section had answered, for the over-budget log.
+  const startedAt = Date.now();
+  let firedMs = 0;
   const [privacy, ...groups] = await Promise.all([
     getHomePrivacy(homeId).catch(() => ({ address_precision: true })),
     ...runs.map(({ ids, budget, run }) => {
       const compose = () => run({ home: subject, userId, tier, hubPromise, access, ballot: ballotOn, claimant, countyReads, budgetMs });
       if (!budget) return compose();
-      return withBudget(compose, budgetMs, () => {
+      let over = false;
+      // A section past its budget keeps running to fill its cache; its real
+      // time is logged when it ends, so the slow source can be named.
+      const timed = () => {
+        const attempt = Promise.resolve().then(compose);
+        attempt.then(
+          () => { if (over) logger.warn('placeIntelligence: late section finished', { homeId, sections: ids, ms: Date.now() - startedAt }); },
+          (err) => { if (over) logger.warn('placeIntelligence: late section failed', { homeId, sections: ids, ms: Date.now() - startedAt, error: err.message }); },
+        );
+        return attempt;
+      };
+      return withBudget(timed, budgetMs, () => {
+        over = true;
+        firedMs = Math.max(firedMs, Date.now() - startedAt);
         late.push(...ids);
-        return failedSections(ids, tier)();
+        // Past its budget the ballot card still comes, from the checked
+        // reference data alone (no boundary lookup or live count), so "This
+        // season" stays on the page; the next load has the rest.
+        const card = ballotOn && ids.includes('civic_election')
+          ? placeSectionAdapters.composeCivicElectionFromReference(subject) : null;
+        return card || failedSections(ids, tier)();
       });
     }),
   ]);
-  if (late.length) logger.warn('placeIntelligence: sections over budget', { homeId, sections: late, budgetMs });
+  if (late.length) {
+    logger.warn('placeIntelligence: sections over budget', {
+      homeId, sections: late, budgetMs, fired_ms: firedMs, total_ms: Date.now() - startedAt,
+    });
+  }
 
   const composed = {};
   for (const env of groups.flat()) composed[env.id] = env;

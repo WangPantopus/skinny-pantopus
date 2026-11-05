@@ -213,14 +213,24 @@ function clearHubTodayCache(userId) {
 }
 
 // Settles with the provider's answer, or rejects once `ms` has passed (no
-// limit without one). The provider's request itself keeps running.
-function withinProviderBudget(promise, ms) {
+// limit without one). The provider's request itself keeps running; when it
+// ends past the limit, the log names the provider and its real time.
+function withinProviderBudget(promise, ms, provider) {
   if (!(ms > 0)) return promise;
+  const startedAt = Date.now();
+  let over = false;
   let timer = null;
   const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error('provider over budget')), ms);
+    timer = setTimeout(() => {
+      over = true;
+      reject(new Error('provider over budget'));
+    }, ms);
     if (typeof timer.unref === 'function') timer.unref();
   });
+  promise.then(
+    () => { if (over) logger.warn('orchestrator: provider over budget', { provider, ms: Date.now() - startedAt, budget_ms: ms }); },
+    () => {},
+  );
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
@@ -305,9 +315,9 @@ async function getHubToday(userId, options = {}) {
   const fetchStartMs = Date.now();
   const providerMs = options.providerBudgetMs;
   const [weatherResult, aqiResult, alertsResult, internalResult, addressCalendarResult] = await Promise.allSettled([
-    withinProviderBudget(fetchWeather(latitude, longitude), providerMs),
-    withinProviderBudget(fetchAQI(latitude, longitude), providerMs),
-    withinProviderBudget(fetchAlerts(latitude, longitude), providerMs),
+    withinProviderBudget(fetchWeather(latitude, longitude), providerMs, 'weather'),
+    withinProviderBudget(fetchAQI(latitude, longitude), providerMs, 'aqi'),
+    withinProviderBudget(fetchAlerts(latitude, longitude), providerMs, 'alerts'),
     collectInternalContext(userId, location.homeId, location.timezone),
     fetchAddressCalendar(location, userId, countyReads),
   ]);
