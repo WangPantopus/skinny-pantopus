@@ -11,6 +11,7 @@
 'use client';
 
 import { useContext, useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
@@ -19,7 +20,6 @@ import { queryKeys } from '@/lib/query-keys';
 import type { PlaceSwitcherHome } from '@/components/archetypes/place';
 import { PlaceHomeContext, placeHomeQuery } from '@/components/archetypes/place';
 import ErrorState from '@/components/ui/ErrorState';
-import SavedPlaceContext from './SavedPlaceContext';
 import ClaimsInReview from './ClaimsInReview';
 import { placeSlugsNotForViewer } from './detail/sections';
 import PlaceDashboardView from './PlaceDashboardView';
@@ -29,6 +29,14 @@ import SetupBanner from '@/components/hub/SetupBanner';
 import { usePrimaryHome } from '@/lib/primaryHome';
 import { claimsInReview, myClaimsQuery, myHomesQuery as sharedMyHomesQuery } from '@/lib/myHomes';
 import { PLACE_FRESH_MS, gatedStaleTime, placeCopyGate, useAfterRecheck } from '@/lib/householdCopy';
+
+// Only an account without a home shows its saved addresses here, and they bring the address
+// preview from the start funnel with them: loaded on demand, so a home's dashboard leaves both
+// out of its first scripts. The download starts as soon as the account turns out to have no home.
+const SavedPlaceContext = dynamic(() => import('./SavedPlaceContext'), {
+  ssr: false,
+  loading: () => <p role="status">Loading your saved places…</p>,
+});
 
 const REDIRECT_TO = encodeURIComponent('/app/place');
 
@@ -101,6 +109,8 @@ export default function PlaceDashboard() {
   // The first one's address shows its public view (the server's for an open claim), its status on top.
   const noHome = homeQuery.isSuccess && !homeId;
   const claimsQuery = useQuery({ ...myClaimsQuery(), enabled: authed && noHome && myHomesQuery.isFetched });
+  // Fetched alongside the claims, so the no-home view does not wait for its script afterwards.
+  useEffect(() => { if (noHome) void import('./SavedPlaceContext'); }, [noHome]);
   const claim = noHome ? claimsInReview(claimsQuery.data)[0] ?? null : null;
   const shownHomeId = homeId ?? claim?.home_id ?? null;
   // Links carry the place only when it isn't the primary home.
