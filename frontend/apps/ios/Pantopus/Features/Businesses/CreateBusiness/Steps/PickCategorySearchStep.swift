@@ -3,8 +3,8 @@
 //  Pantopus
 //
 //  A12.10 Frame 2 (search) — Create Business wizard step 1, active
-//  typeahead variant. Renders the chip + headline + focused search
-//  field + ranked-results header + 3 hits with the matched substring
+//  typeahead results below the shared search field. Renders the
+//  ranked-results header + 3 hits with the matched substring
 //  violet-highlighted + a dashed-violet "Add as custom category"
 //  fallback row.
 //
@@ -19,20 +19,10 @@ struct PickCategorySearchStep: View {
     }
 
     var body: some View {
-        BusinessIdentityChip()
-
-        HeadlineBlock(
-            "What does your business do?",
-            subtitle: "Pick the closest fit — this shapes your listings, tax setup, and the badges " +
-                "customers see."
-        )
-
-        BusinessSearchField(text: $viewModel.searchText, focused: true)
-
         SearchResultsHeader(
             matchCount: viewModel.searchHits.count,
             query: query
-        )
+        ) { viewModel.searchText = "" }
 
         VStack(spacing: Spacing.s2) {
             ForEach(viewModel.searchHits) { hit in
@@ -80,17 +70,14 @@ struct PickCategorySearchStep: View {
 private struct SearchResultsHeader: View {
     let matchCount: Int
     let query: String
+    let onBrowseAll: () -> Void
 
     var body: some View {
         HStack {
             Text("\(matchCount) \(matchCount == 1 ? "match" : "matches") for \"\(query)\"", style: .overline)
                 .foregroundStyle(Theme.Color.appTextSecondary)
             Spacer(minLength: Spacing.s2)
-            Button {
-                // Browse-all clears the search and returns to the populated grid.
-                // The audit lists this as the secondary affordance on the
-                // search frame header.
-            } label: {
+            Button(action: onBrowseAll) {
                 Text("Browse all")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.business)
@@ -231,7 +218,7 @@ private struct AddCustomCategoryRow: View {
                     Text("Add \"\(label)\" as a custom category")
                         .pantopusTextStyle(.body)
                         .foregroundStyle(Theme.Color.businessDark)
-                    Text("We'll pass the request on — custom categories aren't live yet.")
+                    Text("Custom categories aren't available yet. Choose a listed category instead.")
                         .pantopusTextStyle(.caption)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -257,7 +244,7 @@ private struct AddCustomCategoryRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             "Add \(label) as a custom category. " +
-                "We'll pass the request on — custom categories aren't live yet."
+                "Custom categories aren't available yet. Choose a listed category instead."
         )
         .accessibilityIdentifier("createBusinessAddCustomCategory")
     }

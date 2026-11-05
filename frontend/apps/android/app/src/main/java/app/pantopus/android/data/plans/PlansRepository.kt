@@ -36,6 +36,7 @@ import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.conditionalApiCall
 import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.PlansApi
+import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.store.PlanStoreKeys
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
@@ -43,6 +44,7 @@ import app.pantopus.android.data.store.StoreTopics
 import app.pantopus.android.data.store.Stored
 import kotlinx.coroutines.delay
 import org.json.JSONObject
+import retrofit2.Response
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -65,12 +67,48 @@ class PlansRepository
     constructor(
         private val api: PlansApi,
         private val store: ScreenStore,
+        private val tokens: TokenStorage,
     ) {
         /** Public cards seen lately, so a plan opened from the map or a list shows its card at once. */
         private val cards =
             object : LinkedHashMap<String, PlanDto>(CARD_CACHE, 0.75f, true) {
                 override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PlanDto>?): Boolean = size > CARD_CACHE
             }
+
+        private data class CacheSession(val marker: String?, val generation: Long)
+
+        private var cacheMarker: String? = null
+        private var cacheGeneration = 0L
+        private var rememberedList: List<PlanDto> = emptyList()
+        private var browsingOrigin: PlanOrigin? = null
+
+        private fun cacheSession(): CacheSession =
+            synchronized(cards) {
+                val marker = tokens.sessionMarker()
+                if (cacheMarker != marker) {
+                    clearCopies()
+                    cacheMarker = marker
+                }
+                CacheSession(marker, cacheGeneration)
+            }
+
+        private fun isCurrent(session: CacheSession): Boolean = session.marker != null && session == cacheSession()
+
+        /** Sign-out also retires replies still in flight, before they can repopulate the next session. */
+        fun clearAccount() {
+            synchronized(cards) {
+                clearCopies()
+                cacheMarker = null
+            }
+        }
+
+        /** Called only while holding [cards]. */
+        private fun clearCopies() {
+            cacheGeneration += 1
+            cards.clear()
+            rememberedList = emptyList()
+            browsingOrigin = null
+        }
 
         fun pinsCopy(
             viewport: PlanViewport,
@@ -127,7 +165,10 @@ class PlansRepository
             longitude: Double?,
             window: PlanWindow,
             kinds: String?,
-        ): PlansListResponse? = store.peek(listKey(latitude, longitude, window, kinds)).data?.also(::remember)
+        ): PlansListResponse? {
+            val session = cacheSession()
+            return store.peek(listKey(latitude, longitude, window, kinds)).data?.also { remember(it, session) }
+        }
 
         suspend fun list(
             latitude: Double?,
@@ -136,6 +177,7 @@ class PlansRepository
             kinds: String?,
             force: Boolean = false,
         ): Stored<PlansListResponse> {
+            val session = cacheSession()
             val lat = latitude?.let(StoreKeys::roundCoordinate)
             val lng = longitude?.let(StoreKeys::roundCoordinate)
             val gps = origin?.gps
@@ -154,7 +196,7 @@ class PlansRepository
                             gpsTimestamp = gps?.toString(),
                         )
                     }
-                }.also { it.data?.let(::remember) }
+                }.also { stored -> stored.data?.let { remember(it, session) } }
         }
 
         private fun listKey(
@@ -173,32 +215,50 @@ class PlansRepository
 
         fun isMineCurrent(): Boolean = store.isCurrent(PlanStoreKeys.mine)
 
-        suspend fun mine(force: Boolean = false): Stored<MyPlansResponse> =
-            store.read(PlanStoreKeys.mine, force) { etag -> conditionalApiCall { api.mine(etag) } }.also { stored ->
-                stored.data?.let { reply -> (reply.hosting + reply.going + reply.asked + reply.waitlisted).forEach(::rememberCard) }
+        suspend fun mine(force: Boolean = false): Stored<MyPlansResponse> {
+            val session = cacheSession()
+            return store.read(PlanStoreKeys.mine, force) { etag -> conditionalApiCall { api.mine(etag) } }.also { stored ->
+                stored.data?.let { reply ->
+                    (reply.hosting + reply.going + reply.asked + reply.waitlisted).forEach { rememberCard(it, session) }
+                }
             }
+        }
 
         /** The public card last seen for [id], for a first frame while the plan loads. Never the private part. */
-        fun card(id: String): PlanDto? = synchronized(cards) { cards[id] }
+        fun card(id: String): PlanDto? =
+            synchronized(cards) {
+                cacheSession()
+                cards[id]
+            }
 
         /** The last list read around the person, for "Other plans this week" (J8). */
-        @Volatile
-        var lastList: List<PlanDto> = emptyList()
-            private set
+        val lastList: List<PlanDto>
+            get() =
+                synchronized(cards) {
+                    cacheSession()
+                    rememberedList
+                }
 
         /** `GET /api/public/plans/:id`: what a signed-out page may show (J9 asks it after a 404). */
         suspend fun publicPlan(id: String): NetworkResult<PublicPlanDto> = safeApiCall { api.publicPlan(id) }
 
         /** Where distances are measured from, and a fresh GPS fix when the person browses by location. */
-        @Volatile
-        private var origin: PlanOrigin? = null
+        private val origin: PlanOrigin?
+            get() =
+                synchronized(cards) {
+                    cacheSession()
+                    browsingOrigin
+                }
 
         fun setOrigin(value: PlanOrigin?) {
-            origin = value
+            synchronized(cards) {
+                if (cacheSession().marker != null) browsingOrigin = value
+            }
         }
 
         /** `GET /api/plans/:id`, fresh every time, with what a 404 means (J9 or gone). */
         suspend fun read(id: String): PlanRead {
+            val session = cacheSession()
             val from = origin
             val result =
                 safeApiCall {
@@ -211,20 +271,27 @@ class PlansRepository
                         gpsTimestamp = from?.gps?.toString(),
                     )
                 }
-            val response =
-                when (result) {
-                    is NetworkResult.Success -> result.data
-                    is NetworkResult.Failure -> return PlanRead.Failed(result.error)
-                }
+            if (!isCurrent(session)) return PlanRead.Failed(NetworkError.Unauthorized)
+            return when (result) {
+                is NetworkResult.Success -> readResponse(id, result.data, session)
+                is NetworkResult.Failure -> PlanRead.Failed(result.error)
+            }
+        }
+
+        private fun readResponse(
+            id: String,
+            response: Response<PlanDto>,
+            session: CacheSession,
+        ): PlanRead {
             val body = response.body()
             if (response.isSuccessful && body != null) {
-                rememberCard(body)
+                rememberCard(body, session)
                 return PlanRead.Found(body)
             }
             val error = runCatching { response.errorBody()?.string() }.getOrNull()
             return when (response.code()) {
                 HTTP_NOT_FOUND -> {
-                    forget(id)
+                    forget(id, session)
                     val json = error?.let { runCatching { JSONObject(it) }.getOrNull() }
                     if (json?.optString("error") == "needs_verified_address") {
                         PlanRead.Locked(
@@ -235,8 +302,14 @@ class PlansRepository
                         PlanRead.Missing
                     }
                 }
-                HTTP_UNAUTHORIZED -> PlanRead.Failed(NetworkError.Unauthorized)
-                HTTP_FORBIDDEN -> PlanRead.Failed(NetworkError.Forbidden(error))
+                HTTP_UNAUTHORIZED -> {
+                    forget(id, session)
+                    PlanRead.Failed(NetworkError.Unauthorized)
+                }
+                HTTP_FORBIDDEN -> {
+                    forget(id, session)
+                    PlanRead.Failed(NetworkError.Forbidden(error))
+                }
                 in HTTP_SERVER_ERRORS -> PlanRead.Failed(NetworkError.Server(response.code(), error))
                 else -> PlanRead.Failed(NetworkError.ClientError(response.code(), error))
             }
@@ -250,12 +323,18 @@ class PlansRepository
                 is PlanRead.Locked, PlanRead.Missing -> NetworkResult.Failure(NetworkError.NotFound)
             }
 
-        suspend fun create(body: CreatePlanBody): NetworkResult<PlanDto> = write { api.create(body) }.also { rememberResult(it) }
+        suspend fun create(body: CreatePlanBody): NetworkResult<PlanDto> {
+            val session = cacheSession()
+            return write { api.create(body) }.also { rememberResult(it, session) }
+        }
 
         suspend fun update(
             id: String,
             body: UpdatePlanBody,
-        ): NetworkResult<PlanDto> = write(id) { api.update(id, body) }.also { rememberResult(it) }
+        ): NetworkResult<PlanDto> {
+            val session = cacheSession()
+            return write(id) { api.update(id, body) }.also { rememberResult(it, session) }
+        }
 
         suspend fun cancel(
             id: String,
@@ -266,9 +345,12 @@ class PlansRepository
             id: String,
             body: AskToJoinBody,
         ): NetworkResult<AskToJoinResponse> {
+            val session = cacheSession()
             val gps = origin?.let { from -> from.gps?.let { at -> PlanGpsInput(from.latitude, from.longitude, at.toString()) } }
             val withGps = if (body.gps == null && gps != null) body.copy(gps = gps) else body
-            return write(id) { api.ask(id, withGps) }.also { result -> (result as? NetworkResult.Success)?.data?.plan?.let(::rememberCard) }
+            return write(id) { api.ask(id, withGps) }.also { result ->
+                (result as? NetworkResult.Success)?.data?.plan?.let { rememberCard(it, session) }
+            }
         }
 
         /** `POST /api/plans/:id/report`. */
@@ -434,10 +516,12 @@ class PlansRepository
         suspend fun claimInvite(
             id: String,
             token: String,
-        ): NetworkResult<PlanInvitePlanResponse> =
-            write(id) { api.claimInvite(id, PlanInviteClaimBody(token)) }.also { result ->
-                (result as? NetworkResult.Success)?.data?.plan?.let(::rememberCard)
+        ): NetworkResult<PlanInvitePlanResponse> {
+            val session = cacheSession()
+            return write(id) { api.claimInvite(id, PlanInviteClaimBody(token)) }.also { result ->
+                (result as? NetworkResult.Success)?.data?.plan?.let { rememberCard(it, session) }
             }
+        }
 
         /** "Can't make it" to an invitation. */
         suspend fun declineInvite(id: String): NetworkResult<PlanInvitePlanResponse> = write(id, chats = true) { api.declineInvite(id) }
@@ -455,7 +539,9 @@ class PlansRepository
             chats: Boolean = false,
             crossinline block: suspend () -> T,
         ): NetworkResult<T> {
+            val session = cacheSession()
             val result = safeApiCall(surfaceForbiddenBody = true) { block() }
+            if (!isCurrent(session)) return NetworkResult.Failure(NetworkError.Unauthorized)
             if (result is NetworkResult.Success) {
                 store.markEdited(PlanStoreKeys.TOPIC)
                 id?.let { store.markEdited(PlanStoreKeys.topic(it)) }
@@ -464,23 +550,63 @@ class PlansRepository
             return result
         }
 
-        private fun rememberResult(result: NetworkResult<PlanDto>) {
-            if (result is NetworkResult.Success) rememberCard(result.data)
+        private fun rememberResult(
+            result: NetworkResult<PlanDto>,
+            session: CacheSession,
+        ) {
+            if (result is NetworkResult.Success) rememberCard(result.data, session)
         }
 
-        private fun remember(reply: PlansListResponse) {
-            lastList = reply.items
-            reply.items.forEach(::rememberCard)
+        private fun remember(
+            reply: PlansListResponse,
+            session: CacheSession,
+        ) {
+            synchronized(cards) {
+                if (!isCurrent(session)) return
+                rememberedList = reply.items.map(::publicCard)
+                rememberedList.forEach { cards[it.id] = it }
+            }
         }
 
-        private fun rememberCard(plan: PlanDto) {
-            val card = plan.copy(place = null, people = null, chatRoomId = null, guestNote = null)
-            synchronized(cards) { cards[plan.id] = card }
+        private fun rememberCard(
+            plan: PlanDto,
+            session: CacheSession,
+        ) {
+            synchronized(cards) {
+                if (isCurrent(session)) cards[plan.id] = publicCard(plan)
+            }
         }
 
-        private fun forget(id: String) {
-            synchronized(cards) { cards.remove(id) }
+        private fun forget(
+            id: String,
+            session: CacheSession,
+        ) {
+            synchronized(cards) {
+                if (isCurrent(session)) {
+                    cards.remove(id)
+                    rememberedList = rememberedList.filterNot { it.id == id }
+                }
+            }
         }
+
+        /** Access-dependent details are re-read on every appearance, including a return from the background. */
+        private fun publicCard(plan: PlanDto): PlanDto =
+            plan.copy(
+                place = null,
+                people = null,
+                chatRoomId = null,
+                chatOpen = null,
+                guestNote = null,
+                cancelNote = null,
+                myRequest = null,
+                myInvite = null,
+                invites = null,
+                requestsCount = null,
+                autoRules = null,
+                startsAt = plan.startsAt.takeUnless { plan.kind == "playdate" },
+                endsAt = plan.endsAt.takeUnless { plan.kind == "playdate" },
+                askingClosesAt = plan.askingClosesAt.takeUnless { plan.kind == "playdate" },
+            )
 
         private companion object {
             const val CARD_CACHE = 64

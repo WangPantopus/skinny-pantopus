@@ -13,6 +13,39 @@ export const SESSION_REFRESH_PATH = '/session/refresh';
 export const SESSION_REFRESH_GUARD_KEY = 'pantopus:session-refresh-attempt';
 
 /**
+ * Short-lived, JS-readable hint the middleware sets on an app document whose
+ * session flag is set while the 1-hour access cookie is gone. Its value is the
+ * public fallback for a failed recovery (`onFail`), or `1` when there is none.
+ * It carries no credential: the refresh cookie stays httpOnly and path-scoped.
+ */
+export const SESSION_RECOVER_COOKIE = 'pantopus_recover';
+export const SESSION_RECOVER_MAX_AGE_S = 30;
+
+/**
+ * Runs as the app document is parsed, before any bundle downloads (rendered by
+ * src/app/(app)/app/layout.tsx). With the hint present it clears it and starts
+ * the same refresh request the API client makes (POST /api/users/refresh with
+ * the httpOnly refresh cookie), so recovering an expired access cookie costs
+ * one request alongside the page's own loading instead of a separate page.
+ * @pantopus/api adopts the pending result as its single-flight refresh and
+ * holds the page's API requests until it settles. A refused or failed refresh
+ * hands off to SESSION_REFRESH_PATH, which signs out, retries or explains,
+ * exactly as before. Outcomes follow the API client's: 2xx with `ok` is
+ * success, 400/401 is invalid, anything else is transient.
+ */
+export const SESSION_RECOVERY_SCRIPT = `(function(){try{
+var m=document.cookie.match(/(?:^|;\\s*)${SESSION_RECOVER_COOKIE}=([^;]*)/);if(!m)return;
+document.cookie='${SESSION_RECOVER_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax'+(location.protocol==='https:'?'; Secure':'');
+var f='';try{f=m[1]==='1'?'':decodeURIComponent(m[1]);}catch(e){}
+var r=window.__pantopusRecovery={handedOff:false};
+r.promise=fetch('/api/users/refresh',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','x-token-transport':'cookie'},body:'{}'})
+.then(function(x){if(x.ok)return x.json().then(function(b){return b&&b.ok?{status:'success',accessToken:'__session__'}:{status:'invalid',statusCode:x.status};},function(){return{status:'transient',statusCode:x.status};});
+return{status:x.status===400||x.status===401?'invalid':'transient',statusCode:x.status};},function(){return{status:'transient'};})
+.then(function(o){if(o.status!=='success'){r.handedOff=true;var t=location.pathname+location.search+location.hash;
+location.replace('${SESSION_REFRESH_PATH}?redirectTo='+encodeURIComponent(t)+(f?'&onFail='+encodeURIComponent(f):''));}return o;});
+}catch(e){}})();`;
+
+/**
  * sessionStorage key that carries the account-deletion outcome to /login as
  * `deleted:<ms>` (the DELETE succeeded) or `unconfirmed:<ms>` (this session
  * ended while the DELETE was still pending). The server signs every session

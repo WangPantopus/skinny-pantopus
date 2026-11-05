@@ -1226,6 +1226,7 @@ router.get('/:businessId', verifyToken, async (req, res) => {
 /**
  * GET /:businessId/dashboard — Dashboard aggregate
  */
+const DASHBOARD_UNAVAILABLE = 'Business dashboard could not be loaded right now. Please retry.';
 router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
   try {
     const { businessId } = req.params;
@@ -1236,18 +1237,10 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'No access to this business' });
     }
 
-    // Parallel fetch
-    const [
-      { data: bizUser },
-      { data: profile },
-      { data: locations },
-      { data: teamMembers },
-      { data: catalogItems },
-      { data: pages },
-      profileCompleteness,
-    ] = await Promise.all([
-      supabaseAdmin.from('User').select('id, username, name, email, profile_picture_url, cover_photo_url, bio, tagline, average_rating, review_count, account_type, gigs_completed, created_at').eq('id', businessId).single(),
-      supabaseAdmin.from('BusinessProfile').select('*').eq('business_user_id', businessId).single(),
+    // Parallel fetch. maybeSingle: a missing row is an answer (null), not a failed read to retry.
+    const results = await Promise.all([
+      supabaseAdmin.from('User').select('id, username, name, email, profile_picture_url, cover_photo_url, bio, tagline, average_rating, review_count, account_type, gigs_completed, created_at').eq('id', businessId).maybeSingle(),
+      supabaseAdmin.from('BusinessProfile').select('*').eq('business_user_id', businessId).maybeSingle(),
       supabaseAdmin.from('BusinessLocation').select('*').eq('business_user_id', businessId).eq('is_active', true).order('sort_order'),
       // Firewall-safe: use BusinessSeat (no user data leaked)
       supabaseAdmin.from('BusinessSeat').select(`
@@ -1256,23 +1249,31 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
       `).eq('business_user_id', businessId).eq('is_active', true).order('created_at'),
       supabaseAdmin.from('BusinessCatalogItem').select('id, name, kind, status, is_featured, price_cents, sort_order').eq('business_user_id', businessId).neq('status', 'archived').order('sort_order').limit(50),
       supabaseAdmin.from('BusinessPage').select('id, slug, title, is_default, published_revision, draft_revision').eq('business_user_id', businessId).order('nav_order'),
-      calculateProfileCompleteness(businessId),
     ]);
+    // Missing reads must not become empty collections or an incomplete setup checklist.
+    if (results.some((result) => result.error)) {
+      return res.status(503).json({ error: DASHBOARD_UNAVAILABLE });
+    }
+    const [{ data: bizUser }, { data: profile }, { data: locations }, { data: teamMembers },
+      { data: catalogItems }, { data: pages }] = results;
+    // A business without a profile row still loads as before (profile null), so its team keeps the other tabs.
+    if (!bizUser) return res.status(404).json({ error: 'Business not found' });
+
+    const locationIds = (locations || []).map((location) => location.id);
+    const hoursRead = locationIds.length > 0
+      ? Promise.resolve(supabaseAdmin.from('BusinessHours').select('id', { count: 'exact', head: true })
+        .in('location_id', locationIds))
+      : Promise.resolve({ count: 0 });
+    const [hoursResult, profileCompleteness] = await Promise.all([
+      hoursRead,
+      calculateProfileCompleteness(businessId, { profile, locations: locations || [], user: bizUser, hoursRead }),
+    ]);
+    if (hoursResult.error) return res.status(503).json({ error: DASHBOARD_UNAVAILABLE });
+    const hasHours = (hoursResult.count || 0) > 0;
 
     // Parse PostGIS
     for (const loc of (locations || [])) {
       if (loc.location) loc.location = parsePostGISPoint(loc.location);
-    }
-
-    // Check if any location has business hours
-    const locationIds = (locations || []).map((l) => l.id);
-    let hasHours = false;
-    if (locationIds.length > 0) {
-      const { count: hoursCount } = await supabaseAdmin
-        .from('BusinessHours')
-        .select('id', { count: 'exact', head: true })
-        .in('location_id', locationIds);
-      hasHours = (hoursCount || 0) > 0;
     }
 
     // Self-attestation records the owner's claim; only reviewed verification
@@ -1317,6 +1318,8 @@ router.get('/:businessId/dashboard', verifyToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('Business dashboard error', { error: err.message, businessId: req.params.businessId });
+    // A failed access or completeness read (503) is worth a retry; anything else is a server error.
+    if (err.statusCode === 503) return res.status(503).json({ error: DASHBOARD_UNAVAILABLE });
     res.status(500).json({ error: 'Failed to fetch dashboard' });
   }
 });

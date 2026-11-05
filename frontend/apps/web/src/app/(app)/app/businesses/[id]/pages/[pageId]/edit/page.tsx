@@ -36,7 +36,7 @@ export default function PageBuilderPage() {
 
   // ─── Main editor layout ───────────────────────
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col bg-app-surface-sunken overflow-hidden">
+    <div className="min-h-[calc(100dvh-3.5rem)] md:h-[calc(100vh-4rem)] md:min-h-0 flex flex-col bg-app-surface-sunken md:overflow-hidden">
       {/* Top bar */}
       <EditorToolbar
         page={editor.page}
@@ -58,7 +58,7 @@ export default function PageBuilderPage() {
       />
 
       {/* Main area */}
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 flex min-w-0 flex-col md:flex-row md:min-h-0 md:overflow-hidden relative">
         {/* Left: Block palette (edit mode only) */}
         {!editor.showPreview && (
           <BlockPalette onAddBlock={editor.addBlock} />

@@ -86,7 +86,10 @@ enum CreateBusinessSampleData {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
         let q = trimmed.lowercased()
-        let scored: [(hit: CategorySearchHit, score: Int)] = searchCatalog.compactMap { hit in
+        let categories = BusinessCategory.allCases.map {
+            CategorySearchHit(id: "category-\($0.rawValue)", category: $0, label: $0.label)
+        }
+        let scored: [(hit: CategorySearchHit, score: Int)] = (searchCatalog + categories).compactMap { hit in
             let lower = hit.label.lowercased()
             if lower.hasPrefix(q) { return (hit, 0) }
             if lower.contains(" \(q)") { return (hit, 1) }

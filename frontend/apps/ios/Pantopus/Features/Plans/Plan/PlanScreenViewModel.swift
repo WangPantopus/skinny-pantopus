@@ -57,6 +57,9 @@ final class PlanScreenViewModel {
     private(set) var otherPlans: [PlanCardDTO] = []
     /// The host's pending and waitlisted requests (names on H9's card).
     private(set) var hostRequests: PlanRequestsResponse?
+    private(set) var isLoadingDetails = false
+    private var readGeneration = 0
+    private var isOnScreen = true
 
     private let api: APIClient
     private let store: ScreenStore
@@ -103,9 +106,15 @@ final class PlanScreenViewModel {
     // MARK: - Reading
 
     func load() async {
+        guard isOnScreen else { return }
+        readGeneration += 1
+        let generation = readGeneration
+        isLoadingDetails = true
+        defer { if generation == readGeneration { isLoadingDetails = false } }
         let wasIn = mode == .going
         do {
             let detail = try await PlansStoreReads.detail(id: planId, store: store)
+            guard generation == readGeneration, !Task.isCancelled else { return }
             plan = detail
             phase = .loaded
             // The reveal plays when the plan turns "in" here, or the first
@@ -114,20 +123,63 @@ final class PlanScreenViewModel {
                 PlanReveal.markPlayed(planId)
                 revealToken += 1
             }
-            if case .notThisTime = mode { await loadOtherPlans() }
-            if mode == .hosting { hostRequests = try? await PlansStoreReads.requests(planId: planId, store: store) }
+            if case .notThisTime = mode { await loadOtherPlans(generation: generation) }
+            if mode == .hosting {
+                let requests = try? await PlansStoreReads.requests(planId: planId, store: store)
+                guard generation == readGeneration, !Task.isCancelled else { return }
+                hostRequests = requests
+            }
         } catch is CancellationError {
             return
         } catch let error as APIError {
-            if case .notFound = error {
-                plan = nil
-                phase = await publicPlaydate() ?? .unavailable
-            } else if plan == nil {
-                phase = .error(error.errorDescription ?? "We couldn't load this plan.")
-            }
+            await showLoadFailure(error, generation: generation)
         } catch {
+            guard generation == readGeneration else { return }
             if plan == nil { phase = .error("We couldn't load this plan.") }
         }
+    }
+
+    private func showLoadFailure(_ error: APIError, generation: Int) async {
+        guard generation == readGeneration else { return }
+        if case .notFound = error {
+            plan = nil
+            hostRequests = nil
+            let nextPhase = await publicPlaydate() ?? .unavailable
+            guard generation == readGeneration else { return }
+            phase = nextPhase
+        } else if ScreenStore.isRefusal(error) {
+            plan = nil
+            hostRequests = nil
+            phase = .unavailable
+        } else if plan == nil {
+            phase = .error(error.errorDescription ?? "We couldn't load this plan.")
+        } else {
+            notice = "Couldn't refresh this plan. Pull down to try again."
+        }
+    }
+
+    /// Exact places, guest lists and private times must be checked again after
+    /// leaving the screen. Replies started before leaving cannot restore them.
+    func suspend() {
+        isOnScreen = false
+        readGeneration += 1
+        isLoadingDetails = false
+        plan = nil
+        hostRequests = nil
+        otherPlans = []
+        actionError = nil
+        phase = .loading
+    }
+
+    func resume() async {
+        if !isOnScreen {
+            // A write may have finished while away; it is not fresh authority.
+            plan = nil
+            hostRequests = nil
+            phase = .loading
+            isOnScreen = true
+        }
+        await load()
     }
 
     /// A 404 for a playdate the viewer can't see yet (no verified address)
@@ -140,7 +192,7 @@ final class PlanScreenViewModel {
         return .needsVerification(city: body.plan?.city, invitedBy: body.invitedBy)
     }
 
-    private func loadOtherPlans() async {
+    private func loadOtherPlans(generation: Int) async {
         // Opened from a link or a push, the map may not have set a center yet:
         // the viewer's home, else a fix when location is already allowed.
         var center = PlansStoreReads.lastCenter
@@ -157,6 +209,7 @@ final class PlanScreenViewModel {
             kinds: [],
             store: store
         ) {
+            guard generation == readGeneration, !Task.isCancelled else { return }
             otherPlans = Array(snapshot.value.items.filter { $0.id != planId && $0.viewer?.canAsk == true }.prefix(2))
         }
     }

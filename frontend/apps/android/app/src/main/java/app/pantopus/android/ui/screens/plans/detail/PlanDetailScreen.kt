@@ -87,8 +87,8 @@ fun PlanDetailScreen(
     val scope = rememberCoroutineScope()
     val openVerification: () -> Unit = { scope.launch { onOpenVerification(viewModel.verificationTarget()) } }
     LifecycleResumeEffect(Unit) {
-        viewModel.load()
         viewModel.onScreen(true)
+        viewModel.load()
         onPauseOrDispose { viewModel.onScreen(false) }
     }
     // A plan push marks Plans out of date: read again, so "You're in" reveals while the page is open.
@@ -210,7 +210,7 @@ private fun PlanReady(
                     plan = plan,
                     requests = ui.requests,
                     viewerId = ui.viewerId,
-                    busy = ui.busy,
+                    busy = ui.busy || (ui.state as? PlanDetailUiState.Ready)?.fresh != true,
                     onOpenRequests = onOpenRequests,
                     onInvite = { inviting = true },
                     onMessageGuests = { plan.chatRoomId?.let(onOpenChat) },
@@ -330,13 +330,15 @@ private fun footerFor(
     confirm: (LeaveKind) -> Unit,
 ): (@Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit)? {
     val standing = plan.standing
+    val ready = (ui.state as? PlanDetailUiState.Ready)?.fresh == true
+    val busy = ui.busy || !ready
     return when {
         standing == PlanViewerStanding.HOSTING -> null
         closed -> {
             { GhostButton(title = "See other plans", onClick = onSeeAll, modifier = Modifier.height(50.dp)) }
         }
         standing == PlanViewerStanding.IN -> {
-            { PlanTextButton(title = "Can't make it", onClick = { confirm(LeaveKind.Plan) }, danger = true, enabled = !ui.busy) }
+            { PlanTextButton(title = "Can't make it", onClick = { confirm(LeaveKind.Plan) }, danger = true, enabled = !busy) }
         }
         standing == PlanViewerStanding.REQUESTED -> {
             {
@@ -344,23 +346,23 @@ private fun footerFor(
                     title = "Change who's coming",
                     onClick = viewModel::openAsk,
                     modifier = Modifier.height(50.dp),
-                    isEnabled = !ui.busy,
+                    isEnabled = !busy,
                 )
-                PlanTextButton(title = "Withdraw request", onClick = { confirm(LeaveKind.Request) }, danger = true, enabled = !ui.busy)
+                PlanTextButton(title = "Withdraw request", onClick = { confirm(LeaveKind.Request) }, danger = true, enabled = !busy)
             }
         }
         standing == PlanViewerStanding.WAITLISTED -> {
             {
                 GhostButton(title = "Leave the waitlist", onClick = {
                     confirm(LeaveKind.Waitlist)
-                }, modifier = Modifier.height(50.dp), isEnabled = !ui.busy)
+                }, modifier = Modifier.height(50.dp), isEnabled = !busy)
                 waitlistCaption(plan)?.let { PlanFooterCaption(it) }
             }
         }
         plan.openInvite != null &&
             (plan.viewer?.canAsk == true || plan.viewer?.cannotAskReason == PlanCannotAsk.FULL_USE_WAITLIST) ->
-            inviteFooterContent(plan, requireNotNull(plan.openInvite), ui.busy, viewModel)
-        else -> askFooterContent(askFooter(plan), viewModel, onVerify, onLocation)
+            inviteFooterContent(plan, requireNotNull(plan.openInvite), busy, viewModel)
+        else -> askFooterContent(askFooter(plan), viewModel, onVerify, onLocation, ready)
     }
 }
 
@@ -370,6 +372,7 @@ private fun askFooterContent(
     viewModel: PlanDetailViewModel,
     onVerify: () -> Unit,
     onLocation: () -> Unit,
+    ready: Boolean,
 ): @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit =
     {
         PrimaryButton(
@@ -382,7 +385,7 @@ private fun askFooterContent(
                     AskAction.None -> Unit
                 }
             },
-            isEnabled = footer.enabled && footer.action != AskAction.None,
+            isEnabled = ready && footer.enabled && footer.action != AskAction.None,
             modifier = Modifier.height(50.dp),
         )
         footer.caption?.let { PlanFooterCaption(it) }

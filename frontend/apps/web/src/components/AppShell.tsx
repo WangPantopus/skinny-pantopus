@@ -57,6 +57,7 @@ import { FEED_COMPOSER_OPEN_EVENT, MAGIC_TASK_OPEN_EVENT, notifyFeedPostCreated 
 import { launchFeatures, webFeatureFlags } from '@/lib/featureFlags';
 import { useFeatureFlagState } from '@/hooks/useFeatureFlag';
 import { useShellReadsReleased } from '@/lib/shellReads';
+import { hubTodayQuery } from '@/lib/hubToday';
 import type { CSSProperties } from 'react';
 import { Search, MessageCircle, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, UserRound, type LucideIcon } from 'lucide-react';
 import { useOnlineStatus } from '@/components/map/OfflineIndicator';
@@ -179,6 +180,40 @@ const INITIAL_APP_STATE: AppShellState = {
   feedComposerOpen: false,
   feedPosting: false,
 };
+
+// ── First frame ────────────────────────────────────────────────
+// The top bar and the sidebar's empty frame at the full shell's width (64 px on
+// tablets, 240 px on desktops, 64 px if collapsed there), so nothing moves when
+// the full shell replaces it. A plain function, not a component: AppShellInner
+// returns it while hydrating and its own full shell afterwards, and both keep the
+// page in the same keyed <main>, so the page mounts once.
+function shellFrame(content: React.ReactNode) {
+  return (
+    // The script sets --desktop-sidebar on this element before React loads.
+    <div className="min-h-screen bg-app text-app" suppressHydrationWarning>
+      <script dangerouslySetInnerHTML={{ __html: COLLAPSED_SIDEBAR_SCRIPT }} />
+      <header className="fixed top-0 left-0 right-0 md:left-[64px] lg:left-[var(--desktop-sidebar,240px)] h-14 bg-surface border-b border-app z-50" />
+      <aside className="hidden md:block fixed top-0 left-0 bottom-0 md:w-[64px] lg:w-[var(--desktop-sidebar,240px)] bg-surface border-r border-app z-40">
+        <div className="h-14 border-b border-app" />
+      </aside>
+      <main key="content" className="pt-14 md:ml-[64px] lg:ml-[var(--desktop-sidebar,240px)]">
+        {content}
+      </main>
+    </div>
+  );
+}
+
+// The app's pages are prerendered once for everyone, and AppShellInner reads the
+// address's query, which a prerender cannot know, so the prerendered HTML holds
+// this boundary's fallback and the browser renders the shell and page itself
+// once the scripts arrive. Drawing the frame (with the app's usual loading
+// spinner where the page goes) as that fallback gives the first paint the app's
+// own frame instead of a blank screen while the scripts download.
+const SHELL_FALLBACK = shellFrame(
+  <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center" aria-hidden="true">
+    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600" />
+  </div>,
+);
 
 // ────────────────────────────────────────────────────────────────
 // AppShellInner
@@ -421,22 +456,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       <span>You&apos;re offline. Pantopus will refresh when you reconnect.</span>
     </div>
   );
-  if (!mounted) {
-    return (
-      // The script sets --desktop-sidebar on this element before React loads.
-      <div className="min-h-screen bg-app text-app" suppressHydrationWarning>
-        <script dangerouslySetInnerHTML={{ __html: COLLAPSED_SIDEBAR_SCRIPT }} />
-        <header className="fixed top-0 left-0 right-0 md:left-[64px] lg:left-[var(--desktop-sidebar,240px)] h-14 bg-surface border-b border-app z-50" />
-        <aside className="hidden md:block fixed top-0 left-0 bottom-0 md:w-[64px] lg:w-[var(--desktop-sidebar,240px)] bg-surface border-r border-app z-40">
-          <div className="h-14 border-b border-app" />
-        </aside>
-        <main key="content" className="pt-14 md:ml-[64px] lg:ml-[var(--desktop-sidebar,240px)]">
-          {offlineNotice}
-          {children}
-        </main>
-      </div>
-    );
-  }
+  if (!mounted) return shellFrame(<>{offlineNotice}{children}</>);
 
   return (
     // `--fab-lift` raises every fixed bottom-anchored control (FABs, the
@@ -738,7 +758,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <SocketProvider>
       <BadgeProvider>
-        <Suspense>
+        <Suspense fallback={SHELL_FALLBACK}>
           <AppShellInner>{children}</AppShellInner>
         </Suspense>
       </BadgeProvider>
@@ -764,7 +784,10 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, ma
   //  1. router.prefetch() → warms the Next.js route bundle + RSC payload
   //  2. queryClient.prefetchQuery() → warms the React Query cache (where
   //     the destination page's query key is known ahead of time)
-  // staleTime 5s means rapid re-hovers within 5s are no-ops (RQ dedupes).
+  // Place, Today and Messages warm their screen's own query definition, so
+  // revisiting a navigation item cannot re-fetch data that the destination
+  // still considers fresh. PREFETCH_STALE covers queries defined only here
+  // (rapid re-hovers within 5s are no-ops).
   const PREFETCH_STALE = 5_000;
 
   // Place — warm the route bundle + the primary-home query (the
@@ -777,11 +800,7 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, ma
   // Today — the briefing tab; the query key is known ahead of time.
   const prefetchToday = useCallback(() => {
     router.prefetch('/app/today');
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.hubToday(),
-      queryFn: () => api.hub.getHubToday({ retries: 1, retryDelayMs: 800 }),
-      staleTime: PREFETCH_STALE,
-    });
+    queryClient.prefetchQuery(hubTodayQuery());
   }, [router, queryClient]);
 
   const prefetchNearby = useCallback(() => {
