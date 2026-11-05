@@ -66,16 +66,19 @@ struct CrewDayAddressField: View {
     let onEdit: () -> Void
     @State private var search = CrewDayAddressSearch()
     @FocusState private var focused: Bool
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             HStack(spacing: Spacing.s2) {
                 Icon(.mapPin, size: 18, color: Theme.Color.appTextSecondary)
-                TextField(placeholder, text: $query)
+                // At the accessibility text sizes the address wraps instead of scrolling out of sight.
+                TextField(placeholder, text: $query, axis: typeSize.isAccessibilitySize ? .vertical : .horizontal)
                     .planFont(.body)
                     .textContentType(.fullStreetAddress)
                     .autocorrectionDisabled()
                     .focused($focused)
+                    .accessibilityLabel(placeholder)
                     .accessibilityIdentifier(identifier)
                 if search.isResolving { ProgressView() }
                 if picked != nil {
@@ -84,6 +87,7 @@ struct CrewDayAddressField: View {
                 }
             }
             .padding(.horizontal, Spacing.s3)
+            .padding(.vertical, typeSize.isAccessibilitySize ? Spacing.s2 : 0)
             .frame(minHeight: 48)
             .background(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).fill(Theme.Color.appSurface))
             .overlay(
@@ -91,6 +95,12 @@ struct CrewDayAddressField: View {
                     .stroke(focused ? Theme.Color.primary600 : Theme.Color.appBorderStrong, lineWidth: 1)
             )
             .onChange(of: query) { _, value in
+                // Return in the wrapping field closes the keyboard, as it does in a one-line one.
+                if value.contains("\n") {
+                    query = value.replacingOccurrences(of: "\n", with: "")
+                    focused = false
+                    return
+                }
                 if let picked, value == picked.address { return }
                 if picked != nil { onEdit() }
                 search.search(value)

@@ -49,9 +49,9 @@ async function runReminders({ now = new Date() } = {}) {
   return { sent };
 }
 
-async function endBooking(b, day, from, reason, crew) {
+async function endBooking(b, day, from, reason, crew, fields = {}) {
   const ended = await bookingsService.transition(b, from, { status: 'cancelled', cancelled_by: 'system',
-    cancelled_at: new Date().toISOString(), cancel_reason: reason }).catch(() => null);
+    cancelled_at: new Date().toISOString(), cancel_reason: reason, ...fields }).catch(() => null);
   if (!ended) return false;
   await store.addEvent({ day, booking: ended, actorRole: 'system', kind: 'booking_cancelled', data: { by: 'system', reason },
     visibleTo: 'both' });
@@ -72,7 +72,10 @@ async function runDeadlines({ now = new Date() } = {}) {
     if (!day) continue;
     const crew = await bookingsService.crewFor(day);
     if (b.status === 'new_dates' && day.proposed_dates && now >= new Date(day.proposed_dates.deadline_at)) {
-      if (await endBooking(b, day, ['new_dates'], 'no_new_date', crew)) result.no_new_date += 1;
+      // Recorded as the proposal's answer, like the household's own "Cancel at no charge" (with no answer time), so the
+      // crew's answers list the home as cancelled.
+      const answer = { new_date_choice: { proposal_id: day.proposed_dates.id, date: 'cancel', answered_at: null } };
+      if (await endBooking(b, day, ['new_dates'], 'no_new_date', crew, answer)) result.no_new_date += 1;
     } else if (b.status !== 'new_dates' && now >= new Date(day.booking_closes_at)) {
       if (await endBooking(b, day, ['price_pending', 'price_offered'], 'price_not_answered', crew)) result.price_not_answered += 1;
     }

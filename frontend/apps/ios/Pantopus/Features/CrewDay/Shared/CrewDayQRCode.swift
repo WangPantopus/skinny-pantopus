@@ -51,7 +51,7 @@ struct CrewDayQRSheet: View {
 
     var body: some View {
         VStack(spacing: Spacing.s5) {
-            PlanNavBar(title: "QR code", leading: .close) { dismiss() }
+            PlanNavBar.crewDay(title: "QR code", leading: .close) { dismiss() }
             Spacer()
             Text(title)
                 .planFont(.h3)

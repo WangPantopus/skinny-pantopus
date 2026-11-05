@@ -77,6 +77,8 @@ enum CrewDayBookingPageCopy {
 
     static func phase(_ booking: CrewDayBookingDTO, now: Date = Date()) -> CrewDayBookingPhase {
         if booking.problem?.status == "open" { return .attention }
+        // After an amount off, a failed charge for the rest still needs Pay now, not the case's outcome.
+        if booking.status == "payment_failed" { return .cardFailed }
         if booking.problem?.status == "resolved", booking.problem?.resolution != nil { return .resolved }
         if booking.status == "new_dates", booking.proposal != nil { return .newDates }
         if let phase = statusPhases[booking.status] { return phase }
@@ -140,6 +142,13 @@ enum CrewDayBookingPageCopy {
         booking.priceCents.map(CrewDayFormat.price)
     }
 
+    /// What a failed charge still owes: the price less any amount Pantopus support took off ("$70" of $100).
+    static func amountDue(_ booking: CrewDayBookingDTO) -> String? {
+        guard let total = booking.priceCents else { return nil }
+        let off = booking.problem?.refundedCents ?? booking.charge?.refundedCents ?? 0
+        return CrewDayFormat.price(max(total - off, 0))
+    }
+
     /// "Tuesday, Nov 17 · 9 AM–1 PM".
     static func when(_ booking: CrewDayBookingDTO) -> String {
         let day = CrewDayFormat.longDay(booking.serviceDate, timezone: booking.crewDay.timezone)
@@ -199,7 +208,10 @@ enum CrewDayBookingPageCopy {
                 ? "\(crew) cancelled this day. Nothing was charged."
                 : "\(crew) released your home. Nothing was charged."
         case "operator":
-            return "Pantopus cancelled this Crew Day. Nothing was charged."
+            // A whole refund before the charge ends just this booking while the day goes on.
+            return booking.crewDay.status == "cancelled"
+                ? "Pantopus cancelled this Crew Day. Nothing was charged."
+                : "Pantopus support cancelled this booking. Nothing was charged."
         default:
             let reason = booking.events.last { $0.kind == "booking_cancelled" }?.reason
             return reason == "price_not_answered"
@@ -214,7 +226,10 @@ enum CrewDayBookingPageCopy {
         let refunded = booking.problem?.refundedCents ?? booking.charge?.refundedCents ?? 0
         switch booking.problem?.resolution {
         case "released": return "Charge released: \(CrewDayFormat.price(total)) paid"
-        case "refunded": return "Refunded \(CrewDayFormat.price(refunded > 0 ? refunded : total)) to \(cardLabel(booking))"
+        case "refunded":
+            // Refunded in full before the charge: the booking ended and no money moved.
+            if booking.status == "cancelled" { return "We cancelled the \(CrewDayFormat.price(total)) charge. Nothing was charged." }
+            return "Refunded \(CrewDayFormat.price(refunded > 0 ? refunded : total)) to \(cardLabel(booking))"
         case "partial_refund": return "Refunded \(CrewDayFormat.price(refunded)) of \(CrewDayFormat.price(total))"
         default: return "Pantopus support resolved this"
         }

@@ -59,8 +59,10 @@ function shareFor(day, stats) {
   };
 }
 
+// A refund Pantopus support made without a reported problem shows as a resolved case with no kind, so every app
+// shows its outcome in words ("Refunded $60 of $180").
 function problemFor(b) {
-  if (!b.problem_kind) return null;
+  if (!b.problem_kind && !b.problem_resolution) return null;
   return { status: b.problem_status, kind: b.problem_kind, note: b.problem_note, opened_at: b.problem_opened_at,
     due_at: b.problem_due_at, resolved_at: b.problem_resolved_at, resolution: b.problem_resolution,
     refunded_cents: b.refunded_cents || 0 };
@@ -76,7 +78,7 @@ async function bookingPage(bookingId, userId) {
     store.eventsFor(day.id, 'household', { bookingId: booking.id }),
   ]);
   const stats = views.dayStats(rows.get(String(day.id)));
-  const cutoff = rules.cancelCutoffAt(booking.service_date, booking.window_start, day.timezone);
+  const cutoff = bookingsService.cancelCutoff(booking, day);
   const beforeCutoff = !cutoff || new Date() < new Date(cutoff);
   const changeable = bookingsService.CHANGEABLE.includes(booking.status);
   const option = (booking.line_items || []).find((i) => i.kind === 'option') || { id: booking.option_id };
@@ -342,6 +344,7 @@ function crewHome(booking, index, day, person, now) {
     photo_count: (booking.photo_paths || []).length,
     charge_state: views.chargeState(booking),
     charge_due_at: booking.charge_due_at,
+    refunded_cents: booking.refunded_cents || 0,
     problem: booking.problem_kind ? { status: booking.problem_status, kind: booking.problem_kind, note: booking.problem_note,
       opened_at: booking.problem_opened_at } : null,
     new_date_choice: booking.new_date_choice,

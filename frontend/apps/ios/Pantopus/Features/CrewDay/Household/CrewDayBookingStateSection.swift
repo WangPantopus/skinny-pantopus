@@ -167,7 +167,7 @@ struct CrewDayBookingStateSection: View {
                 CrewDayQuote(label: "From \(crew)", text: note, identifier: "crewDayBookingPrepNote")
             }
             Button("Edit access note", action: onEditNote)
-                .planButton(.secondary)
+                .crewDayButton(.secondary)
                 .accessibilityIdentifier("crewDayBookingEditAccess")
         }
     }
@@ -215,7 +215,7 @@ struct CrewDayBookingStateSection: View {
             buttons {
                 primary("Everything looks good", .confirm, id: "crewDayBookingLooksGood") { await viewModel.confirm() }
                 Button("Something needs attention", action: onProblem)
-                    .planButton(.secondary)
+                    .crewDayButton(.secondary)
                     .accessibilityIdentifier("crewDayBookingProblem")
             }
         }
@@ -246,10 +246,11 @@ struct CrewDayBookingStateSection: View {
 
     private var cardFailed: some View {
         CrewDayStateCard(tone: .error, icon: .circleAlert, title: "Your card didn't go through") {
-            CrewDayStateText(text: price.map { "Pay \($0) to \(crew) in Pantopus." } ?? "Pay \(crew) in Pantopus.")
+            let due = CrewDayBookingPageCopy.amountDue(booking)
+            CrewDayStateText(text: due.map { "Pay \($0) to \(crew) in Pantopus." } ?? "Pay \(crew) in Pantopus.")
             if let invoiceId = booking.invoiceId {
                 Button("Pay now") { onOpenInvoice(invoiceId) }
-                    .planButton(.primary)
+                    .crewDayButton(.primary)
                     .accessibilityIdentifier("crewDayBookingPayNow")
             }
         }
@@ -268,7 +269,7 @@ struct CrewDayBookingStateSection: View {
             CrewDayStateText(text: pausedLine, identifier: "crewDayBookingPaused")
             CrewDayCaseTimeline(lines: CrewDayBookingPageCopy.caseTimeline(booking))
             Button("Add a note or photo", action: onProblem)
-                .planButton(.secondary)
+                .crewDayButton(.secondary)
                 .accessibilityIdentifier("crewDayBookingProblemAdd")
         }
     }
@@ -304,10 +305,10 @@ struct CrewDayBookingStateSection: View {
         CrewDayStateCard(tone: .neutral, icon: .calendarX, title: CrewDayBookingPageCopy.endedTitle(booking)) {
             buttons {
                 Button("Find another Crew Day", action: onFindAnother)
-                    .planButton(.secondary)
+                    .crewDayButton(.secondary)
                     .accessibilityIdentifier("crewDayBookingFindAnother")
                 Button("Ask for one on your street", action: onAsk)
-                    .planButton(.secondary)
+                    .crewDayButton(.secondary)
                     .accessibilityIdentifier("crewDayBookingAsk")
             }
         }
@@ -331,7 +332,7 @@ private extension CrewDayBookingStateSection {
         Button { Task { await run() } } label: {
             PlanButtonLabel(title: title, isLoading: viewModel.working == action)
         }
-        .planButton(.primary)
+        .crewDayButton(.primary)
         .disabled(disabled || viewModel.working != nil)
         .accessibilityIdentifier(id)
     }
@@ -345,7 +346,7 @@ private extension CrewDayBookingStateSection {
         Button { Task { await run() } } label: {
             PlanButtonLabel(title: title, kind: .secondary, isLoading: action != nil && viewModel.working == action)
         }
-        .planButton(.secondary)
+        .crewDayButton(.secondary)
         .disabled(viewModel.working != nil)
         .accessibilityIdentifier(id)
     }
@@ -359,7 +360,7 @@ private extension CrewDayBookingStateSection {
 
     func receiptLink(_ invoiceId: String) -> some View {
         Button("See receipt") { onOpenInvoice(invoiceId) }
-            .planButton(.text, size: .extraSmall)
+            .crewDayButton(.text, size: .extraSmall)
             .accessibilityIdentifier("crewDayBookingReceipt")
     }
 }

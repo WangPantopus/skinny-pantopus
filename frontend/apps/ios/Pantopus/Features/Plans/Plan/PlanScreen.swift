@@ -415,7 +415,10 @@ struct PlanNavBar: View {
     let title: String
     var leading: Leading = .back
     var trailing: String?
+    /// Crew Day's bars: at the accessibility text sizes the title wraps instead of truncating.
+    var wrapsAtLargeText = false
     var onLeading: () -> Void = {}
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         HStack(spacing: Spacing.s2) {
@@ -430,8 +433,10 @@ struct PlanNavBar: View {
             Text(title)
                 .planFont(.h4)
                 .foregroundStyle(Theme.Color.appText)
+                .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
-                .lineLimit(1)
+                .lineLimit(wrapsAtLargeText && typeSize.isAccessibilitySize ? 3 : 1)
+                .fixedSize(horizontal: false, vertical: wrapsAtLargeText && typeSize.isAccessibilitySize)
                 .accessibilityAddTraits(.isHeader)
             Text(trailing ?? "")
                 .planFont(.label)

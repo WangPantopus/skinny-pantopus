@@ -33,8 +33,13 @@ struct CrewDayNewServiceStep: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
                 ForEach(model.included.indices, id: \.self) { index in
                     HStack(spacing: Spacing.s2) {
-                        CrewDayTextField(placeholder: "What the crew does", text: includedLine(index), limit: 120)
-                            .accessibilityIdentifier("crewDayNewIncluded_\(index)")
+                        CrewDayTextField(
+                            label: "What the crew does, line \(index + 1)",
+                            placeholder: "What the crew does",
+                            text: includedLine(index),
+                            limit: 120
+                        )
+                        .accessibilityIdentifier("crewDayNewIncluded_\(index)")
                         if model.included.count > 1 {
                             Button { model.included.remove(at: index) } label: {
                                 Icon(.x, size: 16, color: Theme.Color.appTextSecondary).frame(width: 44, height: 44)
@@ -46,7 +51,7 @@ struct CrewDayNewServiceStep: View {
                 }
                 if model.included.count < 6 {
                     Button("Add a line") { model.included.append("") }
-                        .planButton(.text, size: .extraSmall)
+                        .crewDayButton(.text, size: .extraSmall)
                         .accessibilityIdentifier("crewDayNewIncludedAdd")
                 }
             }
@@ -81,7 +86,7 @@ struct CrewDayNewWhereStep: View {
         VStack(alignment: .leading, spacing: Spacing.s5) {
             VStack(alignment: .leading, spacing: Spacing.s2) {
                 CrewDaySectionTitle(text: "Street or area")
-                CrewDayTextField(placeholder: "Maple Lane", text: $model.streetLabel, limit: 80)
+                CrewDayTextField(label: "Street or area", placeholder: "Maple Lane", text: $model.streetLabel, limit: 80)
                     .accessibilityIdentifier("crewDayNewStreet")
                 Text("Neighbors see this name, never the center.")
                     .planFont(.small)
@@ -101,12 +106,25 @@ struct CrewDayNewWhereStep: View {
             reach
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 CrewDaySectionTitle(text: "When")
-                DatePicker("Date", selection: $model.serviceDate, in: Date()..., displayedComponents: .date)
-                    .accessibilityIdentifier("crewDayNewDate")
-                DatePicker("Arriving from", selection: $model.windowStart, displayedComponents: .hourAndMinute)
-                    .accessibilityIdentifier("crewDayNewWindowStart")
-                DatePicker("Until", selection: $model.windowEnd, displayedComponents: .hourAndMinute)
-                    .accessibilityIdentifier("crewDayNewWindowEnd")
+                CrewDayDatePickerRow(
+                    label: "Date",
+                    selection: $model.serviceDate,
+                    range: Date()...Date.distantFuture,
+                    components: .date,
+                    identifier: "crewDayNewDate"
+                )
+                CrewDayDatePickerRow(
+                    label: "Arriving from",
+                    selection: $model.windowStart,
+                    components: .hourAndMinute,
+                    identifier: "crewDayNewWindowStart"
+                )
+                CrewDayDatePickerRow(
+                    label: "Until",
+                    selection: $model.windowEnd,
+                    components: .hourAndMinute,
+                    identifier: "crewDayNewWindowEnd"
+                )
                 if model.windowEnd <= model.windowStart {
                     CrewDayErrorText(text: "The window has to end after it starts.")
                 }
@@ -175,8 +193,12 @@ struct CrewDayNewWhereStep: View {
             .tint(Theme.Color.home)
             .accessibilityIdentifier("crewDayNewClosesEarly")
             if model.closesEarly {
-                DatePicker("Closes", selection: $model.bookingClosesAt, in: Date()...max(Date(), model.windowStartsAt))
-                    .accessibilityIdentifier("crewDayNewCloses")
+                CrewDayDatePickerRow(
+                    label: "Closes",
+                    selection: $model.bookingClosesAt,
+                    range: Date()...max(Date(), model.windowStartsAt),
+                    identifier: "crewDayNewCloses"
+                )
             }
             if !model.closesInTime {
                 CrewDayErrorText(text: "Booking has to stay open at least an hour and close before the crew arrives. Pick a later date.")
@@ -187,13 +209,17 @@ struct CrewDayNewWhereStep: View {
 
 /// A text field in the Plans form style, with a character limit.
 struct CrewDayTextField: View {
+    /// What VoiceOver calls the field (the placeholder is only an example).
+    let label: String
     let placeholder: String
     @Binding var text: String
     var limit = 500
     var axis: Axis = .horizontal
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        TextField(placeholder, text: $text, axis: axis)
+        // At the accessibility text sizes a one-line field wraps what's typed instead of scrolling it out of sight.
+        TextField(placeholder, text: $text, axis: typeSize.isAccessibilitySize ? .vertical : axis)
             .planFont(.body)
             .foregroundStyle(Theme.Color.appText)
             .padding(.horizontal, Spacing.s3)
@@ -204,9 +230,40 @@ struct CrewDayTextField: View {
                 RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
                     .stroke(Theme.Color.appBorderStrong, lineWidth: 1)
             )
+            .accessibilityLabel(label)
             .onChange(of: text) { _, value in
-                if value.count > limit { text = String(value.prefix(limit)) }
+                // A one-line field stays one line when it wraps (Return would type a new line there).
+                var kept = axis == .horizontal ? value.replacingOccurrences(of: "\n", with: " ") : value
+                if kept.count > limit { kept = String(kept.prefix(limit)) }
+                if kept != value { text = kept }
             }
+    }
+}
+
+/// A date or time with its label beside the picker, or above it at the accessibility text sizes (where the
+/// compact picker would leave the label one syllable per line).
+struct CrewDayDatePickerRow: View {
+    let label: String
+    @Binding var selection: Date
+    var range: ClosedRange<Date> = Date.distantPast...Date.distantFuture
+    var components: DatePickerComponents = [.date, .hourAndMinute]
+    let identifier: String
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: Spacing.s1) {
+                Text(label).foregroundStyle(Theme.Color.appText).accessibilityHidden(true)
+                picker.labelsHidden()
+            }
+        } else {
+            picker
+        }
+    }
+
+    private var picker: some View {
+        DatePicker(label, selection: $selection, in: range, displayedComponents: components)
+            .accessibilityIdentifier(identifier)
     }
 }
 

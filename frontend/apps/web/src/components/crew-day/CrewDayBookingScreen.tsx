@@ -373,7 +373,7 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
       <StateCard tone="warning" icon={LifeBuoy} title="Pantopus support has this">
         <div className="flex flex-col gap-1 rounded-xl bg-app-surface-sunken p-3">
           <span className="text-xs font-semibold uppercase tracking-[0.07em] text-app-text-secondary">You said</span>
-          <span className="text-[0.9375rem] leading-[1.375rem]">{b.problem.note || PROBLEM_LABEL[b.problem.kind]}</span>
+          <span className="text-[0.9375rem] leading-[1.375rem]">{b.problem.note || PROBLEM_LABEL[b.problem.kind ?? 'other']}</span>
         </div>
         <Photos photos={b.problem_photos ?? []} what="you sent" />
         <Body>
