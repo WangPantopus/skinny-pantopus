@@ -159,6 +159,14 @@ export function formatReceipt(cents: number): string {
   );
 }
 
+/**
+ * The crew's included items to list. A crew that also wrote "Outside only" as an item gets it once: the screens
+ * say "Outside only. You don't need to be home." on their own line when the day is outside only.
+ */
+export function includedItems(day: Pick<PublicCrewDay, 'included' | 'outside_only'>): string[] {
+  return day.outside_only ? day.included.filter((item) => !/^\s*outside only\.?\s*$/i.test(item)) : day.included;
+}
+
 /** "6 homes booked · room for 4 more". Counts only, never which homes. */
 export function bookedLine(booked: number, spotsLeft: number, capacity: number): string {
   if (booked <= 0) return `Room for ${capacity} ${capacity === 1 ? 'home' : 'homes'}`;

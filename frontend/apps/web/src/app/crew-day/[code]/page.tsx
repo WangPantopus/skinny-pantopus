@@ -13,6 +13,7 @@ import {
   formatInstantDate,
   formatPrice,
   formatWindow,
+  includedItems,
   streetInCity,
   type PublicCrewDay,
 } from '@/lib/crewDay';
@@ -161,6 +162,7 @@ export default async function CrewDayInvitationPage({ params }: PageProps) {
   if (!day) return <CrewDayLoadFailed code={code} retryHref={buildCrewDayPath(code)} />;
 
   const line = statusLine(day);
+  const included = includedItems(day);
   return (
     <main className="min-h-screen bg-app text-app-text">
       <div className="mx-auto w-full max-w-md pb-10">
@@ -215,13 +217,13 @@ export default async function CrewDayInvitationPage({ params }: PageProps) {
             </CrewDayCard>
           </section>
 
-          {day.included.length > 0 || day.outside_only ? (
+          {included.length > 0 || day.outside_only ? (
             <section aria-labelledby="what-the-crew-does" className="flex flex-col gap-2 pt-2">
               <CrewDaySectionTitle id="what-the-crew-does" small>What the crew does</CrewDaySectionTitle>
               <CrewDayCard className="flex flex-col gap-[0.875rem] p-4">
-                {day.included.length > 0 ? (
+                {included.length > 0 ? (
                   <ul className="flex flex-col gap-[0.625rem]">
-                    {day.included.map((item) => (
+                    {included.map((item) => (
                       <li key={item} className="flex items-start gap-[0.625rem] text-sm leading-5 text-app-text-strong">
                         <Check className="mt-0.5 h-4 w-4 flex-none text-app-home" strokeWidth={2.4} aria-hidden="true" />
                         {item}
@@ -229,7 +231,7 @@ export default async function CrewDayInvitationPage({ params }: PageProps) {
                     ))}
                   </ul>
                 ) : null}
-                {day.included.length > 0 && day.outside_only ? <div className="h-px bg-app-border" /> : null}
+                {included.length > 0 && day.outside_only ? <div className="h-px bg-app-border" /> : null}
                 {day.outside_only ? <OutsideOnlyLine /> : null}
               </CrewDayCard>
             </section>
