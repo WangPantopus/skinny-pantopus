@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -43,7 +44,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.crewday.CrewDayBookingDto
-import app.pantopus.android.data.api.models.crewday.CrewDayStepDto
 import app.pantopus.android.data.crewday.CrewDayFormat
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.ErrorState
@@ -169,7 +169,7 @@ private fun BookingPage(
             ),
     ) {
         TitleBlock(booking)
-        StatusLine(booking.steps)
+        StatusLine(boardSteps(booking))
         StateCard(booking, working, gateTold, viewModel, actions, onEditNote = { sheet = SHEET_NOTE })
         YourBooking(booking)
         ForTheCrew(booking, onEdit = { sheet = SHEET_NOTE })
@@ -249,15 +249,43 @@ private fun TitleBlock(booking: CrewDayBookingDto) {
     }
 }
 
+/** A step as the board draws it: the server's step, with the board's words where the booking waits. */
+private data class BoardStep(
+    val key: String,
+    val label: String,
+    val state: String?,
+    val tone: StepTone,
+)
+
+private enum class StepTone { Normal, Warning, Error }
+
 /**
- * Booked · On the way · Done · Paid ("Requested" while the price waits): a row of steps, or a list at the largest
- * text sizes so nothing truncates.
+ * The board's status line for this booking (board `CrewDay`, as the web draws it): "Requested" is where a home
+ * waiting on its price stands, "Pick a date" while rain moved it, "Paused" while support has a problem, "Payment due"
+ * after a declined card.
+ */
+private fun boardSteps(booking: CrewDayBookingDto): List<BoardStep> =
+    booking.steps.map { step ->
+        val label = step.label ?: step.key
+        when {
+            booking.status in setOf("price_pending", "price_offered") && step.key == "booked" ->
+                BoardStep(step.key, label, "current", StepTone.Normal)
+            booking.status == "new_dates" && step.key == "booked" -> BoardStep(step.key, "Pick a date", "current", StepTone.Warning)
+            booking.problem?.status == "open" && step.key == "paid" -> BoardStep(step.key, "Paused", "current", StepTone.Warning)
+            booking.status == "payment_failed" && step.key == "paid" -> BoardStep(step.key, "Payment due", "current", StepTone.Error)
+            else -> BoardStep(step.key, label, step.state, StepTone.Normal)
+        }
+    }
+
+/**
+ * The four-step status line (Booked · On the way · Done · Paid). With large text it becomes a list, so no word has to
+ * squeeze into a quarter of the width (board `CdDoneLarge`).
  */
 @Composable
-private fun StatusLine(steps: List<CrewDayStepDto>) {
+private fun StatusLine(steps: List<BoardStep>) {
     if (steps.isEmpty()) return
     val large = LocalDensity.current.fontScale >= LARGE_TEXT
-    val spoken = steps.joinToString(", ") { "${it.label ?: it.key}: ${stepWord(it.state)}" }
+    val spoken = steps.joinToString(", ") { "${it.label}: ${stepWord(it)}" }
     if (large) {
         Column(
             modifier = Modifier.fillMaxWidth().testTag("crewDayBookingSteps").semantics(mergeDescendants = true) {},
@@ -265,11 +293,11 @@ private fun StatusLine(steps: List<CrewDayStepDto>) {
         ) {
             steps.forEach { step ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                    StepDot(step.state)
+                    StepDot(step)
                     Text(
-                        text = "${step.label ?: step.key} · ${stepWord(step.state)}",
+                        text = "${step.label} · ${stepWord(step)}",
                         style = PantopusTextStyle.body,
-                        color = PantopusColors.appText,
+                        color = stepInk(step),
                     )
                 }
             }
@@ -292,13 +320,13 @@ private fun StatusLine(steps: List<CrewDayStepDto>) {
                             .fillMaxWidth()
                             .heightIn(min = 4.dp)
                             .clip(RoundedCornerShape(Radii.pill))
-                            .background(if (step.state == "todo") PantopusColors.appBorderStrong else PantopusColors.home)
+                            .background(stepFill(step))
                             .padding(vertical = 2.dp),
                 )
                 Text(
-                    text = step.label ?: step.key,
+                    text = step.label,
                     style = PantopusTextStyle.caption.copy(fontWeight = stepWeight(step.state)),
-                    color = if (step.state == "todo") PantopusColors.appTextSecondary else PantopusColors.appText,
+                    color = stepInk(step),
                     maxLines = 1,
                 )
             }
@@ -310,23 +338,44 @@ private const val LARGE_TEXT = 1.3f
 
 private fun stepWeight(state: String?): FontWeight = if (state == "current") FontWeight.Bold else FontWeight.Medium
 
+/** The step's colour on the line: home green as it goes, amber while it waits, red when a payment is due. */
+private fun stepFill(step: BoardStep): Color =
+    when {
+        step.tone == StepTone.Warning -> PantopusColors.warning
+        step.tone == StepTone.Error -> PantopusColors.error
+        step.state == "todo" -> PantopusColors.appBorderStrong
+        else -> PantopusColors.home
+    }
+
+private fun stepInk(step: BoardStep): Color =
+    when {
+        step.tone == StepTone.Warning -> PantopusColors.warning
+        step.tone == StepTone.Error -> PantopusColors.error
+        step.state == "todo" -> PantopusColors.appTextSecondary
+        else -> PantopusColors.appText
+    }
+
 @Composable
-private fun StepDot(state: String?) {
+private fun StepDot(step: BoardStep) {
+    val todo = step.state == "todo"
     Box(
         modifier =
             Modifier
                 .size(12.dp)
                 .clip(CircleShape)
-                .background(if (state == "todo") PantopusColors.appSurfaceSunken else PantopusColors.home)
-                .border(1.dp, if (state == "todo") PantopusColors.appBorderStrong else PantopusColors.home, CircleShape),
+                .background(if (todo) PantopusColors.appSurfaceSunken else stepFill(step))
+                .border(1.dp, stepFill(step), CircleShape),
     )
 }
 
-private fun stepWord(state: String?): String =
-    when (state) {
-        "done" -> "done"
-        "current" -> "now"
-        else -> "not yet"
+/** What TalkBack says after a step's name (the board: "in progress", "on hold", "needs payment"). */
+private fun stepWord(step: BoardStep): String =
+    when {
+        step.state == "done" -> "done"
+        step.state != "current" -> "not yet"
+        step.tone == StepTone.Warning -> "on hold"
+        step.tone == StepTone.Error -> "needs payment"
+        else -> "now"
     }
 
 /** The card on top: what is happening and what the household can do now. */
