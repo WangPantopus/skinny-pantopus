@@ -134,7 +134,6 @@ private fun PrepContent(
     var cancelling by remember { mutableStateOf(false) }
     var showingQr by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
-    val open = day.status == "open"
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         PrepHeader(view, zone)
         StatusBanner(view, working, viewModel)
