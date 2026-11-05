@@ -44,6 +44,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import java.time.YearMonth
+import java.time.format.TextStyle
+import java.util.Locale
 import javax.inject.Inject
 
 sealed interface MyCrewDaysUiState {
@@ -163,7 +166,12 @@ private fun MineContent(
                 data.requests.forEachIndexed { index, request ->
                     PlanRow(
                         title = request.title.ifBlank { request.serviceLabel ?: CrewDayFormat.service(request.service) },
-                        subtitle = listOfNotNull(request.streetLabel, monthsWords(request.months)).joinToString(" · "),
+                        subtitle =
+                            listOfNotNull(
+                                CrewDayFormat.shortDate(CrewDayFormat.instant(request.createdAt), CrewDayFormat.DEFAULT_ZONE)
+                                    ?.let { "Asked ${it.substringAfter(", ")}" },
+                                monthsWords(request.months),
+                            ).joinToString(" · "),
                         end = PlanRowEnd.Status(requestWord(request.status)),
                         first = index == 0,
                         leading = { CrewDayTile() },
@@ -208,6 +216,11 @@ private fun MineContent(
                 style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
                 color = PantopusColors.appText,
             )
+            Text(
+                text = "Tell us the service. We look for a local crew.",
+                style = PantopusTextStyle.small,
+                color = PantopusColors.appTextSecondary,
+            )
             PrimaryButton(
                 title = "Ask for a Crew Day",
                 onClick = actions.onAsk,
@@ -240,20 +253,22 @@ private fun requestWord(status: String?): String =
         else -> "Finding an option"
     }
 
-/** "December, January" or "Any time" for a request's months (`2026-12`, `any`). */
+/** "March or April", "December, January or February", or "Any time" for a request's months (`2026-12`, `any`). */
 private fun monthsWords(months: List<String>): String? {
     if (months.isEmpty()) return null
     if (months.contains("any")) return "Any time"
-    return months.mapNotNull { m ->
-        runCatching { java.time.YearMonth.parse(m).month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.US) }.getOrNull()
-    }.joinToString(", ")
+    val names =
+        months.mapNotNull { m ->
+            runCatching { YearMonth.parse(m).month.getDisplayName(TextStyle.FULL, Locale.US) }.getOrNull()
+        }
+    return if (names.size > 1) "${names.dropLast(1).joinToString(", ")} or ${names.last()}" else names.firstOrNull()
 }
 
-/** "Tue, Oct 27 · $180 paid · 3 photos". */
+/** "Tue, Oct 27 · Paid $180 · 3 photos". */
 private fun pastLine(card: CrewDayCardDto): String {
     val paid =
         when (card.status) {
-            "paid" -> card.priceCents?.let { "${CrewDayFormat.price(it)} paid" }
+            "paid" -> card.priceCents?.let { "Paid ${CrewDayFormat.price(it)}" }
             "refunded" -> "Refunded"
             "cancelled" -> "Cancelled"
             "declined" -> "Not taken"
