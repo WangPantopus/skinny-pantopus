@@ -297,6 +297,9 @@ private struct SearchBarRow: View {
             .submitLabel(SubmitLabel.search)
             .onSubmit { config.onSubmit?() }
             .focused(focus)
+            // The placeholder disappears once a query is typed; keep it as the
+            // field's name for VoiceOver (as the search screens do).
+            .accessibilityLabel(config.placeholder)
         }
         .padding(.horizontal, Spacing.s3)
         .padding(.vertical, Spacing.s2)
