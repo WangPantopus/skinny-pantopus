@@ -477,8 +477,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
               {mobileOpen ? <X className="w-[20px] h-[20px] text-app-muted" /> : <Menu className="w-[20px] h-[20px] text-app-muted" />}
             </button>
             {/* min-w-0 lets the wordmark truncate before the buttons move; mr-auto, not flex-1, keeps its tap
-             *  target to the logo and name, so a tap on the empty bar does not open the Hub. */}
-            <button onClick={() => router.push('/app/hub')} className="mr-auto flex min-w-0 items-center gap-[8px]" aria-label="Pantopus Hub">
+             *  target to the logo and name, so a tap on the empty bar does not open Place. */}
+            <button onClick={() => router.push('/app/place')} className="mr-auto flex min-w-0 items-center gap-[8px]" aria-label="Pantopus, go to Place">
               <PantopusMark size={24} className="shrink-0" />
               <span className="truncate text-[18px] leading-[28px] font-semibold text-app">Pantopus</span>
             </button>
@@ -545,12 +545,12 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           {/* ── Brand ── */}
           <div className="h-14 flex items-center gap-3 flex-shrink-0 border-b border-app overflow-hidden" style={sidebarHeaderPadStyle}>
             {showLabels ? (
-              <button onClick={() => router.push('/app/hub')} className="flex items-center gap-3 hover-bg-app rounded-lg px-1 py-1 transition">
+              <button onClick={() => router.push('/app/place')} className="flex items-center gap-3 hover-bg-app rounded-lg px-1 py-1 transition">
                 <PantopusMark size={28} className="flex-shrink-0" />
                 <span className="text-lg font-bold text-app whitespace-nowrap">Pantopus</span>
               </button>
             ) : (
-              <button onClick={() => router.push('/app/hub')} className="w-full h-full flex items-center justify-center hover-bg-app transition" title="Pantopus Hub" aria-label="Pantopus Hub">
+              <button onClick={() => router.push('/app/place')} className="w-full h-full flex items-center justify-center hover-bg-app transition" title="Pantopus" aria-label="Pantopus, go to Place">
                 <PantopusMark size={28} />
               </button>
             )}
@@ -712,7 +712,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         onOpenChange={setNamePromptOpen}
         onSaved={(saved) => {
           setMe(saved);
-          // The Hub greeting and public profile pages read the name from their own queries.
+          // Place's hub payload and public profile pages read the name from their own queries.
           queryClient.invalidateQueries({ queryKey: queryKeys.hub() });
           queryClient.invalidateQueries({ queryKey: ['profile'] });
         }}
@@ -843,9 +843,9 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, ma
           social discovery at /app/nearby (Pulse / Beacons / Marketplace /
           Tasks open behind its meter); Messages is the conversation list at
           /app/chat. Launch cut #10: while Mailbox is on, Mail is its own entry
-          before Messages (founder, 2026-10-26). Hub and the my-x screens keep
-          their routes (deep links resolve) but leave the nav. */}
-      <SidebarItem icon={NavIcons.place} label="Place" active={startsWith('/app/place') || isActive('/app/hub')} onClick={() => go('/app/place')} onPrefetch={prefetchPlace} showLabel={showLabels} accent="home" testId="sidebar-place" />
+          before Messages (founder, 2026-10-26). The my-x screens keep their
+          routes (deep links resolve) but leave the nav; /app/hub opens Place. */}
+      <SidebarItem icon={NavIcons.place} label="Place" active={startsWith('/app/place')} onClick={() => go('/app/place')} onPrefetch={prefetchPlace} showLabel={showLabels} accent="home" testId="sidebar-place" />
       <SidebarItem icon={NavIcons.today} label="Today" active={startsWith('/app/today') || startsWith('/app/hub/today')} onClick={() => go('/app/today')} onPrefetch={prefetchToday} showLabel={showLabels} testId="sidebar-today" />
       {/* Nearby opens on its Pulse segment (/app/feed); Neighborhood is /app/nearby (founder decision 2026-10-20). */}
       <SidebarItem icon={NavIcons.nearby} label="Nearby" active={startsWith('/app/nearby') || startsWith('/app/neighborhood') || startsWith('/app/feed') || startsWith('/app/beacons') || startsWith('/app/gigs') || startsWith('/app/marketplace')} onClick={() => go('/app/feed')} onPrefetch={prefetchNearby} showLabel={showLabels} testId="sidebar-nearby" />
@@ -962,9 +962,9 @@ function HomeSidebarNavigation({ homeId, currentTab, showLabels, onNavigate }: H
       />}
       <SidebarItem
         icon={HomeIcons.back}
-        label="Pantopus Hub"
+        label="Back to Pantopus"
         onClick={() => {
-          router.push('/app/hub');
+          router.push('/app/place');
           onNavigate();
         }}
         showLabel={showLabels}
@@ -1018,7 +1018,7 @@ function BusinessSidebarContent({ businessId, currentTab, showLabels, onNavigate
       <SidebarDivider showLabel={showLabels} />
 
       {can('profile.edit') && <SidebarItem icon={BusinessIcons.settings} label="Settings" active={isTabActive('settings')} onClick={() => goTab('settings')} showLabel={showLabels} />}
-      <SidebarItem icon={BusinessIcons.back} label="Pantopus Hub" onClick={() => goPath('/app/hub')} showLabel={showLabels} />
+      <SidebarItem icon={BusinessIcons.back} label="Back to Pantopus" onClick={() => goPath('/app/place')} showLabel={showLabels} />
     </div>
   );
 }

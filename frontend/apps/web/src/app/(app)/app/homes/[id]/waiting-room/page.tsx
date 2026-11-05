@@ -160,7 +160,7 @@ function WaitingRoomContent() {
           <button onClick={() => window.open('mailto:help@pantopus.com?subject=Verification%20Help', '_blank')} className="flex items-center justify-center gap-2 w-full py-2.5 text-sm text-app-text-secondary hover:text-app-text">
             <HelpCircle className="w-4 h-4" /> Request help
           </button>
-          <button onClick={() => router.push('/app/hub')} className="w-full py-3 border border-app-border rounded-xl text-sm font-semibold text-app-text-secondary hover:bg-app-hover transition">
+          <button onClick={() => router.push('/app/place')} className="w-full py-3 border border-app-border rounded-xl text-sm font-semibold text-app-text-secondary hover:bg-app-hover transition">
             Done
           </button>
           <button onClick={reload} className="w-full py-2 text-xs text-emerald-600 font-medium hover:text-emerald-700">
