@@ -64,6 +64,7 @@ fun CrewDayStreetMap(
             val w = size.width
             val h = size.height
             val unit = h / 150f
+
             fun rect(
                 x: Float,
                 y: Float,
