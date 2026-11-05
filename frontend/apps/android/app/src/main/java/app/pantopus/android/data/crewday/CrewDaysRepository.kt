@@ -6,6 +6,7 @@ import app.pantopus.android.data.api.models.crewday.CrewDayBookingBody
 import app.pantopus.android.data.api.models.crewday.CrewDayBookingDto
 import app.pantopus.android.data.api.models.crewday.CrewDayBookingPatch
 import app.pantopus.android.data.api.models.crewday.CrewDayBusinessResponse
+import app.pantopus.android.data.api.models.crewday.CrewDayCardDto
 import app.pantopus.android.data.api.models.crewday.CrewDayCreateBody
 import app.pantopus.android.data.api.models.crewday.CrewDayCrewViewDto
 import app.pantopus.android.data.api.models.crewday.CrewDayDoneBody
@@ -28,6 +29,7 @@ import app.pantopus.android.data.api.models.crewday.CrewDayRequestBody
 import app.pantopus.android.data.api.models.crewday.CrewDayRouteDto
 import app.pantopus.android.data.api.models.crewday.CrewDayRouteOrderBody
 import app.pantopus.android.data.api.models.crewday.CrewDayRunningLateBody
+import app.pantopus.android.data.api.models.crewday.CrewDayRunningLateResponse
 import app.pantopus.android.data.api.models.crewday.CrewDayTodayResponse
 import app.pantopus.android.data.api.models.crewday.CrewDayUploadResponse
 import app.pantopus.android.data.api.models.crewday.MyCrewDaysResponse
@@ -128,20 +130,24 @@ open class CrewDaysRepository
         ): NetworkResult<CrewDayBookingDto> =
             write { api.answerNewDate(bookingId, CrewDayNewDateBody(proposalId, choice)).booking }
 
-        /** Uploads one photo ([bytes] of [mimeType]) for [bookingId]; the answer's `path` goes into done or problem. */
+        /**
+         * Uploads one photo ([bytes] of [mimeType]) for [bookingId]; [purpose] is `done` (the crew) or `problem` (the
+         * household). The answer's `path` goes into done or problem.
+         */
         open suspend fun upload(
             bookingId: String,
+            purpose: String,
             bytes: ByteArray,
             mimeType: String,
             fileName: String,
         ): NetworkResult<CrewDayUploadResponse> =
             call {
-                val part = MultipartBody.Part.createFormData("file", fileName, bytes.toRequestBody(mimeType.toMediaType()))
-                api.upload(bookingId.toRequestBody(TEXT), part)
+                val part = MultipartBody.Part.createFormData("photo", fileName, bytes.toRequestBody(mimeType.toMediaType()))
+                api.upload(bookingId.toRequestBody(TEXT), purpose.toRequestBody(TEXT), part)
             }
 
-        open suspend fun askForCrewDay(body: CrewDayRequestBody): NetworkResult<CrewDayDto> =
-            write { api.askForCrewDay(body).crewDay }
+        open suspend fun askForCrewDay(body: CrewDayRequestBody): NetworkResult<CrewDayCardDto> =
+            write { api.askForCrewDay(body).request }
 
         // MARK: - Crew
 
@@ -186,8 +192,8 @@ open class CrewDaysRepository
             crewDayId: String,
             dates: List<CrewDayProposedDateDto>,
             note: String?,
-        ): NetworkResult<CrewDayCrewViewDto> =
-            write { api.proposeDates(crewDayId, CrewDayProposeDatesBody(dates, note)) }
+        ): NetworkResult<CrewDayDto> =
+            write { api.proposeDates(crewDayId, CrewDayProposeDatesBody(dates, note)).crewDay }
 
         open suspend fun cancelDay(
             crewDayId: String,
@@ -215,7 +221,7 @@ open class CrewDaysRepository
             crewDayId: String,
             minutes: Int,
             date: String?,
-        ): NetworkResult<CrewDayRouteDto> =
+        ): NetworkResult<CrewDayRunningLateResponse> =
             write { api.runningLate(crewDayId, CrewDayRunningLateBody(minutes, date)) }
 
         open suspend fun cantGetIn(

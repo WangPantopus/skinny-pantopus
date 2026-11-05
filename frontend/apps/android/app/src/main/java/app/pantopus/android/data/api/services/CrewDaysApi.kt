@@ -25,10 +25,12 @@ import app.pantopus.android.data.api.models.crewday.CrewDayQuoteBody
 import app.pantopus.android.data.api.models.crewday.CrewDayQuoteDto
 import app.pantopus.android.data.api.models.crewday.CrewDayReasonBody
 import app.pantopus.android.data.api.models.crewday.CrewDayRequestBody
+import app.pantopus.android.data.api.models.crewday.CrewDayRequestResponse
 import app.pantopus.android.data.api.models.crewday.CrewDayResponse
 import app.pantopus.android.data.api.models.crewday.CrewDayRouteDto
 import app.pantopus.android.data.api.models.crewday.CrewDayRouteOrderBody
 import app.pantopus.android.data.api.models.crewday.CrewDayRunningLateBody
+import app.pantopus.android.data.api.models.crewday.CrewDayRunningLateResponse
 import app.pantopus.android.data.api.models.crewday.CrewDayTodayResponse
 import app.pantopus.android.data.api.models.crewday.CrewDayUploadResponse
 import app.pantopus.android.data.api.models.crewday.MyCrewDaysResponse
@@ -145,19 +147,23 @@ interface CrewDaysApi {
         @Body body: CrewDayNewDateBody,
     ): CrewDayBookingResponse
 
-    /** `POST /api/crew-days/uploads`: one JPEG, PNG or HEIC image (up to 10 MB) for a booking. */
+    /**
+     * `POST /api/crew-days/uploads`: one JPEG, PNG or HEIC image (up to 10 MB) as `photo`, for a booking, with its
+     * `purpose`: `done` (the crew) or `problem` (the household).
+     */
     @Multipart
     @POST("api/crew-days/uploads")
     suspend fun upload(
         @Part("booking_id") bookingId: okhttp3.RequestBody,
-        @Part file: MultipartBody.Part,
+        @Part("purpose") purpose: okhttp3.RequestBody,
+        @Part photo: MultipartBody.Part,
     ): CrewDayUploadResponse
 
     /** `POST /api/crew-days/requests` (screen 11): "Ask for a Crew Day on my street". */
     @POST("api/crew-days/requests")
     suspend fun askForCrewDay(
         @Body body: CrewDayRequestBody,
-    ): CrewDayResponse
+    ): CrewDayRequestResponse
 
     // MARK: - Crew
 
@@ -218,7 +224,7 @@ interface CrewDaysApi {
     suspend fun proposeDates(
         @Path("id") crewDayId: String,
         @Body body: CrewDayProposeDatesBody,
-    ): CrewDayCrewViewDto
+    ): CrewDayResponse
 
     /** `POST /api/crew-days/:id/cancel`: the day and every active booking, nobody charged. */
     @POST("api/crew-days/{id}/cancel")
@@ -253,7 +259,7 @@ interface CrewDaysApi {
     suspend fun runningLate(
         @Path("id") crewDayId: String,
         @Body body: CrewDayRunningLateBody,
-    ): CrewDayRouteDto
+    ): CrewDayRunningLateResponse
 
     /** `POST /api/crew-days/bookings/:bookingId/cant-get-in`: records it and tells the household. */
     @POST("api/crew-days/bookings/{bookingId}/cant-get-in")
