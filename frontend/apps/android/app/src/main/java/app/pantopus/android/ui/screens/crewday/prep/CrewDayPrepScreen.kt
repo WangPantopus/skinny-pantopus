@@ -157,7 +157,6 @@ private fun PrepContent(
     var cancelling by remember { mutableStateOf(false) }
     var showingQr by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
-    val open = day.status == "open"
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         PrepHeader(view, zone)
         if (view.routeIsOpen()) {
@@ -165,50 +164,25 @@ private fun PrepContent(
         }
         StatusBanner(view, working, viewModel)
         // Rain: while households answer the new dates, their answers and each date's route (as the web).
-        if (open || day.status == "in_progress") CrewDayRainCard(view, onOpen = { actions.onProposeDates(day.id) })
+        CrewDayRainCard(view, onOpen = { actions.onProposeDates(day.id) })
         NeedsYou(view, working, onPrice = { pricing = it }, onDecline = { declining = it }, onRelease = { releasing = it })
         HomesBooked(view)
-        // As the web: no more homes can come once booking closed or the day is full.
-        if (open && !view.isClosed && !view.isFull) {
-            BringInMore(
-                view = view,
-                inviting = CrewDayPrepViewModel.DAY in working,
-                onShare = { view.share?.url?.let { url -> actions.onShare(url, shareMessage(view, url)) } },
-                onQr = { showingQr = true },
-                onCopy = {
-                    view.share?.url?.let { url ->
-                        clipboard.setText(AnnotatedString(url))
-                        onCopied()
-                    }
-                },
-                onFlyer = { view.share?.flyerUrl?.let(actions.onOpenFlyer) },
-                onInvitePast = viewModel::invitePast,
-            )
-        }
+        BringInMore(
+            view = view,
+            inviting = CrewDayPrepViewModel.DAY in working,
+            onShare = { view.share?.url?.let { url -> actions.onShare(url, shareMessage(view, url)) } },
+            onQr = { showingQr = true },
+            onCopy = {
+                view.share?.url?.let { url ->
+                    clipboard.setText(AnnotatedString(url))
+                    onCopied()
+                }
+            },
+            onFlyer = { view.share?.flyerUrl?.let(actions.onOpenFlyer) },
+            onInvitePast = viewModel::invitePast,
+        )
         MoneyPreview(view)
-        if (day.canEdit && (day.status == "open" || day.status == "in_progress")) {
-            CrewDaySection("If plans change") {
-                // One proposal at a time, and only for homes that are booked (as the web).
-                val canPropose = view.proposal == null && view.bookings.any { it.status == "booked" }
-                if (canPropose) {
-                    PlanOptionRow(first = true) {
-                        PlanTonalButton(
-                            title = "Propose new dates",
-                            onClick = { actions.onProposeDates(day.id) },
-                            modifier = Modifier.testTag("crewDayPrepProposeDates"),
-                        )
-                    }
-                }
-                PlanOptionRow(first = !canPropose) {
-                    PlanTextButton(
-                        title = "Cancel this Crew Day",
-                        onClick = { cancelling = true },
-                        danger = true,
-                        modifier = Modifier.testTag("crewDayPrepCancel"),
-                    )
-                }
-            }
-        }
+        IfPlansChange(view, onProposeDates = { actions.onProposeDates(day.id) }, onCancel = { cancelling = true })
     }
     pricing?.let { home ->
         SetPriceDialog(
@@ -502,6 +476,8 @@ private fun BringInMore(
     onFlyer: () -> Unit,
     onInvitePast: () -> Unit,
 ) {
+    // As the web: an open day only, and no more homes can come once booking closed or the day is full.
+    if (view.status != "open" || view.isClosed || view.isFull) return
     CrewDaySection("Bring in more homes") {
         PlanOptionRow(first = true) {
             Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
@@ -578,6 +554,37 @@ private fun ifDoneWords(view: CrewDayCrewViewDto): String {
         priced == active.size -> "If all $priced are done"
         priced == 1 -> "If the 1 priced home is done"
         else -> "If the $priced priced homes are done"
+    }
+}
+
+/** "If plans change" for owners and editors while the day is open or under way: Propose new dates, Cancel this Crew Day. */
+@Composable
+private fun IfPlansChange(
+    view: CrewDayCrewViewDto,
+    onProposeDates: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    if (!view.canEdit || view.status !in setOf("open", "in_progress")) return
+    CrewDaySection("If plans change") {
+        // One proposal at a time, and only for homes that are booked (as the web).
+        val canPropose = view.proposal == null && view.bookings.any { it.status == "booked" }
+        if (canPropose) {
+            PlanOptionRow(first = true) {
+                PlanTonalButton(
+                    title = "Propose new dates",
+                    onClick = onProposeDates,
+                    modifier = Modifier.testTag("crewDayPrepProposeDates"),
+                )
+            }
+        }
+        PlanOptionRow(first = !canPropose) {
+            PlanTextButton(
+                title = "Cancel this Crew Day",
+                onClick = onCancel,
+                danger = true,
+                modifier = Modifier.testTag("crewDayPrepCancel"),
+            )
+        }
     }
 }
 

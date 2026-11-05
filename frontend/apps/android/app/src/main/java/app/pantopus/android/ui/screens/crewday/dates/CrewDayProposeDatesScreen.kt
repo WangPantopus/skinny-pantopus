@@ -460,7 +460,7 @@ fun CrewDayRainCard(
     view: CrewDayCrewViewDto,
     onOpen: () -> Unit,
 ) {
-    val proposal = view.proposal ?: return
+    val proposal = view.proposal?.takeIf { view.status == "open" || view.status == "in_progress" } ?: return
     Column(modifier = Modifier.testTag("crewDayPrepNewDates"), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         PlanOverline("New dates")
         RainSummary(view, RainAnswers(view, proposal.id))
