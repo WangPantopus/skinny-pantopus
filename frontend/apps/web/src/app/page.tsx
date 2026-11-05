@@ -27,8 +27,14 @@ import HomeFooter from './_components/HomeFooter';
 import { HERO_ID, skyPhaseScript } from './_components/skyScene';
 import styles from './_components/home.module.css';
 
-const serif = Newsreader({ subsets: ['latin'], style: ['normal', 'italic'], axes: ['opsz'], variable: '--home-serif', display: 'swap' });
-const mono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500'], variable: '--home-mono', display: 'swap' });
+// The serif's two faces (the variable weight and optical-size axes, about 280 KB) aren't preloaded: a preload
+// put them ahead of the page's stylesheets and held back the first paint. The headline paints at once in
+// next/font's size-matched fallback and swaps to Newsreader when it lands. The mono faces are small and stay
+// preloaded. Their fallbacks are in home.module.css: a Courier New face with Plex Mono's exact advance stands
+// in while it loads, because next/font's Arial-based one has wider capitals and rewrapped the hero's eyebrow,
+// moving the hero when Plex Mono arrived.
+const serif = Newsreader({ subsets: ['latin'], style: ['normal', 'italic'], axes: ['opsz'], variable: '--home-serif', display: 'swap', preload: false });
+const mono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500'], variable: '--home-mono', display: 'swap', adjustFontFallback: false });
 
 const TITLE = 'Pantopus · Your home and neighborhood, connected';
 const DESCRIPTION =

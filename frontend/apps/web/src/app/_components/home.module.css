@@ -5,6 +5,35 @@
    following the app's light or dark theme.
    ============================================================ */
 
+/* IBM Plex Mono's fallbacks (page.tsx turns off next/font's own). While Plex Mono loads, its labels draw in
+   Courier New: both are monospace, Plex Mono advancing 0.600 em per glyph and Courier New 0.6001 em, so at
+   this size-adjust every label wraps exactly as it will in Plex Mono and nothing moves when the font lands
+   (next/font's Arial-based fallback has wider capitals and rewrapped the hero's eyebrow). The overrides give
+   it Plex Mono's ascent and descent. Its range is the characters Plex Mono's Latin file draws, so Courier New
+   never shows once Plex Mono is in. Anything outside it, like the labels' "→", keeps the Arial face below
+   (next/font's values) before and after Plex Mono loads, as it always has. Without Courier New or Arial
+   (Android), the stack's `monospace` (Droid Sans Mono, 0.600 em) stands in. */
+@font-face {
+  font-family: 'Plex Mono Fallback';
+  src: local('Courier New'), local('CourierNewPSMT');
+  size-adjust: 99.98%;
+  ascent-override: 102.52%;
+  descent-override: 27.5%;
+  line-gap-override: 0%;
+  unicode-range: U+0020-007E, U+00A0-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+2013-2014, U+2018-201A, U+201C-201E, U+2022, U+2026, U+2032-2033, U+2039-203A, U+2044, U+20AC, U+2122, U+2191,
+    U+2193, U+2212, U+2215;
+}
+
+@font-face {
+  font-family: 'Plex Mono Arial Fallback';
+  src: local('Arial');
+  size-adjust: 134.59%;
+  ascent-override: 76.16%;
+  descent-override: 20.43%;
+  line-gap-override: 0%;
+}
+
 .page {
   --ink: #0f1a28;
   --ink-2: #3e4b5b;
@@ -18,7 +47,7 @@
   --night-ink: #e8eef6;
   --night-muted: #c2cddc;
   --serif: var(--home-serif), 'Iowan Old Style', Georgia, serif;
-  --mono: var(--home-mono), ui-monospace, Menlo, monospace;
+  --mono: var(--home-mono), 'Plex Mono Fallback', 'Plex Mono Arial Fallback', ui-monospace, Menlo, monospace;
   --gutter: clamp(20px, 4vw, 56px);
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   color: var(--ink);
