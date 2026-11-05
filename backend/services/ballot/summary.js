@@ -477,6 +477,16 @@ async function summaryForHome(home, { now = cardNow(), deadline = null } = {}) {
   );
 }
 
+/**
+ * The Place card from the checked reference data alone (null where none
+ * applies): no boundary lookup and no live count, so it needs no database or
+ * network read. A Place shows it when the full card runs out of its time budget.
+ */
+function summaryFromReference(home, { now = cardNow() } = {}) {
+  if (!home) return null;
+  return composeSummary({ stateValue: home.state, moveInDate: home.move_in_date || null, now });
+}
+
 // A live boundary lookup stamped with the moment it was made.
 async function lookupPoint(lat, lng, options) {
   const result = await governments.governmentsForPoint(lat, lng, options);
@@ -668,6 +678,7 @@ async function civicGovernmentsForHome(home) {
 module.exports = {
   composeSummary,
   summaryForHome,
+  summaryFromReference,
   summaryForPoint,
   teaserForPoint,
   civicGovernmentsForHome,

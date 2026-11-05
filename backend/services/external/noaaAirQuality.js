@@ -77,7 +77,7 @@ async function fetchModelAqi(lat, lng, { now = Date.now() } = {}) {
         valid_at: Number.isFinite(validMs) ? new Date(validMs).toISOString() : null,
       };
     }
-    await setCache(PROVIDER, placeKey, { estimate }, TTL_MINUTES);
+    void setCache(PROVIDER, placeKey, { estimate }, TTL_MINUTES); // in the background (setCache never rejects)
     return estimate;
   } catch (err) {
     logger.warn('noaaAirQuality: fetch failed', { error: err.message });

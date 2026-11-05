@@ -63,7 +63,10 @@ async function fetchWeather(latitude, longitude) {
 
     if (wkResult.source !== 'unavailable' && wkResult.source !== 'error') {
       recordWkSuccess();
-      logger.debug('weatherProvider: served by WeatherKit', { source: wkResult.source, latency_ms: wkMs });
+      // A live read is logged at info (once per place per cache lifetime), so a deploy can
+      // confirm WeatherKit is serving; cache hits stay at debug.
+      if (wkResult.source === 'live') logger.info('weatherProvider: served by WeatherKit', { source: wkResult.source, latency_ms: wkMs });
+      else logger.debug('weatherProvider: served by WeatherKit', { source: wkResult.source, latency_ms: wkMs });
       return wkResult;
     }
 

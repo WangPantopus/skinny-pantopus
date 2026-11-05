@@ -456,7 +456,7 @@ const AQI_STALE_MS = 3 * 60 * 60 * 1000;
 // anonymous point snapshot (that section then reads unavailable and the
 // preview simply does not list it).
 function buildTodayEnvelopes({
-  weather, aqi, aqiMissing = null, weatherMissing = null, alerts, alertsMissing = null,
+  weather, aqi, aqiMissing = null, weatherMissing = null, alerts, alertsMissing = null, goodDayMissing = null,
   weatherProvider, alertsProvider, asOf = null, alertsCheckedAt = null, hub = null, home = null,
 }) {
   const out = [];
@@ -566,7 +566,9 @@ function buildTodayEnvelopes({
   if (goodDay) {
     out.push(serializePlaceSection('good_day_to', { access: 'available', asOf, data: goodDay }));
   } else {
-    out.push(serializePlaceSection('good_day_to', { access: 'available', status: 'unavailable' }));
+    out.push(serializePlaceSection('good_day_to', {
+      access: 'available', status: goodDayMissing === 'error' ? 'error' : 'unavailable',
+    }));
   }
 
   return out;
@@ -575,19 +577,23 @@ function buildTodayEnvelopes({
 // The hub payload is fetched ONCE in composeHomeIntelligence and passed
 // down (it used to be re-fetched per composer; the memo never absorbed it).
 async function composeToday(userId, home, hub) {
+  const located = Boolean(hub) && !(hub.location && hub.location.source === 'none');
+  // A provider that failed or ran out of its time (getHubToday's providerBudgetMs) is a retryable error on its own
+  // card ("Couldn't load this · Try again"), as on the preview, never "not available for your area".
+  const failed = new Set(located ? (hub.meta && hub.meta.partial_failures) || [] : []);
   // An alerts list is only an all-clear when the alerts fetch worked. On a failed fetch the orchestrator still returns
   // `alerts: []` (with 'alerts' in meta.partial_failures), and its empty result (no location, or an unexpected error)
   // never asked a provider; both read as "No active alerts" before.
-  const alertsChecked = Boolean(hub)
-    && !(hub.location && hub.location.source === 'none')
-    && !((hub.meta && hub.meta.partial_failures) || []).includes('alerts');
-  const located = Boolean(hub) && !(hub.location && hub.location.source === 'none');
-  const aqiFailed = located && ((hub.meta && hub.meta.partial_failures) || []).includes('aqi');
+  const alertsChecked = located && !failed.has('alerts');
   return buildTodayEnvelopes({
     weather: hub && hub.weather ? hub.weather : null,
+    weatherMissing: failed.has('weather') ? 'error' : null,
+    // "Good day to…" is read from the same forecast.
+    goodDayMissing: failed.has('weather') ? 'error' : null,
     aqi: hub && hub.aqi ? hub.aqi : null,
-    aqiMissing: located ? (aqiFailed ? 'error' : 'no_reading') : null,
+    aqiMissing: located ? (failed.has('aqi') ? 'error' : 'no_reading') : null,
     alerts: alertsChecked ? (hub.alerts || []) : null,
+    alertsMissing: failed.has('alerts') ? 'error' : null,
     weatherProvider: hub?.meta?.section_providers?.weather,
     alertsProvider: hub?.meta?.section_providers?.alerts,
     asOf: (hub && hub.fetched_at) || null,
@@ -751,7 +757,7 @@ async function composeTodayForPoint(lat, lng, { budgetMs = null } = {}) {
 // The weather section's provider, as the Heat & cold card credits it.
 const WEATHER_SOURCE_LABELS = { WEATHERKIT: 'Apple Weather', OPEN_METEO: 'Open-Meteo' };
 
-function composeHeatCold(home, hubPromise) {
+async function composeHeatCold(home, hubPromise) {
   const forecast = Promise.resolve(hubPromise).then((hub) => {
     const provider = hub && hub.meta && hub.meta.section_providers && hub.meta.section_providers.weather;
     return hub && hub.weather
@@ -764,7 +770,15 @@ function composeHeatCold(home, hubPromise) {
       : null;
   });
 
-  return placeSectionAdapters.composeHeatCold(home, forecast);
+  const sections = await placeSectionAdapters.composeHeatCold(home, forecast);
+  // With no forecast because the weather provider failed or ran out of time,
+  // the card is a retryable error like the weather card, not "No temperature
+  // forecast for this area".
+  const hub = await hubPromise;
+  const weatherFailed = Boolean(hub && hub.meta && (hub.meta.partial_failures || []).includes('weather'));
+  return weatherFailed
+    ? sections.map((s) => (s.status === 'unavailable' ? { ...s, status: 'error', unavailable_reason: null } : s))
+    : sections;
 }
 
 // Wedge Phase 2 (D6) — the address calendar. Never throws; a home with no
@@ -1486,6 +1500,11 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   //
   // The hub payload's calendar and the address calendar card are for the same
   // home: they share one read of its county rules (public data).
+  //
+  // These sections share one section budget (below), so each provider gets
+  // only part of it: one that runs past that (AirNow, WeatherKit, the Weather
+  // Service) fails its own card alone, as on the preview, rather than taking
+  // weather, air quality, alerts and "Good day to…" down together.
   const countyReads = new Map();
   const HUB_SECTIONS = ['weather', 'air_quality', 'alerts', 'good_day_to', 'heat_cold'];
   let hubPromise = Promise.resolve(null);
@@ -1497,6 +1516,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
           detail: true,
           atLocation: { latitude: ll.lat, longitude: ll.lng, label: home.address || home.name, homeId: claimant ? null : home.id },
           countyReads,
+          providerBudgetMs: supportingLookupMs(sectionBudgetMs()),
         })
         .catch((err) => {
           logger.warn('placeIntelligence: getHubToday failed', { userId, error: err.message });
@@ -1520,18 +1540,44 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   // cache for the next look.
   const budgetMs = sectionBudgetMs();
   const late = [];
+  // When the budget fallbacks ran (near budgetMs unless the process itself was
+  // held up) and when every section had answered, for the over-budget log.
+  const startedAt = Date.now();
+  let firedMs = 0;
   const [privacy, ...groups] = await Promise.all([
     getHomePrivacy(homeId).catch(() => ({ address_precision: true })),
     ...runs.map(({ ids, budget, run }) => {
       const compose = () => run({ home: subject, userId, tier, hubPromise, access, ballot: ballotOn, claimant, countyReads, budgetMs });
       if (!budget) return compose();
-      return withBudget(compose, budgetMs, () => {
+      let over = false;
+      // A section past its budget keeps running to fill its cache; its real
+      // time is logged when it ends, so the slow source can be named.
+      const timed = () => {
+        const attempt = Promise.resolve().then(compose);
+        attempt.then(
+          () => { if (over) logger.warn('placeIntelligence: late section finished', { homeId, sections: ids, ms: Date.now() - startedAt }); },
+          (err) => { if (over) logger.warn('placeIntelligence: late section failed', { homeId, sections: ids, ms: Date.now() - startedAt, error: err.message }); },
+        );
+        return attempt;
+      };
+      return withBudget(timed, budgetMs, () => {
+        over = true;
+        firedMs = Math.max(firedMs, Date.now() - startedAt);
         late.push(...ids);
-        return failedSections(ids, tier)();
+        // Past its budget the ballot card still comes, from the checked
+        // reference data alone (no boundary lookup or live count), so "This
+        // season" stays on the page; the next load has the rest.
+        const card = ballotOn && ids.includes('civic_election')
+          ? placeSectionAdapters.composeCivicElectionFromReference(subject) : null;
+        return card || failedSections(ids, tier)();
       });
     }),
   ]);
-  if (late.length) logger.warn('placeIntelligence: sections over budget', { homeId, sections: late, budgetMs });
+  if (late.length) {
+    logger.warn('placeIntelligence: sections over budget', {
+      homeId, sections: late, budgetMs, fired_ms: firedMs, total_ms: Date.now() - startedAt,
+    });
+  }
 
   const composed = {};
   for (const env of groups.flat()) composed[env.id] = env;

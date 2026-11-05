@@ -297,7 +297,8 @@ describe('GET /api/homes/:id/intelligence', () => {
         meta: { section_providers: { weather: 'OPEN_METEO', alerts: 'NOAA' }, partial_failures: ['alerts'] },
       });
       const unchecked = await request(app).get(`/api/homes/${HOME_ID}/intelligence?sections=alerts`).set('x-test-user-id', USER);
-      expect(sectionsById(unchecked.body).alerts).toMatchObject({ status: 'unavailable', source: 'Source unavailable', data: null });
+      // A failed alerts check is a retryable error, never an all-clear or "not available here".
+      expect(sectionsById(unchecked.body).alerts).toMatchObject({ status: 'error', source: 'Source unavailable', data: null });
     });
 
     test('air quality names the dominant pollutant as a machine token', async () => {
