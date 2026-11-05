@@ -63,6 +63,9 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
                         tabs: dataSource.tabs,
                         selected: $dataSource.selectedTab
                     )
+                    // Half folded like a book, the tabs keep to the larger side of the fold and scroll there, as
+                    // on a phone, instead of putting a tab on the crease (Members' Audit Log).
+                    .besideFold()
                     .background(Theme.Color.appSurface)
                     Divider().background(Theme.Color.appBorderSubtle)
                 }
@@ -356,6 +359,8 @@ private struct ChipStripRow: View {
             }
             .padding(.horizontal, Spacing.s4)
         }
+        // Half folded like a book, the chips keep to the larger side of the fold and scroll there, as the tabs do.
+        .besideFold()
         .padding(.vertical, Spacing.s2)
         .background(Theme.Color.appSurface)
     }
