@@ -274,6 +274,35 @@ async function fetchWalkScore(lat, lng, address) {
   }
 }
 
+// ── In-process memo ──────────────────────────────────────────────────────
+// Place asks for the same few tracts on every load: a cell's tract (kept for good) and the tract's profile row
+// (90 days). Each was a database read, one after the other, on every load, so a slow database held census_context
+// for both. They are public Census data and are kept in this process for a while as well: the tract for a day,
+// a fresh profile row for ten minutes and never past its own expiry.
+const TRACT_MEMO_MS = 24 * 60 * 60 * 1000;
+const PROFILE_MEMO_MS = 10 * 60 * 1000;
+const MEMO_MAX = 2000;
+const tractMemo = new Map(); // geohash-7 cell -> { value, until }
+const profileMemo = new Map(); // tract id -> { value, until }
+
+function memoGet(memo, key) {
+  if (process.env.NODE_ENV === 'test') return null;
+  const hit = memo.get(key);
+  if (!hit) return null;
+  if (hit.until <= Date.now()) {
+    memo.delete(key);
+    return null;
+  }
+  return hit.value;
+}
+
+function memoSet(memo, key, value, until) {
+  if (process.env.NODE_ENV === 'test' || !(until > Date.now())) return;
+  memo.delete(key);
+  if (memo.size >= MEMO_MAX) memo.delete(memo.keys().next().value);
+  memo.set(key, { value, until });
+}
+
 // ── FEMA Flood Zone Fetch ────────────────────────────────────────────────
 
 /**
@@ -283,8 +312,10 @@ async function fetchWalkScore(lat, lng, address) {
  * row served if the geocoder is down (database-first).
  */
 async function geocodeToTractCached(lat, lng) {
+  const gh7 = encodeGeohash(lat, lng, 7);
+  const remembered = memoGet(tractMemo, gh7);
+  if (remembered) return remembered;
   try {
-    const gh7 = encodeGeohash(lat, lng, 7);
     const { payload } = await readThrough({
       cacheKey: `geo:${gh7}`,
       sectionId: '_tract',
@@ -292,6 +323,7 @@ async function geocodeToTractCached(lat, lng) {
       ttlMs: 365 * 24 * 60 * 60 * 1000,
       fetch: () => geocodeToTract(lat, lng),
     });
+    if (payload) memoSet(tractMemo, gh7, payload, Date.now() + TRACT_MEMO_MS);
     return payload || null;
   } catch (err) {
     // The cache layer must never make geocoding WORSE than uncached —
@@ -363,6 +395,8 @@ async function fetchFloodZone(lat, lng, { throwOnFailure = false } = {}) {
  * @returns {Promise<object|null>}
  */
 async function getCachedProfile(tractId, { allowExpired = false } = {}) {
+  const remembered = allowExpired ? null : memoGet(profileMemo, tractId);
+  if (remembered) return remembered;
   try {
     let query = supabaseAdmin
       .from('NeighborhoodProfileCache')
@@ -376,7 +410,12 @@ async function getCachedProfile(tractId, { allowExpired = false } = {}) {
       return null;
     }
 
-    return data ? { profile: data.profile, fetchedAt: data.fetched_at } : null;
+    if (!data) return null;
+    const value = { profile: data.profile, fetchedAt: data.fetched_at };
+    if (!allowExpired) {
+      memoSet(profileMemo, tractId, value, Math.min(Date.now() + PROFILE_MEMO_MS, Date.parse(data.expires_at)));
+    }
+    return value;
   } catch (err) {
     logger.error('NeighborhoodProfileCache read exception', { tractId, error: err.message });
     return null;
@@ -393,6 +432,7 @@ async function setCachedProfile(tractId, profile, ttlDays = CACHE_TTL_DAYS) {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + ttlDays * 24 * 60 * 60 * 1000);
 
+    profileMemo.delete(tractId);
     const { error } = await supabaseAdmin
       .from('NeighborhoodProfileCache')
       .upsert(
