@@ -8,6 +8,7 @@
 
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const days = require('./days');
+const reads = require('./reads');
 const rules = require('./rules');
 const store = require('./store');
 const views = require('./views');
@@ -232,7 +233,8 @@ async function detail(dayId, operatorId) {
     kind: 'offer',
     day: adminDayCard(day, stats, crew, history.get(String(day.business_user_id))),
     money: views.money(stats, fee.rate_pct),
-    bookings: (rows || []).map((b) => adminBooking(b, people.get(String(b.household_user_id)))),
+    bookings: await reads.withPhotos((rows || []).map((b) => adminBooking(b, people.get(String(b.household_user_id)))),
+      new Map((rows || []).map((b) => [b.id, b]))),
     events,
   };
 }

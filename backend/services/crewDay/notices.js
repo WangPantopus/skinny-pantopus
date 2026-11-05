@@ -131,7 +131,63 @@ async function bookingCancelled(day, booking, crew, reason) {
   }, { day, booking, link: links.booking(booking.id) });
 }
 
+async function onTheWay(day, booking) {
+  await send([booking.household_user_id], {
+    type: 'crew_day_on_the_way',
+    title: 'Your crew is on the way',
+    body: `Expected ${rules.formatInstantWindow(booking.eta_start, booking.eta_end, day.timezone)}. Tap when the gate is ready.`,
+  }, { day, booking, link: links.booking(booking.id) });
+}
+
+async function etaChanged(day, booking, crew) {
+  const when = booking.eta_start
+    ? rules.formatInstantWindow(booking.eta_start, booking.eta_end, day.timezone)
+    : rules.formatWindow(booking.window_start, booking.window_end);
+  await send([booking.household_user_id], {
+    type: 'crew_day_eta_changed',
+    title: 'New arrival time',
+    body: `${businessName(crew)} now expects ${when}.`,
+  }, { day, booking, link: links.booking(booking.id) });
+}
+
+async function cantGetIn(day, booking, note) {
+  await send([booking.household_user_id], {
+    type: 'crew_day_cant_get_in',
+    title: "The crew can't get in",
+    body: note || null,
+  }, { day, booking, link: links.booking(booking.id) });
+}
+
+// "Gutters cleaned and flushed." and the like, by service.
+const DONE_LINES = {
+  gutter_cleaning: 'Gutters cleaned and flushed.',
+  leaf_cleanup: 'Leaves cleared and hauled away.',
+  roof_moss: 'Roof moss removed.',
+  holiday_lights: 'Your lights are up.',
+  window_washing: 'Windows washed.',
+  pressure_washing: 'Pressure washing done.',
+  other: 'The work is done.',
+};
+
+async function workDone(day, booking) {
+  await send([booking.household_user_id], {
+    type: 'crew_day_done',
+    title: 'One thing off your list',
+    body: `${DONE_LINES[day.service] || DONE_LINES.other} See the photos. We'll charge ${rules.formatMoney(booking.price_cents)} `
+      + `${rules.formatDayRelative(booking.charge_due_at, day.timezone)} at ${rules.formatTime(booking.charge_due_at, day.timezone)} `
+      + 'unless something needs attention.',
+  }, { day, booking, link: links.booking(booking.id) });
+}
+
 // ── Crew (about one home) ─────────────────────────────────────
+
+async function gateReady(day, booking) {
+  await send(await crewRecipients(day), {
+    type: 'crew_day_gate_ready',
+    title: `Gate is ready at ${booking.address_line}`,
+    body: null,
+  }, { day, booking, link: links.crewDay(day.business_user_id, day.id) });
+}
 
 async function newBooking(day, booking, bookedCount) {
   await send(await crewRecipients(day), {
@@ -178,6 +234,12 @@ async function reviewNeeded(day, { businessName }) {
 }
 
 module.exports = {
+  onTheWay,
+  etaChanged,
+  cantGetIn,
+  workDone,
+  gateReady,
+  DONE_LINES,
   booked,
   priceOffered,
   bookingCancelled,
