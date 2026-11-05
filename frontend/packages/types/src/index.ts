@@ -476,6 +476,12 @@ export type {
   CrewDayCrew,
   CrewDayViewer,
   PublicCrewDay,
+  CrewDayQuoteRequest,
+  CrewDayQuote,
+  CrewDayBookingStatus,
+  CrewDayAddress,
+  CreateCrewDayBookingRequest,
+  CrewDayBookingSummary,
 } from './crewDay';
 
 // ─── Re-exports from Calendarly scheduling contract (W0) ────

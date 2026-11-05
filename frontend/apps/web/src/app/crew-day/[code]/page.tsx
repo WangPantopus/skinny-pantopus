@@ -1,12 +1,12 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { cookies, headers } from 'next/headers';
+import { headers } from 'next/headers';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Check, CloudRain, CreditCard, House, Lock, type LucideIcon } from 'lucide-react';
 import { buildCrewDayAppUrl, buildCrewDayPath } from '@pantopus/utils';
-import { buildShareMetadata, crewDayShareCode, fetchPublicCrewDay, getStoreDownloadCta } from '@/lib/publicShare';
-import { launchFeatures } from '@/lib/featureFlags';
+import { buildShareMetadata, getStoreDownloadCta } from '@/lib/publicShare';
+import { crewDayUnavailable, readCrewDayForPage } from '@/lib/crewDayServer';
 import {
   bookedLine,
   formatCrewDate,
@@ -20,6 +20,7 @@ import {
   CREW_DAY_PRIMARY_BUTTON,
   CREW_DAY_SECONDARY_BUTTON,
   CrewDayCard,
+  CrewDayLoadFailed,
   CrewDaySectionTitle,
   CrewDayTopBar,
   CrewRow,
@@ -34,14 +35,6 @@ import {
 export const dynamic = 'force-dynamic';
 
 type PageProps = { params: Promise<{ code: string }> };
-
-async function readCrewDay(rawCode: string) {
-  const code = crewDayShareCode(rawCode);
-  if (!launchFeatures.crewDay || !code) return { code: null, day: null, status: 404 };
-  const access = (await cookies()).get('pantopus_access')?.value ?? null;
-  const result = await fetchPublicCrewDay(code, access);
-  return { code, day: result.data, status: result.status };
-}
 
 function whenLine(day: PublicCrewDay): string {
   const window = formatWindow(day.window_start, day.window_end);
@@ -135,7 +128,7 @@ function Action({ day, code }: { day: PublicCrewDay; code: string }): ReactNode 
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { code: rawCode } = await params;
-  const { code, day } = await readCrewDay(rawCode);
+  const { code, day } = await readCrewDayForPage(rawCode);
   const base = { robots: { index: false, follow: false } };
   if (!code || !day) {
     return { ...base, title: 'Crew Day not available | Pantopus', description: "This Crew Day isn't available." };
@@ -157,29 +150,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function CrewDayInvitationPage({ params }: PageProps) {
   const { code: rawCode } = await params;
-  const { code, day, status } = await readCrewDay(rawCode);
+  const page = await readCrewDayForPage(rawCode);
   // 404: no such code, or not approved yet; 403: Crew Day is off on the server.
-  if (!code || status === 404 || status === 403) notFound();
+  if (crewDayUnavailable(page) || !page.code) notFound();
+  const { code, day } = page;
 
   const userAgent = (await headers()).get('user-agent') || '';
   const storeCta = getStoreDownloadCta(userAgent, buildCrewDayPath(code));
 
-  if (!day) {
-    return (
-      <main className="min-h-screen bg-app text-app-text">
-        <div className="mx-auto w-full max-w-md">
-          <CrewDayTopBar code={code} fallbackUrl={storeCta?.href ?? null} copyPath={storeCta?.copyPath ?? null} />
-          <div className="flex flex-col gap-4 px-4 pt-10 text-center">
-            <h1 className="text-xl font-semibold leading-[1.625rem]">Couldn&apos;t load this Crew Day</h1>
-            <p className="text-sm leading-5 text-app-text-secondary">Something went wrong on our side. Try again in a moment.</p>
-            <a href={buildCrewDayPath(code)} className={CREW_DAY_PRIMARY_BUTTON}>
-              Try again
-            </a>
-          </div>
-        </div>
-      </main>
-    );
-  }
+  if (!day) return <CrewDayLoadFailed code={code} retryHref={buildCrewDayPath(code)} />;
 
   const line = statusLine(day);
   return (

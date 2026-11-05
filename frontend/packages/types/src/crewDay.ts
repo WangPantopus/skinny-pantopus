@@ -76,3 +76,72 @@ export interface PublicCrewDay {
   crew: CrewDayCrew;
   viewer?: CrewDayViewer | null;
 }
+
+/** POST /api/crew-days/public/:code/quote: the price for one home, and whether the day reaches it. */
+export interface CrewDayQuoteRequest {
+  latitude: number;
+  longitude: number;
+  address_line: string;
+  option_id: string;
+  add_on_ids: string[];
+}
+
+export interface CrewDayQuote {
+  in_area: boolean;
+  /** Null while the crew confirms it after a look. */
+  price_cents: number | null;
+  needs_look: boolean;
+  message: string | null;
+}
+
+/** A booking's status (02-contract.md §2). Active ones count toward the day's capacity. */
+export type CrewDayBookingStatus =
+  | 'price_pending'
+  | 'price_offered'
+  | 'booked'
+  | 'new_dates'
+  | 'on_the_way'
+  | 'done'
+  | 'paid'
+  | 'payment_failed'
+  | 'refunded'
+  | 'cancelled'
+  | 'declined';
+
+export interface CrewDayAddress {
+  line: string;
+  city: string;
+  state: string;
+  zip: string;
+  latitude: number;
+  longitude: number;
+}
+
+/** POST /api/crew-days/:id/bookings. A retry with the same `client_request_id` answers with the same booking. */
+export interface CreateCrewDayBookingRequest {
+  client_request_id: string;
+  home_id?: string;
+  address: CrewDayAddress;
+  option_id: string;
+  add_on_ids: string[];
+  access_note?: string;
+  /** The saved card's Stripe id (`pm_…`). */
+  payment_method_id: string;
+  approve_terms: true;
+}
+
+/** The parts of a household's booking every Crew Day screen reads; GET /api/crew-days/bookings/:bookingId has more. */
+export interface CrewDayBookingSummary {
+  id: string;
+  crew_day_id: string;
+  status: CrewDayBookingStatus;
+  price_cents: number | null;
+  option_id: string;
+  add_on_ids: string[];
+  service_date?: string | null;
+  window_start?: string | null;
+  window_end?: string | null;
+  prep_note?: string | null;
+  access_note?: string | null;
+  [field: string]: unknown;
+}

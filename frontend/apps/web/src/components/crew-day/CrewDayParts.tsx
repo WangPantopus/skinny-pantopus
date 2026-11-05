@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import {
   AppWindow,
+  ChevronLeft,
   Droplets,
   House,
   Leaf,
@@ -146,11 +147,67 @@ export function CrewDayTopBar({
   );
 }
 
+/**
+ * A booking step's bar: a round back button, the step's title in the middle and "1 of 2" on the right (like the
+ * apps' Plans bar). `trailing` takes the place of the step label, e.g. a Close button.
+ */
+export function CrewDayStepBar({
+  title,
+  backHref,
+  backLabel = 'Back',
+  step,
+  trailing,
+}: {
+  title: string;
+  backHref?: string | null;
+  backLabel?: string;
+  step?: string | null;
+  trailing?: ReactNode;
+}) {
+  return (
+    <div className="grid min-h-14 grid-cols-[minmax(2.5rem,1fr)_auto_minmax(2.5rem,1fr)] items-center gap-2 border-b border-app-border bg-app-surface px-3">
+      <div className="flex justify-start">
+        {backHref ? (
+          <Link
+            href={backHref}
+            aria-label={backLabel}
+            className="grid h-10 w-10 place-items-center rounded-full bg-app-surface-sunken text-app-text hover:bg-app-hover"
+          >
+            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+          </Link>
+        ) : null}
+      </div>
+      <h1 className="py-2 text-center text-[1.0625rem] font-semibold leading-[1.375rem] text-app-text">{title}</h1>
+      <div className="flex justify-end">
+        {trailing ?? (step ? <span className="text-[0.8125rem] font-medium leading-[1.125rem] text-app-text-secondary">{step}</span> : null)}
+      </div>
+    </div>
+  );
+}
+
 export const CREW_DAY_PRIMARY_BUTTON =
   'flex min-h-[3.125rem] w-full items-center justify-center rounded-xl bg-primary-600 px-4 py-2 text-center text-base font-semibold text-white shadow-[0_6px_16px_rgba(2,132,199,0.18)] hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none';
 
 export const CREW_DAY_SECONDARY_BUTTON =
   'flex min-h-[3.125rem] w-full items-center justify-center rounded-xl border border-app-border-strong bg-app-surface px-4 py-2 text-center text-base font-semibold text-app-text hover:bg-app-hover disabled:cursor-not-allowed disabled:opacity-50';
+
+/** A Crew Day page whose read failed for a reason other than "no such day": a retry, never a dead end. */
+export function CrewDayLoadFailed({ code, retryHref }: { code: string; retryHref: string }) {
+  return (
+    <main className="min-h-screen bg-app text-app-text">
+      <div className="mx-auto w-full max-w-md">
+        <CrewDayTopBar code={code} />
+        <div className="flex flex-col gap-4 px-4 pt-10 text-center">
+          <h1 className="text-xl font-semibold leading-[1.625rem]">Couldn&apos;t load this Crew Day</h1>
+          <p className="text-sm leading-5 text-app-text-secondary">Something went wrong on our side. Try again in a moment.</p>
+          <a href={retryHref} className={CREW_DAY_PRIMARY_BUTTON}>
+            Try again
+          </a>
+        </div>
+      </div>
+    </main>
+  );
+}
 
 /** A card section's overline heading: 11px, upper case, spaced. */
 export function CrewDaySectionTitle({ id, children }: { id?: string; children: ReactNode }) {
