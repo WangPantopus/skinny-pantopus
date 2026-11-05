@@ -344,6 +344,7 @@ function crewHome(booking, index, day, person, now) {
     photo_count: (booking.photo_paths || []).length,
     charge_state: views.chargeState(booking),
     charge_due_at: booking.charge_due_at,
+    refunded_cents: booking.refunded_cents || 0,
     problem: booking.problem_kind ? { status: booking.problem_status, kind: booking.problem_kind, note: booking.problem_note,
       opened_at: booking.problem_opened_at } : null,
     new_date_choice: booking.new_date_choice,
