@@ -125,10 +125,13 @@ fun CrewDayBookingDto.cancelledWords(): String =
     }
 
 /** "Wed, Nov 18" for a timestamp in the Crew Day's zone. */
-fun CrewDayBookingDto.dayOf(raw: String?): String? = CrewDayFormat.shortDate(CrewDayFormat.instant(raw), CrewDayFormat.zone(crewDay?.timezone))
+fun CrewDayBookingDto.dayOf(raw: String?): String? = CrewDayFormat.shortDate(CrewDayFormat.instant(raw), zone)
 
 /** "11:42 AM" for a timestamp in the Crew Day's zone. */
-fun CrewDayBookingDto.clockOf(raw: String?): String? = CrewDayFormat.clock(CrewDayFormat.instant(raw), CrewDayFormat.zone(crewDay?.timezone))
+fun CrewDayBookingDto.clockOf(raw: String?): String? = CrewDayFormat.clock(CrewDayFormat.instant(raw), zone)
+
+/** The Crew Day's own time zone. */
+val CrewDayBookingDto.zone: java.time.ZoneId get() = CrewDayFormat.zone(crewDay?.timezone)
 
 /** "tomorrow at 11:42 AM", "today at …", or "Wed, Nov 18 at …" for when the charge runs. */
 fun CrewDayBookingDto.chargeWhen(now: Instant = Instant.now()): String? {

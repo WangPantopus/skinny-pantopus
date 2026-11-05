@@ -297,7 +297,7 @@ private fun StatusLine(steps: List<CrewDayStepDto>) {
                 )
                 Text(
                     text = step.label ?: step.key,
-                    style = PantopusTextStyle.caption.copy(fontWeight = if (step.state == "current") FontWeight.Bold else FontWeight.Medium),
+                    style = PantopusTextStyle.caption.copy(fontWeight = stepWeight(step.state)),
                     color = if (step.state == "todo") PantopusColors.appTextSecondary else PantopusColors.appText,
                     maxLines = 1,
                 )
@@ -307,6 +307,8 @@ private fun StatusLine(steps: List<CrewDayStepDto>) {
 }
 
 private const val LARGE_TEXT = 1.3f
+
+private fun stepWeight(state: String?): FontWeight = if (state == "current") FontWeight.Bold else FontWeight.Medium
 
 @Composable
 private fun StepDot(state: String?) {
@@ -433,7 +435,7 @@ private fun StateCard(
             }
             CrewDayBookingCard.Done -> {
                 StateText(
-                    title = booking.clockOf(booking.doneAt)?.let { "Done · reported by the crew at $it" } ?: "Done · reported by the crew",
+                    title = "Done · reported by the crew" + booking.clockOf(booking.doneAt)?.let { " at $it" }.orEmpty(),
                     body = null,
                 )
                 Photos(booking.photoUrls)
@@ -527,13 +529,21 @@ private fun StateCard(
             CrewDayBookingCard.Resolved -> {
                 StateText(title = booking.resolutionWords(), body = "Pantopus support closed this case.")
                 booking.invoiceId?.let { invoice ->
-                    PlanTextButton(title = "See receipt", onClick = { actions.onOpenInvoice(invoice) }, modifier = Modifier.testTag("crewDayBookingReceipt"))
+                    PlanTextButton(
+                        title = "See receipt",
+                        onClick = { actions.onOpenInvoice(invoice) },
+                        modifier = Modifier.testTag("crewDayBookingReceipt"),
+                    )
                 }
             }
             CrewDayBookingCard.Refunded -> {
                 StateText(title = "Refunded ${booking.priceWords.orEmpty()}${booking.cardWords?.let { " to $it" }.orEmpty()}", body = null)
                 booking.invoiceId?.let { invoice ->
-                    PlanTextButton(title = "See receipt", onClick = { actions.onOpenInvoice(invoice) }, modifier = Modifier.testTag("crewDayBookingReceipt"))
+                    PlanTextButton(
+                        title = "See receipt",
+                        onClick = { actions.onOpenInvoice(invoice) },
+                        modifier = Modifier.testTag("crewDayBookingReceipt"),
+                    )
                 }
             }
             CrewDayBookingCard.Cancelled, CrewDayBookingCard.Declined -> {
@@ -557,6 +567,9 @@ private fun StateCard(
     }
 }
 
+/** A sunken well for a quote or the crew's note. */
+private fun Modifier.wellShape(): Modifier = clip(RoundedCornerShape(14.dp)).background(PantopusColors.appSurfaceSunken).padding(Spacing.s3)
+
 /** "You'll hear by Sun, Nov 15. " for a price check. */
 private fun closesWords(booking: CrewDayBookingDto): String =
     booking.dayOf(booking.cancelCutoffAt)?.let { "You'll hear by $it. " }.orEmpty()
@@ -576,10 +589,14 @@ private fun StateText(
     body?.let { Text(text = it, style = PantopusTextStyle.body, color = PantopusColors.appTextStrong) }
     note?.takeIf { it.isNotBlank() }?.let { prep ->
         Column(
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(PantopusColors.appSurfaceSunken).padding(Spacing.s3),
+            modifier = Modifier.fillMaxWidth().wellShape(),
             verticalArrangement = Arrangement.spacedBy(Spacing.s1),
         ) {
-            Text(text = "One thing to do", style = PantopusTextStyle.small.copy(fontWeight = FontWeight.SemiBold), color = PantopusColors.appText)
+            Text(
+                text = "One thing to do",
+                style = PantopusTextStyle.small.copy(fontWeight = FontWeight.SemiBold),
+                color = PantopusColors.appText,
+            )
             Text(text = prep, style = PantopusTextStyle.small, color = PantopusColors.appTextStrong)
         }
     }
@@ -591,7 +608,7 @@ private fun NoteQuote(text: String) {
         text = "“$text”",
         style = PantopusTextStyle.body,
         color = PantopusColors.appTextStrong,
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(PantopusColors.appSurfaceSunken).padding(Spacing.s3),
+        modifier = Modifier.fillMaxWidth().wellShape(),
     )
 }
 
@@ -767,7 +784,11 @@ private fun ForTheCrew(
                     color = if (booking.accessNote.isNullOrBlank()) PantopusColors.appTextSecondary else PantopusColors.appText,
                     modifier = Modifier.weight(1f),
                 )
-                PlanTextButton(title = "Edit", onClick = onEdit, modifier = Modifier.fillMaxWidth(0.25f).testTag("crewDayBookingEditNoteRow"))
+                PlanTextButton(
+                    title = "Edit",
+                    onClick = onEdit,
+                    modifier = Modifier.fillMaxWidth(0.25f).testTag("crewDayBookingEditNoteRow"),
+                )
             }
         }
         Text(text = "The crew sees this on the day only.", style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)

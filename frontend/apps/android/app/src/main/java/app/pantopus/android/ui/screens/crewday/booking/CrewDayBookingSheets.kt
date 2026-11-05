@@ -70,7 +70,12 @@ fun CrewDayNoteDialog(
         title = { Text("Note for the crew") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                PlanTextArea(value = note, onValue = { note = it.take(MAX_NOTE) }, placeholder = "Gate, pets, parking…", label = "Note for the crew")
+                PlanTextArea(
+                    value = note,
+                    onValue = { note = it.take(MAX_NOTE) },
+                    placeholder = "Gate, pets, parking…",
+                    label = "Note for the crew",
+                )
                 Text(
                     text = "The crew sees this on the day. It's deleted a week after the job.",
                     style = PantopusTextStyle.small,
@@ -109,7 +114,12 @@ fun CrewDayChangeSheet(
     val title = booking.crewDay?.title.orEmpty()
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, modifier = Modifier.testTag("crewDayCancel")) {
         Column(
-            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.s4).navigationBarsPadding(),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = Spacing.s4)
+                    .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(Spacing.s3),
         ) {
             Text(
@@ -220,6 +230,8 @@ private fun SheetRow(
     }
 }
 
+private const val LOOK_FIRST_WORDS = "The crew confirms the new price before you're booked."
+
 /** The day's options and add-ons, with the new total; a look-first option sends it back to the crew for a price. */
 @Composable
 private fun ChangeDetails(
@@ -234,7 +246,9 @@ private fun ChangeDetails(
     var addOns by remember { mutableStateOf(booking.addOns.map { it.id }.toSet()) }
     val option = prices.priceOptions.firstOrNull { it.id == optionId }
     val total =
-        option?.takeIf { !it.needsLook }?.priceCents?.let { base -> base + prices.addOns.filter { it.id in addOns }.sumOf { it.priceCents } }
+        option?.takeIf { !it.needsLook }?.priceCents?.let { base ->
+            base + prices.addOns.filter { it.id in addOns }.sumOf { it.priceCents }
+        }
     PlanFormCard {
         prices.priceOptions.forEachIndexed { index, choice ->
             val selected = choice.id == optionId
@@ -267,7 +281,7 @@ private fun ChangeDetails(
         }
     }
     Text(
-        text = total?.let { "New total: ${CrewDayFormat.price(it)} · including tax" } ?: "The crew confirms the new price before you're booked.",
+        text = total?.let { "New total: ${CrewDayFormat.price(it)} · including tax" } ?: LOOK_FIRST_WORDS,
         style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
         color = PantopusColors.appText,
     )
@@ -327,7 +341,13 @@ fun CrewDayShareSheet(
                 color = PantopusColors.appTextSecondary,
                 modifier = Modifier.testTag("crewDayShareCount"),
             )
-            PlanTextArea(value = message, onValue = { message = it }, placeholder = "Your message", label = "Message to neighbors", minHeight = 110.dp)
+            PlanTextArea(
+                value = message,
+                onValue = { message = it },
+                placeholder = "Your message",
+                label = "Message to neighbors",
+                minHeight = 110.dp,
+            )
             // The link's preview: the street and the date, never the address.
             Column(
                 modifier = Modifier.fillMaxWidth().planCard().padding(Spacing.s3),
@@ -355,7 +375,11 @@ fun CrewDayShareSheet(
                     height = 44.dp,
                     modifier = Modifier.weight(1f).testTag("crewDayShareCopy"),
                 )
-                PrimaryButton(title = "Share…", onClick = { onShare(message) }, modifier = Modifier.weight(1f).testTag("crewDayShareShare"))
+                PrimaryButton(
+                    title = "Share…",
+                    onClick = { onShare(message) },
+                    modifier = Modifier.weight(1f).testTag("crewDayShareShare"),
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PlanTonalButton(

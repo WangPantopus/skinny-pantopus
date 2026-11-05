@@ -77,7 +77,7 @@ fun CrewDayProblemScreen(
     LaunchedEffect(Unit) { viewModel.load() }
     LaunchedEffect(state.sent) { if (state.sent) onClose() }
     val picker =
-        rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(maxItems = CrewDayProblemState.MAX_PHOTOS)) { uris ->
+        rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(CrewDayProblemState.MAX_PHOTOS)) { uris ->
             scope.launch {
                 uris.take(CrewDayProblemState.MAX_PHOTOS - state.photos.size).forEach { uri ->
                     val bytes = withContext(Dispatchers.IO) { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }
@@ -94,7 +94,12 @@ fun CrewDayProblemScreen(
         modifier = Modifier.testTag("crewDayProblem"),
         footer = {
             state.error?.let {
-                Text(text = it, style = PantopusTextStyle.small, color = PantopusColors.error, modifier = Modifier.testTag("crewDayProblemError"))
+                Text(
+                    text = it,
+                    style = PantopusTextStyle.small,
+                    color = PantopusColors.error,
+                    modifier = Modifier.testTag("crewDayProblemError"),
+                )
             }
             PrimaryButton(
                 title = "Send to Pantopus support",
@@ -177,7 +182,11 @@ fun CrewDayProblemScreen(
                     modifier = Modifier.testTag("crewDayProblemAddPhoto"),
                 )
             }
-            Column { Text(text = "Up to 4. Only Pantopus support and the crew see them.", style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary) }
+            Text(
+                text = "Up to 4. Only Pantopus support and the crew see them.",
+                style = PantopusTextStyle.small,
+                color = PantopusColors.appTextSecondary,
+            )
         }
     }
 }

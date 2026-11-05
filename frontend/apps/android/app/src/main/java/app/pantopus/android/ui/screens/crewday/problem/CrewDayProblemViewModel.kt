@@ -69,7 +69,8 @@ class CrewDayProblemViewModel
         fun load() {
             if (_state.value.booking != null) return
             viewModelScope.launch {
-                (repository.booking(bookingId) as? NetworkResult.Success)?.data?.let { booking -> _state.update { it.copy(booking = booking) } }
+                val booking = (repository.booking(bookingId) as? NetworkResult.Success)?.data ?: return@launch
+                _state.update { it.copy(booking = booking) }
             }
         }
 
@@ -81,7 +82,11 @@ class CrewDayProblemViewModel
         fun addPhoto(raw: ByteArray) {
             val bytes = ListingPhotoProcessor.uploadData(raw) ?: return
             _state.update {
-                if (it.photos.size >= CrewDayProblemState.MAX_PHOTOS) it else it.copy(photos = it.photos + CrewDayProblemPhoto(UUID.randomUUID().toString(), bytes))
+                if (it.photos.size >= CrewDayProblemState.MAX_PHOTOS) {
+                    it
+                } else {
+                    it.copy(photos = it.photos + CrewDayProblemPhoto(UUID.randomUUID().toString(), bytes))
+                }
             }
         }
 
@@ -94,15 +99,7 @@ class CrewDayProblemViewModel
             viewModelScope.launch {
                 val paths = mutableListOf<String>()
                 for (photo in _state.value.photos) {
-                    val path =
-                        photo.path ?: when (val upload = repository.upload(bookingId, photo.bytes, "image/jpeg", "problem-${photo.id.take(8)}.jpg")) {
-                            is NetworkResult.Success -> upload.data.path.also { done -> markUploaded(photo.id, done) }
-                            is NetworkResult.Failure -> {
-                                _state.update { it.copy(sending = false, error = "A photo didn't upload. ${upload.error.crewDayMessage}") }
-                                return@launch
-                            }
-                        }
-                    paths += path
+                    paths += photo.path ?: upload(photo) ?: return@launch
                 }
                 val body = CrewDayProblemBody(kind = s.kind.takeUnless { s.adding }, note = s.note.trim(), photoPaths = paths)
                 when (val result = repository.reportProblem(bookingId, body)) {
@@ -112,8 +109,21 @@ class CrewDayProblemViewModel
             }
         }
 
-        private fun markUploaded(
-            id: String,
-            path: String,
-        ) = _state.update { s -> s.copy(photos = s.photos.map { if (it.id == id) it.copy(path = path) else it }) }
+        /** Uploads one photo and keeps its path, so a retry doesn't upload it again; null (with the error shown) if it fails. */
+        private suspend fun upload(photo: CrewDayProblemPhoto): String? =
+            when (val result = repository.upload(bookingId, photo.bytes, JPEG, "problem-${photo.id.take(8)}.jpg")) {
+                is NetworkResult.Success -> {
+                    val path = result.data.path
+                    _state.update { s -> s.copy(photos = s.photos.map { if (it.id == photo.id) it.copy(path = path) else it }) }
+                    path
+                }
+                is NetworkResult.Failure -> {
+                    _state.update { it.copy(sending = false, error = "A photo didn't upload. ${result.error.crewDayMessage}") }
+                    null
+                }
+            }
+
+        private companion object {
+            const val JPEG = "image/jpeg"
+        }
     }
