@@ -109,6 +109,7 @@ fun PantopusNavHost(viewModel: RootViewModel = hiltViewModel()) {
             targetState = authState,
             transitionSpec = { fadeIn() togetherWith fadeOut() },
             label = "pantopus-auth-state",
+            contentKey = ::authContentKey,
         ) { state ->
             when (state) {
                 AuthRepository.State.Unknown -> SplashScreen()
@@ -146,6 +147,14 @@ fun PantopusNavHost(viewModel: RootViewModel = hiltViewModel()) {
         )
     }
 }
+
+/**
+ * Launch opens on the saved account and the profile read replaces it a moment later: a fresher copy of the same
+ * account keeps the signed-in screens (their navigation and state) instead of cross-fading to a rebuilt copy. Another
+ * state or another account still cross-fades.
+ */
+private fun authContentKey(state: AuthRepository.State): Any =
+    (state as? AuthRepository.State.SignedIn)?.let { "signed-in:${it.user.id}" } ?: state
 
 /**
  * The signed-out front door: the Place launch funnel, with the existing
