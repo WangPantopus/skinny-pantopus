@@ -27,10 +27,11 @@ struct CrewDayCrewDayView: View {
     @State private var showsQR = false
     @State private var confirmsCancel = false
     @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(spacing: 0) {
-            PlanNavBar(title: viewModel.day?.card.title ?? "Crew Day", onLeading: onBack)
+            PlanNavBar.crewDay(title: viewModel.day?.card.title ?? "Crew Day", onLeading: onBack)
             content
         }
         .background(Theme.Color.appBg)
@@ -75,7 +76,8 @@ struct CrewDayCrewDayView: View {
                         onOpenInvoices: { onOpenInvoices(day.businessUserId ?? "") },
                         onRepeat: { onRepeat(day.businessUserId ?? "") }
                     )
-                    if ["open", "in_progress"].contains(day.card.status), !CrewDayPrepCopy.isAfter(page), let share = day.card.share {
+                    if ["open", "in_progress"].contains(day.card.status), !day.card.isClosed, !CrewDayPrepCopy.isAfter(page),
+                       let share = day.card.share {
                         bringMore(share, page: page)
                     }
                     if let money = day.money, (money.grossCents ?? 0) > 0, !CrewDayPrepCopy.isAfter(page) {
@@ -177,7 +179,7 @@ struct CrewDayCrewDayView: View {
                 Button { Task { await viewModel.submit() } } label: {
                     PlanButtonLabel(title: action.0, isLoading: viewModel.working)
                 }
-                .planButton(.primary)
+                .crewDayButton(.primary)
                 .disabled(viewModel.working)
                 .accessibilityIdentifier(action.1)
             }
@@ -196,31 +198,31 @@ private extension CrewDayCrewDayView {
                     Text(url)
                         .planFont(.small)
                         .foregroundStyle(Theme.Color.appTextSecondary)
-                        .lineLimit(1)
+                        .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
                         .truncationMode(.middle)
                         .textSelection(.enabled)
-                    HStack(spacing: Spacing.s2) {
+                    CrewDayButtonRow(spacing: Spacing.s2) {
                         Button {
                             UIPasteboard.general.string = url
                             viewModel.notice = "Link copied."
                         } label: { PlanButtonLabel(title: "Copy link", icon: .copy, kind: .tonal) }
-                            .planButton(.tonal, size: .small)
+                            .crewDayButton(.tonal, size: .small)
                             .accessibilityIdentifier("crewDayPrepCopyLink")
                         Button { systemSheet = .share(items: [url]) } label: {
                             PlanButtonLabel(title: "Share…", icon: .share, kind: .tonal)
                         }
-                        .planButton(.tonal, size: .small)
+                        .crewDayButton(.tonal, size: .small)
                         .accessibilityIdentifier("crewDayPrepShare")
                     }
-                    HStack(spacing: Spacing.s2) {
+                    CrewDayButtonRow(spacing: Spacing.s2) {
                         Button { showsQR = true } label: { PlanButtonLabel(title: "QR code", icon: .qrCode, kind: .tonal) }
-                            .planButton(.tonal, size: .small)
+                            .crewDayButton(.tonal, size: .small)
                             .accessibilityIdentifier("crewDayPrepQR")
                         if let flyer = share.flyerURL.flatMap(URL.init(string:)) {
                             Button { openURL(flyer) } label: {
                                 PlanButtonLabel(title: "Printable flyer", icon: .printer, kind: .tonal)
                             }
-                            .planButton(.tonal, size: .small)
+                            .crewDayButton(.tonal, size: .small)
                             .accessibilityIdentifier("crewDayPrepFlyer")
                         }
                     }
@@ -233,7 +235,7 @@ private extension CrewDayCrewDayView {
                     Button { Task { await viewModel.invitePast() } } label: {
                         PlanButtonLabel(title: "Invite past customers", icon: .userPlus, kind: .secondary, isLoading: viewModel.working)
                     }
-                    .planButton(.secondary, size: .small)
+                    .crewDayButton(.secondary, size: .small)
                     .disabled(viewModel.working)
                     .accessibilityIdentifier("crewDayPrepInvitePast")
                 }
@@ -259,12 +261,12 @@ private extension CrewDayCrewDayView {
                 Button(action: onProposeDates) {
                     PlanButtonLabel(title: "Propose new dates", icon: .cloudRain, kind: .secondary)
                 }
-                .planButton(.secondary)
+                .crewDayButton(.secondary)
                 .disabled(viewModel.working)
                 .accessibilityIdentifier("crewDayPrepProposeDates")
             }
             Button { confirmsCancel = true } label: { PlanButtonLabel(title: "Cancel this Crew Day", kind: .textDanger) }
-                .planButton(.textDanger)
+                .crewDayButton(.textDanger)
                 .disabled(viewModel.working)
                 .accessibilityIdentifier("crewDayPrepCancel")
         }
@@ -277,10 +279,11 @@ private extension CrewDayCrewDayView {
 }
 
 enum CrewDayCrewDayCopy {
-    /// "If all 6 are done: $1,020 charged · you receive $918 after the 10% founding fee."
+    /// "If all 6 are done: $1,020 charged · you receive $918 after the 10% founding fee." ("If the home is done" for one.)
     static func preview(_ money: CrewDayMoneyDTO, homes: Int) -> String {
         let gross = CrewDayFormat.price(money.grossCents ?? 0)
-        guard let net = money.netCents, let rate = money.feeRate else { return "If all \(homes) are done: \(gross) charged." }
-        return "If all \(homes) are done: \(gross) charged · you receive \(CrewDayFormat.price(net)) after the \(Int(rate))% fee."
+        let lead = homes == 1 ? "If the home is done" : "If all \(homes) are done"
+        guard let net = money.netCents, let rate = money.feeRate else { return "\(lead): \(gross) charged." }
+        return "\(lead): \(gross) charged · you receive \(CrewDayFormat.price(net)) after the \(Int(rate))% fee."
     }
 }

@@ -13,6 +13,7 @@ import SwiftUI
 struct CrewDayNewView: View {
     @State var model: CrewDayNewModel
     let onDone: (String?) -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         Group {
@@ -31,6 +32,7 @@ struct CrewDayNewView: View {
             }
         }
         .task { await model.loadFee() }
+        .onChange(of: typeSize, initial: true) { _, size in model.largeText = size.isAccessibilitySize }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("crewDayNew")
     }
@@ -51,7 +53,7 @@ struct CrewDayNewView: View {
                 .fixedSize(horizontal: false, vertical: true)
             Spacer()
             Button("Done") { onDone(model.sentDayId) }
-                .planButton(.primary)
+                .crewDayButton(.primary)
                 .accessibilityIdentifier("crewDayNewDone")
         }
         .padding(Spacing.s5)
@@ -62,6 +64,19 @@ struct CrewDayNewView: View {
 
 struct CrewDayNewPricesStep: View {
     @Bindable var model: CrewDayNewModel
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// A price's name and amount side by side; stacked at the accessibility text sizes, where the amount
+    /// wouldn't fit its narrow field.
+    private var fieldRow: AnyLayout {
+        typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.s2))
+            : AnyLayout(HStackLayout(spacing: Spacing.s2))
+    }
+
+    private var amountWidth: CGFloat? {
+        typeSize.isAccessibilitySize ? nil : 96
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s5) {
@@ -73,12 +88,12 @@ struct CrewDayNewPricesStep: View {
                     .fixedSize(horizontal: false, vertical: true)
                 ForEach($model.options) { $option in
                     CrewDayCard(padding: Spacing.s3) {
-                        HStack(spacing: Spacing.s2) {
-                            CrewDayTextField(placeholder: "Two stories", text: $option.label, limit: 60)
+                        fieldRow {
+                            CrewDayTextField(label: "Price name", placeholder: "Two stories", text: $option.label, limit: 60)
                             if !option.needsLook {
-                                CrewDayTextField(placeholder: "$", text: $option.price, limit: 6)
+                                CrewDayTextField(label: "Price in dollars", placeholder: "$", text: $option.price, limit: 6)
                                     .keyboardType(.decimalPad)
-                                    .frame(width: 96)
+                                    .frame(width: amountWidth)
                             }
                         }
                         Toggle("I confirm this one after a look", isOn: $option.needsLook)
@@ -86,7 +101,7 @@ struct CrewDayNewPricesStep: View {
                             .tint(Theme.Color.home)
                         if model.options.count > 1 {
                             Button("Remove") { model.options.removeAll { $0.id == option.id } }
-                                .planButton(.textDanger, size: .extraSmall)
+                                .crewDayButton(.textDanger, size: .extraSmall)
                         }
                     }
                     .accessibilityIdentifier("crewDayNewOption_\(option.id)")
@@ -95,23 +110,25 @@ struct CrewDayNewPricesStep: View {
                     Button("Add a price") {
                         model.options.append(CrewDayNewOption(id: Self.newId("opt"), label: "", price: "", needsLook: false))
                     }
-                    .planButton(.text, size: .extraSmall)
+                    .crewDayButton(.text, size: .extraSmall)
                     .accessibilityIdentifier("crewDayNewOptionAdd")
                 }
             }
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 CrewDaySectionTitle(text: "Add-ons")
                 ForEach($model.addOns) { $addOn in
-                    HStack(spacing: Spacing.s2) {
-                        CrewDayTextField(placeholder: "Clean the gutter guards", text: $addOn.label, limit: 60)
-                        CrewDayTextField(placeholder: "$", text: $addOn.price, limit: 6)
-                            .keyboardType(.decimalPad)
-                            .frame(width: 96)
-                        Button { model.addOns.removeAll { $0.id == addOn.id } } label: {
-                            Icon(.x, size: 16, color: Theme.Color.appTextSecondary).frame(width: 44, height: 44)
+                    fieldRow {
+                        CrewDayTextField(label: "Add-on", placeholder: "Clean the gutter guards", text: $addOn.label, limit: 60)
+                        HStack(spacing: Spacing.s2) {
+                            CrewDayTextField(label: "Add-on price in dollars", placeholder: "$", text: $addOn.price, limit: 6)
+                                .keyboardType(.decimalPad)
+                                .frame(width: amountWidth)
+                            Button { model.addOns.removeAll { $0.id == addOn.id } } label: {
+                                Icon(.x, size: 16, color: Theme.Color.appTextSecondary).frame(width: 44, height: 44)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Remove this add-on")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Remove this add-on")
                     }
                     .accessibilityIdentifier("crewDayNewAddOn_\(addOn.id)")
                 }
@@ -119,13 +136,14 @@ struct CrewDayNewPricesStep: View {
                     Button("Add an add-on") {
                         model.addOns.append(CrewDayNewAddOn(id: Self.newId("add"), label: "", price: ""))
                     }
-                    .planButton(.text, size: .extraSmall)
+                    .crewDayButton(.text, size: .extraSmall)
                     .accessibilityIdentifier("crewDayNewAddOnAdd")
                 }
             }
             VStack(alignment: .leading, spacing: Spacing.s2) {
                 CrewDaySectionTitle(text: "One thing for households to do")
                 CrewDayTextField(
+                    label: "One thing for households to do",
                     placeholder: "Please keep the side gate unlocked and pets inside.",
                     text: $model.prepNote,
                     limit: 500,
@@ -207,6 +225,12 @@ struct CrewDayNewReviewStep: View {
                 .planFont(.small)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+            if model.largeText {
+                Button("Save draft") { model.secondaryTapped() }
+                    .crewDayButton(.secondary)
+                    .disabled(model.isSubmitting)
+                    .accessibilityIdentifier("crewDayNewSaveDraft")
+            }
         }
     }
 

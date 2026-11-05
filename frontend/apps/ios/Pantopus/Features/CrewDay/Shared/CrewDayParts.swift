@@ -154,12 +154,13 @@ struct CrewDayPromiseRow: View {
     }
 }
 
-/// A small status chip ("Open", "Waiting for approval", "Paid out").
+/// A small status chip ("Open", "Waiting for approval", "Paid out"). At the accessibility text sizes it wraps.
 struct CrewDayChip: View {
     enum Tone { case neutral, good, waiting, bad, business, info }
 
     let text: String
     var tone: Tone = .neutral
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         Text(text)
@@ -167,8 +168,9 @@ struct CrewDayChip: View {
             .foregroundStyle(ink)
             .padding(.horizontal, Spacing.s2)
             .padding(.vertical, 3)
-            .background(Capsule().fill(fill))
-            .lineLimit(1)
+            .background(RoundedRectangle(cornerRadius: typeSize.isAccessibilitySize ? Radii.md : Radii.pill).fill(fill))
+            .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
+            .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
     }
 
     private var ink: Color {
@@ -194,6 +196,43 @@ struct CrewDayChip: View {
     }
 }
 
+/// Buttons side by side, stacked full width at the accessibility text sizes so no label truncates.
+struct CrewDayButtonRow<Content: View>: View {
+    var spacing: CGFloat = Spacing.s2
+    @ViewBuilder let content: () -> Content
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(spacing: spacing) { content() }
+        } else {
+            HStack(spacing: spacing) { content() }
+        }
+    }
+}
+
+/// A heading with something on its trailing side; at the accessibility text sizes the trailing part goes below.
+struct CrewDayHeaderRow<Leading: View, Trailing: View>: View {
+    @ViewBuilder let leading: () -> Leading
+    @ViewBuilder let trailing: () -> Trailing
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: Spacing.s1) {
+                leading()
+                trailing()
+            }
+        } else {
+            HStack(alignment: .firstTextBaseline) {
+                leading()
+                Spacer()
+                trailing()
+            }
+        }
+    }
+}
+
 /// A full-width error line under a form or a footer button.
 struct CrewDayErrorText: View {
     let text: String
@@ -210,7 +249,8 @@ struct CrewDayErrorText: View {
     }
 }
 
-/// The sticky footer every Crew Day screen puts its one primary action in.
+/// The sticky footer every Crew Day screen puts its one primary action in. It keeps its full height (the
+/// content above it scrolls), so its lines never squeeze into each other at the large text sizes.
 struct CrewDayFooter<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
@@ -222,8 +262,39 @@ struct CrewDayFooter<Content: View>: View {
         .padding(.top, Spacing.s3)
         .padding(.bottom, Spacing.s2)
         .frame(maxWidth: .infinity)
+        .fixedSize(horizontal: false, vertical: true)
         .background(Theme.Color.appSurface.ignoresSafeArea(edges: .bottom))
         .overlay(alignment: .top) { Divider().overlay(Theme.Color.appBorder) }
+    }
+}
+
+extension PlanNavBar {
+    /// A Crew Day top bar: at the accessibility text sizes its title wraps (01-spec.md: nothing truncates).
+    static func crewDay(
+        title: String,
+        leading: Leading = .back,
+        trailing: String? = nil,
+        onLeading: @escaping () -> Void = {}
+    ) -> PlanNavBar {
+        PlanNavBar(title: title, leading: leading, trailing: trailing, wrapsAtLargeText: true, onLeading: onLeading)
+    }
+}
+
+extension View {
+    /// A Crew Day sheet's heights; at the accessibility text sizes it opens at full height so nothing is cut off.
+    func crewDaySheetDetents(_ detents: Set<PresentationDetent>) -> some View {
+        modifier(CrewDaySheetDetents(detents: detents))
+    }
+}
+
+private struct CrewDaySheetDetents: ViewModifier {
+    let detents: Set<PresentationDetent>
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    func body(content: Content) -> some View {
+        content
+            .presentationDetents(typeSize.isAccessibilitySize ? [.large] : detents)
+            .presentationDragIndicator(.visible)
     }
 }
 
@@ -241,18 +312,57 @@ struct CrewDayLoadingView: View {
 }
 
 struct CrewDayErrorView: View {
+    /// What failed ("Couldn't load your Crew Days").
+    var headline = "Couldn't load this Crew Day"
+    /// What happened and what to do ("Can't reach Pantopus. Check your connection and try again.").
     let message: String
     let retry: @MainActor () async -> Void
+    @State private var retrying = false
 
+    /// EmptyState's look, in Crew Day's type: its words grow with the text size (EmptyState's keep their size), and
+    /// at the largest sizes it scrolls.
     var body: some View {
-        EmptyState(
-            icon: .alertCircle,
-            headline: "Couldn't load this Crew Day",
-            subcopy: message,
-            cta: EmptyState.CTA(title: "Try again") { await retry() }
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityIdentifier("crewDayLoadError")
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(spacing: Spacing.s4) {
+                    ZStack {
+                        Circle().fill(Theme.Color.personalBg).frame(width: 72, height: 72)
+                        Icon(.alertCircle, size: 32, color: Theme.Color.primary600)
+                    }
+                    .accessibilityHidden(true)
+                    Text(headline)
+                        .planFont(.h3)
+                        .foregroundStyle(Theme.Color.appText)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(message)
+                        .planFont(.small)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        Task {
+                            retrying = true
+                            await retry()
+                            retrying = false
+                        }
+                    } label: {
+                        PlanButtonLabel(title: "Try again", isLoading: retrying)
+                    }
+                    .crewDayButton(.primary)
+                    .disabled(retrying)
+                    .padding(.top, Spacing.s2)
+                }
+                .padding(.horizontal, Spacing.s6)
+                .padding(.vertical, Spacing.s4)
+                // One VoiceOver element that reads what failed and does Try again, as EmptyState's does.
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("crewDayLoadError")
+                .centeredClearOfFold(minHeight: proxy.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+        .background(Theme.Color.appBg)
     }
 }
 

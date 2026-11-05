@@ -77,7 +77,7 @@ struct CrewDayPrepSections: View {
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             Button("Open the route") { onOpenRoute(nil) }
-                .planButton(.primary)
+                .crewDayButton(.primary)
                 .accessibilityIdentifier("crewDayPrepRoute")
         }
         .accessibilityElement(children: .contain)
@@ -125,7 +125,7 @@ struct CrewDayPrepSections: View {
                             kind: .tonal
                         )
                     }
-                    .planButton(.tonal, size: .small)
+                    .crewDayButton(.tonal, size: .small)
                     .accessibilityIdentifier("crewDayDatesOpenRoute_\(date.date)")
                 }
             }
@@ -147,20 +147,20 @@ struct CrewDayPrepSections: View {
                             .foregroundStyle(Theme.Color.appText)
                             .fixedSize(horizontal: false, vertical: true)
                         if page.day.canEdit {
-                            HStack(spacing: Spacing.s2) {
+                            CrewDayButtonRow(spacing: Spacing.s2) {
                                 Button("Set price") {
                                     priceText = ""
                                     pricing = home
                                     showsPricing = true
                                 }
-                                .planButton(.primary, size: .small)
+                                .crewDayButton(.primary, size: .small)
                                 .accessibilityIdentifier("crewDayPrepSetPrice")
                                 Button("Can't take it") {
                                     declineNote = ""
                                     declining = home
                                     showsDeclining = true
                                 }
-                                .planButton(.secondary, size: .small)
+                                .crewDayButton(.secondary, size: .small)
                                 .accessibilityIdentifier("crewDayPrepCantTake")
                             }
                         }
@@ -180,7 +180,7 @@ struct CrewDayPrepSections: View {
                             Button { Task { await viewModel.release(home) } } label: {
                                 PlanButtonLabel(title: "Release at no charge", kind: .secondary, isLoading: viewModel.working)
                             }
-                            .planButton(.secondary, size: .small)
+                            .crewDayButton(.secondary, size: .small)
                             .disabled(viewModel.working)
                             .accessibilityIdentifier("crewDayPrepRelease")
                         }
@@ -224,7 +224,9 @@ struct CrewDayPrepSections: View {
                     }
                 }
             }
-            CrewDayLockLine(text: "Addresses show at 6 PM the evening before.")
+            if !CrewDayPrepCopy.routeOpen(page) {
+                CrewDayLockLine(text: "Addresses show at 6 PM the evening before.")
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("crewDayPrepHomes")
@@ -265,12 +267,12 @@ struct CrewDayPrepSections: View {
                         .foregroundStyle(Theme.Color.appTextSecondary)
                 }
                 Button("See invoices", action: onOpenInvoices)
-                    .planButton(.secondary, size: .small)
+                    .crewDayButton(.secondary, size: .small)
                     .accessibilityIdentifier("crewDayAfterInvoices")
             }
             if page.day.canEdit {
                 Button("Offer a Crew Day here again", action: onRepeat)
-                    .planButton(.primary)
+                    .crewDayButton(.primary)
                     .accessibilityIdentifier("crewDayAfterRepeat")
             }
             ForEach(problems) { home in

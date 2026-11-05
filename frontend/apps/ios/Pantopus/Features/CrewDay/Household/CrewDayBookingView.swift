@@ -37,12 +37,12 @@ struct CrewDayBookingView: View {
             switch viewModel.state {
             case .loading:
                 VStack(spacing: 0) {
-                    PlanNavBar(title: "Your Crew Day", onLeading: onBack)
+                    PlanNavBar.crewDay(title: "Your Crew Day", onLeading: onBack)
                     CrewDayLoadingView()
                 }
             case let .failed(message):
                 VStack(spacing: 0) {
-                    PlanNavBar(title: "Your Crew Day", onLeading: onBack)
+                    PlanNavBar.crewDay(title: "Your Crew Day", onLeading: onBack)
                     if viewModel.unavailable { unavailable } else { CrewDayErrorView(message: message) { await viewModel.load() } }
                 }
             case let .loaded(booking):
@@ -315,17 +315,17 @@ private extension CrewDayBookingView {
                         .onChange(of: noteDraft) { _, text in if text.count > 500 { noteDraft = String(text.prefix(500)) } }
                         .accessibilityLabel("Note for the crew")
                         .accessibilityIdentifier("crewDayNoteField")
-                    HStack(spacing: Spacing.s2) {
+                    CrewDayButtonRow(spacing: Spacing.s2) {
                         Button {
                             Task { if await viewModel.saveNote(noteDraft) { editingNote = false } }
                         } label: {
                             PlanButtonLabel(title: "Save note", isLoading: viewModel.working == .note)
                         }
-                        .planButton(.primary, size: .small)
+                        .crewDayButton(.primary, size: .small)
                         .disabled(viewModel.working != nil)
                         .accessibilityIdentifier("crewDayNoteSave")
                         Button("Cancel") { editingNote = false }
-                            .planButton(.tonal, size: .small)
+                            .crewDayButton(.tonal, size: .small)
                             .accessibilityIdentifier("crewDayBookingCancelNote")
                     }
                 } else {
@@ -337,7 +337,7 @@ private extension CrewDayBookingView {
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("crewDayBookingNote")
                         Button("Edit") { startEditingNote(booking) }
-                            .planButton(.text, size: .extraSmall)
+                            .crewDayButton(.text, size: .extraSmall)
                             .accessibilityLabel("Edit the note for the crew")
                             .accessibilityIdentifier("crewDayBookingEditNote")
                     }

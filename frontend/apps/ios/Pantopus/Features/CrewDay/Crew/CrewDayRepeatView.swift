@@ -24,12 +24,12 @@ struct CrewDayRepeatView: View {
                 CrewDayNewView(model: model, onDone: onDone)
             } else if let error {
                 VStack(spacing: 0) {
-                    PlanNavBar(title: "New Crew Day", leading: .close, onLeading: onClose)
+                    PlanNavBar.crewDay(title: "New Crew Day", leading: .close, onLeading: onClose)
                     CrewDayErrorView(message: error) { await load() }
                 }
             } else {
                 VStack(spacing: 0) {
-                    PlanNavBar(title: "New Crew Day", leading: .close, onLeading: onClose)
+                    PlanNavBar.crewDay(title: "New Crew Day", leading: .close, onLeading: onClose)
                     CrewDayLoadingView()
                 }
             }

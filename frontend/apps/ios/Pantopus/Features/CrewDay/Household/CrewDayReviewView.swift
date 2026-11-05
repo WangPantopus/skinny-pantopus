@@ -14,6 +14,7 @@ struct CrewDayReviewView: View {
     @Bindable var model: CrewDayBookingFlowModel
     let invitation: CrewDayInvitationDTO
     @State private var choosesCard = false
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,8 +27,11 @@ struct CrewDayReviewView: View {
                     plansChange
                 }
                 .padding(Spacing.s4)
+                // At the accessibility text sizes the total, the approval and Book end the page; pinned, they'd
+                // leave a few lines to read.
+                if typeSize.isAccessibilitySize { footer }
             }
-            footer
+            if !typeSize.isAccessibilitySize { footer }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("crewDayReview")
@@ -63,8 +67,14 @@ struct CrewDayReviewView: View {
     private var forCrew: some View {
         CrewDayCard {
             CrewDaySectionTitle(text: "For the crew (optional)")
-            CrewDayTextField(placeholder: "Gate, pets, parking…", text: $model.accessNote, limit: 500, axis: .vertical)
-                .accessibilityIdentifier("crewDayReviewNote")
+            CrewDayTextField(
+                label: "Note for the crew",
+                placeholder: "Gate, pets, parking…",
+                text: $model.accessNote,
+                limit: 500,
+                axis: .vertical
+            )
+            .accessibilityIdentifier("crewDayReviewNote")
             Text("The crew sees this on the day. It's deleted a week after the job.")
                 .planFont(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
@@ -75,15 +85,18 @@ struct CrewDayReviewView: View {
         CrewDayCard {
             CrewDaySectionTitle(text: "Payment")
             if let card = model.card {
-                HStack {
-                    Icon(.creditCard, size: 18, color: Theme.Color.appText)
-                    Text(card.label)
-                        .planFont(.bodyStrong)
-                        .foregroundStyle(Theme.Color.appText)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityIdentifier("crewDayReviewCard")
+                CrewDayHeaderRow {
+                    HStack {
+                        Icon(.creditCard, size: 18, color: Theme.Color.appText)
+                        Text(card.label)
+                            .planFont(.bodyStrong)
+                            .foregroundStyle(Theme.Color.appText)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityIdentifier("crewDayReviewCard")
+                    }
+                } trailing: {
                     Button("Change") { choosesCard = true }
-                        .planButton(.text, size: .extraSmall)
+                        .crewDayButton(.text, size: .extraSmall)
                         .accessibilityIdentifier("crewDayReviewChangeCard")
                         // On iOS 26+ the dialog is a popover: anchor it to the button.
                         .confirmationDialog("Pay with", isPresented: $choosesCard, titleVisibility: .visible) {
@@ -97,7 +110,7 @@ struct CrewDayReviewView: View {
                 Button { Task { await model.addCard() } } label: {
                     PlanButtonLabel(title: "Add a card", icon: .creditCard, kind: .secondary, isLoading: model.wallet.isAdding)
                 }
-                .planButton(.secondary)
+                .crewDayButton(.secondary)
                 .disabled(model.wallet.isAdding)
                 .accessibilityIdentifier("crewDayReviewAddCard")
             }
@@ -147,14 +160,15 @@ struct CrewDayReviewView: View {
     private var footer: some View {
         CrewDayFooter {
             if let price = model.priceCents, !model.needsLook {
-                HStack {
+                CrewDayHeaderRow {
                     Text("Total").planFont(.bodyStrong).foregroundStyle(Theme.Color.appText)
-                    Spacer()
+                } trailing: {
                     Text("\(CrewDayFormat.price(price)) · including tax")
                         .planFont(.bodyStrong)
                         .monospacedDigit()
                         .foregroundStyle(Theme.Color.appText)
                 }
+                .accessibilityElement(children: .combine)
             }
             Toggle(isOn: $model.approved) {
                 Text(approvalLine)
@@ -168,7 +182,7 @@ struct CrewDayReviewView: View {
             Button { Task { await model.book() } } label: {
                 PlanButtonLabel(title: bookTitle, isLoading: model.isBooking)
             }
-            .planButton(.primary)
+            .crewDayButton(.primary)
             .disabled(!model.canBook)
             .accessibilityIdentifier("crewDayReviewBook")
         }
