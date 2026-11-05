@@ -14,6 +14,10 @@
   - `uncovered-counties-2026-11-05.csv`: the 41 top-150 counties (41.9M people) without free building facts (19 not
     found, 15 paid or permission, 5 one city only, 2 free files not confirmed), with prices where found and the next step.
   - `county-data-survey/`: scripts and inputs to re-run or extend the survey (see its README; run Python with `-I`).
+  - `property-data-sources-2026-11-05.csv`: every county and state source checked in the second pass, with link, what
+    it holds and its terms caveat.
+  - `how-listing-sites-get-unit-data-2026-11-05.md`: how Zillow and Redfin get unit facts and floor plans (MLS, rental
+    feeds, owners, vendor-bought county records), the two Chicago examples checked, and what Pantopus can use.
 - Headline numbers after the second pass: about 56% of Americans (range 52-61%) live where free bulk building facts
   exist; about 22% (20-26%) where they include bedrooms or baths; about 36% only lookup sites (resellers sell the files,
   ~$200-300 per county); about 6.5% paid or permission; none unchecked.

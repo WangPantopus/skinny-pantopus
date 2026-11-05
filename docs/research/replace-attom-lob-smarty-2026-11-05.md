@@ -179,6 +179,13 @@ Smarty account or agreement; ATTOM plan and license terms; the Google billing SK
 production key; a private storage account for the national data files; Lob live key and return address; whether to
 accept Washington's commercial-use attestation to open Spokane's free files.
 
+### Unit facts for condos and apartments
+
+County records (and so ATTOM) rarely hold a condo or apartment unit's bedrooms or size; Zillow and Redfin get them
+from MLS and rental listings. Proposed: building managers' floor plan sheets (one sheet fills a whole unit stack),
+residents confirming their own unit, and county files where they exist; MLS only by the founder's decision. See
+[how-listing-sites-get-unit-data-2026-11-05.md](how-listing-sites-get-unit-data-2026-11-05.md).
+
 ### Sources
 
 Every link checked in the second pass, with what it holds and its terms caveat:
