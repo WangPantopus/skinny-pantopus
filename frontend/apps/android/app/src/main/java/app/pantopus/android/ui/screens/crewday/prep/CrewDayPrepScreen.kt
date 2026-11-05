@@ -46,6 +46,7 @@ import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.screens.crewday.components.CrewDayListPlaceholder
 import app.pantopus.android.ui.screens.crewday.components.CrewDaySection
 import app.pantopus.android.ui.screens.crewday.create.NewCrewDayState
+import app.pantopus.android.ui.screens.crewday.dates.CrewDayRainCard
 import app.pantopus.android.ui.screens.plans.components.PlanBanner
 import app.pantopus.android.ui.screens.plans.components.PlanBannerTone
 import app.pantopus.android.ui.screens.plans.components.PlanOptionRow
@@ -163,6 +164,8 @@ private fun PrepContent(
             CrewDayRouteCard(view = view, onOpenRoute = { actions.onOpenRoute(day.id) })
         }
         StatusBanner(view, working, viewModel)
+        // Rain: while households answer the new dates, their answers and each date's route (as the web).
+        if (open || day.status == "in_progress") CrewDayRainCard(view, onOpen = { actions.onProposeDates(day.id) })
         NeedsYou(view, working, onPrice = { pricing = it }, onDecline = { declining = it }, onRelease = { releasing = it })
         HomesBooked(view)
         // As the web: no more homes can come once booking closed or the day is full.
@@ -185,14 +188,18 @@ private fun PrepContent(
         MoneyPreview(view)
         if (day.canEdit && (day.status == "open" || day.status == "in_progress")) {
             CrewDaySection("If plans change") {
-                PlanOptionRow(first = true) {
-                    PlanTonalButton(
-                        title = "Propose new dates",
-                        onClick = { actions.onProposeDates(day.id) },
-                        modifier = Modifier.testTag("crewDayPrepProposeDates"),
-                    )
+                // One proposal at a time, and only for homes that are booked (as the web).
+                val canPropose = view.proposal == null && view.bookings.any { it.status == "booked" }
+                if (canPropose) {
+                    PlanOptionRow(first = true) {
+                        PlanTonalButton(
+                            title = "Propose new dates",
+                            onClick = { actions.onProposeDates(day.id) },
+                            modifier = Modifier.testTag("crewDayPrepProposeDates"),
+                        )
+                    }
                 }
-                PlanOptionRow {
+                PlanOptionRow(first = !canPropose) {
                     PlanTextButton(
                         title = "Cancel this Crew Day",
                         onClick = { cancelling = true },
