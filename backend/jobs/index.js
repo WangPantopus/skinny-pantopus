@@ -111,6 +111,8 @@ const authRegistryPrune = require('./authRegistryPrune');
 const { runSupportTrainReminders } = require('./supportTrainReminders');
 // Nearby Plans: held pushes, reminders, lifecycle and the host's summary
 const { runPlansTick } = require('./planJobs');
+// Crew Day: charges 24 hours after a home is done (docs/product/crew-day-build/02-contract.md §7)
+const crewDayJobs = require('./crewDayJobs');
 // Assistant nudges and briefs: pushes held for quiet hours
 const { releaseHeldNudges } = require('../services/ai/nudges/engine');
 const { runBookingReminders } = require('./bookingReminders');
@@ -743,6 +745,24 @@ function startJobs(options = {}) {
   // then the assistant's nudges for hosts (weather, requests waiting, after the plan).
   // Every send is claimed first, so overlapping runners don't repeat a notice.
   scheduleCron('*/5 * * * *', wrapJob('plansTick', runPlansTick), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Crew Day ───
+  // Every 10 minutes: done homes whose 24 hours passed (or that the household confirmed) are charged with the card
+  // saved at booking. Each booking is claimed first, so overlapping runners never charge one twice.
+  scheduleCron('*/10 * * * *', wrapJob('crewDayCharges', crewDayJobs.crewDayCharges), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+  // Every 15 minutes: the evening-before reminders (6 PM local, once per booking), then the deadlines (unanswered new
+  // dates and price offers end free, finished days close, access notes are cleared a week after the day).
+  scheduleCron('4,19,34,49 * * * *', wrapJob('crewDayReminders', crewDayJobs.crewDayReminders), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+  scheduleCron('8,23,38,53 * * * *', wrapJob('crewDayDeadlines', crewDayJobs.crewDayDeadlines), {
     scheduled: true,
     timezone: 'UTC',
   });
