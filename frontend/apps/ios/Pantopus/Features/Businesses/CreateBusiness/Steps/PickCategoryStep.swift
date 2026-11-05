@@ -88,6 +88,8 @@ struct BusinessCategoryGrid: View {
             }
         }
         .accessibilityIdentifier("createBusinessCategoryGrid")
+        // Half folded like a book, the grid keeps to the larger side of the fold instead of a column on the crease.
+        .besideFold()
     }
 }
 
