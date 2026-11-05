@@ -4009,7 +4009,7 @@ router.get('/:id/emergencies', verifyToken, async (req, res) => {
       location_in_home: e.location,
     }));
 
-    res.json({ emergencies });
+    res.json({ emergencies, canManage: current.access.permissions.includes('home.edit') });
   } catch (err) {
     if (err.statusCode === 503) return homeListService.sendError(res, err);
     logger.error('Emergencies fetch error', { error: err.message });

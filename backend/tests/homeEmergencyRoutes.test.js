@@ -182,7 +182,7 @@ describe('GET /api/homes/:id/emergencies uses the effective sensitivity permissi
   test('owner and explicitly granted member use the existing response and aliases', async () => {
     const expected = { emergencies: getTable('HomeEmergency').map(row => ({
       ...row, info_type: row.type, location_in_home: row.location,
-    })) };
+    })), canManage: true };
     const owner = await get(OWNER);
     expect(owner.status).toBe(200);
     expect(owner.body).toEqual(expected);
