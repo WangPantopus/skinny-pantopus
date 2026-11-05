@@ -746,6 +746,24 @@ public final class ChatConversationViewModel {
     private var savedHistoryKey: String?
     private var refreshInProgress = false
     private var fallbackRefreshTask: Task<Void, Never>?
+    /// The scheduled catch-up reads only if a change signal named the thread
+    /// after `currentAsOf` (`changedSinceCurrent()`); any other ask makes it read.
+    private var fallbackRefreshOnlyIfChanged = false
+    /// Asked for again while the catch-up was on its way: it reads once more.
+    private var fallbackRefreshAgain = false
+    /// A merge asked for while another read was on its way: it follows that read.
+    private var mergeAfterCurrentRead = false
+    /// Since when the thread hears every change as it happens: its socket
+    /// listeners are on and the socket is connected. nil while it isn't.
+    private var liveSince: Date?
+    /// When the thread last had every change: the moment its latest canonical
+    /// read (history, a search match's context, or changes) was sent, or the
+    /// moment it stopped listening while it heard everything.
+    private var currentAsOf: Date?
+    /// When the latest live event about each of the thread's rooms arrived. A
+    /// `sync:changed` naming only rooms heard from just before is that event's
+    /// echo, so it reads nothing.
+    @ObservationIgnored private var lastRoomEventAt: [String: Date] = [:]
     private var topicsRefreshTask: Task<Void, Never>?
     private var markReadTask: Task<Void, Never>?
     private var visibleReadBoundaries: [String: String] = [:]
@@ -962,14 +980,19 @@ public final class ChatConversationViewModel {
         ChatPerformance.signposter.emitEvent("ThreadLoad")
         observeOutbox()
         await restoreComposerDraft()
-        if case .loaded = state {
-            // Back on screen after `teardown()` (a pushed screen, a tab
-            // switch): listen again and catch up on what arrived meanwhile.
+        switch state {
+        case .loaded, .empty:
+            // Back on screen (a fold or a turn, a pushed screen closed, a tab
+            // switch): listen again if it stopped. What changed meanwhile is
+            // caught up then, only if something did (`handleConnectionState`).
             if socketTasks.isEmpty {
                 subscribeToSockets()
-                await refresh()
+                // A topics read that leaving called off.
+                refreshTopicsIfUnknown(in: messages)
             }
             return
+        case .loading, .error:
+            break
         }
         await restoreAIConversationIfNeeded()
         // Reopening a thread seen earlier this session: its messages at once,
@@ -979,7 +1002,10 @@ public final class ChatConversationViewModel {
         if recalled { ChatPerformance.mark("ThreadCached", rows: messages.count) }
         await loadTopicsIfNeeded()
         await fetch(recalled ? .merge : .reload)
-        subscribeToSockets()
+        // Listening once the first read is in. What changed since it was sent
+        // is caught up then, only if a change signal named the thread
+        // (`handleConnectionState`).
+        if socketTasks.isEmpty { subscribeToSockets() }
         prefetchDirectRoomIfNeeded()
         loadGigContextIfNeeded()
         applyAILaunch()
@@ -1355,22 +1381,95 @@ public final class ChatConversationViewModel {
             if isViewingSearchContext { didResolveScrollTarget = false }
             await fetch(.reload)
         } else {
-            // Catch-up, reconnect and pull-to-refresh merge quietly, a search
-            // context included (its anchored window is requested again): the
-            // rows stay on screen and the reader stays where they are.
+            // Pull-to-refresh and coming back to the app merge quietly, a
+            // search context included (through `changes` when the thread
+            // knows where its history stood): the rows stay on screen and the
+            // reader stays where they are.
             await fetch(.merge)
         }
     }
 
-    /// Incomplete legacy events and reconnects share one recovery request.
-    private func scheduleFallbackRefresh() {
-        guard fallbackRefreshTask == nil else { return }
+    /// Incomplete legacy events, reconnects and change signals share one
+    /// recovery request (`catchUp()`).
+    /// - Parameter onlyIfChanged: the thread listens again with the socket up
+    ///   (back on screen after a pushed screen, a tab switch, or a fold or a
+    ///   turn under a pushed screen): it reads only if a change signal named it
+    ///   meanwhile. Any other ask in the meantime makes it read.
+    private func scheduleFallbackRefresh(onlyIfChanged: Bool = false) {
+        if !onlyIfChanged { fallbackRefreshOnlyIfChanged = false }
+        guard fallbackRefreshTask == nil else {
+            // An ask while the catch-up is reading can concern a later change.
+            if !onlyIfChanged { fallbackRefreshAgain = true }
+            return
+        }
+        fallbackRefreshOnlyIfChanged = onlyIfChanged
         fallbackRefreshTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 150_000_000)
-            guard let self, !Task.isCancelled else { return }
-            await refresh()
+            if onlyIfChanged {
+                // After the change signals that reached the store before the
+                // thread listened (`ScreenStoreLive` marks them in turn). Later
+                // ones reach the thread's own listener (`namesUnheardChange`).
+                await Task.yield()
+            } else {
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            }
+            guard let self else { return }
+            repeat {
+                guard !Task.isCancelled else { return }
+                fallbackRefreshAgain = false
+                if fallbackRefreshOnlyIfChanged, !changedSinceCurrent() { break }
+                await catchUp()
+            } while fallbackRefreshAgain
             fallbackRefreshTask = nil
         }
+    }
+
+    /// The newest changes merged quietly, a search match's window included.
+    /// Topics are read again only when a message names one the thread doesn't
+    /// know (`refreshTopicsIfUnknown(in:)`), or when their first read failed.
+    private func catchUp() async {
+        guard case .error = state else {
+            if !topicsConfirmed { await loadTopicsIfNeeded() }
+            await fetch(.merge)
+            return
+        }
+        // Nothing is on screen to keep: as Retry does.
+        await refresh()
+    }
+
+    /// A change signal named the thread after `currentAsOf`, or a dropped
+    /// socket marked Messages (`ScreenStoreLive` marks both). A person's
+    /// thread also counts any chat's signal: a new task room with them names a
+    /// room it doesn't know yet, as a business's inbox hears only `chats`.
+    private func changedSinceCurrent() -> Bool {
+        guard let currentAsOf else { return true }
+        var topics = Set(activeRoomIds.map(ScreenTopic.chat))
+        switch mode {
+        case let .room(roomId):
+            topics.insert(ScreenTopic.chat(roomId))
+            if asBusinessUserId != nil { topics.insert(ScreenTopic.chats) }
+        case .person:
+            topics.insert(ScreenTopic.chats)
+        case .ai:
+            return false
+        }
+        return store.wasMarked(topics: topics, kind: .messagesList, since: currentAsOf)
+    }
+
+    /// A canonical read answered: the thread has every change up to when it
+    /// was sent. One sent before the thread was listening (the socket was
+    /// still connecting) can have missed what changed until then.
+    private func readArrived(sentAt: Date) {
+        if currentAsOf.map({ $0 < sentAt }) != false { currentAsOf = sentAt }
+        if let liveSince, sentAt < liveSince { scheduleFallbackRefresh() }
+    }
+
+    /// Messages a read brought in from a topic the thread doesn't know (one
+    /// started while it wasn't looking): its topics are read again, as for a
+    /// live message from one (`handleIncoming`).
+    private func refreshTopicsIfUnknown(in messages: [ChatMessageDTO]) {
+        let known = Set(topics.map(\.id))
+        guard messages.contains(where: { $0.topicId.map { !known.contains($0) } == true }) else { return }
+        scheduleTopicsRefresh()
     }
 
     public func selectTopic(_ topicId: String?) async {
@@ -2386,6 +2485,13 @@ public final class ChatConversationViewModel {
     }
 
     public func teardown() {
+        // Stopping while it heard every change since a read and owed none: it
+        // has all of them until now (what changes next, `changedSinceCurrent()` sees).
+        if currentAsOf != nil, liveSince != nil, fallbackRefreshTask == nil, historyRequestId == nil, !mergeAfterCurrentRead {
+            currentAsOf = Date()
+        }
+        liveSince = nil
+        mergeAfterCurrentRead = false
         resetRoomJoins()
         scheduleDraftSave(immediate: true)
         outboxTask?.cancel()
@@ -3051,6 +3157,16 @@ public final class ChatConversationViewModel {
     }
 
     private func fetch(_ kind: FetchKind, recoverReceiptReset: Bool = true, recallOnReload: Bool = false) async {
+        await fetchOnce(kind, recoverReceiptReset: recoverReceiptReset, recallOnReload: recallOnReload)
+        // A merge asked for while that read was on its way can concern a later change: it follows now.
+        let generation = historyGeneration
+        while mergeAfterCurrentRead, historyRequestId == nil, generation == historyGeneration, !Task.isCancelled {
+            mergeAfterCurrentRead = false
+            await fetchOnce(.merge)
+        }
+    }
+
+    private func fetchOnce(_ kind: FetchKind, recoverReceiptReset: Bool = true, recallOnReload: Bool = false) async {
         if case .ai = mode {
             if messages.isEmpty { state = .empty }
             return
@@ -3058,6 +3174,7 @@ public final class ChatConversationViewModel {
         if case .reload = kind {
             guard await prepareHistoryReload(recall: recallOnReload) else { return }
         } else if historyRequestId != nil {
+            if case .merge = kind { mergeAfterCurrentRead = true }
             return
         }
         let requestId = UUID()
@@ -3075,9 +3192,14 @@ public final class ChatConversationViewModel {
         case .merge: earlierHistoryBefore
         case .reload: nil
         }
+        let sentAt = Date()
         do {
-            if case .merge = kind, topicId == nil, let cursor = syncCursors,
-               try await fetchChanges(cursor: cursor, requestId: requestId, generation: generation, cacheVersion: cacheVersion) {
+            var cursor = syncCursors
+            if cursor == nil, case .merge = kind, topicId == nil { cursor = await savedCursorsForSearchContext() }
+            if case .merge = kind, topicId == nil, let cursor,
+               try await fetchChanges(
+                   cursor: cursor, requestId: requestId, generation: generation, cacheVersion: cacheVersion, sentAt: sentAt
+               ) {
                 return
             }
             let response = try await requestHistory(before: before, topicId: topicId)
@@ -3094,13 +3216,16 @@ public final class ChatConversationViewModel {
             } else {
                 hasLatestHistoryWindow = response.anchorMessageId == nil && !isViewingEarlierHistory
                 syncCursors = topicId == nil ? response.syncCursors?.filter { authorizedRooms?.contains($0.key) != false } : nil
+                readArrived(sentAt: sentAt)
             }
             apply(response: response, kind: kind, fetchedMessages: fetched, authorizedRooms: authorizedRooms)
             scheduleMarkRead()
             if case let .room(roomId) = mode, before == nil {
                 await refreshRoomAvailability(roomId: roomId)
             }
-            if recoverReceiptReset, let cursor = response.syncCursors,
+            // A page carries its own messages' receipts. Only a merge keeps rows
+            // the page didn't bring, whose receipts can have moved since.
+            if case .merge = kind, recoverReceiptReset, let cursor = response.syncCursors,
                await !refreshMessageReadReceipts(cursor: cursor, requestId: requestId, generation: generation) {
                 // A receipt snapshot can discover a history reset after the
                 // history request completed. Retry canonical history once.
@@ -3176,7 +3301,9 @@ public final class ChatConversationViewModel {
 
     /// Drain one fixed server snapshot before applying rows or committing its
     /// cursor. A failed later page leaves the displayed history and cursor intact.
-    private func fetchChanges(cursor: [String: Int64], requestId: UUID, generation: Int, cacheVersion: Int) async throws -> Bool {
+    private func fetchChanges(
+        cursor: [String: Int64], requestId: UUID, generation: Int, cacheVersion: Int, sentAt: Date
+    ) async throws -> Bool {
         guard cursor.count <= 10000 else { return false }
         var next = cursor
         var until: [String: Int64]?
@@ -3186,14 +3313,24 @@ public final class ChatConversationViewModel {
         var deleted: Set<String> = []
         var confirmations: [String: ChatMessageDTO] = [:]
         var finalPage: ChatChangesResponse?
+        // A read moves no room revision: the first page also asks after our
+        // own messages not yet read (`refreshMessageReadReceipts` asks after any more).
+        let receiptIds = Array(unreadOwnMessageIds().prefix(500))
+        var receipts: [ChatMessageReadReceipt]?
         do {
             repeat {
-                let page: ChatChangesResponse = try await api.request(changesEndpoint(cursor: next, until: until))
+                let page: ChatChangesResponse = try await api.request(changesEndpoint(
+                    cursor: next, until: until, readMessageIds: finalPage == nil && !receiptIds.isEmpty ? receiptIds : nil
+                ))
                 guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return true }
                 reconcileHistoryAccess(roomIds: Set(page.roomIds), reset: page.resetRequired)
                 guard !page.resetRequired else { return false }
                 if let until, until != page.untilCursors { throw APIError.invalidResponse }
                 if page.hasMore, page.syncCursors == next { throw APIError.invalidResponse }
+                // A search match's window takes only its own rows: a long change
+                // log since an old cursor is cheaper as its context read again.
+                if isViewingSearchContext, page.hasMore { return false }
+                if finalPage == nil { receipts = page.messageReadReceipts }
                 let pendingIds = Set(ChatOutbox.shared.messages.map(\.id))
                     .union(pendingByClientId.keys).union(sendContextsByClientId.keys).union(failedClientIds)
                 for change in page.messages {
@@ -3225,18 +3362,7 @@ public final class ChatConversationViewModel {
         }
         guard let finalPage else { return false }
         let rooms = Set(finalPage.roomIds)
-        var byId = Dictionary(uniqueKeysWithValues: messages.filter { rooms.contains($0.roomId) }.map { ($0.id, $0) })
-        for id in deleted where !historyTouchedIds.contains(id) {
-            byId.removeValue(forKey: id)
-        }
-        for message in staged.values where !historyTouchedIds.contains(message.id) && rooms.contains(message.roomId) {
-            if message.readAt == nil, let readAt = byId[message.id]?.readAt {
-                byId[message.id] = message.replacingReadAt(readAt)
-            } else {
-                byId[message.id] = message
-            }
-        }
-        messages = byId.values.sorted(by: Self.messagePrecedes)
+        mergeChanges(staged: staged, deleted: deleted, rooms: rooms)
         retireConfirmedClientIds(in: Array(confirmations.values))
         activeRoomIds = rooms
         activeThreadTracker.setActiveRooms(rooms, owner: ObjectIdentifier(self), topicId: selectedTopicId)
@@ -3250,11 +3376,34 @@ public final class ChatConversationViewModel {
             handleRead(receipt, recoverOtherRooms: false)
         }
         rebuild()
+        if let receipts { applyMessageReadReceipts(receipts, requested: Set(receiptIds)) }
         ChatPerformance.mark("HistoryChanges", rows: messages.count)
         joinActiveRoomsIfPossible()
         scheduleMarkRead()
+        readArrived(sentAt: sentAt)
+        refreshTopicsIfUnknown(in: Array(staged.values))
         if case let .room(roomId) = mode { await refreshRoomAvailability(roomId: roomId) }
-        return await refreshMessageReadReceipts(cursor: next, requestId: requestId, generation: generation)
+        // The changed rows came with their receipts too.
+        let asked = receipts == nil ? Set<String>() : Set(receiptIds).union(staged.keys)
+        return await refreshMessageReadReceipts(cursor: next, requestId: requestId, generation: generation, asked: asked)
+    }
+
+    /// A drained snapshot's rows and removals over the held rows of `rooms`.
+    /// A row a live event touched since the read began keeps that version,
+    /// and a known Read stays.
+    private func mergeChanges(staged: [String: ChatMessageDTO], deleted: Set<String>, rooms: Set<String>) {
+        var byId = Dictionary(uniqueKeysWithValues: messages.filter { rooms.contains($0.roomId) }.map { ($0.id, $0) })
+        for id in deleted where !historyTouchedIds.contains(id) {
+            byId.removeValue(forKey: id)
+        }
+        for message in staged.values where !historyTouchedIds.contains(message.id) && rooms.contains(message.roomId) {
+            if message.readAt == nil, let readAt = byId[message.id]?.readAt {
+                byId[message.id] = message.replacingReadAt(readAt)
+            } else {
+                byId[message.id] = message
+            }
+        }
+        messages = byId.values.sorted(by: Self.messagePrecedes)
     }
 
     private func changesEndpoint(cursor: [String: Int64], until: [String: Int64]?, readMessageIds: [String]? = nil) throws -> Endpoint {
@@ -3280,14 +3429,22 @@ public final class ChatConversationViewModel {
         }
     }
 
-    /// Receipt-only snapshots do not alter the message delta cursor. Positive
-    /// confirmations can apply independently; nil never clears a known Read.
-    private func refreshMessageReadReceipts(cursor: [String: Int64], requestId: UUID, generation: Int) async -> Bool {
-        guard cursor.count <= 10000 else { return true }
-        let ids = messages.filter {
+    /// Our own messages the other person hasn't read yet, as far as the thread knows.
+    private func unreadOwnMessageIds() -> [String] {
+        messages.filter {
             $0.userId == sendingIdentityId && $0.readAt == nil && $0.deletedAt == nil && UUID(uuidString: $0.id) != nil
         }
         .map(\.id)
+    }
+
+    /// Receipt-only snapshots do not alter the message delta cursor. Positive
+    /// confirmations can apply independently; nil never clears a known Read.
+    /// - Parameter asked: messages whose receipts the changes read already brought.
+    private func refreshMessageReadReceipts(
+        cursor: [String: Int64], requestId: UUID, generation: Int, asked: Set<String> = []
+    ) async -> Bool {
+        guard cursor.count <= 10000 else { return true }
+        let ids = unreadOwnMessageIds().filter { !asked.contains($0) }
         for start in stride(from: 0, to: ids.count, by: 500) {
             guard generation == historyGeneration, historyRequestId == requestId, !Task.isCancelled else { return true }
             let batch = Array(ids[start..<min(start + 500, ids.count)])
@@ -3491,6 +3648,7 @@ public final class ChatConversationViewModel {
         }
         messages = byId.values.sorted(by: Self.messagePrecedes)
         retireConfirmedClientIds(in: fetchedMessages)
+        refreshTopicsIfUnknown(in: fetchedMessages)
         updateActiveRooms(response: response, authorizedRooms: authorizedRooms)
         if case .merge = kind, oldestCursor != nil {
             // Keep the pagination position belonging to the oldest loaded page.
@@ -3697,19 +3855,41 @@ public final class ChatConversationViewModel {
             guard let stream = self?.socket.events(named: "sync:changed", as: SyncChangedEvent.self) else { return }
             for await event in stream {
                 guard let self else { return }
-                let relevant = switch mode {
-                case let .room(roomId):
-                    event.topics.contains(ScreenTopic.chat(roomId))
-                case .person:
-                    event.topics.contains(ScreenTopic.chats)
-                case .ai:
-                    false
-                }
                 // Membership changes and DB-only edits have no message event.
                 // Reuse the coalesced delta refresh to reconcile an open thread.
-                if relevant { scheduleFallbackRefresh() }
+                if namesUnheardChange(event) { scheduleFallbackRefresh() }
             }
         })
+    }
+
+    /// Whether a change signal names one of the thread's rooms with no live
+    /// event about it just before. The server signals every change it also
+    /// sends as an event (a message, a read, an edit, a removal) a moment
+    /// after that event, which the thread has applied already. A person's
+    /// thread hears a new room with them through its first message.
+    private func namesUnheardChange(_ event: SyncChangedEvent) -> Bool {
+        let rooms: Set<String> = switch mode {
+        case let .room(roomId): activeRoomIds.union([roomId])
+        case .person: activeRoomIds
+        case .ai: []
+        }
+        let now = Date()
+        if rooms.contains(where: { room in
+            event.topics.contains(ScreenTopic.chat(room)) && lastRoomEventAt[room].map { now.timeIntervalSince($0) > 2 } != false
+        }) {
+            return true
+        }
+        // Just after the thread started listening, a new room with this person
+        // (a task) may have said its first message before then.
+        guard case .person = mode, let liveSince, now.timeIntervalSince(liveSince) < 2 else { return false }
+        let known = Set(rooms.map(ScreenTopic.chat))
+        return event.topics.contains { $0.hasPrefix("chat:") && !known.contains($0.lowercased()) }
+    }
+
+    /// A live event about one of the thread's rooms (`namesUnheardChange(_:)`).
+    private func noteRoomEvent(_ roomId: String?) {
+        guard let roomId, activeRoomIds.contains(roomId) else { return }
+        lastRoomEventAt[roomId] = Date()
     }
 
     private func subscribeToSockets() {
@@ -3719,9 +3899,12 @@ public final class ChatConversationViewModel {
         // freed, instead of staying alive (and polling) inside the loop.
         socketTasks.append(Task { [weak self] in
             guard let stream = self?.socket.connectionStates() else { return }
+            // The first state is the socket's as the thread starts listening.
+            var resuming = true
             for await state in stream {
                 guard let self else { return }
-                handleConnectionState(state)
+                handleConnectionState(state, resuming: resuming)
+                resuming = false
             }
         })
         socketTasks.append(Task { [weak self] in
@@ -3731,6 +3914,7 @@ public final class ChatConversationViewModel {
             for await event in stream {
                 guard let self else { return }
                 handleIncoming(event)
+                noteRoomEvent(event.message.roomId)
             }
         })
         socketTasks.append(Task { [weak self] in
@@ -3741,6 +3925,7 @@ public final class ChatConversationViewModel {
             ) else { return }
             for await event in stream {
                 guard let self else { return }
+                noteRoomEvent(event.roomId ?? event.updatedMessage?.roomId)
                 handleUpdate(event)
             }
         })
@@ -3748,6 +3933,7 @@ public final class ChatConversationViewModel {
             guard let stream = self?.socket.events(named: "message:deleted", as: ChatRealtimeMessageDelete.self) else { return }
             for await event in stream {
                 guard let self else { return }
+                noteRoomEvent(event.roomId)
                 handleDelete(event)
             }
         })
@@ -3755,6 +3941,7 @@ public final class ChatConversationViewModel {
             guard let stream = self?.socket.events(named: "message:reaction_updated", as: ChatRealtimeReaction.self) else { return }
             for await event in stream {
                 guard let self else { return }
+                noteRoomEvent(messages.first { $0.id == event.messageId }?.roomId)
                 handleReaction(event)
             }
         })
@@ -3787,16 +3974,29 @@ public final class ChatConversationViewModel {
                 handlePresence(event, online: false)
             }
         })
-        joinActiveRoomsIfPossible()
+        // The rooms are joined once the socket's state arrives
+        // (`handleConnectionState`): joined here too, each room's second join
+        // found the first still pending and was refused as busy.
     }
 
-    private func handleConnectionState(_ state: SocketClient.ConnectionState) {
+    /// - Parameter resuming: the socket's state as the thread starts listening.
+    private func handleConnectionState(_ state: SocketClient.ConnectionState, resuming: Bool) {
         resetRoomJoins()
         if state == .connected {
             ChatPerformance.signposter.emitEvent("SocketConnected")
             joinActiveRoomsIfPossible()
-            scheduleFallbackRefresh()
+            if liveSince == nil {
+                liveSince = Date()
+                // Hearing every change again. What it missed is caught up
+                // through `changes`: after a drop, always; when it starts
+                // listening with the socket already up (after its first read,
+                // or back on screen), only if a change signal named it
+                // meanwhile. A thread whose read failed tries again.
+                let failed = if case .error = self.state { true } else { currentAsOf == nil }
+                scheduleFallbackRefresh(onlyIfChanged: resuming && !failed)
+            }
         } else {
+            liveSince = nil
             counterpartyOnline = nil
             isCounterpartyTyping = false
             typingClearTask?.cancel()
@@ -3811,6 +4011,8 @@ public final class ChatConversationViewModel {
             guard let stream = self?.socket.events(named: "messages:read", as: ChatRealtimeRead.self) else { return }
             for await event in stream {
                 guard let self else { return }
+                // Our own reads too: their change signal follows them.
+                noteRoomEvent(event.roomId)
                 handleRead(event)
             }
         })
@@ -3818,6 +4020,7 @@ public final class ChatConversationViewModel {
             guard let stream = self?.socket.events(named: "messages:topic_read", as: ChatRealtimeTopicRead.self) else { return }
             for await event in stream {
                 guard let self else { return }
+                noteRoomEvent(event.roomId)
                 handleTopicRead(event)
             }
         })
@@ -3850,7 +4053,7 @@ public final class ChatConversationViewModel {
                 try? await Task.sleep(nanoseconds: delay * 1_000_000_000)
                 guard !Task.isCancelled else { return }
                 guard let self else { return }
-                await refresh()
+                await catchUp()
                 // While the socket is down an open thread keeps polling at
                 // least every 10 s, so it catches up soon after the outage.
                 delay = min(delay * 2, 10)
@@ -3930,12 +4133,11 @@ public final class ChatConversationViewModel {
                 } else {
                     completeRoomJoin(roomId, ack: ack)
                 }
+                // No catch-up once the joins settle: messages and their changes
+                // reach each member's sockets whether or not a room is joined
+                // (presence and typing need the join), so a thread listening
+                // since before its read has missed nothing.
                 joinActiveRoomsIfPossible()
-                if joiningRooms.isEmpty, activeRoomIds.isSubset(of: joinedRoomIds) {
-                    // One canonical catch-up after all subscriptions settle,
-                    // rather than one refresh per room acknowledgement.
-                    scheduleFallbackRefresh()
-                }
             }
         }
         guard joiningRooms.count < 4,
@@ -3976,8 +4178,9 @@ public final class ChatConversationViewModel {
             roomJoinRetryAt[roomId] = Date().addingTimeInterval(min(30, delay + Double.random(in: 0...min(1, delay * 0.2))))
         }
         // A refusal can signal removed membership. Resolve it canonically,
-        // with a global bound even when hundreds of rooms fail together.
-        if Date().timeIntervalSince(lastJoinRecoveryAt) >= 5 {
+        // with a global bound even when hundreds of rooms fail together. A
+        // busy server only asks for the retry above.
+        if ack?.code != "CHAT_BUSY", Date().timeIntervalSince(lastJoinRecoveryAt) >= 5 {
             lastJoinRecoveryAt = Date()
             scheduleFallbackRefresh()
         }
@@ -4812,6 +5015,25 @@ extension ChatConversationViewModel {
         activeRoomIds = Set(messages.map(\.roomId))
         rebuild()
         return true
+    }
+
+    /// A search match's context comes without the history's position. When the
+    /// thread's latest window was seen (this session, or saved on the phone),
+    /// where its history stood then lets a catch-up read `changes` instead of
+    /// the context again: the window takes only its own rows' edits and removals.
+    private func savedCursorsForSearchContext() async -> [String: Int64]? {
+        guard isViewingSearchContext, let endpoint = latestThreadMemoryEndpoint, let key = store.key(for: endpoint),
+              key.account == currentUserId else { return nil }
+        let cacheVersion = ChatLocalStore.shared.version
+        var saved = store.seeded(endpoint, as: ChatThreadMemory.self)
+        if api === APIClient.shared, saved?.cacheGeneration != cacheVersion { saved = nil }
+        if saved == nil, api === APIClient.shared {
+            saved = await ChatLocalStore.shared.history(
+                scope: ChatLocalStore.scope(server: key.server, account: key.account), thread: key.description
+            )
+        }
+        guard api !== APIClient.shared || cacheVersion == ChatLocalStore.shared.version else { return nil }
+        return saved?.syncCursors
     }
 
     /// The newest page shares no message with what's held while older messages

@@ -80,18 +80,20 @@ final class AccessCodesViewModel: ListOfRowsDataSource {
     }
 
     var fab: FABAction? {
-        FABAction(
+        guard canManage else { return nil }
+        return FABAction(
             icon: .plus,
             accessibilityLabel: "Add access code",
             variant: .secondaryCreate,
             tint: .home
         ) { [weak self] in
             guard let self else { return }
-            MainActor.assumeIsolated { self.onSelect(.addCode(homeId: self.homeId, category: nil)) }
+            MainActor.assumeIsolated { self.startAddCode(in: nil) }
         }
     }
 
     private(set) var state: ListOfRowsState = .loading
+    private(set) var canManage = false
 
     /// Ephemeral toast message (e.g. "Code copied"). Observed by the
     /// view; cleared after a short window. Public so tests can assert.
@@ -120,6 +122,8 @@ final class AccessCodesViewModel: ListOfRowsDataSource {
 
     private var secrets: [HomeAccessSecretDTO] = []
     private var loadedOnce = false
+    private var readGeneration = 0
+    private var isVisible = true
     private var toastTask: Task<Void, Never>?
 
     init(
@@ -141,13 +145,27 @@ final class AccessCodesViewModel: ListOfRowsDataSource {
     // MARK: - ListOfRowsDataSource
 
     func load() async {
+        isVisible = true
         if loadedOnce { return }
         state = .loading
         await fetch()
     }
 
     func refresh() async {
+        guard isVisible else { return }
         await fetch()
+    }
+
+    func suspend() {
+        isVisible = false
+        readGeneration &+= 1
+        loadedOnce = false
+        secrets = []
+        revealedIds = []
+        canManage = false
+        toastTask?.cancel()
+        toastMessage = nil
+        state = .loading
     }
 
     func loadMoreIfNeeded() async {
@@ -193,19 +211,32 @@ final class AccessCodesViewModel: ListOfRowsDataSource {
     /// Quick-start CTA from the empty state — opens Add Code pre-set to
     /// the selected category (or no category when "all" is active).
     func startAddCode(in category: AccessCategory?) {
+        guard canManage else { return }
         onSelect(.addCode(homeId: homeId, category: category))
     }
 
     // MARK: - Fetching
 
     private func fetch() async {
+        readGeneration &+= 1
+        let generation = readGeneration
+        canManage = false
+        revealedIds = []
         let endpoint = HomesEndpoints.accessSecrets(homeId: homeId)
         do {
             let response: HomeAccessSecretsResponse = try await api.request(endpoint)
+            guard generation == readGeneration, !Task.isCancelled else { return }
             secrets = response.secrets
             loadedOnce = true
+            canManage = response.canManage == true && response.allowedVisibilities?.contains {
+                AccessVisibility(rawValue: $0) != nil
+            } == true
             rebuild()
         } catch {
+            guard generation == readGeneration, !Task.isCancelled else { return }
+            secrets = []
+            loadedOnce = false
+            revealedIds = []
             state = .error(message: "Couldn't load access codes. Try again.")
         }
     }
@@ -260,6 +291,7 @@ final class AccessCodesViewModel: ListOfRowsDataSource {
     /// When no codes match the filter, fall back to the whole-screen
     /// empty state.
     func rebuild() {
+        guard loadedOnce else { return }
         let visibleCategories: [AccessCategory] = if selectedChip == AccessCodesChip.all {
             AccessCategory.displayOrder
         } else if let category = AccessCategory(rawValue: selectedChip) {
@@ -272,15 +304,15 @@ final class AccessCodesViewModel: ListOfRowsDataSource {
         for category in visibleCategories {
             let rows = secrets.filter { AccessCategory.from(accessType: $0.accessType) == category }
             if rows.isEmpty { continue }
+            let addCode: @Sendable () -> Void = { [weak self] in
+                MainActor.assumeIsolated { self?.startAddCode(in: category) }
+            }
             sections.append(RowSection(
                 id: "category-\(category.rawValue)",
                 header: category.label,
                 rows: rows.map { rowFor($0) },
                 count: rows.count,
-                onSeeAll: { [weak self] in
-                    guard let self else { return }
-                    MainActor.assumeIsolated { self.onSelect(.addCode(homeId: self.homeId, category: category)) }
-                },
+                onSeeAll: canManage ? addCode : nil,
                 style: .card
             ))
         }
@@ -299,10 +331,10 @@ final class AccessCodesViewModel: ListOfRowsDataSource {
                 icon: .keyRound,
                 headline: "No \(category.label.lowercased()) codes yet",
                 subcopy: "Add a \(category.label.lowercased()) code so household members can find it when they need it.",
-                ctaTitle: "Add \(category.label) code"
+                ctaTitle: canManage ? "Add \(category.label) code" : nil
             ) { [weak self] in
                 guard let self else { return }
-                MainActor.assumeIsolated { self.onSelect(.addCode(homeId: self.homeId, category: category)) }
+                MainActor.assumeIsolated { self.startAddCode(in: category) }
             }
         }
         return ListOfRowsState.EmptyContent(
@@ -310,10 +342,10 @@ final class AccessCodesViewModel: ListOfRowsDataSource {
             headline: "No access codes yet",
             subcopy: "One vault for every code at this address. Codes are encrypted, masked by default, " +
                 "and only shared with members you choose.",
-            ctaTitle: "Add your first code"
+            ctaTitle: canManage ? "Add your first code" : nil
         ) { [weak self] in
             guard let self else { return }
-            MainActor.assumeIsolated { self.onSelect(.addCode(homeId: self.homeId, category: nil)) }
+            MainActor.assumeIsolated { self.startAddCode(in: nil) }
         }
     }
 

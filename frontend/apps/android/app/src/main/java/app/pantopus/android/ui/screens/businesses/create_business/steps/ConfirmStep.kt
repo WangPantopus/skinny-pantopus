@@ -60,7 +60,7 @@ fun ConfirmStep(state: CreateBusinessUiState) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SubmissionMessage(
+internal fun SubmissionMessage(
     message: String,
     color: Color,
     tag: String,

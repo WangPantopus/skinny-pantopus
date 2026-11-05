@@ -23,6 +23,11 @@ public struct AddEmergencyInfoFormView: View {
     @State private var viewModel: AddEmergencyInfoFormViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var showsMemberPicker = false
+    @State private var canManage = false
+    @State private var isConfirmingPermission = true
+    @State private var permissionGeneration = 0
+    @State private var isVisible = false
+    @Environment(\.scenePhase) private var scenePhase
 
     public init(viewModel: AddEmergencyInfoFormViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -32,24 +37,53 @@ public struct AddEmergencyInfoFormView: View {
         FormShell(
             title: viewModel.screenTitle,
             rightActionLabel: "Save",
-            isValid: viewModel.isValid,
+            isValid: viewModel.isValid && canManage && !isConfirmingPermission,
             isDirty: viewModel.isDirty,
             isSaving: viewModel.isSaving,
             onClose: { dismiss() },
             onCommit: commit,
             // swiftlint:disable:next trailing_closure
             content: {
-                categorySection
-                titleSection
-                if viewModel.category.supportsSeverity {
-                    severitySection
+                if canManage {
+                    categorySection
+                    titleSection
+                    if viewModel.category.supportsSeverity {
+                        severitySection
+                    }
+                    detailsSection
+                    verifiedBySection
+                } else if isConfirmingPermission {
+                    ProgressView("Checking edit permission…")
+                } else {
+                    Text("Editing is unavailable. Check your access and try again.")
+                    Button("Retry") { Task { await refreshPermission() } }
                 }
-                detailsSection
-                verifiedBySection
             }
         )
         .background(Theme.Color.appBg)
-        .task { await viewModel.loadMembers() }
+        .disabled(viewModel.isSaving)
+        .interactiveDismissDisabled(viewModel.isSaving || viewModel.isDirty)
+        .onAppear { isVisible = true }
+        .onDisappear {
+            isVisible = false
+            permissionGeneration &+= 1
+            canManage = false
+        }
+        .task {
+            async let members: Void = viewModel.loadMembers()
+            await refreshPermission()
+            await members
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard isVisible else { return }
+            if phase == .background {
+                permissionGeneration &+= 1
+                canManage = false
+                showsMemberPicker = false
+            } else if phase == .active, !canManage {
+                Task { await refreshPermission() }
+            }
+        }
         .accessibilityIdentifier("addEmergencyInfoForm")
         .overlay(alignment: .bottom) {
             if let toast = viewModel.toast {
@@ -235,7 +269,23 @@ public struct AddEmergencyInfoFormView: View {
     }
 
     private func commit() {
-        Task { await viewModel.submit() }
+        Task {
+            guard await refreshPermission(), isVisible, scenePhase == .active else { return }
+            await viewModel.submit()
+        }
+    }
+
+    @discardableResult
+    private func refreshPermission() async -> Bool {
+        permissionGeneration &+= 1
+        let generation = permissionGeneration
+        canManage = false
+        isConfirmingPermission = true
+        let allowed = await viewModel.confirmPermission()
+        guard generation == permissionGeneration, isVisible, scenePhase == .active, !Task.isCancelled else { return false }
+        canManage = allowed
+        isConfirmingPermission = false
+        return allowed
     }
 }
 
@@ -363,7 +413,7 @@ private struct MemberPickerSheet: View {
                         Rectangle().fill(Theme.Color.appBorderSubtle).frame(height: 1)
                     }
                     if members.isEmpty {
-                        Text("No household members yet.")
+                        Text("No household members available.")
                             .pantopusTextStyle(.body)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                             .padding(Spacing.s4)

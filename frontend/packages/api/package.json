@@ -6,6 +6,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./endpoints/*": "./src/endpoints/*.ts",
     "./src/endpoints/*": "./src/endpoints/*"
   },
   "scripts": {
@@ -19,5 +21,6 @@
   },
   "devDependencies": {
     "typescript": "^5.7.2"
-  }
+  },
+  "sideEffects": false
 }

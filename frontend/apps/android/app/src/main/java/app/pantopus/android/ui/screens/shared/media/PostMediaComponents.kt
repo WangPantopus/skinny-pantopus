@@ -11,11 +11,12 @@
 package app.pantopus.android.ui.screens.shared.media
 
 import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
 import android.media.MediaMetadataRetriever
+import android.net.Uri
 import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -34,11 +35,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -47,7 +46,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -60,6 +58,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -70,11 +69,14 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import coil.ImageLoader
 import coil.compose.SubcomposeAsyncImage
+import coil.decode.DataSource
+import coil.fetch.DrawableResult
+import coil.fetch.Fetcher
 import coil.request.CachePolicy
 import coil.request.ImageRequest
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import coil.request.Options
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Tile heights per surface — feed cards are compact, detail is regular. */
@@ -424,40 +426,89 @@ fun MediaStillTile(
     )
 }
 
-/** One sharp frame, decoded off the UI thread without playing or retaining the video file. */
+/** Reuse one bounded frame in the existing, sign-out-aware image memory cache; never save the video. */
 @Composable
 private fun PostVideoPoster(
     item: PostMediaItem,
     modifier: Modifier = Modifier,
 ) {
-    val frame by produceState<Bitmap?>(null, item.url) {
-        value = null
-        value =
-            withContext(Dispatchers.IO) {
+    val context = LocalContext.current
+    val model =
+        remember(context, item.url) {
+            ImageRequest.Builder(context)
+                .data(item.url)
+                .memoryCacheKey("post-video-poster:${item.url}")
+                .diskCachePolicy(CachePolicy.DISABLED)
+                .fetcherFactory(VideoPosterFetcherFactory)
+                .size(VIDEO_POSTER_SIZE)
+                .crossfade(false)
+                .build()
+        }
+    SubcomposeAsyncImage(
+        model = model,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = modifier,
+        loading = { VideoPosterFallback(item.thumbnailUrl) },
+        error = { VideoPosterFallback(item.thumbnailUrl) },
+    )
+}
+
+@Composable
+private fun VideoPosterFallback(thumbnailUrl: String?) {
+    if (!thumbnailUrl.isNullOrBlank()) {
+        MediaStillTile(url = thumbnailUrl, modifier = Modifier.fillMaxSize())
+    } else {
+        Box(Modifier.fillMaxSize().background(PantopusColors.appSurfaceSunken))
+    }
+}
+
+private const val VIDEO_POSTER_SIZE = 1600
+
+/** Coil dispatches fetchers on IO and owns eviction and cancellation of their results. */
+private object VideoPosterFetcherFactory : Fetcher.Factory<Uri> {
+    override fun create(
+        data: Uri,
+        options: Options,
+        imageLoader: ImageLoader,
+    ): Fetcher =
+        object : Fetcher {
+            override suspend fun fetch(): DrawableResult {
                 val retriever = MediaMetadataRetriever()
                 try {
-                    retriever.setDataSource(item.url, emptyMap())
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                        retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 1600, 1600)
-                    } else {
-                        retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                    }
-                } catch (_: Exception) {
-                    null
+                    retriever.setDataSource(data.toString(), emptyMap())
+                    val frame =
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                            retriever.getScaledFrameAtTime(
+                                0,
+                                MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                                VIDEO_POSTER_SIZE,
+                                VIDEO_POSTER_SIZE,
+                            )
+                        } else {
+                            legacyFrame(retriever)
+                        }
+                    return DrawableResult(
+                        drawable = BitmapDrawable(options.context.resources, checkNotNull(frame)),
+                        isSampled = false,
+                        dataSource = DataSource.NETWORK,
+                    )
                 } finally {
                     retriever.release()
                 }
             }
-    }
-    Box(modifier) {
-        val bitmap = frame
-        if (bitmap != null) {
-            Image(bitmap.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-        } else if (!item.thumbnailUrl.isNullOrBlank()) {
-            MediaStillTile(url = item.thumbnailUrl, modifier = Modifier.fillMaxSize())
-        } else {
-            Box(Modifier.fillMaxSize().background(PantopusColors.appSurfaceSunken))
         }
+
+    private fun legacyFrame(retriever: MediaMetadataRetriever): Bitmap? {
+        val original = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: return null
+        val scale = minOf(1f, VIDEO_POSTER_SIZE.toFloat() / maxOf(original.width, original.height))
+        if (scale == 1f) return original
+        return Bitmap.createScaledBitmap(
+            original,
+            (original.width * scale).toInt().coerceAtLeast(1),
+            (original.height * scale).toInt().coerceAtLeast(1),
+            true,
+        ).also { original.recycle() }
     }
 }
 
@@ -504,6 +555,7 @@ fun LivePhotoTile(
     val haptics = LocalHapticFeedback.current
     var playing by remember { mutableStateOf(false) }
     var player by remember { mutableStateOf<ExoPlayer?>(null) }
+    var visible by remember { mutableStateOf(false) }
 
     fun ensurePlayer(): ExoPlayer {
         player?.let { return it }
@@ -527,8 +579,11 @@ fun LivePhotoTile(
         return created
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
+    LifecycleStartEffect(item.url, item.liveVideoUrl, isActive) {
+        visible = isActive
+        onStopOrDispose {
+            visible = false
+            playing = false
             player?.release()
             player = null
         }
@@ -538,9 +593,9 @@ fun LivePhotoTile(
         if (!isActive) playing = false
     }
 
-    LaunchedEffect(playing) {
+    LaunchedEffect(playing, visible) {
         val active = player
-        if (playing) {
+        if (playing && visible) {
             val target = active ?: ensurePlayer()
             target.seekTo(0)
             target.playWhenReady = true

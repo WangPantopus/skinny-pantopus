@@ -68,7 +68,6 @@ final class AccessCodesViewModelTests: XCTestCase {
         }
         XCTAssertEqual(content.headline, "No access codes yet")
         XCTAssertEqual(content.icon, .keyRound)
-        XCTAssertEqual(content.ctaTitle, "Add your first code")
     }
 
     func testLoadPopulatedTransitionsToLoaded() async {
@@ -136,7 +135,6 @@ final class AccessCodesViewModelTests: XCTestCase {
             return XCTFail("Expected .empty after filter, got \(vm.state)")
         }
         XCTAssertEqual(content.headline, "No garage codes yet")
-        XCTAssertEqual(content.ctaTitle, "Add Garage code")
     }
 
     // MARK: - Reveal toggle

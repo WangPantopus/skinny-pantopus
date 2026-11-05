@@ -63,7 +63,9 @@ struct CachedAsyncImage<Content: View>: View {
         withTransaction(transaction) {
             phase = image.map { .success(Image(uiImage: $0)) } ?? .failure(URLError(.cannotDecodeContentData))
         }
-        loadedURL = url
+        // A failed download is still pending: revisiting this view should
+        // retry it after connectivity or the media server recovers.
+        loadedURL = image == nil ? nil : url
         loadedMaxPixelSize = maxPixelSize
     }
 }

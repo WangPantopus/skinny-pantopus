@@ -269,6 +269,23 @@ public final class AddEmergencyInfoFormViewModel {
         }
     }
 
+    /// The form uses the same current authority as the list before offering or committing an edit.
+    func confirmPermission() async -> Bool {
+        toast = nil
+        do {
+            let response: GetHomeEmergenciesResponse = try await api.request(HomesEndpoints.emergencies(homeId: homeId))
+            try Task.checkCancellation()
+            let allowed = response.canManage == true
+            if !allowed { toast = ToastMessage(text: "You don't have permission to manage emergency info.", kind: .error) }
+            return allowed
+        } catch {
+            if !Task.isCancelled {
+                toast = ToastMessage(text: "Couldn't confirm your access. Try again.", kind: .error)
+            }
+            return false
+        }
+    }
+
     // MARK: - Submit
 
     @discardableResult
