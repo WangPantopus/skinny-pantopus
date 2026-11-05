@@ -504,7 +504,8 @@ private fun BringInMore(
 private fun MoneyPreview(view: CrewDayCrewViewDto) {
     val money = view.money
     if (money.grossCents <= 0) return
-    val percent = money.feeRate?.let { "${(it * 100).let { p -> if (p % 1.0 == 0.0) p.toInt().toString() else "%.1f".format(p) }}%" }
+    // `fee_rate` is in percent (10 for a founding business).
+    val percent = money.feeRate?.let { p -> "${if (p % 1.0 == 0.0) p.toInt().toString() else "%.1f".format(p)}%" }
     Text(
         text =
             "If all ${view.bookedCount} are done: ${CrewDayFormat.price(money.grossCents)} charged · you receive " +
