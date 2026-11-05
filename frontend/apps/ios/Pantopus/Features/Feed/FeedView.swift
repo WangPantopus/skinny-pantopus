@@ -199,10 +199,16 @@ public struct FeedView: View {
         .onChange(of: viewModel.activeIntent) { _, _ in showHeader() }
         .onChange(of: viewModel.activeTopic) { _, _ in showHeader() }
         .onChange(of: isSearchVisible) { _, _ in showHeader() }
-        .onAppear { showHeader() }
+        .onAppear {
+            showHeader()
+            viewModel.screens.screenDidAppear()
+        }
         // Back from a post or another tab, the search box isn't still typing:
         // the keyboard came back by itself (founder report 2026-10-29).
-        .onDisappear { searchFieldFocused = false }
+        .onDisappear {
+            searchFieldFocused = false
+            viewModel.screens.screenDidDisappear()
+        }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .askPantopus($askTopic)
         .task {
@@ -212,6 +218,8 @@ public struct FeedView: View {
             viewModel.onFallbackArea = { [weak contextBarViewModel] in
                 contextBarViewModel?.fallbackLabel = $0
             }
+            // Rebuilt by a fold or a turn: the posts were up all along. Coming back reads as before.
+            if viewModel.showsRebuiltScreen { return }
             await viewModel.load()
             if showsNearbyPosts { await NearbyFeedSeen.feedShown() }
         }

@@ -115,6 +115,26 @@ public final class PulsePostDetailViewModel {
 
     /// Where the reader was down the post. The tab keeps this model through a fold, which rebuilds the screen.
     public let scrollPlace = ScrollPlace()
+    /// The comment box has the keyboard. A new screen for this post after a fold or a turn gives it back. Not
+    /// observed.
+    @ObservationIgnored var isComposing = false {
+        didSet { if oldValue, !isComposing { composingEndedAt = Date() } }
+    }
+
+    /// When the comment box last lost the keyboard: closing the iPhone Duo, or half folding it upright, takes the
+    /// keyboard away a moment before the screen is rebuilt.
+    @ObservationIgnored private var composingEndedAt: Date?
+    /// A screen made now gives the comment box the keyboard: it has it, or had it until a moment ago.
+    var returnsToComposer: Bool {
+        isComposing || composingEndedAt.map { Date().timeIntervalSince($0) < PulseScreenRebuilds.window } ?? false
+    }
+
+    /// The post's screens: a screen rebuilt by a fold or a turn reads nothing again (`load()`).
+    let screens = PulseScreenRebuilds()
+    /// The last read of the post (and of its "Nearby Providers") ran to its end; a screen that leaves mid-read
+    /// cancels it, and the next screen reads again.
+    @ObservationIgnored private var postRead = false
+    @ObservationIgnored private var providersRead = false
 
     /// Inline composer's draft text. Bound from the view.
     public var composerText: String = "" {
@@ -325,8 +345,12 @@ public final class PulsePostDetailViewModel {
     }
 
     /// Opening the post: what's on screen stays (the store's or the feed's
-    /// copy); the post is read when that copy is over a minute old.
+    /// copy); the post is read when that copy is over a minute old. A screen
+    /// rebuilt by a fold or a turn reads nothing: the post was on screen all along.
     public func load() async {
+        if postRead, screens.isRebuilding { return }
+        postRead = false
+        defer { postRead = !Task.isCancelled }
         if !usesPostPage {
             if conversation == nil { state = .loading }
             await fetchConversation(force: false)
@@ -648,6 +672,9 @@ public final class PulsePostDetailViewModel {
     public func loadNearbyProviders() async {
         // Launch cuts #6/#4 hide the card (business discovery and broad provider search): nothing is asked for it.
         guard LaunchFeatures.businessDirectory, LaunchFeatures.openGigs else { return }
+        if providersRead, screens.isRebuilding { return }
+        providersRead = false
+        defer { providersRead = !Task.isCancelled }
         await fetchNearbyProviders()
     }
 

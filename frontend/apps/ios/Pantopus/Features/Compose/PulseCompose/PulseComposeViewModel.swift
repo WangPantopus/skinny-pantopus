@@ -295,6 +295,29 @@ public final class PulseComposeViewModel {
 
     /// Place-eligibility warning surfaced as a banner on the draft step.
     public private(set) var eligibilityWarning: String?
+    /// The place was checked to its end; a screen rebuilt by a fold or a turn doesn't check it again.
+    @ObservationIgnored private var eligibilityChecked = false
+
+    /// The field that has the keyboard. A new screen for this draft after a fold or a turn gives it back. Not
+    /// observed.
+    @ObservationIgnored var keyboardField: PulseComposeField? {
+        didSet { if let oldValue, keyboardField == nil { lastKeyboardField = (oldValue, Date()) } }
+    }
+
+    /// The field that last lost the keyboard, and when: closing the iPhone Duo, or half folding it upright, takes the
+    /// keyboard away a moment before the screen is rebuilt.
+    @ObservationIgnored private var lastKeyboardField: (field: PulseComposeField, endedAt: Date)?
+    /// The field a screen made now gives the keyboard to: the one that has it, or had it until a moment ago.
+    var returnsToField: PulseComposeField? {
+        if let keyboardField { return keyboardField }
+        guard let last = lastKeyboardField, Date().timeIntervalSince(last.endedAt) < PulseScreenRebuilds.window else {
+            return nil
+        }
+        return last.field
+    }
+
+    /// The draft's screens: one rebuilt by a fold or a turn reads nothing again (`checkPlaceEligibility()`).
+    let screens = PulseScreenRebuilds()
 
     // MARK: - Pre-post safety precheck (`POST /api/posts/precheck`)
 
@@ -1330,6 +1353,15 @@ public final class PulseComposeViewModel {
 
     // MARK: - Pre-post safety precheck
 
+    /// The details box lost the keyboard: the precheck runs (`runPrecheck()`), unless a fold or a turn took the
+    /// keyboard away with the screen (closing the iPhone Duo, or half folding it upright, drops it a moment before the
+    /// rebuilt screen gives it back).
+    public func bodyEditingEnded() async {
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        guard !Task.isCancelled, keyboardField != .body, !screens.isRebuilding else { return }
+        await runPrecheck()
+    }
+
     /// Run `POST /api/posts/precheck` against the current draft and
     /// project the response onto the three banners RN renders: the
     /// cooldown block, the visitor badge, and the soft nudge.
@@ -1517,6 +1549,9 @@ public final class PulseComposeViewModel {
     public func checkPlaceEligibility() async {
         guard let target = postingTarget, target.isPlaceTarget,
               let lat = target.latitude, let lon = target.longitude else { return }
+        if eligibilityChecked, screens.isRebuilding { return }
+        eligibilityChecked = false
+        defer { eligibilityChecked = !Task.isCancelled }
         let gps = gpsFields(for: target)
         do {
             let response: PlaceEligibilityResponse = try await api.request(
