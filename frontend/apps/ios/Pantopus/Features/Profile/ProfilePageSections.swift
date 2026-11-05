@@ -382,13 +382,30 @@ private struct AboutIconDisc: View {
 
 // MARK: - Work
 
+/// The Work tab's sections' models, made as each section first shows. The
+/// profile's model keeps them while Work stays picked (`PublicProfileViewModel.workModels`),
+/// so a fold or a turn, which makes the tab anew, reads nothing; picking
+/// another tab lets them go, and Work reads again when picked again.
+@MainActor
+final class ProfileWorkModels {
+    let userId: String
+    let isOwnProfile: Bool
+    private(set) lazy var portfolio = ProfilePortfolioViewModel(userId: userId, isOwnProfile: isOwnProfile)
+    private(set) lazy var gigs = ProfileGigsViewModel(userId: userId)
+    private(set) lazy var reviews = ProfileGigReviewsViewModel(userId: userId)
+
+    init(userId: String, isOwnProfile: Bool) {
+        self.userId = userId
+        self.isOwnProfile = isOwnProfile
+    }
+}
+
 /// The Work tab: the portfolio, the tasks they posted (with Open gigs on)
 /// and their reviews, each only when it has something. Your own profile
 /// always shows the portfolio, where "Add portfolio item" lives.
 @MainActor
 struct LocalProfileWorkSection: View {
-    let userId: String
-    let isOwnProfile: Bool
+    let models: ProfileWorkModels
     let showsPortfolio: Bool
     let showsTasks: Bool
     let showsReviews: Bool
@@ -399,17 +416,21 @@ struct LocalProfileWorkSection: View {
         VStack(alignment: .leading, spacing: Spacing.s6) {
             if showsPortfolio {
                 part("Portfolio") {
-                    ProfilePortfolioSection(userId: userId, isOwnProfile: isOwnProfile)
+                    ProfilePortfolioSection(
+                        userId: models.userId,
+                        isOwnProfile: models.isOwnProfile,
+                        viewModel: models.portfolio
+                    )
                 }
             }
             if showsTasks {
                 part("Tasks") {
-                    ProfileGigsSection(userId: userId, onOpenGig: onOpenGig)
+                    ProfileGigsSection(userId: models.userId, viewModel: models.gigs, onOpenGig: onOpenGig)
                 }
             }
             if showsReviews {
                 part("Reviews") {
-                    ProfileGigReviewsSection(userId: userId, onOpenReviewer: onOpenReviewer)
+                    ProfileGigReviewsSection(userId: models.userId, viewModel: models.reviews, onOpenReviewer: onOpenReviewer)
                 }
             }
         }

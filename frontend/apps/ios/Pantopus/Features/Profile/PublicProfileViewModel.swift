@@ -314,8 +314,14 @@ public final class PublicProfileViewModel {
     public var selectedNeighborTab: NeighborProfileTab = .about
 
     /// A21.2 — selected tab on the Local Beacon profile archetype
-    /// (Posts · About). Switching is local; no refetch.
-    public var selectedLocalTab: LocalProfileTab = .posts
+    /// (Posts · About). Switching is local; no refetch. Leaving Work lets its
+    /// sections go, so picking it again reads them again.
+    public var selectedLocalTab: LocalProfileTab = .posts {
+        didSet { if selectedLocalTab != .work { work = nil } }
+    }
+
+    /// The Work tab's sections (`workModels(userId:isOwnProfile:)`).
+    @ObservationIgnored private var work: ProfileWorkModels?
 
     /// Connect button state — toggles between `idle` → `inFlight` →
     /// `succeeded` after a successful `POST /api/relationships/requests`.
@@ -397,6 +403,26 @@ public final class PublicProfileViewModel {
     /// When the Local posts were read. A post on this profile changed
     /// elsewhere after that (its page, the feed) makes the next opening re-read them.
     private var postsReadAt: Date?
+    /// Your own profile's extras (`PublicProfileView+Owner.swift`), kept with
+    /// the page through a fold or a turn. Nil in a preview and signed out.
+    public let ownerPage: OwnerPageModel?
+
+    /// The screens showing this profile (`presentationDidAppear()`).
+    private var presentationCount = 0
+    /// Counts the profile as left a moment after the last screen showing it
+    /// went away (`presentationDidDisappear()`).
+    private var pendingLeave: Task<Void, Never>?
+    /// How many times the profile left the screen: a visit lasts from one
+    /// opening (or coming back) to the next leaving.
+    private var visit = 0
+    /// The visit whose reads all answered on screen; `load()` reads nothing
+    /// more in it. Nil until then.
+    private var readVisit: Int?
+    /// The same for your own profile's extras (`loadOwnerPage()`).
+    private var ownerReadVisit: Int?
+    /// A read of the current pass failed: the next opening, or a fold or a
+    /// turn, reads again.
+    private var readFailed = false
 
     /// The raw route param — may be a UUID or a `@handle`.
     private let routeIdentifier: String
@@ -432,6 +458,7 @@ public final class PublicProfileViewModel {
         self.client = client
         store = ScreenStore.store(for: client)
         postCards = ProfilePostCardsModel(viewerId: currentUserId, client: client, store: store)
+        ownerPage = previewAudience == nil ? currentUserId.map { OwnerPageModel(userId: $0, client: client) } : nil
         postCards.onToast = { [weak self] message in self?.toastMessage = message }
         // A preview always reads fresh: what the audience sees, not a saved copy.
         if previewAudience == nil { showStoredCopy() }
@@ -448,14 +475,52 @@ public final class PublicProfileViewModel {
     }
 
     /// Opening the profile: the store's copy at once (Follow and Connect wait
-    /// for the relationship read), re-read once out of date.
+    /// for the relationship read), re-read once out of date. A fold or a turn
+    /// makes the screen anew around this model and reads nothing: what this
+    /// visit read stands until the profile leaves the screen.
     public func load() async {
+        guard readVisit != visit else { return }
         if case .loaded = state {} else { state = .loading }
         await fetch(force: false)
     }
 
     public func refresh() async {
         await fetch(force: true)
+    }
+
+    /// Your own profile's extras, read once a visit like the page; a pull
+    /// reads them again (`PublicProfileView.refreshOwnPage()`).
+    public func loadOwnerPage() async {
+        guard isOwnProfileLoaded, let ownerPage, ownerReadVisit != visit else { return }
+        let started = visit
+        if await ownerPage.load(), started == visit, presentationCount > 0 { ownerReadVisit = visit }
+    }
+
+    // MARK: - On screen
+
+    /// A screen showing this profile appeared. A fold or a turn makes the
+    /// screen anew (Messages and Pulse keep this model), and the new screen
+    /// can appear before the old one leaves.
+    public func presentationDidAppear() {
+        presentationCount += 1
+        pendingLeave?.cancel()
+        pendingLeave = nil
+    }
+
+    /// The old screen can also leave before the new one appears: the profile
+    /// waits a moment before it counts as left, so a fold or a turn keeps what
+    /// it read. Leaving it (a screen pushed over it, another tab) counts a
+    /// moment later, and coming back reads it again, as opening it does.
+    public func presentationDidDisappear() {
+        presentationCount = max(presentationCount - 1, 0)
+        guard presentationCount == 0 else { return }
+        pendingLeave?.cancel()
+        pendingLeave = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard let self, !Task.isCancelled, presentationCount == 0 else { return }
+            pendingLeave = nil
+            visit += 1
+        }
     }
 
     /// Reopening a profile seen in the last few minutes shows it at once.
@@ -907,6 +972,8 @@ public final class PublicProfileViewModel {
     }
 
     private func fetch(force: Bool) async {
+        let started = visit
+        readFailed = false
         do {
             let profile: PublicProfile = if let previewAudience {
                 // Not through the store: a preview's answers never stand in for the real profile.
@@ -947,9 +1014,19 @@ public final class PublicProfileViewModel {
                 state = .loaded(build(from: profile, kind: kind, posts: []))
                 await loadRelationship(id: profile.id)
             }
+            // All read on screen: the rest of this visit reads nothing more. What
+            // failed is read again on the next opening, or a fold or a turn.
+            if readFailed {
+                readVisit = nil
+            } else if !Task.isCancelled, started == visit, presentationCount > 0 {
+                readVisit = visit
+            }
         } catch is CancellationError {
             return
         } catch let error as APIError {
+            // Leaving the screen (or a fold making it anew) cancels the read: nothing failed.
+            if Task.isCancelled { return }
+            readVisit = nil
             logger.warning("Profile load failed: \(error)")
             // A failed refresh keeps the profile on screen; gone or hidden shows the server's answer.
             if case .loaded = state, !ScreenStore.isRefusal(error) {
@@ -958,6 +1035,7 @@ public final class PublicProfileViewModel {
             }
             state = .error(message: friendlyMessage(for: error))
         } catch {
+            readVisit = nil
             logger.warning("Profile load failed: \(error)")
             state = .error(message: "Something went wrong")
         }
@@ -1018,6 +1096,7 @@ public final class PublicProfileViewModel {
                 // Leaving the screen cancels the read: nothing failed, so nothing changes.
                 if Task.isCancelled { return }
                 logger.warning("Blocked-list load failed: \(error)")
+                readFailed = true
                 canFollow = false
                 isFollowing = false
                 relationshipReadFailed = true
@@ -1044,6 +1123,7 @@ public final class PublicProfileViewModel {
         } catch {
             if Task.isCancelled { return }
             logger.debug("Relationship load failed: \(error)")
+            readFailed = true
             relationshipLoaded = false
             relationshipReadFailed = true
             toastMessage = "Couldn't load connection status. Try again later."
@@ -1127,6 +1207,7 @@ public final class PublicProfileViewModel {
             return snapshot.value.posts
         } catch {
             logger.debug("Profile posts load failed: \(error)")
+            readFailed = true
             postsLoadFailed = true
             postCards.show([], readRevision: readRevision)
             return []
@@ -1171,6 +1252,7 @@ public final class PublicProfileViewModel {
             portfolioCount = response.files.count
         } catch {
             logger.debug("Portfolio count failed: \(error)")
+            readFailed = true
             portfolioCount = nil
         }
     }
@@ -1184,6 +1266,15 @@ public final class PublicProfileViewModel {
             || (profile.reviewCount ?? 0) > 0
             || (LaunchFeatures.openGigs && (profile.gigsPosted ?? 0) > 0)
         return hasWork || payload.isOwner ? [.posts, .about, .work] : [.posts, .about]
+    }
+
+    /// The Work tab's sections' models, kept while Work stays picked: a fold
+    /// or a turn makes the tab anew and reads nothing.
+    func workModels(userId: String, isOwnProfile: Bool) -> ProfileWorkModels {
+        if let work, work.userId == userId, work.isOwnProfile == isOwnProfile { return work }
+        let models = ProfileWorkModels(userId: userId, isOwnProfile: isOwnProfile)
+        work = models
+        return models
     }
 
     /// True when someone is signed in (the relationship read needs it).
@@ -1227,6 +1318,7 @@ public final class PublicProfileViewModel {
             // Leaving the screen cancels the read: nothing failed, so nothing changes.
             if Task.isCancelled { return }
             logger.debug("Pinned read failed: \(error)")
+            readFailed = true
             pinnedPosts = []
             pinnedReadSucceeded = false
         }
@@ -1246,6 +1338,7 @@ public final class PublicProfileViewModel {
             // Leaving the screen cancels the read: nothing failed, so nothing changes.
             if Task.isCancelled { return }
             logger.debug("In-common read failed: \(error)")
+            readFailed = true
             inCommon = nil
         }
     }

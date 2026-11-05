@@ -168,8 +168,13 @@ public final class ProfilePortfolioViewModel {
         isOwnProfile
     }
 
+    /// Reads once: shown (or empty), it stays, also when a profile keeps this
+    /// model through a fold or a turn (`ProfileWorkModels`).
     public func load() async {
-        if case .loaded = state { return }
+        switch state {
+        case .loaded, .empty: return
+        case .loading, .error: break
+        }
         state = .loading
         await fetch()
     }
@@ -189,9 +194,12 @@ public final class ProfilePortfolioViewModel {
             allItems = response.files.map(Self.project)
             state = allItems.isEmpty ? .empty : .loaded(allItems)
         } catch let error as APIError {
+            // The screen left (or a fold made it anew) and cancelled the read: nothing failed.
+            if Task.isCancelled { return }
             logger.warning("Portfolio load failed: \(error)")
             state = .error(message: Self.friendlyMessage(for: error))
         } catch {
+            if Task.isCancelled { return }
             logger.warning("Portfolio load failed: \(error)")
             state = .error(message: "Something went wrong. Try again.")
         }
@@ -356,8 +364,12 @@ public final class ProfileGigsViewModel {
         self.client = client
     }
 
+    /// Reads once, as the portfolio does.
     public func load() async {
-        if case .loaded = state { return }
+        switch state {
+        case .loaded, .empty: return
+        case .loading, .error: break
+        }
         state = .loading
         await fetch()
     }
@@ -375,9 +387,11 @@ public final class ProfileGigsViewModel {
             let rows = response.gigs.map(Self.project)
             state = rows.isEmpty ? .empty : .loaded(rows)
         } catch let error as APIError {
+            if Task.isCancelled { return }
             logger.warning("Profile gigs load failed: \(error)")
             state = .error(message: ProfilePortfolioViewModel.friendlyMessage(for: error))
         } catch {
+            if Task.isCancelled { return }
             logger.warning("Profile gigs load failed: \(error)")
             state = .error(message: "Something went wrong. Try again.")
         }
@@ -526,8 +540,12 @@ public final class ProfileGigReviewsViewModel {
         return allReviews.filter { $0.receivedAs == activeFilter }
     }
 
+    /// Reads once, as the portfolio does.
     public func load() async {
-        if case .loaded = state { return }
+        switch state {
+        case .loaded, .empty: return
+        case .loading, .error: break
+        }
         state = .loading
         await fetch()
     }
@@ -555,9 +573,11 @@ public final class ProfileGigReviewsViewModel {
                 ? .empty
                 : .loaded(summary: summary, reviews: allReviews)
         } catch let error as APIError {
+            if Task.isCancelled { return }
             logger.warning("Profile reviews load failed: \(error)")
             state = .error(message: ProfilePortfolioViewModel.friendlyMessage(for: error))
         } catch {
+            if Task.isCancelled { return }
             logger.warning("Profile reviews load failed: \(error)")
             state = .error(message: "Something went wrong. Try again.")
         }
