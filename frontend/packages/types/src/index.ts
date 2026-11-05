@@ -490,6 +490,9 @@ export type {
   CrewDayEvent,
   CrewDayStep,
   CrewDayBookingPage,
+  CrewDayBookingCard,
+  CrewDayRequestCard,
+  CrewDayMine,
 } from './crewDay';
 
 // ─── Re-exports from Calendarly scheduling contract (W0) ────
