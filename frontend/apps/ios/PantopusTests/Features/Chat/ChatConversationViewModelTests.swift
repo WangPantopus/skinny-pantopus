@@ -785,40 +785,45 @@ final class ChatConversationViewModelTests: XCTestCase {
     /// reload behavior reset the thread to a shimmer and dropped every
     /// older page, yanking the scroll position on each incoming message).
     func testRefreshKeepsPaginatedOlderMessages() async {
+        // Its own person: a thread an earlier test left can still be reading u_other's pages.
         URLProtocolStub.stub(
-            path: "/api/chat/conversations/u_other/messages",
+            path: "/api/chat/conversations/u_paged/messages",
             responses: [
                 // Initial load: newest message, more history behind it.
                 .json(Self.messagesJSON(
-                    Self.messageJSON(id: "m2", userId: "u_other", text: "newest"),
+                    Self.messageJSON(id: "m2", userId: "u_paged", text: "newest"),
                     hasMore: true
                 )),
                 // loadOlder(): the older page.
                 .json(Self.messagesJSON(
-                    Self.messageJSON(id: "m1", userId: "u_other", text: "older", createdAt: "2026-04-20T09:59:00.000Z"),
+                    Self.messageJSON(id: "m1", userId: "u_paged", text: "older", createdAt: "2026-04-20T09:59:00.000Z"),
                     hasMore: false
                 )),
                 // refresh() (socket echo): newest page again plus a reply; older history remains.
                 .json(Self.messagesJSON(
-                    Self.messageJSON(id: "m3", userId: "u_other", text: "reply", createdAt: "2026-04-20T10:01:00.000Z"),
-                    Self.messageJSON(id: "m2", userId: "u_other", text: "newest"),
+                    Self.messageJSON(id: "m3", userId: "u_paged", text: "reply", createdAt: "2026-04-20T10:01:00.000Z"),
+                    Self.messageJSON(id: "m2", userId: "u_paged", text: "newest"),
                     hasMore: true
                 )),
                 // The refresh reads back to the oldest message it holds: m1 still exists.
                 .json(Self.messagesJSON(
-                    Self.messageJSON(id: "m1", userId: "u_other", text: "older", createdAt: "2026-04-20T09:59:00.000Z"),
+                    Self.messageJSON(id: "m1", userId: "u_paged", text: "older", createdAt: "2026-04-20T09:59:00.000Z"),
                     hasMore: false
                 ))
             ]
         )
-        URLProtocolStub.stub(path: "/api/chat/conversations/u_other/read", response: .json("{}"))
+        URLProtocolStub.stub(path: "/api/chat/conversations/u_paged/read", response: .json("{}"))
         let vm = ChatConversationViewModel(
-            mode: .person(otherUserId: "u_other"),
+            mode: .person(otherUserId: "u_paged"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
             api: makeAPI()
         )
         await vm.load()
+        // The test's socket never connects: listening, the thread would catch
+        // up a moment later and, on a slow runner, read the pages below out of
+        // turn. Stopped, it reads only what each step asks for.
+        vm.teardown()
         await vm.loadOlder()
         let beforeRefresh = URLProtocolStub.capturedRequests.count
         await vm.refresh()
@@ -831,7 +836,7 @@ final class ChatConversationViewModelTests: XCTestCase {
         }
         XCTAssertEqual(bubbleIds, ["m1", "m2", "m3"], "refresh must keep the paginated older page and append the new reply in order")
         let refreshPages = URLProtocolStub.capturedRequests[beforeRefresh...].filter {
-            $0.url?.path == "/api/chat/conversations/u_other/messages"
+            $0.url?.path == "/api/chat/conversations/u_paged/messages"
         }
         let cursors = refreshPages.map { request in
             request.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }?.queryItems?.first { $0.name == "before" }?.value

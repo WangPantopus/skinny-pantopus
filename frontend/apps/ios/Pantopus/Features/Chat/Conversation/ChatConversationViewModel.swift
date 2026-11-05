@@ -3902,7 +3902,9 @@ public final class ChatConversationViewModel {
             // The first state is the socket's as the thread starts listening.
             var resuming = true
             for await state in stream {
-                guard let self else { return }
+                // The stream hands that state even to a listener stopped
+                // (`teardown()`) before it ran, which then starts no catch-up.
+                guard let self, !Task.isCancelled else { return }
                 handleConnectionState(state, resuming: resuming)
                 resuming = false
             }
