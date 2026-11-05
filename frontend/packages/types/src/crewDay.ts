@@ -314,3 +314,259 @@ export interface CrewDayMine {
   requests: CrewDayRequestCard[];
   past: CrewDayBookingCard[];
 }
+
+// ─── Crew (a business page's owners, editors and team seats) ────────────
+
+/** Where an offer stands. A day whose dates have passed is listed under `past` whatever its status. */
+export type CrewDayStatus = 'draft' | 'pending_review' | 'declined' | 'open' | 'in_progress' | 'done' | 'cancelled';
+
+/** A day in the crew's lists, and the base of the crew's and the operator's day (02-contract.md §4 "Shapes"). */
+export interface CrewDayDayCard {
+  id: string;
+  title: string;
+  service: CrewDayService;
+  service_label: string;
+  street_label: string;
+  city: string | null;
+  state: string | null;
+  timezone: string;
+  service_date: string;
+  window_start: string;
+  window_end: string;
+  window_starts_at: string;
+  window_ends_at: string;
+  status: CrewDayStatus;
+  capacity: number;
+  booked_count: number;
+  spots_left: number;
+  is_full: boolean;
+  booking_closes_at: string;
+  is_closed: boolean;
+  price_checks: number;
+  release_asks: number;
+  done_count: number;
+  charged_cents: number;
+  /** Past list only: every charge's money has reached the crew. */
+  paid_out?: boolean;
+  /** The dates its active bookings are on (rain can split a day), or its own date. */
+  dates: string[];
+  review_note: string | null;
+  submitted_at: string | null;
+  share: { code: string; url: string; flyer_url: string } | null;
+  updated_at: string;
+}
+
+export interface CrewDayServiceInfo {
+  key: CrewDayService;
+  label: string;
+  /** "Gutter Day": the start of the title the server builds ("Gutter Day on Maple Lane"). */
+  day_title: string;
+  included: string[];
+}
+
+/** GET /api/crew-days/business/:businessId */
+export interface CrewDayBusiness {
+  readiness: { published: boolean; payouts_enabled: boolean; documents_verified: boolean; missing: Array<'publish_page' | 'set_up_payouts'> };
+  can_edit: boolean;
+  fee: { rate_pct: number; founding: boolean };
+  services: CrewDayServiceInfo[];
+  today: CrewDayDayCard[];
+  upcoming: CrewDayDayCard[];
+  pending: CrewDayDayCard[];
+  drafts: CrewDayDayCard[];
+  past: CrewDayDayCard[];
+}
+
+/** One home on the crew's day: "Home 3 · Two stories" until the job window, then its address and first name. */
+export interface CrewDayHome {
+  id: string;
+  label: string;
+  details: string;
+  line_items: CrewDayLineItem[];
+  price_cents: number | null;
+  status: CrewDayBookingStatus;
+  service_date: string;
+  window_start: string;
+  window_end: string;
+  address_visible: boolean;
+  address: CrewDayAddress | null;
+  first_name: string | null;
+  household_user_id?: string | null;
+  access_note: string | null;
+  route_position: number | null;
+  eta: { start: string; end: string; updated_at?: string | null } | null;
+  gate_ready_at: string | null;
+  cant_get_in_at: string | null;
+  release_asked_at: string | null;
+  done_at: string | null;
+  photo_count: number;
+  charge_state: CrewDayChargeState;
+  charge_due_at: string | null;
+  problem: { status: 'open' | 'resolved' | null; kind: string; note: string | null; opened_at: string | null } | null;
+  new_date_choice: { proposal_id: string; date: string; answered_at: string } | null;
+  created_at: string;
+  /** The route adds these. */
+  photos?: CrewDayPhoto[];
+  problem_photos?: CrewDayPhoto[];
+  done_note?: string | null;
+}
+
+/** GET /api/crew-days/:id/crew: the crew's day (screens 15, 18, 19), with its whole form. */
+export interface CrewDayCrewView extends CrewDayDayCard {
+  business_user_id: string;
+  center: { latitude: number; longitude: number } | null;
+  radius_m: number;
+  cancel_cutoff_at: string | null;
+  included: string[];
+  outside_only: boolean;
+  prep_note: string | null;
+  price_options: CrewDayPriceOption[];
+  add_ons: CrewDayAddOn[];
+  price_from_cents: number | null;
+  proposed_dates: (CrewDayProposal & { homes: number }) | null;
+  repeat_of: string | null;
+  reviewed_at: string | null;
+  cancel_reason: string | null;
+  cancelled_by: 'crew' | 'operator' | null;
+  cancelled_at: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  can_edit: boolean;
+  editable_fields: string[];
+  crew: CrewDayCrew;
+  past_customers: number;
+  money: { gross_cents: number; fee_rate: number; net_cents: number; charged_cents: number; scheduled_cents: number; paused_cents: number };
+  needs_you: { price_checks: CrewDayHome[]; release_asks: CrewDayHome[] };
+  bookings: CrewDayHome[];
+  ended: CrewDayHome[];
+  events: CrewDayEvent[];
+}
+
+/** GET /api/crew-days/:id/route?date= */
+export interface CrewDayRoute {
+  crew_day_id: string;
+  title: string;
+  date: string;
+  dates: string[];
+  timezone: string;
+  window_start: string;
+  window_end: string;
+  total: number;
+  done: number;
+  homes: CrewDayHome[];
+}
+
+/** POST /api/crew-days and PATCH /api/crew-days/:id (options and add-ons keep their server-made ids). */
+export interface CrewDayForm {
+  business_id?: string;
+  service: CrewDayService;
+  title?: string;
+  street_label: string;
+  city: string;
+  state: string;
+  center: { latitude: number; longitude: number };
+  radius_m: number;
+  service_date: string;
+  window_start: string;
+  window_end: string;
+  capacity: number;
+  booking_closes_at?: string;
+  included: string[];
+  outside_only: boolean;
+  prep_note: string;
+  price_options: Array<{ id?: string; label: string; price_cents: number | null; needs_look: boolean }>;
+  add_ons: Array<{ id?: string; label: string; price_cents: number }>;
+  submit?: boolean;
+  repeat_of?: string;
+}
+
+// ─── Operator (Pantopus support, web only) ──────────────────────────────
+
+export type AdminCrewDayTab = 'waiting' | 'open' | 'today' | 'problems' | 'done' | 'requests';
+
+/** The crew as the operator sees it beside a day. */
+export interface AdminCrewDayCrew extends CrewDayCrew {
+  published: boolean;
+  payouts_enabled: boolean;
+  founding: boolean;
+  past_days?: number;
+  problems?: number;
+}
+
+/** A day in the operator's lists: the crew's day without its homes, plus the crew's standing. */
+export type AdminCrewDayItem = Omit<CrewDayCrewView, 'crew' | 'money' | 'needs_you' | 'bookings' | 'ended' | 'events' | 'past_customers'> & {
+  crew: AdminCrewDayCrew;
+};
+
+/** A booking as the operator sees it: everything, for support. */
+export interface AdminCrewDayBooking {
+  id: string;
+  crew_day_id: string;
+  household: { user_id: string; first_name: string | null; last_name: string | null; name: string | null; email: string | null };
+  address: { line: string; city: string | null; state: string | null; zip: string | null };
+  option_id: string;
+  add_on_ids: string[];
+  line_items: CrewDayLineItem[];
+  price_cents: number | null;
+  status: CrewDayBookingStatus;
+  service_date: string;
+  window_start: string;
+  window_end: string;
+  access_note: string | null;
+  charge_state: CrewDayChargeState;
+  charge_due_at: string | null;
+  invoice_id: string | null;
+  charge_failure: string | null;
+  refunded_cents: number;
+  paid_at: string | null;
+  done_at: string | null;
+  problem: (Omit<CrewDayProblem, 'refunded_cents'> & { refunded_cents?: number }) | null;
+  cancelled_by: 'household' | 'crew' | 'operator' | 'system' | null;
+  cancelled_at: string | null;
+  created_at: string;
+  photos?: CrewDayPhoto[];
+  problem_photos?: CrewDayPhoto[];
+  done_note?: string | null;
+  /** The Problems tab adds these. */
+  crew_day?: { id: string; title: string; timezone: string; business_user_id: string };
+  crew?: AdminCrewDayCrew;
+}
+
+/** A household's street request as the operator sees it (first name only). */
+export interface AdminCrewDayRequest {
+  id: string;
+  kind: 'request';
+  title: string;
+  service: CrewDayService;
+  service_label: string;
+  street_label: string;
+  city: string | null;
+  state: string | null;
+  months: string[];
+  note: string | null;
+  status: 'requested' | 'offer_ready' | 'no_crew';
+  asked_by: { user_id: string; first_name: string | null };
+  answer_note: string | null;
+  answered_at: string | null;
+  offer_crew_day_id: string | null;
+  created_at: string;
+}
+
+/** GET /api/admin/crew-days?tab= */
+export interface AdminCrewDayList {
+  tab: AdminCrewDayTab;
+  counts: Record<AdminCrewDayTab, number>;
+  items: Array<AdminCrewDayItem | AdminCrewDayBooking | AdminCrewDayRequest>;
+}
+
+/** GET /api/admin/crew-days/:id */
+export type AdminCrewDayDetail =
+  | {
+      kind: 'offer';
+      day: AdminCrewDayItem;
+      money: CrewDayCrewView['money'];
+      bookings: AdminCrewDayBooking[];
+      events: Array<CrewDayEvent & { booking_id: string | null; visible_to: string }>;
+    }
+  | { kind: 'request'; request: AdminCrewDayRequest };

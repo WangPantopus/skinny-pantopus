@@ -494,6 +494,21 @@ export type {
   CrewDayRequestCard,
   CreateCrewDayRequestRequest,
   CrewDayMine,
+  CrewDayStatus,
+  CrewDayDayCard,
+  CrewDayServiceInfo,
+  CrewDayBusiness,
+  CrewDayHome,
+  CrewDayCrewView,
+  CrewDayRoute,
+  CrewDayForm,
+  AdminCrewDayTab,
+  AdminCrewDayCrew,
+  AdminCrewDayItem,
+  AdminCrewDayBooking,
+  AdminCrewDayRequest,
+  AdminCrewDayList,
+  AdminCrewDayDetail,
 } from './crewDay';
 
 // ─── Re-exports from Calendarly scheduling contract (W0) ────
