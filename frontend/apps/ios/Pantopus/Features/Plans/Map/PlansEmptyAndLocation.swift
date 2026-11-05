@@ -39,7 +39,8 @@ struct PlansEmptyCard: View {
                     .planFont(.small)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .padding(.top, 2)
-                otherKinds
+                    .hiddenUnderPlansTabBar()
+                otherKinds.hiddenUnderPlansTabBar()
                 Divider().overlay(Theme.Color.appBorder).padding(.top, Spacing.s1)
                 if let elsewhere = viewModel.nearestElsewhere {
                     HStack(spacing: 10) {
@@ -54,6 +55,7 @@ struct PlansEmptyCard: View {
                             .frame(minHeight: 44)
                             .accessibilityIdentifier("plansShowElsewhere")
                     }
+                    .hiddenUnderPlansTabBar()
                 }
                 // The person's own invite link, so the neighbor sees who asked them.
                 ShareLink(
@@ -64,6 +66,7 @@ struct PlansEmptyCard: View {
                 }
                 .planButton(.secondary, size: .small)
                 .accessibilityIdentifier("plansInviteNeighbor")
+                .hiddenUnderPlansTabBar()
             }
             .padding(.bottom, Spacing.s4)
             // One drag up shows all of it: the middle stop fits the whole message.
@@ -196,6 +199,7 @@ struct PlansLocationCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 PlanScopeLine(text: "Hosts and guests never see where you are. They see a distance like \u{201C}about 1 mi\u{201D}.")
+                    .hiddenUnderPlansTabBar()
                 if viewModel.locationUnavailable {
                     Text(viewModel.homeCenter == nil
                         ? "Location is off for Pantopus. You can turn it on in Settings."
@@ -203,6 +207,7 @@ struct PlansLocationCard: View {
                         .planFont(.small)
                         .foregroundStyle(Theme.Color.warning)
                         .fixedSize(horizontal: false, vertical: true)
+                        .hiddenUnderPlansTabBar()
                 }
                 VStack(spacing: Spacing.s2) {
                     Button {
@@ -230,6 +235,7 @@ struct PlansLocationCard: View {
                     }
                 }
                 .padding(.top, Spacing.s1)
+                .hiddenUnderPlansTabBar()
             }
             .padding(.top, Spacing.s1)
             .padding(.bottom, Spacing.s4)

@@ -20,6 +20,43 @@ extension PlansSheetLayout {
     }
 }
 
+extension View {
+    /// A part of the sheet that VoiceOver skips while it lies under the tab bar at a lower stop, where the mask hides
+    /// it, so a focus ring never lands on something that doesn't show. On a Group, each of its views is judged alone.
+    func hiddenUnderPlansTabBar() -> some View {
+        modifier(PlansSheetHiddenUnderTabBar())
+    }
+}
+
+extension EnvironmentValues {
+    /// How much of the sheet shows above the tab bar at its resting stop, from the sheet's top; nil at full and
+    /// outside the sheet, where all of it shows.
+    var plansSheetShownHeight: CGFloat? {
+        get { self[PlansSheetShownHeightKey.self] }
+        set { self[PlansSheetShownHeightKey.self] = newValue }
+    }
+}
+
+/// The sheet's own coordinates, from its top; a drag's offset doesn't move them.
+enum PlansSheetBody {
+    static let space = "plansSheetBody"
+}
+
+private struct PlansSheetShownHeightKey: EnvironmentKey {
+    static let defaultValue: CGFloat? = nil
+}
+
+private struct PlansSheetHiddenUnderTabBar: ViewModifier {
+    @Environment(\.plansSheetShownHeight) private var shown
+    @State private var top: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(PlansSheetBody.space)).minY } action: { top = $0 }
+            .accessibilityHidden(shown.map { top >= $0 } ?? false)
+    }
+}
+
 /// The mask: the part of the sheet above the tab bar, following a drag; all of it at full. A view of its own, so a
 /// drag frame redraws only this beside the sheet's offset.
 struct PlansSheetAboveTabBar: View {

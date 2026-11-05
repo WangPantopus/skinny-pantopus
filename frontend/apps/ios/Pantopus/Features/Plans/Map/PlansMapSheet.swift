@@ -239,6 +239,9 @@ struct PlansMapSheet: View {
             PlansSheetContent(viewModel: viewModel, actions: actions, onStop: onStop)
                 .frame(maxHeight: .infinity, alignment: .top)
         }
+        // What lies under the tab bar below full is hidden from VoiceOver too (`hiddenUnderPlansTabBar()`).
+        .coordinateSpace(.named(PlansSheetBody.space))
+        .environment(\.plansSheetShownHeight, stop == .full ? nil : layout.aboveTabBar(top: layout.top(stop)))
         .padding(.bottom, layout.bottomInset)
         .frame(maxWidth: .infinity)
         // Content taller than the sheet (the largest text) runs off its bottom, never over the map.
