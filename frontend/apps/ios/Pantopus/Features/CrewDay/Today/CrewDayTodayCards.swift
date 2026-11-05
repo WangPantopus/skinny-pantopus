@@ -69,6 +69,7 @@ struct CrewDayTodayCards: View {
     /// The space goes above the cards (Today puts them under its agenda) instead of below.
     var gapAbove = false
     @State private var model = CrewDayTodayModel()
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
@@ -113,17 +114,17 @@ struct CrewDayTodayCards: View {
         let busy = model.working == card.bookingId
         switch CrewDayTodayCopy.state(card) {
         case "on_the_way":
-            HStack(spacing: 10) {
+            CrewDayButtonRow(spacing: 10) {
                 if card.crewUserId != nil {
                     Button("Message the crew") { Task { await model.messageCrew(card) } }
-                        .planButton(.tonal, size: .small)
+                        .crewDayButton(.tonal, size: .small)
                         .accessibilityIdentifier("crewDayTodayMessage")
                 }
                 if card.gateReadyAt == nil {
                     Button { Task { await model.act(card, CrewDayEndpoints.gateReady) } } label: {
                         PlanButtonLabel(title: "Gate is ready", isLoading: busy)
                     }
-                    .planButton(.primary, size: .small)
+                    .crewDayButton(.primary, size: .small)
                     .disabled(busy)
                     .accessibilityIdentifier("crewDayTodayGateReady")
                 } else {
@@ -134,7 +135,7 @@ struct CrewDayTodayCards: View {
             Button { Task { await model.act(card, CrewDayEndpoints.confirm) } } label: {
                 PlanButtonLabel(title: "Everything looks good", isLoading: busy)
             }
-            .planButton(.primary, size: .small)
+            .crewDayButton(.primary, size: .small)
             .disabled(busy)
             .accessibilityIdentifier("crewDayTodayLooksGood")
         case "price_ready":
@@ -150,13 +151,13 @@ struct CrewDayTodayCards: View {
 
     private func primaryOpen(_ card: CrewDayCardDTO, title: String, identifier: String) -> some View {
         Button(title) { open(card) }
-            .planButton(.primary, size: .small)
+            .crewDayButton(.primary, size: .small)
             .accessibilityIdentifier(identifier)
     }
 
     private func openButton(_ card: CrewDayCardDTO, kind: PlanButtonStyle.Kind) -> some View {
         Button("Open") { open(card) }
-            .planButton(kind, size: .small)
+            .crewDayButton(kind, size: .small)
             .accessibilityIdentifier("crewDayTodayOpen")
     }
 
@@ -164,12 +165,12 @@ struct CrewDayTodayCards: View {
 
     private func nearbyCard(_ card: CrewDayCardDTO) -> some View {
         cardShell(overline: "Coming to your street", title: card.title ?? "Crew Day", line: nearbyLine(card)) {
-            HStack(spacing: 10) {
+            CrewDayButtonRow(spacing: 10) {
                 Button("Not for me") { Task { await model.dismiss(card) } }
-                    .planButton(.tonal, size: .small)
+                    .crewDayButton(.tonal, size: .small)
                     .accessibilityIdentifier("crewDayTodayNotForMe")
                 Button("See my price") { invite(card) }
-                    .planButton(.primary, size: .small)
+                    .crewDayButton(.primary, size: .small)
                     .accessibilityIdentifier("crewDayTodaySeePrice")
             }
         } onOpen: {
@@ -196,7 +197,8 @@ struct CrewDayTodayCards: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             Button(action: onOpen) {
-                HStack(spacing: Spacing.s3) {
+                // At the accessibility text sizes the tile stays by the overline instead of floating mid-card.
+                HStack(alignment: typeSize.isAccessibilitySize ? .top : .center, spacing: Spacing.s3) {
                     CrewDayTile()
                     VStack(alignment: .leading, spacing: 1) {
                         Text.planOverline(overline)

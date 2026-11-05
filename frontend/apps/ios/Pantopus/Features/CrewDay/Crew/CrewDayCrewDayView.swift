@@ -4,8 +4,10 @@
 //
 //  15. Before the day (build kit 01-spec.md, board `CrewDayPrep`): the
 //  status, date and window, the homes booked on a slot meter, when booking
-//  closes; what Pantopus said; the link, QR code and flyer to bring in more
-//  homes; the money preview; and Cancel this Crew Day.
+//  closes; what Pantopus said; the route from 6 PM the evening before; the
+//  rain answers; what needs the crew; the homes; the link, QR code, flyer
+//  and past customers to bring in more homes; the money preview (after the
+//  day, what was charged); Propose new dates and Cancel this Crew Day.
 //
 
 import SwiftUI
@@ -14,18 +16,29 @@ import UIKit
 struct CrewDayCrewDayView: View {
     @State var viewModel: CrewDayCrewDayViewModel
     let onBack: () -> Void
+    /// The route for a date (nil: the next one).
+    var onOpenRoute: (String?) -> Void = { _ in }
+    var onOpenHome: (CrewDayHomeDTO) -> Void = { _ in }
+    var onProposeDates: () -> Void = {}
+    var onOpenInvoices: (String) -> Void = { _ in }
+    /// "Offer a Crew Day here again" for the day's business.
+    var onRepeat: (String) -> Void = { _ in }
     @State private var systemSheet: SystemSheetRequest?
     @State private var showsQR = false
     @State private var confirmsCancel = false
     @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(spacing: 0) {
-            PlanNavBar(title: viewModel.day?.card.title ?? "Crew Day", onLeading: onBack)
+            PlanNavBar.crewDay(title: viewModel.day?.card.title ?? "Crew Day", onLeading: onBack)
             content
         }
         .background(Theme.Color.appBg)
         .task { await viewModel.load() }
+        .onReceive(NotificationCenter.default.publisher(for: .crewDayChanged)) { _ in
+            Task { await viewModel.load() }
+        }
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
         .sheet(item: $systemSheet) { $0.makeView() }
         .sheet(isPresented: $showsQR) {
@@ -49,17 +62,30 @@ struct CrewDayCrewDayView: View {
             CrewDayLoadingView()
         case let .failed(message):
             CrewDayErrorView(message: message) { await viewModel.load() }
-        case let .loaded(day):
+        case let .loaded(page):
+            let day = page.day
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s5) {
                     header(day)
                     statusCard(day)
-                    if ["open", "in_progress"].contains(day.card.status), let share = day.card.share {
-                        bringMore(share)
+                    CrewDayPrepSections(
+                        page: page,
+                        viewModel: viewModel,
+                        onOpenRoute: onOpenRoute,
+                        onOpenHome: onOpenHome,
+                        onOpenInvoices: { onOpenInvoices(day.businessUserId ?? "") },
+                        onRepeat: { onRepeat(day.businessUserId ?? "") }
+                    )
+                    if ["open", "in_progress"].contains(day.card.status), !day.card.isClosed, !CrewDayPrepCopy.isAfter(page),
+                       let share = day.card.share {
+                        bringMore(share, page: page)
                     }
-                    if let money = day.money, (money.grossCents ?? 0) > 0 { moneyCard(money, day: day) }
-                    if day.canEdit, ["open", "pending_review", "draft", "declined"].contains(day.card.status) {
-                        plansChange(day)
+                    if let money = day.money, (money.grossCents ?? 0) > 0, !CrewDayPrepCopy.isAfter(page) {
+                        moneyCard(money, day: day)
+                    }
+                    if day.canEdit, ["open", "in_progress", "pending_review", "draft", "declined"].contains(day.card.status),
+                       !CrewDayPrepCopy.isAfter(page) {
+                        plansChange(page)
                     }
                     if let error = viewModel.actionError { CrewDayErrorText(text: error, identifier: "crewDayPrepError") }
                     if let notice = viewModel.notice {
@@ -97,6 +123,7 @@ struct CrewDayCrewDayView: View {
                 PlanSlotMeter(spots: card.capacity, filled: card.bookedCount)
             }
             .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("crewDayPrepCount")
             Text(closesLine(card))
                 .planFont(.small)
                 .foregroundStyle(Theme.Color.appTextSecondary)
@@ -152,16 +179,18 @@ struct CrewDayCrewDayView: View {
                 Button { Task { await viewModel.submit() } } label: {
                     PlanButtonLabel(title: action.0, isLoading: viewModel.working)
                 }
-                .planButton(.primary)
+                .crewDayButton(.primary)
                 .disabled(viewModel.working)
                 .accessibilityIdentifier(action.1)
             }
         }
     }
+}
 
-    // MARK: - Bring in more homes
+// MARK: - Bring in more homes, money, if plans change
 
-    private func bringMore(_ share: CrewDayShareDTO) -> some View {
+private extension CrewDayCrewDayView {
+    func bringMore(_ share: CrewDayShareDTO, page: CrewDayCrewPageDTO) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             Text.planOverline("Bring in more homes")
             CrewDayCard {
@@ -169,42 +198,52 @@ struct CrewDayCrewDayView: View {
                     Text(url)
                         .planFont(.small)
                         .foregroundStyle(Theme.Color.appTextSecondary)
-                        .lineLimit(1)
+                        .lineLimit(typeSize.isAccessibilitySize ? 4 : 1)
                         .truncationMode(.middle)
                         .textSelection(.enabled)
-                    HStack(spacing: Spacing.s2) {
+                    CrewDayButtonRow(spacing: Spacing.s2) {
                         Button {
                             UIPasteboard.general.string = url
                             viewModel.notice = "Link copied."
                         } label: { PlanButtonLabel(title: "Copy link", icon: .copy, kind: .tonal) }
-                            .planButton(.tonal, size: .small)
+                            .crewDayButton(.tonal, size: .small)
                             .accessibilityIdentifier("crewDayPrepCopyLink")
                         Button { systemSheet = .share(items: [url]) } label: {
                             PlanButtonLabel(title: "Share…", icon: .share, kind: .tonal)
                         }
-                        .planButton(.tonal, size: .small)
+                        .crewDayButton(.tonal, size: .small)
                         .accessibilityIdentifier("crewDayPrepShare")
                     }
-                    HStack(spacing: Spacing.s2) {
+                    CrewDayButtonRow(spacing: Spacing.s2) {
                         Button { showsQR = true } label: { PlanButtonLabel(title: "QR code", icon: .qrCode, kind: .tonal) }
-                            .planButton(.tonal, size: .small)
+                            .crewDayButton(.tonal, size: .small)
                             .accessibilityIdentifier("crewDayPrepQR")
                         if let flyer = share.flyerURL.flatMap(URL.init(string:)) {
                             Button { openURL(flyer) } label: {
                                 PlanButtonLabel(title: "Printable flyer", icon: .printer, kind: .tonal)
                             }
-                            .planButton(.tonal, size: .small)
+                            .crewDayButton(.tonal, size: .small)
                             .accessibilityIdentifier("crewDayPrepFlyer")
                         }
                     }
+                }
+                if page.day.canEdit, page.pastCustomers > 0, page.day.card.status == "open" {
+                    Divider().overlay(Theme.Color.appBorder)
+                    Text("\(CrewDayFormat.homes(page.pastCustomers)) you served near here")
+                        .planFont(.small)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                    Button { Task { await viewModel.invitePast() } } label: {
+                        PlanButtonLabel(title: "Invite past customers", icon: .userPlus, kind: .secondary, isLoading: viewModel.working)
+                    }
+                    .crewDayButton(.secondary, size: .small)
+                    .disabled(viewModel.working)
+                    .accessibilityIdentifier("crewDayPrepInvitePast")
                 }
             }
         }
     }
 
-    // MARK: - Money
-
-    private func moneyCard(_ money: CrewDayMoneyDTO, day: CrewDayCrewDayDTO) -> some View {
+    func moneyCard(_ money: CrewDayMoneyDTO, day: CrewDayCrewDayDTO) -> some View {
         CrewDayCard {
             CrewDaySectionTitle(text: "Money")
             Text(CrewDayCrewDayCopy.preview(money, homes: day.card.bookedCount))
@@ -215,29 +254,36 @@ struct CrewDayCrewDayView: View {
         }
     }
 
-    // MARK: - If plans change
-
-    private func plansChange(_: CrewDayCrewDayDTO) -> some View {
+    func plansChange(_ page: CrewDayCrewPageDTO) -> some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             Text.planOverline("If plans change")
+            if ["open", "in_progress"].contains(page.day.card.status), !page.bookings.isEmpty, !CrewDayPrepCopy.isAfter(page) {
+                Button(action: onProposeDates) {
+                    PlanButtonLabel(title: "Propose new dates", icon: .cloudRain, kind: .secondary)
+                }
+                .crewDayButton(.secondary)
+                .disabled(viewModel.working)
+                .accessibilityIdentifier("crewDayPrepProposeDates")
+            }
             Button { confirmsCancel = true } label: { PlanButtonLabel(title: "Cancel this Crew Day", kind: .textDanger) }
-                .planButton(.textDanger)
+                .crewDayButton(.textDanger)
                 .disabled(viewModel.working)
                 .accessibilityIdentifier("crewDayPrepCancel")
         }
     }
 
-    private var cancelTitle: String {
+    var cancelTitle: String {
         let homes = viewModel.day?.card.bookedCount ?? 0
         return homes > 0 ? "Cancel for all \(CrewDayFormat.homes(homes))? Nobody is charged." : "Cancel this Crew Day?"
     }
 }
 
 enum CrewDayCrewDayCopy {
-    /// "If all 6 are done: $1,020 charged · you receive $918 after the 10% founding fee."
+    /// "If all 6 are done: $1,020 charged · you receive $918 after the 10% founding fee." ("If the home is done" for one.)
     static func preview(_ money: CrewDayMoneyDTO, homes: Int) -> String {
         let gross = CrewDayFormat.price(money.grossCents ?? 0)
-        guard let net = money.netCents, let rate = money.feeRate else { return "If all \(homes) are done: \(gross) charged." }
-        return "If all \(homes) are done: \(gross) charged · you receive \(CrewDayFormat.price(net)) after the \(Int(rate))% fee."
+        let lead = homes == 1 ? "If the home is done" : "If all \(homes) are done"
+        guard let net = money.netCents, let rate = money.feeRate else { return "\(lead): \(gross) charged." }
+        return "\(lead): \(gross) charged · you receive \(CrewDayFormat.price(net)) after the \(Int(rate))% fee."
     }
 }

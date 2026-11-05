@@ -47,8 +47,14 @@ function priceFor(day, optionId, addOnIds = []) {
   };
 }
 
+/** When cancelling stops being free: 48 hours before the window, or, while new dates wait for an answer, their deadline. */
+function cancelCutoff(booking, day) {
+  if (booking.status === 'new_dates' && day.proposed_dates?.deadline_at) return day.proposed_dates.deadline_at;
+  return rules.cancelCutoffAt(booking.service_date, booking.window_start, day.timezone);
+}
+
 function cutoffPassed(booking, day, now = new Date()) {
-  const cutoff = rules.cancelCutoffAt(booking.service_date, booking.window_start, day.timezone);
+  const cutoff = cancelCutoff(booking, day);
   return Boolean(cutoff && now >= new Date(cutoff));
 }
 
@@ -389,6 +395,7 @@ async function dismiss(dayId, userId) {
 
 module.exports = {
   CHANGEABLE,
+  cancelCutoff,
   priceFor,
   cutoffPassed,
   activeCount,

@@ -17,10 +17,13 @@ struct CrewDaysCrewView: View {
     let onNewDay: (String) -> Void
     /// A readiness step: the business page, payouts or documents.
     let onOpenBusinessStep: (HubRoute) -> Void
+    /// A day's route (Today's days).
+    var onOpenRoute: (String) -> Void = { _ in }
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(spacing: 0) {
-            PlanNavBar(title: "Crew Days", onLeading: onBack)
+            PlanNavBar.crewDay(title: "Crew Days", onLeading: onBack)
             content
         }
         .background(Theme.Color.appBg)
@@ -39,7 +42,7 @@ struct CrewDaysCrewView: View {
         case .loading:
             CrewDayLoadingView()
         case let .failed(message):
-            CrewDayErrorView(message: message) { await viewModel.refresh() }
+            CrewDayErrorView(headline: "Couldn't load your Crew Days", message: message) { await viewModel.refresh() }
         case let .loaded(response):
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s5) {
@@ -50,7 +53,7 @@ struct CrewDaysCrewView: View {
                     if response.isEmpty {
                         empty(ready: response.readiness?.isReady ?? true)
                     } else {
-                        section("Today", response.today)
+                        section("Today", response.today, route: true)
                         section("Upcoming", response.upcoming)
                         section("Waiting for Pantopus", response.pending)
                         section("Drafts", response.drafts)
@@ -65,7 +68,7 @@ struct CrewDaysCrewView: View {
                     Button { onNewDay(businessId) } label: {
                         PlanButtonLabel(title: "New Crew Day", icon: .plus)
                     }
-                    .planButton(.primary)
+                    .crewDayButton(.primary)
                     .accessibilityIdentifier("crewDaysCrewNew")
                 }
             }
@@ -158,11 +161,18 @@ struct CrewDaysCrewView: View {
     // MARK: - Sections
 
     @ViewBuilder
-    private func section(_ title: String, _ days: [CrewDaySummaryDTO]) -> some View {
+    private func section(_ title: String, _ days: [CrewDaySummaryDTO], route: Bool = false) -> some View {
         if !days.isEmpty {
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 Text.planOverline(title)
-                ForEach(days) { day in row(day) }
+                ForEach(days) { day in
+                    row(day)
+                    if route, ["open", "in_progress"].contains(day.status) {
+                        Button("Open the route") { onOpenRoute(day.id) }
+                            .crewDayButton(.primary, size: .small)
+                            .accessibilityIdentifier("crewDaysCrewRoute_\(day.id)")
+                    }
+                }
             }
         }
     }
@@ -177,6 +187,10 @@ struct CrewDaysCrewView: View {
                             .planFont(.rowTitle)
                             .foregroundStyle(Theme.Color.appText)
                             .multilineTextAlignment(.leading)
+                        // At the accessibility text sizes the chip goes under the title, which keeps the width.
+                        if typeSize.isAccessibilitySize, let chip = CrewDayCrewCopy.chip(day) {
+                            CrewDayChip(text: chip.text, tone: chip.tone)
+                        }
                         Text(CrewDayCrewCopy.when(day))
                             .planFont(.small)
                             .foregroundStyle(Theme.Color.appTextSecondary)
@@ -192,7 +206,7 @@ struct CrewDaysCrewView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    if let chip = CrewDayCrewCopy.chip(day) {
+                    if !typeSize.isAccessibilitySize, let chip = CrewDayCrewCopy.chip(day) {
                         CrewDayChip(text: chip.text, tone: chip.tone)
                     }
                 }

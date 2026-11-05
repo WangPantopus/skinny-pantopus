@@ -24,10 +24,10 @@ struct CrewDayBookingFlowView: View {
             if let invitation = model.invitation {
                 switch model.step {
                 case .price:
-                    PlanNavBar(title: "Your price", trailing: "1 of 2", onLeading: onClose)
+                    PlanNavBar.crewDay(title: "Your price", trailing: "1 of 2", onLeading: onClose)
                     CrewDayPriceView(model: model, invitation: invitation, onAsk: onAsk)
                 case .review:
-                    PlanNavBar(title: "Review and book", trailing: "2 of 2") { model.backToPrice() }
+                    PlanNavBar.crewDay(title: "Review and book", trailing: "2 of 2") { model.backToPrice() }
                     CrewDayReviewView(model: model, invitation: invitation)
                 case .booked:
                     CrewDayBookedView(
@@ -38,10 +38,10 @@ struct CrewDayBookingFlowView: View {
                     )
                 }
             } else if let error = model.loadError {
-                PlanNavBar(title: "Your price", onLeading: onClose)
+                PlanNavBar.crewDay(title: "Your price", onLeading: onClose)
                 CrewDayErrorView(message: error) { await model.load() }
             } else {
-                PlanNavBar(title: "Your price", onLeading: onClose)
+                PlanNavBar.crewDay(title: "Your price", onLeading: onClose)
                 CrewDayLoadingView()
             }
         }
@@ -71,7 +71,7 @@ struct CrewDayBookedView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PlanNavBar(title: "", leading: .close, onLeading: onClose)
+            PlanNavBar.crewDay(title: "", leading: .close, onLeading: onClose)
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s5) {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -139,18 +139,18 @@ struct CrewDayBookedView: View {
 
     private var actions: some View {
         VStack(spacing: Spacing.s3) {
-            HStack(spacing: Spacing.s2) {
+            CrewDayButtonRow(spacing: Spacing.s2) {
                 Button { addsToCalendar = true } label: {
                     PlanButtonLabel(title: "Add to calendar", icon: .calendarPlus, kind: .tonal)
                 }
-                .planButton(.tonal, size: .small)
+                .crewDayButton(.tonal, size: .small)
                 .accessibilityIdentifier("crewDayBookedCalendar")
                 Button {
                     systemSheet = .share(items: [CrewDayShareText.message(invitation), CrewDayShareText.link(invitation.code)])
                 } label: {
                     PlanButtonLabel(title: "Share with neighbors", icon: .share, kind: .tonal)
                 }
-                .planButton(.tonal, size: .small)
+                .crewDayButton(.tonal, size: .small)
                 .accessibilityIdentifier("crewDayBookedShare")
             }
             Text("The preview shows \(invitation.streetLabel) and the date, never your address.")
@@ -159,7 +159,7 @@ struct CrewDayBookedView: View {
                 .multilineTextAlignment(.center)
             if let bookingId = booking?.id {
                 Button("See my Crew Day") { onOpenBooking(bookingId) }
-                    .planButton(.primary)
+                    .crewDayButton(.primary)
                     .accessibilityIdentifier("crewDayBookedOpen")
             }
         }

@@ -79,6 +79,8 @@ final class CrewDayBookingFlowModel {
     private(set) var isQuoting = false
     /// The address is outside this Crew Day.
     private(set) var outOfArea = false
+    /// Counts quotes asked, so only the newest answer counts (an older one may arrive after the address changed).
+    private var quoteRun = 0
 
     // MARK: Review
 
@@ -112,6 +114,8 @@ final class CrewDayBookingFlowModel {
         }
         if optionId == nil { optionId = invitation?.priceOptions.first?.id }
         await loadHomes()
+        // A Home in Pantopus filled in the address: say at once whether this day reaches it.
+        if address != nil, quote == nil, !outOfArea { await checkArea() }
     }
 
     private func loadHomes() async {
@@ -140,7 +144,7 @@ final class CrewDayBookingFlowModel {
     func useHome(_ home: CrewDayHomeAddress) {
         address = home
         isTypingAddress = false
-        resetQuote()
+        addressChanged()
     }
 
     func useTyped(_ normalized: NormalizedAddress) {
@@ -154,12 +158,19 @@ final class CrewDayBookingFlowModel {
             longitude: longitude,
             homeId: nil
         )
-        resetQuote()
+        addressChanged()
     }
 
     func clearTyped() {
         if address?.homeId == nil { address = nil }
-        resetQuote()
+        addressChanged()
+    }
+
+    /// Change: type another address. What the old one was told goes with it.
+    func changeAddress() {
+        addressQuery = ""
+        isTypingAddress = true
+        addressChanged(checks: false)
     }
 
     func select(option id: String) {
@@ -196,21 +207,35 @@ final class CrewDayBookingFlowModel {
         address != nil && option != nil && !isQuoting
     }
 
+    /// As soon as the address is known (01-spec.md screen 2, as the web does): whether this day reaches it, through
+    /// the quote. An address outside it shows "Ask for one on your street" under Your home instead of the options.
+    func checkArea() async {
+        guard let address, let optionId = optionId ?? invitation?.priceOptions.first?.id else { return }
+        quoteRun += 1
+        let run = quoteRun
+        isQuoting = true
+        defer { if run == quoteRun { isQuoting = false } }
+        // A failure here says nothing: Continue asks again and says what failed.
+        guard let answer: CrewDayQuoteDTO = try? await APIClient.shared.request(
+            CrewDayEndpoints.quote(code: code, quoteBody(address, optionId: optionId))
+        ), run == quoteRun else { return }
+        quote = answer
+        outOfArea = !answer.inArea
+    }
+
     /// Continue: the server checks the area and prices the home.
     func continueToReview() async {
         guard let address, let optionId else { return }
+        quoteRun += 1
+        let run = quoteRun
         isQuoting = true
         error = nil
-        defer { isQuoting = false }
+        defer { if run == quoteRun { isQuoting = false } }
         do {
-            let body = CrewDayQuoteBody(
-                latitude: address.latitude,
-                longitude: address.longitude,
-                addressLine: address.line,
-                optionId: optionId,
-                addOnIds: Array(addOnIds).sorted()
+            let answer: CrewDayQuoteDTO = try await APIClient.shared.request(
+                CrewDayEndpoints.quote(code: code, quoteBody(address, optionId: optionId))
             )
-            let answer: CrewDayQuoteDTO = try await APIClient.shared.request(CrewDayEndpoints.quote(code: code, body))
+            guard run == quoteRun else { return }
             quote = answer
             outOfArea = !answer.inArea
             guard answer.inArea else { return }
@@ -220,7 +245,7 @@ final class CrewDayBookingFlowModel {
                 cardId = cardId ?? wallet.preferred?.id
             }
         } catch {
-            self.error = CrewDayErrors.sentence(for: error)
+            if run == quoteRun { self.error = CrewDayErrors.sentence(for: error) }
         }
     }
 
@@ -229,9 +254,29 @@ final class CrewDayBookingFlowModel {
         step = .price
     }
 
+    private func quoteBody(_ address: CrewDayHomeAddress, optionId: String) -> CrewDayQuoteBody {
+        CrewDayQuoteBody(
+            latitude: address.latitude,
+            longitude: address.longitude,
+            addressLine: address.line,
+            optionId: optionId,
+            addOnIds: Array(addOnIds).sorted()
+        )
+    }
+
+    /// Another option or add-on: the price is asked again at Continue (the area stays as it was).
     private func resetQuote() {
         quote = nil
+    }
+
+    /// A new address, or none: the old answers go, a late one is dropped, and the new address is checked at once.
+    private func addressChanged(checks: Bool = true) {
+        quote = nil
         outOfArea = false
+        quoteRun += 1
+        isQuoting = false
+        guard checks, address != nil else { return }
+        Task { await checkArea() }
     }
 
     // MARK: - Review and book

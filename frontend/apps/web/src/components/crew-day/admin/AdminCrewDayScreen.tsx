@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Eye, RefreshCw, ShieldAlert } from 'lucide-react';
@@ -9,12 +9,16 @@ import type { AdminCrewDayBooking, AdminCrewDayDetail } from '@pantopus/types';
 import { toast } from '@/components/ui/toast-store';
 import { formatCrewDate, formatInstantDate, formatInstantRange, formatInstantTime, formatPrice, formatWindow } from '@/lib/crewDay';
 import { monthsText } from '../crewDayStatus';
-import { ADMIN_FIELD, ADMIN_QUIET, CrewStanding, Pill, ProblemCard, moneyText, shortName } from './AdminCrewDayParts';
+import { ADMIN_FIELD, ADMIN_QUIET, CrewStanding, Pill, ProblemCard, RefundForm, moneyText, shortName } from './AdminCrewDayParts';
 
 // Screen 21, one Crew Day for the operator (board `AdminDay`): everything about the day and its bookings
-// (addresses, households, prices, status, where each charge stands), Cancel this Crew Day, the open problems with
-// their answers (refunds go through a problem), and the timeline in words. Opening it records the operator's
-// visit on the day's timeline. GET /api/admin/crew-days/:id.
+// (addresses, households, prices, status, where each charge stands), Cancel this Crew Day, a Refund (all or part) on
+// each done, charged or card-failed booking, the open problems with their answers, and the timeline in words.
+// Opening it records the operator's visit on the day's timeline. GET /api/admin/crew-days/:id.
+
+// Bookings support can refund without an open problem (a household that called in); one with a problem is refunded
+// from its problem card.
+const REFUNDABLE = ['done', 'payment_failed', 'paid'];
 
 type OfferDetail = Extract<AdminCrewDayDetail, { kind: 'offer' }>;
 
@@ -133,7 +137,7 @@ function eventText(e: OfferDetail['events'][number], detail: OfferDetail): strin
     case 'problem_resolved':
       return `Pantopus closed the problem (${String(data.resolution || 'resolved').replace(/_/g, ' ')})${note ? `: ${note}` : ''}`;
     case 'refunded':
-      return `Refunded ${cents('amount_cents')}${data.before_charge ? ' before the charge' : ''}`;
+      return `Refunded ${cents('amount_cents')}${data.before_charge ? ' before the charge' : ''}${note ? `: ${note}` : ''}`;
     case 'date_answered':
       return data.choice === 'cancel' || data.date === 'cancel' ? `${who} cancelled instead of a new date` : `${who} picked a new date`;
     case 'operator_viewed':
@@ -151,6 +155,7 @@ export default function AdminCrewDayScreen({ crewDayId }: { crewDayId: string })
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const [refunding, setRefunding] = useState<string | null>(null);
   const denied = (query.error as { statusCode?: number } | null)?.statusCode === 403;
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ['crew-day', 'admin'] });
 
@@ -357,34 +362,69 @@ export default function AdminCrewDayScreen({ crewDayId }: { crewDayId: string })
                 <tbody>
                   {bookings.map((b) => {
                     const pill = b.problem?.status === 'open' ? { label: 'Problem open', tone: 'amber' as const } : (STATUS[b.status] ?? { label: b.status, tone: 'slate' as const });
+                    const refundable = b.problem?.status !== 'open' && REFUNDABLE.includes(b.status);
+                    const open = refunding === b.id && refundable;
                     return (
-                      <tr key={b.id} className={`border-b border-app-border last:border-b-0 ${b.problem?.status === 'open' ? 'bg-amber-50 dark:bg-amber-950/20' : ''}`}>
-                        <td className="px-3.5 py-3 align-top font-semibold text-app-text">
-                          {b.address.line}
-                          <div className="text-xs font-normal text-app-text-secondary">{formatCrewDate(b.service_date)}</div>
-                        </td>
-                        <td className="px-3.5 py-3 align-top text-app-text-strong">
-                          {b.household.name || shortName(b.household)}
-                          {b.household.email ? <div className="text-xs text-app-text-secondary">{b.household.email}</div> : null}
-                        </td>
-                        <td className="px-3.5 py-3 align-top text-app-text-strong">{b.line_items.map((l) => l.label).join(', ') || '—'}</td>
-                        <td className="px-3.5 py-3 text-right align-top [font-variant-numeric:tabular-nums]">{moneyText(b.price_cents)}</td>
-                        <td className="px-3.5 py-3 align-top">
-                          <Pill tone={pill.tone}>{pill.label}</Pill>
-                        </td>
-                        <td className="px-3.5 py-3 align-top text-app-text-strong">{chargeLine(b, tz)}</td>
-                        <td className="px-3.5 py-3 text-right align-top">
-                          {b.problem?.status === 'open' ? (
-                            <a href={`#problem-${b.id}`} className="text-[0.8125rem] font-semibold text-violet-700 hover:underline dark:text-violet-300">
-                              Open problem
-                            </a>
-                          ) : b.invoice_id ? (
-                            <Link href={`/app/invoice/${encodeURIComponent(b.invoice_id)}`} className="text-[0.8125rem] font-semibold text-violet-700 hover:underline dark:text-violet-300">
-                              Invoice
-                            </Link>
-                          ) : null}
-                        </td>
-                      </tr>
+                      <Fragment key={b.id}>
+                        <tr className={`border-app-border ${open ? '' : 'border-b last:border-b-0'} ${b.problem?.status === 'open' ? 'bg-amber-50 dark:bg-amber-950/20' : ''}`}>
+                          <td className="px-3.5 py-3 align-top font-semibold text-app-text">
+                            {b.address.line}
+                            <div className="text-xs font-normal text-app-text-secondary">{formatCrewDate(b.service_date)}</div>
+                          </td>
+                          <td className="px-3.5 py-3 align-top text-app-text-strong">
+                            {b.household.name || shortName(b.household)}
+                            {b.household.email ? <div className="text-xs text-app-text-secondary">{b.household.email}</div> : null}
+                          </td>
+                          <td className="px-3.5 py-3 align-top text-app-text-strong">{b.line_items.map((l) => l.label).join(', ') || '—'}</td>
+                          <td className="px-3.5 py-3 text-right align-top [font-variant-numeric:tabular-nums]">{moneyText(b.price_cents)}</td>
+                          <td className="px-3.5 py-3 align-top">
+                            <Pill tone={pill.tone}>{pill.label}</Pill>
+                          </td>
+                          <td className="px-3.5 py-3 align-top text-app-text-strong">{chargeLine(b, tz)}</td>
+                          <td className="px-3.5 py-3 text-right align-top">
+                            {b.problem?.status === 'open' ? (
+                              <a href={`#problem-${b.id}`} className="text-[0.8125rem] font-semibold text-violet-700 hover:underline dark:text-violet-300">
+                                Open problem
+                              </a>
+                            ) : (
+                              <span className="inline-flex flex-col items-end gap-1.5">
+                                {refundable ? (
+                                  <button
+                                    type="button"
+                                    aria-expanded={open}
+                                    onClick={() => setRefunding(open ? null : b.id)}
+                                    className="text-[0.8125rem] font-semibold text-violet-700 hover:underline dark:text-violet-300"
+                                  >
+                                    Refund
+                                  </button>
+                                ) : null}
+                                {b.invoice_id ? (
+                                  <Link href={`/app/invoice/${encodeURIComponent(b.invoice_id)}`} className="text-[0.8125rem] font-semibold text-violet-700 hover:underline dark:text-violet-300">
+                                    Invoice
+                                  </Link>
+                                ) : null}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                        {open ? (
+                          <tr className="border-b border-app-border last:border-b-0">
+                            <td colSpan={7} className="px-3.5 pb-3.5">
+                              {/* Stays in view while the wide table scrolls sideways on a narrow screen. */}
+                              <div className="sticky left-3.5 max-w-[min(36rem,calc(100vw-3rem))]">
+                                <RefundForm
+                                  booking={b}
+                                  onDone={() => {
+                                    setRefunding(null);
+                                    refresh();
+                                  }}
+                                  onCancel={() => setRefunding(null)}
+                                />
+                              </div>
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
                     );
                   })}
                 </tbody>
