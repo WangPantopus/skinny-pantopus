@@ -20,6 +20,8 @@ const reads = require('../services/crewDay/reads');
 const dayOf = require('../services/crewDay/dayOf');
 const money = require('../services/crewDay/money');
 const problems = require('../services/crewDay/problems');
+const changes = require('../services/crewDay/changes');
+const requests = require('../services/crewDay/requests');
 
 // One photo per request, up to 10 MB (JPEG, PNG or HEIC; stored as JPEG or PNG without metadata).
 const photoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
@@ -111,6 +113,16 @@ router.post('/bookings/:bookingId/problem', verifyToken, handle('problem', async
   await bookingAnswer(req, res, await problems.report(req.params.bookingId, req.user.id, req.body || {}));
 }));
 
+// POST /api/crew-days/bookings/:bookingId/new-date { proposal_id, choice: date or "cancel" }: answer the rain dates.
+router.post('/bookings/:bookingId/new-date', verifyToken, handle('new_date', async (req, res) => {
+  await bookingAnswer(req, res, await changes.answerDate(req.params.bookingId, req.user.id, req.body || {}));
+}));
+
+// POST /api/crew-days/requests { service, home_id, months, note }: "Ask for a Crew Day on my street" (screen 11).
+router.post('/requests', verifyToken, handle('request', async (req, res) => {
+  res.status(201).json({ request: requests.card(await requests.create(req.user.id, req.body || {})) });
+}));
+
 // POST /api/crew-days/bookings/:bookingId/gate-ready: on the day, tell the crew the gate is open.
 router.post('/bookings/:bookingId/gate-ready', verifyToken, handle('gate_ready', async (req, res) => {
   await bookingAnswer(req, res, await dayOf.gateReady(req.params.bookingId, req.user.id));
@@ -168,6 +180,23 @@ router.post('/:id/bookings/:bookingId/price', verifyToken, handle('price', async
 router.post('/:id/bookings/:bookingId/release', verifyToken, handle('release', async (req, res) => {
   const booking = await bookings.release(req.params.id, req.params.bookingId, req.user.id);
   res.json({ booking: await crewHomeAnswer(booking) });
+}));
+
+// POST /api/crew-days/:id/propose-dates { dates (2–3), note? }: rain; every booked home picks a date or cancels free.
+router.post('/:id/propose-dates', verifyToken, handle('propose_dates', async (req, res) => {
+  const day = await changes.proposeDates(req.params.id, req.user.id, req.body || {});
+  res.json({ crew_day: await reads.crewDayDetail(day, await days.dayForCrew(day, req.user.id)) });
+}));
+
+// POST /api/crew-days/:id/cancel { reason }: the crew cancels the day; every home not yet worked on ends free.
+router.post('/:id/cancel', verifyToken, handle('cancel_day', async (req, res) => {
+  const day = await changes.cancelDay(req.params.id, req.user.id, { reason: req.body?.reason, byOperator: false });
+  res.json({ crew_day: await reads.crewDayDetail(day, await days.dayForCrew(day, req.user.id)) });
+}));
+
+// POST /api/crew-days/:id/invite-past: past customers near here hear about this day, once each.
+router.post('/:id/invite-past', verifyToken, handle('invite_past', async (req, res) => {
+  res.json(await changes.invitePast(req.params.id, req.user.id));
 }));
 
 // GET /api/crew-days/:id/route?date=: the homes on that date in the crew's order (screen 16).

@@ -166,5 +166,7 @@ router.post('/jobs/ask-still-open-reminders', jobEndpoint('askStillOpenReminders
 router.post('/jobs/plans-tick', jobEndpoint('plansTick', runPlansTick, 240));
 // Crew Day (they also run on the cron runner; each skips while `crew_day` is unlisted).
 router.post('/jobs/crew-day-charges', jobEndpoint('crewDayCharges', crewDayJobs.crewDayCharges, 240));
+router.post('/jobs/crew-day-reminders', jobEndpoint('crewDayReminders', crewDayJobs.crewDayReminders, 240));
+router.post('/jobs/crew-day-deadlines', jobEndpoint('crewDayDeadlines', crewDayJobs.crewDayDeadlines, 240));
 
 module.exports = router;

@@ -17,6 +17,7 @@ const views = require('./views');
 const days = require('./days');
 const bookingsService = require('./bookings');
 const photos = require('./photos');
+const changes = require('./changes');
 
 const DONE_STATES = ['done', 'paid', 'payment_failed', 'refunded'];
 
@@ -373,6 +374,7 @@ async function crewDayDetail(day, base) {
   const fee = await days.feeFor(day.business_user_id, facts);
   return {
     ...base,
+    past_customers: ['open'].includes(day.status) ? (await changes.pastCustomers(day)).length : 0,
     money: views.money(stats, fee.rate_pct),
     needs_you: {
       price_checks: active.filter((h) => h.status === 'price_pending').map(strip),

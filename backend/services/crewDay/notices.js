@@ -204,7 +204,63 @@ async function problemUpdate(day, booking, body) {
   }, { day, booking, link: links.booking(booking.id) });
 }
 
+async function newDates(day, booking, crew, proposal) {
+  const dates = proposal.dates.map((d) => rules.formatDay(d.date));
+  const list = dates.length > 1 ? `${dates.slice(0, -1).join(', ')} or ${dates[dates.length - 1]}` : dates[0];
+  await send([booking.household_user_id], {
+    type: 'crew_day_new_dates',
+    title: 'Rain changed the plan',
+    body: `${businessName(crew)} can come ${list} at the same price. No payment has been taken. If you don't answer by `
+      + `${rules.formatDayRelative(proposal.deadline_at, day.timezone).replace(/^on /, '')} ${rules.formatTime(proposal.deadline_at, day.timezone)}, we won't book a new date.`,
+  }, { day, booking, link: links.booking(booking.id) });
+}
+
+async function reminder(day, booking) {
+  await send([booking.household_user_id], {
+    type: 'crew_day_reminder',
+    title: `${serviceDayName(day)} is tomorrow`,
+    body: `${rules.formatWindow(booking.window_start, booking.window_end)}.${day.prep_note ? ` ${day.prep_note}` : ''}`
+      + `${day.outside_only ? " You don't need to be home." : ''}`,
+  }, { day, booking, link: links.booking(booking.id), idempotencyKey: `crew-day-reminder:${booking.id}:${booking.service_date}` });
+}
+
+async function invite(day, userId, crew, priceCents) {
+  await send([userId], {
+    type: 'crew_day_invite',
+    title: `${businessName(crew)} is back on ${day.street_label}`,
+    body: `${rules.formatDay(day.service_date)}. Book again: ${priceCents ? `your price is ${rules.formatMoney(priceCents)}` : 'see your price'}.`,
+  }, { day, link: `/crew-day/${day.share_code}`, idempotencyKey: `crew-day-invite:${day.id}` });
+}
+
+async function requestAnswered(request, offerDay) {
+  await send([request.created_by], offerDay ? {
+    type: 'crew_day_request_answered',
+    title: `A crew can come to ${request.street_label}`,
+    body: `${offerDay.title}, ${rules.formatDay(offerDay.service_date)}. See your price.`,
+  } : {
+    type: 'crew_day_request_answered',
+    title: `No crew yet for ${request.street_label}`,
+    body: request.review_note || null,
+  }, { day: request, link: offerDay ? `/crew-day/${offerDay.share_code}` : links.mine() });
+}
+
 // ── Crew (about one home) ─────────────────────────────────────
+
+async function datesAnswered(day, booking, answered, total) {
+  await send(await crewRecipients(day), {
+    type: 'crew_day_dates_answered',
+    title: `${answered} of ${total} picked a new date`,
+    body: day.title,
+  }, { day, booking, link: links.crewDay(day.business_user_id, day.id), push: false });
+}
+
+async function dayCancelledForCrew(day, byOperator) {
+  await send(await crewRecipients(day), {
+    type: 'crew_day_cancelled',
+    title: byOperator ? `Pantopus cancelled ${day.title}` : `${day.title} was cancelled`,
+    body: `${day.cancel_reason ? `${day.cancel_reason} ` : ''}Nobody was charged.`,
+  }, { day, link: links.crewDay(day.business_user_id, day.id) });
+}
 
 async function problemReported(day, booking) {
   await send(await crewRecipients(day), {
@@ -257,6 +313,14 @@ async function releaseAsked(day, booking) {
 
 // ── Operator ───────────────────────────────────────────────────
 
+async function requestNew(request) {
+  await send(await adminRecipients(), {
+    type: 'crew_day_request_new',
+    title: 'A street asked for a Crew Day',
+    body: `${request.title}.`,
+  }, { day: request, link: links.admin(request.id), push: false });
+}
+
 async function problemOpened(day, booking) {
   const due = rules.formatDayRelative(booking.problem_due_at, day.timezone);
   await send(await adminRecipients(), {
@@ -276,6 +340,13 @@ async function reviewNeeded(day, { businessName }) {
 }
 
 module.exports = {
+  newDates,
+  reminder,
+  invite,
+  requestAnswered,
+  datesAnswered,
+  dayCancelledForCrew,
+  requestNew,
   charged,
   chargeFailed,
   problemUpdate,

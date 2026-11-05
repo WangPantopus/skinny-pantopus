@@ -17,6 +17,8 @@ function safeRedirectPath(redirectTo, fallback = '/app/place') {
       /^\/(?:invite|persona|posts)\/[a-zA-Z0-9_-]+$/.test(path) ||
       // A letter's claim page (/open/:mailId?token=…), opened from its email before signing in.
       /^\/open\/[a-fA-F0-9-]+$/.test(path) ||
+      // A Crew Day invitation and its booking steps, after signing up from "Your price".
+      /^\/crew-day\/[a-z2-9]{6,16}(?:\/(?:price|book|booked))?$/.test(path) ||
       /^\/@[a-zA-Z0-9_-]+$/.test(path);
     return allowed ? path + suffix : fallback;
   } catch {
