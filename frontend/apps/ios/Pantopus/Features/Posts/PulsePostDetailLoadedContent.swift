@@ -195,15 +195,21 @@ public struct PulsePostDetailLoadedContent: View {
     }
 
     /// A fold or a turn rebuilt the screen while the comment box had the keyboard: it gets it back, once the box is
-    /// in the window (closed, the window takes a moment to settle on the outer screen).
+    /// in the window (closed, the window takes a moment to settle on the outer screen). Until it has it, the post's
+    /// model keeps that the box should, so a second rebuild on the way (half folded to upright passes through open
+    /// sideways) gives it back too; and while the screen settles, a box that loses it again gets it back.
     private func returnToComposer() async {
         guard returnsToComposer else { return }
         returnsToComposer = false
+        onComposerFocusChange?(true)
         for delayMs: UInt64 in [80, 170, 250, 500] {
             try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
-            guard !Task.isCancelled, !composerFocused else { return }
-            composerFocused = true
+            guard !Task.isCancelled else { return }
+            if !composerFocused { composerFocused = true }
         }
+        // Still without it, on a screen that stayed: the box doesn't have the keyboard after all.
+        try? await Task.sleep(nanoseconds: 250 * 1_000_000)
+        if !Task.isCancelled, !composerFocused { onComposerFocusChange?(false) }
     }
 }
 
