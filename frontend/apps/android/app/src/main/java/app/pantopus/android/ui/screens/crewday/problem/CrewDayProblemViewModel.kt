@@ -1,3 +1,5 @@
+@file:Suppress("MagicNumber")
+
 package app.pantopus.android.ui.screens.crewday.problem
 
 import androidx.lifecycle.SavedStateHandle
