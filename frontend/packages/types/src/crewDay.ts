@@ -259,3 +259,58 @@ export interface CrewDayBookingPage {
   events: CrewDayEvent[];
   created_at: string;
 }
+
+/** A booking in Your Crew Days and on Today (GET /api/crew-days/mine, /today). */
+export interface CrewDayBookingCard {
+  booking_id: string;
+  crew_day_id: string;
+  code: string;
+  title: string;
+  service: CrewDayService;
+  service_label: string;
+  street_label: string;
+  timezone: string;
+  service_date: string;
+  window_start: string;
+  window_end: string;
+  window_starts_at: string;
+  status: CrewDayBookingStatus;
+  price_cents: number | null;
+  charge: CrewDayCharge;
+  eta: { start: string; end: string } | null;
+  photo_count: number;
+  problem_status: 'open' | 'resolved' | null;
+  crew: { name: string; username: string | null } | null;
+  /** Past bookings: the same crew opened a day that reaches this home again. */
+  book_again?: { crew_day_id: string; code: string; service_date: string } | null;
+}
+
+/** A household's "Ask for a Crew Day on my street". */
+export interface CrewDayRequestCard {
+  id: string;
+  title: string;
+  service: CrewDayService;
+  service_label: string;
+  street_label: string;
+  months: string[];
+  note: string | null;
+  status: 'requested' | 'offer_ready' | 'no_crew';
+  answer_note: string | null;
+  answered_at: string | null;
+  created_at: string;
+  offer: { crew_day_id: string; code: string } | null;
+}
+
+/** POST /api/crew-days/requests. `months` are "YYYY-MM" in the next six, or ["any"]. */
+export interface CreateCrewDayRequestRequest {
+  service: CrewDayService;
+  home_id?: string;
+  months: string[];
+  note?: string;
+}
+
+export interface CrewDayMine {
+  upcoming: CrewDayBookingCard[];
+  requests: CrewDayRequestCard[];
+  past: CrewDayBookingCard[];
+}
