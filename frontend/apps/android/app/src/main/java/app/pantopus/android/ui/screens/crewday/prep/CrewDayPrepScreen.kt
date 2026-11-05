@@ -342,7 +342,7 @@ private fun NeedsYou(
                         text =
                             listOfNotNull(
                                 homeName(home),
-                                home.option?.label?.lowercase(),
+                                home.details?.takeIf { it.isNotBlank() }?.lowercase(),
                                 askedOn(home, zone),
                             ).joinToString(" · "),
                         style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
@@ -640,11 +640,11 @@ private fun QrDialog(
 private fun askedOn(
     home: CrewDayHomeDto,
     zone: ZoneId,
-): String? = CrewDayFormat.shortDate(CrewDayFormat.instant(home.askedAt), zone)?.let { "asked ${it.substringAfter(", ")}" }
+): String? = CrewDayFormat.shortDate(CrewDayFormat.instant(home.createdAt), zone)?.let { "asked ${it.substringAfter(", ")}" }
 
 /** "Two stories · gutter guards". */
 private fun jobWords(home: CrewDayHomeDto): String? =
-    (listOfNotNull(home.option?.label) + home.addOns.map { it.label.lowercase() }).joinToString(" · ").ifBlank { null }
+    home.details?.takeIf { it.isNotBlank() }
 
 /** "Home 3", or the address once the crew may see it. */
 private fun homeName(home: CrewDayHomeDto): String = home.address?.line ?: home.label ?: "A home"
