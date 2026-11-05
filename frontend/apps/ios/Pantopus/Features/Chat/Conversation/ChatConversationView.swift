@@ -252,6 +252,20 @@ private final class ChatTimelinePlace: NSObject {
         if endScroll != nil {
             spreadRest(to: end(of: scrollView), in: scrollView)
         }
+        keepViewportOnContent(scrollView)
+    }
+
+    /// The content shrank under the viewport: the lazy stack took lower estimates for the rows it has not laid out.
+    /// Folding the iPhone Duo closed from upright widens the timeline, the rows re-wrap shorter, and the offset was
+    /// left past the end, on blank space where the stack lays out no rows, until the reader scrolled. Back to the end.
+    private func keepViewportOnContent(_ scrollView: UIScrollView) {
+        guard !scrollView.isTracking, !scrollView.isDecelerating else { return }
+        let end = max(
+            -scrollView.adjustedContentInset.top,
+            scrollView.contentSize.height + scrollView.adjustedContentInset.bottom - scrollView.bounds.height
+        )
+        guard scrollView.contentOffset.y > end + 1 else { return }
+        scrollView.contentOffset.y = end
     }
 
     private func keepRowsBelow(_ scrollView: UIScrollView) {
