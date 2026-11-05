@@ -121,7 +121,7 @@ household per Crew Day (a unique index), and `client_request_id` is unique per h
 `id`, `crew_day_id` (cascade), `booking_id` (nullable, cascade), `actor_user_id` (nullable for the system; set null),
 `actor_role` (`household`, `crew`, `operator`, `system`), `kind` (lowercase snake case, 3–40 characters), `data`
 jsonb object, `visible_to` (`household`, `crew`, `both`, `operator`), `created_at`.
-Kinds: `day_created`, `day_submitted`, `day_approved`, `day_declined`, `day_cancelled`, `day_started`,
+Kinds: `day_created`, `day_edited`, `day_submitted`, `day_approved`, `day_declined`, `day_cancelled`, `day_started`,
 `dates_proposed`, `price_requested`, `price_offered`, `price_approved`, `price_declined`, `booked`, `booking_changed`,
 `booking_cancelled`, `release_asked`, `released`, `access_note_changed` (never the text), `gate_ready`, `on_the_way`,
 `eta_changed`, `cant_get_in`, `done`, `household_confirmed`, `charged`, `charge_failed`, `paid_by_household`,
@@ -173,7 +173,7 @@ routes add `requireAdmin`. Rate-limit the public routes like the Plans share rou
 
 | Route | Returns |
 |---|---|
-| `GET /api/crew-days/public/:code` | the invitation: `id`, `code`, `title`, `service`, `street_label`, `city`, `state`, `timezone`, `service_date`, `window_start`, `window_end`, `window_starts_at`, `window_ends_at`, `booking_closes_at`, `included`, `outside_only`, `price_from_cents`, `price_options`, `add_ons`, `capacity`, `booked_count`, `spots_left`, `availability` (`open`, `full`, `closed`, `cancelled`, `done`; `state` is the US state everywhere), `crew { business_user_id, name, username, avatar_url, verified, rating { average, count } or null }`, and when signed in `viewer { role: crew/household/none, booking_id }`. Never addresses, households or the area's coordinates. 404 `NOT_FOUND` for unknown codes and for days not yet approved. |
+| `GET /api/crew-days/public/:code` | the invitation: `id`, `code`, `title`, `service`, `street_label`, `city`, `state`, `timezone`, `service_date`, `window_start`, `window_end`, `window_starts_at`, `window_ends_at`, `booking_closes_at`, `included`, `outside_only`, `price_from_cents`, `price_options`, `add_ons`, `capacity`, `booked_count`, `spots_left`, `availability` (`open`, `full`, `closed`, `cancelled`, `done`; `state` is the US state everywhere), `crew { business_user_id, name, username, avatar_url, verified, rating { average, count } or null }`, and when signed in `viewer { role: crew/household/none, booking_id }`. Also `service_label`, `price_options[{ id, label, price_cents or null, needs_look }]`, `add_ons[{ id, label, price_cents }]`. Never addresses, households or the area's coordinates. 404 `NOT_FOUND` ("This Crew Day isn't available.") for unknown or malformed codes and for days not yet approved (a day cancelled after approval stays readable as `cancelled`). Limited like the Plans share page (60 a minute per IP). |
 | `POST /api/crew-days/public/:code/quote` | body `{ latitude, longitude, address_line, option_id, add_on_ids }` → `{ in_area, price_cents or null, needs_look, message }` |
 
 ### Household
@@ -203,11 +203,11 @@ create, edit, prices, dates, cancel and release; any business access for reading
 
 | Route | Does |
 |---|---|
-| `GET /api/crew-days/business/:businessId` | `{ readiness { published, payouts_enabled, documents_verified, missing[] }, today, upcoming, pending, drafts, past }` |
-| `POST /api/crew-days` | create: `{ business_id, service, street_label, city, state, center { latitude, longitude }, radius_m, service_date, window_start, window_end, capacity, booking_closes_at?, included, outside_only, prep_note, price_options, add_ons, submit, repeat_of? }` → `draft` or `pending_review` (refused until ready: `BUSINESS_NOT_READY` with `missing`) |
-| `PATCH /api/crew-days/:id` | edit within the rules in `01-spec.md` 14 |
-| `POST /api/crew-days/:id/submit` | draft → `pending_review` |
-| `GET /api/crew-days/:id/crew` | the crew's day (15): counts, `money { gross_cents, fee_rate, net_cents, charged_cents, scheduled_cents, paused_cents }`, `needs_you` (price checks, release asks), bookings (address and first name only when the privacy rule allows; otherwise `label` "Home 3"), share link and flyer URL, events |
+| `GET /api/crew-days/business/:businessId` | any member. `{ readiness { published, payouts_enabled, documents_verified, missing[] }, can_edit, fee { rate_pct, founding }, services[{ key, label, day_title, included[] }], today, upcoming, pending, drafts, past }`. `missing` holds the required steps only: `publish_page`, `set_up_payouts` (documents are optional: `documents_verified` drives the badge row). Sections hold day cards (below); `pending` has `pending_review` and `declined` (with `review_note`); a day whose dates are all past moves to `past`. |
+| `POST /api/crew-days` | owners and editors (`profile.edit`). create: `{ business_id, service, street_label, city, state, center { latitude, longitude }, radius_m, service_date, window_start, window_end, capacity, booking_closes_at?, included, outside_only, prep_note, price_options, add_ons, submit, repeat_of?, title? }` → 201 `{ crew_day }`, `draft` or `pending_review`. Refuses `VALIDATION` (422, with `field`), `NOT_ALLOWED` (403, a member without `profile.edit`), `NOT_FOUND`, `BUSINESS_NOT_READY` (409, with `missing`). The date must be after today and within six months; booking must stay open at least an hour from now and close by the window's start (default: 48 hours before it). Option and add-on ids are made by the server (`opt_…`, `add_…`); send them back to keep them. |
+| `PATCH /api/crew-days/:id` | owners and editors; any form field above → `{ crew_day }`. Draft, declined and waiting days take every field; an open or started day takes only `capacity` (not below its active bookings: `CAPACITY_BELOW_BOOKED`), `included`, `outside_only`, `prep_note`, `price_options`, `add_ons` (an option or add-on a booking uses can be repriced, not removed: `OPTION_IN_USE`; existing bookings keep their prices). Other fields: 409 `NOT_EDITABLE` with `fields`. `crew_day.editable_fields` lists what the viewer may change. |
+| `POST /api/crew-days/:id/submit` | draft or declined → `pending_review` → `{ crew_day }`; tells the operator. Refuses `DAY_NOT_DRAFT`, `BUSINESS_NOT_READY`, `VALIDATION` (a date that has passed). |
+| `GET /api/crew-days/:id/crew` | any member. The crew's day (15): the whole form (`center`, `radius_m`, `included`, `prep_note`, `price_options`, `add_ons`, `price_from_cents`), the card fields, `can_edit`, `editable_fields`, `review_note`, `cancel_*`. From SRV-3/4 also: counts, `money { gross_cents, fee_rate, net_cents, charged_cents, scheduled_cents, paused_cents }`, `needs_you` (price checks, release asks), bookings (address and first name only when the privacy rule allows; otherwise `label` "Home 3"), events. |
 | `POST /api/crew-days/:id/bookings/:bookingId/price` | `{ price_cents }` → `price_offered`, or `{ decline: true, note }` → `declined` |
 | `POST /api/crew-days/:id/bookings/:bookingId/release` | a home inside the cutoff, at no charge → `cancelled` (`crew`) |
 | `POST /api/crew-days/:id/invite-past` | invites households this business served with a `paid` booking within the area in the last 400 days, once each → `{ invited }` |
@@ -220,14 +220,25 @@ create, edit, prices, dates, cancel and release; any business access for reading
 | `POST /api/crew-days/bookings/:bookingId/cant-get-in` | `{ note }` → event, tells the household |
 | `POST /api/crew-days/bookings/:bookingId/done` | `{ photo_paths (≥ 1), note? }` → `done`, the invoice, `charge_due_at` |
 
+### Shapes
+
+- **Day card** (crew lists, and the base of every crew and operator day): `id`, `title`, `service`, `service_label`,
+  `street_label`, `city`, `state`, `timezone`, `service_date`, `window_start`, `window_end` (`HH:MM`),
+  `window_starts_at`, `window_ends_at`, `status`, `capacity`, `booked_count`, `spots_left`, `is_full`,
+  `booking_closes_at`, `is_closed`, `price_checks`, `release_asks`, `done_count`, `charged_cents`, `dates` (the dates
+  its active bookings are on, or its own date), `review_note` (declined only), `submitted_at`,
+  `share { code, url, flyer_url }`, `updated_at`.
+- **Errors common to every route:** `UNAVAILABLE` (503, try again), `SERVER_ERROR` (500), `CHANGED` (409, someone
+  changed it meanwhile; refresh), `NOT_FOUND` (404, also for a day the viewer can't see).
+
 ### Operator
 
 | Route | Does |
 |---|---|
-| `GET /api/admin/crew-days?tab=waiting,open,today,problems,done,requests` | lists for 20, 22, 23 |
-| `GET /api/admin/crew-days/:id` | everything (21); records `operator_viewed` |
-| `POST /api/admin/crew-days/:id/approve` | `{ note? }` → `open`; tells the crew |
-| `POST /api/admin/crew-days/:id/decline` | `{ note }` (required) → `declined`; tells the crew |
+| `GET /api/admin/crew-days?tab=waiting,open,today,problems,done,requests` | lists for 20, 22, 23: `{ tab, counts { waiting, open, today, problems, done, requests }, items }`. Day items are the crew's day plus `crew { business_user_id, name, username, avatar_url, verified, rating, published, payouts_enabled, founding, past_days, problems }`; `problems` items are bookings (operator shape below) with `crew_day` and `crew`; `requests` items are `{ id, kind: "request", title, service, service_label, street_label, city, state, months, note, status, asked_by { user_id, first_name }, answer_note, answered_at, offer_crew_day_id, created_at }`. Non-admins get 403 `NOT_OPERATOR`. |
+| `GET /api/admin/crew-days/:id` | everything (21): `{ kind: "offer", day, money, bookings, events }` (every booking with `household { user_id, first_name, last_name, name, email }`, `address`, `line_items`, `price_cents`, `status`, `charge_state` (`not_yet`, `scheduled`, `paused`, `charged`, `partially_refunded`, `refunded`, `failed`, `none`), `invoice_id`, `problem`, …; every event) or `{ kind: "request", request }`; records `operator_viewed` (once per ten minutes per operator) |
+| `POST /api/admin/crew-days/:id/approve` | `{ note? }` → `open` → `{ crew_day }`; tells the crew. Refuses `NOT_WAITING`, `BUSINESS_NOT_READY`, `DAY_PASSED` (booking would already be closed) |
+| `POST /api/admin/crew-days/:id/decline` | `{ note }` (required, ≤ 500) → `declined` → `{ crew_day }`; tells the crew |
 | `POST /api/admin/crew-days/:id/cancel` | `{ reason }` |
 | `POST /api/admin/crew-days/bookings/:bookingId/problem` | `{ action: note, release, refund, resolve, amount_cents?, note }` |
 | `POST /api/admin/crew-days/requests/:id` | `{ action: offer_ready, crew_day_id }` or `{ action: no_crew, note }`; tells the household |
