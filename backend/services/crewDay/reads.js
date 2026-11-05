@@ -160,9 +160,10 @@ function bookingCard(booking, day, crew) {
     price_cents: booking.price_cents,
     charge: chargeFor(booking),
     eta: booking.eta_start ? { start: booking.eta_start, end: booking.eta_end } : null,
+    gate_ready_at: booking.gate_ready_at,
     photo_count: (booking.photo_paths || []).length,
     problem_status: booking.problem_status,
-    crew: crew ? { name: crew.name, username: crew.username } : null,
+    crew: crew ? { business_user_id: day.business_user_id, name: crew.name, username: crew.username } : null,
   };
 }
 
@@ -310,7 +311,10 @@ function detailsLine(booking) {
   return (booking.line_items || []).map((i) => (i.kind === 'add_on' ? i.label.toLowerCase() : i.label)).join(' · ');
 }
 
-/** A home as the crew sees it now: "Home 3 · Two stories" or, in the job window, the address and first name. */
+/**
+ * A home as the crew sees it now: "Home 3 · Two stories" or, in the job window, the address, the first name and the
+ * household's user id (to open a conversation, as "Can't get in" does).
+ */
 function crewHome(booking, index, day, person, now) {
   const visible = addressVisible(booking, day, now);
   return {
@@ -327,6 +331,7 @@ function crewHome(booking, index, day, person, now) {
     address: visible ? { line: booking.address_line, city: booking.address_city, state: booking.address_state,
       zip: booking.address_zip, latitude: booking.latitude, longitude: booking.longitude } : null,
     first_name: visible ? (person?.first_name || null) : null,
+    household_user_id: visible ? booking.household_user_id : null,
     access_note: visible && !['price_pending', 'price_offered'].includes(booking.status) ? booking.access_note : null,
     route_position: booking.route_position,
     eta: booking.eta_start ? { start: booking.eta_start, end: booking.eta_end, updated_at: booking.eta_updated_at } : null,
@@ -374,6 +379,7 @@ async function crewDayDetail(day, base) {
   const fee = await days.feeFor(day.business_user_id, facts);
   return {
     ...base,
+    crew: store.publicCrew(facts),
     past_customers: ['open'].includes(day.status) ? (await changes.pastCustomers(day)).length : 0,
     money: views.money(stats, fee.rate_pct),
     needs_you: {
