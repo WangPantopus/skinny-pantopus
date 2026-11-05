@@ -249,7 +249,7 @@ export default function AdminCrewDayScreen({ crewDayId }: { crewDayId: string })
   return (
     <div className="min-h-screen bg-app-surface">
       {header(day.title, <Pill tone={statusPill.tone}>{statusPill.label}</Pill>)}
-      <div className="mx-auto flex max-w-5xl flex-col gap-4 p-4">
+      <div className="mx-auto flex max-w-5xl flex-col gap-4 p-4 [&>section]:min-w-0">
         <p className="flex items-center gap-1.5 text-[0.8125rem] text-app-text-secondary">
           <Eye className="h-3.5 w-3.5 flex-none" aria-hidden="true" /> Your visit to this page is recorded in its timeline.
         </p>
@@ -340,7 +340,7 @@ export default function AdminCrewDayScreen({ crewDayId }: { crewDayId: string })
             Bookings
           </h2>
           {bookings.length ? (
-            <div className="overflow-x-auto rounded-xl border border-app-border">
+            <div className="relative overflow-x-auto rounded-xl border border-app-border">
               <table className="w-full min-w-[53.75rem] border-collapse text-sm">
                 <thead>
                   <tr className="bg-app-surface-sunken text-left">
@@ -423,7 +423,7 @@ export default function AdminCrewDayScreen({ crewDayId }: { crewDayId: string })
               .filter((x) => x.text)
               .map(({ e, text }) => (
                 <li key={e.id} className="flex flex-wrap gap-x-4 gap-y-1 border-b border-app-border py-2.5 text-sm last:border-b-0">
-                  <span className="w-44 flex-none text-app-text-secondary [font-variant-numeric:tabular-nums]">
+                  <span className="w-44 max-w-full flex-none text-app-text-secondary [font-variant-numeric:tabular-nums]">
                     {formatInstantDate(e.created_at, tz)} · {formatInstantTime(e.created_at, tz)}
                   </span>
                   <span className="min-w-[min(15rem,100%)] flex-1 text-app-text">{text}</span>

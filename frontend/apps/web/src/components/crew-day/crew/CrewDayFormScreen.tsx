@@ -104,7 +104,7 @@ function Section({ n, id, title, intro, children }: { n: number; id: string; tit
 }
 
 const INPUT =
-  'w-full rounded-lg border border-app-strong bg-surface px-3 py-2 text-[0.9375rem] text-app placeholder:text-app-secondary focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:cursor-not-allowed disabled:opacity-60';
+  'w-full min-w-0 rounded-lg border border-app-strong bg-surface px-3 py-2 text-[0.9375rem] text-app placeholder:text-app-secondary focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:cursor-not-allowed disabled:opacity-60';
 const LABEL = 'text-sm font-semibold text-app-strong';
 const HINT = 'text-[0.8125rem] text-app-secondary';
 const SMALL_BUTTON =
@@ -394,7 +394,7 @@ export default function CrewDayFormScreen({
         }}
         className="mx-auto grid max-w-6xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_22rem]"
       >
-        <div className="flex min-w-0 flex-col gap-5">
+        <div className="flex min-w-0 flex-col gap-5 [&>section]:min-w-0">
           {existing?.status === 'declined' && existing.review_note ? (
             <p role="status" className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
               <CircleAlert className="mt-0.5 h-4 w-4 flex-none" aria-hidden="true" />
@@ -468,7 +468,7 @@ export default function CrewDayFormScreen({
             title="Where and when"
             intro="Only homes inside your reach can book. You can't move the date later except by proposing new dates."
           >
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="cd-street" className={LABEL}>
                   Street or area name
@@ -507,7 +507,7 @@ export default function CrewDayFormScreen({
             </div>
             <fieldset className="flex min-w-0 flex-col gap-2" disabled={!editable('radius_m')}>
               <legend className={LABEL}>Reach</legend>
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
+              <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
                 <div className="flex flex-col divide-y divide-app overflow-hidden rounded-xl border border-app">
                   {REACH.map((r) => (
                     <label key={r.meters} className="flex min-h-12 cursor-pointer items-center gap-3 px-3 py-2 hover:bg-surface-raised">
@@ -528,7 +528,7 @@ export default function CrewDayFormScreen({
                 </div>
               </div>
             </fieldset>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="cd-date" className={LABEL}>
                   Date
