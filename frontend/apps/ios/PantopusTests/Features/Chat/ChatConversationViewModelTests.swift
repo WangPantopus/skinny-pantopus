@@ -29,6 +29,16 @@ final class ChatConversationViewModelTests: XCTestCase {
         super.tearDown()
     }
 
+    /// A socket that reports no connection state: no thread under test runs the
+    /// offline catch-up (150 ms after it starts listening) or polling, so each
+    /// test's stubbed replies go only to the reads it makes. On a slow runner
+    /// that catch-up took replies meant for the test's own reads.
+    private static let quietSocket: SocketClient = {
+        let socket = SocketClient()
+        socket.reportsConnectionStates = false
+        return socket
+    }()
+
     private func makeAPI() -> APIClient {
         APIClient(
             environment: .current,
@@ -120,7 +130,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         guard case let .loaded(rows) = vm.state else {
@@ -152,7 +163,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         guard case let .loaded(rows) = vm.state else {
@@ -182,7 +194,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         guard case let .loaded(rows) = vm.state else {
@@ -205,7 +218,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .ai,
             counterparty: Self.counterpartyAI,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         if case .empty = vm.state { /* ok */ } else {
@@ -218,7 +232,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .ai,
             counterparty: Self.counterpartyAI,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         // Welcome/empty before any capability is tapped.
@@ -260,6 +275,7 @@ final class ChatConversationViewModelTests: XCTestCase {
             counterparty: Self.counterpartyAI,
             currentUserId: "u_me",
             api: makeAPI(),
+            socket: Self.quietSocket,
             aiClient: fakeAI
         )
         await vm.load()
@@ -338,6 +354,7 @@ final class ChatConversationViewModelTests: XCTestCase {
             counterparty: Self.counterpartyAI,
             currentUserId: "u_me",
             api: makeAPI(),
+            socket: Self.quietSocket,
             uploader: MultipartUploader(session: TestSession.make()),
             aiClient: fakeAI
         )
@@ -385,7 +402,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         vm.composerText = "Hello"
@@ -422,7 +440,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         vm.composerText = "Hello"
@@ -469,7 +488,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         vm.composerText = "Hello"
@@ -523,7 +543,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         vm.composerText = "Hello"
@@ -563,6 +584,7 @@ final class ChatConversationViewModelTests: XCTestCase {
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
             api: makeAPI(),
+            socket: Self.quietSocket,
             uploader: MultipartUploader(session: TestSession.make())
         )
         await vm.load()
@@ -641,7 +663,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         vm.beginReply(to: "m_gig")
@@ -683,7 +706,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         vm.composerText = "will fail"
@@ -729,7 +753,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         await vm.loadOlder()
@@ -765,7 +790,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         await vm.refresh()
@@ -816,15 +842,10 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
-        // The tests have no socket. A thread listening with its socket down
-        // catches up 150 ms later and keeps polling, and a catch-up asked while
-        // `loadOlder()` reads runs right after it: on a slow runner that took
-        // the replies stubbed for `refresh()` below. Stop listening, so the
-        // reads under test are the only ones made.
-        vm.teardown()
         await vm.loadOlder()
         let beforeRefresh = URLProtocolStub.capturedRequests.count
         await vm.refresh()
@@ -865,7 +886,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         vm.beginReply(to: "m1")
@@ -906,7 +928,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         vm.beginEdit(messageId: "m1")
@@ -934,7 +957,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         await vm.delete(messageId: "m1")
@@ -970,6 +994,7 @@ final class ChatConversationViewModelTests: XCTestCase {
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
             api: makeAPI(),
+            socket: Self.quietSocket,
             uploader: MultipartUploader(session: TestSession.make())
         )
         await vm.load()
@@ -1035,7 +1060,8 @@ final class ChatConversationViewModelTests: XCTestCase {
                 topicRefId: "11111111-1111-1111-1111-111111111111",
                 title: "Lamp"
             ),
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         XCTAssertEqual(vm.selectedTopicId, "t1")
@@ -1133,7 +1159,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         guard case let .loaded(rows) = vm.state,
@@ -1186,7 +1213,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         guard case let .loaded(rows) = vm.state else {
@@ -1223,7 +1251,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         vm.composerText = "one more"
@@ -1259,7 +1288,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         await vm.bulkDelete(ids: ["m1", "m2"])
@@ -1276,7 +1306,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         let blocked = await vm.blockCounterparty()
         XCTAssertTrue(blocked)
@@ -1291,7 +1322,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         let reported = await vm.reportCounterparty(reason: "spam", details: "Keeps posting ads")
         XCTAssertTrue(reported)
@@ -1312,6 +1344,7 @@ final class ChatConversationViewModelTests: XCTestCase {
             counterparty: Self.counterpartyAI,
             currentUserId: "u_me",
             api: makeAPI(),
+            socket: Self.quietSocket,
             aiClient: firstClient,
             aiConversationStore: store
         )
@@ -1326,6 +1359,7 @@ final class ChatConversationViewModelTests: XCTestCase {
             counterparty: Self.counterpartyAI,
             currentUserId: "u_me",
             api: makeAPI(),
+            socket: Self.quietSocket,
             aiClient: secondClient,
             aiConversationStore: store
         )
@@ -1359,7 +1393,8 @@ final class ChatConversationViewModelTests: XCTestCase {
             mode: .person(otherUserId: "u_other"),
             counterparty: Self.counterpartyPerson,
             currentUserId: "u_me",
-            api: makeAPI()
+            api: makeAPI(),
+            socket: Self.quietSocket
         )
         await vm.load()
         await vm.sendGigOffer(
