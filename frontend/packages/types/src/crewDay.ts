@@ -166,7 +166,8 @@ export interface CrewDayCharge {
 
 export interface CrewDayProblem {
   status: 'open' | 'resolved' | null;
-  kind: 'missed' | 'damage' | 'no_show' | 'charge' | 'other';
+  /** Null for a refund Pantopus support made without a reported problem (`status` is then `resolved`). */
+  kind: 'missed' | 'damage' | 'no_show' | 'charge' | 'other' | null;
   note: string | null;
   opened_at: string | null;
   due_at: string | null;
