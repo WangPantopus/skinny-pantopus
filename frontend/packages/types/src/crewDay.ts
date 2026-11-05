@@ -91,6 +91,7 @@ export interface CrewDayQuote {
   /** Null while the crew confirms it after a look. */
   price_cents: number | null;
   needs_look: boolean;
+  line_items?: CrewDayLineItem[];
   message: string | null;
 }
 
@@ -130,18 +131,131 @@ export interface CreateCrewDayBookingRequest {
   approve_terms: true;
 }
 
-/** The parts of a household's booking every Crew Day screen reads; GET /api/crew-days/bookings/:bookingId has more. */
-export interface CrewDayBookingSummary {
+export interface CrewDayLineItem {
+  kind: 'option' | 'add_on';
   id: string;
-  crew_day_id: string;
-  status: CrewDayBookingStatus;
+  label: string;
   price_cents: number | null;
-  option_id: string;
-  add_on_ids: string[];
-  service_date?: string | null;
-  window_start?: string | null;
-  window_end?: string | null;
-  prep_note?: string | null;
-  access_note?: string | null;
+}
+
+export interface CrewDayPhoto {
+  path: string;
+  /** A signed URL that lasts about an hour. */
+  url: string;
+}
+
+/** Where a booking's charge stands. */
+export type CrewDayChargeState =
+  | 'not_yet'
+  | 'scheduled'
+  | 'paused'
+  | 'charged'
+  | 'partially_refunded'
+  | 'refunded'
+  | 'failed'
+  | 'none';
+
+export interface CrewDayCharge {
+  state: CrewDayChargeState;
+  amount_cents: number | null;
+  due_at: string | null;
+  paid_at: string | null;
+  refunded_cents: number;
+  failure: string | null;
+}
+
+export interface CrewDayProblem {
+  status: 'open' | 'resolved' | null;
+  kind: 'missed' | 'damage' | 'no_show' | 'charge' | 'other';
+  note: string | null;
+  opened_at: string | null;
+  due_at: string | null;
+  resolved_at: string | null;
+  resolution: 'released' | 'refunded' | 'partial_refund' | 'resolved' | null;
+  refunded_cents: number;
+}
+
+export interface CrewDayProposal {
+  id: string;
+  dates: Array<{ date: string; window_start: string; window_end: string }>;
+  deadline_at: string;
+  note: string | null;
+  sent_at: string;
+}
+
+export interface CrewDayEvent {
+  id: string;
+  kind: string;
+  actor_role: 'household' | 'crew' | 'operator' | 'system';
+  data: Record<string, unknown> | null;
+  created_at: string;
   [field: string]: unknown;
+}
+
+export interface CrewDayStep {
+  key: 'booked' | 'on_the_way' | 'done' | 'paid';
+  /** "Requested" while the crew checks the price. */
+  label: string;
+  state: 'done' | 'current' | 'todo';
+}
+
+/** GET /api/crew-days/bookings/:bookingId: the household's booking page (screen 5). */
+export interface CrewDayBookingPage {
+  id: string;
+  crew_day: {
+    id: string;
+    code: string;
+    title: string;
+    service: CrewDayService;
+    service_label: string;
+    street_label: string;
+    city: string | null;
+    state: string | null;
+    timezone: string;
+    status: string;
+    included: string[];
+    outside_only: boolean;
+    crew: CrewDayCrew;
+  };
+  status: CrewDayBookingStatus;
+  steps: CrewDayStep[];
+  service_date: string;
+  window_start: string;
+  window_end: string;
+  window_starts_at: string;
+  window_ends_at: string;
+  eta: { start: string; end: string; updated_at: string | null } | null;
+  gate_ready_at: string | null;
+  cant_get_in_at: string | null;
+  prep_note: string | null;
+  access_note: string | null;
+  address: { line: string; city: string | null; state: string | null; zip: string | null };
+  home_id: string | null;
+  option: { id: string; label: string };
+  add_ons: Array<{ id: string; label: string; price_cents: number | null }>;
+  line_items: CrewDayLineItem[];
+  price_cents: number | null;
+  card: { brand: string; last4: string } | null;
+  cancel_cutoff_at: string | null;
+  can_cancel: boolean;
+  can_change: boolean;
+  can_ask_release: boolean;
+  release_asked_at: string | null;
+  charge: CrewDayCharge;
+  invoice_id: string | null;
+  done_at: string | null;
+  done_note: string | null;
+  photos: CrewDayPhoto[];
+  problem_photos?: CrewDayPhoto[];
+  household_confirmed_at: string | null;
+  problem: CrewDayProblem | null;
+  proposal: CrewDayProposal | null;
+  new_date_choice: { proposal_id: string; date: string; answered_at: string } | null;
+  remind_next_season: boolean;
+  cancelled_by: 'household' | 'crew' | 'operator' | 'system' | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  share: { url: string; flyer_url: string; message: string; booked_count: number; spots_left: number } | null;
+  events: CrewDayEvent[];
+  created_at: string;
 }

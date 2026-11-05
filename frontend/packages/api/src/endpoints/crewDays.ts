@@ -8,7 +8,7 @@
 import { get, post } from '../client';
 import type {
   CreateCrewDayBookingRequest,
-  CrewDayBookingSummary,
+  CrewDayBookingPage,
   CrewDayQuote,
   CrewDayQuoteRequest,
   PublicCrewDay,
@@ -32,10 +32,10 @@ export function quote(code: string, data: CrewDayQuoteRequest) {
 
 /** Books a home (`booked`, or `price_pending` for an option the crew confirms after a look). */
 export function createBooking(crewDayId: string, data: CreateCrewDayBookingRequest) {
-  return post<{ booking: CrewDayBookingSummary }>(`${BASE}/${encodeURIComponent(crewDayId)}/bookings`, data);
+  return post<{ booking: CrewDayBookingPage }>(`${BASE}/${encodeURIComponent(crewDayId)}/bookings`, data);
 }
 
 /** The household's booking page (screen 5). */
 export function getBooking(bookingId: string) {
-  return get<CrewDayBookingSummary>(`${BASE}/bookings/${encodeURIComponent(bookingId)}`);
+  return get<CrewDayBookingPage>(`${BASE}/bookings/${encodeURIComponent(bookingId)}`);
 }

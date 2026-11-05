@@ -13,11 +13,11 @@ import { crewDayServiceLabel, formatCrewDate, formatInstantDate, formatPrice, fo
 import {
   CREW_DAY_PRIMARY_BUTTON,
   CREW_DAY_SECONDARY_BUTTON,
-  CrewDayFooterBar,
   CrewDayIconTile,
   CrewDaySectionTitle,
   CrewDayStepBar,
 } from './CrewDayParts';
+import CrewDayFooterBar from './CrewDayFooterBar';
 
 // Screen 4, You're on the route (01-spec.md §3): what happens next, the crew's prep note, Add to calendar, Share
 // with neighbors and See my Crew Day. A home that waits for the crew's price check says so instead.
@@ -74,8 +74,10 @@ export default function CrewDayBookedScreen({ day }: { day: PublicCrewDay }) {
   const bookingPath = bookingId ? `/app/crew-days/bookings/${encodeURIComponent(bookingId)}` : '/app/crew-days';
 
   const share = async () => {
-    const url = buildCrewDayShareUrl(code);
-    const text = shareMessage(day);
+    // The server drafts the message with the link at its end (the share kit's text); the link also rides as `url`.
+    const url = booking.data?.share?.url || buildCrewDayShareUrl(code);
+    const drafted = booking.data?.share?.message;
+    const text = drafted ? drafted.replace(url, '').trim() : shareMessage(day);
     try {
       if (typeof navigator.share === 'function') {
         await navigator.share({ title: day.title, text, url });

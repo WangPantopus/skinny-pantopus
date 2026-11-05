@@ -15,6 +15,7 @@ import {
   formatInstantTime,
   formatPrice,
   formatWindow,
+  includedItems,
   type PublicCrewDay,
 } from '@/lib/crewDay';
 import { clearCrewDayDraft, readCrewDayDraft, saveCrewDayDraft, type CrewDayDraft } from '@/lib/crewDayDraft';
@@ -22,13 +23,13 @@ import {
   CREW_DAY_OVERLINE,
   CREW_DAY_PRIMARY_BUTTON,
   CrewDayCard,
-  CrewDayFooterBar,
   CrewDayIconTile,
   CrewDaySectionTitle,
   CrewDayStepBar,
   CrewRow,
   ServiceTag,
 } from './CrewDayParts';
+import CrewDayFooterBar from './CrewDayFooterBar';
 
 // Screen 3, Review and book (01-spec.md §3): the day, the home, a note for the crew, the card that's saved now and
 // charged only after the work, what happens if plans change, and the approval. POST /api/crew-days/:id/bookings,
@@ -194,6 +195,7 @@ export default function CrewDayReviewScreen({ day }: { day: PublicCrewDay }) {
   }
 
   const arrival = formatWindow(day.window_start, day.window_end);
+  const included = includedItems(day);
   const amount = total != null ? formatPrice(total) : null;
   const planLines: Array<{ icon: LucideIcon; text: string }> = [
     { icon: CalendarDays, text: `Free cancellation until ${cutoffText}.` },
@@ -243,11 +245,11 @@ export default function CrewDayReviewScreen({ day }: { day: PublicCrewDay }) {
                   {[option?.label, ...addOns.map((a) => a.label)].filter(Boolean).join(' · ')}
                 </span>
               </div>
-              {day.included.length > 0 || day.outside_only ? (
+              {included.length > 0 || day.outside_only ? (
                 <>
                   <div className="h-px bg-app-border" />
                   <ul className="flex flex-col gap-2">
-                    {day.included.map((item) => (
+                    {included.map((item) => (
                       <li key={item} className="flex items-start gap-[0.625rem] text-sm leading-5 text-app-text-strong">
                         <Check className="mt-0.5 h-4 w-4 flex-none text-app-home" strokeWidth={2.4} aria-hidden="true" />
                         {item}
@@ -297,14 +299,14 @@ export default function CrewDayReviewScreen({ day }: { day: PublicCrewDay }) {
                   </button>
                 </div>
               ) : card && !choosing && !adding ? (
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span className="grid h-7 w-10 flex-none place-items-center rounded-md border border-app-border-strong text-app-text-strong" aria-hidden="true">
                     <CreditCard className="h-4 w-4" />
                   </span>
-                  <span className="min-w-0 flex-1 text-base font-semibold leading-[1.3125rem]">
+                  <span className="min-w-[min(9rem,100%)] flex-1 text-base font-semibold leading-[1.3125rem]">
                     {brandName(card.brand)} ending {card.last4}
                   </span>
-                  <button type="button" onClick={() => setChoosing(true)} className="-my-2 min-h-11 px-1 text-[0.9375rem] font-semibold text-app-link">
+                  <button type="button" onClick={() => setChoosing(true)} className="-my-2 min-h-11 flex-none px-1 text-[0.9375rem] font-semibold text-app-link">
                     Change
                   </button>
                 </div>

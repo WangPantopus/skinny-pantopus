@@ -17,10 +17,10 @@ import {
   CREW_DAY_PRIMARY_BUTTON,
   CREW_DAY_SECONDARY_BUTTON,
   CrewDayCard,
-  CrewDayFooterBar,
   CrewDaySectionTitle,
   CrewDayStepBar,
 } from './CrewDayParts';
+import CrewDayFooterBar from './CrewDayFooterBar';
 
 // Screen 2, Your price (01-spec.md §3): the home, its option and add-ons, and the price from the crew's list
 // (POST …/quote, which also says whether the day reaches the home). Signed in with a home in Pantopus, the home is
@@ -115,8 +115,10 @@ export default function CrewDayPriceScreen({ day }: { day: PublicCrewDay }) {
     result: null,
   });
   const quoteRun = useRef(0);
+  // Before an option is picked, the first one asks only whether the day reaches the home.
+  const quoteOptionId = optionId ?? day.price_options[0]?.id ?? null;
   const askQuote = useCallback(async () => {
-    if (!choice || !optionId) {
+    if (!choice || !quoteOptionId) {
       setQuote({ status: 'idle', result: null });
       return;
     }
@@ -127,22 +129,22 @@ export default function CrewDayPriceScreen({ day }: { day: PublicCrewDay }) {
         latitude: choice.address.latitude,
         longitude: choice.address.longitude,
         address_line: choice.address.line,
-        option_id: optionId,
-        add_on_ids: addOnIds,
+        option_id: quoteOptionId,
+        add_on_ids: optionId ? addOnIds : [],
       });
       if (run === quoteRun.current) setQuote({ status: 'done', result });
     } catch {
       if (run === quoteRun.current) setQuote({ status: 'failed', result: null });
     }
-  }, [addOnIds, choice, code, optionId]);
+  }, [addOnIds, choice, code, optionId, quoteOptionId]);
   useEffect(() => {
     const timer = window.setTimeout(() => void askQuote(), 250);
     return () => window.clearTimeout(timer);
   }, [askQuote]);
 
   const outOfArea = quote.status === 'done' && quote.result?.in_area === false;
-  const needsLook = option?.needs_look === true || quote.result?.needs_look === true;
-  const price = quote.status === 'done' && quote.result?.price_cents != null ? quote.result.price_cents : localPrice;
+  const needsLook = option?.needs_look === true || (Boolean(optionId) && quote.result?.needs_look === true);
+  const price = optionId && quote.status === 'done' && quote.result?.price_cents != null ? quote.result.price_cents : localPrice;
   const ready = Boolean(choice && option && quote.status === 'done' && quote.result?.in_area);
 
   const continueTo = (destination: 'book' | 'register' | 'login') => {
@@ -183,11 +185,12 @@ export default function CrewDayPriceScreen({ day }: { day: PublicCrewDay }) {
             <CrewDaySectionTitle id="crew-day-home">Your home</CrewDaySectionTitle>
             <CrewDayCard className="flex flex-col gap-3 p-[0.875rem]">
               {choice && !typing ? (
-                <div className="flex items-start gap-3">
+                // Large text wraps the address under the tile and Change under the address instead of squeezing them.
+                <div className="flex flex-wrap items-start gap-3">
                   <span className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-app-home-bg text-app-home" aria-hidden="true">
                     <House className="h-5 w-5" />
                   </span>
-                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <div className="flex min-w-[min(11rem,100%)] flex-1 flex-col gap-0.5">
                     <span className="text-base font-semibold leading-[1.3125rem] text-app-text">{choice.address.line}</span>
                     <span className="text-sm leading-5 text-app-text-secondary">{cityLine(choice.address)}</span>
                     {choice.homeId ? (
@@ -201,7 +204,7 @@ export default function CrewDayPriceScreen({ day }: { day: PublicCrewDay }) {
                       setAddressText('');
                       setChoice(null);
                     }}
-                    className="-mr-1 -mt-[0.6875rem] min-h-11 flex-none px-1 text-[0.9375rem] font-semibold leading-5 text-app-link"
+                    className="-mr-1 -mt-[0.6875rem] min-h-11 flex-none px-1 text-left text-[0.9375rem] font-semibold leading-5 text-app-link"
                   >
                     Change
                   </button>
