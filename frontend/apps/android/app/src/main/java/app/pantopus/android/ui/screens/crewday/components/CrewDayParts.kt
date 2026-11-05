@@ -117,7 +117,7 @@ fun CrewDayDayRow(
 fun CrewDayListPlaceholder(modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
         Shimmer(width = 120.dp, height = 12.dp)
-        repeat(3) {
+        repeat(PLACEHOLDER_ROWS) {
             Row(
                 modifier = Modifier.fillMaxWidth().planCard().padding(Spacing.s4),
                 verticalAlignment = Alignment.CenterVertically,
@@ -150,3 +150,5 @@ fun CrewDayPageTitle(
         subtitle?.let { Text(text = it, style = PantopusTextStyle.body, color = PantopusColors.appTextSecondary) }
     }
 }
+
+private const val PLACEHOLDER_ROWS = 3
