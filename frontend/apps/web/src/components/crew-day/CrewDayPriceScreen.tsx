@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Lock } from 'lucide-react';
+import { House, Lock, MapPin } from 'lucide-react';
 import * as api from '@pantopus/api';
 import type { CrewDayAddress, CrewDayQuote } from '@pantopus/types';
 import { buildCrewDayPath } from '@pantopus/utils';
@@ -13,9 +13,11 @@ import { myHomesQuery } from '@/lib/myHomes';
 import { formatCrewDate, formatPrice, type PublicCrewDay } from '@/lib/crewDay';
 import { readCrewDayDraft, saveCrewDayDraft } from '@/lib/crewDayDraft';
 import {
+  CREW_DAY_OVERLINE,
   CREW_DAY_PRIMARY_BUTTON,
   CREW_DAY_SECONDARY_BUTTON,
   CrewDayCard,
+  CrewDayFooterBar,
   CrewDaySectionTitle,
   CrewDayStepBar,
 } from './CrewDayParts';
@@ -161,26 +163,36 @@ export default function CrewDayPriceScreen({ day }: { day: PublicCrewDay }) {
   const toggleAddOn = (id: string) =>
     setAddOnIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
 
+  const lockLine = (
+    <p className="flex items-start gap-2 text-sm leading-5 text-app-text-secondary">
+      <Lock className="mt-0.5 h-4 w-4 flex-none" aria-hidden="true" />
+      Visible to your crew and Pantopus.
+    </p>
+  );
+
   return (
-    <main className="min-h-screen bg-app text-app-text">
-      <div className="mx-auto w-full max-w-md pb-10">
+    <main className="flex min-h-screen flex-col bg-app text-app-text">
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
         <CrewDayStepBar title="Your price" backHref={invitationPath} backLabel="Back to the invitation" step="1 of 2" />
-        <div className="flex flex-col gap-5 px-4 pt-4">
-          <p className="text-sm leading-5 text-app-text-secondary">
+        <div className="flex flex-1 flex-col gap-5 px-4 pb-6 pt-1">
+          <p className="text-center text-sm leading-5 text-app-text-secondary">
             {day.title} · {formatCrewDate(day.service_date)}
           </p>
 
           <section aria-labelledby="crew-day-home" className="flex flex-col gap-2">
             <CrewDaySectionTitle id="crew-day-home">Your home</CrewDaySectionTitle>
-            <CrewDayCard className="flex flex-col gap-3 p-4">
+            <CrewDayCard className="flex flex-col gap-3 p-[0.875rem]">
               {choice && !typing ? (
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 flex-col gap-0.5">
-                    {choice.homeId ? (
-                      <span className="text-xs font-medium leading-4 text-app-home">From your home in Pantopus</span>
-                    ) : null}
-                    <span className="text-[0.9375rem] font-semibold leading-5 text-app-text">{choice.address.line}</span>
+                <div className="flex items-start gap-3">
+                  <span className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-app-home-bg text-app-home" aria-hidden="true">
+                    <House className="h-5 w-5" />
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="text-base font-semibold leading-[1.3125rem] text-app-text">{choice.address.line}</span>
                     <span className="text-sm leading-5 text-app-text-secondary">{cityLine(choice.address)}</span>
+                    {choice.homeId ? (
+                      <span className="text-[0.8125rem] font-semibold leading-[1.125rem] text-app-home">From your home in Pantopus</span>
+                    ) : null}
                   </div>
                   <button
                     type="button"
@@ -189,15 +201,15 @@ export default function CrewDayPriceScreen({ day }: { day: PublicCrewDay }) {
                       setAddressText('');
                       setChoice(null);
                     }}
-                    className="flex-none text-sm font-semibold leading-5 text-app-link"
+                    className="-mr-1 -mt-[0.6875rem] min-h-11 flex-none px-1 text-[0.9375rem] font-semibold leading-5 text-app-link"
                   >
                     Change
                   </button>
                 </div>
               ) : (
-                <div className="flex flex-col gap-2">
-                  <span id={addressLabelId} className="text-sm font-medium leading-5 text-app-text-strong">
-                    Your address
+                <div className="flex flex-col gap-2.5">
+                  <span id={addressLabelId} className="text-[0.8125rem] font-semibold leading-[1.125rem] text-app-text-strong">
+                    Street address
                   </span>
                   <AddressAutocomplete
                     labelId={addressLabelId}
@@ -233,86 +245,98 @@ export default function CrewDayPriceScreen({ day }: { day: PublicCrewDay }) {
                         setChoice({ homeId: pantopusHome.id, address: pantopusHome.address });
                         setTyping(false);
                       }}
-                      className="self-start text-sm font-semibold leading-5 text-app-link"
+                      className="min-h-11 self-start text-[0.9375rem] font-semibold leading-5 text-app-link"
                     >
                       Use my home in Pantopus
                     </button>
                   ) : null}
                 </div>
               )}
+              <div className="h-px bg-app-border" />
+              {lockLine}
             </CrewDayCard>
-            <p className="flex items-start gap-2 text-[0.8125rem] leading-[1.125rem] text-app-text-secondary">
-              <Lock className="mt-px h-[0.875rem] w-[0.875rem] flex-none" aria-hidden="true" />
-              Visible to your crew and Pantopus.
-            </p>
           </section>
 
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-2 text-[0.6875rem] font-semibold uppercase leading-4 tracking-[0.06em] text-app-text-secondary">
-              {optionsQuestion(day)}
-            </legend>
-            <CrewDayCard className="divide-y divide-app-border overflow-hidden">
-              {day.price_options.map((o) => (
-                <label key={o.id} className="flex cursor-pointer items-start gap-3 px-4 py-[0.875rem] hover:bg-app-hover">
-                  <input
-                    type="radio"
-                    name="crew-day-option"
-                    value={o.id}
-                    checked={optionId === o.id}
-                    onChange={() => setOptionId(o.id)}
-                    className="mt-0.5 h-5 w-5 flex-none accent-[rgb(var(--accent-primary-fill))]"
-                  />
-                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="text-[0.9375rem] font-medium leading-5 text-app-text">{o.label}</span>
-                    {o.needs_look ? (
-                      <span className="text-[0.8125rem] leading-[1.125rem] text-app-text-secondary">
-                        The crew confirms the price after a look
-                      </span>
-                    ) : null}
-                  </span>
-                  {!o.needs_look && o.price_cents != null ? (
-                    <span className="flex-none text-[0.9375rem] font-semibold leading-5 text-app-text [font-variant-numeric:tabular-nums]">
-                      {formatPrice(o.price_cents)}
-                    </span>
-                  ) : null}
-                </label>
-              ))}
-            </CrewDayCard>
-          </fieldset>
-
-          {day.add_ons.length > 0 ? (
-            <fieldset className="flex flex-col gap-2">
-              <legend className="mb-2 text-[0.6875rem] font-semibold uppercase leading-4 tracking-[0.06em] text-app-text-secondary">
-                Add-ons
-              </legend>
-              <CrewDayCard className="divide-y divide-app-border overflow-hidden">
-                {day.add_ons.map((a) => (
-                  <label key={a.id} className="flex cursor-pointer items-start gap-3 px-4 py-[0.875rem] hover:bg-app-hover">
-                    <input
-                      type="checkbox"
-                      checked={addOnIds.includes(a.id)}
-                      onChange={() => toggleAddOn(a.id)}
-                      className="mt-0.5 h-5 w-5 flex-none accent-[rgb(var(--accent-primary-fill))]"
-                    />
-                    <span className="min-w-0 flex-1 text-[0.9375rem] font-medium leading-5 text-app-text">{a.label}</span>
-                    <span className="flex-none text-[0.9375rem] font-semibold leading-5 text-app-text [font-variant-numeric:tabular-nums]">
-                      +{formatPrice(a.price_cents)}
-                    </span>
-                  </label>
-                ))}
-              </CrewDayCard>
-            </fieldset>
-          ) : null}
-
           {outOfArea && choice ? (
-            <div role="status" className="flex flex-col gap-3 rounded-[1.25rem] border border-app-border bg-app-surface-sunken p-4">
-              <p className="text-sm leading-5 text-app-text-strong">
-                This Crew Day doesn&apos;t reach {choice.address.line}. It covers homes near {day.street_label}.
-              </p>
+            <div
+              role="status"
+              className="flex flex-col gap-[0.875rem] rounded-2xl border border-[#fde68a] bg-[#fffbeb] p-4 dark:border-[#5c4210] dark:bg-[#2a2008]"
+            >
+              <div className="flex items-start gap-3">
+                <span
+                  className="grid h-[2.125rem] w-[2.125rem] flex-none place-items-center rounded-[0.6875rem] bg-[#fde68a] text-[#9a4a08] dark:bg-[#5c4210] dark:text-[#fcd34d]"
+                  aria-hidden="true"
+                >
+                  <MapPin className="h-[1.125rem] w-[1.125rem]" />
+                </span>
+                <p className="text-[0.9375rem] leading-[1.3125rem] text-app-text">
+                  This Crew Day doesn&apos;t reach {choice.address.line}. It covers homes near {day.street_label}.
+                </p>
+              </div>
               <Link href="/app/crew-days/ask" className={CREW_DAY_SECONDARY_BUTTON}>
                 Ask for one on your street
               </Link>
             </div>
+          ) : null}
+
+          {!outOfArea ? (
+            <>
+              <fieldset className="min-w-0">
+                <legend className={`mb-2 ${CREW_DAY_OVERLINE}`}>{optionsQuestion(day)}</legend>
+                <CrewDayCard className="divide-y divide-app-border overflow-hidden">
+                  {day.price_options.map((o) => (
+                    <label
+                      key={o.id}
+                      className={`flex min-h-14 cursor-pointer gap-3 px-[0.875rem] py-3 hover:bg-app-hover ${o.needs_look ? 'items-start' : 'items-center'}`}
+                    >
+                      <input
+                        type="radio"
+                        name="crew-day-option"
+                        value={o.id}
+                        checked={optionId === o.id}
+                        onChange={() => setOptionId(o.id)}
+                        className="h-[1.375rem] w-[1.375rem] flex-none accent-[rgb(var(--accent-primary-fill))]"
+                      />
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="text-base leading-[1.3125rem] text-app-text">{o.label}</span>
+                        {o.needs_look ? (
+                          <span className="text-[0.8125rem] leading-[1.125rem] text-app-text-secondary">
+                            The crew confirms the price after a look
+                          </span>
+                        ) : null}
+                      </span>
+                      {!o.needs_look && o.price_cents != null ? (
+                        <span className="flex-none text-base font-semibold leading-[1.3125rem] text-app-text [font-variant-numeric:tabular-nums]">
+                          {formatPrice(o.price_cents)}
+                        </span>
+                      ) : null}
+                    </label>
+                  ))}
+                </CrewDayCard>
+              </fieldset>
+
+              {day.add_ons.length > 0 ? (
+                <fieldset className="min-w-0">
+                  <legend className={`mb-2 ${CREW_DAY_OVERLINE}`}>Add-ons</legend>
+                  <CrewDayCard className="divide-y divide-app-border overflow-hidden">
+                    {day.add_ons.map((a) => (
+                      <label key={a.id} className="flex min-h-14 cursor-pointer items-center gap-3 px-[0.875rem] py-3 hover:bg-app-hover">
+                        <input
+                          type="checkbox"
+                          checked={addOnIds.includes(a.id)}
+                          onChange={() => toggleAddOn(a.id)}
+                          className="h-[1.375rem] w-[1.375rem] flex-none accent-[rgb(var(--accent-primary-fill))]"
+                        />
+                        <span className="min-w-0 flex-1 text-base leading-[1.3125rem] text-app-text">{a.label}</span>
+                        <span className="flex-none text-base font-semibold leading-[1.3125rem] text-app-text [font-variant-numeric:tabular-nums]">
+                          +{formatPrice(a.price_cents)}
+                        </span>
+                      </label>
+                    ))}
+                  </CrewDayCard>
+                </fieldset>
+              ) : null}
+            </>
           ) : null}
 
           {quote.status === 'failed' ? (
@@ -325,55 +349,54 @@ export default function CrewDayPriceScreen({ day }: { day: PublicCrewDay }) {
               </button>
             </div>
           ) : null}
-
-          {!outOfArea ? (
-            <CrewDayCard className="flex flex-col gap-3 p-4">
-              {needsLook ? (
-                <p className="text-[0.9375rem] font-semibold leading-5 text-app-text">
-                  The crew confirms your price before you&apos;re booked
-                </p>
-              ) : (
-                <div className="flex flex-col gap-0.5" aria-live="polite">
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                    <span className="text-[0.9375rem] font-semibold leading-5 text-app-text">Your price</span>
-                    {price != null ? (
-                      <span className="text-[0.9375rem] leading-5 text-app-text [font-variant-numeric:tabular-nums]">
-                        <span className="text-lg font-bold">{formatPrice(price)}</span> · including tax
-                      </span>
-                    ) : null}
-                  </div>
-                  <span className="text-[0.8125rem] leading-[1.125rem] text-app-text-secondary">
-                    {option ? 'Nothing is charged until the work is done.' : 'Pick an option to see your price.'}
-                  </span>
-                </div>
-              )}
-              <button
-                type="button"
-                disabled={!ready}
-                onClick={() => continueTo(signedIn ? 'book' : 'register')}
-                className={CREW_DAY_PRIMARY_BUTTON}
-              >
-                {quote.status === 'loading' && choice && option ? 'Checking your price…' : 'Continue'}
-              </button>
-              {!choice ? (
-                <p className="text-center text-xs leading-4 text-app-text-secondary">Add your address to continue.</p>
-              ) : null}
-              {!signedIn ? (
-                <p className="text-center text-xs leading-4 text-app-text-secondary">
-                  Booking needs a free Pantopus account.{' '}
-                  <button
-                    type="button"
-                    disabled={!ready}
-                    onClick={() => continueTo('login')}
-                    className="font-semibold text-app-link disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Have one? Sign in
-                  </button>
-                </p>
-              ) : null}
-            </CrewDayCard>
-          ) : null}
         </div>
+
+        {!outOfArea ? (
+          <CrewDayFooterBar>
+            <div className="flex flex-col gap-0.5" aria-live="polite">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                <span className="text-base font-semibold leading-6 text-app-text">Your price</span>
+                {needsLook ? (
+                  <span className="text-base font-semibold leading-6 text-app-text-strong">After a look</span>
+                ) : price != null ? (
+                  <span className="text-sm leading-5 text-app-text-secondary [font-variant-numeric:tabular-nums]">
+                    <b className="text-[1.375rem] font-bold leading-7 text-app-text">{formatPrice(price)}</b> · including tax
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-[0.8125rem] leading-[1.125rem] text-app-text-secondary">
+                {needsLook
+                  ? "The crew confirms your price before you're booked."
+                  : option
+                    ? 'Nothing is charged until the work is done.'
+                    : choice
+                      ? 'Pick an option to see your price.'
+                      : 'Add your address and pick an option to see your price.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={!ready}
+              onClick={() => continueTo(signedIn ? 'book' : 'register')}
+              className={CREW_DAY_PRIMARY_BUTTON}
+            >
+              {quote.status === 'loading' && choice && option ? 'Checking your price…' : 'Continue'}
+            </button>
+            {!signedIn ? (
+              <p className="text-center text-xs leading-4 text-app-text-secondary">
+                Booking needs a free Pantopus account.{' '}
+                <button
+                  type="button"
+                  disabled={!ready}
+                  onClick={() => continueTo('login')}
+                  className="font-semibold text-app-link disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Have one? Sign in
+                </button>
+              </p>
+            ) : null}
+          </CrewDayFooterBar>
+        ) : null}
       </div>
     </main>
   );

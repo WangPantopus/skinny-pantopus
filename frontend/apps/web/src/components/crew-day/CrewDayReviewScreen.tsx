@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Check, CloudRain, CreditCard, LifeBuoy, Lock, type LucideIcon } from 'lucide-react';
+import { CalendarDays, Check, CloudRain, CreditCard, House, LifeBuoy, Lock, MapPin, Plus, type LucideIcon } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { buildCrewDayPath } from '@pantopus/utils';
 import StripeProvider from '@/components/payments/StripeProvider';
@@ -19,12 +19,14 @@ import {
 } from '@/lib/crewDay';
 import { clearCrewDayDraft, readCrewDayDraft, saveCrewDayDraft, type CrewDayDraft } from '@/lib/crewDayDraft';
 import {
+  CREW_DAY_OVERLINE,
   CREW_DAY_PRIMARY_BUTTON,
   CrewDayCard,
+  CrewDayFooterBar,
+  CrewDayIconTile,
   CrewDaySectionTitle,
   CrewDayStepBar,
   CrewRow,
-  OutsideOnlyLine,
   ServiceTag,
 } from './CrewDayParts';
 
@@ -35,6 +37,9 @@ import {
 type SavedCard = { id: string; stripeId: string; brand: string; last4: string; isDefault: boolean };
 
 const CARD_QUERY_KEY = ['crew-day', 'saved-cards'] as const;
+
+const ADD_CARD_BUTTON =
+  'flex min-h-[3.125rem] w-full items-center justify-center gap-2 rounded-xl bg-app-surface-sunken px-4 text-base font-semibold text-app-text hover:bg-app-hover';
 
 /** Saved cards from GET /api/payments/methods (bank accounts can't pay a Crew Day). */
 function savedCards(rows: Array<Record<string, unknown>>): SavedCard[] {
@@ -191,94 +196,115 @@ export default function CrewDayReviewScreen({ day }: { day: PublicCrewDay }) {
   const arrival = formatWindow(day.window_start, day.window_end);
   const amount = total != null ? formatPrice(total) : null;
   const planLines: Array<{ icon: LucideIcon; text: string }> = [
-    { icon: Check, text: `Free cancellation until ${cutoffText}.` },
-    { icon: CloudRain, text: 'If rain moves the day, you pick a new date or cancel at no charge. Same price.' },
-    { icon: LifeBuoy, text: "If something's wrong, Pantopus support owns it until it's fixed." },
+    { icon: CalendarDays, text: `Free cancellation until ${cutoffText}.` },
+    { icon: CloudRain, text: 'Rain? You pick a new date or cancel at no charge. Same price.' },
+    { icon: LifeBuoy, text: "A problem? Pantopus support owns it until it's fixed." },
   ];
+  const cityLine = [draft.address.city, [draft.address.state, draft.address.zip].filter(Boolean).join(' ')]
+    .filter(Boolean)
+    .join(', ');
 
   return (
-    <main className="min-h-screen bg-app text-app-text">
-      <div className="mx-auto w-full max-w-md pb-10">
+    <main className="flex min-h-screen flex-col bg-app text-app-text">
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
         <CrewDayStepBar title="Review and book" backHref={pricePath} backLabel="Back to your price" step="2 of 2" />
-        <div className="flex flex-col gap-5 px-4 pt-4">
-          <CrewDayCard className="flex flex-col gap-2 p-4">
+        <div className="flex flex-1 flex-col gap-5 px-4 pb-6 pt-1">
+          <section aria-labelledby="crew-day-review-title" className="flex flex-col gap-2 rounded-[1.25rem] border border-app-border bg-app-surface p-4">
             <ServiceTag service={day.service} />
-            <h2 className="text-lg font-semibold leading-6 tracking-[-0.01em]">{day.title}</h2>
-            <p className="text-sm leading-5 text-app-text-strong">
+            <h2 id="crew-day-review-title" className="text-xl font-semibold leading-[1.625rem] tracking-[-0.012em]">
+              {day.title}
+            </h2>
+            <p className="flex items-start gap-2 text-sm leading-5 text-app-text-strong [font-variant-numeric:tabular-nums]">
+              <CalendarDays className="mt-0.5 h-4 w-4 flex-none" aria-hidden="true" />
               {formatCrewDate(day.service_date, 'long')}
               {arrival ? ` · Arriving ${arrival}` : ''}
             </p>
             <CrewRow crew={day.crew} />
-          </CrewDayCard>
+          </section>
 
           <section aria-labelledby="crew-day-review-home" className="flex flex-col gap-2">
             <CrewDaySectionTitle id="crew-day-review-home">Your home</CrewDaySectionTitle>
-            <CrewDayCard className="flex flex-col gap-3 p-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[0.9375rem] font-semibold leading-5">{draft.address.line}</span>
-                <span className="flex items-center gap-1.5 text-[0.8125rem] leading-[1.125rem] text-app-text-secondary">
-                  <Lock className="h-[0.8125rem] w-[0.8125rem] flex-none" aria-hidden="true" />
-                  Visible to your crew and Pantopus.
+            <CrewDayCard className="flex flex-col gap-3 p-[0.875rem]">
+              <div className="flex items-start gap-3">
+                <MapPin className="mt-0.5 h-5 w-5 flex-none text-app-text-strong" aria-hidden="true" />
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-base font-semibold leading-[1.3125rem]">{draft.address.line}</span>
+                  {cityLine ? <span className="text-sm leading-5 text-app-text-secondary">{cityLine}</span> : null}
+                  <span className="flex items-center gap-1.5 pt-0.5 text-[0.8125rem] leading-[1.125rem] text-app-text-secondary">
+                    <Lock className="h-[0.8125rem] w-[0.8125rem] flex-none" aria-hidden="true" />
+                    Visible to your crew and Pantopus.
+                  </span>
+                </div>
+              </div>
+              <div className="h-px bg-app-border" />
+              <div className="flex items-center gap-3">
+                <House className="h-5 w-5 flex-none text-app-text-strong" aria-hidden="true" />
+                <span className="text-base leading-[1.3125rem]">
+                  {[option?.label, ...addOns.map((a) => a.label)].filter(Boolean).join(' · ')}
                 </span>
               </div>
-              <p className="text-sm leading-5 text-app-text-strong">
-                {[option?.label, ...addOns.map((a) => a.label)].filter(Boolean).join(' · ')}
-              </p>
-              {day.included.length > 0 ? (
-                <ul className="flex flex-col gap-2 border-t border-app-border pt-3">
-                  {day.included.map((item) => (
-                    <li key={item} className="flex items-start gap-[0.625rem] text-sm leading-5 text-app-text-strong">
-                      <Check className="mt-0.5 h-4 w-4 flex-none text-app-home" strokeWidth={2.4} aria-hidden="true" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
+              {day.included.length > 0 || day.outside_only ? (
+                <>
+                  <div className="h-px bg-app-border" />
+                  <ul className="flex flex-col gap-2">
+                    {day.included.map((item) => (
+                      <li key={item} className="flex items-start gap-[0.625rem] text-sm leading-5 text-app-text-strong">
+                        <Check className="mt-0.5 h-4 w-4 flex-none text-app-home" strokeWidth={2.4} aria-hidden="true" />
+                        {item}
+                      </li>
+                    ))}
+                    {day.outside_only ? (
+                      <li className="flex items-start gap-[0.625rem] text-sm leading-5 text-app-text-strong">
+                        <House className="mt-0.5 h-4 w-4 flex-none text-app-text-secondary" aria-hidden="true" />
+                        Outside only. You don&apos;t need to be home.
+                      </li>
+                    ) : null}
+                  </ul>
+                </>
               ) : null}
-              {day.outside_only ? <OutsideOnlyLine /> : null}
             </CrewDayCard>
           </section>
 
-          <section aria-labelledby="crew-day-review-note" className="flex flex-col gap-2">
-            <CrewDaySectionTitle id="crew-day-review-note">For the crew (optional)</CrewDaySectionTitle>
-            <CrewDayCard className="flex flex-col gap-2 p-4">
-              <label htmlFor="crew-day-access-note" className="sr-only">
-                Note for the crew
-              </label>
-              <textarea
-                id="crew-day-access-note"
-                value={note}
-                maxLength={500}
-                rows={3}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Gate, pets, parking…"
-                aria-describedby="crew-day-access-note-hint"
-                className="w-full resize-y rounded-xl border border-app-border bg-app-surface px-3 py-2 text-[0.9375rem] leading-5 text-app-text placeholder:text-app-text-secondary focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
-              <p id="crew-day-access-note-hint" className="text-[0.8125rem] leading-[1.125rem] text-app-text-secondary">
-                The crew sees this on the day. It&apos;s deleted a week after the job.
-              </p>
-            </CrewDayCard>
+          <section className="flex flex-col gap-2">
+            <label htmlFor="crew-day-access-note" className={CREW_DAY_OVERLINE}>
+              For the crew (optional)
+            </label>
+            <textarea
+              id="crew-day-access-note"
+              value={note}
+              maxLength={500}
+              rows={3}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Gate, pets, parking…"
+              aria-describedby="crew-day-access-note-hint"
+              className="min-h-[5.75rem] w-full resize-y rounded-[0.875rem] border border-app-border-strong bg-app-surface px-[0.875rem] py-3 text-base leading-[1.375rem] text-app-text placeholder:text-app-text-secondary focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+            <p id="crew-day-access-note-hint" className="text-[0.8125rem] leading-[1.125rem] text-app-text-secondary">
+              The crew sees this on the day. It&apos;s deleted a week after the job.
+            </p>
           </section>
 
           <section aria-labelledby="crew-day-review-payment" className="flex flex-col gap-2">
             <CrewDaySectionTitle id="crew-day-review-payment">Payment</CrewDaySectionTitle>
-            <CrewDayCard className="flex flex-col gap-3 p-4">
+            <CrewDayCard className="flex flex-col gap-2.5 p-[0.875rem]">
               {cards.isLoading ? (
                 <p className="text-sm leading-5 text-app-text-secondary">Loading your saved cards…</p>
               ) : cards.isError ? (
                 <div className="flex flex-col gap-2">
                   <p className="text-sm leading-5 text-app-text-strong">We couldn&apos;t load your saved cards.</p>
-                  <button type="button" onClick={() => void cards.refetch()} className="self-start text-sm font-semibold text-app-link">
+                  <button type="button" onClick={() => void cards.refetch()} className="min-h-11 self-start text-[0.9375rem] font-semibold text-app-link">
                     Try again
                   </button>
                 </div>
               ) : card && !choosing && !adding ? (
-                <div className="flex items-center justify-between gap-3">
-                  <span className="flex items-center gap-2 text-[0.9375rem] font-medium leading-5">
-                    <CreditCard className="h-5 w-5 flex-none text-app-text-secondary" aria-hidden="true" />
+                <div className="flex items-center gap-3">
+                  <span className="grid h-7 w-10 flex-none place-items-center rounded-md border border-app-border-strong text-app-text-strong" aria-hidden="true">
+                    <CreditCard className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0 flex-1 text-base font-semibold leading-[1.3125rem]">
                     {brandName(card.brand)} ending {card.last4}
                   </span>
-                  <button type="button" onClick={() => setChoosing(true)} className="text-sm font-semibold text-app-link">
+                  <button type="button" onClick={() => setChoosing(true)} className="-my-2 min-h-11 px-1 text-[0.9375rem] font-semibold text-app-link">
                     Change
                   </button>
                 </div>
@@ -288,7 +314,7 @@ export default function CrewDayReviewScreen({ day }: { day: PublicCrewDay }) {
                 <fieldset className="flex flex-col gap-1">
                   <legend className="sr-only">Choose a card</legend>
                   {cards.data.map((c) => (
-                    <label key={c.id} className="flex cursor-pointer items-center gap-3 rounded-lg px-1 py-2 hover:bg-app-hover">
+                    <label key={c.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-1 hover:bg-app-hover">
                       <input
                         type="radio"
                         name="crew-day-card"
@@ -297,14 +323,15 @@ export default function CrewDayReviewScreen({ day }: { day: PublicCrewDay }) {
                           setCardId(c.id);
                           setChoosing(false);
                         }}
-                        className="h-5 w-5 flex-none accent-[rgb(var(--accent-primary-fill))]"
+                        className="h-[1.375rem] w-[1.375rem] flex-none accent-[rgb(var(--accent-primary-fill))]"
                       />
-                      <span className="text-[0.9375rem] leading-5">
+                      <span className="text-base leading-[1.3125rem]">
                         {brandName(c.brand)} ending {c.last4}
                       </span>
                     </label>
                   ))}
-                  <button type="button" onClick={() => setAdding(true)} className="self-start px-1 py-2 text-sm font-semibold text-app-link">
+                  <button type="button" onClick={() => setAdding(true)} className={ADD_CARD_BUTTON}>
+                    <Plus className="h-[1.125rem] w-[1.125rem]" aria-hidden="true" />
                     Add a card
                   </button>
                 </fieldset>
@@ -323,7 +350,8 @@ export default function CrewDayReviewScreen({ day }: { day: PublicCrewDay }) {
                   />
                 </StripeProvider>
               ) : !card && !cards.isLoading && !cards.isError ? (
-                <button type="button" onClick={() => setAdding(true)} className="self-start text-sm font-semibold text-app-link">
+                <button type="button" onClick={() => setAdding(true)} className={ADD_CARD_BUTTON}>
+                  <Plus className="h-[1.125rem] w-[1.125rem]" aria-hidden="true" />
                   Add a card
                 </button>
               ) : null}
@@ -338,63 +366,64 @@ export default function CrewDayReviewScreen({ day }: { day: PublicCrewDay }) {
 
           <section aria-labelledby="crew-day-review-plans" className="flex flex-col gap-2">
             <CrewDaySectionTitle id="crew-day-review-plans">If plans change</CrewDaySectionTitle>
-            <CrewDayCard className="flex flex-col gap-3 p-4">
+            <ul className="flex flex-col gap-[0.875rem] rounded-[1.25rem] border border-app-border bg-app-surface p-[0.875rem]">
               {planLines.map(({ icon: LineIcon, text }) => (
-                <p key={text} className="flex items-start gap-[0.625rem] text-sm leading-5 text-app-text-strong">
-                  <LineIcon className="mt-0.5 h-4 w-4 flex-none text-app-text-secondary" aria-hidden="true" />
-                  {text}
-                </p>
+                <li key={text} className="flex items-start gap-3">
+                  <CrewDayIconTile>
+                    <LineIcon className="h-4 w-4" />
+                  </CrewDayIconTile>
+                  <span className="pt-1.5 text-sm leading-5 text-app-text-strong">{text}</span>
+                </li>
               ))}
-            </CrewDayCard>
+            </ul>
           </section>
-
-          <CrewDayCard className="flex flex-col gap-4 p-4">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-              <span className="text-[0.9375rem] font-semibold leading-5">{amount ? 'Total' : 'Your price'}</span>
-              {amount ? (
-                <span className="text-[0.9375rem] leading-5 [font-variant-numeric:tabular-nums]">
-                  <span className="text-lg font-bold">{amount}</span> · including tax
-                </span>
-              ) : (
-                <span className="text-sm leading-5 text-app-text-secondary">The crew confirms it after a look</span>
-              )}
-            </div>
-            <label className="flex cursor-pointer items-start gap-3">
-              <input
-                type="checkbox"
-                checked={approved}
-                onChange={(e) => setApproved(e.target.checked)}
-                className="mt-0.5 h-5 w-5 flex-none accent-[rgb(var(--accent-primary-fill))]"
-              />
-              <span className="text-sm leading-5 text-app-text-strong">
-                {amount
-                  ? `I approve the scope, the ${amount} total and these terms.`
-                  : "I approve the scope and these terms. I'll approve my price before anything is booked."}
-              </span>
-            </label>
-            {error ? (
-              <p role="alert" className="rounded-xl bg-app-error-bg px-3 py-2 text-sm leading-5 text-app-error">
-                {error}{' '}
-                {/filled up|closed|outside/.test(error) ? (
-                  <Link href={invitationPath} className="font-semibold underline">
-                    Back to the invitation
-                  </Link>
-                ) : null}
-              </p>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => void book()}
-              disabled={!approved || !card || submitting || adding}
-              className={CREW_DAY_PRIMARY_BUTTON}
-            >
-              {submitting ? 'Booking…' : amount ? `Book for ${amount}` : 'Ask for my price'}
-            </button>
-            {!card && !cards.isLoading ? (
-              <p className="text-center text-xs leading-4 text-app-text-secondary">Add a card to book.</p>
-            ) : null}
-          </CrewDayCard>
         </div>
+
+        <CrewDayFooterBar>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+            <span className="text-base font-semibold leading-6">{amount ? 'Total' : 'Your price'}</span>
+            {amount ? (
+              <span className="text-sm leading-5 text-app-text-secondary [font-variant-numeric:tabular-nums]">
+                <b className="text-[1.375rem] font-bold leading-7 text-app-text">{amount}</b> · including tax
+              </span>
+            ) : (
+              <span className="text-base font-semibold leading-6 text-app-text-strong">After a look</span>
+            )}
+          </div>
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={approved}
+              onChange={(e) => setApproved(e.target.checked)}
+              className="h-[1.375rem] w-[1.375rem] flex-none accent-[rgb(var(--accent-primary-fill))]"
+            />
+            <span className="text-sm leading-5 text-app-text-strong">
+              {amount
+                ? `I approve the scope, the ${amount} total and these terms.`
+                : "I approve the scope and these terms. I'll see the price before anything is booked."}
+            </span>
+          </label>
+          <button
+            type="button"
+            onClick={() => void book()}
+            disabled={!approved || !card || submitting || adding}
+            className={CREW_DAY_PRIMARY_BUTTON}
+          >
+            {submitting ? 'Booking…' : amount ? `Book for ${amount}` : 'Ask for my price'}
+          </button>
+          {error ? (
+            <p role="alert" className="text-center text-[0.8125rem] leading-[1.125rem] text-app-error">
+              {error}{' '}
+              {/filled up|closed|outside/.test(error) ? (
+                <Link href={invitationPath} className="font-semibold underline">
+                  Back to the invitation
+                </Link>
+              ) : null}
+            </p>
+          ) : !card && !cards.isLoading ? (
+            <p className="text-center text-xs leading-4 text-app-text-secondary">Add a card to book.</p>
+          ) : null}
+        </CrewDayFooterBar>
       </div>
     </main>
   );

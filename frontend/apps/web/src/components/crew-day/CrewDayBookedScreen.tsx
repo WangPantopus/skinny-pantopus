@@ -3,14 +3,21 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { BellRing, Camera, Check, Hourglass, Truck, X, type LucideIcon } from 'lucide-react';
+import { BellRing, CalendarPlus, Camera, Check, ClipboardList, Eye, Hourglass, Share, Tag, Truck, X, type LucideIcon } from 'lucide-react';
 import * as api from '@pantopus/api';
 import { buildCrewDayPath, buildCrewDayShareUrl } from '@pantopus/utils';
 import AddToCalendar from '@/components/scheduling/AddToCalendar';
 import BottomSheet from '@/components/ui/BottomSheet';
 import { toast } from '@/components/ui/toast-store';
 import { crewDayServiceLabel, formatCrewDate, formatInstantDate, formatPrice, formatWindow, type PublicCrewDay } from '@/lib/crewDay';
-import { CREW_DAY_PRIMARY_BUTTON, CREW_DAY_SECONDARY_BUTTON, CrewDayCard, CrewDaySectionTitle } from './CrewDayParts';
+import {
+  CREW_DAY_PRIMARY_BUTTON,
+  CREW_DAY_SECONDARY_BUTTON,
+  CrewDayFooterBar,
+  CrewDayIconTile,
+  CrewDaySectionTitle,
+  CrewDayStepBar,
+} from './CrewDayParts';
 
 // Screen 4, You're on the route (01-spec.md §3): what happens next, the crew's prep note, Add to calendar, Share
 // with neighbors and See my Crew Day. A home that waits for the crew's price check says so instead.
@@ -22,6 +29,14 @@ function windowWords(start: string, end: string): string {
   if (!from || !to) return range;
   // "10–11 AM" keeps one AM: "between 10 and 11 AM".
   return `between ${from} and ${to}`;
+}
+
+/** "Monday evening": the evening before the visit, by its weekday. */
+function eveningBefore(serviceDate: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(serviceDate || '');
+  if (!match) return 'The evening before';
+  const before = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) - 1, 12));
+  return `${new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'long' }).format(before)} evening`;
 }
 
 /** The share kit's drafted message (screen 12): the street and the date, never an address. */
@@ -74,17 +89,25 @@ export default function CrewDayBookedScreen({ day }: { day: PublicCrewDay }) {
     }
   };
 
-  const nextSteps: Array<{ icon: LucideIcon; title: string; body: string }> = [
-    { icon: BellRing, title: 'The evening before', body: 'We remind you what to do, and when the crew comes.' },
-    { icon: Truck, title: 'On the day', body: `${crew} tells you when it's on the way.` },
-    {
-      icon: Camera,
-      title: "When it's done",
-      body: price != null
-        ? `You see photos of the work. We charge ${formatPrice(price)} the next day, unless you tell us something needs attention.`
-        : 'You see photos of the work. We charge your card the next day, unless you tell us something needs attention.',
-    },
-  ];
+  const reviewBy = formatInstantDate(day.booking_closes_at, day.timezone);
+  const nextSteps: Array<{ icon: LucideIcon; title: string; body: string }> = pending
+    ? [
+        { icon: Eye, title: 'The crew looks at your home', body: `From outside, before ${reviewBy}. You don't need to be home.` },
+        { icon: Tag, title: 'You approve your price', body: "We tell you as soon as it's set. Declining is free." },
+        { icon: Check, title: "Then you're on the route", body: 'Nothing is charged until the work is done.' },
+      ]
+    : [
+        { icon: BellRing, title: eveningBefore(serviceDate), body: "A reminder with your arrival window and the crew's note." },
+        { icon: Truck, title: 'On the day', body: "The crew tells you when it's on the way. Tap when your gate is ready." },
+        {
+          icon: Camera,
+          title: "When it's done",
+          body:
+            price != null
+              ? `Photos of the work. We charge ${formatPrice(price)} the next day, unless you tell us something needs attention.`
+              : 'Photos of the work. We charge your card the next day, unless you tell us something needs attention.',
+        },
+      ];
 
   if (!bookingId && !viewer.isLoading) {
     return (
@@ -101,91 +124,91 @@ export default function CrewDayBookedScreen({ day }: { day: PublicCrewDay }) {
   }
 
   return (
-    <main className="min-h-screen bg-app text-app-text">
-      <div className="mx-auto w-full max-w-md pb-10">
-        <div className="flex min-h-14 items-center justify-end px-3">
-          <Link
-            href={invitationPath}
-            aria-label="Close"
-            className="grid h-10 w-10 place-items-center rounded-full bg-app-surface-sunken text-app-text hover:bg-app-hover"
-          >
-            <X className="h-5 w-5" aria-hidden="true" />
-          </Link>
-        </div>
-        <div className="flex flex-col gap-5 px-4 pt-2">
+    <main className="flex min-h-screen flex-col bg-app text-app-text">
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
+        <CrewDayStepBar
+          leading={
+            <Link
+              href={invitationPath}
+              aria-label="Close"
+              className="grid h-11 w-11 place-items-center rounded-full bg-app-surface-sunken text-app-text hover:bg-app-hover"
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </Link>
+          }
+        />
+        <div className="flex flex-1 flex-col gap-6 px-4 pb-6 pt-2">
           <div className="flex flex-col gap-3">
             <span
-              className={`grid h-14 w-14 place-items-center rounded-[1rem] ${pending ? 'bg-app-surface-sunken text-app-text-strong' : 'bg-app-home text-white dark:text-[#0b1220]'}`}
+              className={`grid h-14 w-14 place-items-center rounded-2xl ${pending ? 'bg-[#fde68a] text-[#9a4a08] dark:bg-[#5c4210] dark:text-[#fcd34d]' : 'bg-app-home text-white dark:text-[#0b1220]'}`}
               aria-hidden="true"
             >
               {pending ? <Hourglass className="h-7 w-7" /> : <Check className="h-7 w-7" strokeWidth={2.6} />}
             </span>
-            {pending ? (
-              <>
-                <h1 className="text-2xl font-bold leading-[1.875rem] tracking-[-0.015em]">We asked {crew} for your price</h1>
-                <p className="text-[0.9375rem] leading-[1.375rem] text-app-text-strong">
-                  You&apos;ll hear by {formatInstantDate(day.booking_closes_at, day.timezone)}. Nothing is booked or charged until you
-                  approve it.
-                </p>
-              </>
-            ) : (
-              <>
-                <h1 className="text-2xl font-bold leading-[1.875rem] tracking-[-0.015em]">You&apos;re on the route</h1>
-                <p className="text-[0.9375rem] leading-[1.375rem] text-app-text-strong">
-                  {crew} comes {formatCrewDate(serviceDate, 'long')}, {windowWords(start, end)}.
-                  {day.outside_only ? " You don't need to be home." : ''}
-                </p>
-              </>
-            )}
+            <h1 className="mt-1 text-[1.875rem] font-bold leading-9 tracking-[-0.02em]">
+              {pending ? `We asked ${crew} for your price` : "You're on the route"}
+            </h1>
+            <p className="text-base leading-6 text-app-text-strong">
+              {pending
+                ? `You'll hear by ${reviewBy}. Nothing is booked or charged until you approve it.`
+                : `${crew} comes ${formatCrewDate(serviceDate, 'long')}, ${windowWords(start, end)}.${day.outside_only ? " You don't need to be home." : ''}`}
+            </p>
           </div>
 
           {!pending && prepNote ? (
-            <section aria-labelledby="crew-day-prep" className="flex flex-col gap-2">
-              <CrewDaySectionTitle id="crew-day-prep">One thing to do</CrewDaySectionTitle>
-              <CrewDayCard className="p-4">
-                <p className="text-[0.9375rem] leading-[1.375rem] text-app-text">{prepNote}</p>
-              </CrewDayCard>
+            <section aria-labelledby="crew-day-prep" className="flex flex-col gap-2.5 rounded-[1.25rem] border border-app-border bg-app-surface p-4">
+              <div className="flex items-center gap-2.5">
+                <CrewDayIconTile tone="home">
+                  <ClipboardList className="h-4 w-4" />
+                </CrewDayIconTile>
+                <h2 id="crew-day-prep" className="text-[0.9375rem] font-semibold leading-5">
+                  One thing to do
+                </h2>
+              </div>
+              <p className="text-base leading-[1.375rem]">{prepNote}</p>
+              <p className="text-[0.8125rem] leading-[1.125rem] text-app-text-secondary">From {crew}</p>
             </section>
           ) : null}
+
+          <section aria-labelledby="crew-day-next" className="flex flex-col gap-3">
+            <CrewDaySectionTitle id="crew-day-next">What happens next</CrewDaySectionTitle>
+            <ol className="flex flex-col gap-4">
+              {nextSteps.map(({ icon: StepIcon, title, body }) => (
+                <li key={title} className="flex items-start gap-3">
+                  <CrewDayIconTile>
+                    <StepIcon className="h-4 w-4" />
+                  </CrewDayIconTile>
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-[0.9375rem] font-semibold leading-5">{title}</span>
+                    <span className="text-sm leading-5 text-app-text-secondary">{body}</span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
 
           {!pending ? (
-            <section aria-labelledby="crew-day-next" className="flex flex-col gap-2">
-              <CrewDaySectionTitle id="crew-day-next">What happens next</CrewDaySectionTitle>
-              <CrewDayCard className="flex flex-col gap-4 p-4">
-                {nextSteps.map(({ icon: StepIcon, title, body }) => (
-                  <div key={title} className="flex items-start gap-3">
-                    <span className="grid h-8 w-8 flex-none place-items-center rounded-[0.5625rem] bg-app-surface-sunken text-app-text-strong" aria-hidden="true">
-                      <StepIcon className="h-4 w-4" />
-                    </span>
-                    <div className="flex min-w-0 flex-col gap-0.5">
-                      <h3 className="text-[0.9375rem] font-semibold leading-5">{title}</h3>
-                      <p className="text-sm leading-5 text-app-text-secondary">{body}</p>
-                    </div>
-                  </div>
-                ))}
-              </CrewDayCard>
-            </section>
-          ) : null}
-
-          <div className="flex flex-col gap-3">
-            {!pending ? (
-              <button type="button" onClick={() => setCalendarOpen(true)} className={CREW_DAY_SECONDARY_BUTTON}>
+            <div className="flex flex-col gap-2.5">
+              <button type="button" onClick={() => setCalendarOpen(true)} className={`${CREW_DAY_SECONDARY_BUTTON} gap-2`}>
+                <CalendarPlus className="h-[1.125rem] w-[1.125rem]" aria-hidden="true" />
                 Add to calendar
               </button>
-            ) : null}
-            <div className="flex flex-col gap-1.5">
-              <button type="button" onClick={() => void share()} className={CREW_DAY_SECONDARY_BUTTON}>
+              <button type="button" onClick={() => void share()} className={`${CREW_DAY_SECONDARY_BUTTON} gap-2`}>
+                <Share className="h-[1.125rem] w-[1.125rem]" aria-hidden="true" />
                 Share with neighbors
               </button>
-              <p className="text-center text-xs leading-4 text-app-text-secondary">
+              <p className="text-center text-[0.8125rem] leading-[1.125rem] text-app-text-secondary">
                 The preview shows {day.street_label} and the date, never your address.
               </p>
             </div>
-            <Link href={bookingPath} className={CREW_DAY_PRIMARY_BUTTON}>
-              See my Crew Day
-            </Link>
-          </div>
+          ) : null}
         </div>
+
+        <CrewDayFooterBar>
+          <Link href={bookingPath} className={CREW_DAY_PRIMARY_BUTTON}>
+            See my Crew Day
+          </Link>
+        </CrewDayFooterBar>
       </div>
 
       <BottomSheet open={calendarOpen} onClose={() => setCalendarOpen(false)} title="Add to calendar">

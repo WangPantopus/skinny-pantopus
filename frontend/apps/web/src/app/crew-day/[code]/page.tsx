@@ -199,7 +199,7 @@ export default async function CrewDayInvitationPage({ params }: PageProps) {
           <Action day={day} code={code} />
 
           <section aria-labelledby="how-it-works" className="flex flex-col gap-2 pt-2">
-            <CrewDaySectionTitle id="how-it-works">How it works for you</CrewDaySectionTitle>
+            <CrewDaySectionTitle id="how-it-works" small>How it works for you</CrewDaySectionTitle>
             <CrewDayCard className="flex flex-col gap-4 p-4">
               {HOW_IT_WORKS.map(({ icon: RowIcon, title, body }) => (
                 <div key={title} className="flex items-start gap-3">
@@ -217,7 +217,7 @@ export default async function CrewDayInvitationPage({ params }: PageProps) {
 
           {day.included.length > 0 || day.outside_only ? (
             <section aria-labelledby="what-the-crew-does" className="flex flex-col gap-2 pt-2">
-              <CrewDaySectionTitle id="what-the-crew-does">What the crew does</CrewDaySectionTitle>
+              <CrewDaySectionTitle id="what-the-crew-does" small>What the crew does</CrewDaySectionTitle>
               <CrewDayCard className="flex flex-col gap-[0.875rem] p-4">
                 {day.included.length > 0 ? (
                   <ul className="flex flex-col gap-[0.625rem]">
