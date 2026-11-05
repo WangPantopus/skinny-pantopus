@@ -13,7 +13,9 @@ import SwiftUI
 
 struct AccessCodesView: View {
     @State private var viewModel: AccessCodesViewModel
-    @State private var appearedOnce = false
+    @State private var isVisible = false
+    @State private var needsForegroundRead = false
+    @Environment(\.scenePhase) private var scenePhase
 
     init(viewModel: AccessCodesViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -23,9 +25,22 @@ struct AccessCodesView: View {
         ListOfRowsView(dataSource: viewModel)
             .accessibilityIdentifier(AccessCodesA11y.screen)
             .onAppear {
-                // Back from adding, editing or deleting a code: read the list again.
-                if appearedOnce { Task { await viewModel.refresh() } }
-                appearedOnce = true
+                isVisible = true
+                needsForegroundRead = false
+            }
+            .onDisappear {
+                isVisible = false
+                viewModel.suspend()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                guard isVisible else { return }
+                if phase == .background {
+                    needsForegroundRead = true
+                    viewModel.suspend()
+                } else if phase == .active, needsForegroundRead {
+                    needsForegroundRead = false
+                    Task { await viewModel.load() }
+                }
             }
             .sensitiveScreen()
             .overlay(alignment: .bottom) {

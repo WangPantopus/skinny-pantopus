@@ -28,9 +28,11 @@ final class AccessCodesSearchViewModel {
 
     /// True only while the one-shot corpus fetch is in flight.
     private(set) var isLoading = false
+    private(set) var errorMessage: String?
 
     private var corpus: [HomeAccessSecretDTO] = []
     private var loadedOnce = false
+    private var readGeneration = 0
 
     private let api: APIClient
     private let onOpenCode: @MainActor (String) -> Void
@@ -62,23 +64,37 @@ final class AccessCodesSearchViewModel {
 
     func load() async {
         if loadedOnce { return }
+        readGeneration &+= 1
+        let generation = readGeneration
         isLoading = true
-        defer { isLoading = false }
+        errorMessage = nil
+        defer { if generation == readGeneration { isLoading = false } }
         do {
             let response: HomeAccessSecretsResponse = try await api.request(
                 HomesEndpoints.accessSecrets(homeId: homeId)
             )
+            guard generation == readGeneration, !Task.isCancelled else { return }
             corpus = response.secrets
             loadedOnce = true
         } catch {
-            // Degrade to "no matches"; the list screen owns error/retry.
+            guard generation == readGeneration, !Task.isCancelled else { return }
             corpus = []
+            errorMessage = "Couldn't load access codes. Try again."
         }
+    }
+
+    func suspend() {
+        readGeneration &+= 1
+        corpus = []
+        loadedOnce = false
+        isLoading = true
+        errorMessage = nil
     }
 
     // MARK: - Intents
 
     func openResult(_ secret: HomeAccessSecretDTO) {
+        guard corpus.contains(where: { $0.id == secret.id }) else { return }
         onOpenCode(secret.id)
     }
 
