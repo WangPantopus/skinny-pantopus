@@ -3027,6 +3027,39 @@ const MAINTENANCE_CATEGORY_VALUES = new Set([
 const maintenanceCostSchema = Joi.number().min(0).max(9999999999.99)
   .precision(2).strict().allow(null).optional();
 
+// `access` is the route's own current read (maintenance.view or home.edit). It
+// carries the viewer's full effective permissions, so docs.view needs no second read.
+async function visibleMaintenanceDocuments(homeId, userId, access, documentIds) {
+  const ids = [...new Set(documentIds.filter(Boolean))];
+  if (!ids.length || !access.permissions?.includes('docs.view')) return new Set();
+  const unavailable = () => Object.assign(new Error('Document access could not be checked. Please retry.'), { statusCode: 503 });
+  const visibility = await homeDocumentVisibilities(homeId, userId, access);
+  if (visibility.readFailed) throw unavailable();
+  const { data, error } = await supabaseAdmin.from('HomeDocument').select('id')
+    .eq('home_id', homeId).in('id', ids).in('visibility', visibility.allowed);
+  if (error) throw unavailable();
+  return new Set((data || []).map(document => document.id));
+}
+
+async function validateMaintenanceDocument(homeId, userId, access, documentId) {
+  if (Joi.string().uuid().allow(null).optional().validate(documentId).error) {
+    throw Object.assign(new Error('Invalid maintenance document.'), { statusCode: 400 });
+  }
+  if (documentId == null) return documentId;
+  const id = documentId.toLowerCase();
+  if (!(await visibleMaintenanceDocuments(homeId, userId, access, [id])).has(id)) {
+    throw Object.assign(new Error('Document not found or unavailable for this home.'), { statusCode: 404 });
+  }
+  return id;
+}
+
+// Maintenance permission does not grant document permission. Resolve references
+// in one batch, without exposing restricted document IDs or their storage paths.
+async function serializeMaintenance(homeId, userId, access, tasks) {
+  const visible = await visibleMaintenanceDocuments(homeId, userId, access, tasks.map(task => task.document_id));
+  return tasks.map(task => task.document_id && !visible.has(task.document_id) ? { ...task, document_id: null } : task);
+}
+
 /**
  * GET /api/homes/:id/maintenance
  *
@@ -3068,9 +3101,10 @@ router.get('/:id/maintenance', verifyToken, requireSharedHomeContent, async (req
       return res.status(500).json({ error: 'Failed to fetch maintenance' });
     }
 
-    res.json({ tasks: data || [] });
+    res.json({ tasks: await serializeMaintenance(homeId, userId, access, data || []) });
   } catch (err) {
     logger.error('Maintenance fetch error', { error: err.message });
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
     res.status(500).json({ error: 'Failed to fetch maintenance' });
   }
 });
@@ -3078,7 +3112,7 @@ router.get('/:id/maintenance', verifyToken, requireSharedHomeContent, async (req
 /**
  * POST /api/homes/:id/maintenance
  *
- * Body: { task, vendor?, cost?, recurrence?, due_date?, status?, performed_at?, notes? }.
+ * Body: { task, vendor?, cost?, recurrence?, due_date?, status?, performed_at?, notes?, document_id? }.
  *  - `task` is required (non-empty); everything else is optional.
  *  - `status` defaults to `scheduled`; `recurrence` defaults to `one_time`.
  */
@@ -3090,7 +3124,7 @@ router.post('/:id/maintenance', verifyToken, requireSharedHomeContent, async (re
     const access = await checkHomePermission(homeId, userId, 'home.edit');
     if (!access.hasAccess) return res.status(403).json({ error: 'No permission to manage maintenance' });
 
-    const { task, vendor, cost, recurrence, due_date, status, performed_at, notes, category, performer_contact, clientRequestId } = req.body || {};
+    const { task, vendor, cost, recurrence, due_date, status, performed_at, notes, category, performer_contact, document_id, clientRequestId } = req.body || {};
     if (maintenanceCostSchema.validate(cost).error) {
       return res.status(400).json({ error: 'Cost must be a non-negative amount below $10 billion, with at most two decimal places.' });
     }
@@ -3120,6 +3154,7 @@ router.post('/:id/maintenance', verifyToken, requireSharedHomeContent, async (re
     if (clientRequestId != null && Joi.string().uuid().validate(clientRequestId).error) {
       return res.status(400).json({ error: 'Invalid maintenance request' });
     }
+    const documentId = await validateMaintenanceDocument(homeId, userId, access, document_id);
 
     const logId = clientRequestId == null ? null : crypto.createHash('sha256')
       .update('pantopus:maintenance-log:v1:' + homeId.toLowerCase() + ':' + userId.toLowerCase() + ':' + clientRequestId.toLowerCase())
@@ -3136,6 +3171,7 @@ router.post('/:id/maintenance', verifyToken, requireSharedHomeContent, async (re
       notes: typeof notes === 'string' ? notes.trim() || null : null,
       category: category ?? null,
       performer_contact: typeof performer_contact === 'string' ? performer_contact.trim() || null : null,
+      document_id: documentId ?? null,
       status: status || 'scheduled',
       created_by: userId,
     };
@@ -3144,12 +3180,13 @@ router.post('/:id/maintenance', verifyToken, requireSharedHomeContent, async (re
       if (error) throw error;
       return data;
     };
-    const acknowledgeRetry = (existing) => {
+    const acknowledgeRetry = async (existing) => {
       if (existing.home_id !== homeId.toLowerCase() || existing.created_by !== userId.toLowerCase() || existing.gig_id != null ||
           existing.task !== row.task || existing.vendor !== row.vendor || existing.recurrence !== row.recurrence ||
           (notes !== undefined && (existing.notes ?? null) !== row.notes) ||
           (category !== undefined && (existing.category ?? null) !== row.category) ||
           (performer_contact !== undefined && (existing.performer_contact ?? null) !== row.performer_contact) ||
+          (existing.document_id ?? null) !== row.document_id ||
           existing.status !== row.status || (existing.cost == null ? null : Number(existing.cost)) !==
             (row.cost == null ? null : Number(row.cost)) ||
           (existing.due_date == null ? null : Date.parse(existing.due_date)) !==
@@ -3157,11 +3194,11 @@ router.post('/:id/maintenance', verifyToken, requireSharedHomeContent, async (re
           (row.performed_at !== undefined && Date.parse(existing.performed_at) !== Date.parse(row.performed_at))) {
         return res.status(409).json({ error: 'This maintenance request no longer matches the saved entry. Start a new entry for different details.' });
       }
-      return res.status(201).json({ task: existing });
+      return res.status(201).json({ task: (await serializeMaintenance(homeId, userId, access, [existing]))[0] });
     };
     if (logId) {
       const existing = await readRetry();
-      if (existing) return acknowledgeRetry(existing);
+      if (existing) return await acknowledgeRetry(existing);
     }
     const insert = logId
       ? supabaseAdmin.from('HomeMaintenanceLog').upsert(row, { onConflict: 'id', ignoreDuplicates: true })
@@ -3169,18 +3206,20 @@ router.post('/:id/maintenance', verifyToken, requireSharedHomeContent, async (re
     const { data, error } = await insert.select().maybeSingle();
 
     if (error) {
+      if (error.code === '23503' && documentId) return res.status(409).json({ error: 'The document changed. Reload it before saving.' });
       logger.error('Error creating maintenance task', { error: error.message, homeId });
       return res.status(500).json({ error: 'Failed to create maintenance task' });
     }
     if (!data && logId) {
       const existing = await readRetry();
-      if (existing) return acknowledgeRetry(existing);
+      if (existing) return await acknowledgeRetry(existing);
     }
     if (!data) return res.status(500).json({ error: 'Failed to create maintenance task' });
 
     res.status(201).json({ task: data });
   } catch (err) {
     logger.error('Maintenance create error', { error: err.message });
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
     res.status(500).json({ error: 'Failed to create maintenance task' });
   }
 });
@@ -3206,10 +3245,13 @@ router.put('/:id/maintenance/:taskId', verifyToken, requireSharedHomeContent, as
     if (readError) return res.status(503).json({ error: 'Maintenance could not be checked. Please retry.' });
     if (!current) return res.status(404).json({ error: 'Maintenance task not found' });
 
-    const allowed = ['task', 'vendor', 'cost', 'recurrence', 'due_date', 'status', 'performed_at', 'notes', 'category', 'performer_contact'];
+    const allowed = ['task', 'vendor', 'cost', 'recurrence', 'due_date', 'status', 'performed_at', 'notes', 'category', 'performer_contact', 'document_id'];
     const updates = {};
     for (const key of allowed) {
       if (req.body && req.body[key] !== undefined) updates[key] = req.body[key];
+    }
+    if (updates.document_id !== undefined) {
+      updates.document_id = await validateMaintenanceDocument(homeId, userId, access, updates.document_id);
     }
 
     if (maintenanceCostSchema.validate(updates.cost).error) {
@@ -3263,6 +3305,13 @@ router.put('/:id/maintenance/:taskId', verifyToken, requireSharedHomeContent, as
 
     updates.updated_at = new Date().toISOString();
 
+    // Check an unchanged receipt before saving too, so an unrelated edit never
+    // returns a document reference the editor can no longer view. Omission keeps
+    // the stored link; only an explicit null detaches it, without deleting bytes.
+    const visibleDocuments = updates.document_id === undefined
+      ? await visibleMaintenanceDocuments(homeId, userId, access, [current.document_id])
+      : new Set([updates.document_id]);
+
     const { data, error } = await supabaseAdmin
       .from('HomeMaintenanceLog')
       .update(updates)
@@ -3274,14 +3323,16 @@ router.put('/:id/maintenance/:taskId', verifyToken, requireSharedHomeContent, as
       .maybeSingle();
 
     if (error) {
+      if (error.code === '23503' && updates.document_id) return res.status(409).json({ error: 'The document changed. Reload it before saving.' });
       logger.error('Error updating maintenance task', { error: error.message, taskId });
       return res.status(500).json({ error: 'Failed to update maintenance task' });
     }
     if (!data) return res.status(409).json({ error: 'Maintenance changed. Reload it before saving.' });
 
-    res.json({ task: data });
+    res.json({ task: data.document_id && !visibleDocuments.has(data.document_id) ? { ...data, document_id: null } : data });
   } catch (err) {
     logger.error('Maintenance update error', { error: err.message });
+    if (err.statusCode) return res.status(err.statusCode).json({ error: err.message });
     res.status(500).json({ error: 'Failed to update maintenance task' });
   }
 });
@@ -4009,7 +4060,7 @@ router.get('/:id/emergencies', verifyToken, async (req, res) => {
       location_in_home: e.location,
     }));
 
-    res.json({ emergencies });
+    res.json({ emergencies, canManage: current.access.permissions.includes('home.edit') });
   } catch (err) {
     if (err.statusCode === 503) return homeListService.sendError(res, err);
     logger.error('Emergencies fetch error', { error: err.message });
@@ -4201,7 +4252,7 @@ router.get('/:id/access', verifyToken, async (req, res) => {
   // Door, gate and Wi-Fi codes: never kept in a device's HTTP cache.
   res.set('Cache-Control', 'private, no-store');
   try {
-    res.json({ secrets: await homeAccessSecretService.list(req.params.id, req.user.id) });
+    res.json(await homeAccessSecretService.list(req.params.id, req.user.id));
   } catch (err) {
     logger.error('Access secrets fetch error', { errorCode: err.code, homeId: req.params.id });
     res.status(err.statusCode || 503).json({ error: err.message, code: err.code });

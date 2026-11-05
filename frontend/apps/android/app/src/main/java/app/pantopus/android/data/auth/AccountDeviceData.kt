@@ -11,6 +11,7 @@ import app.pantopus.android.data.gigs.GigDraftQueue
 import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.data.mailbox.MailEnclosureFiles
 import app.pantopus.android.data.mailbox.MailboxRepository
+import app.pantopus.android.data.plans.PlansRepository
 import app.pantopus.android.data.posts.PostCameraPhotos
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.support_trains.SupportTrainReservationsStore
@@ -50,6 +51,7 @@ class AccountDeviceData
         private val gigDrafts: GigDraftQueue,
         private val screenStore: ScreenStore,
         private val chatOutbox: ChatOutbox,
+        private val plans: PlansRepository,
     ) {
         /** Never throws: a part that fails is logged and the rest is still cleared. */
         @OptIn(ExperimentalCoilApi::class)
@@ -57,6 +59,7 @@ class AccountDeviceData
             // First, so a reply still in flight can't write the last account's data back (generation number).
             chatOutbox.clear()
             screenStore.wipe()
+            plans.clearAccount()
             MailboxRepository.forgetAccount()
             HolidayCardsRepository.forgetAccount()
             chatBadges.reset()

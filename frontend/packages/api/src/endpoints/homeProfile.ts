@@ -293,8 +293,8 @@ export async function removeBusinessLink(homeId: string, linkId: string) {
 
 // ---- HomeEmergency ----
 
-export async function getHomeEmergencies(homeId: string) {
-  return get<{ emergencies: any[] }>(`/api/homes/${homeId}/emergencies`);
+export async function getHomeEmergencies(homeId: string, signal?: AbortSignal) {
+  return get<{ emergencies: any[]; canManage?: boolean }>(`/api/homes/${homeId}/emergencies`, undefined, { signal });
 }
 
 // `type` must be a HomeEmergencyType value (HomeEmergency_type_chk); the route
@@ -321,8 +321,8 @@ export async function deleteHomeEmergency(homeId: string, emergencyId: string) {
 
 // ---- HomeAccessSecret ----
 
-export async function getHomeAccessSecrets(homeId: string) {
-  return get<{ secrets: any[] }>(`/api/homes/${homeId}/access`);
+export async function getHomeAccessSecrets(homeId: string, signal?: AbortSignal) {
+  return get<{ secrets: any[] }>(`/api/homes/${homeId}/access`, undefined, { signal });
 }
 
 export async function createHomeAccessSecret(
