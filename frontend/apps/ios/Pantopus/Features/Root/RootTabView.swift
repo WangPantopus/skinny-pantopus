@@ -178,6 +178,8 @@ public struct RootTabView: View {
     /// write observed state while the bar draws: the Xcode 16.4 render loop).
     @State private var drawerModel = NavigationDrawerViewModel(context: .personal(name: ""))
     private let mailBadgeStore = MailBadgeStore.shared
+    /// The person's businesses, for the side menu's Crew Day Business section.
+    @State private var crewMembership = CrewDayMembership.shared
 
     public init() {}
 
@@ -206,6 +208,14 @@ public struct RootTabView: View {
                 await plansFlags.refresh(account: signedInUserID)
                 // Every invite shares the person's own link; read it before anyone taps one.
                 await PersonalInviteLink.shared.load(account: signedInUserID)
+                await crewMembership.refresh(account: signedInUserID)
+            }
+            .onChange(of: model.showsNavigationMenu) { _, isOpen in
+                // A business joined or left since: the menu's Business section follows.
+                if isOpen, LaunchFeatures.crewDay { Task { await crewMembership.refresh(account: signedInUserID) } }
+            }
+            .onChange(of: crewMembership.businesses.isEmpty, initial: true) { _, isEmpty in
+                drawerModel.updateCrewBusiness(!isEmpty)
             }
             .onChange(of: signedInUserName, initial: true) { _, name in
                 drawerModel.updateContext(.personal(name: name))
@@ -347,7 +357,9 @@ public struct RootTabView: View {
              .wallet, .paymentsSettings, .securityDevices, .notificationSettings, .assistantMemory, .assistantRules,
              .businessOwner, .businessConversation, .viewAs, .waitingRoom, .neighborMessage,
              .bookingDetail, .myBookings,
-             .invoiceDetail:
+             .invoiceDetail,
+             // Crew Day (launch cut #13) opens in the Place stack, as the side menu's rows do.
+             .crewDayInvitation, .crewDays, .crewDayAsk, .crewDayBooking, .crewDaysCrew, .crewDayCrew:
             model.selected = .place
         // Morning/Evening Briefing push — the Today tab consumes it.
         case .hubToday, .todayTab:

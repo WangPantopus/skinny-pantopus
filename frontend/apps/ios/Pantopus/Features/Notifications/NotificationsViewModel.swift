@@ -793,6 +793,12 @@ public final class NotificationsViewModel: ListOfRowsDataSource {
         // A brief or nudge opens the assistant at its message (AI assistant phase 2).
         let link = DeepLinkRouter.assistantPath(type: dto.type, notificationId: dto.id, conversationId: dto.metadata?.conversationId)
             ?? HomeTaskNotificationRoute.path(type: dto.type, homeId: dto.metadata?.homeId, taskId: dto.metadata?.taskId)
+            ?? CrewDayNotificationRoute.path(
+                type: dto.type,
+                link: dto.link,
+                bookingId: dto.metadata?.bookingId,
+                crewDayId: dto.metadata?.crewDayId
+            )
             ?? DeepLinkRouter.notificationPath(type: dto.type, link: dto.link)
         if let link, !link.isEmpty { DeepLinkRouter.shared.handle(path: link) }
         onSelect(dto)
