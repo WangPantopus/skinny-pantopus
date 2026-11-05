@@ -5,14 +5,15 @@ Kept by the coordinator from the sessions' live status files in the notes folder
 
 ## November 5, 2026
 
-- 01:30 PST: the founder chose to build Crew Day in the apps, on the feature branch `crew-day` cut from master
-  `96451b75e2`.
-- 01:55: questions 3–9 answered "All recommended": scope, payment model, roles, the `crew_day` key, the three tables,
-  four build sessions, Stripe test keys. Questions 1 (by-hand lessons) and 2 (the private Crew Day Kit) remain open.
-- 02:05: the design plan approved; the sample board (the invitation, light and dark) drawn on the
+- 01:22 PST: the coordinator started, after the founder chose to build Crew Day in the apps on the feature branch
+  `crew-day` (cut from master `96451b75e2`).
+- About 01:35: questions 3–9 answered "All recommended": scope, payment model, roles, the `crew_day` key, the three
+  tables, four build sessions, Stripe test keys. Questions 1 (by-hand lessons) and 2 (the private Crew Day Kit) remain
+  open.
+- 01:40: the design plan approved; the sample board (the invitation, light and dark) drawn on the
   [Crew Day designs](https://claude.ai/artifact/WbwmCoReKrDHGN2mGNg9oP) canvas.
-- 02:50: "Draw the rest", then: keep working to the end without asking, start sessions to go faster.
-- This kit written; sessions started (see the table).
+- About 01:47: "Draw the rest", then: keep working to the end without asking, start sessions to go faster.
+- 01:59: this kit in PR #3373; sessions started (see the table).
 
 ## Sessions
 
