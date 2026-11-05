@@ -22,6 +22,8 @@ final class SocketClient {
     static let shared = SocketClient()
 
     private(set) var connectionState: ConnectionState = .disconnected
+    /// Tests only; production never sets it: false makes `connectionStates()` report nothing.
+    var reportsConnectionStates = true
 
     private var manager: SocketManager?
     private var socket: SocketIOClient?
@@ -299,6 +301,7 @@ final class SocketClient {
 
     func connectionStates() -> AsyncStream<ConnectionState> {
         AsyncStream { continuation in
+            guard reportsConnectionStates else { return }
             let id = UUID()
             connectionContinuations[id] = continuation
             continuation.yield(connectionState)
