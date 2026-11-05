@@ -150,6 +150,18 @@ function formatInstantWindow(startIso, endIso, timezone) {
   return formatWindow(a.toFormat('HH:mm'), b.toFormat('HH:mm'));
 }
 
+// "tomorrow", "today", or "Wed, Nov 18" for an instant, in the day's zone.
+function formatDayRelative(iso, timezone, now = new Date()) {
+  const zone = timezone || DEFAULT_TIMEZONE;
+  const at = DateTime.fromISO(String(iso)).setZone(zone);
+  if (!at.isValid) return '';
+  const today = DateTime.fromJSDate(now).setZone(zone).startOf('day');
+  const days = Math.round(at.startOf('day').diff(today, 'days').days);
+  if (days === 0) return 'today';
+  if (days === 1) return 'tomorrow';
+  return `on ${at.toFormat('ccc, LLL d')}`;
+}
+
 // "11:42 AM" in the day's zone
 function formatTime(iso, timezone) {
   const at = DateTime.fromISO(String(iso)).setZone(timezone || DEFAULT_TIMEZONE);
@@ -226,6 +238,7 @@ module.exports = {
   formatDay,
   formatWindow,
   formatInstantWindow,
+  formatDayRelative,
   formatTime,
   formatMoney,
   formatReceipt,
