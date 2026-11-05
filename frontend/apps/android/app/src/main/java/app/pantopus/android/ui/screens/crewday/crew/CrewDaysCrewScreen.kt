@@ -173,7 +173,7 @@ private fun ReadinessCard(
         if (!ready) {
             PlanBanner(
                 title = "Before your first Crew Day",
-                subtitle = "Households pay by card in Pantopus, so your page and payouts come first.",
+                subtitle = "Pantopus checks each one before your invitation works.",
                 icon = PantopusIcon.ClipboardList,
                 tone = PlanBannerTone.Warning,
             )
@@ -185,7 +185,7 @@ private fun ReadinessCard(
                 first = false
             }
             if (!readiness.payoutsEnabled) {
-                ReadinessRow("Set up payouts", "Money reaches your bank 48 hours after each charge.", first, "crewDaysCrewReady_payouts") {
+                ReadinessRow("Set up payouts", "Charges reach your bank through Stripe.", first, "crewDaysCrewReady_payouts") {
                     actions.onOpenPayouts(businessId)
                 }
                 first = false
@@ -193,7 +193,7 @@ private fun ReadinessCard(
             if (!readiness.documentsVerified) {
                 ReadinessRow(
                     "Add your insurance and registration",
-                    "Optional: it earns the \"Insured and registered\" badge.",
+                    "Optional. Needed for the Insured and registered badge.",
                     first,
                     "crewDaysCrewReady_documents",
                 ) {
