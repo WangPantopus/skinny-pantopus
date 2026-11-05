@@ -191,3 +191,34 @@ residents confirming their own unit, and county files where they exist; MLS only
 Every link checked in the second pass, with what it holds and its terms caveat:
 [property-data-sources-2026-11-05.csv](property-data-sources-2026-11-05.csv). First-pass rows name their publisher in
 the survey table.
+
+## 7. Will Property details stay as good after the switch? (Nov 5, evening)
+
+**The Clark County sample home.** Clark's free weekly assessor file holds every building field ATTOM shows for this
+home (section 1), and three of ATTOM's values are wrong: 1 full bath (the county records 2), municipality "Clark"
+(Camas), roof "Concrete" (the county's code is composition). The page keeps its fields and gets more accurate and
+fresher. Two things change: the ATTOM ID becomes Pantopus's own stable ID, and the value estimate becomes ours (the
+county's market value, its sale history and the FHFA price trend), which must be measured on past sales before it
+shows a range or a confidence score.
+
+**Nationally** (survey numbers):
+
+| Where people live | Share of Americans | Property details after the switch | Against ATTOM |
+|---|---:|---|---|
+| County or state publishes building facts including bedrooms or baths | about 22% | Mostly the same fields, straight from the county | Same or better |
+| County or state publishes basics only (year built, size, value, sales) | about 34% | County basics; bedrooms and baths from the household | Behind on bedrooms and baths until residents confirm them |
+| Lookup sites only, sold files, one city only, or unconfirmed | about 44% | Labeled estimates (size, age, stories) and household entries, until county files are requested or bought | Clearly behind |
+
+**Where Pantopus can beat ATTOM:** accuracy at the source; weekly freshness where counties publish weekly; facts
+confirmed by verified residents; condo and apartment units (floor plan sheets, see the listing-sites note); speed (a
+stored copy, no vendor call while the page loads); no retention limits on public records.
+
+**Where Pantopus would trail:** the counties without free files; bedrooms and baths where counties publish only basics;
+the value estimate until it is measured; deed and mortgage history (not used today); and the work of mapping each
+county's codes to plain words.
+
+**Ways to avoid a visible drop (founder decisions):** ask residents to confirm the two or three missing facts during
+Add Home; request or buy county files for the largest gaps (prices in `uncovered-counties-2026-11-05.csv`); and, if
+the ATTOM plan allows storing its data, keep ATTOM only for counties not yet covered and cancel it county by county as
+coverage arrives.
+
