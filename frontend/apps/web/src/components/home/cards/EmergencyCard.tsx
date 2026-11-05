@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Droplets, Flame, Zap, OctagonX, Siren, MapPin, Phone, ChevronLeft } from 'lucide-react';
 import DashboardCard from '../DashboardCard';
-import { emergencyCategory, emergencyDetail } from '../emergencyTypes';
+import { emergencyCategory, emergencyDetail, emergencyNote } from '../emergencyTypes';
 
 // Keyed by the HomeEmergency.type values the column actually holds; the earlier
 // water_main/gas_shutoff/electrical_panel keys never matched a row.
@@ -106,7 +106,7 @@ export default function EmergencyCard({
           ) : (
             shutoffs.map((s) => {
               const cfg = SHUTOFF_TYPES[s.type] || SHUTOFF_TYPES.other;
-              const notes = emergencyDetail(s, 'notes') || emergencyDetail(s, 'detail');
+              const notes = emergencyNote(s);
               const photoUrl = emergencyDetail(s, 'photo_url');
               return (
                 <div key={s.id} className="px-4 py-3 flex items-start gap-3">
@@ -149,7 +149,7 @@ export default function EmergencyCard({
           ) : (
             contacts.map((c) => {
               const phone = emergencyDetail(c, 'phone');
-              const notes = emergencyDetail(c, 'notes') || emergencyDetail(c, 'detail');
+              const notes = emergencyNote(c);
               return (
               <div key={c.id} className="px-4 py-3 flex items-center gap-3">
                 <Phone className="w-5 h-5 flex-shrink-0" />
@@ -211,7 +211,7 @@ export default function EmergencyCard({
           <h3 className="text-sm font-semibold text-app-text-secondary uppercase tracking-wider mb-2">Other</h3>
           <div className="bg-app-surface rounded-xl border border-app-border shadow-sm divide-y divide-app-border-subtle">
             {other.map((item) => {
-              const notes = emergencyDetail(item, 'notes') || emergencyDetail(item, 'detail');
+              const notes = emergencyNote(item);
               return (
               <div key={item.id} className="px-4 py-3">
                 <div className="text-sm font-medium text-app-text">{item.label || 'Emergency Item'}</div>

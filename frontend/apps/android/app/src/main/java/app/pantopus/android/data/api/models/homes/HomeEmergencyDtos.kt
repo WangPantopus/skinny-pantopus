@@ -31,12 +31,25 @@ data class HomeEmergencyDto(
     /**
      * Free-form payload — the design uses `phone`, `address`, `detail`,
      * `reviewed`, `pinned`, and `needs_review` keys but no key is
-     * enforced by the backend.
+     * enforced by the backend. Read the note through [noteText].
      */
     val details: Map<String, String>?,
     @Json(name = "created_at") val createdAt: String?,
     @Json(name = "updated_at") val updatedAt: String?,
-)
+) {
+    /** The entry's free-text note, or null when it has none. */
+    val noteText: String?
+        get() = NOTE_KEYS.firstNotNullOfOrNull { key -> details?.get(key)?.takeIf { it.isNotEmpty() } }
+
+    companion object {
+        /**
+         * Keys that hold the note, newest first. Every client writes `detail` (the key every installed app
+         * version reads); entries saved on the web before that hold it as `notes`. An app edit of such an
+         * entry writes `detail`, so `detail` wins.
+         */
+        val NOTE_KEYS = listOf("detail", "notes")
+    }
+}
 
 /** `GET /api/homes/:id/emergencies` envelope. */
 @JsonClass(generateAdapter = true)

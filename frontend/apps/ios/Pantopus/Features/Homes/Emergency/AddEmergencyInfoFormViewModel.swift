@@ -80,7 +80,7 @@ public struct EmergencyFormDraft: Sendable, Equatable, Identifiable {
             category: category,
             title: dto.label,
             severity: EmergencySeverity.from(rawValue: dto.details["severity"]),
-            details: dto.details["detail"] ?? "",
+            details: dto.noteText ?? "",
             verifiedByUserId: dto.details["verified_by"],
             lastUpdated: Self.parseDate(dto.updatedAt) ?? Self.parseDate(dto.createdAt) ?? Date(),
             backendType: dto.type,
@@ -97,7 +97,7 @@ public struct EmergencyFormDraft: Sendable, Equatable, Identifiable {
             category: .other,
             title: dto.label,
             severity: EmergencySeverity.from(rawValue: dto.details["severity"]),
-            details: dto.details["detail"] ?? dto.location ?? "",
+            details: dto.noteText ?? dto.location ?? "",
             verifiedByUserId: dto.details["verified_by"],
             lastUpdated: parseDate(dto.updatedAt) ?? parseDate(dto.createdAt) ?? Date(),
             backendType: dto.type,
@@ -333,7 +333,13 @@ public final class AddEmergencyInfoFormViewModel {
     public func buildEditDetailsMap(original: EmergencyFormDraft) -> [String: String] {
         var details = original.rawDetails
         if detailsField.isDirty {
+            // The field showed the entry's one note (`detail`, else an older
+            // web entry's `notes`); the edit replaces it, so a cleared note
+            // stays cleared and no stale copy is left behind.
             let trimmed = detailsField.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            for key in HomeEmergencyDTO.noteKeys {
+                details[key] = nil
+            }
             details["detail"] = trimmed.isEmpty ? nil : trimmed
         }
         if severity != originalSeverity {

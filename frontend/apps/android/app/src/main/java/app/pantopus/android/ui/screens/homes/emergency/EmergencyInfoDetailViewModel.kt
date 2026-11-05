@@ -182,7 +182,7 @@ class EmergencyInfoDetailViewModel
                     category = EmergencyFormCategory.Other,
                     title = dto.label,
                     severity = EmergencySeverity.fromValue(dto.details?.get("severity")),
-                    details = dto.details?.get("detail") ?: dto.location.orEmpty(),
+                    details = dto.noteText ?: dto.location.orEmpty(),
                     verifiedByUserId = dto.details?.get("verified_by"),
                     lastUpdated =
                         try {

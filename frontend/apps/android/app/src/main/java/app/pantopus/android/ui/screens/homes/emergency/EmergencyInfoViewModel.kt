@@ -565,7 +565,7 @@ class EmergencyInfoViewModel
 
             private fun detailString(dto: HomeEmergencyDto): String {
                 val details = dto.details
-                val detail = details?.get("detail").orEmpty()
+                val detail = dto.noteText.orEmpty()
                 val phone = details?.get("phone").orEmpty()
                 val note = details?.get("note").orEmpty()
                 return when {

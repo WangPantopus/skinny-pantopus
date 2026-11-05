@@ -75,7 +75,7 @@ object EmergencyCardPdf {
 
     private fun detailOf(dto: HomeEmergencyDto): String {
         val details = dto.details
-        val detail = details?.get("detail").orEmpty()
+        val detail = dto.noteText.orEmpty()
         if (detail.isNotEmpty()) return detail
         val phone = details?.get("phone").orEmpty()
         if (phone.isNotEmpty()) {

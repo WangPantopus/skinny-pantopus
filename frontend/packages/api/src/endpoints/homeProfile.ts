@@ -299,7 +299,7 @@ export async function getHomeEmergencies(homeId: string, signal?: AbortSignal) {
 
 // `type` must be a HomeEmergencyType value (HomeEmergency_type_chk); the route
 // answers 400 INVALID_EMERGENCY_TYPE otherwise. `details` is the free-form
-// jsonb object the native forms already write (phone, notes, detail keys).
+// jsonb object every client writes (phone, and the note as `detail`).
 export async function createHomeEmergency(
   homeId: string,
   data: { type: HomeEmergencyType; label: string; location?: string | null; details?: Record<string, string>; clientRequestId?: string },

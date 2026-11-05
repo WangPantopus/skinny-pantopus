@@ -27,8 +27,9 @@ public struct HomeEmergencyDTO: Decodable, Sendable, Hashable, Identifiable {
     public let label: String
     /// Optional location hint (e.g. "Basement utility closet").
     public let location: String?
-    /// Free-form payload — the design uses `phone`, `address`, and
-    /// `notes` keys but no key is required by the backend.
+    /// Free-form payload (`phone`, `severity`, `verified_by`, the note as
+    /// `detail`, …); no key is required by the backend. Read the note
+    /// through `noteText`.
     public let details: [String: String]
     public let createdAt: String?
     public let updatedAt: String?
@@ -74,6 +75,17 @@ public struct HomeEmergencyDTO: Decodable, Sendable, Hashable, Identifiable {
         self.details = details
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+
+    /// Keys that hold the entry's free-text note, newest first. Every client
+    /// writes `detail` (the key every installed app version reads); entries
+    /// saved on the web before that hold it as `notes`. An app edit of such
+    /// an entry writes `detail`, so `detail` wins.
+    public static let noteKeys = ["detail", "notes"]
+
+    /// The entry's free-text note, or `nil` when it has none.
+    public var noteText: String? {
+        Self.noteKeys.lazy.compactMap { details[$0] }.first { !$0.isEmpty }
     }
 }
 
