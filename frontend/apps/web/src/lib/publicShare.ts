@@ -1,6 +1,7 @@
 import { cache } from 'react';
 import type { Metadata } from 'next';
 import { ANDROID_PLAY_STORE_URL, API_BASE_URL, APP_NAME, APP_WEB_URL, IOS_APP_STORE_APP_ID, IOS_APP_STORE_URL, chosenUsername } from '@pantopus/utils';
+import { toPublicCrewDay, type PublicCrewDay } from './crewDay';
 
 const API_BASE = API_BASE_URL.replace(/\/+$/, '');
 
@@ -160,6 +161,38 @@ export const fetchPublicPlan = cache(async (id: string, invite: string | null = 
     { noStore: true },
   );
   return { data: result.data ?? null, status: result.status };
+});
+
+/** A Crew Day invitation's share code (8 characters of [a-z2-9]), or null. */
+export function crewDayShareCode(value: unknown): string | null {
+  return typeof value === 'string' && /^[a-z2-9]{6,16}$/.test(value) ? value : null;
+}
+
+/**
+ * A Crew Day invitation (GET /api/crew-days/public/:code), never cached: its counts move as homes book. With the
+ * visitor's session cookie the answer also says who is looking (`viewer`); an expired session reads as signed out.
+ */
+export const fetchPublicCrewDay = cache(async (code: string, access: string | null = null): Promise<PublicFetchResult<PublicCrewDay>> => {
+  const path = `/api/crew-days/public/${encodeURIComponent(code)}`;
+  const read = async (withSession: boolean): Promise<PublicFetchResult<PublicCrewDay>> => {
+    try {
+      const response = await fetch(`${API_BASE}${path}`, {
+        cache: 'no-store',
+        headers: {
+          Accept: 'application/json',
+          ...(withSession && access ? { Cookie: `pantopus_access=${access}` } : {}),
+        },
+      });
+      if (!response.ok) return { data: null, status: response.status };
+      const body = (await response.json()) as Record<string, unknown> & { crew_day?: Record<string, unknown> };
+      const raw = body?.crew_day && typeof body.crew_day === 'object' ? body.crew_day : body;
+      return { data: raw && typeof raw.code === 'string' ? toPublicCrewDay(raw) : null, status: response.status };
+    } catch {
+      return { data: null, status: 500 };
+    }
+  };
+  const result = await read(Boolean(access));
+  return access && result.status === 401 ? read(false) : result;
 });
 
 export const fetchPublicPoll = cache(async (id: string): Promise<PublicFetchResult<any>> => {

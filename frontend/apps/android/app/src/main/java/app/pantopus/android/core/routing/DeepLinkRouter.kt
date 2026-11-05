@@ -619,8 +619,12 @@ object DeepLinkRouter {
      * and their https links open in the browser ([WebLinkFallback]).
      */
     fun isCrewDayDestination(destination: Destination): Boolean =
-        destination is Destination.CrewDayInvitation || destination == Destination.MyCrewDays || destination == Destination.CrewDayAsk ||
-            destination is Destination.CrewDayBooking || destination is Destination.BusinessCrewDays || destination is Destination.CrewDayCrew
+        destination is Destination.CrewDayInvitation ||
+            destination == Destination.MyCrewDays ||
+            destination == Destination.CrewDayAsk ||
+            destination is Destination.CrewDayBooking ||
+            destination is Destination.BusinessCrewDays ||
+            destination is Destination.CrewDayCrew
 
     /** True when [raw] opens a mailbox page (`pantopus://mailbox/…`, `https://…/app/mailbox/…`). */
     private fun isMailboxLink(raw: String): Boolean {

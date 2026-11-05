@@ -88,6 +88,10 @@ enum NavigationDrawerDestination: Equatable {
     case walletAndPayments
     case settings
     case helpSupport
+    /// Crew Day (launch cut #13): the household's Crew Days.
+    case crewDays
+    /// Crew Day: the crew's Crew Days, in the Business section.
+    case businessCrewDays
 
     // Home (the active home id is read from `NavigationDrawerContext`)
     case homeProperty
@@ -134,6 +138,8 @@ enum NavigationDrawerDestination: Equatable {
         case .homeBills, .homePackages: LaunchFeatures.householdExtras
         // Launch cut #10 (Mailbox).
         case .mailbox, .homeMailbox: LaunchFeatures.mailbox
+        // Launch cut #13 (Crew Day).
+        case .crewDays, .businessCrewDays: LaunchFeatures.crewDay
         default: true
         }
     }
@@ -170,6 +176,9 @@ struct NavigationDrawerSection: Identifiable, Equatable {
 @MainActor
 final class NavigationDrawerViewModel {
     private(set) var context: NavigationDrawerContext
+    /// The person is on a business's team (owner or seat), so the personal
+    /// menu gets the Business section with the crew's Crew Days (launch cut #13).
+    private(set) var hasCrewBusiness = false
 
     init(context: NavigationDrawerContext) {
         self.context = context
@@ -177,6 +186,10 @@ final class NavigationDrawerViewModel {
 
     func updateContext(_ context: NavigationDrawerContext) {
         self.context = context
+    }
+
+    func updateCrewBusiness(_ hasBusiness: Bool) {
+        hasCrewBusiness = hasBusiness
     }
 
     var pillar: NavigationDrawerPillar {
@@ -223,10 +236,16 @@ final class NavigationDrawerViewModel {
     }
 
     var sections: [NavigationDrawerSection] {
-        let sections = switch context {
+        var sections = switch context {
         case .personal: Self.personalSections
         case .home: Self.homeSections
         case .business: Self.businessSections
+        }
+        // Crew Day: the crew's row in a Business section after Manage, for
+        // people on a business's team.
+        if case .personal = context, hasCrewBusiness {
+            let at = (sections.firstIndex { $0.id == "manage" } ?? -1) + 1
+            sections.insert(Self.businessSection, at: at)
         }
         // Launch cuts: rows into features hidden for the first launch are
         // dropped, and a section left without rows goes with them.
@@ -280,6 +299,7 @@ final class NavigationDrawerViewModel {
                 item(.compass, "Discover Neighbors", .discoverNeighbors)
             ]),
             NavigationDrawerSection(id: "your-stuff", overline: "Your Stuff", items: [
+                item(.truck, "Crew Days", .crewDays),
                 item(.radio, "My Beacon", .myBeacon),
                 item(.tag, "My Listings", .myListings),
                 item(.fileText, "My Pulse", .myPulse),
@@ -294,6 +314,20 @@ final class NavigationDrawerViewModel {
                 item(.helpCircle, "Help & Support", .helpSupport)
             ])
         ]
+    }
+
+    /// The personal menu's Business section (Crew Day): the crew's Crew
+    /// Days. Its slug differs from the household row's, whose label it shares.
+    private static var businessSection: NavigationDrawerSection {
+        NavigationDrawerSection(id: "business", overline: "Business", items: [
+            NavigationDrawerItem(
+                slug: "business-crew-days",
+                icon: .truck,
+                label: "Crew Days",
+                isActive: false,
+                destination: .businessCrewDays
+            )
+        ])
     }
 
     // MARK: Home
