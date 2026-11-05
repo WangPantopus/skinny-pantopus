@@ -5,6 +5,7 @@
  */
 
 const express = require('express');
+const multer = require('multer');
 
 const verifyToken = require('../middleware/verifyToken');
 const optionalAuth = require('../middleware/optionalAuth');
@@ -16,6 +17,10 @@ const days = require('../services/crewDay/days');
 const store = require('../services/crewDay/store');
 const bookings = require('../services/crewDay/bookings');
 const reads = require('../services/crewDay/reads');
+const dayOf = require('../services/crewDay/dayOf');
+
+// One photo per request, up to 10 MB (JPEG, PNG or HEIC; stored as JPEG or PNG without metadata).
+const photoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
 
 const router = express.Router();
 router.use(requireCrewDay);
@@ -93,6 +98,23 @@ router.post('/bookings/:bookingId/price-answer', verifyToken, handle('price_answ
   await bookingAnswer(req, res, await bookings.answerPrice(req.params.bookingId, req.user.id, req.body || {}));
 }));
 
+// POST /api/crew-days/bookings/:bookingId/gate-ready: on the day, tell the crew the gate is open.
+router.post('/bookings/:bookingId/gate-ready', verifyToken, handle('gate_ready', async (req, res) => {
+  await bookingAnswer(req, res, await dayOf.gateReady(req.params.bookingId, req.user.id));
+}));
+
+// POST /api/crew-days/uploads (multipart: photo, booking_id, purpose done|problem) → { path }: the crew's finished-work
+// photos, or the household's problem photos, for that booking only.
+router.post('/uploads', verifyToken, (req, res, next) => photoUpload.single('photo')(req, res, (err) => {
+  if (!err) return next();
+  const tooBig = err.code === 'LIMIT_FILE_SIZE';
+  return res.status(tooBig ? 413 : 400).json({ error: tooBig ? 'This photo is over 10 MB. Try a smaller copy.'
+    : 'Send one photo at a time.', code: tooBig ? 'PHOTO_TOO_LARGE' : 'VALIDATION' });
+}), handle('upload', async (req, res) => {
+  res.status(201).json(await dayOf.upload(req.user.id, { bookingId: req.body?.booking_id, purpose: req.body?.purpose || 'done',
+    buffer: req.file?.buffer }));
+}));
+
 // POST /api/crew-days/:id/bookings: book a home (201), or the same booking again for a repeated client_request_id (200).
 router.post('/:id/bookings', verifyToken, handle('book', async (req, res) => {
   const { booking, repeated } = await bookings.book(req.params.id, req.user, req.body || {});
@@ -135,12 +157,42 @@ router.post('/:id/bookings/:bookingId/release', verifyToken, handle('release', a
   res.json({ booking: await crewHomeAnswer(booking) });
 }));
 
-// The crew's view of one home after a change: the same shape as the day's `bookings` items.
+// GET /api/crew-days/:id/route?date=: the homes on that date in the crew's order (screen 16).
+router.get('/:id/route', verifyToken, handle('route', async (req, res) => {
+  res.json(await dayOf.route(req.params.id, req.user.id, req.query.date));
+}));
+
+// POST /api/crew-days/:id/route/order { booking_ids }: the crew's order for one date.
+router.post('/:id/route/order', verifyToken, handle('route_order', async (req, res) => {
+  res.json(await dayOf.order(req.params.id, req.user.id, req.body || {}));
+}));
+
+// POST /api/crew-days/:id/running-late { minutes: 30|60|90, date }: every home still waiting moves back and is told.
+router.post('/:id/running-late', verifyToken, handle('running_late', async (req, res) => {
+  res.json(await dayOf.runningLate(req.params.id, req.user.id, req.body || {}));
+}));
+
+// POST /api/crew-days/bookings/:bookingId/on-the-way { eta_start, eta_end }: "On my way" (again: a new time).
+router.post('/bookings/:bookingId/on-the-way', verifyToken, handle('on_the_way', async (req, res) => {
+  res.json({ booking: await crewHomeAnswer(await dayOf.onTheWay(req.params.bookingId, req.user.id, req.body || {})) });
+}));
+
+// POST /api/crew-days/bookings/:bookingId/cant-get-in { note }: recorded and sent to the household.
+router.post('/bookings/:bookingId/cant-get-in', verifyToken, handle('cant_get_in', async (req, res) => {
+  res.json({ booking: await crewHomeAnswer(await dayOf.cantGetIn(req.params.bookingId, req.user.id, req.body || {})) });
+}));
+
+// POST /api/crew-days/bookings/:bookingId/done { photo_paths, note? }: done, with the invoice; charged 24 hours later.
+router.post('/bookings/:bookingId/done', verifyToken, handle('done', async (req, res) => {
+  res.json({ booking: await crewHomeAnswer(await dayOf.markDone(req.params.bookingId, req.user.id, req.body || {})) });
+}));
+
+// The crew's view of one home after a change: the same shape as the day's `bookings` items, with its photos.
 async function crewHomeAnswer(booking) {
   const day = await store.getDay(booking.crew_day_id);
   const home = (await reads.crewHomes(day)).find((h) => h.id === booking.id);
   const { row, ...rest } = home;
-  return rest;
+  return (await reads.withPhotos([rest], new Map([[row.id, row]])))[0];
 }
 
 // PATCH /api/crew-days/:id: edit within the rules (an open day keeps its street, date and window).

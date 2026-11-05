@@ -16,6 +16,7 @@ const store = require('./store');
 const views = require('./views');
 const days = require('./days');
 const bookingsService = require('./bookings');
+const photos = require('./photos');
 
 const DONE_STATES = ['done', 'paid', 'payment_failed', 'refunded'];
 
@@ -64,8 +65,8 @@ function problemFor(b) {
     refunded_cents: b.refunded_cents || 0 };
 }
 
-/** The household's booking page (screen 5). Photos are signed URLs (SRV-4). */
-async function bookingPage(bookingId, userId, { photoUrls = async () => [] } = {}) {
+/** The household's booking page (screen 5). Photos are signed URLs that last an hour. */
+async function bookingPage(bookingId, userId) {
   const { booking, day } = await bookingsService.householdBooking(bookingId, userId);
   const [rows, facts, card, events] = await Promise.all([
     store.bookingsByDay([day.id]),
@@ -123,7 +124,8 @@ async function bookingPage(bookingId, userId, { photoUrls = async () => [] } = {
     invoice_id: booking.invoice_id,
     done_at: booking.done_at,
     done_note: booking.done_note,
-    photos: await photoUrls(booking.photo_paths || []),
+    photos: await photos.signedUrls(booking.photo_paths || []),
+    problem_photos: await photos.signedUrls(booking.problem_photo_paths || []),
     household_confirmed_at: booking.household_confirmed_at,
     problem: problemFor(booking),
     proposal: booking.status === 'new_dates' ? day.proposed_dates : null,
@@ -382,7 +384,20 @@ async function crewDayDetail(day, base) {
   };
 }
 
+/** Adds signed photo URLs (done and problem photos) to crew or operator homes, in one call. */
+async function withPhotos(homes, rowsById) {
+  const all = homes.flatMap((h) => [...(rowsById.get(h.id)?.photo_paths || []), ...(rowsById.get(h.id)?.problem_photo_paths || [])]);
+  const signed = new Map((await photos.signedUrls(all)).map((p) => [p.path, p]));
+  return homes.map((h) => {
+    const row = rowsById.get(h.id) || {};
+    return { ...h, photos: (row.photo_paths || []).map((p) => signed.get(p)).filter(Boolean),
+      problem_photos: (row.problem_photo_paths || []).map((p) => signed.get(p)).filter(Boolean),
+      done_note: row.done_note || null };
+  });
+}
+
 module.exports = {
+  withPhotos,
   bookingPage,
   bookingCard,
   mine,

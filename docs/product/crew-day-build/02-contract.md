@@ -131,9 +131,10 @@ both sides is drawn, and how the operator reads a case.
 
 ### Photos
 
-Completion and problem photos are images in a private storage bucket, under `crew-day/<crew_day_id>/<booking_id>/`,
-read through short-lived signed URLs. CDSRV prefers an existing private bucket and pattern; if a new bucket is needed
-it is created by the migration (additive) and listed in `FOUNDER.md` for production.
+Completion and problem photos are images in the existing private completion bucket (`GIG_COMPLETION_BUCKET`, the
+gig completion photos' bucket; no new bucket), under `crew-day/<crew_day_id>/<booking_id>/done-<uuid>.jpg` or
+`problem-<uuid>.jpg`, stored without metadata (location, camera, time; HEIC becomes JPEG, as every Pantopus photo
+upload), and read through signed URLs that last an hour (`photos: [{ path, url }]`).
 
 ## 3. Money
 
@@ -141,9 +142,9 @@ it is created by the migration (additive) and listed in `FOUNDER.md` for product
   (`backend/routes/pays.js` `GET/POST /api/pays/methods` and the existing add-card sheet / web add-card form). The
   booking stores the chosen `payment_method_id`; the server checks it belongs to the household's Stripe customer.
 - **Marking done** creates the invoice: one `BusinessInvoice` per booking (business = the crew, recipient = the
-  household, one line item per option and add-on, `total_cents` = `price_cents`, fee by
-  `stripeService.getEffectiveFeeRate`, `status` `sent`, memo "Crew Day: Gutter Day on Maple Lane, Tue, Nov 17",
-  due date = the charge day). No generic `invoice_received` notification and no Mail bill for these invoices (the
+  household, one line item per option and add-on (`{ description, amount_cents, quantity: 1 }`), `subtotal_cents` =
+  `total_cents` = `price_cents`, `fee_cents` by `stripeService.getEffectiveFeeRate` and `calculateFees`, `status`
+  `sent`, memo "Crew Day: Gutter Day on Maple Lane, Tue, Nov 17", `due_date` = `charge_due_at`). No generic `invoice_received` notification and no Mail bill for these invoices (the
   `crew_day_done` notice replaces them). It appears in the household's received invoices as usual.
 - **The charge** (`crewDayCharges` job, every 10 minutes, and at once on "Everything looks good"): for `done`
   bookings with no open problem whose `charge_due_at` has passed or that the household confirmed, pay the invoice
@@ -193,7 +194,8 @@ routes add `requireAdmin`. Rate-limit the public routes like the Plans share rou
 | `POST /api/crew-days/bookings/:bookingId/confirm` | "Everything looks good": charges now; answers with the booking (`paid` or `payment_failed`) |
 | `POST /api/crew-days/bookings/:bookingId/problem` | `{ kind, note, photo_paths }` → `problem_status` `open`, charge paused, `problem_due_at` = next business day 5 PM local; tells the operator and the crew. A second call adds a note or photos. |
 | `POST /api/crew-days/bookings/:bookingId/new-date` | `{ proposal_id, choice: "YYYY-MM-DD" or "cancel" }` |
-| `POST /api/crew-days/uploads` | multipart image (JPEG, PNG or HEIC, ≤ 10 MB; HEIC converted) → `{ path }`; household or crew of that booking |
+| `POST /api/crew-days/uploads` | multipart: `photo` (JPEG, PNG or HEIC, ≤ 10 MB; HEIC converted), `booking_id`, `purpose` (`done`: any member of that booking's crew; `problem`: that booking's household) → 201 `{ path }`. Refuses `PHOTO_TOO_LARGE` (413), `PHOTO_UNREADABLE` / `PHOTO_TYPE` (415), `NOT_FOUND` (not your booking). |
+| `POST /api/crew-days/bookings/:bookingId/gate-ready` | on the day (from 6 PM the evening before) while the crew is coming: sets `gate_ready_at`, tells the crew → `{ booking }`. `TOO_EARLY`, `NOT_ON_ROUTE` |
 | `POST /api/crew-days/requests` | `{ service, home_id, months, note }` → the request (`requested`); tells the operator |
 
 ### Crew
@@ -213,12 +215,12 @@ create, edit, prices, dates, cancel and release; any business access for reading
 | `POST /api/crew-days/:id/invite-past` | invites households this business served with a `paid` booking within the area in the last 400 days, once each → `{ invited }` |
 | `POST /api/crew-days/:id/propose-dates` | `{ dates: [{ date, window_start, window_end }] (2–3), note? }` → every `booked` booking on the original date becomes `new_dates`; deadline = 24 h before the earliest date |
 | `POST /api/crew-days/:id/cancel` | `{ reason }` → the day and every active booking `cancelled`, nobody charged |
-| `GET /api/crew-days/:id/route?date=` | ordered homes for the date, with what the job window allows |
-| `POST /api/crew-days/:id/route/order` | `{ booking_ids }` |
-| `POST /api/crew-days/bookings/:bookingId/on-the-way` | `{ eta_start, eta_end }` → `on_the_way` (the day becomes `in_progress`) |
-| `POST /api/crew-days/:id/running-late` | `{ minutes: 30, 60 or 90, date }` → shifts every remaining home's window and tells them |
-| `POST /api/crew-days/bookings/:bookingId/cant-get-in` | `{ note }` → event, tells the household |
-| `POST /api/crew-days/bookings/:bookingId/done` | `{ photo_paths (≥ 1), note? }` → `done`, the invoice, `charge_due_at` |
+| `GET /api/crew-days/:id/route?date=` | any member. `{ crew_day_id, title, date, dates, timezone, window_start, window_end, total, done, homes: [home + photos, problem_photos, done_note] }` in the crew's order (`route_position`, then booking order), each with what the job window allows. Without `date`: the first of its dates from today. |
+| `POST /api/crew-days/:id/route/order` | any member. `{ booking_ids }` (homes on one date) → the route |
+| `POST /api/crew-days/bookings/:bookingId/on-the-way` | any member, on or after the home's date. `{ eta_start, eta_end }` (ISO instants, up to 4 hours apart) → `on_the_way` (the day becomes `in_progress`) → `{ booking }` (home shape); the household gets `crew_day_on_the_way`. Again on an `on_the_way` home: a new time (`crew_day_eta_changed`). `NOT_TODAY`, `NOT_ON_ROUTE` |
+| `POST /api/crew-days/:id/running-late` | any member. `{ minutes: 30, 60 or 90, date? (today) }` → every home still `booked` or `on_the_way` that date moves its window (and its expected time) back and is told → `{ date, minutes, moved, route }`. `TOO_LATE` past midnight |
+| `POST /api/crew-days/bookings/:bookingId/cant-get-in` | any member. `{ note }` (required) → `cant_get_in_at`, event with the note, `crew_day_cant_get_in` to the household → `{ booking }` |
+| `POST /api/crew-days/bookings/:bookingId/done` | any member, on or after the home's date. `{ photo_paths (1–8, uploaded for this booking as `done`), note? }` → `done`, the invoice (below), `charge_due_at` = now + 24 h, `crew_day_done` to the household → `{ booking }` (home shape). Repeating it answers the same. |
 
 ### Shapes
 
