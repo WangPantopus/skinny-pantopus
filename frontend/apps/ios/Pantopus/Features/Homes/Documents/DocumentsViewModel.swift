@@ -77,7 +77,10 @@ final class DocumentsViewModel: ListOfRowsDataSource {
         ) { [onSearch] in onSearch() }
     }
 
+    /// Only with a current read: while loading or after a failed read there
+    /// is nothing to filter, so no zero-count chips sit above the state.
     var chipStrip: ChipStripConfig? {
+        guard documents != nil else { return nil }
         let counts = chipCounts()
         let chips: [ChipStripConfig.Chip] = DocumentsFilter.allCases.map { filter in
             let count = counts[filter] ?? 0
@@ -266,8 +269,11 @@ final class DocumentsViewModel: ListOfRowsDataSource {
         case .expiring:
             return expiresWithin(dto: dto, days: 90, now: now)
         case .shared:
-            return dto.visibility != "private"
-                && Self.sharedCount(for: dto) > 0
+            // Visible to other members counts as shared, as on Android:
+            // nothing writes `details.shared_count`, so that alone left the
+            // Shared chip empty for every real document.
+            return dto.visibility == "members" || dto.visibility == "managers"
+                || (dto.visibility != "private" && Self.sharedCount(for: dto) > 0)
         }
     }
 

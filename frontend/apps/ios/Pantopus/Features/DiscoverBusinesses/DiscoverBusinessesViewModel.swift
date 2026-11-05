@@ -127,7 +127,9 @@ public final class DiscoverBusinessesViewModel: ListOfRowsDataSource {
     public private(set) var state: ListOfRowsState = .loading
 
     public var searchBar: SearchBarConfig? {
-        SearchBarConfig(
+        // Without a home location the server can't search: nothing to narrow.
+        guard !needsHomeLocation else { return nil }
+        return SearchBarConfig(
             placeholder: "Search businesses or services",
             text: searchText
         ) { [weak self] next in
@@ -138,7 +140,8 @@ public final class DiscoverBusinessesViewModel: ListOfRowsDataSource {
     }
 
     public var chipStrip: ChipStripConfig? {
-        ChipStripConfig(
+        guard !needsHomeLocation else { return nil }
+        return ChipStripConfig(
             chips: DiscoverBusinessesChip.order.map { id in
                 ChipStripConfig.Chip(
                     id: id,
@@ -155,6 +158,9 @@ public final class DiscoverBusinessesViewModel: ListOfRowsDataSource {
     /// section grouping).
     public private(set) var selectedChip: String = DiscoverBusinessesChip.all
     public private(set) var searchText: String = ""
+    /// The last search was refused for want of a home location (400): the
+    /// "Set a home address" state shows, without a search bar or chips.
+    public private(set) var needsHomeLocation = false
 
     /// Persisted filter-sheet selection (category / distance / open-now /
     /// rating). Default = no filters.
@@ -171,6 +177,9 @@ public final class DiscoverBusinessesViewModel: ListOfRowsDataSource {
     private var results: [BusinessDiscoverySearchResponse.Item] = []
     private var loadedOnce = false
     private var pendingSearchTask: Task<Void, Never>?
+    /// Counts started reads: a chip, search or filter change starts a new
+    /// one, and an older reply that arrives later is dropped.
+    private var fetchGeneration = 0
 
     init(
         api: APIClient = .shared,
@@ -244,6 +253,8 @@ public final class DiscoverBusinessesViewModel: ListOfRowsDataSource {
     // MARK: - Fetching
 
     private func fetch() async {
+        fetchGeneration &+= 1
+        let generation = fetchGeneration
         // Preserve "loading" only on first fetch; chip + search updates
         // keep the previous list visible while the new one arrives.
         if !loadedOnce { state = .loading }
@@ -262,6 +273,8 @@ public final class DiscoverBusinessesViewModel: ListOfRowsDataSource {
         )
         do {
             let response: BusinessDiscoverySearchResponse = try await api.request(endpoint)
+            guard generation == fetchGeneration else { return }
+            needsHomeLocation = false
             results = response.results
             loadedOnce = true
             rebuild()
@@ -269,9 +282,12 @@ public final class DiscoverBusinessesViewModel: ListOfRowsDataSource {
             // "Location required" — the viewer has no resolved home and
             // didn't pass explicit lat/lon. Show the no-location empty
             // state with a Widen-radius CTA.
+            guard generation == fetchGeneration else { return }
+            needsHomeLocation = true
             state = .empty(noLocationContent())
             loadedOnce = true
         } catch {
+            guard generation == fetchGeneration else { return }
             state = .error(message: "Couldn't load businesses. Try again.")
         }
     }
@@ -354,7 +370,18 @@ public final class DiscoverBusinessesViewModel: ListOfRowsDataSource {
     }
 
     private func noResultsContent() -> ListOfRowsState.EmptyContent {
-        ListOfRowsState.EmptyContent(
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !query.isEmpty || selectedChip != DiscoverBusinessesChip.all {
+            // A search or category narrowed the list: say so, rather than
+            // that no businesses are nearby.
+            return ListOfRowsState.EmptyContent(
+                icon: .search,
+                headline: "No matching businesses",
+                subcopy: "Nothing nearby matches that yet. Try another search or category, " +
+                    "or widen your search radius in Filters."
+            )
+        }
+        return ListOfRowsState.EmptyContent(
             icon: .compass,
             headline: "No verified businesses nearby yet",
             subcopy:

@@ -155,7 +155,11 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
     /// Chip-strip filter — primary navigation for the screen. Lives on
     /// `chipStrip` (mutually exclusive with `tabs`); the shell renders
     /// it as the secondary header row beneath the top bar.
+    ///
+    /// Only with a current read: while loading, after leaving or after a
+    /// failed read there is nothing to filter, so no zero-count chips show.
     var chipStrip: ChipStripConfig? {
+        guard emergencies != nil else { return nil }
         let counts = rowsByCategory().mapValues(\.count)
         let totalCount = counts.values.reduce(0, +)
         let chips: [ChipStripConfig.Chip] = EmergencyFilter.allCases.map { filter in

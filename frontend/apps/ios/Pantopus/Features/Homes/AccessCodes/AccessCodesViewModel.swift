@@ -111,8 +111,11 @@ final class AccessCodesViewModel: ListOfRowsDataSource {
     /// view; cleared after a short window. Public so tests can assert.
     private(set) var toastMessage: String?
 
+    /// Only with a current read: after a failed or refused read there are
+    /// no codes to filter, so no zero-count chips sit above its error.
     var chipStrip: ChipStripConfig? {
-        ChipStripConfig(
+        guard loadedOnce else { return nil }
+        return ChipStripConfig(
             chips: chipConfig(),
             selectedId: selectedChip
         ) { [weak self] id in
