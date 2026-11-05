@@ -234,6 +234,7 @@ async function listForBusiness(businessUserId, userId) {
   sections.drafts.sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
   sections.pending.sort((a, b) => String(a.submitted_at || '').localeCompare(String(b.submitted_at || '')));
   sections.past.reverse();
+  await markPaidOut(sections.past);
   return {
     readiness: { published: ready.published, payouts_enabled: ready.payouts_enabled,
       documents_verified: ready.documents_verified, missing: ready.missing },
@@ -275,6 +276,28 @@ async function publicInvitation(code, user = null) {
     viewer = { role: access.hasAccess ? 'crew' : (mine ? 'household' : 'none'), booking_id: mine ? mine.id : null };
   }
   return views.invitation(day, views.dayStats(rows), store.publicCrew(facts.get(String(day.business_user_id))), viewer);
+}
+
+/** A past day is paid out once every charge's money has been transferred to the crew. */
+async function markPaidOut(cards) {
+  const charged = cards.filter((c) => c.charged_cents > 0);
+  for (const c of cards) c.paid_out = false;
+  if (!charged.length) return;
+  const { data: paid } = await supabaseAdmin.from('CrewDayBooking').select('crew_day_id, invoice_id')
+    .in('crew_day_id', charged.map((c) => c.id)).in('status', ['paid', 'refunded']);
+  const invoiceIds = (paid || []).map((b) => b.invoice_id).filter(Boolean);
+  if (!invoiceIds.length) return;
+  const { data: invoices } = await supabaseAdmin.from('BusinessInvoice').select('id, payment_id').in('id', invoiceIds);
+  const paymentIds = (invoices || []).map((i) => i.payment_id).filter(Boolean);
+  const { data: payments } = paymentIds.length
+    ? await supabaseAdmin.from('Payment').select('id, payment_status').in('id', paymentIds) : { data: [] };
+  const statusOf = new Map((payments || []).map((p) => [String(p.id), p.payment_status]));
+  const paymentOf = new Map((invoices || []).map((i) => [String(i.id), i.payment_id]));
+  for (const c of charged) {
+    const rows = (paid || []).filter((b) => String(b.crew_day_id) === String(c.id));
+    c.paid_out = rows.length > 0 && rows.every((b) => ['transferred', 'refunded_full', 'refunded_partial']
+      .includes(statusOf.get(String(paymentOf.get(String(b.invoice_id))))));
+  }
 }
 
 // ── Writes ─────────────────────────────────────────────────────
