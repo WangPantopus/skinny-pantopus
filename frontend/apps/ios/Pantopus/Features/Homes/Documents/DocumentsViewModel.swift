@@ -269,8 +269,11 @@ final class DocumentsViewModel: ListOfRowsDataSource {
         case .expiring:
             return expiresWithin(dto: dto, days: 90, now: now)
         case .shared:
-            return dto.visibility != "private"
-                && Self.sharedCount(for: dto) > 0
+            // Visible to other members counts as shared, as on Android:
+            // nothing writes `details.shared_count`, so that alone left the
+            // Shared chip empty for every real document.
+            return dto.visibility == "members" || dto.visibility == "managers"
+                || (dto.visibility != "private" && Self.sharedCount(for: dto) > 0)
         }
     }
 

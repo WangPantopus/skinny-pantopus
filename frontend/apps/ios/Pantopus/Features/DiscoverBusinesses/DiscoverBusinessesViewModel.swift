@@ -127,7 +127,9 @@ public final class DiscoverBusinessesViewModel: ListOfRowsDataSource {
     public private(set) var state: ListOfRowsState = .loading
 
     public var searchBar: SearchBarConfig? {
-        SearchBarConfig(
+        // Without a home location the server can't search: nothing to narrow.
+        guard !needsHomeLocation else { return nil }
+        return SearchBarConfig(
             placeholder: "Search businesses or services",
             text: searchText
         ) { [weak self] next in
@@ -138,7 +140,8 @@ public final class DiscoverBusinessesViewModel: ListOfRowsDataSource {
     }
 
     public var chipStrip: ChipStripConfig? {
-        ChipStripConfig(
+        guard !needsHomeLocation else { return nil }
+        return ChipStripConfig(
             chips: DiscoverBusinessesChip.order.map { id in
                 ChipStripConfig.Chip(
                     id: id,
@@ -155,6 +158,9 @@ public final class DiscoverBusinessesViewModel: ListOfRowsDataSource {
     /// section grouping).
     public private(set) var selectedChip: String = DiscoverBusinessesChip.all
     public private(set) var searchText: String = ""
+    /// The last search was refused for want of a home location (400): the
+    /// "Set a home address" state shows, without a search bar or chips.
+    public private(set) var needsHomeLocation = false
 
     /// Persisted filter-sheet selection (category / distance / open-now /
     /// rating). Default = no filters.
@@ -268,6 +274,7 @@ public final class DiscoverBusinessesViewModel: ListOfRowsDataSource {
         do {
             let response: BusinessDiscoverySearchResponse = try await api.request(endpoint)
             guard generation == fetchGeneration else { return }
+            needsHomeLocation = false
             results = response.results
             loadedOnce = true
             rebuild()
@@ -276,6 +283,7 @@ public final class DiscoverBusinessesViewModel: ListOfRowsDataSource {
             // didn't pass explicit lat/lon. Show the no-location empty
             // state with a Widen-radius CTA.
             guard generation == fetchGeneration else { return }
+            needsHomeLocation = true
             state = .empty(noLocationContent())
             loadedOnce = true
         } catch {
