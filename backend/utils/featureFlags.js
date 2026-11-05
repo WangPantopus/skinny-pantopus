@@ -37,6 +37,7 @@ const LAUNCH_FEATURE_KEYS = [
   'mailbox', // 10. The mailbox: received mail, Mail Day, vault, vacation hold, Stamps (2026-10-09)
   'pulse_redesign', // 11. The Pulse redesign (PR 625), paused for launch (2026-10-15); the October 13 Pulse stays
   'holiday_cards', // 12. Christmas cards sent through Mail (2026-10-30); needs `mailbox` on too
+  'crew_day', // 13. Crew Day: street days booked and paid per home (2026-11-05, docs/product/crew-day-build/)
 ];
 
 function isLaunchFeatureEnabled(key) {
@@ -141,6 +142,16 @@ const LAUNCH_NOTIFICATION_TYPE_FEATURES = {
   offer_chosen: ['pulse_redesign'],
   offer_gone: ['pulse_redesign'],
   ask_still_open: ['pulse_redesign'],
+  // 13. Crew Day: every notice about a booking, a street day or a street request
+  // (docs/product/crew-day-build/02-contract.md §6).
+  ...Object.fromEntries([
+    'crew_day_booked', 'crew_day_price_offered', 'crew_day_reminder', 'crew_day_on_the_way', 'crew_day_eta_changed',
+    'crew_day_cant_get_in', 'crew_day_done', 'crew_day_charged', 'crew_day_charge_failed', 'crew_day_new_dates',
+    'crew_day_cancelled', 'crew_day_problem_update', 'crew_day_request_answered', 'crew_day_invite',
+    'crew_day_approved', 'crew_day_declined', 'crew_day_new_booking', 'crew_day_price_needed',
+    'crew_day_booking_cancelled', 'crew_day_release_asked', 'crew_day_gate_ready', 'crew_day_problem',
+    'crew_day_dates_answered', 'crew_day_review_needed', 'crew_day_problem_opened', 'crew_day_request_new',
+  ].map((type) => [type, ['crew_day']])),
 };
 
 // The audience stream (context 'audience') is Beacon/persona only.
