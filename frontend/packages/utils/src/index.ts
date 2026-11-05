@@ -85,6 +85,21 @@ export function buildPlanAppUrl(planId: string): string {
   return `pantopus:///plans/${encodeURIComponent(planId)}`;
 }
 
+// ─── Crew Day invitation links (mirror buildPlan*) ───────────
+
+/** A Crew Day's invitation: /crew-day/:code (its share code). */
+export function buildCrewDayPath(code: string): string {
+  return `/crew-day/${encodeURIComponent(code)}`;
+}
+
+export function buildCrewDayShareUrl(code: string): string {
+  return `${APP_WEB_URL}${buildCrewDayPath(code)}`;
+}
+
+export function buildCrewDayAppUrl(code: string): string {
+  return `pantopus:///crew-day/${encodeURIComponent(code)}`;
+}
+
 // ─── Calendarly booking links (mirror buildSupportTrain*) ────
 
 /** Public booking page path: /book/:slug (slug = booking PAGE slug). */
