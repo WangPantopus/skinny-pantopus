@@ -466,6 +466,18 @@ export type {
   SupportTrainDeliveryLocation,
 } from './supportTrain';
 
+// ─── Re-exports from Crew Day (launch cut #13) ───────────────
+
+export type {
+  CrewDayService,
+  CrewDayPriceOption,
+  CrewDayAddOn,
+  CrewDayAvailability,
+  CrewDayCrew,
+  CrewDayViewer,
+  PublicCrewDay,
+} from './crewDay';
+
 // ─── Re-exports from Calendarly scheduling contract (W0) ────
 
 export type {
