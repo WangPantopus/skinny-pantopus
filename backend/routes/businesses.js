@@ -5198,6 +5198,9 @@ async function knownInvoiceRecipients(businessId, senderId, onlyUserId = null) {
       .eq('user_id', businessId).eq('room.type', 'direct')
       .neq('room.member.user_id', businessId).neq('room.reply.user_id', businessId)
       .limit(1, { referencedTable: 'room.reply' }), 'room.member.user_id', 'joined_at'),
+    // Households with a booking on one of the crew's street days (Crew Day), so it can invoice extra work.
+    recent(supabaseAdmin.from('CrewDayBooking').select('household_user_id, day:crew_day_id!inner(business_user_id)')
+      .eq('day.business_user_id', businessId), 'household_user_id', 'created_at'),
     onlyUserId
       ? connected.or([[senderId, onlyUserId], [onlyUserId, senderId]]
         .map(([a, b]) => `and(requester_id.eq.${a},addressee_id.eq.${b})`).join(',')).limit(1)
@@ -5206,7 +5209,7 @@ async function knownInvoiceRecipients(businessId, senderId, onlyUserId = null) {
   ]);
   const failed = sources.find((r) => r.error);
   if (failed) throw failed.error;
-  const [invoiced, booked, hired, wrote, connections] = sources.map((r) => r.data || []);
+  const [invoiced, booked, hired, wrote, crewDays, connections] = sources.map((r) => r.data || []);
 
   const known = new Map();
   const excluded = new Set([businessId, senderId].map((id) => String(id).toLowerCase()));
@@ -5217,6 +5220,7 @@ async function knownInvoiceRecipients(businessId, senderId, onlyUserId = null) {
   booked.forEach((r) => add(r.invitee_user_id, 'booked'));
   hired.forEach((r) => add(r.user_id, 'hired'));
   wrote.forEach((r) => r.room.member.forEach((m) => add(m.user_id, 'messaged')));
+  crewDays.forEach((r) => add(r.household_user_id, 'crew_day'));
   connections.forEach((r) => add(r.requester_id === senderId ? r.addressee_id : r.requester_id, 'connection'));
   return known;
 }
