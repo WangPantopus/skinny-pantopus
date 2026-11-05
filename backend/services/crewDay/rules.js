@@ -11,37 +11,37 @@ const { DateTime } = require('luxon');
 const DEFAULT_TIMEZONE = 'America/Los_Angeles';
 
 // label: the service tag and the request chips; day: the title's first words ("Gutter Day on Maple Lane");
-// included: what the New Crew Day wizard prefills.
+// included: what the New Crew Day wizard prefills ("Outside only" is the day's own `outside_only` line, never an item).
 const SERVICES = {
   gutter_cleaning: {
     label: 'Gutter cleaning',
     day: 'Gutter Day',
-    included: ['Cleans every gutter by hand', 'Flushes each downspout', 'Bags the debris and takes it away', 'Outside only'],
+    included: ['Cleans every gutter by hand', 'Flushes each downspout', 'Bags the debris and takes it away'],
   },
   leaf_cleanup: {
     label: 'Leaf cleanup',
     day: 'Leaf Day',
-    included: ['Rakes leaves from the lawn and beds', 'Clears the walkways and the driveway', 'Bags the leaves and takes them away', 'Outside only'],
+    included: ['Rakes leaves from the lawn and beds', 'Clears the walkways and the driveway', 'Bags the leaves and takes them away'],
   },
   roof_moss: {
     label: 'Roof moss',
     day: 'Roof Moss Day',
-    included: ['Removes moss from the roof by hand', 'Treats the roof against regrowth', 'Clears what falls into the gutters', 'Outside only'],
+    included: ['Removes moss from the roof by hand', 'Treats the roof against regrowth', 'Clears what falls into the gutters'],
   },
   holiday_lights: {
     label: 'Holiday lights',
     day: 'Holiday Lights Day',
-    included: ['Hangs lights along the roofline', 'Uses clips that leave no marks', 'Tests every strand before leaving', 'Outside only'],
+    included: ['Hangs lights along the roofline', 'Uses clips that leave no marks', 'Tests every strand before leaving'],
   },
   window_washing: {
     label: 'Window washing',
     day: 'Window Day',
-    included: ['Washes every outside window', 'Wipes the frames and sills', 'Leaves no streaks or drips', 'Outside only'],
+    included: ['Washes every outside window', 'Wipes the frames and sills', 'Leaves no streaks or drips'],
   },
   pressure_washing: {
     label: 'Pressure washing',
     day: 'Pressure Washing Day',
-    included: ['Washes the driveway and walkways', 'Rinses the front steps', 'Clears the moss and stains it can', 'Outside only'],
+    included: ['Washes the driveway and walkways', 'Rinses the front steps', 'Clears the moss and stains it can'],
   },
   other: { label: 'Something else', day: 'Crew Day', included: [] },
 };
