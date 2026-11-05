@@ -108,5 +108,10 @@ export function uploadPhoto(bookingId: string, purpose: 'problem' | 'done', phot
   form.append('photo', photo);
   form.append('booking_id', bookingId);
   form.append('purpose', purpose);
-  return post<{ path: string }>(`${BASE}/uploads`, form);
+  // Without the multipart type the client's JSON default turns the form into JSON and drops the file.
+  return post<{ path: string }>(`${BASE}/uploads`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    // Up to 10 MB going up on a phone's connection.
+    timeout: 60000,
+  });
 }

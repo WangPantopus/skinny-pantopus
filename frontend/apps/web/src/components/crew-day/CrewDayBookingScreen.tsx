@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -115,7 +115,7 @@ function Body({ children }: { children: ReactNode }) {
   return <p className="text-[0.9375rem] leading-[1.375rem] text-app-text-strong">{children}</p>;
 }
 
-function Photos({ photos }: { photos: CrewDayBookingPage['photos'] }) {
+function Photos({ photos, what = 'of the finished work' }: { photos: CrewDayBookingPage['photos']; what?: string }) {
   if (!photos.length) return null;
   return (
     <div className="grid grid-cols-3 gap-2">
@@ -123,31 +123,144 @@ function Photos({ photos }: { photos: CrewDayBookingPage['photos'] }) {
         <a key={photo.path} href={photo.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-xl bg-app-surface-sunken">
           {/* Signed, short-lived URLs from the private bucket: a plain img, never the image optimizer. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={photo.url} alt={`Photo ${index + 1} of the finished work`} className="aspect-square w-full object-cover" />
+          <img src={photo.url} alt={`Photo ${index + 1} ${what}`} className="aspect-square w-full object-cover" />
         </a>
       ))}
     </div>
   );
 }
 
-function Steps({ steps }: { steps: CrewDayBookingPage['steps'] }) {
+const RESOLVED_LINE: Record<string, string> = {
+  released: 'Pantopus support released the charge.',
+  refunded: 'Pantopus support refunded you.',
+  partial_refund: 'Pantopus support refunded part of the charge.',
+  resolved: 'Pantopus support closed this case.',
+};
+
+/** The case so far (board `CdAttention`), from the timeline the household may see, from the report on. */
+function caseTimeline(b: CrewDayBookingPage): Array<{ id: string; at: string; text: string }> {
+  const tz = b.crew_day.timezone;
+  const start = b.events.findIndex((e) => e.kind === 'problem_opened');
+  if (start < 0) return [];
+  const note = (e: CrewDayBookingPage['events'][number]) => (typeof e.data?.note === 'string' && e.data.note.trim() ? e.data.note.trim() : null);
+  const lines: Array<{ id: string; at: string; text: string }> = [];
+  for (const e of b.events.slice(start)) {
+    let text: string | null = null;
+    if (e.kind === 'problem_opened') text = 'You reported a problem. Your charge paused.';
+    else if (e.kind === 'problem_note') text = note(e) ? `You added: “${note(e)}”` : 'You added photos.';
+    else if (e.kind === 'operator_note') text = note(e) ? `Pantopus support: ${note(e)}` : null;
+    else if (e.kind === 'refunded' && typeof e.data?.amount_cents === 'number') text = `Refunded ${formatPrice(e.data.amount_cents)}.`;
+    else if (e.kind === 'problem_resolved') text = [RESOLVED_LINE[String(e.data?.resolution)] ?? RESOLVED_LINE.resolved, note(e)].filter(Boolean).join(' ');
+    else if (e.kind === 'charged' || e.kind === 'paid_by_household') text = 'Your charge went through.';
+    if (text) lines.push({ id: e.id, at: `${formatInstantDate(e.created_at, tz)} · ${formatInstantTime(e.created_at, tz)}`, text });
+  }
+  return lines;
+}
+
+function CaseTimeline({ lines }: { lines: ReturnType<typeof caseTimeline> }) {
+  if (!lines.length) return null;
   return (
-    <ol aria-label="Where your booking is" className="flex flex-wrap gap-x-1 gap-y-2">
-      {steps.map((step, index) => (
-        <li key={step.key} className="flex min-w-[min(5rem,100%)] flex-1 items-center gap-1.5">
-          <span
-            aria-hidden="true"
-            className={`grid h-5 w-5 flex-none place-items-center rounded-full ${step.state === 'done' ? 'bg-app-home text-white dark:text-[#0b1220]' : step.state === 'current' ? 'border-2 border-app-home' : 'border border-app-border-strong'}`}
-          >
-            {step.state === 'done' ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
-          </span>
-          <span className={`text-[0.8125rem] leading-[1.125rem] ${step.state === 'todo' ? 'text-app-text-secondary' : 'font-semibold text-app-text'}`}>
-            {step.label}
-            <span className="sr-only">{step.state === 'done' ? ', done' : step.state === 'current' ? ', now' : ''}</span>
-          </span>
-          {index < steps.length - 1 ? <span aria-hidden="true" className="h-px flex-1 bg-app-border" /> : null}
+    <ol aria-label="What has happened" className="flex flex-col gap-3 border-l-2 border-app-border pl-3">
+      {lines.map((line) => (
+        <li key={line.id} className="flex flex-col gap-0.5">
+          <span className="text-[0.8125rem] leading-[1.125rem] text-app-text-secondary [font-variant-numeric:tabular-nums]">{line.at}</span>
+          <span className="text-[0.9375rem] leading-[1.375rem]">{line.text}</span>
         </li>
       ))}
+    </ol>
+  );
+}
+
+type StepTone = 'normal' | 'warning' | 'error';
+
+/** The board's words for a step the booking is stuck on: "Pick a date", "Paused", "Payment due". */
+function stepsFor(b: CrewDayBookingPage): Array<CrewDayBookingPage['steps'][number] & { tone: StepTone }> {
+  return b.steps.map((step) => {
+    if (b.status === 'new_dates' && step.key === 'booked') return { ...step, label: 'Pick a date', state: 'current', tone: 'warning' };
+    if (b.problem?.status === 'open' && step.key === 'paid') return { ...step, label: 'Paused', state: 'current', tone: 'warning' };
+    if (b.status === 'payment_failed' && step.key === 'paid') return { ...step, label: 'Payment due', state: 'current', tone: 'error' };
+    return { ...step, tone: 'normal' };
+  });
+}
+
+function StepDot({ step }: { step: ReturnType<typeof stepsFor>[number] }) {
+  const ring =
+    step.tone === 'warning'
+      ? 'border-2 border-app-warning'
+      : step.tone === 'error'
+        ? 'border-2 border-app-error'
+        : step.state === 'done'
+          ? 'bg-app-home text-white dark:text-[#0b1220]'
+          : step.state === 'current'
+            ? 'border-2 border-app-home'
+            : 'border border-app-border-strong';
+  const dot = step.tone === 'warning' ? 'bg-app-warning' : step.tone === 'error' ? 'bg-app-error' : 'bg-app-home';
+  return (
+    <span aria-hidden="true" className={`grid h-5 w-5 flex-none place-items-center rounded-full ${ring}`}>
+      {step.state === 'done' && step.tone === 'normal' ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
+      {step.state === 'current' ? <i className={`h-2 w-2 rounded-full ${dot}`} /> : null}
+    </span>
+  );
+}
+
+function StepLabel({ step, className = '' }: { step: ReturnType<typeof stepsFor>[number]; className?: string }) {
+  const ink =
+    step.tone === 'warning'
+      ? 'font-semibold text-app-warning'
+      : step.tone === 'error'
+        ? 'font-semibold text-app-error'
+        : step.state === 'todo'
+          ? 'text-app-text-secondary'
+          : 'font-semibold text-app-text';
+  return (
+    <span className={`text-[0.8125rem] leading-[1.125rem] ${ink} ${className}`}>
+      {step.label}
+      <span className="sr-only">{step.state === 'done' ? ', done' : step.state === 'current' ? ', now' : ''}</span>
+    </span>
+  );
+}
+
+/**
+ * The four-step status line (board `CrewDay`): four columns, each a dot on the line with its word under it. With
+ * large text (root size 150% or more) it becomes a list, so no word has to squeeze into a quarter of the width.
+ */
+function Steps({ steps }: { steps: ReturnType<typeof stepsFor> }) {
+  const ref = useRef<HTMLOListElement>(null);
+  const [asList, setAsList] = useState(false);
+  useEffect(() => {
+    const measure = () => setAsList(parseFloat(getComputedStyle(document.documentElement).fontSize) >= 24);
+    measure();
+    const observer = typeof ResizeObserver === 'function' && ref.current ? new ResizeObserver(measure) : null;
+    if (observer && ref.current) observer.observe(ref.current);
+    return () => observer?.disconnect();
+  }, []);
+  if (asList) {
+    return (
+      <ol ref={ref} aria-label="Where your booking is" className="flex flex-col gap-2.5">
+        {steps.map((step) => (
+          <li key={step.key} className="flex items-center gap-2.5">
+            <StepDot step={step} />
+            <StepLabel step={step} />
+          </li>
+        ))}
+      </ol>
+    );
+  }
+  return (
+    <ol ref={ref} aria-label="Where your booking is" className="grid grid-cols-4">
+      {steps.map((step, index) => {
+        const next = steps[index + 1];
+        return (
+          <li key={step.key} className="flex min-w-0 flex-col items-center gap-1.5">
+            <span aria-hidden="true" className="flex w-full items-center">
+              <i className={`h-0.5 flex-1 ${index === 0 ? '' : step.state !== 'todo' ? 'bg-app-home' : 'bg-app-border'}`} />
+              <StepDot step={step} />
+              <i className={`h-0.5 flex-1 ${!next ? '' : next.state !== 'todo' ? 'bg-app-home' : 'bg-app-border'}`} />
+            </span>
+            <StepLabel step={step} className="text-center" />
+          </li>
+        );
+      })}
     </ol>
   );
 }
@@ -250,6 +363,8 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
   const problemOpen = b.problem?.status === 'open';
   const ended = ['cancelled', 'declined', 'refunded'].includes(b.status);
   const proposal = b.status === 'new_dates' ? b.proposal : null;
+  // After a failed charge the household pays the invoice in Pantopus, maybe with another card: never name the saved one.
+  const paidInApp = b.events.some((e) => e.kind === 'paid_by_household');
   const chosenDate = proposal?.dates.find((d) => d.date === dateChoice) ?? null;
 
   let state: ReactNode;
@@ -260,10 +375,12 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
           <span className="text-xs font-semibold uppercase tracking-[0.07em] text-app-text-secondary">You said</span>
           <span className="text-[0.9375rem] leading-[1.375rem]">{b.problem.note || PROBLEM_LABEL[b.problem.kind]}</span>
         </div>
+        <Photos photos={b.problem_photos ?? []} what="you sent" />
         <Body>
           {price ? `Your ${price} charge is paused while we sort it out.` : 'Your charge is paused while we sort it out.'}
           {b.problem.due_at ? ` We'll reply by ${formatInstantTime(b.problem.due_at, tz)} ${formatInstantDate(b.problem.due_at, tz)}.` : ''}
         </Body>
+        <CaseTimeline lines={caseTimeline(b)} />
         <Link href={`/app/crew-days/bookings/${encodeURIComponent(b.id)}/problem`} className={CREW_DAY_SECONDARY_BUTTON}>
           Add a note or photo
         </Link>
@@ -405,7 +522,7 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
     state = (
       <StateCard tone="success" icon={CreditCard} title={`Paid ${price ?? ''}${b.charge.paid_at ? ` · ${formatInstantDate(b.charge.paid_at, tz)}` : ''}`.trim()}>
         <p className="text-[0.9375rem] leading-[1.375rem] text-app-text-strong">
-          {card(b)}
+          {paidInApp ? 'Paid in Pantopus' : card(b)}
           {b.invoice_id ? (
             <>
               {' · '}
@@ -494,19 +611,25 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
   }
 
   const cardSub =
-    b.status === 'price_pending' || b.status === 'price_offered'
-      ? 'Saved. Nothing is charged yet.'
-      : b.status === 'new_dates'
-        ? 'Saved. No payment has been taken.'
-        : problemOpen
-          ? 'Charge paused'
-          : b.status === 'done' && b.charge.due_at
-            ? `Charges ${formatInstantDate(b.charge.due_at, tz)} at ${formatInstantTime(b.charge.due_at, tz)}`
-            : b.status === 'paid' && b.charge.paid_at
-              ? `Charged ${formatInstantDate(b.charge.paid_at, tz)}`
-              : b.status === 'payment_failed'
-                ? "Didn't go through"
-                : 'Saved. Charged only after the work.';
+    b.status === 'cancelled' || b.status === 'declined'
+      ? 'Nothing was charged.'
+      : b.status === 'refunded'
+        ? 'Charged, then refunded in full.'
+        : b.status === 'price_pending' || b.status === 'price_offered'
+        ? 'Saved. Nothing is charged yet.'
+        : b.status === 'new_dates'
+          ? 'Saved. No payment has been taken.'
+          : problemOpen
+            ? 'Charge paused'
+            : b.status === 'done' && b.charge.due_at
+              ? `Charges ${formatInstantDate(b.charge.due_at, tz)} at ${formatInstantTime(b.charge.due_at, tz)}`
+              : b.status === 'paid' && paidInApp
+                ? "Didn't go through. You paid in Pantopus."
+                : b.status === 'paid' && b.charge.paid_at
+                  ? `Charged ${formatInstantDate(b.charge.paid_at, tz)}`
+                  : b.status === 'payment_failed'
+                    ? "Didn't go through"
+                    : 'Saved. Charged only after the work.';
   const showNote = !ended && b.status !== 'paid';
   const cutoffLine = b.can_cancel && b.cancel_cutoff_at
     ? `Free cancellation until ${formatInstantDate(b.cancel_cutoff_at, tz)}, ${formatInstantTime(b.cancel_cutoff_at, tz)}`
@@ -583,7 +706,7 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
         </div>
       </div>
 
-      {!ended ? <Steps steps={b.steps} /> : null}
+      {!ended ? <Steps steps={stepsFor(b)} /> : null}
 
       {state}
 
@@ -611,7 +734,16 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
           </div>
           <div className="flex items-start gap-3 p-[0.875rem]">
             <Tag className="mt-0.5 h-5 w-5 flex-none text-app-text-strong" aria-hidden="true" />
-            <span className="text-base leading-[1.3125rem]">{price ? `${price} · including tax` : 'After a look'}</span>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-base leading-[1.3125rem]">{price ? `${price} · including tax` : 'After a look'}</span>
+              {b.charge.refunded_cents > 0 && b.price_cents != null ? (
+                <span className="text-sm leading-5 text-app-text-secondary">
+                  {b.charge.refunded_cents >= b.price_cents
+                    ? `Refunded in full`
+                    : `${formatPrice(b.charge.refunded_cents)} refunded · ${formatPrice(b.price_cents - b.charge.refunded_cents)} paid`}
+                </span>
+              ) : null}
+            </div>
           </div>
           <div className="flex items-start gap-3 p-[0.875rem]">
             <CreditCard className="mt-0.5 h-5 w-5 flex-none text-app-text-strong" aria-hidden="true" />
