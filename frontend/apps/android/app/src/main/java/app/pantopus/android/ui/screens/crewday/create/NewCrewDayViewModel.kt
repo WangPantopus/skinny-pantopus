@@ -1,4 +1,4 @@
-@file:Suppress("TooManyFunctions")
+@file:Suppress("TooManyFunctions", "MagicNumber")
 
 package app.pantopus.android.ui.screens.crewday.create
 
@@ -10,8 +10,8 @@ import app.pantopus.android.data.api.models.crewday.CrewDayCenterDto
 import app.pantopus.android.data.api.models.crewday.CrewDayCreateBody
 import app.pantopus.android.data.api.models.crewday.CrewDayDto
 import app.pantopus.android.data.api.models.crewday.CrewDayFeeDto
-import app.pantopus.android.data.api.models.crewday.CrewDayServiceDto
 import app.pantopus.android.data.api.models.crewday.CrewDayPriceOptionDto
+import app.pantopus.android.data.api.models.crewday.CrewDayServiceDto
 import app.pantopus.android.data.api.models.geo.GeoSuggestion
 import app.pantopus.android.data.api.models.geo.NormalizedAddress
 import app.pantopus.android.data.api.net.NetworkResult
