@@ -11,6 +11,8 @@ const rules = require('./rules');
 function dayStats(bookings = [], now = new Date()) {
   const active = bookings.filter((b) => !rules.INACTIVE_BOOKING_STATUSES.includes(b.status));
   const sum = (rows) => rows.reduce((total, b) => total + (Number(b.price_cents) || 0), 0);
+  const refunded = (rows) => rows.reduce((total, b) => total + (Number(b.refunded_cents) || 0), 0);
+  const priced = active.filter((b) => b.price_cents != null);
   const paid = active.filter((b) => b.status === 'paid');
   const paused = active.filter((b) => b.status === 'done' && b.problem_status === 'open');
   const scheduled = active.filter((b) => b.status === 'done' && b.problem_status !== 'open');
@@ -20,10 +22,11 @@ function dayStats(bookings = [], now = new Date()) {
     price_checks: active.filter((b) => b.status === 'price_pending').length,
     release_asks: active.filter((b) => b.release_asked_at && !['done', 'paid', 'payment_failed'].includes(b.status)).length,
     done_count: active.filter((b) => ['done', 'paid', 'payment_failed'].includes(b.status)).length,
-    charged_cents: sum(paid) - paid.reduce((total, b) => total + (Number(b.refunded_cents) || 0), 0),
+    charged_cents: sum(paid) - refunded(paid),
     scheduled_cents: sum(scheduled),
     paused_cents: sum(paused),
-    gross_cents: sum(active.filter((b) => b.price_cents != null)),
+    // What the priced homes come to, less any amount Pantopus support took off.
+    gross_cents: sum(priced) - refunded(priced),
     dates,
     now,
   };
@@ -39,7 +42,7 @@ function chargeState(b) {
   return 'not_yet';
 }
 
-/** The money preview and the after-the-day totals: gross of every priced booking, and the crew's share. */
+/** The money preview and the after-the-day totals: what the priced bookings come to, and the crew's share. */
 function money(stats, feeRatePct) {
   const rate = feeRatePct == null ? null : Number(feeRatePct);
   const net = (cents) => (rate == null ? null : Math.round((cents * (100 - rate)) / 100));
