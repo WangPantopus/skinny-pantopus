@@ -131,10 +131,10 @@ private fun ServiceStep(
                 Column(modifier = Modifier.weight(1f).testTag("crewDayNewIncluded_$index")) {
                     PlanTextArea(
                         value = item,
-                        onValue = { viewModel.setIncluded(index, it) },
+                        onValue = { viewModel.setIncluded(index, oneLine(it)) },
                         placeholder = "What the crew does",
                         label = "Included item ${index + 1}",
-                        singleLine = true,
+                        minHeight = LINE_FIELD_HEIGHT,
                     )
                 }
                 if (state.included.size > 1) {
@@ -314,10 +314,10 @@ private fun PricesStep(
                         Column(modifier = Modifier.weight(1f)) {
                             PlanTextArea(
                                 value = option.label,
-                                onValue = { viewModel.setOption(index, option.copy(label = it)) },
+                                onValue = { viewModel.setOption(index, option.copy(label = oneLine(it))) },
                                 placeholder = "Two stories",
                                 label = "Price ${index + 1} name",
-                                singleLine = true,
+                                minHeight = LINE_FIELD_HEIGHT,
                             )
                         }
                         if (!option.needsLook) {
@@ -363,10 +363,10 @@ private fun PricesStep(
                 Column(modifier = Modifier.weight(1f)) {
                     PlanTextArea(
                         value = addOn.label,
-                        onValue = { viewModel.setAddOn(index, addOn.copy(label = it)) },
+                        onValue = { viewModel.setAddOn(index, addOn.copy(label = oneLine(it))) },
                         placeholder = "Clean the gutter guards",
                         label = "Add-on ${index + 1} name",
-                        singleLine = true,
+                        minHeight = LINE_FIELD_HEIGHT,
                     )
                 }
                 Column(modifier = Modifier.width(PRICE_WIDTH)) {
@@ -544,3 +544,12 @@ private fun SentStep(state: NewCrewDayState) {
         )
     }
 }
+
+/**
+ * One line of text that wraps as it's typed (an included item, a price's or an add-on's name): at large text sizes a
+ * single-line field would hide most of it. A typed line break becomes a space.
+ */
+private fun oneLine(text: String): String = text.replace('\n', ' ')
+
+/** A wrapping one-line field starts as tall as a single-line one. */
+private val LINE_FIELD_HEIGHT = 48.dp
