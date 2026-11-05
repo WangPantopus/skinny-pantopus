@@ -31,6 +31,56 @@ public extension View {
     func centeredClearOfFold(minHeight: CGFloat, bottomClearance: CGFloat = 0) -> some View {
         modifier(CenteredClearOfFold(minHeight: minHeight, bottomClearance: bottomClearance))
     }
+
+    /// For a bar's button that stays put while the screen scrolls (a form's bottom button, a wizard's Continue):
+    /// while the iPhone Duo is half folded like a book with the fold down through it, the button takes the larger
+    /// side beside the fold, at that side's width, instead of running across the fold. Everywhere else it keeps the
+    /// width offered.
+    func besideFold() -> some View {
+        modifier(BesideFold())
+    }
+}
+
+private struct BesideFold: ViewModifier {
+    @State private var fold: CGRect?
+
+    func body(content: Content) -> some View {
+        FoldSideLayout(fold: fold) { content }
+            .readsActiveFold($fold)
+    }
+}
+
+/// Lays its one subview out across the width offered, or, where a fold runs down through it, in the larger side
+/// beside the fold (the leading one when they match) at that side's width.
+private struct FoldSideLayout: Layout {
+    let fold: CGRect?
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
+        guard let content = subviews.first else { return .zero }
+        let width = proposal.width ?? content.sizeThatFits(proposal).width
+        let side = side(in: CGRect(x: 0, y: 0, width: width, height: proposal.height ?? 0))?.width ?? width
+        return CGSize(width: width, height: content.sizeThatFits(ProposedViewSize(width: side, height: proposal.height)).height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
+        guard let content = subviews.first else { return }
+        let area = side(in: bounds) ?? bounds
+        content.place(
+            at: CGPoint(x: area.midX, y: bounds.midY),
+            anchor: .center,
+            proposal: ProposedViewSize(width: area.width, height: bounds.height)
+        )
+    }
+
+    /// The larger side of `bounds` beside a fold that runs down through it; nil for no fold or one across it.
+    private func side(in bounds: CGRect) -> CGRect? {
+        guard let fold else { return nil }
+        let crease = fold.offsetBy(dx: bounds.minX, dy: bounds.minY)
+        guard crease.height > crease.width, crease.minX > bounds.minX, crease.maxX < bounds.maxX else { return nil }
+        let leading = CGRect(x: bounds.minX, y: bounds.minY, width: crease.minX - bounds.minX, height: bounds.height)
+        let trailing = CGRect(x: crease.maxX, y: bounds.minY, width: bounds.maxX - crease.maxX, height: bounds.height)
+        return leading.width >= trailing.width ? leading : trailing
+    }
 }
 
 private struct CenteredClearOfFold: ViewModifier {
