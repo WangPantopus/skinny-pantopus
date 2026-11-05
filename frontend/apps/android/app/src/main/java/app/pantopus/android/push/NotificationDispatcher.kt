@@ -157,6 +157,8 @@ class NotificationDispatcher
                 HomeTaskNotificationRoute.pushPath(data)
                     // A brief or nudge opens the assistant at its message, in the conversation it was added to.
                     ?: DeepLinkRouter.assistantNotificationPath(data["type"], data["notificationId"], data["link"], data["conversation_id"])
+                    // A Crew Day push with no link opens its booking, else the crew's day.
+                    ?: DeepLinkRouter.crewDayNotificationPath(data["type"], data["link"], data["booking_id"], data["crew_day_id"])
                     ?: DeepLinkRouter.notificationPath(data["type"], data["link"])
                     ?: data["deepLink"]
                     ?: briefingOrReceiptLink(data)

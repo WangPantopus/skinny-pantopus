@@ -983,9 +983,17 @@ class NotificationsViewModel
             if (!mayOpenTask(dto)) return
             // A brief or nudge opens the assistant at its message, in the conversation it was added to.
             val conversationId = (dto.metadata as? Map<*, *>)?.get("conversation_id") as? String
+            val metadata = dto.metadata as? Map<*, *>
             val link =
                 DeepLinkRouter.assistantNotificationPath(dto.type, dto.id, dto.link, conversationId)
                     ?: HomeTaskNotificationRoute.metadataPath(dto.type, dto.metadata)
+                    // A Crew Day notice with no link opens its booking, else the crew's day.
+                    ?: DeepLinkRouter.crewDayNotificationPath(
+                        dto.type,
+                        dto.link,
+                        metadata?.get("booking_id") as? String,
+                        metadata?.get("crew_day_id") as? String,
+                    )
                     ?: DeepLinkRouter.notificationPath(dto.type, dto.link)
             if (!link.isNullOrEmpty()) {
                 val gigId = DeepLinkRouter.gigIdForLink(link)

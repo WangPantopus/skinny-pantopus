@@ -36,6 +36,9 @@ import java.net.URLDecoder
 object DeepLinkRouter {
     private const val BUSINESS_CONVERSATION_SEGMENTS = 4
 
+    /** `businesses/<id>/crew-days/<crewDayId>`. */
+    private const val BUSINESS_CREW_DAY_SEGMENTS = 4
+
     /**
      * How a resolved destination should be handled relative to auth.
      */
@@ -421,6 +424,30 @@ object DeepLinkRouter {
         data object PlansTab : Destination
 
         /**
+         * Crew Day: `/crew-day/<code>` (and its `/price`, `/book` and `/booked` steps) opens the invitation (screen 1).
+         * The flyer and the two explainer pages stay on the web. Behind the `crew_day` key, like every Crew Day page.
+         */
+        data class CrewDayInvitation(val code: String) : Destination
+
+        /** Crew Day: `/crew-days` opens Your Crew Days (screen 10). */
+        data object MyCrewDays : Destination
+
+        /** Crew Day: `/crew-days/ask` opens Ask for a Crew Day on your street (screen 11). */
+        data object CrewDayAsk : Destination
+
+        /** Crew Day: `/crew-days/bookings/<id>` opens the household's booking (screen 5). */
+        data class CrewDayBooking(val bookingId: String) : Destination
+
+        /** Crew Day: `/businesses/<id>/dashboard?tab=crew-days` opens the crew's Crew Days (screen 13). */
+        data class BusinessCrewDays(val businessId: String) : Destination
+
+        /**
+         * Crew Day: `/businesses/<id>/crew-days/<crewDayId>` opens the crew's day (screen 15, the route on the day).
+         * A notice with no link opens it by its `crew_day_id` alone ([businessId] null).
+         */
+        data class CrewDayCrew(val businessId: String?, val crewDayId: String) : Destination
+
+        /**
          * `pantopus://assistant` opens the assistant thread; `?nudge=<notificationId>` opens it at that brief's or
          * nudge's message (AI assistant phase 2 contract §8.2), and `&conversation=<id>` names the conversation it was
          * added to. Each is null without one, or when it isn't a UUID.
@@ -584,8 +611,20 @@ object DeepLinkRouter {
             -> setOf(LaunchFeature.MAILBOX)
             // A mailbox page the app has no route for (`/app/mailbox/vault`) is still the Mailbox.
             is Destination.Unknown -> if (isMailboxLink(destination.uri)) setOf(LaunchFeature.MAILBOX) else emptySet()
-            else -> emptySet()
+            else -> if (isCrewDayDestination(destination)) setOf(LaunchFeature.CREW_DAY) else emptySet()
         }
+
+    /**
+     * True when [destination] is a Crew Day page. With the `crew_day` key off these links are dropped (no placeholder),
+     * and their https links open in the browser ([WebLinkFallback]).
+     */
+    fun isCrewDayDestination(destination: Destination): Boolean =
+        destination is Destination.CrewDayInvitation ||
+            destination == Destination.MyCrewDays ||
+            destination == Destination.CrewDayAsk ||
+            destination is Destination.CrewDayBooking ||
+            destination is Destination.BusinessCrewDays ||
+            destination is Destination.CrewDayCrew
 
     /** True when [raw] opens a mailbox page (`pantopus://mailbox/…`, `https://…/app/mailbox/…`). */
     private fun isMailboxLink(raw: String): Boolean {
@@ -645,6 +684,7 @@ object DeepLinkRouter {
                 // Not `personal*`: those are in-scope personal-context notices.
                 key == "persona" || key.startsWith("persona_") -> setOf(LaunchFeature.BEACON, LaunchFeature.PERSONAS)
                 key.startsWith("booking_") -> setOf(LaunchFeature.PUBLIC_SCHEDULING)
+                key.startsWith("crew_day_") -> setOf(LaunchFeature.CREW_DAY)
                 else -> LAUNCH_CUT_NOTIFICATION_TYPES[key].orEmpty()
             } + mailboxNotificationFeatures(key)
         // Nearby Plans' notifications show only while the `plans` flag is on for this person.
@@ -1005,6 +1045,30 @@ object DeepLinkRouter {
                     else -> Destination.Unknown(raw)
                 }
             }
+            "crew-day" -> {
+                // The invitation and its steps; `/crew-day/<code>/flyer` and the explainer pages are web pages.
+                val code = segments.getOrNull(1)
+                val step = segments.getOrNull(2)
+                when {
+                    code == null || !CREW_DAY_CODE.matches(code) -> Destination.Unknown(raw)
+                    segments.size == 2 -> Destination.CrewDayInvitation(code)
+                    segments.size == 3 && step in CREW_DAY_INVITATION_STEPS -> Destination.CrewDayInvitation(code)
+                    else -> Destination.Unknown(raw)
+                }
+            }
+            "crew-days" -> {
+                val id = segments.getOrNull(2)
+                when {
+                    segments.size == 1 -> Destination.MyCrewDays
+                    segments.size == 2 && segments[1] == "ask" -> Destination.CrewDayAsk
+                    segments.size == 3 && segments[1] == "bookings" && id != null && MAIL_UUID.matches(id) ->
+                        Destination.CrewDayBooking(id.lowercase())
+                    // A notice with no link: the crew's day by its id alone (see [crewDayNotificationPath]).
+                    segments.size == 3 && segments[1] == "day" && id != null && MAIL_UUID.matches(id) ->
+                        Destination.CrewDayCrew(null, id.lowercase())
+                    else -> Destination.Unknown(raw)
+                }
+            }
             "businesses" -> {
                 // `pantopus://businesses/new` opens the Create Business wizard.
                 // `pantopus://businesses/:id/page-editor` opens the owner-only
@@ -1020,6 +1084,10 @@ object DeepLinkRouter {
                     id.isNullOrBlank() -> Destination.Unknown(raw)
                     trailing == "page-editor" || trailing == "page_editor" ->
                         Destination.EditBusinessPage(id)
+                    // Crew Day: the dashboard's Crew Days tab, and one of the crew's days.
+                    trailing == "dashboard" && tabQuery == "crew-days" -> Destination.BusinessCrewDays(id)
+                    trailing == "crew-days" && segments.size == BUSINESS_CREW_DAY_SEGMENTS && MAIL_UUID.matches(segments[3]) ->
+                        Destination.CrewDayCrew(id, segments[3].lowercase())
                     trailing == "chat" && segments.size == BUSINESS_CONVERSATION_SEGMENTS && roomId != null && MAIL_UUID.matches(roomId) ->
                         Destination.BusinessConversation(id, roomId.lowercase())
                     else -> Destination.BusinessOwner(id)
@@ -1215,6 +1283,27 @@ object DeepLinkRouter {
         if (ownerKind == null) return Destination.BookingDetail(bookingId)
         val owner = HomeTaskNotificationRoute.canonicalId(ownerId)?.takeIf { ownerKind == "home" || ownerKind == "business" }
         return owner?.let { Destination.BookingDetail(bookingId, ownerKind, it) }
+    }
+
+    /** A Crew Day's share code: 8 characters of `a-z` and `2-9` (no look-alikes), with room for a longer one. */
+    private val CREW_DAY_CODE = Regex("^[a-z2-9]{6,16}$")
+
+    /** The invitation's own steps on the web (`/crew-day/<code>/price` …); the app opens the invitation for each. */
+    private val CREW_DAY_INVITATION_STEPS = setOf("price", "book", "booked")
+
+    /**
+     * A `crew_day_*` notice or push that carries no link opens its booking (screen 5) by `booking_id`, else the crew's
+     * day (screen 15) by `crew_day_id`. Null for other types, for a notice with a link, or without either id.
+     */
+    fun crewDayNotificationPath(
+        type: String?,
+        link: String?,
+        bookingId: String?,
+        crewDayId: String?,
+    ): String? {
+        if (type?.lowercase()?.startsWith("crew_day_") != true || !link.isNullOrBlank()) return null
+        bookingId?.takeIf(MAIL_UUID::matches)?.let { return "pantopus://crew-days/bookings/${it.lowercase()}" }
+        return crewDayId?.takeIf(MAIL_UUID::matches)?.let { "pantopus://crew-days/day/${it.lowercase()}" }
     }
 
     /** `pantopus://assistant?starter=`: the questions a link may send, by fixed key (AI assistant phase 3 §8.4). */
