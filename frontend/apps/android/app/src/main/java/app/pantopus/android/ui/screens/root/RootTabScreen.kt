@@ -57,6 +57,8 @@ import app.pantopus.android.core.LaunchFeature
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.core.perf.ScreenTiming
 import app.pantopus.android.core.routing.DeepLinkRouter
+import app.pantopus.android.core.routing.ExternalLinks
+import app.pantopus.android.core.routing.WebLinkFallback
 import app.pantopus.android.data.ai.AIScreenContext
 import app.pantopus.android.data.mailbox.HolidayCardsRepository
 import app.pantopus.android.data.mailbox.MailboxRepository
@@ -117,6 +119,7 @@ import app.pantopus.android.ui.screens.contentdetail.InvoiceDetailScreen
 import app.pantopus.android.ui.screens.contentdetail.ListingDetailScreen
 import app.pantopus.android.ui.screens.creator_audience.YourAudienceScreen
 import app.pantopus.android.ui.screens.creator_inbox.CreatorInboxScreen
+import app.pantopus.android.ui.screens.crewday.CrewDayExternalRoutes
 import app.pantopus.android.ui.screens.crewday.CrewDayMenuViewModel
 import app.pantopus.android.ui.screens.crewday.CrewDayRoutes
 import app.pantopus.android.ui.screens.crewday.crewDayRoutes
@@ -3111,7 +3114,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         )
                     }
                 }
-                crewDayRoutes(navController)
+                crewDayRoutes(
+                    nav = navController,
+                    external =
+                        CrewDayExternalRoutes(
+                            openBusiness = { id -> navController.navigate(ChildRoutes.businessOwner(id)) },
+                            openPayouts = { id -> navController.navigate(ChildRoutes.businessPaymentsOwner(id)) },
+                            openLegal = { id -> navController.navigate(ChildRoutes.businessLegal(id)) },
+                            share = { message, title -> appContext.shareText(message, title) },
+                            // A pantopus.com page would come straight back to the app: open it in the browser.
+                            openWeb = { url -> ExternalLinks.webUri(url)?.let { WebLinkFallback.open(appContext, it) } },
+                        ),
+                )
                 plansRoutes(
                     nav = navController,
                     external =

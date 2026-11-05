@@ -65,6 +65,7 @@ data class CrewDayPublicDto(
     @Json(name = "code") val code: String? = null,
     @Json(name = "title") val title: String = "",
     @Json(name = "service") val service: String? = null,
+    @Json(name = "service_label") val serviceLabel: String? = null,
     @Json(name = "street_label") val streetLabel: String? = null,
     @Json(name = "city") val city: String? = null,
     @Json(name = "state") val state: String? = null,
@@ -204,9 +205,10 @@ data class CrewDayProposalDto(
     @Json(name = "sent_at") val sentAt: String? = null,
 )
 
-/** The share kit (screen 12): counts only, and the drafted message. */
+/** The share kit (screen 12): counts only, and the drafted message. The crew's reads carry [code] and [flyerUrl]. */
 @JsonClass(generateAdapter = true)
 data class CrewDayShareDto(
+    @Json(name = "code") val code: String? = null,
     @Json(name = "url") val url: String? = null,
     @Json(name = "message") val message: String? = null,
     @Json(name = "booked_count") val bookedCount: Int = 0,
@@ -388,7 +390,7 @@ data class CrewDayTodayResponse(
 
 // MARK: - Crew
 
-/** What the business still needs before it can start a street day: `missing` lists `published`, `payouts`, … */
+/** What the business still needs before it can start a street day: `missing` lists `publish_page`, `set_up_payouts`. */
 @JsonClass(generateAdapter = true)
 data class CrewDayReadinessDto(
     @Json(name = "published") val published: Boolean = false,
@@ -397,33 +399,62 @@ data class CrewDayReadinessDto(
     @Json(name = "missing") val missing: List<String> = emptyList(),
 )
 
-/** A street day in the crew's lists (screen 13), with its counts and charge totals. */
+/** A street day in the crew's lists (screen 13, the contract's "day card"), with its counts and charge totals. */
 @JsonClass(generateAdapter = true)
 data class CrewDayListItemDto(
     @Json(name = "id") val id: String,
-    @Json(name = "code") val code: String? = null,
     @Json(name = "title") val title: String = "",
     @Json(name = "service") val service: String? = null,
+    @Json(name = "service_label") val serviceLabel: String? = null,
     @Json(name = "street_label") val streetLabel: String? = null,
+    @Json(name = "city") val city: String? = null,
     @Json(name = "timezone") val timezone: String? = null,
     @Json(name = "service_date") val serviceDate: String? = null,
     @Json(name = "window_start") val windowStart: String? = null,
     @Json(name = "window_end") val windowEnd: String? = null,
+    @Json(name = "window_starts_at") val windowStartsAt: String? = null,
     @Json(name = "status") val status: String? = null,
     @Json(name = "capacity") val capacity: Int = 0,
     @Json(name = "booked_count") val bookedCount: Int = 0,
-    @Json(name = "price_checks") val priceChecks: Int = 0,
+    @Json(name = "spots_left") val spotsLeft: Int = 0,
     @Json(name = "is_full") val isFull: Boolean = false,
-    @Json(name = "review_note") val reviewNote: String? = null,
+    @Json(name = "booking_closes_at") val bookingClosesAt: String? = null,
+    @Json(name = "is_closed") val isClosed: Boolean = false,
+    @Json(name = "price_checks") val priceChecks: Int = 0,
+    @Json(name = "release_asks") val releaseAsks: Int = 0,
     @Json(name = "done_count") val doneCount: Int = 0,
     @Json(name = "charged_cents") val chargedCents: Int = 0,
+    /** The dates its active bookings are on (rain can split a day), or its own date. */
+    @Json(name = "dates") val dates: List<String> = emptyList(),
+    @Json(name = "review_note") val reviewNote: String? = null,
+    @Json(name = "submitted_at") val submittedAt: String? = null,
+    @Json(name = "share") val share: CrewDayShareDto? = null,
     @Json(name = "paid_out") val paidOut: Boolean = false,
 )
 
-/** `GET /api/crew-days/business/:businessId` (screen 13). */
+/** The business's fee on each charge: "10% (founding business)". */
+@JsonClass(generateAdapter = true)
+data class CrewDayFeeDto(
+    @Json(name = "rate_pct") val ratePct: Double? = null,
+    @Json(name = "founding") val founding: Boolean = false,
+)
+
+/** A service the crew can pick, with the day's title word and the included items it starts with. */
+@JsonClass(generateAdapter = true)
+data class CrewDayServiceDto(
+    @Json(name = "key") val key: String,
+    @Json(name = "label") val label: String = "",
+    @Json(name = "day_title") val dayTitle: String? = null,
+    @Json(name = "included") val included: List<String> = emptyList(),
+)
+
+/** `GET /api/crew-days/business/:businessId` (screen 13). [canEdit]: owners and editors set up and change days. */
 @JsonClass(generateAdapter = true)
 data class CrewDayBusinessResponse(
     @Json(name = "readiness") val readiness: CrewDayReadinessDto = CrewDayReadinessDto(),
+    @Json(name = "can_edit") val canEdit: Boolean = false,
+    @Json(name = "fee") val fee: CrewDayFeeDto? = null,
+    @Json(name = "services") val services: List<CrewDayServiceDto> = emptyList(),
     @Json(name = "today") val today: List<CrewDayListItemDto> = emptyList(),
     @Json(name = "upcoming") val upcoming: List<CrewDayListItemDto> = emptyList(),
     @Json(name = "pending") val pending: List<CrewDayListItemDto> = emptyList(),
@@ -493,7 +524,7 @@ data class CrewDayDto(
     @Json(name = "prep_note") val prepNote: String? = null,
     @Json(name = "price_options") val priceOptions: List<CrewDayPriceOptionDto> = emptyList(),
     @Json(name = "add_ons") val addOns: List<CrewDayAddOnDto> = emptyList(),
-    @Json(name = "share_code") val shareCode: String? = null,
+    @Json(name = "share") val share: CrewDayShareDto? = null,
     @Json(name = "status") val status: String? = null,
     @Json(name = "review_note") val reviewNote: String? = null,
     @Json(name = "radius_m") val radiusM: Int? = null,
@@ -560,20 +591,59 @@ data class CrewDayNeedsYouDto(
     @Json(name = "release_asks") val releaseAsks: List<CrewDayHomeDto> = emptyList(),
 )
 
-/** `GET /api/crew-days/:id/crew` (screens 15 and 19). */
+/**
+ * `GET /api/crew-days/:id/crew` (screens 15 and 19): the day card, its whole form, what the viewer may change, and
+ * (from SRV-3/4) the money, what needs the crew, the homes and the timeline.
+ */
 @JsonClass(generateAdapter = true)
 data class CrewDayCrewViewDto(
-    @Json(name = "day") val day: CrewDayDto,
+    @Json(name = "id") val id: String,
+    @Json(name = "kind") val kind: String? = null,
+    @Json(name = "business_user_id") val businessUserId: String? = null,
+    @Json(name = "title") val title: String = "",
+    @Json(name = "service") val service: String? = null,
+    @Json(name = "service_label") val serviceLabel: String? = null,
+    @Json(name = "street_label") val streetLabel: String? = null,
+    @Json(name = "city") val city: String? = null,
+    @Json(name = "state") val state: String? = null,
+    @Json(name = "timezone") val timezone: String? = null,
+    @Json(name = "service_date") val serviceDate: String? = null,
+    @Json(name = "window_start") val windowStart: String? = null,
+    @Json(name = "window_end") val windowEnd: String? = null,
+    @Json(name = "window_starts_at") val windowStartsAt: String? = null,
+    @Json(name = "status") val status: String? = null,
+    @Json(name = "capacity") val capacity: Int = 0,
     @Json(name = "booked_count") val bookedCount: Int = 0,
     @Json(name = "spots_left") val spotsLeft: Int = 0,
     @Json(name = "is_full") val isFull: Boolean = false,
+    @Json(name = "booking_closes_at") val bookingClosesAt: String? = null,
+    @Json(name = "is_closed") val isClosed: Boolean = false,
+    @Json(name = "price_checks") val priceChecks: Int = 0,
+    @Json(name = "release_asks") val releaseAsks: Int = 0,
+    @Json(name = "done_count") val doneCount: Int = 0,
+    @Json(name = "charged_cents") val chargedCents: Int = 0,
+    @Json(name = "dates") val dates: List<String> = emptyList(),
+    @Json(name = "share") val share: CrewDayShareDto? = null,
+    @Json(name = "center") val center: CrewDayCenterDto? = null,
+    @Json(name = "radius_m") val radiusM: Int? = null,
+    @Json(name = "cancel_cutoff_at") val cancelCutoffAt: String? = null,
+    @Json(name = "included") val included: List<String> = emptyList(),
+    @Json(name = "outside_only") val outsideOnly: Boolean = true,
+    @Json(name = "prep_note") val prepNote: String? = null,
+    @Json(name = "price_options") val priceOptions: List<CrewDayPriceOptionDto> = emptyList(),
+    @Json(name = "add_ons") val addOns: List<CrewDayAddOnDto> = emptyList(),
+    @Json(name = "price_from_cents") val priceFromCents: Int? = null,
+    @Json(name = "proposed_dates") val proposal: CrewDayProposalDto? = null,
+    @Json(name = "repeat_of") val repeatOf: String? = null,
+    @Json(name = "review_note") val reviewNote: String? = null,
+    @Json(name = "cancel_reason") val cancelReason: String? = null,
+    @Json(name = "cancelled_by") val cancelledBy: String? = null,
+    @Json(name = "can_edit") val canEdit: Boolean = false,
+    @Json(name = "editable_fields") val editableFields: List<String> = emptyList(),
     @Json(name = "money") val money: CrewDayMoneyDto = CrewDayMoneyDto(),
     @Json(name = "needs_you") val needsYou: CrewDayNeedsYouDto = CrewDayNeedsYouDto(),
     @Json(name = "bookings") val bookings: List<CrewDayHomeDto> = emptyList(),
-    @Json(name = "share") val share: CrewDayShareDto? = null,
     @Json(name = "past_customers") val pastCustomers: Int = 0,
-    @Json(name = "proposal") val proposal: CrewDayProposalDto? = null,
-    @Json(name = "can_edit") val canEdit: Boolean = false,
     @Json(name = "events") val events: List<CrewDayEventDto> = emptyList(),
 )
 
