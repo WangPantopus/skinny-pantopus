@@ -30,7 +30,7 @@ function stepsFor(booking) {
   return order.map((key, i) => ({
     key,
     label: key === 'booked' && requested ? 'Requested' : { booked: 'Booked', on_the_way: 'On the way', done: 'Done', paid: 'Paid' }[key],
-    state: i < reached ? 'done' : (i === reached ? 'current' : 'todo'),
+    state: i < reached || ['paid', 'refunded'].includes(booking.status) ? 'done' : (i === reached ? 'current' : 'todo'),
   }));
 }
 

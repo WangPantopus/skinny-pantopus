@@ -24,6 +24,7 @@ const computeAvgResponseTime = require('../jobs/computeAvgResponseTime');
 const autoArchivePosts = require('../jobs/autoArchivePosts');
 const askStillOpenReminders = require('../jobs/askStillOpenReminders');
 const { runPlansTick } = require('../jobs/planJobs');
+const crewDayJobs = require('../jobs/crewDayJobs');
 
 // ─── Internal auth middleware ───
 // Validates X-Internal-Key header against INTERNAL_API_KEY env var.
@@ -163,5 +164,7 @@ router.post('/jobs/auto-archive-posts', jobEndpoint('autoArchivePosts', autoArch
 router.post('/jobs/ask-still-open-reminders', jobEndpoint('askStillOpenReminders', askStillOpenReminders));
 // Nearby Plans tick (it also runs every 5 minutes on the cron runner).
 router.post('/jobs/plans-tick', jobEndpoint('plansTick', runPlansTick, 240));
+// Crew Day (they also run on the cron runner; each skips while `crew_day` is unlisted).
+router.post('/jobs/crew-day-charges', jobEndpoint('crewDayCharges', crewDayJobs.crewDayCharges, 240));
 
 module.exports = router;

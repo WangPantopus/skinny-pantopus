@@ -156,9 +156,18 @@ upload), and read through signed URLs that last an hour (`photos: [{ path, url }
   invoice through the existing invoice pay screen, which marks the booking `paid`.
 - **Payout:** unchanged: the existing 48-hour hold and `processPendingTransfers` move the crew's share to its Stripe
   account. Crew Day requires payouts enabled, so the money never goes to an owner's wallet.
-- **Refunds:** operator only, through the existing refund machinery (`createSmartRefund`) on the invoice's payment;
-  the crew gets the existing refund notice. Before a charge, "refund" means the charge never runs: the invoice is
-  voided and the booking ends `cancelled` by the operator.
+- **Refunds:** operator only, through the existing refund machinery (`createSmartRefund`, admin mode) on the
+  invoice's payment, which refunds an invoice payment **in full** only (a partial refund would strand the rest in the
+  48-hour hold): after a charge the operator refunds all of it (`REFUND_IN_FULL` otherwise) and the booking ends
+  `refunded`. Before a charge, refunding the whole price means the charge never runs (the invoice is voided, the
+  booking ends `cancelled` by the operator, nothing is charged); an amount off ("Refunded $60 of $180") voids the
+  invoice, makes a new one for the rest ("…, less $60.00 from Pantopus support") and charges it at once, with
+  `refunded_cents` = the amount off.
+- **The shared path** is `backend/services/invoicePayments.js` (`startInvoicePayment`, `captureInvoicePayment`,
+  `markInvoicePaid`), used by `POST /api/businesses/invoices/:invoiceId/pay` and `/confirm` (unchanged) and by the
+  charges. `markInvoicePaid` also turns a Crew Day booking `paid` (event `charged`, or `paid_by_household` after a
+  failed charge) and sends `crew_day_charged`. A declined card ends `payment_failed` with `charge_failure` (Stripe's
+  decline code, or `authentication_required`).
 - **Known people:** a household with a booking counts as known to the crew in `knownInvoiceRecipients`
   (`relation: 'crew_day'`), so the crew can invoice extra work with the existing invoices.
 
@@ -191,8 +200,8 @@ routes add `requireAdmin`. Rate-limit the public routes like the Plans share rou
 | `POST /api/crew-days/bookings/:bookingId/ask-release` | after the cutoff: records `release_asked_at` and tells the crew → `{ booking }`. Before it: 409 `CAN_CANCEL` |
 | `POST /api/crew-days/bookings/:bookingId/price-answer` | `{ approve: true or false }` on `price_offered` → `{ booking }`: approve → `booked` (the household gets `crew_day_booked`, the crew `crew_day_new_booking`); decline → `cancelled` (free). Otherwise 409 `NO_PRICE_OFFER` |
 | `POST /api/crew-days/bookings/:bookingId/gate-ready` | sets `gate_ready_at`, tells the crew |
-| `POST /api/crew-days/bookings/:bookingId/confirm` | "Everything looks good": charges now; answers with the booking (`paid` or `payment_failed`) |
-| `POST /api/crew-days/bookings/:bookingId/problem` | `{ kind, note, photo_paths }` → `problem_status` `open`, charge paused, `problem_due_at` = next business day 5 PM local; tells the operator and the crew. A second call adds a note or photos. |
+| `POST /api/crew-days/bookings/:bookingId/confirm` | "Everything looks good" on a `done` home: records `household_confirmed_at` and charges now → `{ booking }` (`paid`, or `payment_failed`, or still `done` if Stripe is settling). `NOT_DONE`, `PROBLEM_OPEN` |
+| `POST /api/crew-days/bookings/:bookingId/problem` | `{ kind (missed, damage, no_show, charge, other), note (1–1,000), photo_paths (≤ 4, uploaded as `problem`) }` → `problem_status` `open`, charge paused, `problem_due_at` = 5 PM local the next business day; tells the crew (`crew_day_problem`) and the operator (`crew_day_problem_opened`) → `{ booking }`. Once the crew has come (on or after the home's date). A second call while open adds a note or photos (`problem_note`). `NOT_REPORTABLE` |
 | `POST /api/crew-days/bookings/:bookingId/new-date` | `{ proposal_id, choice: "YYYY-MM-DD" or "cancel" }` |
 | `POST /api/crew-days/uploads` | multipart: `photo` (JPEG, PNG or HEIC, ≤ 10 MB; HEIC converted), `booking_id`, `purpose` (`done`: any member of that booking's crew; `problem`: that booking's household) → 201 `{ path }`. Refuses `PHOTO_TOO_LARGE` (413), `PHOTO_UNREADABLE` / `PHOTO_TYPE` (415), `NOT_FOUND` (not your booking). |
 | `POST /api/crew-days/bookings/:bookingId/gate-ready` | on the day (from 6 PM the evening before) while the crew is coming: sets `gate_ready_at`, tells the crew → `{ booking }`. `TOO_EARLY`, `NOT_ON_ROUTE` |
@@ -242,7 +251,7 @@ create, edit, prices, dates, cancel and release; any business access for reading
 | `POST /api/admin/crew-days/:id/approve` | `{ note? }` → `open` → `{ crew_day }`; tells the crew. Refuses `NOT_WAITING`, `BUSINESS_NOT_READY`, `DAY_PASSED` (booking would already be closed) |
 | `POST /api/admin/crew-days/:id/decline` | `{ note }` (required, ≤ 500) → `declined` → `{ crew_day }`; tells the crew |
 | `POST /api/admin/crew-days/:id/cancel` | `{ reason }` |
-| `POST /api/admin/crew-days/bookings/:bookingId/problem` | `{ action: note, release, refund, resolve, amount_cents?, note }` |
+| `POST /api/admin/crew-days/bookings/:bookingId/problem` | `{ action, amount_cents?, note }` → `{ booking }` (operator shape + `crew_day`). `note`: a note to the household (`crew_day_problem_update`) and on the timeline. `release`: resolved (`released`), the charge runs now ("Charge released: $180 paid."). `refund`: see §3 (`amount_cents` defaults to the whole price). `resolve`: resolved with a required note to both; the charge then runs on its schedule. `NO_OPEN_PROBLEM`, `REFUND_IN_FULL`, `NOTHING_TO_REFUND` |
 | `POST /api/admin/crew-days/requests/:id` | `{ action: offer_ready, crew_day_id }` or `{ action: no_crew, note }`; tells the household |
 
 ## 5. Links
@@ -297,7 +306,9 @@ and the member who created the day.
 Follow `backend/jobs/planJobs.js` and `pgBossJobs.js`; every job skips while `crew_day` is off. Locally they run once
 through the existing job launcher, so scenarios don't wait for the clock.
 
-- `crewDayCharges` (every 10 min): §3.
+- `crewDayCharges` (every 10 min, `backend/jobs/crewDayJobs.js`; `POST /api/internal/jobs/crew-day-charges` runs it
+  once): §3. Each booking is claimed (`charge_claimed_at`) before charging; a claim older than 15 minutes is taken
+  again.
 - `crewDayReminders` (every 15 min): `crew_day_reminder` at 6 PM local the evening before, once per booking.
 - `crewDayDeadlines` (every 15 min): new-date deadlines → unanswered bookings `cancelled` (`system`); price offers not
   answered by `booking_closes_at` → `cancelled`; days whose bookings are all settled → `done`; access notes cleared
