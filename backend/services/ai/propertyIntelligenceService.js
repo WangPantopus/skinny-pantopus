@@ -115,15 +115,19 @@ async function fetchAttomRequest(endpoint, params, { timeoutMs = FETCH_TIMEOUT_M
     if (!res.ok) {
       const text = await readCappedText(res, MAX_BODY_BYTES, controller.signal);
       let noResult = false;
+      // ATTOM says why in its own status message ("SuccessWithoutResult", a
+      // parameter or entitlement error); logged so a failing endpoint can be told apart.
+      let attomMsg = null;
       try {
-        noResult = res.status === 400 && JSON.parse(text)?.status?.msg === 'SuccessWithoutResult';
+        attomMsg = JSON.parse(text)?.status?.msg ?? null;
+        noResult = res.status === 400 && attomMsg === 'SuccessWithoutResult';
       } catch (_) {
         // Not JSON: a real error.
       }
       if (noResult) {
         logger.info('ATTOM has no record', { endpoint });
       } else {
-        logger.warn('ATTOM API error', { endpoint, status: res.status });
+        logger.warn('ATTOM API error', { endpoint, status: res.status, attom_msg: attomMsg ? String(attomMsg).slice(0, 120) : null });
       }
       return { json: null, noResult };
     }
