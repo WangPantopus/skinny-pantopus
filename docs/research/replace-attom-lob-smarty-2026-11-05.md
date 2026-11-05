@@ -106,13 +106,13 @@ Daniel's Law) and a no-mail path for address-confidentiality participants; respe
 
 No. All three subscriptions can end. What stays external: USPS's delivery database (license only, 39 U.S.C. § 412),
 printing and postage, and national deed/mortgage/lien history (not used today; Record Watch's deed half was never
-built). Free public data covers building facts for about 53% of Americans (21% including bedrooms/baths); see the
+built). Free public data covers building facts for about 56% of Americans (22% including bedrooms or baths); see the
 county survey.
 
 ## 5. Open decisions and next steps
 
 Founder decisions:
-1. **How to fill counties with no free bulk data** (about a third of Americans): households enter facts plus labeled
+1. **How to fill counties with no free bulk data** (about 36% of Americans, plus about 6% where the county sells it): households enter facts plus labeled
    national estimates (my recommendation now), public-records requests county by county (price them for the largest
    uncovered counties: `uncovered-counties-2026-11-05.csv`), or buying reseller files / a national parcel license
    (a subscription again).
@@ -122,8 +122,15 @@ Founder decisions:
    exit purge); which Google billing SKU CASS requests use; a private storage account for the national record; Lob
    live key and real return address.
 
-Research left (no founder action needed):
-- 23 of the top 150 counties not checked; 5 sampled counties with free downloads whose building fields are unconfirmed.
-- Confirm counties classified only from re-published copies, at the county source.
-- License terms for each free source before use.
+Research done in the second pass (Nov 5, evening): all 150 largest counties classified, the unopened sample files
+checked, and every re-published or known-dataset row confirmed at the county or state source (see the survey's
+"Second pass" section).
+
+Research left (no founder action needed unless marked):
+- License terms for each free source before use (Will County and KGIS forbid redistribution; Stanislaus is own-use only).
+- Spokane WA's free parcel files sit behind Washington's commercial-use attestation: opening them needs the founder's OK.
+- Cobb GA's free tabular file (county FTP) and Medina OH's CAMA file (site certificate expired) are still unopened.
+- Northampton PA and Madison VA rest on re-published copies; no county file was found.
+- North Carolina's statewide building layer mixes county parcel data with model estimates; only the parcel-derived
+  share should count as county facts.
 - Per-state inventory of statewide files beyond those found.

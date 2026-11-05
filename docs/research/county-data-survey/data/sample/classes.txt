@@ -21,7 +21,7 @@
 362|A|V|NY State public parcels: year built 75%, bedrooms 69%|NYS Tax Parcels Public
 419|B|V|County tax parcels: actual year built|Brunswick County NC GIS
 337|A|V|County taxlots: year built, bedrooms, bathrooms, garage sq ft|Deschutes County GIS
-229|A|R|County data in a city layer: year built, living area, full/half baths, rooms, sale price and validity|Northampton County via City of Bethlehem
+229|A|R|County offers lookups only (Vision); a City of Bethlehem layer re-publishes county CAMA fields for all 122,379 county parcels: year built, living area, bedrooms, full/half baths, rooms, sale price|Northampton County via City of Bethlehem
 561|A|V|County parcel layer: year built, building sq ft, bedrooms, baths, sale price|Bradley County TN GIS
 172|B|D|Texas statewide parcels carry year built; appraisal-district export not checked (no sale prices in Texas)|TxGIO StratMap
 228|B|D|Texas statewide year built; CAD export not checked|TxGIO StratMap
@@ -31,8 +31,8 @@
 974|B|D|Texas statewide year built; CAD export not checked|TxGIO StratMap
 1831|B|D|Texas statewide year built; CAD export not checked|TxGIO StratMap
 344|B|V|Utah state LIR parcels: year built, building sq ft (no sale prices in Utah)|UGRC LIR
-496|A|R|County taxroll in a re-published layer: year built, living area, bedrooms, heat/AC, garage, sale price|Skagit County taxroll (third-party copy)
-582|B|R|West Virginia statewide tax parcels: year built, stories, rooms, structure area (2021 copy)|WV GIS Technical Center
+496|A|V|County's own assessor tax parcel service: bedrooms on 38,548 of 83,004 parcels, year built on 49,062, living area, plumbing, sale price|geo.skagitcountywa.gov Tax Parcels
+582|B|V|West Virginia's statewide parcel summary (WV GIS Technical Center, county assessor data, tax year 2026): year built on 41,424 of 65,497 Monongalia parcels (63%), stories, style, grade|services.wvgis.wvu.edu WV_Parcels ParcelSummary
 319|P|D|Residential characteristics sold per parcel at the assessor's office (fee)|Yolo County CA assessor
 671|N|D|County parcel GIS is ownership only; no characteristics found|Mendocino County CA
 270|N|D|County's own assessment download not found; vendors only|Sussex County DE
@@ -60,12 +60,12 @@
 238|N|D|Assessor search portal only|Greene County MO
 912|N|D|Per-parcel inquiry only; Nevada's statewide parcel layer is restricted|Carson City NV
 742|N|D|Not in NY State public layer; Image Mate lookups only|Clinton County NY
-193|N|D|Parcel viewer and lookups only; no bulk characteristics|Forsyth County NC
-297|Q|D|County GIS offers open data downloads; building fields not confirmed (sales search shows year built and heated area)|Cabarrus County NC
-636|Q|D|Free parcel attribute spreadsheet (parceldata.zip); building fields not confirmed|Lincoln County NC
-1087|Q|D|Free data download page and parcel sales service; building fields not confirmed|Davie County NC
+193|B|V|North Carolina Emergency Management statewide building layer: parcel-derived year built on 140,740 of 202,178 buildings (70%), heated sq ft 55%; the county itself has lookups only|NC Emergency Management NC Risk Building Footprints
+297|N|V|County open-data tax parcels carry values and sale prices but no building facts (2005 and 2010 archive layers had year built); North Carolina's statewide building layer is mostly modeled here (15% of buildings have a parcel-derived year built)|Cabarrus County open data + NC Emergency Management buildings
+636|A|V|County GIS publishes free CSVs: improvements (year built on 93% of records, finished area, bedrooms, full/half baths, fireplaces, basement) and sales|Lincoln County NC GIS downloads (improvements.zip, sales.zip)
+1087|N|V|County parcels carry values and sale dates only; North Carolina's statewide building layer has no parcel-derived values here (modeled only)|Davie County GIS + NC Emergency Management buildings
 231|N|D|Per-parcel auditor search shows year built and bedrooms; no bulk found|Lorain County OH
-377|Q|D|Auditor has a Download Data page; fields not confirmed|Medina County OH
+377|B|D|Auditor's free download page lists a CAMA file of dwellings, buildings, additions and features (pipe-delimited) plus parcel and transfer files; fields not opened because the auditor's site certificate has expired|Medina County Auditor Available Downloads
 659|N|D|Parcel shapefile from tax map office; no characteristics found|Tuscarawas County OH
 1152|N|D|Auditor real estate search only; vendors|Fulton County OH
 664|N|D|Assessor search (Spatialest) only|Wagoner County OK
@@ -78,8 +78,8 @@
 163|N|D|Property search tool has bedrooms/baths/year built per parcel; no bulk download confirmed|Virginia Beach VA
 288|N|D|No assessor download found|Chesapeake VA
 1098|A|V|City open data: residential details with year built, square footage, bedrooms, full baths|Charlottesville Real Estate (Residential Details)
-2143|A|R|Regional commission layer of county assessment data: year built, gross area, bedrooms, full baths, sale price|Rappahannock-Rapidan Regional Commission copy
-182|Q|D|County publishes free parcel downloads with tax listing data; building fields not confirmed (state schema has none)|Waukesha County WI
+2143|A|R|County source not found (vendors sell the county file); the Rappahannock-Rapidan Regional Commission layer re-publishes county assessment data: year built, gross area, bedrooms, full baths, sale price|Rappahannock-Rapidan Regional Commission copy
+182|N|V|County parcel map service and downloads carry values and owners only, no building facts; Wisconsin statewide parcels carry values only|Waukesha County Web Tax Parcel
 531|N|D|Older county export and statewide parcels carry assessment values only|La Crosse County WI + Wisconsin statewide parcels
 551|N|D|Real estate lookups; county GIS download not confirmed|Hanover County VA
 403|N|D|Municipal assessor lookups (Vision) only|Kent County RI towns

@@ -17,4 +17,14 @@ Public data only; no keys. Run every script with `python3 -I`.
 - `tools/stats.py`: grouped counts on an ArcGIS layer (fill rates by county).
 - `tools/zipmember.py`, `tools/zipfind.py`: read one member of a remote ZIP with HTTP range requests (used on Clark
   County's PACS file) without downloading it.
+- `tools/zipls.py <url>`: list a remote ZIP's members (offset, compressed and full size) from its central directory, to
+  feed `zipmember.py`.
+- `tools/restscan.py <https://host/.../rest/services> [name regex]`: walk one ArcGIS Server a folder deep and score every
+  service's columns (second pass: county servers that ArcGIS Online search does not list).
 - `tools/estimate.py <data dir>`: national estimate with 95% Wilson ranges.
+- `tools/tables.py <data dir> <out dir>`: rebuild both survey CSVs and the two markdown tables from the classes files
+  (copy the CSVs to `docs/research/`, paste the tables into the survey file).
+
+Second pass (November 5, evening): the 23 unchecked counties, the unopened sample files and every re-published or
+known-dataset row were checked at the county or state source; `classes.txt` rows carry the result and evidence. No
+category U rows remain; category Q (free download, fields unconfirmed) now also appears in the top 150.
