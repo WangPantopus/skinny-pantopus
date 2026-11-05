@@ -4,10 +4,11 @@ import Link from 'next/link';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import {
   BarChart3, Store, MapPin, Package, FileText, Users, Star, Building2,
-  Receipt, Scale, Activity, Inbox,
+  Receipt, Scale, Activity, Inbox, Truck,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useBusinessData } from '@/components/business/useBusinessData';
+import { launchFeatures } from '@/lib/featureFlags';
 import {
   OverviewTab,
   ProfileTab,
@@ -23,6 +24,7 @@ import {
   LegalTab,
   ActivityTab,
   InboxTab,
+  CrewDaysTab,
 } from '@/components/business/tabs';
 
 type Tab =
@@ -36,12 +38,13 @@ type Tab =
   | 'insights'
   | 'payments'
   | 'invoices'
+  | 'crew-days'
   | 'legal'
   | 'activity'
   | 'inbox'
   | 'settings';
 
-const TAB_CONFIG: { key: Tab; label: string; icon: LucideIcon }[] = [
+const ALL_TABS: { key: Tab; label: string; icon: LucideIcon }[] = [
   { key: 'overview', label: 'Overview', icon: BarChart3 },
   { key: 'profile', label: 'Profile', icon: Store },
   { key: 'locations', label: 'Locations', icon: MapPin },
@@ -50,10 +53,14 @@ const TAB_CONFIG: { key: Tab; label: string; icon: LucideIcon }[] = [
   { key: 'team', label: 'Team', icon: Users },
   { key: 'reviews', label: 'Reviews', icon: Star },
   { key: 'invoices', label: 'Invoices', icon: Receipt },
+  { key: 'crew-days', label: 'Crew Days', icon: Truck },
   { key: 'legal', label: 'Legal', icon: Scale },
   { key: 'activity', label: 'Activity', icon: Activity },
   { key: 'inbox', label: 'Inbox', icon: Inbox },
 ];
+
+// Crew Days (launch cut #13) shows only while `crew_day` is listed.
+const TAB_CONFIG = ALL_TABS.filter((t) => t.key !== 'crew-days' || launchFeatures.crewDay);
 
 export default function BusinessDashboardPage() {
   const router = useRouter();
@@ -231,6 +238,7 @@ export default function BusinessDashboardPage() {
         {tab === 'payments' && <PaymentsTab businessId={businessId} />}
         {tab === 'insights' && <InsightsTab businessId={businessId} />}
         {tab === 'invoices' && <InvoicesTab businessId={businessId} canManage={can('profile.edit')} />}
+        {tab === 'crew-days' && launchFeatures.crewDay && <CrewDaysTab businessId={businessId} />}
         {tab === 'legal' && <LegalTab businessId={businessId} businessType={profile?.business_type} />}
         {tab === 'activity' && <ActivityTab businessId={businessId} />}
         {tab === 'inbox' && <InboxTab businessId={businessId} />}

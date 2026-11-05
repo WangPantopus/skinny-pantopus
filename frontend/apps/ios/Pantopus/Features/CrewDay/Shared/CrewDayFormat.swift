@@ -57,6 +57,11 @@ enum CrewDayFormat {
         format(day(date, timezone: timezone), "EEEE", timezone: timezone)
     }
 
+    /// "Sunday, Nov 15" for an instant, in the Crew Day's zone.
+    static func longDay(instant: Date?, timezone: String?) -> String {
+        format(instant, "EEEE, MMM d", timezone: timezone)
+    }
+
     /// "Sun, Nov 15" for an instant, in the Crew Day's zone.
     static func shortDay(instant: Date?, timezone: String?) -> String {
         format(instant, "EEE, MMM d", timezone: timezone)
