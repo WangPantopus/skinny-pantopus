@@ -53,7 +53,16 @@ export function ServiceTag({ service }: { service: string }) {
  * The board's illustrated mini-map: blocks, a park and roads, with the Crew Day's street highlighted and labeled.
  * Never houses or pins: it doesn't say which homes booked, and it isn't a real map of the area.
  */
-export function StreetMiniMap({ street, className = 'h-[150px]' }: { street: string; className?: string }) {
+export function StreetMiniMap({
+  street,
+  className = 'h-[150px]',
+  label = true,
+}: {
+  street: string;
+  className?: string;
+  /** The street's name on the map; a thumbnail (the share kit's link preview) leaves it off. */
+  label?: boolean;
+}) {
   const block = 'absolute rounded-[4px] bg-[#e8e5de] dark:bg-[#252a30]';
   const road = 'absolute bg-white shadow-[0_0_0_1px_#dcd8cf] dark:bg-[#384049] dark:shadow-[0_0_0_1px_#2a3038]';
   return (
@@ -70,9 +79,11 @@ export function StreetMiniMap({ street, className = 'h-[150px]' }: { street: str
       <i className={`${road} left-[-5%] top-[50.5%] h-[8px] w-[110%]`} />
       <i className={`${road} left-[29%] top-[-7%] h-[114%] w-[6px]`} />
       <i className={`${road} left-[75.5%] top-[-7%] h-[114%] w-[5px]`} />
-      <span className="absolute left-1/2 top-[54%] flex max-w-[60%] -translate-x-1/2 -translate-y-1/2 items-center truncate rounded-full bg-white px-[0.5625rem] py-[0.1875rem] text-[0.6875rem] font-semibold leading-4 text-app-text-strong shadow-[0_1px_3px_rgba(0,0,0,0.14)] dark:bg-[#0f172a]">
-        {street}
-      </span>
+      {label ? (
+        <span className="absolute left-1/2 top-[54%] flex max-w-[60%] -translate-x-1/2 -translate-y-1/2 items-center truncate rounded-full bg-white px-[0.5625rem] py-[0.1875rem] text-[0.6875rem] font-semibold leading-4 text-app-text-strong shadow-[0_1px_3px_rgba(0,0,0,0.14)] dark:bg-[#0f172a]">
+          {street}
+        </span>
+      ) : null}
     </div>
   );
 }
