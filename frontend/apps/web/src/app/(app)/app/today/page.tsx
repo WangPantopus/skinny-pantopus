@@ -3,9 +3,8 @@
 // server for a document request (lib/firstContent.ts); that route stays for
 // deep links and the morning push.
 import FirstContent, { type FirstContentSearchParams } from '@/components/first-content/FirstContent';
-import { todayFirstContent } from '@/lib/server/firstContentReads';
 import HubTodayPage from '../hub/today/page';
 
 export default function TodayPage({ searchParams }: { searchParams: FirstContentSearchParams }) {
-  return <FirstContent read={todayFirstContent} searchParams={searchParams}><HubTodayPage /></FirstContent>;
+  return <FirstContent route="/app/today" searchParams={searchParams}><HubTodayPage /></FirstContent>;
 }

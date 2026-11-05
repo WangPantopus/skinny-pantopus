@@ -2,6 +2,7 @@
 // its screen's own queries would hold after their first reads: the same keys, the
 // same shapes, the same copy rules (founder decision 3: a copy that may not show
 // before its re-check is left to the browser, which reads it again).
+import { cache } from 'react';
 import type { DehydratedState } from '@tanstack/react-query';
 import type { HubPayload, MyHome } from '@pantopus/api';
 import type { PrimaryHome } from '@pantopus/api/endpoints/homes';
@@ -11,7 +12,7 @@ import { queryKeys } from '@/lib/query-keys';
 import { CONVERSATIONS_LIMIT, compareConversationTime } from '@/lib/conversationOrder';
 import { FEED_PAGE_SIZE, buildFeedKey, feedLocationKey } from '@/lib/feedKeys';
 import { placeCopyGate, showsHomeCopy, showsMyHomesCopy, showsPrimaryCopy } from '@/lib/householdCopyRules';
-import { FirstContentEntries, readAsVisitor, settled, type FirstContentSession } from './firstContent';
+import { FirstContentEntries, firstContentSession, readAsVisitor, settled, type FirstContentSession } from './firstContent';
 
 type MyHomesReply = { homes: MyHome[]; primary_home?: PrimaryHome | null };
 type ConversationsPage = {
@@ -118,3 +119,22 @@ export async function pulseFirstContent(session: FirstContentSession): Promise<D
   if (eligibility) entries.set(['posts', 'place-eligibility', latitude, longitude], { eligible: eligibility.eligible, reason: eligibility.reason || null });
   return entries.dehydrate();
 }
+
+const TAB_READS: Record<string, (session: FirstContentSession) => Promise<DehydratedState | null>> = {
+  '/app/place': placeFirstContent,
+  '/app/today': todayFirstContent,
+  '/app/chat': messagesFirstContent,
+  '/app/feed': pulseFirstContent,
+};
+
+/**
+ * A tab document's first content, read once per request (React cache): the tab's page
+ * renders its screen from it, and the app layout's first-content slot waits for it
+ * so the screen goes out with the frame (components/first-content/FirstContentHold.tsx).
+ */
+export const tabFirstContent = cache(async (route: string): Promise<{ state: DehydratedState | null; tag: string } | null> => {
+  const session = await firstContentSession();
+  const read = TAB_READS[route];
+  if (!session || !read) return null;
+  return { state: await read(session).catch(() => null), tag: session.tag };
+});

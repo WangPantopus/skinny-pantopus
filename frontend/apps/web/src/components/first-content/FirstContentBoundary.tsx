@@ -27,14 +27,6 @@ import { firstContentTag } from '@/lib/firstContent';
 
 const spent = new WeakSet<DehydratedState>();
 
-// React 19 holds a streamed boundary's reveal until 300 ms after the page's first
-// paint (react-dom's streaming runtime: $RC waits until $RT + 300 once $RT is set).
-// The shell's frame paints first, so content that has already arrived would wait
-// ~300 ms on a fast connection. Rendered at the start of the content, this runs
-// just before React reveals it, so it shows on the next frame. If React renames
-// these internals, the reveal is throttled as before.
-const REVEAL_NOW = 'window.$RT=void 0';
-
 function cookieValue(name: string): string | null {
   const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
   if (!match) return null;
@@ -60,16 +52,11 @@ export default function FirstContentBoundary({ state, tag, children }: {
   const client = useQueryClient();
   // Once, in the first render, so the browser's first render matches the server's.
   // hydrate() never replaces an entry holding newer data.
-  const [used] = useState(() => {
+  useState(() => {
     const accepted = !!state && (typeof window === 'undefined' || (!spent.has(state) && readForThisSession(tag)));
     if (accepted && state) hydrate(client, state);
     return accepted;
   });
   useEffect(() => { if (state) spent.add(state); }, [state]);
-  return (
-    <>
-      {used ? <script dangerouslySetInnerHTML={{ __html: REVEAL_NOW }} /> : null}
-      {children}
-    </>
-  );
+  return children;
 }
