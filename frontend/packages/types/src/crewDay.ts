@@ -403,8 +403,11 @@ export interface CrewDayHome {
   photo_count: number;
   charge_state: CrewDayChargeState;
   charge_due_at: string | null;
+  /** What Pantopus support took off or refunded; on a paid home, the charge was price_cents minus this. */
+  refunded_cents: number;
   problem: { status: 'open' | 'resolved' | null; kind: string; note: string | null; opened_at: string | null } | null;
-  new_date_choice: { proposal_id: string; date: string; answered_at: string } | null;
+  /** answered_at is null when the deadline passed without an answer. */
+  new_date_choice: { proposal_id: string; date: string; answered_at: string | null } | null;
   created_at: string;
   /** The route adds these. */
   photos?: CrewDayPhoto[];

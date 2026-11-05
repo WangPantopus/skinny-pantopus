@@ -368,9 +368,11 @@ async function newDates(day, booking, crew, proposal) {
 }
 
 async function reminder(day, booking) {
+  // Sent from 6 PM the evening before until the window starts, so a late booking or run can send it on the day itself.
+  const when = booking.service_date === rules.todayIn(day.timezone) ? 'today' : 'tomorrow';
   await send([booking.household_user_id], {
     type: 'crew_day_reminder',
-    title: `${serviceDayName(day)} is tomorrow`,
+    title: `${serviceDayName(day)} is ${when}`,
     body: `${rules.formatWindow(booking.window_start, booking.window_end)}.${day.prep_note ? ` ${day.prep_note}` : ''}`
       + `${day.outside_only ? " You don't need to be home." : ''}`,
   }, { day, booking, link: links.booking(booking.id), idempotencyKey: `crew-day-reminder:${booking.id}:${booking.service_date}`,
