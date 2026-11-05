@@ -401,6 +401,7 @@ data class CrewDayCardDto(
     @Json(name = "booking_closes_at") val bookingClosesAt: String? = null,
     @Json(name = "photo_count") val photoCount: Int = 0,
     @Json(name = "eta") val eta: CrewDayEtaDto? = null,
+    @Json(name = "gate_ready_at") val gateReadyAt: String? = null,
     @Json(name = "charge") val charge: CrewDayChargeDto? = null,
     @Json(name = "problem_status") val problemStatus: String? = null,
     @Json(name = "crew") val crew: CrewDayCrewDto? = null,
