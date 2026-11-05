@@ -111,7 +111,7 @@ class CrewDayProblemViewModel
 
         /** Uploads one photo and keeps its path, so a retry doesn't upload it again; null (with the error shown) if it fails. */
         private suspend fun upload(photo: CrewDayProblemPhoto): String? =
-            when (val result = repository.upload(bookingId, photo.bytes, JPEG, "problem-${photo.id.take(8)}.jpg")) {
+            when (val result = repository.upload(bookingId, "problem", photo.bytes, JPEG, "problem-${photo.id.take(8)}.jpg")) {
                 is NetworkResult.Success -> {
                     val path = result.data.path
                     _state.update { s -> s.copy(photos = s.photos.map { if (it.id == photo.id) it.copy(path = path) else it }) }
