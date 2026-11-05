@@ -193,6 +193,8 @@ private fun RouteContent(
     val homes = order ?: route.homes
     val next = route.homes.firstOrNull { it.isWaiting() && it.cantGetInAt == null }
     val zone = CrewDayFormat.zone(route.timezone)
+    // The route opens at 6 PM the evening before; On my way and Running late work from the date itself.
+    val onTheDay = CrewDayFormat.date(route.date)?.let { !it.isAfter(java.time.LocalDate.now(zone)) } ?: true
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
         if (route.dates.size > 1) {
             PlanChoiceGroup(
@@ -224,6 +226,13 @@ private fun RouteContent(
                 color = PantopusColors.appTextSecondary,
                 modifier = Modifier.testTag("crewDayRouteDone"),
             )
+            if (!onTheDay) {
+                Text(
+                    text = "On my way and Running late work on ${CrewDayFormat.shortDate(route.date).orEmpty()}.",
+                    style = PantopusTextStyle.small,
+                    color = PantopusColors.appTextSecondary,
+                )
+            }
         }
         PlanFormCard(modifier = Modifier.testTag("crewDayRouteHomes")) {
             homes.forEachIndexed { index, home ->
@@ -236,7 +245,7 @@ private fun RouteContent(
                     onOpen = { events.onOpen(home) },
                     onMove = { delta -> events.onMove(index, delta) },
                 )
-                if (order == null && home.id == next?.id) {
+                if (order == null && onTheDay && home.id == next?.id) {
                     NextButtons(
                         onMyWay = { events.onMyWay(home) },
                         onLate = events.onLate,

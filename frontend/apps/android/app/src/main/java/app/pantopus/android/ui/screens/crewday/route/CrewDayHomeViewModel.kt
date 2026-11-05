@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.crewday.CrewDayHomeDto
 import app.pantopus.android.data.api.models.crewday.CrewDayRouteDto
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.crewday.CrewDayFormat
 import app.pantopus.android.data.crewday.CrewDaysRepository
 import app.pantopus.android.data.crewday.crewDayMessage
 import app.pantopus.android.ui.screens.compose.listing.ListingPhotoProcessor
@@ -49,6 +50,13 @@ data class CrewDayHomeState(
     val isDone: Boolean get() = home?.status in setOf("done", "paid", "payment_failed")
 
     val canMarkDone: Boolean get() = !saving && !isDone && photos.isNotEmpty()
+
+    /** The home's own date has come (in the Crew Day's zone): before it the server refuses Mark done. */
+    val onTheDay: Boolean
+        get() =
+            CrewDayFormat.date(home?.serviceDate ?: route?.date)?.let { date ->
+                !date.isAfter(java.time.LocalDate.now(CrewDayFormat.zone(route?.timezone)))
+            } ?: true
 
     companion object {
         const val MAX_PHOTOS = 8

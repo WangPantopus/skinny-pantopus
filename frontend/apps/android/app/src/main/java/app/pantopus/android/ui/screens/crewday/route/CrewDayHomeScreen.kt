@@ -64,6 +64,7 @@ import app.pantopus.android.ui.screens.plans.components.PlanOptionRow
 import app.pantopus.android.ui.screens.plans.components.PlanTextArea
 import app.pantopus.android.ui.screens.plans.components.PlanTextButton
 import app.pantopus.android.ui.screens.plans.components.PlanTonalButton
+import app.pantopus.android.ui.screens.plans.detail.PlanFooterCaption
 import app.pantopus.android.ui.screens.plans.detail.PlanRoundButton
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -156,20 +157,26 @@ fun CrewDayHomeScreen(
                             modifier = Modifier.testTag("crewDayRouteHomeError"),
                         )
                     }
-                    PrimaryButton(
-                        title = "Mark done",
-                        onClick = viewModel::markDone,
-                        isEnabled = state.canMarkDone,
-                        isLoading = state.saving,
-                        modifier = Modifier.fillMaxWidth().testTag("crewDayRouteHomeDone"),
-                    )
-                    PlanTonalButton(
-                        title = "Can't get in",
-                        onClick = { cantGetIn = true },
-                        height = 44.dp,
-                        enabled = !state.saving,
-                        modifier = Modifier.testTag("crewDayRouteHomeCantGetIn"),
-                    )
+                    if (state.onTheDay) {
+                        PrimaryButton(
+                            title = "Mark done",
+                            onClick = viewModel::markDone,
+                            isEnabled = state.canMarkDone,
+                            isLoading = state.saving,
+                            modifier = Modifier.fillMaxWidth().testTag("crewDayRouteHomeDone"),
+                        )
+                        PlanTonalButton(
+                            title = "Can't get in",
+                            onClick = { cantGetIn = true },
+                            height = 44.dp,
+                            enabled = !state.saving,
+                            modifier = Modifier.testTag("crewDayRouteHomeCantGetIn"),
+                        )
+                    } else {
+                        // The server takes Mark done from the home's own date: say when instead of offering it.
+                        val day = CrewDayFormat.shortDate(state.home?.serviceDate ?: route?.date).orEmpty()
+                        PlanFooterCaption("This home is on $day. You mark it done that day.")
+                    }
                 }
             },
     ) {
