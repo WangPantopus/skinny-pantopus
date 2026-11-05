@@ -819,6 +819,12 @@ final class ChatConversationViewModelTests: XCTestCase {
             api: makeAPI()
         )
         await vm.load()
+        // The tests have no socket. A thread listening with its socket down
+        // catches up 150 ms later and keeps polling, and a catch-up asked while
+        // `loadOlder()` reads runs right after it: on a slow runner that took
+        // the replies stubbed for `refresh()` below. Stop listening, so the
+        // reads under test are the only ones made.
+        vm.teardown()
         await vm.loadOlder()
         let beforeRefresh = URLProtocolStub.capturedRequests.count
         await vm.refresh()
