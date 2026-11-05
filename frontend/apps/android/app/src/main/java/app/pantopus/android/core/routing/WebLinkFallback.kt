@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.SystemClock
 import androidx.browser.customtabs.CustomTabsIntent
+import app.pantopus.android.core.LaunchFeatures
 import timber.log.Timber
 
 /**
@@ -36,11 +37,17 @@ object WebLinkFallback {
     @Volatile
     private var lastHandoff: Handoff? = null
 
-    /** True when [uri] is a link on those hosts that [DeepLinkRouter] has no destination for. */
+    /**
+     * True when [uri] is a link on those hosts that [DeepLinkRouter] has no destination for, or a Crew Day page while
+     * the `crew_day` key is off (the web shows the invitation, or that it isn't available).
+     */
     fun isWebOnly(uri: Uri): Boolean =
         uri.scheme.equals("https", ignoreCase = true) &&
             uri.host?.lowercase() in HOSTS &&
-            DeepLinkRouter.resolve(uri) is DeepLinkRouter.Destination.Unknown
+            DeepLinkRouter.resolve(uri).let { destination ->
+                destination is DeepLinkRouter.Destination.Unknown ||
+                    (DeepLinkRouter.isCrewDayDestination(destination) && !LaunchFeatures.crewDay)
+            }
 
     /**
      * Shows [uri] in a Custom Tab of the person's browser.

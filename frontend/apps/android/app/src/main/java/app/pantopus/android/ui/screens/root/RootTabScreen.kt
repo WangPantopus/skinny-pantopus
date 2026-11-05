@@ -117,6 +117,10 @@ import app.pantopus.android.ui.screens.contentdetail.InvoiceDetailScreen
 import app.pantopus.android.ui.screens.contentdetail.ListingDetailScreen
 import app.pantopus.android.ui.screens.creator_audience.YourAudienceScreen
 import app.pantopus.android.ui.screens.creator_inbox.CreatorInboxScreen
+import app.pantopus.android.ui.screens.crewday.CrewDayMenuViewModel
+import app.pantopus.android.ui.screens.crewday.CrewDayRoutes
+import app.pantopus.android.ui.screens.crewday.crewDayRoutes
+import app.pantopus.android.ui.screens.crewday.today.CrewDayTodayActions
 import app.pantopus.android.ui.screens.discoverbusinesses.DiscoverBusinessesScreen
 import app.pantopus.android.ui.screens.discoverbusinesses.DiscoverBusinessesTarget
 import app.pantopus.android.ui.screens.discoverhub.DiscoverHubScreen
@@ -2414,7 +2418,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         // launch opens the existing not-yet-available placeholder instead.
         val cutLink = pendingDeepLink?.takeUnless(DeepLinkRouter::isLaunchAvailable)
         if (cutLink != null) {
-            navController.navigate(ChildRoutes.placeholder(launchCutLabel(cutLink)))
+            // Crew Day's links are dropped while its key is off (its https links already went to the browser).
+            if (!DeepLinkRouter.isCrewDayDestination(cutLink)) navController.navigate(ChildRoutes.placeholder(launchCutLabel(cutLink)))
             DeepLinkRouter.consume()
             return@LaunchedEffect
         }
@@ -2871,6 +2876,31 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 openPlansLink(PlansRoutes.host())
                 DeepLinkRouter.consume()
             }
+            // Crew Day: each page opens on top of the current tab, as the side menu's rows do.
+            is DeepLinkRouter.Destination.CrewDayInvitation -> {
+                navController.navigate(CrewDayRoutes.invitation(pending.code))
+                DeepLinkRouter.consume()
+            }
+            DeepLinkRouter.Destination.MyCrewDays -> {
+                navController.navigate(CrewDayRoutes.MINE)
+                DeepLinkRouter.consume()
+            }
+            DeepLinkRouter.Destination.CrewDayAsk -> {
+                navController.navigate(CrewDayRoutes.ASK)
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.CrewDayBooking -> {
+                navController.navigate(CrewDayRoutes.booking(pending.bookingId))
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.BusinessCrewDays -> {
+                navController.navigate(CrewDayRoutes.crew(pending.businessId))
+                DeepLinkRouter.consume()
+            }
+            is DeepLinkRouter.Destination.CrewDayCrew -> {
+                navController.navigate(CrewDayRoutes.crewDay(pending.crewDayId, pending.businessId))
+                DeepLinkRouter.consume()
+            }
             is DeepLinkRouter.Destination.ResetPassword,
             is DeepLinkRouter.Destination.VerifyEmail,
             is DeepLinkRouter.Destination.Unknown,
@@ -2880,15 +2910,20 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
         }
     }
 
+    // Crew Day: the menu's Business section shows for someone on a business's team; read again each time it opens.
+    val crewDayMenu: CrewDayMenuViewModel = hiltViewModel()
+    val hasBusiness by crewDayMenu.hasBusiness.collectAsStateWithLifecycle()
+    LaunchedEffect(navDrawerState.isOpen) { if (navDrawerState.isOpen) crewDayMenu.refresh() }
     ModalNavigationDrawer(
         drawerState = navDrawerState,
         gesturesEnabled = navDrawerState.isOpen,
         drawerContent = {
+            val menuContext = NavigationDrawerContext.Personal(name = currentHandle, hasBusiness = hasBusiness)
             NavigationDrawer(
-                context = NavigationDrawerContext.Personal(name = currentHandle),
+                context = menuContext,
                 onSelect = { destination ->
                     navDrawerScope.launch { navDrawerState.close() }
-                    val route = routeForDrawer(destination, NavigationDrawerContext.Personal(name = currentHandle))
+                    val route = routeForDrawer(destination, menuContext)
                     // The Mailbox rows switch to the Mail tab, whose top screen is the Mailbox.
                     if (route == PantopusRoute.Mail.path) navController.openTabRoot(PantopusRoute.Mail) else navController.navigate(route)
                 },
@@ -3009,6 +3044,12 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     navController.navigate(PlansRoutes.host(kind = kind, again = planId))
                                 },
                             ),
+                        // Crew Day's cards open over Today, as the side menu's rows do.
+                        crewDays =
+                            CrewDayTodayActions(
+                                onOpenBooking = { id -> navController.navigate(CrewDayRoutes.booking(id)) },
+                                onOpenInvitation = { code -> navController.navigate(CrewDayRoutes.invitation(code)) },
+                            ).takeIf { LaunchFeatures.crewDay },
                     )
                 }
 
@@ -3070,6 +3111,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         )
                     }
                 }
+                crewDayRoutes(navController)
                 plansRoutes(
                     nav = navController,
                     external =
@@ -7840,6 +7882,9 @@ private fun routeForDrawer(
         NavigationDrawerDestination.WalletAndPayments -> ChildRoutes.WALLET
         NavigationDrawerDestination.Settings -> ChildRoutes.MENU
         NavigationDrawerDestination.HelpSupport -> ChildRoutes.SETTINGS_HELP
+        // Crew Day: Your Crew Days, and the crew's (on the person's first business, with a picker).
+        NavigationDrawerDestination.CrewDays -> CrewDayRoutes.MINE
+        NavigationDrawerDestination.BusinessCrewDays -> CrewDayRoutes.crew()
         // C3 — the business drawer's Payments row belongs on the business's
         // own Stripe Connect surface, not on the personal payout settings.
         NavigationDrawerDestination.BusinessPayments ->

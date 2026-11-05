@@ -58,6 +58,13 @@ enum class LaunchFeature(
      * today's card. It needs [MAILBOX] on too. Cards that arrive draw as cards whenever the server sends them.
      */
     HOLIDAY_CARDS("holiday_cards"),
+
+    /**
+     * 13. Crew Day (founder decision, 2026-11-05): a local crew's street day that each household books and pays for
+     * itself, the crew's day and its route, and the street requests. While it is off no row, card, link or
+     * notification for it shows, and `/crew-day/<code>` links open in the browser.
+     */
+    CREW_DAY("crew_day"),
 }
 
 /**
@@ -89,6 +96,7 @@ object LaunchFeatures {
     val mailbox: Boolean get() = isEnabled(LaunchFeature.MAILBOX)
     val pulseRedesign: Boolean get() = isEnabled(LaunchFeature.PULSE_REDESIGN)
     val holidayCards: Boolean get() = isEnabled(LaunchFeature.HOLIDAY_CARDS)
+    val crewDay: Boolean get() = isEnabled(LaunchFeature.CREW_DAY)
 
     /** Parses a comma-separated key list ("all" enables every feature). */
     fun parse(raw: String?): Set<LaunchFeature> {

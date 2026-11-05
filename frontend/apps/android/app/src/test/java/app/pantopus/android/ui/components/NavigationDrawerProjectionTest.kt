@@ -57,7 +57,7 @@ class NavigationDrawerProjectionTest {
             listOf(
                 "my-homes", "my-businesses", "connections", "mailbox", "profile-and-privacy",
                 "beacon-updates", "search", "discover-neighbors",
-                "my-beacon", "my-listings", "my-pulse", "my-tasks", "my-bids",
+                "crew-days", "my-beacon", "my-listings", "my-pulse", "my-tasks", "my-bids",
                 "offers-and-bids", "post-task", "wallet-and-payments",
                 "settings", "help-and-support",
             ),
