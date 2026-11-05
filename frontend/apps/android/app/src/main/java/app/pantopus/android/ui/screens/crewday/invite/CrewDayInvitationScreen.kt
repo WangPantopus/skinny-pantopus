@@ -112,7 +112,7 @@ private fun InvitationContent(
     val street = day.streetLabel ?: day.title
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
         Text(
-            text = "A local crew is coming to $street${day.city?.let { " in $it" }.orEmpty()}.",
+            text = introLine(day, street),
             style = PantopusTextStyle.small,
             color = PantopusColors.appTextSecondary,
         )
@@ -138,12 +138,15 @@ private fun InvitationContent(
                     )
                 }
                 CrewDayCrewRow(crew = day.crew, modifier = Modifier.padding(top = Spacing.s1))
-                Text(
-                    text = countLine(day),
-                    style = PantopusTextStyle.small,
-                    color = PantopusColors.appTextSecondary,
-                    modifier = Modifier.testTag("crewDayInvitationCount"),
-                )
+                // The counts while it can be booked; otherwise the note below says why it can't (as the web).
+                if (day.availability == "open") {
+                    Text(
+                        text = countLine(day),
+                        style = PantopusTextStyle.small,
+                        color = PantopusColors.appTextSecondary,
+                        modifier = Modifier.testTag("crewDayInvitationCount"),
+                    )
+                }
             }
         }
         StateNote(day)
@@ -182,6 +185,20 @@ private fun whenLine(day: CrewDayPublicDto): String =
         CrewDayFormat.longDate(CrewDayFormat.date(day.serviceDate)),
         CrewDayFormat.window(day.windowStart, day.windowEnd)?.let { "Arriving $it" },
     ).joinToString(" · ")
+
+/** The line above the card, as the web words it: who it is for and whether the crew is still coming. */
+private fun introLine(
+    day: CrewDayPublicDto,
+    street: String,
+): String {
+    val place = "$street${day.city?.let { " in $it" }.orEmpty()}"
+    return when {
+        day.viewer?.role == "crew" -> "This is your Crew Day."
+        day.availability == "done" -> "A local crew came to $place."
+        day.availability == "cancelled" -> "A local crew planned a Crew Day on $place."
+        else -> "A local crew is coming to $place."
+    }
+}
 
 /** "6 homes booked · room for 4 more": counts only, never which homes. */
 private fun countLine(day: CrewDayPublicDto): String {
