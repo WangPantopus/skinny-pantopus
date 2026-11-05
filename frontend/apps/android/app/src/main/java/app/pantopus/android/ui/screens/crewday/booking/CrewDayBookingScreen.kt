@@ -511,6 +511,7 @@ private fun StateCard(
             CrewDayBookingCard.Attention -> {
                 val problem = booking.problem
                 StateText(title = "Pantopus support has this", body = problem?.note?.let { "You said: $it" })
+                Photos(booking.problemPhotoUrls, from = "you sent")
                 Text(
                     text =
                         "Your ${booking.priceWords ?: ""} charge is paused while we sort it out." +
@@ -612,9 +613,12 @@ private fun NoteQuote(text: String) {
     )
 }
 
-/** One to eight photo thumbnails; a tap shows one large. */
+/** One to eight photo thumbnails ([from]: "from the crew", "you sent"); a tap shows one large. */
 @Composable
-private fun Photos(urls: List<String>) {
+private fun Photos(
+    urls: List<String>,
+    from: String = "from the crew",
+) {
     if (urls.isEmpty()) return
     var open by remember { mutableStateOf<String?>(null) }
     Row(
@@ -624,7 +628,7 @@ private fun Photos(urls: List<String>) {
         urls.forEachIndexed { index, url ->
             AsyncImage(
                 model = url,
-                contentDescription = "Photo ${index + 1} of ${urls.size} from the crew",
+                contentDescription = "Photo ${index + 1} of ${urls.size} $from",
                 contentScale = ContentScale.Crop,
                 modifier =
                     Modifier
@@ -639,7 +643,7 @@ private fun Photos(urls: List<String>) {
         Dialog(onDismissRequest = { open = null }) {
             AsyncImage(
                 model = url,
-                contentDescription = "Photo from the crew",
+                contentDescription = "Photo $from, large",
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { open = null },
             )
@@ -647,29 +651,47 @@ private fun Photos(urls: List<String>) {
     }
 }
 
-/** The case so far, from the household's events. */
+/** The case so far (board `CdAttention`): when, and what happened, from the report on. */
 @Composable
 private fun Timeline(booking: CrewDayBookingDto) {
-    val lines = booking.events.filter { it.kind.startsWith("problem") || it.kind == "refunded" }
+    val lines = caseLines(booking)
     if (lines.isEmpty()) return
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1), modifier = Modifier.testTag("crewDayBookingTimeline")) {
-        lines.forEach { event ->
-            Text(
-                text = listOfNotNull(booking.dayOf(event.createdAt), eventWords(event.kind)).joinToString(" · "),
-                style = PantopusTextStyle.small,
-                color = PantopusColors.appTextSecondary,
-            )
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2), modifier = Modifier.testTag("crewDayBookingTimeline")) {
+        lines.forEach { (at, text) ->
+            Column(modifier = Modifier.semantics(mergeDescendants = true) {}) {
+                Text(text = at, style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
+                Text(text = text, style = PantopusTextStyle.body, color = PantopusColors.appText)
+            }
         }
     }
 }
 
-private fun eventWords(kind: String): String =
-    when (kind) {
-        "problem_opened" -> "You told Pantopus support"
-        "problem_note" -> "A note was added"
-        "problem_resolved" -> "Pantopus support resolved it"
-        "refunded" -> "Refunded"
-        else -> kind.replace('_', ' ').replaceFirstChar { it.titlecase() }
+/** "Thu, Nov 5 · 9:05 AM" and its line for each step of the case the household may see, as the web words them. */
+private fun caseLines(booking: CrewDayBookingDto): List<Pair<String, String>> {
+    val start = booking.events.indexOfFirst { it.kind == "problem_opened" }
+    if (start < 0) return emptyList()
+    return booking.events.drop(start).mapNotNull { event ->
+        val note = (event.data?.get("note") as? String)?.trim()?.takeIf { it.isNotEmpty() }
+        val text =
+            when (event.kind) {
+                "problem_opened" -> "You reported a problem. Your charge paused."
+                "problem_note" -> note?.let { "You added: “$it”" } ?: "You added photos."
+                "operator_note" -> note?.let { "Pantopus support: $it" }
+                "refunded" -> (event.data?.get("amount_cents") as? Number)?.let { "Refunded ${CrewDayFormat.price(it.toInt())}." }
+                "problem_resolved" -> listOfNotNull(resolvedLine(event.data?.get("resolution") as? String), note).joinToString(" ")
+                "charged", "paid_by_household" -> "Your charge went through."
+                else -> null
+            } ?: return@mapNotNull null
+        listOfNotNull(booking.dayOf(event.createdAt), booking.clockOf(event.createdAt)).joinToString(" · ") to text
+    }
+}
+
+private fun resolvedLine(resolution: String?): String =
+    when (resolution) {
+        "released" -> "Pantopus support released the charge."
+        "refunded" -> "Pantopus support refunded you."
+        "partial_refund" -> "Pantopus support refunded part of the charge."
+        else -> "Pantopus support closed this case."
     }
 
 /** Rain changed the plan (screen 6): pick one of the dates, or cancel at no charge. */
