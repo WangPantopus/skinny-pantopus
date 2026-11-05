@@ -115,10 +115,11 @@ struct CrewDayProposeDatesView: View {
     @State var model: CrewDayProposeDatesModel
     let onBack: () -> Void
     let onSent: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(spacing: 0) {
-            PlanNavBar(title: "Propose new dates", onLeading: onBack)
+            PlanNavBar.crewDay(title: "Propose new dates", onLeading: onBack)
             switch model.page {
             case .loading:
                 CrewDayLoadingView()
@@ -156,7 +157,7 @@ struct CrewDayProposeDatesView: View {
                 Button { Task { if await model.send() { onSent() } } } label: {
                     PlanButtonLabel(title: "Send to \(CrewDayFormat.homes(model.homes))", isLoading: model.sending)
                 }
-                .planButton(.primary)
+                .crewDayButton(.primary)
                 .disabled(!model.canSend)
                 .accessibilityIdentifier("crewDayProposeDatesSend")
             }
@@ -166,15 +167,18 @@ struct CrewDayProposeDatesView: View {
     private var dayGrid: some View {
         let tz = model.day?.day.card.timezone
         return VStack(alignment: .leading, spacing: Spacing.s2) {
-            HStack(alignment: .firstTextBaseline) {
+            CrewDayHeaderRow {
                 Text.planOverline("Next 14 days")
-                Spacer()
+            } trailing: {
                 Text("\(model.picked.count) of 3 picked")
                     .planFont(.footnote)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .accessibilityIdentifier("crewDayProposeDatesCount")
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 7), spacing: 6) {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: typeSize.isAccessibilitySize ? 3 : 7),
+                spacing: 6
+            ) {
                 ForEach(model.days, id: \.self) { date in
                     let on = model.picked.contains(date)
                     let day = CrewDayFormat.day(date, timezone: tz)

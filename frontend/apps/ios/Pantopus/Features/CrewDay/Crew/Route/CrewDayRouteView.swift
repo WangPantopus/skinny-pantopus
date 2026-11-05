@@ -20,7 +20,7 @@ struct CrewDayRouteView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PlanNavBar(title: title, onLeading: onBack)
+            PlanNavBar.crewDay(title: title, onLeading: onBack)
             content
         }
         .background(Theme.Color.appBg)
@@ -64,7 +64,7 @@ struct CrewDayRouteView: View {
         case .loading:
             CrewDayLoadingView()
         case let .failed(message):
-            CrewDayErrorView(message: message) { await viewModel.load() }
+            CrewDayErrorView(headline: "Couldn't load the route", message: message) { await viewModel.load() }
         case let .loaded(route):
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s4) {
@@ -86,14 +86,14 @@ struct CrewDayRouteView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if viewModel.arranging != nil {
                     CrewDayFooter {
-                        HStack(spacing: Spacing.s2) {
+                        CrewDayButtonRow(spacing: Spacing.s2) {
                             Button("Cancel") { viewModel.arranging = nil }
-                                .planButton(.tonal)
+                                .crewDayButton(.tonal)
                                 .accessibilityIdentifier("crewDayRouteCancelOrder")
                             Button { Task { await viewModel.saveOrder() } } label: {
                                 PlanButtonLabel(title: "Save order", isLoading: viewModel.working)
                             }
-                            .planButton(.primary)
+                            .crewDayButton(.primary)
                             .accessibilityIdentifier("crewDayRouteSaveOrder")
                         }
                     }
@@ -150,12 +150,12 @@ struct CrewDayRouteView: View {
         let arranging = viewModel.arranging
         let list = arranging ?? route.homes
         return VStack(alignment: .leading, spacing: Spacing.s3) {
-            HStack {
+            CrewDayHeaderRow {
                 Text.planOverline("Homes in route order")
-                Spacer()
+            } trailing: {
                 if arranging == nil {
                     Button("Change order") { viewModel.startArranging() }
-                        .planButton(.text, size: .extraSmall)
+                        .crewDayButton(.text, size: .extraSmall)
                         .accessibilityIdentifier("crewDayRouteReorder")
                 }
             }
@@ -177,18 +177,18 @@ struct CrewDayRouteView: View {
     }
 
     private func arrangeButtons(_ home: CrewDayHomeDTO, index: Int, count: Int) -> some View {
-        HStack(spacing: Spacing.s2) {
+        CrewDayButtonRow(spacing: Spacing.s2) {
             Button { viewModel.move(home, by: -1) } label: {
                 PlanButtonLabel(title: "Move up", icon: .chevronUp, kind: .tonal)
             }
-            .planButton(.tonal, size: .small)
+            .crewDayButton(.tonal, size: .small)
             .disabled(index == 0)
             .accessibilityLabel("Move \(CrewDayRouteCopy.place(home)) up")
             .accessibilityIdentifier("crewDayRouteUp_\(home.id)")
             Button { viewModel.move(home, by: 1) } label: {
                 PlanButtonLabel(title: "Move down", icon: .chevronDown, kind: .tonal)
             }
-            .planButton(.tonal, size: .small)
+            .crewDayButton(.tonal, size: .small)
             .disabled(index == count - 1)
             .accessibilityLabel("Move \(CrewDayRouteCopy.place(home)) down")
             .accessibilityIdentifier("crewDayRouteDown_\(home.id)")
@@ -196,12 +196,12 @@ struct CrewDayRouteView: View {
     }
 
     private func nextButtons(_ home: CrewDayHomeDTO) -> some View {
-        HStack(spacing: 10) {
+        CrewDayButtonRow(spacing: 10) {
             Button("On my way") { sheet = .onMyWay(home) }
-                .planButton(.primary, size: .small)
+                .crewDayButton(.primary, size: .small)
                 .accessibilityIdentifier("crewDayRouteOnMyWay")
             Button("Running late") { sheet = .late }
-                .planButton(.secondary, size: .small)
+                .crewDayButton(.secondary, size: .small)
                 .accessibilityIdentifier("crewDayRouteLate")
         }
     }
@@ -227,48 +227,29 @@ struct CrewDayRouteRow: View {
     let timezone: String?
     let isNext: Bool
     let onOpen: () -> Void
+    @ScaledMetric(relativeTo: .body) private var badgeSize: CGFloat = 32
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         Button(action: onOpen) {
-            HStack(alignment: .top, spacing: Spacing.s3) {
-                Text("\(number)")
-                    .planFont(.bodyStrong)
-                    .foregroundStyle(badgeInk)
-                    .frame(width: 32, height: 32)
-                    .background(Circle().fill(badge))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(CrewDayRouteCopy.title(home))
-                        .planFont(.bodyStrong)
-                        .foregroundStyle(Theme.Color.appText)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if !home.details.isEmpty {
-                        Text(home.details.prefix(1).uppercased() + home.details.dropFirst())
-                            .planFont(.small)
-                            .foregroundStyle(Theme.Color.appTextStrong)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if let note = CrewDayRouteCopy.noteLine(home) {
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Icon(.lock, size: 12, color: Theme.Color.appTextSecondary)
-                            Text(note)
-                                .planFont(.small)
-                                .foregroundStyle(Theme.Color.appTextSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
+            Group {
+                if typeSize.isAccessibilitySize {
+                    // The words keep the full width: the number and the chevron go on a line above them.
+                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                        HStack {
+                            numberBadge
+                            Spacer()
+                            chevron
                         }
+                        words
                     }
-                    CrewDayChip(text: CrewDayRouteCopy.status(home, timezone: timezone), tone: chipTone)
-                        .accessibilityIdentifier("crewDayRouteStatus_\(home.id)")
-                    if let gate = home.gateReadyAt, CrewDayRouteCopy.tone(home) != .done {
-                        CrewDayChip(
-                            text: "Gate is ready · \(CrewDayFormat.time(CrewDayFormat.instant(gate), timezone: timezone))",
-                            tone: .good
-                        )
-                        .accessibilityIdentifier("crewDayRouteGate_\(home.id)")
+                } else {
+                    HStack(alignment: .top, spacing: Spacing.s3) {
+                        numberBadge
+                        words.frame(maxWidth: .infinity, alignment: .leading)
+                        chevron.padding(.top, Spacing.s2)
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Icon(.chevronRight, size: 16, color: Theme.Color.appTextSecondary).padding(.top, Spacing.s2)
             }
             .padding(Spacing.s3)
             .background(RoundedRectangle(cornerRadius: Radii.xl2, style: .continuous).fill(Theme.Color.appSurface))
@@ -288,10 +269,63 @@ struct CrewDayRouteRow: View {
         .accessibilityIdentifier("crewDayRouteHome_\(home.id)")
     }
 
+    private var numberBadge: some View {
+        Text("\(number)")
+            .planFont(.bodyStrong)
+            .foregroundStyle(badgeInk)
+            .frame(width: badgeSize, height: badgeSize)
+            .background(Circle().fill(badge))
+            .accessibilityHidden(true)
+    }
+
+    private var chevron: some View {
+        Icon(.chevronRight, size: 16, color: Theme.Color.appTextSecondary)
+    }
+
+    private var words: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(CrewDayRouteCopy.title(home))
+                .planFont(.bodyStrong)
+                .foregroundStyle(Theme.Color.appText)
+                .fixedSize(horizontal: false, vertical: true)
+            if !home.details.isEmpty {
+                Text(home.details.prefix(1).uppercased() + home.details.dropFirst())
+                    .planFont(.small)
+                    .foregroundStyle(Theme.Color.appTextStrong)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let note = CrewDayRouteCopy.noteLine(home) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Icon(.lock, size: 12, color: Theme.Color.appTextSecondary)
+                    Text(note)
+                        .planFont(.small)
+                        .foregroundStyle(Theme.Color.appTextSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            CrewDayChip(text: CrewDayRouteCopy.status(home, timezone: timezone), tone: chipTone)
+                .accessibilityIdentifier("crewDayRouteStatus_\(home.id)")
+            if let gate = home.gateReadyAt, CrewDayRouteCopy.tone(home) != .done {
+                CrewDayChip(
+                    text: "Gate is ready · \(CrewDayFormat.time(CrewDayFormat.instant(gate), timezone: timezone))",
+                    tone: .good
+                )
+                .accessibilityIdentifier("crewDayRouteGate_\(home.id)")
+            }
+        }
+    }
+
+    /// What VoiceOver reads for the row: everything it shows, the access note and the gate included.
     private var accessibilityText: String {
-        [CrewDayRouteCopy.title(home), home.details, CrewDayRouteCopy.status(home, timezone: timezone)]
-            .filter { !$0.isEmpty }
-            .joined(separator: ". ")
+        var parts = [CrewDayRouteCopy.title(home), home.details]
+        if let note = CrewDayRouteCopy.noteLine(home) { parts.append("Note: \(note)") }
+        parts.append(CrewDayRouteCopy.status(home, timezone: timezone))
+        if let gate = home.gateReadyAt, CrewDayRouteCopy.tone(home) != .done {
+            parts.append("Gate is ready, \(CrewDayFormat.time(CrewDayFormat.instant(gate), timezone: timezone))")
+        }
+        // A part that ends its own sentence ("Back gate is unlatched.") doesn't get a second stop.
+        let trimmed = parts.map { $0.hasSuffix(".") ? String($0.dropLast()) : $0 }
+        return trimmed.filter { !$0.isEmpty }.joined(separator: ". ")
     }
 
     private var badge: Color {

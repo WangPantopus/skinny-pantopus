@@ -114,10 +114,11 @@ struct CrewDayAskView: View {
     @State var model: CrewDayAskModel
     let onBack: () -> Void
     let onAddHome: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(spacing: 0) {
-            PlanNavBar(title: "Ask for a Crew Day", onLeading: onBack)
+            PlanNavBar.crewDay(title: "Ask for a Crew Day", onLeading: onBack)
             if model.sent != nil {
                 sent
             } else {
@@ -125,7 +126,7 @@ struct CrewDayAskView: View {
                 case .loading:
                     CrewDayLoadingView()
                 case let .failed(message):
-                    CrewDayErrorView(message: message) { await model.load() }
+                    CrewDayErrorView(headline: "Couldn't load your street", message: message) { await model.load() }
                 case .loaded:
                     form
                 }
@@ -175,20 +176,27 @@ struct CrewDayAskView: View {
                 }
                 .padding(.horizontal, Spacing.s4)
                 .padding(.vertical, Spacing.s2)
+                // At the accessibility text sizes Send ends the page; pinned, it'd cover a third of it.
+                if typeSize.isAccessibilitySize { footer }
             }
             .scrollDismissesKeyboard(.interactively)
-            CrewDayFooter {
-                Button { Task { await model.send() } } label: {
-                    PlanButtonLabel(title: "Send request", isLoading: model.sending)
-                }
-                .planButton(.primary)
-                .disabled(!model.canSend)
-                .accessibilityIdentifier("crewDayAskSend")
-                Text("We'll tell you within a week whether a crew can come.")
-                    .planFont(.caption)
-                    .foregroundStyle(Theme.Color.appTextSecondary)
-                    .multilineTextAlignment(.center)
+            if !typeSize.isAccessibilitySize { footer }
+        }
+    }
+
+    private var footer: some View {
+        CrewDayFooter {
+            Button { Task { await model.send() } } label: {
+                PlanButtonLabel(title: "Send request", isLoading: model.sending)
             }
+            .crewDayButton(.primary)
+            .disabled(!model.canSend)
+            .accessibilityIdentifier("crewDayAskSend")
+            Text("We'll tell you within a week whether a crew can come.")
+                .planFont(.caption)
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -222,7 +230,7 @@ struct CrewDayAskView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Button("Add your home", action: onAddHome)
-                    .planButton(.primary, size: .small)
+                    .crewDayButton(.primary, size: .small)
                     .accessibilityIdentifier("crewDayAskAddHome")
             }
             .padding(Spacing.s4)
@@ -254,6 +262,7 @@ struct CrewDayAskView: View {
                 .monospacedDigit()
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .frame(maxWidth: .infinity, alignment: .trailing)
+                .accessibilityLabel("\(model.note.count) of 500 characters")
         }
     }
 
@@ -273,7 +282,7 @@ struct CrewDayAskView: View {
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             Button("Done", action: onBack)
-                .planButton(.primary)
+                .crewDayButton(.primary)
                 .accessibilityIdentifier("crewDayAskDone")
             Spacer()
         }

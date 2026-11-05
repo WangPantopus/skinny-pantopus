@@ -123,6 +123,7 @@ final class CrewDayProblemModel {
 struct CrewDayProblemView: View {
     @State private var model: CrewDayProblemModel
     @State private var picked: [PhotosPickerItem] = []
+    @Environment(\.dynamicTypeSize) private var typeSize
     /// The booking the report answered, or nil when closed without sending.
     let onDone: (CrewDayBookingDTO?) -> Void
 
@@ -133,7 +134,7 @@ struct CrewDayProblemView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PlanNavBar(
+            PlanNavBar.crewDay(
                 title: model.request.adding ? "Add a note or photo" : "Something needs attention",
                 leading: .close
             ) { onDone(nil) }
@@ -164,7 +165,7 @@ struct CrewDayProblemView: View {
                 Button { Task { if let booking = await model.send() { onDone(booking) } } } label: {
                     PlanButtonLabel(title: "Send to Pantopus support", isLoading: model.sending)
                 }
-                .planButton(.primary)
+                .crewDayButton(.primary)
                 .disabled(!model.canSend)
                 .accessibilityIdentifier("crewDayProblemSend")
             }
@@ -240,17 +241,21 @@ struct CrewDayProblemView: View {
                 .monospacedDigit()
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .frame(maxWidth: .infinity, alignment: .trailing)
+                .accessibilityLabel("\(model.note.count) of 1,000 characters")
         }
     }
 
     private var photosSection: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            HStack(alignment: .firstTextBaseline) {
+            CrewDayHeaderRow {
                 Text.planOverline("Photos (optional)")
-                Spacer()
+            } trailing: {
                 Text("Up to 4").planFont(.footnote).foregroundStyle(Theme.Color.appTextSecondary)
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.s2), count: 4), spacing: Spacing.s2) {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.s2), count: typeSize.isAccessibilitySize ? 2 : 4),
+                spacing: Spacing.s2
+            ) {
                 ForEach(model.photos) { photo in
                     thumbnail(photo)
                 }

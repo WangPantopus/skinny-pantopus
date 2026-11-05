@@ -79,6 +79,9 @@ final class CrewDayNewModel: WizardModel {
     private(set) var step: Step = .service
     private(set) var isSubmitting = false
     var error: String?
+    /// At the accessibility text sizes (the view sets it) Save draft ends the review instead of sitting in the
+    /// footer, which would cover half the screen.
+    var largeText = false
     /// Sent: the day's status (`pending_review` or `draft`).
     private(set) var sentStatus: String?
     private(set) var sentDayId: String?
@@ -211,7 +214,9 @@ final class CrewDayNewModel: WizardModel {
             primaryCTALabel: step == .review ? "Send to Pantopus for approval" : "Continue",
             primaryCTAEnabled: stepIsValid && !isSubmitting,
             primaryCTAIdentifier: step == .review ? "crewDayNewSend" : "crewDayNewContinue",
-            secondaryCTA: step == .review ? WizardSecondaryCTA(label: "Save draft", identifier: "crewDayNewSaveDraft") : nil,
+            secondaryCTA: step == .review && !largeText
+                ? WizardSecondaryCTA(label: "Save draft", identifier: "crewDayNewSaveDraft")
+                : nil,
             isSubmitting: isSubmitting,
             footerHint: nil,
             dirty: true,
