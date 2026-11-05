@@ -1,3 +1,5 @@
+@file:Suppress("LongMethod")
+
 package app.pantopus.android.ui.screens.crewday.ask
 
 import androidx.compose.foundation.layout.Arrangement
