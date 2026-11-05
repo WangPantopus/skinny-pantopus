@@ -60,6 +60,7 @@ export const LAUNCH_FEATURE_KEYS = [
   'mailbox', // 10. The digital Mailbox (October 9); the Mail tab becomes Messages
   'pulse_redesign', // 11. The Pulse redesign, paused for launch (October 15); the web has no redesign screens
   'holiday_cards', // 12. Christmas cards sent through Mail (October 30); needs `mailbox` on too
+  'crew_day', // 13. Crew Day: a local crew's street day that households book and pay for (November 5)
 ] as const;
 
 export type LaunchFeatureKey = (typeof LAUNCH_FEATURE_KEYS)[number];
@@ -87,6 +88,7 @@ export const launchFeatures = {
   giftFunds: enabledLaunchFeatures.has('gift_funds'),
   mailbox: enabledLaunchFeatures.has('mailbox'),
   holidayCards: enabledLaunchFeatures.has('holiday_cards'),
+  crewDay: enabledLaunchFeatures.has('crew_day'),
 };
 
 // Pages that exist only for a hidden feature, matched against the pathname.
@@ -136,6 +138,11 @@ const LAUNCH_CUT_ROUTES: ReadonlyArray<readonly [boolean, RegExp]> = [
   // #10 Mailbox: every mailbox page. The middleware sends the mailbox itself to Messages.
   // Postcard verification (/app/homes/<id>/verify-postcard) stays.
   [launchFeatures.mailbox, /^\/app\/mailbox(?:\/|$)/],
+  // #13 Crew Day: the invitation and its pages (/crew-day/<code>, which show "This Crew Day isn't available"
+  // instead of landing on the home page), the household's and the operator's pages, and a crew's.
+  [launchFeatures.crewDay, /^\/crew-day(?:\/|$)/],
+  [launchFeatures.crewDay, /^\/app\/(?:admin\/)?crew-days(?:\/|$)/],
+  [launchFeatures.crewDay, /^\/app\/businesses\/[^/]+\/crew-days(?:\/|$)/],
 ];
 
 /** True when `path` opens a page of a feature hidden for the first launch. */
