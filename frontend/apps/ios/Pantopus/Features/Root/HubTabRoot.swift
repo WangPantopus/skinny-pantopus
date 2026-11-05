@@ -506,6 +506,9 @@ public enum HubRoute: Hashable {
     case waitingRoom(homeId: String)
     /// Calendarly scheduling sub-routes (Foundation I0b).
     case scheduling(SchedulingRoute)
+    /// Crew Day's screens (launch cut #13): the side menu's rows, the Today
+    /// cards, invitation links and notices open them here.
+    case crewDay(CrewDayRoute)
     #if DEBUG
     case tokenGallery
     case iconGallery
@@ -1085,6 +1088,8 @@ public struct HubTabRoot: View {
             true
         case let .scheduling(route):
             schedulingDrawsOwnHeader(route)
+        case let .crewDay(route):
+            route.drawsOwnHeader
         default:
             false
         }
@@ -1216,6 +1221,9 @@ public struct HubTabRoot: View {
         case .walletAndPayments: return .wallet
         case .settings: return .menu
         case .helpSupport: return .helpCenter
+        // Crew Day (launch cut #13): the household's list, and the crew's.
+        case .crewDays: return .crewDay(.mine)
+        case .businessCrewDays: return .crewDay(.crewList(businessId: nil))
         // Home
         case .homeProperty: return .propertyDetails(homeId: homeId)
         case .homeOverview: return .homeDashboard(homeId: homeId)
@@ -1522,6 +1530,25 @@ public struct HubTabRoot: View {
             _ = router.consume()
         case let .invoiceDetail(invoiceId):
             path.append(.invoiceDetail(invoiceId: invoiceId))
+            _ = router.consume()
+        // Crew Day (launch cut #13): links and notices open its screens here.
+        case let .crewDayInvitation(code):
+            path.append(.crewDay(.invitation(code: code)))
+            _ = router.consume()
+        case .crewDays:
+            path.append(.crewDay(.mine))
+            _ = router.consume()
+        case .crewDayAsk:
+            path.append(.crewDay(.ask))
+            _ = router.consume()
+        case let .crewDayBooking(bookingId):
+            path.append(.crewDay(.booking(bookingId: bookingId)))
+            _ = router.consume()
+        case let .crewDaysCrew(businessId):
+            path.append(.crewDay(.crewList(businessId: businessId)))
+            _ = router.consume()
+        case let .crewDayCrew(_, crewDayId):
+            path.append(.crewDay(.crewDay(crewDayId: crewDayId)))
             _ = router.consume()
         default:
             break
@@ -3867,6 +3894,8 @@ public struct HubTabRoot: View {
             ) { pop() }
         case let .scheduling(route):
             SchedulingRouter.destination(for: route, owner: .personal) { push(.scheduling($0)) }
+        case let .crewDay(route):
+            CrewDayRouter.destination(for: route, push: push) { pop() }
         #if DEBUG
         case .tokenGallery: TokenGalleryView()
         case .iconGallery: IconGalleryView()
@@ -4236,6 +4265,9 @@ extension HubRoute {
         // Launch cuts #12 + #10: sending a Christmas card.
         case .christmasCards:
             LaunchFeatures.holidayCards && LaunchFeatures.mailbox
+        // Launch cut #13 (Crew Day).
+        case .crewDay:
+            LaunchFeatures.crewDay
         default:
             true
         }

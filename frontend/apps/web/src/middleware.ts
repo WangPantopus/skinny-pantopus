@@ -15,6 +15,9 @@ const SESSION_COOKIE = 'pantopus_session';
 
 const AUTH_PAGES = new Set(['/login', '/register']);
 
+// The public Crew Day pages: the invitation (/crew-day/<code>) and the pages below it.
+const CREW_DAY_PUBLIC = /^\/crew-day(?:\/|$)/;
+
 // Public read-only twins of app routes. Used (a) to bounce signed-out visitors
 // to the public page and (b) as the fallback when a stale session cannot be
 // refreshed.
@@ -120,8 +123,9 @@ export function middleware(req: NextRequest) {
 
   // Launch cut (src/lib/featureFlags.ts): public pages of a hidden feature
   // (persona pages and /@handle, listings, task browse, booking pages) land
-  // on the home page.
-  if (!pathname.startsWith('/app') && isLaunchCutPath(pathname)) {
+  // on the home page. A Crew Day link (#13) says "This Crew Day isn't
+  // available" itself, as it does for a code that doesn't exist.
+  if (!pathname.startsWith('/app') && isLaunchCutPath(pathname) && !CREW_DAY_PUBLIC.test(pathname)) {
     return NextResponse.redirect(new URL('/', req.url));
   }
   // Launch cut #4: the public task page is hidden; its link opens the task
