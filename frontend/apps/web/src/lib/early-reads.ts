@@ -40,6 +40,10 @@ const SESSION_CHANGE_KEY = 'pantopus_auth_session_change';
  * With the session flag set, starts the shell's and this path's reads. A
  * session being recovered in place (lib/session-refresh.ts) is refreshed
  * first; a failed recovery starts none.
+ *
+ * At low fetch priority: the page's scripts load as async scripts (low
+ * priority) and content waits for them, so on a slow link these reads must
+ * not take the bandwidth first. A browser without fetch priorities ignores it.
  */
 export const EARLY_READS_SCRIPT = `(function(){try{
 if(!/(?:^|;\\s*)pantopus_session=1(?:;|$)/.test(document.cookie))return;
@@ -50,5 +54,5 @@ var k='';try{k=localStorage.getItem('${SESSION_CHANGE_KEY}')||'';}catch(e){}
 var rec=window.__pantopusRecovery;
 var ready=rec&&rec.promise?rec.promise:Promise.resolve({status:'success'});
 var e=window.__pantopusEarly={marker:k,at:Date.now(),reads:{}};
-urls.forEach(function(u){e.reads[u]=ready.then(function(o){return o&&o.status==='success'?fetch(u,{credentials:'same-origin',headers:{'Accept':'application/json, text/plain, */*','x-token-transport':'cookie'}}):null;}).catch(function(){return null;});});
+urls.forEach(function(u){e.reads[u]=ready.then(function(o){return o&&o.status==='success'?fetch(u,{credentials:'same-origin',priority:'low',headers:{'Accept':'application/json, text/plain, */*','x-token-transport':'cookie'}}):null;}).catch(function(){return null;});});
 }catch(x){}})();`;
