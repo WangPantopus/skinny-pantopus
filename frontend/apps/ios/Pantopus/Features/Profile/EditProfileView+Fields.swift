@@ -165,6 +165,14 @@ extension EditProfileView {
         .accessibilityLabel("\(label), \(isOn ? "on" : "off")")
     }
 
+    /// A field's text as the view model has it now. A binding that handed back
+    /// the value captured when the form last drew gave a text box its old text
+    /// between a keystroke and the next redraw: the bio dropped, repeated and
+    /// reordered letters as you typed.
+    func liveText(_ key: EditProfileField) -> Binding<String> {
+        Binding(get: { viewModel.fields[key]?.value ?? "" }, set: { viewModel.update(key, to: $0) })
+    }
+
     @ViewBuilder
     func textField(
         _ key: EditProfileField,
@@ -174,13 +182,9 @@ extension EditProfileView {
         contentType: UITextContentType? = nil
     ) -> some View {
         let snapshot = viewModel.fields[key] ?? FormFieldState(id: key.rawValue, originalValue: "")
-        let binding = Binding<String>(
-            get: { snapshot.value },
-            set: { viewModel.update(key, to: $0) }
-        )
         PantopusTextField(
             label,
-            text: binding,
+            text: liveText(key),
             placeholder: placeholder,
             state: fieldState(for: snapshot),
             isRequired: isRequiredField(key),
@@ -197,7 +201,7 @@ extension EditProfileView {
         let snapshot = viewModel.fields[.username] ?? FormFieldState(id: "username", originalValue: "")
         return UsernameFieldBlock(
             checker: viewModel.usernameCheck,
-            text: Binding(get: { snapshot.value }, set: { viewModel.update(.username, to: $0) }),
+            text: liveText(.username),
             serverError: snapshot.error,
             isDirty: snapshot.isDirty
         )
@@ -219,21 +223,18 @@ extension EditProfileView {
                 Spacer()
                 generateBioButton
             }
-            TextEditor(text: Binding(
-                get: { snapshot.value },
-                set: { viewModel.update(.bio, to: $0) }
-            ))
-            .frame(minHeight: 96)
-            .padding(Spacing.s2)
-            .background(Theme.Color.appSurface)
-            .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-                    .stroke(
-                        snapshot.error != nil ? Theme.Color.error : Theme.Color.appBorder,
-                        lineWidth: 1
-                    )
-            )
+            TextEditor(text: liveText(.bio))
+                .frame(minHeight: 96)
+                .padding(Spacing.s2)
+                .background(Theme.Color.appSurface)
+                .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+                        .stroke(
+                            snapshot.error != nil ? Theme.Color.error : Theme.Color.appBorder,
+                            lineWidth: 1
+                        )
+                )
             if let error = snapshot.error {
                 Text(error)
                     .pantopusTextStyle(.caption)
