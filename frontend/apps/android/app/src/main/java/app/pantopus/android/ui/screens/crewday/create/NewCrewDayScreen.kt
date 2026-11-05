@@ -23,6 +23,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -491,9 +492,16 @@ private fun ReviewRow(
     value: String,
     first: Boolean = false,
 ) {
+    // The label keeps its width and a long value wraps beside it (at 200% text a long value left the label no room).
     PlanOptionRow(first = first, modifier = Modifier.semantics(mergeDescendants = true) {}) {
-        Text(text = label, style = PantopusTextStyle.body, color = PantopusColors.appTextSecondary, modifier = Modifier.weight(1f))
-        Text(text = value, style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold), color = PantopusColors.appText)
+        Text(text = label, style = PantopusTextStyle.body, color = PantopusColors.appTextSecondary)
+        Text(
+            text = value,
+            style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
+            color = PantopusColors.appText,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
