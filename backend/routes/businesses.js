@@ -59,6 +59,10 @@ const router = express.Router();
 const supabaseAdmin = require('../config/supabaseAdmin');
 // Bills from business invoices in the payer's Mail (Mail tab, SRV-7).
 const invoiceBills = require('../services/invoiceBills');
+const {
+  INVOICE_PAID_PAYMENT_STATES, INVOICE_SETTLING_PAYMENT_STATES, INVOICE_CONFIRM_RECHECKS, INVOICE_CONFIRM_RECHECK_MS,
+  RESUMABLE_INTENT_STATUSES, captureInvoicePayment, markInvoicePaid, startInvoicePayment,
+} = require('../services/invoicePayments');
 const verifyToken = require('../middleware/verifyToken');
 const optionalAuth = require('../middleware/optionalAuth');
 const validate = require('../middleware/validate');
@@ -76,14 +80,12 @@ const {
   hasPermission,
   getUserAccess,
   getBusinessPrimaryOwnerId,
-  getBusinessPayoutAccount,
   writeAuditLog,
   BUSINESS_ROLE_RANK,
 } = require('../utils/businessPermissions');
 const { RESERVED_USERNAMES, ENTITY_TYPES, VERIFICATION_STATUSES, getPublishRequirements } = require('../utils/businessConstants');
 const { applyEntityTypeSideEffects } = require('../services/businessEntityService');
 const stripeService = require('../stripe/stripeService');
-const { PAYMENT_STATES } = require('../stripe/paymentStateMachine');
 const { calculateAndStoreCompleteness, calculateProfileCompleteness } = require('../utils/businessCompleteness');
 const { shouldBlockCoordinateOverwrite } = require('../utils/verifiedCoordinateGuard');
 const { generateNewBusinessSignal } = require('../services/businessSignalService');
@@ -4938,56 +4940,20 @@ router.post('/invoices/:invoiceId/pay', verifyToken, async (req, res) => {
 
     // A business whose own payout account Stripe has enabled is paid itself; otherwise its primary owner's wallet
     // receives the money (see getBusinessPrimaryOwnerId). With nobody to receive it, nothing is charged.
-    const ownerId = await getBusinessPrimaryOwnerId(invoice.business_user_id);
-    if (!ownerId) {
-      return res.status(409).json({ error: "This business can't take payments right now.", code: 'BUSINESS_CANNOT_RECEIVE' });
-    }
-    if (ownerId === userId) {
-      return res.status(400).json({ error: "You can't pay an invoice from your own business.", code: 'OWN_BUSINESS' });
-    }
-    const businessAccount = await getBusinessPayoutAccount(invoice.business_user_id);
-    const payeeUserId = businessAccount?.payouts_enabled ? invoice.business_user_id : ownerId;
-
-    // Create payment intent. The key ties it to the payment it replaces, so a double tap makes one.
-    const result = await stripeService.createPaymentIntentForGig({
-      payerId: userId,
-      payeeId: payeeUserId,
-      // The invoice's fee was priced for the business (createInvoice), so the payment is too.
-      feeRateSubjectId: invoice.business_user_id,
-      gigId: invoice.gig_id || null,
-      amount: invoice.total_cents,
+    const started = await startInvoicePayment(invoice, userId, {
       paymentMethodId: payment_method_id || undefined,
-      metadata: {
-        type: 'invoice_payment',
-        invoice_id: invoiceId,
-        business_user_id: invoice.business_user_id,
-      },
       idempotencyKey: `invoice-pay:${invoiceId}:${invoice.stripe_payment_intent_id || 'first'}`,
     });
-
-    if (!result.success) {
+    if (started.refused === 'BUSINESS_CANNOT_RECEIVE') {
+      return res.status(409).json({ error: "This business can't take payments right now.", code: 'BUSINESS_CANNOT_RECEIVE' });
+    }
+    if (started.refused === 'OWN_BUSINESS') {
+      return res.status(400).json({ error: "You can't pay an invoice from your own business.", code: 'OWN_BUSINESS' });
+    }
+    if (started.refused === 'PAYMENT_FAILED') {
       return res.status(500).json({ error: 'Failed to create payment', code: 'PAYMENT_FAILED' });
     }
-
-    // Store the payment reference and mark as "viewed" (not "paid" yet —
-    // the invoice transitions to "paid" only after Stripe confirms capture).
-    // The payment is priced at the business's rate now, which can differ from when the invoice was sent (its type
-    // was verified since, say); the invoice shows the fee actually taken.
-    const paymentFee = result.payment?.amount_platform_fee;
-    const feeCents = Number.isInteger(paymentFee) ? paymentFee : invoice.fee_cents;
-    const { error: updateErr } = await supabaseAdmin
-      .from('BusinessInvoice')
-      .update({
-        status: 'viewed',
-        payment_id: result.paymentId,
-        stripe_payment_intent_id: result.paymentIntentId,
-        fee_cents: feeCents,
-      })
-      .eq('id', invoiceId);
-
-    if (updateErr) {
-      logger.error('Failed to update invoice payment reference', { invoiceId, error: updateErr.message });
-    }
+    const { result, feeCents } = started;
 
     res.json({
       client_secret: result.clientSecret,
@@ -5004,99 +4970,8 @@ router.post('/invoices/:invoiceId/pay', verifyToken, async (req, res) => {
 
 // A captured payment (held, then on its way to the business) is money received; anything earlier,
 // refunded or disputed is not.
-const INVOICE_PAID_PAYMENT_STATES = new Set([
-  PAYMENT_STATES.CAPTURED_HOLD,
-  PAYMENT_STATES.TRANSFER_SCHEDULED,
-  PAYMENT_STATES.TRANSFER_PENDING,
-  PAYMENT_STATES.TRANSFERRED,
-]);
-
-// A payment that has not reached its held state yet (its card was just accepted, perhaps after 3-D Secure).
-const INVOICE_SETTLING_PAYMENT_STATES = new Set([
-  PAYMENT_STATES.AUTHORIZE_PENDING,
-  PAYMENT_STATES.AUTHORIZATION_FAILED,
-  PAYMENT_STATES.CAPTURE_PENDING,
-]);
-const INVOICE_CONFIRM_RECHECKS = 4;
-const INVOICE_CONFIRM_RECHECK_MS = 1000;
-
-// A PaymentIntent the payer hasn't completed yet; Pay hands the same one back.
-const RESUMABLE_INTENT_STATUSES = new Set(['requires_payment_method', 'requires_confirmation', 'requires_action']);
-
-/**
- * Only Stripe can say an invoice payment went through. Syncs the payment with its intent, captures it
- * if it's authorized (held), and returns its status.
- */
-async function captureInvoicePayment(paymentId) {
-  const synced = await stripeService.syncPaymentAuthorizationStatus(paymentId);
-  if (synced?.payment_status === PAYMENT_STATES.AUTHORIZED) {
-    await stripeService.capturePayment(paymentId);
-  }
-  const { data: payment, error } = await supabaseAdmin
-    .from('Payment')
-    .select('payment_status')
-    .eq('id', paymentId)
-    .maybeSingle();
-  if (error) throw error;
-  return payment?.payment_status || null;
-}
-
-/**
- * Tells the business's owner that an invoice was paid, when it is: the money reaches the business's payout account
- * (or, without one, the owner's wallet) after the 48-hour review (processPendingTransfers says so again then), but
- * they should not have to open the app to find out. The payer goes by their Local Profile, as on the invoice list.
- */
-async function notifyInvoicePaid(invoice) {
-  const ownerId = await getBusinessPrimaryOwnerId(invoice.business_user_id);
-  if (!ownerId) return;
-  const [people, { data: payment }, { data: business }] = await Promise.all([
-    loadChatPeople([invoice.recipient_user_id]),
-    invoice.payment_id
-      ? supabaseAdmin.from('Payment').select('amount_to_payee, payee_id').eq('id', invoice.payment_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    supabaseAdmin.from('User').select('name').eq('id', invoice.business_user_id).maybeSingle(),
-  ]);
-  const total = `$${(invoice.total_cents / 100).toFixed(2)}`;
-  const payerName = people.get(String(invoice.recipient_user_id))?.displayName || 'A customer';
-  const net = payment?.amount_to_payee ? `$${(payment.amount_to_payee / 100).toFixed(2)}` : null;
-  const toBusiness = payment?.payee_id === invoice.business_user_id;
-  const destination = toBusiness ? `${business?.name || "the business"}'s payout account` : 'your wallet';
-  await require('../services/notificationService').createNotification({
-    userId: ownerId,
-    type: 'invoice_paid',
-    title: `Invoice paid: ${total}`,
-    body: net
-      ? `${payerName} paid your invoice. ${net} will reach ${destination} after a short review.`
-      : `${payerName} paid your invoice.`,
-    link: toBusiness ? `/app/businesses/${invoice.business_user_id}/dashboard?tab=payments` : '/app/wallet',
-    metadata: { invoice_id: invoice.id, business_id: invoice.business_user_id, amount_cents: invoice.total_cents },
-    context: 'personal',
-    idempotencyKey: `invoice-paid:${invoice.id}`,
-  });
-}
-
-/** Marks the invoice paid (once) and returns it. */
-async function markInvoicePaid(invoiceId) {
-  const { data: updatedRows, error } = await supabaseAdmin
-    .from('BusinessInvoice')
-    .update({ status: 'paid', paid_at: new Date().toISOString() })
-    .eq('id', invoiceId)
-    .neq('status', 'paid')
-    .select();
-  if (error) throw error;
-  // Its bill in the payer's Mail shows Paid and moves to Receipts (Mail tab, SRV-7); never fails the payment.
-  void invoiceBills.onInvoicePaid(invoiceId);
-  if (updatedRows?.[0]) {
-    // Only the request that marked it paid says so; a notice that fails never fails the payment.
-    notifyInvoicePaid(updatedRows[0]).catch((err) => {
-      logger.warn('Invoice paid notice skipped', { invoiceId, error: err.message });
-    });
-    return updatedRows[0];
-  }
-  // Another request marked it paid first.
-  const { data: invoice } = await supabaseAdmin.from('BusinessInvoice').select('*').eq('id', invoiceId).maybeSingle();
-  return invoice;
-}
+// The invoice payment internals (capture, mark paid, the paid notice, starting a payment) live in
+// services/invoicePayments.js, shared with Crew Day's charges.
 
 /**
  * POST /invoices/:invoiceId/confirm — Confirm invoice payment succeeded
@@ -5198,6 +5073,9 @@ async function knownInvoiceRecipients(businessId, senderId, onlyUserId = null) {
       .eq('user_id', businessId).eq('room.type', 'direct')
       .neq('room.member.user_id', businessId).neq('room.reply.user_id', businessId)
       .limit(1, { referencedTable: 'room.reply' }), 'room.member.user_id', 'joined_at'),
+    // Households with a booking on one of the crew's street days (Crew Day), so it can invoice extra work.
+    recent(supabaseAdmin.from('CrewDayBooking').select('household_user_id, day:crew_day_id!inner(business_user_id)')
+      .eq('day.business_user_id', businessId), 'household_user_id', 'created_at'),
     onlyUserId
       ? connected.or([[senderId, onlyUserId], [onlyUserId, senderId]]
         .map(([a, b]) => `and(requester_id.eq.${a},addressee_id.eq.${b})`).join(',')).limit(1)
@@ -5206,7 +5084,7 @@ async function knownInvoiceRecipients(businessId, senderId, onlyUserId = null) {
   ]);
   const failed = sources.find((r) => r.error);
   if (failed) throw failed.error;
-  const [invoiced, booked, hired, wrote, connections] = sources.map((r) => r.data || []);
+  const [invoiced, booked, hired, wrote, crewDays, connections] = sources.map((r) => r.data || []);
 
   const known = new Map();
   const excluded = new Set([businessId, senderId].map((id) => String(id).toLowerCase()));
@@ -5217,6 +5095,7 @@ async function knownInvoiceRecipients(businessId, senderId, onlyUserId = null) {
   booked.forEach((r) => add(r.invitee_user_id, 'booked'));
   hired.forEach((r) => add(r.user_id, 'hired'));
   wrote.forEach((r) => r.room.member.forEach((m) => add(m.user_id, 'messaged')));
+  crewDays.forEach((r) => add(r.household_user_id, 'crew_day'));
   connections.forEach((r) => add(r.requester_id === senderId ? r.addressee_id : r.requester_id, 'connection'));
   return known;
 }

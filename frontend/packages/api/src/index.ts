@@ -118,6 +118,7 @@ export * as ai from './endpoints/ai';                              // AI Agent â
 export * as mailCompose from './endpoints/mailCompose';            // Mail Compose â€” four-moment flow
 export * as linkPreview from './endpoints/linkPreview';            // Link preview (OG metadata)
 export * as supportTrains from './endpoints/supportTrains';        // Support Train (activities)
+export * as crewDays from './endpoints/crewDays';                  // Crew Day (launch cut #13)
 export * as scheduling from './endpoints/scheduling';              // Calendarly scheduling (host)
 export * as publicBooking from './endpoints/publicBooking';        // Calendarly public booking flow
 export type { BookingListParams } from './endpoints/scheduling';
