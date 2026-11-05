@@ -393,7 +393,9 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
       r.resolution === 'released'
         ? `Charge released: ${formatPrice(total)} paid`
         : r.resolution === 'refunded'
-          ? `Refunded ${formatPrice(r.refunded_cents || total)} to ${card(b)}`
+          ? b.status === 'cancelled'
+            ? `We cancelled the ${formatPrice(total)} charge. Nothing was charged.`
+            : `Refunded ${formatPrice(r.refunded_cents || total)} to ${card(b)}`
           : r.resolution === 'partial_refund'
             ? `Refunded ${formatPrice(r.refunded_cents)} of ${formatPrice(total)}`
             : 'Pantopus support resolved this';
@@ -562,16 +564,26 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
   } else if (b.status === 'refunded') {
     state = <StateCard tone="neutral" icon={CreditCard} title={`Refunded ${formatPrice(b.charge.refunded_cents || b.price_cents || 0)} to ${card(b)}`} />;
   } else if (ended) {
+    // Who ended it and how, in honest words: the day called off, a home released, the deadline, an unpriced home.
+    const dayCancelled = b.crew_day.status === 'cancelled';
     const who =
       b.status === 'declined'
         ? `${crew} can't take your home this time. Nothing was charged.`
         : b.cancelled_by === 'household'
           ? 'You cancelled. Nothing was charged.'
           : b.cancelled_by === 'crew'
-            ? `${crew} cancelled. Nothing was charged.`
+            ? dayCancelled
+              ? `${crew} cancelled this day. Nothing was charged.`
+              : b.release_asked_at
+                ? `${crew} released your home at no charge.`
+                : `${crew} cancelled your booking. Nothing was charged.`
             : b.cancelled_by === 'operator'
-              ? 'Pantopus cancelled this Crew Day. Nothing was charged.'
-              : 'No new date was picked, so this booking was cancelled. Nothing was charged.';
+              ? dayCancelled
+                ? 'Pantopus cancelled this Crew Day. Nothing was charged.'
+                : 'Pantopus support cancelled this booking. Nothing was charged.'
+              : b.cancel_reason === 'price_not_answered'
+                ? `${crew} didn't confirm your price before booking closed, so this request ended. Nothing was charged.`
+                : 'No new date was picked, so this booking was cancelled. Nothing was charged.';
     state = (
       <StateCard tone="neutral" icon={CalendarX} title={who}>
         <div className="flex flex-col gap-2.5">
