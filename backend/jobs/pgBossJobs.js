@@ -1,4 +1,5 @@
 const logger = require('../utils/logger');
+const dbTiming = require('../utils/dbTiming');
 const householdClaimConfig = require('../config/householdClaims');
 
 // Import existing job functions (no changes to them)
@@ -78,11 +79,13 @@ async function registerPgBossJobs(boss) {
     // twelve times a minute when idle; pickup can take up to 30 seconds.
     await boss.work(job.name, { pollingIntervalSeconds: 30 }, async ([pgJob]) => {
       const start = Date.now();
+      // The job's Supabase calls (count, time, slowest); pg-boss's own queue queries aren't among them.
+      const ledger = dbTiming.open();
       logger.info(`[pg-boss] Starting: ${job.name}`, { jobId: pgJob.id });
       try {
-        await job.fn();
+        await dbTiming.run(ledger, job.fn);
         const elapsed = Date.now() - start;
-        logger.info(`[pg-boss] Completed: ${job.name}`, { elapsed_ms: elapsed, jobId: pgJob.id });
+        logger.info(`[pg-boss] Completed: ${job.name}`, { elapsed_ms: elapsed, jobId: pgJob.id, ...dbTiming.fields(ledger) });
       } catch (err) {
         const elapsed = Date.now() - start;
         logger.error(`[pg-boss] Failed: ${job.name}`, {
@@ -90,6 +93,7 @@ async function registerPgBossJobs(boss) {
           stack: err.stack,
           elapsed_ms: elapsed,
           jobId: pgJob.id,
+          ...dbTiming.fields(ledger),
         });
         throw err; // pg-boss handles retry
       }

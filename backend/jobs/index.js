@@ -24,6 +24,7 @@
 
 const cron = require('node-cron');
 const logger = require('../utils/logger');
+const dbTiming = require('../utils/dbTiming');
 const householdClaimConfig = require('../config/householdClaims');
 const authorizeUpcomingGigs = require('./authorizeUpcomingGigs');
 const processPendingTransfers = require('./processPendingTransfers');
@@ -168,17 +169,20 @@ function envFlagEnabled(name, defaultValue = true) {
 function wrapJob(name, fn) {
   const wrapped = async () => {
     const start = Date.now();
+    // The job's database calls (count, time, slowest), so its load on the database shows in the log.
+    const ledger = dbTiming.open();
     logger.info(`[CRON] Starting: ${name}`);
     try {
-      await fn();
+      await dbTiming.run(ledger, fn);
       const elapsed = Date.now() - start;
-      logger.info(`[CRON] Completed: ${name}`, { elapsed_ms: elapsed });
+      logger.info(`[CRON] Completed: ${name}`, { elapsed_ms: elapsed, ...dbTiming.fields(ledger) });
     } catch (err) {
       const elapsed = Date.now() - start;
       logger.error(`[CRON] Failed: ${name}`, {
         error: err.message,
         stack: err.stack,
         elapsed_ms: elapsed,
+        ...dbTiming.fields(ledger),
       });
     }
   };
