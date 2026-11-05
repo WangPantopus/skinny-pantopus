@@ -1,0 +1,151 @@
+rank,county,state,fips,population_2024,category,evidence,what_is_there,source
+1,Los Angeles County,California,06037,9757179,"Free, with bedrooms/baths",Checked in the data,"County parcel map service has year built, main sq ft, bedrooms, bathrooms, last sale",LA County Parcel Map Service (lacounty_isd) + county open data
+2,Cook County,Illinois,17031,5182617,"Free, with bedrooms/baths",Checked in the data,"Assessor open data: bedrooms, full/half baths, year built, building sq ft (updated 2026-11-01)",datacatalog.cookcountyil.gov
+3,Harris County,Texas,48201,5009302,"Free, with bedrooms/baths",Official page,"Free public data files; codebook lists bedrooms, bathrooms, fireplaces, stories (no sale prices in Texas)",hcad.org public data (pdata)
+4,Maricopa County,Arizona,04013,4673096,"Free, basics only",Checked in the data,"County GIS: year built, living area, stories, bath fixtures, pool, heat, sale price; no bedrooms. Full assessor data sold under Arizona commercial-purpose rules",gis.maricopa.gov Parcel service
+5,San Diego County,California,06073,3298799,"Free, with bedrooms/baths",Seen in a re-published copy,"SanGIS parcels carry year, bedrooms, baths, garage, pool (seen in re-published copies); SanGIS download has its own license",SanGIS parcels
+6,Orange County,California,06059,3170435,Paid or permission,Official page,No public bulk; Assessor points to ParcelQuest (paid),ocassessor.gov
+7,Miami-Dade County,Florida,12086,2838461,"Free, with bedrooms/baths",Seen in a re-published copy,County open data Property Point View reportedly has bedroom/bath counts (weekly); official bulk file $50 each; state roll free,Miami-Dade open data + FL DOR
+8,Dallas County,Texas,48113,2656028,"Free, basics only",Official page,Free DCAD data files for all accounts; bedroom fields not confirmed (no sale prices in Texas),dallascad.org Data Products
+9,Kings County,New York,36047,2617631,"Free, basics only",Checked in the data,"NY State public parcels: year built 96%, living sq ft; no bedrooms for NYC",NYS Tax Parcels Public + NYC PLUTO
+10,Riverside County,California,06065,2529933,"Free, with bedrooms/baths",Checked in the data,"County open data: year built, living area, bedroom count, bath count",gis.countyofriverside.us Parcels
+11,Clark County,Nevada,32003,2398871,Paid or permission,Official page,"Assessor sells residential extract (weekly); GIS subscription $7,500/yr",clarkcountynv.gov assessor data files
+12,King County,Washington,53033,2340211,"Free, with bedrooms/baths",Seen in a re-published copy,"Weekly assessor downloads incl. residential building (bedrooms, baths); license forbids redistribution without permission",King County Assessor data download
+13,Queens County,New York,36081,2316841,"Free, basics only",Checked in the data,"NY State public parcels (year built, living sq ft; no bedrooms for NYC)",NYS Tax Parcels Public
+14,Tarrant County,Texas,48439,2230708,"Free, with bedrooms/baths",Seen in a re-published copy,Free full property data set; Fort Worth re-publication shows bedroom and bath counts (no sale prices in Texas),tad.org data downloads
+15,San Bernardino County,California,06071,2214281,Paid or permission,Official page,Assessor data sale files and vendors; data for internal use,arc.sbcounty.gov
+16,Bexar County,Texas,48029,2127737,"Free, basics only",Checked in the data,"County GIS parcels: year built, gross building area, stories, rooms; BCAD sells data (no sale prices in Texas)",maps.bexar.org Parcels
+17,Broward County,Florida,12011,2037472,"Free, with bedrooms/baths",Checked in the data,"County GIS layers: bedrooms, baths, year built, building sq ft",Broward County GIS (BCGIS)
+18,Santa Clara County,California,06085,1926325,Paid or permission,Official page,Assessor sells data files incl. property characteristics (order form),sccassessor.org
+19,Wayne County,Michigan,26163,1771063,One city only,Checked in the data,"Detroit only: year built, floor area, sale price; rest of Wayne County not found",Detroit open data parcels
+20,Middlesex County,Massachusetts,25017,1668956,"Free, basics only",Checked in the data,"MassGIS statewide: year built, living area, units, style, rooms, stories, last sale; some towns publish bedrooms too",MassGIS Property Tax Parcels
+21,New York County,New York,36061,1660664,"Free, basics only",Checked in the data,NY State public parcels (no bedrooms for NYC),NYS Tax Parcels Public
+22,Alameda County,California,06001,1649060,Paid or permission,Official page,Characteristics (incl. bed/bath) sold to the public for a fee,acgov.org assessor records
+23,Sacramento County,California,06067,1611231,Not found,Official page,No official bulk; county GIS parcel data restricted; vendors only,saccounty.gov
+24,Palm Beach County,Florida,12099,1582055,"Free, basics only",Official page,State roll free; county data files for a fee,FL DOR NAL + pbcpao.gov
+25,Hillsborough County,Florida,12057,1581426,"Free, basics only",Official page,State roll free; county bulk not found,FL DOR NAL
+26,Philadelphia County,Pennsylvania,42101,1573916,"Free, with bedrooms/baths","Known dataset, not checked today","OPA properties dataset (bedrooms, bathrooms, year built, livable area); not field-checked today",OpenDataPhilly OPA properties
+27,Suffolk County,New York,36103,1535909,Not found,Checked in the data,NY State public layer covers only ~14% of Suffolk parcels; county bulk not found,NYS Tax Parcels Public (partial)
+28,Orange County,Florida,12095,1533646,"Free, basics only",Official page,State roll free; county bulk not found,FL DOR NAL
+29,Nassau County,New York,36059,1392438,Not found,Official page,Lookup site only; not in NY State public layer,lrv.nassaucountyny.gov
+30,Bronx County,New York,36005,1384724,"Free, basics only",Checked in the data,NY State public parcels (no bedrooms for NYC),NYS Tax Parcels Public
+31,Travis County,Texas,48453,1363767,"Free, basics only",Official page,Whole appraisal roll export free (PACS layout with improvement detail); bedroom fields not confirmed (no sale prices in Texas),traviscad.org
+32,Franklin County,Ohio,39049,1356303,"Free, with bedrooms/baths",Checked in the data,"County Auditor GIS: year built, building area, bedrooms, baths, sale price",gis.franklincountyohio.gov
+33,Oakland County,Michigan,26125,1296888,"Free, with bedrooms/baths",Checked in the data,"County Tax Parcel Plus: bedrooms, baths, living area (no year built)",gisservices.oakgov.com
+34,Hennepin County,Minnesota,27053,1273334,"Free, basics only",Checked in the data,"County parcels: year built, sale price/date, market value (no size)",gis.hennepin.us LAND_PROPERTY
+35,Collin County,Texas,48085,1254658,"Free, basics only",Checked in the data,"Collin CAD on Texas Open Data: year built, main area (no sale prices in Texas)",data.texas.gov Collin CAD
+36,Cuyahoga County,Ohio,39035,1240594,"Free, basics only",Checked in the data,"County open data parcels: residential living area, rooms, sale amount (no year built in layer)",gis.cuyahogacounty.gov Open_Data_Parcels
+37,Wake County,North Carolina,37183,1232444,"Free, basics only",Checked in the data,"County parcels: year built, heated area, sale price",maps.wakegov.com Parcels
+38,Allegheny County,Pennsylvania,42003,1231814,"Free, with bedrooms/baths","Known dataset, not checked today","WPRDC property assessments (bedrooms, full/half baths, year built, finished area); not field-checked today",WPRDC Allegheny assessments
+39,Salt Lake County,Utah,49035,1216274,"Free, basics only",Checked in the data,"State LIR parcels: year built, building sq ft (no sale prices in Utah)",UGRC Parcels_SaltLake_LIR
+40,Mecklenburg County,North Carolina,37119,1206285,"Free, with bedrooms/baths",Seen in a re-published copy,"Free Tax Parcels with CAMA Data; Charlotte re-publication shows bedrooms, baths, heated area, year built, fireplaces",maps.mecknc.gov open data
+41,Contra Costa County,California,06013,1172607,"Free, basics only",Checked in the data,"County assessment parcels: year built, building sq ft",gis.cccounty.us CCMAP
+42,Fairfax County,Virginia,51059,1160925,"Free, with bedrooms/baths",Official page,"Real Estate Dwelling Data CSV: year built, bedrooms, bathrooms, style",Fairfax County open data
+43,Fulton County,Georgia,13121,1090354,Not found,Checked in the data,Open tax parcels have no building facts,gismaps.fultoncountyga.gov
+44,Montgomery County,Maryland,24031,1082273,"Free, basics only",Checked in the data,"Maryland SDAT statewide: year built (~92%), structure sq ft, stories, units, sale consideration",MD iMAP Property Data
+45,Pima County,Arizona,04019,1080149,Not found,Official page,Parcels free; no building-facts bulk found,Pima County geospatial portal
+46,Duval County,Florida,12031,1055159,"Free, basics only",Official page,State roll free; county bulk not checked,FL DOR NAL
+47,Denton County,Texas,48121,1045120,Not checked,-,Not checked (Fort Worth layers with bed/bath counts come from Tarrant data; Denton CAD itself not checked),-
+48,Fresno County,California,06019,1024125,Not checked,-,Not checked (California assessors usually sell bulk data),-
+49,Westchester County,New York,36119,1006447,"Free, with bedrooms/baths",Checked in the data,"County tax parcels: year built, living sq ft, bedrooms, full baths",giswww.westchestergov.com
+50,Gwinnett County,Georgia,13135,1003869,Not found,Official page,Bulk file has ownership and values only,gwinnettcounty.com
+51,Honolulu County,Hawaii,15003,998747,Not found,Official page,Weekly value/ownership tables; no building facts found,Honolulu HOLIS
+52,St. Louis County,Missouri,29189,992929,Not found,Official page,No official bulk; vendors only,-
+53,Capitol Planning Region,Connecticut,09110,991508,"Free, with bedrooms/baths",Checked in the data,"Connecticut statewide CAMA 2026: bedrooms, baths, year built, living area, sales",data.ct.gov
+54,Marion County,Indiana,18097,981628,"Free, basics only",Official page,"Indiana DLGF statewide improvement files (year built, size) by email request",Indiana DLGF / Gateway
+55,Bergen County,New Jersey,34003,978641,"Free, basics only",Checked in the data,"NJ MOD-IV statewide: year built, sale price, values (no size, no bedrooms)",maps.nj.gov Cadastral
+56,Prince George's County,Maryland,24033,966629,"Free, basics only",Checked in the data,"Maryland SDAT + county property data: year built, structure sq ft, sale price",MD iMAP + county open data
+57,Pinellas County,Florida,12103,965870,"Free, basics only",Official page,State roll free; county points to state files,FL DOR NAL
+58,Fort Bend County,Texas,48157,958434,"Free, basics only",Checked in the data,"County layer: year built, total living area (no sale prices in Texas)",Fort Bend County Residential Value Assessment
+59,Erie County,New York,36029,950602,"Free, with bedrooms/baths",Checked in the data,"NY State public parcels: year built 86%, bedrooms 81%",NYS Tax Parcels Public
+60,Pierce County,Washington,53053,941170,"Free, basics only",Official page,Free weekly pipe-delimited downloads; fields not confirmed,piercecountywa.gov Data Downloads
+61,DuPage County,Illinois,17043,937142,Paid or permission,Official page,County data requires written permission (FOIA-based use limits),gis.dupageco.org
+62,Milwaukee County,Wisconsin,55079,924740,One city only,Checked in the data,"City of Milwaukee only: year built, building area, bedrooms, baths",City of Milwaukee open data
+63,Kern County,California,06029,922529,Not found,Checked in the data,County GIS assessor layer has land only,KernGIS
+64,Hidalgo County,Texas,48215,914820,"Free, basics only",Seen in a re-published copy,"Appraisal-district facts in city layers: year built, living area (no sale prices in Texas)",Hidalgo CAD via city copies
+65,Shelby County,Tennessee,47157,910530,Paid or permission,Official page,County parcel services restricted to ReGIS participants; vendors,gis.shelbycountytn.gov
+66,Middlesex County,New Jersey,34023,890119,"Free, basics only",Checked in the data,"NJ MOD-IV: year built, sale price (no size)",maps.nj.gov Cadastral
+67,Macomb County,Michigan,26099,886175,Not checked,-,Not checked (Michigan: local assessing units),-
+68,Essex County,New Jersey,34013,881527,"Free, basics only",Checked in the data,"NJ MOD-IV: year built, sale price (no size)",maps.nj.gov Cadastral
+69,Worcester County,Massachusetts,25027,881248,"Free, basics only",Checked in the data,MassGIS statewide,MassGIS
+70,Montgomery County,Pennsylvania,42091,879190,"Free, with bedrooms/baths",Checked in the data,"County parcels: year built, finished living area, bedrooms, baths",Montgomery County PA GIS (Montco_GIS)
+71,El Paso County,Texas,48141,875784,"Free, basics only",Official page,Free certified export files with published layouts; bedroom fields not confirmed (no sale prices in Texas),epcad.org Open Government
+72,Snohomish County,Washington,53061,864113,"Free, basics only",Official page,Assessment roll CSV free 3x/week; improvement file not confirmed,Snohomish County open data
+73,Lee County,Florida,12071,860959,"Free, with bedrooms/baths",Checked in the data,"County parcels: bedrooms, bathrooms, heated area, year built, sale amounts",Lee County GIS
+74,Polk County,Florida,12105,852878,"Free, basics only",Official page,State roll free; county bulk not checked,FL DOR NAL
+75,Baltimore County,Maryland,24005,852425,"Free, basics only",Checked in the data,"Maryland SDAT + county GIS: year built, structure sq ft",MD iMAP + bcgisdata
+76,Hamilton County,Ohio,39061,837359,"Free, basics only",Checked in the data,"County open data: year built, sq ft",CAGIS open data (Hamilton County Auditor)
+77,Ventura County,California,06111,835427,Not checked,-,Not checked (California assessors usually sell bulk data),-
+78,San Francisco County,California,06075,827526,"Free, with bedrooms/baths","Known dataset, not checked today","Assessor secured property tax data published; historic rolls include bedrooms, baths, year built, area; not field-checked today",sf.gov secured property tax data
+79,Essex County,Massachusetts,25009,823938,"Free, basics only",Checked in the data,MassGIS statewide,MassGIS
+80,Oklahoma County,Oklahoma,40109,816490,Not checked,-,Not checked,-
+81,San Joaquin County,California,06077,816108,Not checked,-,Not checked (California assessors usually sell bulk data),-
+82,Multnomah County,Oregon,41051,795897,"Free, basics only",Checked in the data,"Taxlots: year built, building sq ft, sale price",Metro RLIS / county taxlots
+83,Jefferson County,Kentucky,21111,793881,Paid or permission,Official page,PVA commercial subscription billed monthly,jeffersonpva.ky.gov
+84,Suffolk County,Massachusetts,25025,793144,One city only,Checked in the data,"Boston only: year built, gross area, bedroom/bath fields; rest of county has MassGIS basics",BostonGIS Property Assessment FY25
+85,Cobb County,Georgia,13067,787538,Not checked,-,Not checked,-
+86,DeKalb County,Georgia,13089,770307,"Free, basics only",Checked in the data,"County tax parcels: year built, building area",DeKalb County GIS
+87,El Paso County,Colorado,08041,752772,"Free, basics only",Official page,Assessor parcel and sales downloads free; bedroom fields not confirmed,assessor.elpasoco.com
+88,Monroe County,New York,36055,752202,"Free, with bedrooms/baths",Checked in the data,"Monroe County Parcels: year built, living sq ft, bedrooms, full baths",Monroe County Parcels (PlanningDesign)
+89,Montgomery County,Texas,48339,749613,"Free, basics only",Checked in the data,"County GIS MCAD view: year built, main area (no sale prices in Texas)",Montgomery County TX GIS
+90,Utah County,Utah,49049,747234,"Free, basics only",Checked in the data,"State LIR parcels: year built, building sq ft (no sale prices in Utah)",UGRC LIR
+91,San Mateo County,California,06081,742893,Not checked,-,Not checked (city copies show county bed/bath fields; California assessors usually sell bulk data),-
+92,Norfolk County,Massachusetts,25021,740754,"Free, basics only",Checked in the data,MassGIS statewide,MassGIS
+93,Hudson County,New Jersey,34017,736185,"Free, basics only",Checked in the data,"NJ MOD-IV: year built, sale price (no size)",maps.nj.gov Cadastral
+94,Davidson County,Tennessee,47037,729505,Not checked,-,Not checked,-
+95,Denver County,Colorado,08031,729019,"Free, with bedrooms/baths","Known dataset, not checked today","Denver residential characteristics dataset (bedrooms, baths, year built, area); not field-checked today",Denver open data
+96,Williamson County,Texas,48491,727480,"Free, with bedrooms/baths",Checked in the data,"WCAD open data: bedrooms, plumbing, year built, main area (no sale prices in Texas)",data.wcad.org
+97,Jackson County,Missouri,29095,727362,"Free, with bedrooms/baths",Seen in a re-published copy,"County assessment fields in a city layer: bedrooms, baths, effective year, floor area (no sale prices in Missouri)",Jackson County via City of Independence
+98,Lake County,Illinois,17097,718604,"Free, basics only",Official page,Open data assessment by address (2022); fields not confirmed,Lake County IL open data
+99,Will County,Illinois,17197,708583,"Free, basics only",Seen in a re-published copy,"City layer of county data: year built, square footage",Will County via City of Joliet
+100,District of Columbia,District of Columbia,11001,702250,"Free, with bedrooms/baths",Checked in the data,"DC CAMA: year built, living area, bedrooms, bathrooms, sale price",DC GIS open data
+101,Tulsa County,Oklahoma,40143,693514,Not checked,-,Not checked,-
+102,Providence County,Rhode Island,44007,675912,Not checked,-,Not checked (Rhode Island: city assessors),-
+103,Kent County,Michigan,26081,673002,Not checked,-,Not checked (Michigan: local assessing units),-
+104,Bernalillo County,New Mexico,35001,671747,Not checked,-,Not checked (no sale prices in New Mexico),-
+105,Arapahoe County,Colorado,08005,666918,"Free, basics only",Seen in a re-published copy,"Assessor sales file free; year built, building sq ft seen in re-published layers",Arapahoe County assessor
+106,Ocean County,New Jersey,34029,666434,"Free, basics only",Checked in the data,"NJ MOD-IV: year built, sale price (no size)",maps.nj.gov Cadastral
+107,Jefferson County,Alabama,01073,664744,Not checked,-,Not checked,-
+108,Pasco County,Florida,12101,659114,"Free, basics only",Official page,State roll free,FL DOR NAL
+109,Brevard County,Florida,12009,658447,"Free, basics only",Official page,State roll free,FL DOR NAL
+110,Bucks County,Pennsylvania,42017,650131,"Free, with bedrooms/baths",Seen in a re-published copy,"Re-published county parcels: year built, sq ft, bedrooms, full baths, sale price",Bucks County data (third-party copy)
+111,Monmouth County,New Jersey,34025,647520,"Free, basics only",Checked in the data,"NJ MOD-IV: year built, sale price (no size)",maps.nj.gov Cadastral
+112,Western Connecticut Planning Region,Connecticut,09190,637013,"Free, with bedrooms/baths",Checked in the data,Connecticut statewide CAMA 2026,data.ct.gov
+113,Johnson County,Kansas,20091,632276,"Free, basics only",Seen in a re-published copy,"County data in city layers: year built, area (no sale prices in Kansas)",Johnson County AIMS
+114,Washington County,Oregon,41067,611272,"Free, basics only",Checked in the data,"Taxlots: year built, building sq ft, sale price",Metro RLIS
+115,Volusia County,Florida,12127,602772,"Free, basics only",Official page,State roll free; county database download page exists (fields not confirmed),FL DOR NAL + vcpa.vcgov.org
+116,Anne Arundel County,Maryland,24003,602350,"Free, basics only",Checked in the data,Maryland SDAT statewide,MD iMAP
+117,Douglas County,Nebraska,31055,601158,"Free, basics only",Seen in a re-published copy,"Re-published county data: building year built, building sq ft",Douglas County NE (third-party copy)
+118,Union County,New Jersey,34039,594160,"Free, basics only",Checked in the data,"NJ MOD-IV: year built, sale price (no size)",maps.nj.gov Cadastral
+119,Bristol County,Massachusetts,25005,588593,"Free, basics only",Checked in the data,MassGIS statewide,MassGIS
+120,Dane County,Wisconsin,55025,588347,One city only,Checked in the data,"City of Madison only: year built, living area, bedrooms, full baths",City of Madison open data
+121,New Castle County,Delaware,10003,588093,"Free, with bedrooms/baths",Checked in the data,"County parcels: year built, main floor area, bedrooms, full baths",gis.nccde.org
+122,Delaware County,Pennsylvania,42045,584882,Not checked,-,Not checked,-
+123,Jefferson County,Colorado,08059,578533,"Free, basics only",Checked in the data,"County parcels: year built, sq ft",mapservices2.jeffco.us
+124,South Central Connecticut Planning Region,Connecticut,09170,576718,"Free, with bedrooms/baths",Checked in the data,Connecticut statewide CAMA 2026,data.ct.gov
+125,Greenville County,South Carolina,45045,570745,Not checked,-,Not checked (an old third-party copy shows bed/bath fields),-
+126,Baltimore city,Maryland,24510,568271,"Free, basics only",Checked in the data,Maryland SDAT + city real property data,MD iMAP + baltegis
+127,Lancaster County,Pennsylvania,42071,563293,Not checked,-,Not checked,-
+128,Chester County,Pennsylvania,42029,560745,"Free, basics only",Checked in the data,"County parcels: sq ft, last sale price",Chester County PA GIS
+129,Guilford County,North Carolina,37081,558816,"Free, with bedrooms/baths",Seen in a re-published copy,"Regional GIS ParcelsOnline: year built, bedrooms, full baths, sale price",maps.regisnc.org
+130,Stanislaus County,California,06099,556972,Not checked,-,Not checked (a consultant copy shows bed/bath fields; California assessors usually sell bulk data),-
+131,Spokane County,Washington,53063,555947,Not checked,-,Not checked,-
+132,Adams County,Colorado,08001,542973,"Free, with bedrooms/baths",Checked in the data,"County Property Improvements: year built, sq ft, bedrooms, baths",Adams County CO GIS
+133,Plymouth County,Massachusetts,25023,542090,"Free, basics only",Checked in the data,MassGIS statewide,MassGIS
+134,Ramsey County,Minnesota,27123,542015,"Free, with bedrooms/baths",Checked in the data,"County assessor parcel data: bedrooms, full/half baths, year built, sale price",data.ramseycountymn.gov
+135,Summit County,Ohio,39153,538370,"Free, basics only",Seen in a re-published copy,"County tax parcels in city layers: year built, building area",Summit County fiscal office
+136,Montgomery County,Ohio,39113,537443,"Free, with bedrooms/baths",Seen in a re-published copy,"County auditor fields in a city layer: living area, bedrooms, bath fixtures, sale price",Montgomery County OH auditor
+137,Sedgwick County,Kansas,20173,536081,Not checked,-,Not checked (no sale prices in Kansas),-
+138,Ada County,Idaho,16001,535799,"Free, basics only",Seen in a re-published copy,Re-published county parcels: year built (no sale prices in Idaho),Ada County (third-party copy)
+139,Camden County,New Jersey,34007,533988,"Free, basics only",Checked in the data,"NJ MOD-IV: year built, sale price (no size)",maps.nj.gov Cadastral
+140,Clark County,Washington,53011,527269,"Free, with bedrooms/baths",Checked in the data,"Full assessor ZIP checked: bedrooms, baths, heat, roof, walls, garage, sales history",Clark County WA PACS open data
+141,Passaic County,New Jersey,34031,526597,"Free, basics only",Checked in the data,"NJ MOD-IV: year built, sale price (no size)",maps.nj.gov Cadastral
+142,Morris County,New Jersey,34027,523053,"Free, basics only",Checked in the data,"NJ MOD-IV: year built, sale price (no size)",maps.nj.gov Cadastral
+143,Kane County,Illinois,17089,520997,Not checked,-,Not checked (no county open data found),-
+144,Polk County,Iowa,19153,516185,Not checked,-,Not checked,-
+145,Pinal County,Arizona,04021,513862,"Free, basics only",Seen in a re-published copy,"City layer of county data: year built, building area, sale price",Pinal County via City of Maricopa
+146,Washoe County,Nevada,32031,507280,"Free, with bedrooms/baths",Checked in the data,"County parcels: year built, sq ft, bedrooms, baths, sale price",Washoe County GIS
+147,Knox County,Tennessee,47093,506748,Not checked,-,Not checked,-
+148,Lake County,Indiana,18089,502955,"Free, basics only",Official page,Indiana DLGF statewide improvement files by request,Indiana DLGF
+149,Richmond County,New York,36085,498212,"Free, basics only",Checked in the data,NY State public parcels (no bedrooms for NYC),NYS Tax Parcels Public
+150,Prince William County,Virginia,51153,497003,"Free, basics only",Checked in the data,County Parcel CAMA Public: above-grade sq ft,gisweb.pwcva.gov

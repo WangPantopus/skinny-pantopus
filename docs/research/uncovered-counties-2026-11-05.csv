@@ -1,0 +1,45 @@
+rank,county,state,population_2024,status,what_is_there,next_step
+6,Orange County,California,3170435,Paid or permission,No public bulk; Assessor points to ParcelQuest (paid),Get price and license terms
+11,Clark County,Nevada,2398871,Paid or permission,"Assessor sells residential extract (weekly); GIS subscription $7,500/yr",Get price and license terms
+15,San Bernardino County,California,2214281,Paid or permission,Assessor data sale files and vendors; data for internal use,Get price and license terms
+18,Santa Clara County,California,1926325,Paid or permission,Assessor sells data files incl. property characteristics (order form),Get price and license terms
+19,Wayne County,Michigan,1771063,One city only,"Detroit only: year built, floor area, sale price; rest of Wayne County not found",Find the rest of the county
+22,Alameda County,California,1649060,Paid or permission,Characteristics (incl. bed/bath) sold to the public for a fee,Get price and license terms
+23,Sacramento County,California,1611231,Not found,No official bulk; county GIS parcel data restricted; vendors only,File a public-records request or confirm no bulk exists
+27,Suffolk County,New York,1535909,Not found,NY State public layer covers only ~14% of Suffolk parcels; county bulk not found,File a public-records request or confirm no bulk exists
+29,Nassau County,New York,1392438,Not found,Lookup site only; not in NY State public layer,File a public-records request or confirm no bulk exists
+43,Fulton County,Georgia,1090354,Not found,Open tax parcels have no building facts,File a public-records request or confirm no bulk exists
+45,Pima County,Arizona,1080149,Not found,Parcels free; no building-facts bulk found,File a public-records request or confirm no bulk exists
+47,Denton County,Texas,1045120,Not checked,Not checked (Fort Worth layers with bed/bath counts come from Tarrant data; Denton CAD itself not checked),Check the county source
+48,Fresno County,California,1024125,Not checked,Not checked (California assessors usually sell bulk data),Check the county source
+50,Gwinnett County,Georgia,1003869,Not found,Bulk file has ownership and values only,File a public-records request or confirm no bulk exists
+51,Honolulu County,Hawaii,998747,Not found,Weekly value/ownership tables; no building facts found,File a public-records request or confirm no bulk exists
+52,St. Louis County,Missouri,992929,Not found,No official bulk; vendors only,File a public-records request or confirm no bulk exists
+61,DuPage County,Illinois,937142,Paid or permission,County data requires written permission (FOIA-based use limits),Get price and license terms
+62,Milwaukee County,Wisconsin,924740,One city only,"City of Milwaukee only: year built, building area, bedrooms, baths",Find the rest of the county
+63,Kern County,California,922529,Not found,County GIS assessor layer has land only,File a public-records request or confirm no bulk exists
+65,Shelby County,Tennessee,910530,Paid or permission,County parcel services restricted to ReGIS participants; vendors,Get price and license terms
+67,Macomb County,Michigan,886175,Not checked,Not checked (Michigan: local assessing units),Check the county source
+77,Ventura County,California,835427,Not checked,Not checked (California assessors usually sell bulk data),Check the county source
+80,Oklahoma County,Oklahoma,816490,Not checked,Not checked,Check the county source
+81,San Joaquin County,California,816108,Not checked,Not checked (California assessors usually sell bulk data),Check the county source
+83,Jefferson County,Kentucky,793881,Paid or permission,PVA commercial subscription billed monthly,Get price and license terms
+84,Suffolk County,Massachusetts,793144,One city only,"Boston only: year built, gross area, bedroom/bath fields; rest of county has MassGIS basics",Find the rest of the county
+85,Cobb County,Georgia,787538,Not checked,Not checked,Check the county source
+91,San Mateo County,California,742893,Not checked,Not checked (city copies show county bed/bath fields; California assessors usually sell bulk data),Check the county source
+94,Davidson County,Tennessee,729505,Not checked,Not checked,Check the county source
+101,Tulsa County,Oklahoma,693514,Not checked,Not checked,Check the county source
+102,Providence County,Rhode Island,675912,Not checked,Not checked (Rhode Island: city assessors),Check the county source
+103,Kent County,Michigan,673002,Not checked,Not checked (Michigan: local assessing units),Check the county source
+104,Bernalillo County,New Mexico,671747,Not checked,Not checked (no sale prices in New Mexico),Check the county source
+107,Jefferson County,Alabama,664744,Not checked,Not checked,Check the county source
+120,Dane County,Wisconsin,588347,One city only,"City of Madison only: year built, living area, bedrooms, full baths",Find the rest of the county
+122,Delaware County,Pennsylvania,584882,Not checked,Not checked,Check the county source
+125,Greenville County,South Carolina,570745,Not checked,Not checked (an old third-party copy shows bed/bath fields),Check the county source
+127,Lancaster County,Pennsylvania,563293,Not checked,Not checked,Check the county source
+130,Stanislaus County,California,556972,Not checked,Not checked (a consultant copy shows bed/bath fields; California assessors usually sell bulk data),Check the county source
+131,Spokane County,Washington,555947,Not checked,Not checked,Check the county source
+137,Sedgwick County,Kansas,536081,Not checked,Not checked (no sale prices in Kansas),Check the county source
+143,Kane County,Illinois,520997,Not checked,Not checked (no county open data found),Check the county source
+144,Polk County,Iowa,516185,Not checked,Not checked,Check the county source
+147,Knox County,Tennessee,506748,Not checked,Not checked,Check the county source
