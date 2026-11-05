@@ -23,6 +23,9 @@ struct PlansMapCanvas: View {
     let onCluster: @MainActor (PlansCluster) -> Void
     /// A tap on the map itself, away from the pins.
     let onBackground: @MainActor () -> Void
+    /// The camera kept for the next map, from one the map reports. Beside the list, half folded, it's the camera the
+    /// unfolded map would show.
+    var keptCamera: @MainActor (MapCameraUpdateContext) -> MapCamera = { $0.camera }
     /// When a pin was last tapped: the same touch also reaches the map's own
     /// tap (which clears a selection) and must not undo the pin's.
     @State private var pinTappedAt: Date?
@@ -68,7 +71,7 @@ struct PlansMapCanvas: View {
         // of it off screen on every frame, and an overlay that ignores the safe area moved the map down.
         .mapStyle(.standard(emphasis: dimsMap ? .muted : .automatic, pointsOfInterest: .excludingAll))
         .onMapCameraChange(frequency: .onEnd) { context in
-            viewModel.cameraChanged(context.region, camera: context.camera)
+            viewModel.cameraChanged(context.region, camera: keptCamera(context))
         }
         .onTapGesture {
             if let pinTappedAt, Date().timeIntervalSince(pinTappedAt) < 0.5 { return }
