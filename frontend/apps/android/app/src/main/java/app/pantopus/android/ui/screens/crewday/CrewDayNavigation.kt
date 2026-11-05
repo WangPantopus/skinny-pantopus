@@ -1,4 +1,4 @@
-@file:Suppress("MatchingDeclarationName")
+@file:Suppress("MatchingDeclarationName", "LongMethod")
 
 package app.pantopus.android.ui.screens.crewday
 
