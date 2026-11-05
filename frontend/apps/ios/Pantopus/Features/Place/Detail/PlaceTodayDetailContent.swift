@@ -34,6 +34,8 @@ struct TodayTabExtras {
     var onOpenTask: ((_ homeId: String, _ taskId: String) -> Void)?
     /// Needs you (AI phase 3): under the sky, above "Coming up at home".
     var needsYou: TodayNeedsYouModel?
+    /// What the tab says first about the place (a claim's status, "Saved place"): first in the leading column.
+    var lead: AnyView?
 }
 
 struct PlaceTodayDetailContent: View {
@@ -96,8 +98,8 @@ struct PlaceTodayDetailContent: View {
                 .onChange(of: showsCalendar) { _, shows in if !shows { startsPicking = false } }
                 .onChange(of: rootTabs.selected) { (_: RootTab, tab: RootTab) in resumeRadon(tab == .today) }
                 .onChange(of: scenePhase) { (_: ScenePhase, phase: ScenePhase) in
-                    // A picker opened from the radon sheet (the camera's permission alert) leaves the scene
-                    // inactive for a moment, and the sheet stays. Going to the background still ends it.
+                    // Permission alerts and Control Center must not close an unfinished form.
+                    if phase == .inactive { return }
                     if radonState?.choosingReport == true, phase != .background { return }
                     resumeRadon(phase == .active && rootTabs.selected == .today)
                 }
@@ -112,27 +114,48 @@ struct PlaceTodayDetailContent: View {
         }
     }
 
+    /// One column in this order; on the open Duo, the day outside (advisories, the sky, the sun, air, "Good
+    /// day for…" and the full conditions) beside the day at home (Needs you, the agenda, plans, the ballot,
+    /// setup and Ask).
     private func todaySections(proxy: ScrollViewProxy) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            advisories
-            sky(proxy: proxy)
-            sunCard
-            if let needsYou = tab?.needsYou {
-                TodayNeedsYouCard(model: needsYou, hiddenTaskIds: agendaTaskIds, onOpenTask: tab?.onOpenTask)
+        PlaceColumns {
+            if let lead = tab?.lead {
+                lead.placeColumn(.leading, order: 0)
             }
-            agendaSection(proxy: proxy)
-            // The person's plans today (Directions, On my way, Message guests) right under the agenda.
-            if tab != nil, PlansFlags.shared.plans {
-                PlansTodayCards(gapAbove: true)
+            VStack(alignment: .leading, spacing: 0) {
+                advisories
+                sky(proxy: proxy)
+                sunCard
             }
-            airTile(proxy: proxy)
-            goodDay
-            ballotWeek
-            setup(proxy: proxy)
+            .placeColumn(.leading, order: 1)
+            VStack(alignment: .leading, spacing: 0) {
+                if let needsYou = tab?.needsYou {
+                    TodayNeedsYouCard(model: needsYou, hiddenTaskIds: agendaTaskIds, onOpenTask: tab?.onOpenTask)
+                }
+                agendaSection(proxy: proxy)
+                // The person's plans today (Directions, On my way, Message guests) right under the agenda.
+                if tab != nil, PlansFlags.shared.plans {
+                    PlansTodayCards(gapAbove: true)
+                }
+            }
+            // Level with the sky when it starts the column.
+            .placeColumn(.trailing, order: 2, trimsTop: Spacing.s3)
+            VStack(alignment: .leading, spacing: 0) {
+                airTile(proxy: proxy)
+                goodDay
+            }
+            .placeColumn(.leading, order: 3)
+            VStack(alignment: .leading, spacing: 0) {
+                ballotWeek
+                setup(proxy: proxy)
+            }
+            .placeColumn(.trailing, order: 4)
             fullConditions
+                .placeColumn(.leading, order: 5)
             if let tab {
                 AskPantopusBox(action: tab.onAsk)
                     .padding(.top, 24)
+                    .placeColumn(.trailing, order: 6)
             }
         }
     }
@@ -194,7 +217,8 @@ struct PlaceTodayDetailContent: View {
     }
 
     private func resumeRadon(_ active: Bool) {
-        radonState?.suspend()
+        if active, radonState?.context.active == true { return }
+        if !active { radonState?.suspend() }
         guard active, showHomeRadon, let homeId = vm.calendarHomeId else { return }
         if let current = radonState, current.homeId == homeId, current.resumeIfFresh() { return }
         let current = RadonTodayState(homeId: homeId, showing: radonState)
@@ -679,8 +703,12 @@ extension PlaceTodayDetailContent {
 extension PlaceTodayDetailContent {
     /// The full readings and every source: the daily forecast, the AQI gauge,
     /// every alert with its official text and the calendar's source.
-    @ViewBuilder
     var fullConditions: some View {
+        VStack(alignment: .leading, spacing: 0) { fullConditionsRows }
+    }
+
+    @ViewBuilder
+    private var fullConditionsRows: some View {
         PlaceGroupSurface {
             PlaceFoldRow(
                 title: "Sources and full conditions",
@@ -689,7 +717,8 @@ extension PlaceTodayDetailContent {
                 identifier: "today.fullConditions"
             ) { EmptyView() }
         }
-        .padding(.top, setupVisible ? 12 : 24)
+        // Right under setup on a phone; under "Good day for…" in two columns.
+        .modifier(PlaceColumnGap(oneColumn: setupVisible ? 12 : 24, twoColumns: 24))
         .id("todayFullConditions")
         if conditionsOpen {
             VStack(alignment: .leading, spacing: 0) {
@@ -1876,6 +1905,19 @@ private final class RadonTodayContext {
     }
 }
 
+/// Kept only in memory for the same Home and signed-in session. Fresh task
+/// capabilities must allow the action before these fields are shown again.
+private struct RadonTodayDraft {
+    let kind: String
+    let taskId: String?
+    let date: Date
+    let hasDate: Bool
+    let result: String
+    let reportMessage: String?
+    let reportFailed: Bool
+    let reportTestKind: String?
+}
+
 @Observable
 @MainActor
 private final class RadonTodayState {
@@ -1909,6 +1951,7 @@ private final class RadonTodayState {
     private var carried = false
     /// When this lifecycle's own check answered (Today's fresh window).
     private var answeredAt: Date?
+    private var interruptedDraft: RadonTodayDraft?
 
     init(homeId: String) {
         self.homeId = homeId
@@ -1923,7 +1966,9 @@ private final class RadonTodayState {
     /// until its own check answers (coming back to Today never blanks the card).
     convenience init(homeId: String, showing previous: RadonTodayState?) {
         self.init(homeId: homeId)
-        guard let previous, previous.homeId == homeId, previous.loaded else { return }
+        guard let previous, previous.homeId == homeId, previous.context.scope.isCurrent else { return }
+        interruptedDraft = previous.interruptedDraft
+        guard previous.loaded else { return }
         task = previous.task
         canCreate = previous.canCreate
         loaded = true
@@ -1944,7 +1989,7 @@ private final class RadonTodayState {
     /// change, `today`, coming back after 15 minutes): this lifecycle, with
     /// its task session, carries on without a request.
     func resumeIfFresh() -> Bool {
-        guard let answeredAt, loaded, error == nil, access.isCurrent,
+        guard interruptedDraft == nil, let answeredAt, loaded, error == nil, access.isCurrent,
               Date().timeIntervalSince(answeredAt) < ScreenDataKind.today.freshFor,
               !ScreenStore.shared.wasMarked(topics: [ScreenTopic.today, ScreenTopic.home(homeId)], kind: .today, since: answeredAt)
         else { return false }
@@ -1953,6 +1998,12 @@ private final class RadonTodayState {
     }
 
     func suspend() {
+        if let sheet {
+            interruptedDraft = RadonTodayDraft(
+                kind: sheet, taskId: task?.id, date: selectedDate, hasDate: hasDate, result: result,
+                reportMessage: reportMessage, reportFailed: reportFailed, reportTestKind: reportTestKind
+            )
+        }
         context.active = false
         access.invalidatePending()
         coordinator?.hide()
@@ -1975,10 +2026,11 @@ private final class RadonTodayState {
             carried = false
             error = nil
             answeredAt = Date()
+            restoreInterruptedDraft()
         } catch {
             guard (try? context.requireCurrent()) != nil, access.lifecycleRevision == revision, access.isCurrent else { return }
             // A failed re-check keeps the carried answer; a refusal still clears it.
-            if carried, !Self.isForbidden(error) { return }
+            if carried, interruptedDraft == nil, !Self.isForbidden(error) { return }
             loaded = false
             canCreate = false
             if case .forbidden = error as? APIError {
@@ -1988,6 +2040,30 @@ private final class RadonTodayState {
             } else {
                 self.error = "Couldn't check your home's radon tasks. Try again."
             }
+        }
+    }
+
+    private func restoreInterruptedDraft() {
+        guard let draft = interruptedDraft else { return }
+        // A different task must never receive a date intended for the previous one.
+        guard draft.kind != "change" || draft.taskId == task?.id else {
+            interruptedDraft = nil
+            return
+        }
+        do {
+            try open(draft.kind)
+            // A dispatched request has its own durable, exact-payload recovery.
+            if retained == nil {
+                selectedDate = draft.date
+                hasDate = draft.hasDate
+                result = draft.result
+                reportMessage = draft.reportMessage
+                reportFailed = draft.reportFailed
+                reportTestKind = draft.reportTestKind
+            }
+            interruptedDraft = nil
+        } catch {
+            self.error = "Your draft is retained. Reopen Tasks to check your access, then return here."
         }
     }
 

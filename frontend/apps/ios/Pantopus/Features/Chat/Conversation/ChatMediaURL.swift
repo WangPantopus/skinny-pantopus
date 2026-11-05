@@ -111,6 +111,16 @@ enum ChatMediaURL {
         let data: Data
     }
 
+    /// Matches the chat upload's file types in backend/services/s3Service.js.
+    /// Reject other Files selections before reading or queuing their bytes.
+    private static let allowedAttachmentMIMEs: Set<String> = [
+        "image/jpeg", "image/png", "image/gif", "image/webp", "image/avif", "image/heic", "image/heif",
+        "video/mp4", "video/quicktime", "video/x-msvideo", "video/webm",
+        "application/pdf", "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "text/plain"
+    ]
+
     /// Called off the main actor. Refuse oversized files before reading their
     /// bytes, and bound the read too when a provider cannot report its size.
     static func readDocument(_ url: URL, isAssistant: Bool) throws -> PickedDocument {
@@ -124,6 +134,7 @@ enum ChatMediaURL {
             // The assistant keeps its existing PDF validation and limits.
             data = try Data(contentsOf: url)
         } else {
+            guard allowedAttachmentMIMEs.contains(mime) else { throw ChatLocalStorageError.unsupportedAttachment }
             let megabytes = mime.hasPrefix("image/") ? 10 : mime.hasPrefix("video/") ? 100 : 25
             let limit = megabytes * 1024 * 1024
             guard (values.fileSize ?? 0) <= limit else { throw ChatLocalStorageError.attachmentLimit(megabytes: megabytes) }

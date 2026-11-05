@@ -1,9 +1,10 @@
 /**
  * Persistent login — web session recovery (design §11, docs/01 §1.5).
  *
- *   A. middleware: a stale session (pantopus_session=1, no pantopus_access) is
- *      handed to /session/refresh instead of having its cookies cleared; the
- *      refresh route always passes; unauthenticated /app still goes to /login;
+ *   A. middleware: a stale session (pantopus_session=1, no pantopus_access)
+ *      renders the app document with a recovery hint (its first script
+ *      refreshes in place) instead of having its cookies cleared; the refresh
+ *      route always passes; unauthenticated /app still goes to /login;
  *      authenticated traffic is unchanged.
  *   B. /session/refresh page: success → full navigation to redirectTo;
  *      invalid → server logout (clears the path-scoped refresh cookie) →
@@ -18,6 +19,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import '@testing-library/jest-dom';
 
 const apiMock = require('@pantopus/api');
+
+jest.mock('@pantopus/api/endpoints/auth', () => jest.requireActual('@pantopus/api').auth);
 
 jest.mock('next/server', () => {
   const buildResponse = (headers: Record<string, string> = {}) => {
@@ -71,35 +74,33 @@ function buildRequest(input: string, cookies: Record<string, string> = {}) {
   } as any;
 }
 
+const RECOVER_COOKIE = 'pantopus_recover';
+const recoveryHint = (res: any) => res.cookies.set.mock.calls.find(([name]: [string]) => name === RECOVER_COOKIE);
+
 const STALE = { pantopus_session: '1' };
 const AUTHED = { pantopus_session: '1', pantopus_access: 'jwt' };
 
 describe('middleware — stale web session recovery', () => {
-  test('stale /app/* → /session/refresh?redirectTo=…, cookies untouched', () => {
+  test('stale /app/* renders the app with a recovery hint, session cookies untouched', () => {
     const res = middleware(buildRequest('https://web.test/app/settings/security?tab=devices', STALE));
-    const location = new URL(res.headers.get('location'));
-    expect(location.pathname).toBe(SESSION_REFRESH_PATH);
-    expect(location.searchParams.get('redirectTo')).toBe('/app/settings/security?tab=devices');
-    expect(location.searchParams.get('onFail')).toBeNull();
-    expect(res.cookies.set).not.toHaveBeenCalled();
+    expect(res.headers.get('location')).toBeNull();
+    expect(res.cookies.set).toHaveBeenCalledTimes(1);
+    const [, value, options] = recoveryHint(res);
+    expect(value).toBe('1');
+    expect(options).toEqual(expect.objectContaining({ path: '/', httpOnly: false, sameSite: 'lax', secure: true }));
+    expect(options.maxAge).toBeLessThanOrEqual(60);
   });
 
-  test('stale /app route with a public twin carries it as onFail', () => {
+  test('stale /app route with a public twin carries it as the hint (the onFail fallback)', () => {
     const res = middleware(buildRequest('https://web.test/app/gigs/abc123?ref=x', STALE));
-    const location = new URL(res.headers.get('location'));
-    expect(location.pathname).toBe(SESSION_REFRESH_PATH);
-    expect(location.searchParams.get('redirectTo')).toBe('/app/gigs/abc123?ref=x');
-    expect(location.searchParams.get('onFail')).toBe('/gigs/abc123?ref=x');
-    expect(res.cookies.set).not.toHaveBeenCalled();
+    expect(res.headers.get('location')).toBeNull();
+    expect(recoveryHint(res)[1]).toBe('/gigs/abc123?ref=x');
   });
 
-  test('stale / → refresh towards /app/place with the landing page as fallback', () => {
+  test('stale / → /app/place with the landing page as the fallback', () => {
     const res = middleware(buildRequest('https://web.test/', STALE));
-    const location = new URL(res.headers.get('location'));
-    expect(location.pathname).toBe(SESSION_REFRESH_PATH);
-    expect(location.searchParams.get('redirectTo')).toBe('/app/place');
-    expect(location.searchParams.get('onFail')).toBe('/');
-    expect(res.cookies.set).not.toHaveBeenCalled();
+    expect(res.headers.get('location')).toBe('https://web.test/app/place');
+    expect(recoveryHint(res)[1]).toBe('/');
   });
 
   test('stale /login and auth-flow pages render normally without clearing cookies', () => {
@@ -182,7 +183,9 @@ describe('/session/refresh page', () => {
 
     await waitFor(() => expect(replaceSpy).toHaveBeenCalledWith('/login?redirectTo=%2Fapp%2Fplace'));
     expect(apiMock.auth.logout).toHaveBeenCalledTimes(1);
-    expect(apiMock.clearAuthToken).toHaveBeenCalledTimes(1);
+    // Successful API logout owns session cleanup; the page must not emit
+    // another auth change and remount recovery a second time.
+    expect(apiMock.clearAuthToken).not.toHaveBeenCalled();
   });
 
   test('invalid with onFail → goes to the public fallback instead of login', async () => {

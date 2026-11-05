@@ -978,6 +978,17 @@ internal object RadonToday {
         }
 }
 
+/** Unsaved input stays in memory for this Home visit; it never goes into a saved-state bundle. */
+private data class RadonTodayDraft(
+    val actorId: String,
+    val kind: String,
+    val taskId: String?,
+    val date: LocalDate,
+    val hasDate: Boolean,
+    val result: String,
+    val testKind: String?,
+)
+
 private class RadonTodayState(
     val homeId: String,
     private val factory: HomeTaskCreationFactory,
@@ -989,6 +1000,7 @@ private class RadonTodayState(
     private val memory: RadonTodayMemory?,
     private val reportReader: (suspend (Uri) -> RadonReportReading?)?,
 ) {
+    var suspendedDraft: RadonTodayDraft? = null
     val lifetime = CoroutineScope(parent.coroutineContext + Job(parent.coroutineContext[Job]))
     private var active = true
     private val dispatchContext: suspend () -> Unit = {
@@ -1054,6 +1066,34 @@ private class RadonTodayState(
         lifetime.cancel()
     }
 
+    fun draftForResume(): RadonTodayDraft? {
+        if (busy) return null
+        val kind = sheet ?: return suspendedDraft
+        val actorId = coordinator.access.actorId ?: return null
+        return RadonTodayDraft(actorId, kind, task?.id, selectedDate, hasDate, result, reportTestKind)
+    }
+
+    private suspend fun restoreDraft() {
+        val draft = suspendedDraft ?: return
+        if (draft.actorId != coordinator.access.actorId || (draft.kind == "change" && task?.id != draft.taskId)) {
+            suspendedDraft = null
+            return
+        }
+        if (if (draft.kind == "change") task?.capabilities?.canEdit != true else !canCreate) return
+        open(draft.kind)
+        requireCurrent()
+        if (sheet != null) {
+            // An already submitted request has its own durable retry payload; don't change it with unsent fields.
+            if (retained == null) {
+                selectedDate = draft.date
+                hasDate = draft.hasDate
+                result = draft.result
+                reportTestKind = draft.testKind
+            }
+            suspendedDraft = null
+        }
+    }
+
     /** Reads the card's preferences and the home's tasks; [force] reads the tasks even inside their fresh window. */
     suspend fun load(force: Boolean = false) {
         try {
@@ -1068,7 +1108,8 @@ private class RadonTodayState(
                 return
             }
             val readAt = memory?.byHome?.get(homeId)?.readAt ?: 0L
-            if (!force && loaded && System.currentTimeMillis() - readAt in 0 until RADON_TASKS_FRESH_MS) {
+            val copyFresh = loaded && System.currentTimeMillis() - readAt in 0 until RADON_TASKS_FRESH_MS
+            if (!force && suspendedDraft == null && copyFresh) {
                 keepSnapshot()
                 return
             }
@@ -1078,8 +1119,10 @@ private class RadonTodayState(
             task = RadonToday.selected(response.tasks)
             canCreate = response.collectionCapabilities.canCreate
             loaded = true
+            noTaskAccess = false
             error = null
             keepSnapshot(readAt = System.currentTimeMillis())
+            restoreDraft()
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: NetworkError) {
@@ -1288,14 +1331,18 @@ private fun rememberHomeTodayState(
     val parent = rememberCoroutineScope()
     var epoch by remember(homeId) { mutableStateOf(0) }
     var paused by remember(homeId) { mutableStateOf(false) }
+    var pausedDraft by remember(homeId) { mutableStateOf<RadonTodayDraft?>(null) }
     val state =
         remember(homeId, intel, epoch) {
-            RadonTodayState(homeId, factory, parent, contextGuard, events, context.homeTodayPreferences, hasRadon, memory, reportReader)
+            RadonTodayState(
+                homeId, factory, parent, contextGuard, events, context.homeTodayPreferences, hasRadon, memory, reportReader,
+            ).apply { suspendedDraft = pausedDraft }
         }
     DisposableEffect(state) { onDispose { state.close() } }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
         // Choosing a lab report hands over to the camera or a system picker and comes back: the sheet stays.
         if (state.choosingReport) return@LifecycleEventEffect
+        pausedDraft = state.draftForResume()
         paused = true
         state.close()
     }
@@ -1308,7 +1355,10 @@ private fun rememberHomeTodayState(
     // A pull (or Retry) reads the tasks now; otherwise the card's 2-minute window decides.
     val forcedReads = memory?.forcedReads ?: 0
     val forcedAtStart = remember(state) { forcedReads }
-    LaunchedEffect(state, forcedReads) { state.load(force = forcedReads != forcedAtStart) }
+    LaunchedEffect(state, forcedReads) {
+        pausedDraft = null
+        state.load(force = forcedReads != forcedAtStart)
+    }
     return state
 }
 
