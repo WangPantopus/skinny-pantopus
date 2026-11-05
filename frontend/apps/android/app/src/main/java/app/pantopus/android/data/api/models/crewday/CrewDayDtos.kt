@@ -285,8 +285,10 @@ data class CrewDayBookingDto(
     @Json(name = "cant_get_in_at") val cantGetInAt: String? = null,
     @Json(name = "done_at") val doneAt: String? = null,
     @Json(name = "done_note") val doneNote: String? = null,
-    /** Signed photo URLs, as strings or `{ path, url }` objects; read them through [photoUrls]. */
+    /** Signed photo URLs, as `{ path, url }` objects (or strings); read them through [photoUrls]. */
     @Json(name = "photos") val photosRaw: List<Any?> = emptyList(),
+    /** The household's own problem photos, the same way. */
+    @Json(name = "problem_photos") val problemPhotosRaw: List<Any?> = emptyList(),
     @Json(name = "household_confirmed_at") val householdConfirmedAt: String? = null,
     @Json(name = "charge") val charge: CrewDayChargeDto? = null,
     @Json(name = "invoice_id") val invoiceId: String? = null,
@@ -302,9 +304,15 @@ data class CrewDayBookingDto(
     @Json(name = "events") val events: List<CrewDayEventDto> = emptyList(),
 ) {
     /** The completion photos' signed URLs. */
-    val photoUrls: List<String>
-        get() = photosRaw.mapNotNull { item -> (item as? String) ?: ((item as? Map<*, *>)?.get("url") as? String) }
+    val photoUrls: List<String> get() = crewDayPhotoUrls(photosRaw)
+
+    /** The problem photos' signed URLs. */
+    val problemPhotoUrls: List<String> get() = crewDayPhotoUrls(problemPhotosRaw)
 }
+
+/** Signed URLs from a photo list: `{ path, url }` objects, or plain strings. */
+fun crewDayPhotoUrls(raw: List<Any?>): List<String> =
+    raw.mapNotNull { item -> (item as? String) ?: ((item as? Map<*, *>)?.get("url") as? String) }
 
 /** What a booking was priced as when it was made: an option or an add-on, with its price then. */
 @JsonClass(generateAdapter = true)
@@ -357,7 +365,7 @@ data class CrewDayUploadResponse(
 @JsonClass(generateAdapter = true)
 data class CrewDayRequestBody(
     @Json(name = "service") val service: String,
-    @Json(name = "home_id") val homeId: String,
+    @Json(name = "home_id") val homeId: String?,
     @Json(name = "months") val months: List<String>,
     @Json(name = "note") val note: String?,
 )
@@ -593,8 +601,9 @@ data class CrewDayHomeDto(
     @Json(name = "done_at") val doneAt: String? = null,
     @Json(name = "done_note") val doneNote: String? = null,
     @Json(name = "photo_count") val photoCount: Int = 0,
-    /** Signed photo URLs when the read carries them. */
+    /** Signed photo URLs when the read carries them (the route): `{ path, url }` objects. */
     @Json(name = "photos") val photosRaw: List<Any?> = emptyList(),
+    @Json(name = "problem_photos") val problemPhotosRaw: List<Any?> = emptyList(),
     @Json(name = "charge_state") val chargeState: String? = null,
     @Json(name = "charge_due_at") val chargeDueAt: String? = null,
     @Json(name = "problem") val problem: CrewDayProblemDto? = null,
@@ -629,10 +638,32 @@ data class CrewDayCrewViewDto(
 /** `GET /api/crew-days/:id/route?date=` (screen 16): the homes for one date, in the crew's order. */
 @JsonClass(generateAdapter = true)
 data class CrewDayRouteDto(
-    @Json(name = "day") val day: CrewDayDto? = null,
+    @Json(name = "crew_day_id") val crewDayId: String? = null,
+    @Json(name = "title") val title: String = "",
     @Json(name = "date") val date: String? = null,
+    /** Every date this day's homes are on (rain can split a day). */
+    @Json(name = "dates") val dates: List<String> = emptyList(),
+    @Json(name = "timezone") val timezone: String? = null,
+    @Json(name = "window_start") val windowStart: String? = null,
+    @Json(name = "window_end") val windowEnd: String? = null,
+    @Json(name = "total") val total: Int = 0,
+    @Json(name = "done") val done: Int = 0,
     @Json(name = "homes") val homes: List<CrewDayHomeDto> = emptyList(),
-    @Json(name = "done_count") val doneCount: Int = 0,
+)
+
+/** `POST /:id/running-late`: how many homes moved, and the route after. */
+@JsonClass(generateAdapter = true)
+data class CrewDayRunningLateResponse(
+    @Json(name = "date") val date: String? = null,
+    @Json(name = "minutes") val minutes: Int = 0,
+    @Json(name = "moved") val moved: Int = 0,
+    @Json(name = "route") val route: CrewDayRouteDto? = null,
+)
+
+/** `POST /api/crew-days/requests` → `{ request }`. */
+@JsonClass(generateAdapter = true)
+data class CrewDayRequestResponse(
+    @Json(name = "request") val request: CrewDayCardDto,
 )
 
 @JsonClass(generateAdapter = true)
