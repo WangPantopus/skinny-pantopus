@@ -4,8 +4,10 @@
 //
 //  2. Your price (build kit 01-spec.md, board `Price`), step 1 of 2: the
 //  home (from Pantopus, or typed), the options with their prices, the
-//  add-ons, and the home's own total; an address outside the day is
-//  offered "Ask for one on your street".
+//  add-ons, and the home's own total. As soon as the address is known the
+//  model asks whether the day reaches it; an address outside it gets "Ask
+//  for one on your street" under Your home instead of the options, the
+//  add-ons and Continue (as the web does).
 //
 
 import SwiftUI
@@ -24,15 +26,18 @@ struct CrewDayPriceView: View {
                         .planFont(.small)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                     home
-                    options
-                    if !invitation.addOns.isEmpty { addOns }
-                    if model.outOfArea, let address = model.address { outOfArea(address) }
+                    if model.outOfArea, let address = model.address {
+                        outOfArea(address)
+                    } else {
+                        options
+                        if !invitation.addOns.isEmpty { addOns }
+                    }
                 }
                 .padding(Spacing.s4)
                 // At the accessibility text sizes the total and Continue end the page; pinned, they'd cover half of it.
-                if typeSize.isAccessibilitySize { footer }
+                if typeSize.isAccessibilitySize, !model.outOfArea { footer }
             }
-            if !typeSize.isAccessibilitySize { footer }
+            if !typeSize.isAccessibilitySize, !model.outOfArea { footer }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("crewDayPrice")
@@ -61,12 +66,9 @@ struct CrewDayPriceView: View {
                         // One stop for the address, so VoiceOver reads Change after it, not between its lines.
                         .accessibilityElement(children: .combine)
                     } trailing: {
-                        Button("Change") {
-                            model.addressQuery = ""
-                            model.isTypingAddress = true
-                        }
-                        .crewDayButton(.text, size: .extraSmall)
-                        .accessibilityIdentifier("crewDayPriceChangeAddress")
+                        Button("Change") { model.changeAddress() }
+                            .crewDayButton(.text, size: .extraSmall)
+                            .accessibilityIdentifier("crewDayPriceChangeAddress")
                     }
                     CrewDayLockLine(text: "Visible to your crew and Pantopus.")
                 }
@@ -151,16 +153,28 @@ struct CrewDayPriceView: View {
 
     // MARK: - Out of area
 
+    /// The amber notice the web shows in the same place.
     private func outOfArea(_ address: CrewDayHomeAddress) -> some View {
-        CrewDayCard {
-            Text("This Crew Day doesn't reach \(address.short). It covers homes near \(invitation.streetLabel).")
-                .planFont(.body)
-                .foregroundStyle(Theme.Color.appText)
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: Spacing.s3) {
+            HStack(alignment: .top, spacing: Spacing.s3) {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(Theme.Color.warningLight)
+                    .frame(width: 34, height: 34)
+                    .overlay(Icon(.mapPin, size: 18, color: Theme.Color.warningDeep))
+                    .accessibilityHidden(true)
+                Text("This Crew Day doesn't reach \(address.short). It covers homes near \(invitation.streetLabel).")
+                    .planFont(.body)
+                    .foregroundStyle(Theme.Color.appText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             Button("Ask for one on your street", action: onAsk)
                 .crewDayButton(.secondary)
                 .accessibilityIdentifier("crewDayPriceAsk")
         }
+        .padding(Spacing.s4)
+        .background(RoundedRectangle(cornerRadius: Radii.xl2, style: .continuous).fill(Theme.Color.warningBg))
+        .overlay(RoundedRectangle(cornerRadius: Radii.xl2, style: .continuous).stroke(Theme.Color.warningLight, lineWidth: 1))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("crewDayPriceOutOfArea")
     }
@@ -194,7 +208,7 @@ struct CrewDayPriceView: View {
                 PlanButtonLabel(title: "Continue", isLoading: model.isQuoting)
             }
             .crewDayButton(.primary)
-            .disabled(!model.canContinue || model.outOfArea)
+            .disabled(!model.canContinue)
             .accessibilityIdentifier("crewDayPriceContinue")
         }
     }
