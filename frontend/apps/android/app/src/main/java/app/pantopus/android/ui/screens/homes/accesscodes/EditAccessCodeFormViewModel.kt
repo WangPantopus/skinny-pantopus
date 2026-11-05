@@ -8,7 +8,9 @@ import androidx.lifecycle.viewModelScope
 import app.pantopus.android.core.identity.MadeUpUsername
 import app.pantopus.android.data.api.models.homes.CreateAccessSecretRequest
 import app.pantopus.android.data.api.models.homes.HomeAccessSecretDto
+import app.pantopus.android.data.api.models.homes.HomeAccessSecretsResponse
 import app.pantopus.android.data.api.models.homes.UpdateAccessSecretRequest
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.homes.HomesRepository
@@ -62,10 +64,10 @@ enum class AccessVisibility(
     /** Every active household member. Backend default. */
     Members("members"),
 
-    /** Roles with `members.manage` — owners, admins, managers. */
+    /** Manager, admin and owner roles, in addition to category viewing permission. */
     Managers("managers"),
 
-    /** Owners only. */
+    /** People with sensitive viewing permission, in addition to category viewing permission. */
     Sensitive("sensitive"),
     ;
 
@@ -74,19 +76,19 @@ enum class AccessVisibility(
         get() =
             when (this) {
                 Everyone -> "Everyone with access"
-                Members -> "All household members"
+                Members -> "Household access"
                 Managers -> "Owners & managers"
-                Sensitive -> "Owners only (sensitive)"
+                Sensitive -> "Sensitive access"
             }
 
     /** Secondary copy under the headline. */
     val subcopy: String
         get() =
             when (this) {
-                Everyone -> "Members, guests, and anyone given a visitor pass."
-                Members -> "Every active member of this household."
-                Managers -> "Roles with access management — owners, admins, and managers."
-                Sensitive -> "Visible only to verified owners."
+                Everyone -> "People with permission to view this category of code."
+                Members -> "Household access still requires permission to view this category of code."
+                Managers -> "Owners, admins, and managers with permission to view this category of code."
+                Sensitive -> "People with sensitive access and permission to view this category of code."
             }
 
     companion object {
@@ -128,6 +130,9 @@ data class EditAccessCodeUiState(
     val isRevealed: Boolean = false,
     val isSaving: Boolean = false,
     val isEditing: Boolean = false,
+    val isLoaded: Boolean = false,
+    val canManage: Boolean = false,
+    val allowedVisibilities: Set<AccessVisibility> = emptySet(),
     val loadError: String? = null,
     val roster: List<AccessRosterMember> = emptyList(),
     val toast: EditAccessCodeToast? = null,
@@ -141,13 +146,21 @@ data class EditAccessCodeUiState(
         get() {
             val labelOk = fields[EditAccessCodeField.Label]?.value?.trim()?.isNotEmpty() == true
             val valueOk = fields[EditAccessCodeField.Value]?.value?.trim()?.isNotEmpty() == true
-            return aggregate.isValid && labelOk && valueOk
+            val fieldsValid = aggregate.isValid && labelOk && valueOk
+            return canManage && visibility in allowedVisibilities && fieldsValid
         }
 
     val isDirty: Boolean get() = aggregate.isDirty
 
     /** Form title — different for add vs edit. */
-    val title: String get() = if (isEditing) "Edit access code" else "Add access code"
+    val title: String get() =
+        if (isEditing && isLoaded && !canManage) {
+            "Access code"
+        } else if (isEditing) {
+            "Edit access code"
+        } else {
+            "Add access code"
+        }
 }
 
 /**
@@ -193,6 +206,13 @@ class EditAccessCodeFormViewModel
         var clipboardHandler: ((String) -> Unit) = { _ -> }
 
         private var toastJob: Job? = null
+        private var readJob: Job? = null
+        private var rosterJob: Job? = null
+        private var mutationJob: Job? = null
+        private var generation = 0
+        private var active = true
+        private var retainedDraft: EditAccessCodeUiState? = null
+        private var savedSuccessfully = false
 
         init {
             seedDefaultFields()
@@ -203,12 +223,93 @@ class EditAccessCodeFormViewModel
             clipboardHandler = handler
         }
 
-        /** Load the existing secret (when editing) plus the household roster. */
+        /** The secret read also supplies current write permissions, including private setup homes. */
         fun load() {
-            viewModelScope.launch {
-                loadRoster()
-                secretId?.let { loadSecret(it) }
+            active = true
+            if (savedSuccessfully) {
+                _state.update { it.copy(shouldDismiss = true) }
+                return
             }
+            val request = ++generation
+            readJob?.cancel()
+            rosterJob?.cancel()
+            clearPresentation()
+            readJob =
+                viewModelScope.launch {
+                    val result = homes.getHomeAccessSecrets(homeId)
+                    if (!active || request != generation) return@launch
+                    when (result) {
+                        is NetworkResult.Success -> applyRead(result.data, request)
+                        is NetworkResult.Failure -> {
+                            if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound) retainedDraft = null
+                            _state.update { it.copy(loadError = "Couldn't load access code. Try again.") }
+                        }
+                    }
+                }
+        }
+
+        fun pause() {
+            active = false
+            generation++
+            readJob?.cancel()
+            rosterJob?.cancel()
+            clearPresentation()
+        }
+
+        private fun clearPresentation() {
+            if (_state.value.isLoaded) retainedDraft = _state.value.takeIf { it.isDirty }
+            toastJob?.cancel()
+            _state.update {
+                it.copy(
+                    fields = emptyMap(),
+                    isLoaded = false,
+                    isRevealed = false,
+                    canManage = false,
+                    allowedVisibilities = emptySet(),
+                    roster = emptyList(),
+                    toast = null,
+                    loadError = null,
+                )
+            }
+        }
+
+        private fun applyRead(
+            response: HomeAccessSecretsResponse,
+            request: Int,
+        ) {
+            val secret = response.secrets.firstOrNull { it.id == secretId }
+            val scopes = response.allowedVisibilities.mapNotNull(AccessVisibility::fromWire).toSet().takeIf { response.canManage }.orEmpty()
+            val canManage = scopes.isNotEmpty() && (secretId == null || AccessVisibility.fromWire(secret?.visibility) in scopes)
+            val missingSecret = secretId != null && secret == null
+            val cannotCreate = secretId == null && !canManage
+            if (missingSecret || cannotCreate) {
+                retainedDraft = null
+                _state.update {
+                    it.copy(
+                        loadError =
+                            if (secretId == null) {
+                                "You don't have permission to add access codes."
+                            } else {
+                                "Couldn't find that access code."
+                            },
+                    )
+                }
+                return
+            }
+            if (secret != null) hydrate(secret) else seedDefaultFields()
+            val draft = retainedDraft.takeIf { canManage }
+            retainedDraft = draft
+            _state.update { current ->
+                current.copy(
+                    fields = draft?.fields ?: current.fields,
+                    category = draft?.category ?: current.category,
+                    visibility = draft?.visibility ?: current.visibility,
+                    isLoaded = true, isRevealed = false, canManage = canManage, allowedVisibilities = scopes,
+                    isSaving = mutationJob?.isActive == true, loadError = null,
+                )
+            }
+            // The optional roster must never delay the usable form or its permission check.
+            rosterJob = viewModelScope.launch { loadRoster(request) }
         }
 
         // ─── Field updates ────────────────────────────────────────
@@ -217,6 +318,7 @@ class EditAccessCodeFormViewModel
             field: EditAccessCodeField,
             value: String,
         ) {
+            if (!canEdit()) return
             _state.update { current ->
                 val snapshot =
                     current.fields[field]?.copy(
@@ -229,6 +331,7 @@ class EditAccessCodeFormViewModel
         }
 
         fun selectCategory(category: AccessCategory) {
+            if (!canEdit()) return
             _state.update { current ->
                 if (current.category == category) return@update current
                 val snapshot =
@@ -245,6 +348,7 @@ class EditAccessCodeFormViewModel
         }
 
         fun selectVisibility(scope: AccessVisibility) {
+            if (!canEdit() || scope !in _state.value.allowedVisibilities) return
             _state.update { current ->
                 if (current.visibility == scope) return@update current
                 val snapshot =
@@ -262,11 +366,13 @@ class EditAccessCodeFormViewModel
 
         /** Flip the masked / revealed pose of the value field. */
         fun toggleReveal() {
+            if (!active || !_state.value.isLoaded) return
             _state.update { it.copy(isRevealed = !it.isRevealed) }
         }
 
         /** Copy the current value field through the bound clipboard handler. */
         fun copyValue() {
+            if (!active || !_state.value.isLoaded) return
             val raw = (_state.value.fields[EditAccessCodeField.Value]?.value ?: "").trim()
             if (raw.isEmpty()) return
             clipboardHandler(raw)
@@ -285,22 +391,7 @@ class EditAccessCodeFormViewModel
 
         /** Roster-aware summary string for the picker chip. */
         fun rosterSummary(scope: AccessVisibility): String {
-            val members = _state.value.roster
-            val count = members.size
-            return when (scope) {
-                AccessVisibility.Everyone ->
-                    if (count == 0) scope.headline else "Everyone ($count members + guests)"
-                AccessVisibility.Members ->
-                    if (count == 0) scope.headline else "All household members ($count)"
-                AccessVisibility.Managers ->
-                    members.count { it.canManageAccess }.let { managers ->
-                        if (managers == 0) scope.headline else "Owners & managers ($managers)"
-                    }
-                AccessVisibility.Sensitive ->
-                    members.count { it.role?.lowercase() == "owner" }.let { owners ->
-                        if (owners == 0) scope.headline else "Owners only ($owners)"
-                    }
-            }
+            return scope.headline
         }
 
         /**
@@ -312,108 +403,119 @@ class EditAccessCodeFormViewModel
             val members = _state.value.roster
             return when (_state.value.visibility) {
                 AccessVisibility.Everyone, AccessVisibility.Members -> members.map { it.displayName }
-                AccessVisibility.Managers -> members.filter { it.canManageAccess }.map { it.displayName }
+                AccessVisibility.Managers ->
+                    members.filter { it.role?.lowercase() in setOf("owner", "admin", "manager") }.map { it.displayName }
                 AccessVisibility.Sensitive ->
-                    members.filter { it.role?.lowercase() == "owner" }.map { it.displayName }
+                    members.filter { it.canViewSensitive }.map { it.displayName }
             }
         }
 
         // ─── Submit ────────────────────────────────────────────────
 
         fun submit() {
+            if (!canEdit() || _state.value.visibility !in _state.value.allowedVisibilities) return
             if (validateAll() != null) {
                 showToast("Fix the highlighted field.", isError = true)
                 return
             }
             _state.update { it.copy(isSaving = true) }
-            viewModelScope.launch {
-                val current = _state.value
-                val label = current.fields[EditAccessCodeField.Label]?.value.orEmpty().trim()
-                val value = current.fields[EditAccessCodeField.Value]?.value.orEmpty().trim()
-                val notesRaw = current.fields[EditAccessCodeField.Notes]?.value.orEmpty().trim()
-                val notes = notesRaw.ifEmpty { null }
-                val accessType = current.category.backendAccessType
-                val visibilityWire = current.visibility.wire
+            val current = _state.value
+            mutationJob =
+                viewModelScope.launch {
+                    val label = current.fields[EditAccessCodeField.Label]?.value.orEmpty().trim()
+                    val value = current.fields[EditAccessCodeField.Value]?.value.orEmpty().trim()
+                    val notesRaw = current.fields[EditAccessCodeField.Notes]?.value.orEmpty().trim()
+                    val notes = notesRaw.ifEmpty { null }
+                    val accessType = current.category.backendAccessType
+                    val visibilityWire = current.visibility.wire
 
-                val result =
-                    if (secretId != null) {
-                        homes.updateHomeAccessSecret(
-                            homeId = homeId,
-                            secretId = secretId,
-                            request =
-                                UpdateAccessSecretRequest(
-                                    accessType = accessType,
-                                    label = label,
-                                    secretValue = value,
-                                    notes = notes,
-                                    visibility = visibilityWire,
-                                ),
-                        )
-                    } else {
-                        homes.createHomeAccessSecret(
-                            homeId = homeId,
-                            request =
-                                CreateAccessSecretRequest(
-                                    accessType = accessType,
-                                    label = label,
-                                    secretValue = value,
-                                    notes = notes,
-                                    visibility = visibilityWire,
-                                ),
-                        )
-                    }
-                when (result) {
-                    is NetworkResult.Success -> {
-                        _state.update {
-                            it.copy(
-                                isSaving = false,
-                                toast =
-                                    EditAccessCodeToast(
-                                        text = if (secretId != null) "Code updated." else "Code added.",
-                                        isError = false,
+                    val result =
+                        if (secretId != null) {
+                            homes.updateHomeAccessSecret(
+                                homeId = homeId,
+                                secretId = secretId,
+                                request =
+                                    UpdateAccessSecretRequest(
+                                        accessType = accessType,
+                                        label = label,
+                                        secretValue = value,
+                                        notes = notes,
+                                        visibility = visibilityWire,
+                                    ),
+                            )
+                        } else {
+                            homes.createHomeAccessSecret(
+                                homeId = homeId,
+                                request =
+                                    CreateAccessSecretRequest(
+                                        accessType = accessType,
+                                        label = label,
+                                        secretValue = value,
+                                        notes = notes,
+                                        visibility = visibilityWire,
                                     ),
                             )
                         }
-                        // Hold the success toast briefly before dismissing.
-                        delay(800)
-                        _state.update { it.copy(shouldDismiss = true) }
-                    }
-                    is NetworkResult.Failure -> {
-                        _state.update {
-                            it.copy(
-                                isSaving = false,
-                                toast =
-                                    EditAccessCodeToast(
-                                        text = result.error.message,
-                                        isError = true,
-                                    ),
-                            )
+                    when (result) {
+                        is NetworkResult.Success -> {
+                            savedSuccessfully = true
+                            retainedDraft = null
+                            _state.update {
+                                it.copy(
+                                    isSaving = false,
+                                    toast =
+                                        EditAccessCodeToast(
+                                            text = if (secretId != null) "Code updated." else "Code added.",
+                                            isError = false,
+                                        ),
+                                )
+                            }
+                            // Hold the success toast briefly before dismissing.
+                            delay(800)
+                            if (active) _state.update { it.copy(shouldDismiss = true) }
+                        }
+                        is NetworkResult.Failure -> {
+                            retainedDraft = retainedDraft?.copy(isSaving = false)
+                            _state.update {
+                                it.copy(
+                                    isSaving = false,
+                                    toast =
+                                        EditAccessCodeToast(
+                                            text = result.error.message,
+                                            isError = true,
+                                        ),
+                                )
+                            }
+                            if (active && result.error is NetworkError.Forbidden) load()
                         }
                     }
                 }
-            }
         }
 
         /** Removes this code for everyone it was shared with, guest pass pages included. */
         fun delete() {
+            if (!canEdit()) return
             val id = secretId ?: return
             _state.update { it.copy(isSaving = true) }
-            viewModelScope.launch {
-                when (val result = homes.deleteHomeAccessSecret(homeId = homeId, secretId = id)) {
-                    is NetworkResult.Success -> {
-                        _state.update {
-                            it.copy(isSaving = false, toast = EditAccessCodeToast(text = "Code deleted.", isError = false))
+            mutationJob =
+                viewModelScope.launch {
+                    when (val result = homes.deleteHomeAccessSecret(homeId = homeId, secretId = id)) {
+                        is NetworkResult.Success -> {
+                            savedSuccessfully = true
+                            retainedDraft = null
+                            _state.update {
+                                it.copy(isSaving = false, toast = EditAccessCodeToast(text = "Code deleted.", isError = false))
+                            }
+                            // Hold the toast briefly before dismissing, as after a save.
+                            delay(800)
+                            if (active) _state.update { it.copy(shouldDismiss = true) }
                         }
-                        // Hold the toast briefly before dismissing, as after a save.
-                        delay(800)
-                        _state.update { it.copy(shouldDismiss = true) }
+                        is NetworkResult.Failure ->
+                            _state.update {
+                                it.copy(isSaving = false, toast = EditAccessCodeToast(text = result.error.message, isError = true))
+                            }
                     }
-                    is NetworkResult.Failure ->
-                        _state.update {
-                            it.copy(isSaving = false, toast = EditAccessCodeToast(text = result.error.message, isError = true))
-                        }
                 }
-            }
         }
 
         // ─── Validation ─────────────────────────────────────────────
@@ -448,8 +550,10 @@ class EditAccessCodeFormViewModel
 
         // ─── Hydration ─────────────────────────────────────────────
 
-        private suspend fun loadRoster() {
-            when (val result = members.listOccupants(homeId)) {
+        private suspend fun loadRoster(request: Int) {
+            val result = members.listOccupants(homeId)
+            if (!active || request != generation) return
+            when (result) {
                 is NetworkResult.Success -> {
                     val roster =
                         result.data.occupants
@@ -472,24 +576,6 @@ class EditAccessCodeFormViewModel
                     // empty.
                     _state.update { it.copy(roster = emptyList()) }
                 }
-            }
-        }
-
-        private suspend fun loadSecret(secretId: String) {
-            // Backend has no GET-one endpoint — fetch the list and pick
-            // the matching row. Cheap because the calling screen has
-            // typically warmed the cache already.
-            when (val result = homes.getHomeAccessSecrets(homeId)) {
-                is NetworkResult.Success -> {
-                    val secret = result.data.secrets.firstOrNull { it.id == secretId }
-                    if (secret == null) {
-                        _state.update { it.copy(loadError = "Couldn't find that access code.") }
-                        return
-                    }
-                    hydrate(secret)
-                }
-                is NetworkResult.Failure ->
-                    _state.update { it.copy(loadError = "Couldn't load access code. Try again.") }
             }
         }
 
@@ -516,6 +602,8 @@ class EditAccessCodeFormViewModel
         }
 
         // ─── Helpers ───────────────────────────────────────────────
+
+        private fun canEdit(): Boolean = active && _state.value.isLoaded && _state.value.canManage && !_state.value.isSaving
 
         private fun seedDefaultFields() {
             _state.update { current ->

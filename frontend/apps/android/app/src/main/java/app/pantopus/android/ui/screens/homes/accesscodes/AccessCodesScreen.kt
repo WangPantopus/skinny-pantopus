@@ -58,6 +58,7 @@ fun AccessCodesScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val chipStrip by viewModel.chipStrip.collectAsStateWithLifecycle()
     val toast by viewModel.toast.collectAsStateWithLifecycle()
+    val canManage by viewModel.canManage.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
 
@@ -105,7 +106,7 @@ fun AccessCodesScreen(
             onRefresh = { viewModel.refresh() },
             onEndReached = { },
             topBarAction = topBarAction,
-            fab = fab,
+            fab = fab.takeIf { canManage },
             onBack = onBack,
             chipStrip = chipStrip,
         )

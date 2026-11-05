@@ -55,6 +55,14 @@ class EditAccessCodeFormViewModelTest {
 
     @Before fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        coEvery { homes.getHomeAccessSecrets("home_1") } returns
+            NetworkResult.Success(
+                HomeAccessSecretsResponse(
+                    secrets = emptyList(),
+                    canManage = true,
+                    allowedVisibilities = listOf("public", "members", "managers", "sensitive"),
+                ),
+            )
     }
 
     @After fun tearDown() {
@@ -166,7 +174,13 @@ class EditAccessCodeFormViewModelTest {
         runTest {
             coEvery { members.listOccupants("home_1") } returns NetworkResult.Success(roster())
             coEvery { homes.getHomeAccessSecrets("home_1") } returns
-                NetworkResult.Success(HomeAccessSecretsResponse(secrets = listOf(sampleSecret)))
+                NetworkResult.Success(
+                    HomeAccessSecretsResponse(
+                        secrets = listOf(sampleSecret),
+                        canManage = true,
+                        allowedVisibilities = listOf("public", "members", "managers", "sensitive"),
+                    ),
+                )
             val vm = makeVm(secretId = "s1")
             vm.load()
             runCurrent()
@@ -187,7 +201,13 @@ class EditAccessCodeFormViewModelTest {
         runTest {
             coEvery { members.listOccupants("home_1") } returns NetworkResult.Success(roster())
             coEvery { homes.getHomeAccessSecrets("home_1") } returns
-                NetworkResult.Success(HomeAccessSecretsResponse(secrets = emptyList()))
+                NetworkResult.Success(
+                    HomeAccessSecretsResponse(
+                        secrets = emptyList(),
+                        canManage = true,
+                        allowedVisibilities = listOf("public", "members", "managers", "sensitive"),
+                    ),
+                )
             val vm = makeVm(secretId = "missing")
             vm.load()
             runCurrent()
@@ -335,7 +355,13 @@ class EditAccessCodeFormViewModelTest {
         runTest {
             coEvery { members.listOccupants("home_1") } returns NetworkResult.Success(roster())
             coEvery { homes.getHomeAccessSecrets("home_1") } returns
-                NetworkResult.Success(HomeAccessSecretsResponse(secrets = listOf(sampleSecret)))
+                NetworkResult.Success(
+                    HomeAccessSecretsResponse(
+                        secrets = listOf(sampleSecret),
+                        canManage = true,
+                        allowedVisibilities = listOf("public", "members", "managers", "sensitive"),
+                    ),
+                )
             val captured = slot<UpdateAccessSecretRequest>()
             coEvery {
                 homes.updateHomeAccessSecret(
@@ -385,10 +411,10 @@ class EditAccessCodeFormViewModelTest {
             vm.load()
             runCurrent()
 
-            assertEquals("All household members (3)", vm.rosterSummary(AccessVisibility.Members))
-            assertEquals("Owners & managers (2)", vm.rosterSummary(AccessVisibility.Managers))
-            assertEquals("Owners only (1)", vm.rosterSummary(AccessVisibility.Sensitive))
-            assertEquals("Everyone (3 members + guests)", vm.rosterSummary(AccessVisibility.Everyone))
+            assertEquals("Household access", vm.rosterSummary(AccessVisibility.Members))
+            assertEquals("Owners & managers", vm.rosterSummary(AccessVisibility.Managers))
+            assertEquals("Sensitive access", vm.rosterSummary(AccessVisibility.Sensitive))
+            assertEquals("Everyone with access", vm.rosterSummary(AccessVisibility.Everyone))
         }
 
     @Test fun shared_with_names_narrows_by_scope() =
@@ -417,7 +443,7 @@ class EditAccessCodeFormViewModelTest {
             runCurrent()
 
             assertTrue(vm.state.value.roster.isEmpty())
-            assertEquals("All household members", vm.rosterSummary(AccessVisibility.Members))
+            assertEquals("Household access", vm.rosterSummary(AccessVisibility.Members))
             assertTrue(vm.sharedWithNames().isEmpty())
         }
 
