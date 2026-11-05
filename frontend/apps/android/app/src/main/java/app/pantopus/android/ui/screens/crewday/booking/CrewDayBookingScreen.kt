@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -837,9 +838,16 @@ private fun DetailRow(
     label: String,
     value: String,
 ) {
+    // The label keeps its width and a long value wraps beside it (a long value used to squeeze the label to nothing).
     PlanOptionRow(modifier = Modifier.semantics(mergeDescendants = true) {}) {
-        Text(text = label, style = PantopusTextStyle.body, color = PantopusColors.appTextSecondary, modifier = Modifier.weight(1f))
-        Text(text = value, style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold), color = PantopusColors.appText)
+        Text(text = label, style = PantopusTextStyle.body, color = PantopusColors.appTextSecondary)
+        Text(
+            text = value,
+            style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
+            color = PantopusColors.appText,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
