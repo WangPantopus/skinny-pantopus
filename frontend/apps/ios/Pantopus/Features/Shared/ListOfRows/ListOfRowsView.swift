@@ -336,6 +336,9 @@ private struct ChipStripRow: View {
                                 .stroke(borderColor(for: chip.id), lineWidth: 1)
                         )
                         .clipShape(RoundedRectangle(cornerRadius: Radii.pill, style: .continuous))
+                        // 44 pt to tap, inside the strip's own padding; the
+                        // chip draws as before.
+                        .hitArea(vertical: 7)
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("chip.\(chip.id)")

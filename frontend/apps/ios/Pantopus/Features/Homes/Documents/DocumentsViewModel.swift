@@ -77,7 +77,10 @@ final class DocumentsViewModel: ListOfRowsDataSource {
         ) { [onSearch] in onSearch() }
     }
 
+    /// Only with a current read: while loading or after a failed read there
+    /// is nothing to filter, so no zero-count chips sit above the state.
     var chipStrip: ChipStripConfig? {
+        guard documents != nil else { return nil }
         let counts = chipCounts()
         let chips: [ChipStripConfig.Chip] = DocumentsFilter.allCases.map { filter in
             let count = counts[filter] ?? 0

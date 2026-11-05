@@ -171,6 +171,9 @@ public final class DiscoverBusinessesViewModel: ListOfRowsDataSource {
     private var results: [BusinessDiscoverySearchResponse.Item] = []
     private var loadedOnce = false
     private var pendingSearchTask: Task<Void, Never>?
+    /// Counts started reads: a chip, search or filter change starts a new
+    /// one, and an older reply that arrives later is dropped.
+    private var fetchGeneration = 0
 
     init(
         api: APIClient = .shared,
@@ -244,6 +247,8 @@ public final class DiscoverBusinessesViewModel: ListOfRowsDataSource {
     // MARK: - Fetching
 
     private func fetch() async {
+        fetchGeneration &+= 1
+        let generation = fetchGeneration
         // Preserve "loading" only on first fetch; chip + search updates
         // keep the previous list visible while the new one arrives.
         if !loadedOnce { state = .loading }
@@ -262,6 +267,7 @@ public final class DiscoverBusinessesViewModel: ListOfRowsDataSource {
         )
         do {
             let response: BusinessDiscoverySearchResponse = try await api.request(endpoint)
+            guard generation == fetchGeneration else { return }
             results = response.results
             loadedOnce = true
             rebuild()
@@ -269,9 +275,11 @@ public final class DiscoverBusinessesViewModel: ListOfRowsDataSource {
             // "Location required" — the viewer has no resolved home and
             // didn't pass explicit lat/lon. Show the no-location empty
             // state with a Widen-radius CTA.
+            guard generation == fetchGeneration else { return }
             state = .empty(noLocationContent())
             loadedOnce = true
         } catch {
+            guard generation == fetchGeneration else { return }
             state = .error(message: "Couldn't load businesses. Try again.")
         }
     }
@@ -354,7 +362,18 @@ public final class DiscoverBusinessesViewModel: ListOfRowsDataSource {
     }
 
     private func noResultsContent() -> ListOfRowsState.EmptyContent {
-        ListOfRowsState.EmptyContent(
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !query.isEmpty || selectedChip != DiscoverBusinessesChip.all {
+            // A search or category narrowed the list: say so, rather than
+            // that no businesses are nearby.
+            return ListOfRowsState.EmptyContent(
+                icon: .search,
+                headline: "No matching businesses",
+                subcopy: "Nothing nearby matches that yet. Try another search or category, " +
+                    "or widen your search radius in Filters."
+            )
+        }
+        return ListOfRowsState.EmptyContent(
             icon: .compass,
             headline: "No verified businesses nearby yet",
             subcopy:

@@ -50,7 +50,10 @@ public final class VaultListViewModel: ListOfRowsDataSource {
         didSet {
             guard oldValue != selectedTab else { return }
             allRows = []
-            phase = .loading
+            folderRowsLoaded = false
+            // Search results cover every drawer, so they stay on screen while
+            // the new drawer's folders load behind them.
+            if !showsSearchResults { phase = .loading }
             Task { @MainActor [weak self] in await self?.fetch() }
         }
     }
@@ -71,16 +74,7 @@ public final class VaultListViewModel: ListOfRowsDataSource {
         case .loading:
             return .loading
         case let .searchLoaded(results, total):
-            guard !results.isEmpty else {
-                return .empty(
-                    ListOfRowsState.EmptyContent(
-                        icon: .search,
-                        headline: "No matches found",
-                        subcopy: "Nothing in your archive matches that. Try a sender name, an amount "
-                            + "like $87, or a month like March 2025."
-                    )
-                )
-            }
+            guard !results.isEmpty else { return .empty(Self.noMatchesContent) }
             return .loaded(
                 sections: [
                     RowSection(
@@ -91,7 +85,10 @@ public final class VaultListViewModel: ListOfRowsDataSource {
                 ],
                 hasMore: false
             )
-        case let .loaded(rows, _):
+        case let .loaded(rows, total):
+            // Saved items that a short query filters out are "no matches",
+            // not an empty vault.
+            if rows.isEmpty, total > 0 { return .empty(Self.noMatchesContent) }
             guard !rows.isEmpty else {
                 return .empty(
                     ListOfRowsState.EmptyContent(
@@ -118,14 +115,24 @@ public final class VaultListViewModel: ListOfRowsDataSource {
         SearchBarConfig(
             placeholder: "Search sender, amount, date…",
             text: query,
-            onChange: { @Sendable text in
-                Task { @MainActor in self.onQueryChange(text) }
+            onChange: { @Sendable [weak self] text in
+                // The field's setter runs on the main actor. Updating in the
+                // same pass keeps the shell's binding from reading back the
+                // previous query (a deleted last letter would reappear).
+                MainActor.assumeIsolated { self?.onQueryChange(text) }
             },
-            onSubmit: { @Sendable in
-                Task { @MainActor in await self.performSearch() }
+            onSubmit: { @Sendable [weak self] in
+                Task { @MainActor in await self?.performSearch() }
             }
         )
     }
+
+    private static let noMatchesContent = ListOfRowsState.EmptyContent(
+        icon: .search,
+        headline: "No matches found",
+        subcopy: "Nothing in your archive matches that. Try a sender name, an amount "
+            + "like $87, or a month like March 2025."
+    )
 
     // MARK: - Internal state
 
@@ -152,6 +159,9 @@ public final class VaultListViewModel: ListOfRowsDataSource {
     /// Unfiltered union of every row fetched on the last load. The
     /// `phase`'s rows are the post-filter view.
     private var allRows: [VaultListRow] = []
+    /// The current drawer's folders were read, so `allRows` can be shown
+    /// again when a search ends (including one that failed).
+    private var folderRowsLoaded = false
     private(set) var folders: [VaultFolderDTO] = []
     public var query: String = ""
 
@@ -183,10 +193,21 @@ public final class VaultListViewModel: ListOfRowsDataSource {
 
     // MARK: - Load
 
+    /// Showing the screen (again, after an opened item): what is on screen
+    /// stays, search results included. A failed read or search runs again.
     public func load() async {
-        if case .loaded = phase { return }
+        switch phase {
+        case .loaded, .searchLoaded:
+            return
+        case .loading, .error:
+            break
+        }
         phase = .loading
-        await fetch()
+        if isSearching, folderRowsLoaded {
+            await performSearch()
+        } else {
+            await fetch()
+        }
     }
 
     public func refresh() async {
@@ -206,16 +227,21 @@ public final class VaultListViewModel: ListOfRowsDataSource {
         query.trimmingCharacters(in: .whitespacesAndNewlines).count >= Self.minimumSearchLength
     }
 
+    /// Server results for the current query are on screen.
+    private var showsSearchResults: Bool {
+        if case .searchLoaded = phase { return isSearching }
+        return false
+    }
+
     public func onQueryChange(_ text: String) {
         query = text
         searchTask?.cancel()
         guard isSearching else {
             // Below the threshold we're back on the folder view — drop any
-            // stale server results and re-apply the local filter.
-            if case .searchLoaded = phase {
+            // server results (or a failed search) and re-apply the local
+            // filter. A folder read still loading or failed stays as it is.
+            if folderRowsLoaded {
                 phase = .loaded(rows: Self.filter(rows: allRows, query: query), total: allRows.count)
-            } else {
-                recomputeFromCache()
             }
             return
         }
@@ -245,7 +271,8 @@ public final class VaultListViewModel: ListOfRowsDataSource {
                 total: response.total ?? response.results.count
             )
         } catch {
-            guard query.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed else { return }
+            guard !Task.isCancelled,
+                  query.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed else { return }
             phase = .error(
                 message: (error as? APIError)?.errorDescription
                     ?? "Couldn't search your vault."
@@ -258,6 +285,9 @@ public final class VaultListViewModel: ListOfRowsDataSource {
     public func ingest(folders: [VaultFolderDTO], itemsByFolder: [String: [VaultMailItemDTO]]) {
         self.folders = folders
         allRows = Self.flatten(folders: folders, itemsByFolder: itemsByFolder)
+        folderRowsLoaded = true
+        // Server results for the current query stay until the search ends.
+        if showsSearchResults { return }
         let filtered = Self.filter(rows: allRows, query: query)
         phase = .loaded(rows: filtered, total: allRows.count)
     }
@@ -300,6 +330,7 @@ public final class VaultListViewModel: ListOfRowsDataSource {
             }
             ingest(folders: folders, itemsByFolder: itemsByFolder)
         } catch {
+            if showsSearchResults { return }
             phase = .error(
                 message: (error as? APIError)?.errorDescription
                     ?? "Couldn't load your vault."
