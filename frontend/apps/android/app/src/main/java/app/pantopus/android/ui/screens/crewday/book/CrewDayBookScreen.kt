@@ -1,4 +1,4 @@
-@file:Suppress("LongMethod", "TooManyFunctions", "MatchingDeclarationName", "MagicNumber")
+@file:Suppress("LongMethod", "TooManyFunctions", "MatchingDeclarationName", "MagicNumber", "CyclomaticComplexMethod")
 
 package app.pantopus.android.ui.screens.crewday.book
 
