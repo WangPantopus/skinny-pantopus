@@ -25,6 +25,7 @@ function DocsContent() {
   const { id: homeId } = useParams<{ id: string }>();
 
   const [docs, setDocs] = useState<any[]>([]);
+  const [canManage, setCanManage] = useState(false);
   const [loading, setLoading] = useState(true);
   // A failed read is shown as unavailable with a retry, never as an empty list.
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -44,6 +45,7 @@ function DocsContent() {
       setLoadError(null);
       setLoadDenied(false);
       setDocs(res.documents);
+      setCanManage(res.permissions?.includes('docs.manage') === true);
     } catch (err: unknown) {
       if ((err as { statusCode?: number } | null)?.statusCode === 403) { setLoadDenied(true); setLoadError('You don’t have permission to view this household’s documents.'); return; }
       setLoadDenied(false);
@@ -62,9 +64,9 @@ function DocsContent() {
     } catch (err: any) { toast.error(err?.message || 'Could not remove the document. Try again.'); }
   }, [homeId]);
 
-  // Group by folder
+  // Group by the document category returned by the shared API.
   const grouped = docs.reduce<Record<string, any[]>>((acc, doc) => {
-    const folder = doc.folder || 'other';
+    const folder = doc.doc_type || 'other';
     (acc[folder] = acc[folder] || []).push(doc);
     return acc;
   }, {});
@@ -97,7 +99,7 @@ function DocsContent() {
               <div key={folder}>
                 <div className="flex items-center gap-2 mb-3">
                   <Icon className="w-4 h-4 text-app-text-secondary" />
-                  <h2 className="text-sm font-bold text-app-text-strong flex-1">{folder.charAt(0).toUpperCase() + folder.slice(1)}</h2>
+                  <h2 className="text-sm font-bold text-app-text-strong flex-1">{(folder.charAt(0).toUpperCase() + folder.slice(1)).replace(/_/g, ' ')}</h2>
                   <span className="text-xs text-app-text-muted bg-app-surface-sunken px-2 py-0.5 rounded-full">{folderDocs.length}</span>
                 </div>
                 <div className="space-y-1.5">
@@ -122,9 +124,9 @@ function DocsContent() {
                             Download
                           </a>
                         )}
-                        <button onClick={() => handleDelete(doc.id, doc.title || doc.filename)} aria-label={`Delete ${doc.title || doc.filename || 'Untitled'}`} className="p-1 text-app-text-muted hover:text-red-500 transition flex-shrink-0">
+                        {canManage && <button onClick={() => handleDelete(doc.id, doc.title || doc.filename)} aria-label={`Delete ${doc.title || doc.filename || 'Untitled'}`} className="p-1 text-app-text-muted hover:text-red-500 transition flex-shrink-0">
                           <Trash2 className="w-4 h-4" />
-                        </button>
+                        </button>}
                       </div>
                     );
                   })}

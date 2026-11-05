@@ -69,10 +69,9 @@ export default function FollowHandshakePage() {
         const [p, suggestion, viewer] = await Promise.all([
           api.personas.getPersona(handle).catch(() => null),
           api.personas.getFanHandleSuggestion(handle).catch(() => ({ suggestion: '', identity: null, locked: false })),
-          // Some installations expose /users/me; fall back to null silently.
-          (api as unknown as { users?: { getCurrent: () => Promise<{ username: string | null }> } })
-            .users?.getCurrent?.()
-            .catch(() => ({ username: null })) ?? Promise.resolve({ username: null }),
+          // The API package has no current-user username read here, so the
+          // viewer's handle stays unknown (the cast it replaced always fell back to null).
+          Promise.resolve<{ username: string | null }>({ username: null }),
         ]);
         if (cancelled) return;
         setPersona(p?.persona ?? null);

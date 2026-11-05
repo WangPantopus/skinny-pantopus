@@ -25,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,8 +65,8 @@ fun ReviewReplyComposer(
     onSubmit: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var composing by remember(review.id) { mutableStateOf(false) }
-    var draft by remember(review.id) { mutableStateOf("") }
+    var composing by rememberSaveable(review.id) { mutableStateOf(false) }
+    var draft by rememberSaveable(review.id) { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(composing) {

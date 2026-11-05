@@ -5,6 +5,7 @@
 // ============================================================
 
 import axios, {
+  AxiosAdapter,
   AxiosInstance,
   AxiosError,
   AxiosRequestConfig,
@@ -512,10 +513,101 @@ const apiClient: AxiosInstance = axios.create({
   },
 });
 
+// ============ STARTUP SESSION RECOVERY (web) ============
+// An app document loaded after the 1-hour access cookie expired starts
+// POST /api/users/refresh from its first inline script, before this bundle
+// arrives (apps/web src/lib/session-refresh.ts). Requests wait for that
+// refresh instead of being refused, and a 401 retry shares it as the
+// single-flight refresh. When it fails the document is already leaving for
+// /session/refresh, which signs out, retries or explains.
+
+type StartupRecovery = { promise?: Promise<AuthRefreshResult>; handedOff?: boolean };
+let _startupRecovery: Promise<AuthRefreshResult> | null = null;
+
+function startupRecoveryHandle(): StartupRecovery | undefined {
+  if (!_isWeb || typeof window === 'undefined') return undefined;
+  return (window as unknown as { __pantopusRecovery?: StartupRecovery }).__pantopusRecovery;
+}
+
+function sessionRecoveringError() {
+  // No status code: screens keep loading (queries retry) while the page leaves.
+  return new ApiRequestError({ message: 'Restoring your session…', code: 'AUTH_SESSION_RECOVERING' });
+}
+
+/** Resolves once this page's startup session recovery (if any) has settled. */
+async function awaitStartupRecovery(): Promise<void> {
+  const pending = _startupRecovery;
+  if (!pending) return;
+  const result = await pending;
+  if (result.status === 'success') return;
+  // The document is navigating to the refresh page; keep requests out of its way.
+  if (startupRecoveryHandle()?.handedOff) throw sessionRecoveringError();
+}
+
+(function adoptStartupRecovery() {
+  const early = startupRecoveryHandle()?.promise;
+  if (!early) return;
+  const pending = early.then(
+    (result): AuthRefreshResult => result,
+    (): AuthRefreshResult => ({ status: 'transient', message: 'Could not reach the server' }),
+  );
+  _startupRecovery = pending;
+  void pending.then((result) => {
+    if (result.status === 'success' || !startupRecoveryHandle()?.handedOff) {
+      if (_startupRecovery === pending) _startupRecovery = null;
+    }
+  });
+})();
+
+// ============ EARLY READS (web) ============
+// An app document starts its first GET requests from an inline script while
+// its scripts download (apps/web src/lib/early-reads.ts). This page's first
+// request for the same URL takes that response instead of asking again: once,
+// only a successful one, only while it is fresh and only for the session that
+// started it. Interceptors run as for any request.
+
+type EarlyReads = { marker: string; at: number; reads: Record<string, Promise<Response | null> | undefined> };
+const EARLY_READ_MAX_AGE_MS = 30_000;
+
+function takeEarlyRead(config: InternalAxiosRequestConfig): Promise<Response | null> | null {
+  if (!_isWeb || typeof window === 'undefined' || _authChangeSequence !== 0) return null;
+  if ((config.method || 'get').toLowerCase() !== 'get') return null;
+  const early = (window as unknown as { __pantopusEarly?: EarlyReads }).__pantopusEarly;
+  if (!early?.reads) return null;
+  const url = apiClient.getUri(config);
+  const read = early.reads[url];
+  if (!read) return null;
+  delete early.reads[url];
+  let marker = '';
+  try { marker = window.localStorage.getItem(AUTH_SESSION_CHANGE_KEY) || ''; } catch { /* no storage, no marker */ }
+  if (marker !== early.marker || Date.now() - early.at > EARLY_READ_MAX_AGE_MS) return null;
+  return read;
+}
+
+// axios's own choice of transport, resolved per request as axios does.
+const defaultAdapters = apiClient.defaults.adapter;
+const networkAdapter: AxiosAdapter = (config) => axios.getAdapter(defaultAdapters)(config);
+apiClient.defaults.adapter = async (config) => {
+  const early = takeEarlyRead(config);
+  if (early) {
+    const response = await early.catch(() => null);
+    if (response?.ok) {
+      try {
+        const data = await response.json();
+        const headers: Record<string, string> = {};
+        response.headers.forEach((value, name) => { headers[name] = value; });
+        return { data, status: response.status, statusText: response.statusText, headers, config, request: null };
+      } catch { /* not JSON: ask the network */ }
+    }
+  }
+  return networkAdapter(config);
+};
+
 // ============ REQUEST INTERCEPTOR ============
 
 apiClient.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
+  async (config: InternalAxiosRequestConfig) => {
+    await awaitStartupRecovery();
     if (requestSessionChanged(config)) return Promise.reject(sessionChangedError());
     if (_isWeb) (config as SessionBoundRequest)._authSessionMarker = currentRequestSession();
     if (_isWeb) {
@@ -649,6 +741,8 @@ async function doTokenRefresh(): Promise<AuthRefreshResult> {
 
 export async function refreshAuthSession(options?: { trigger?: string }): Promise<AuthRefreshResult> {
   const trigger = options?.trigger ?? 'manual';
+  // The page's startup recovery is this page's refresh while it runs.
+  if (_startupRecovery) return _startupRecovery;
 
   if (!_refreshPromise) {
     const sessionMarker = _isWeb ? currentRequestSession() : null;
