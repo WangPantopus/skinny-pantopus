@@ -97,26 +97,20 @@ open class CrewDaysRepository
         open suspend fun updateBooking(
             bookingId: String,
             patch: CrewDayBookingPatch,
-        ): NetworkResult<CrewDayBookingDto> =
-            write { api.updateBooking(bookingId, patch).booking }
+        ): NetworkResult<CrewDayBookingDto> = write { api.updateBooking(bookingId, patch).booking }
 
-        open suspend fun cancelBooking(bookingId: String): NetworkResult<CrewDayBookingDto> =
-            write { api.cancelBooking(bookingId).booking }
+        open suspend fun cancelBooking(bookingId: String): NetworkResult<CrewDayBookingDto> = write { api.cancelBooking(bookingId).booking }
 
-        open suspend fun askRelease(bookingId: String): NetworkResult<CrewDayBookingDto> =
-            write { api.askRelease(bookingId).booking }
+        open suspend fun askRelease(bookingId: String): NetworkResult<CrewDayBookingDto> = write { api.askRelease(bookingId).booking }
 
         open suspend fun answerPrice(
             bookingId: String,
             approve: Boolean,
-        ): NetworkResult<CrewDayBookingDto> =
-            write { api.answerPrice(bookingId, CrewDayPriceAnswerBody(approve)).booking }
+        ): NetworkResult<CrewDayBookingDto> = write { api.answerPrice(bookingId, CrewDayPriceAnswerBody(approve)).booking }
 
-        open suspend fun gateReady(bookingId: String): NetworkResult<CrewDayBookingDto> =
-            write { api.gateReady(bookingId).booking }
+        open suspend fun gateReady(bookingId: String): NetworkResult<CrewDayBookingDto> = write { api.gateReady(bookingId).booking }
 
-        open suspend fun confirm(bookingId: String): NetworkResult<CrewDayBookingDto> =
-            write { api.confirm(bookingId).booking }
+        open suspend fun confirm(bookingId: String): NetworkResult<CrewDayBookingDto> = write { api.confirm(bookingId).booking }
 
         open suspend fun reportProblem(
             bookingId: String,
@@ -127,8 +121,7 @@ open class CrewDaysRepository
             bookingId: String,
             proposalId: String,
             choice: String,
-        ): NetworkResult<CrewDayBookingDto> =
-            write { api.answerNewDate(bookingId, CrewDayNewDateBody(proposalId, choice)).booking }
+        ): NetworkResult<CrewDayBookingDto> = write { api.answerNewDate(bookingId, CrewDayNewDateBody(proposalId, choice)).booking }
 
         /**
          * Uploads one photo ([bytes] of [mimeType]) for [bookingId]; [purpose] is `done` (the crew) or `problem` (the
@@ -146,13 +139,11 @@ open class CrewDaysRepository
                 api.upload(bookingId.toRequestBody(TEXT), purpose.toRequestBody(TEXT), part)
             }
 
-        open suspend fun askForCrewDay(body: CrewDayRequestBody): NetworkResult<CrewDayCardDto> =
-            write { api.askForCrewDay(body).request }
+        open suspend fun askForCrewDay(body: CrewDayRequestBody): NetworkResult<CrewDayCardDto> = write { api.askForCrewDay(body).request }
 
         // MARK: - Crew
 
-        open suspend fun business(businessId: String): NetworkResult<CrewDayBusinessResponse> =
-            call { api.business(businessId) }
+        open suspend fun business(businessId: String): NetworkResult<CrewDayBusinessResponse> = call { api.business(businessId) }
 
         open suspend fun create(body: CrewDayCreateBody): NetworkResult<CrewDayDto> = write { api.create(body).crewDay }
 
@@ -169,8 +160,7 @@ open class CrewDaysRepository
             crewDayId: String,
             bookingId: String,
             priceCents: Int,
-        ): NetworkResult<CrewDayHomeDto> =
-            write { api.setPrice(crewDayId, bookingId, CrewDayPriceBody(priceCents = priceCents)).booking }
+        ): NetworkResult<CrewDayHomeDto> = write { api.setPrice(crewDayId, bookingId, CrewDayPriceBody(priceCents = priceCents)).booking }
 
         open suspend fun declineHome(
             crewDayId: String,
@@ -192,8 +182,7 @@ open class CrewDaysRepository
             crewDayId: String,
             dates: List<CrewDayProposedDateDto>,
             note: String?,
-        ): NetworkResult<CrewDayDto> =
-            write { api.proposeDates(crewDayId, CrewDayProposeDatesBody(dates, note)).crewDay }
+        ): NetworkResult<CrewDayDto> = write { api.proposeDates(crewDayId, CrewDayProposeDatesBody(dates, note)).crewDay }
 
         open suspend fun cancelDay(
             crewDayId: String,
@@ -214,15 +203,13 @@ open class CrewDaysRepository
             bookingId: String,
             etaStart: String,
             etaEnd: String,
-        ): NetworkResult<CrewDayHomeDto> =
-            write { api.onTheWay(bookingId, CrewDayOnTheWayBody(etaStart, etaEnd)).booking }
+        ): NetworkResult<CrewDayHomeDto> = write { api.onTheWay(bookingId, CrewDayOnTheWayBody(etaStart, etaEnd)).booking }
 
         open suspend fun runningLate(
             crewDayId: String,
             minutes: Int,
             date: String?,
-        ): NetworkResult<CrewDayRunningLateResponse> =
-            write { api.runningLate(crewDayId, CrewDayRunningLateBody(minutes, date)) }
+        ): NetworkResult<CrewDayRunningLateResponse> = write { api.runningLate(crewDayId, CrewDayRunningLateBody(minutes, date)) }
 
         open suspend fun cantGetIn(
             bookingId: String,
@@ -233,8 +220,7 @@ open class CrewDaysRepository
             bookingId: String,
             photoPaths: List<String>,
             note: String?,
-        ): NetworkResult<CrewDayHomeDto> =
-            write { api.markDone(bookingId, CrewDayDoneBody(photoPaths, note)).booking }
+        ): NetworkResult<CrewDayHomeDto> = write { api.markDone(bookingId, CrewDayDoneBody(photoPaths, note)).booking }
 
         private companion object {
             val TEXT = "text/plain".toMediaType()
