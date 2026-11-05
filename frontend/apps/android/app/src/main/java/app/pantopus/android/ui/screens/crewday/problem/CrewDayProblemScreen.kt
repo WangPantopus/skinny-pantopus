@@ -115,7 +115,8 @@ fun CrewDayProblemScreen(
         Text(
             text =
                 if (state.adding) {
-                    "Pantopus support has your case. Anything you add goes to them and to $crew."
+                    // "Example Gutter Co." already ends the sentence.
+                    "Pantopus support has your case. Anything you add goes to them and to ${crew.removeSuffix(".")}."
                 } else {
                     "Tell us what's wrong. Pantopus support owns it until it's fixed, and your ${price ?: ""} charge waits."
                 },
