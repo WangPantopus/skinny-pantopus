@@ -19,6 +19,8 @@ const config: Config = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@pantopus/api(?:/client)?$': '<rootDir>/tests/__mocks__/@pantopus/api.ts',
+    // Stylesheets imported by components (e.g. a map's Leaflet CSS) are for the browser, not the tests.
+    '\\.css$': '<rootDir>/tests/__mocks__/style.ts',
   },
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   // Ignore Playwright spec files (E2E)
