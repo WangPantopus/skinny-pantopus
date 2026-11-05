@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.location.LocationProvider
+import app.pantopus.android.data.location.PASSIVE_LOCATION_TIMEOUT_MILLIS
 import app.pantopus.android.data.location.ViewingLocationRepository
 import app.pantopus.android.data.saved_places.SavedPlacesRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -69,7 +70,7 @@ class PlanLocationResolver
             // Location is allowed but no fix came in time (indoors, a cold start): browse from the home or a saved
             // place meanwhile instead of asking again for a permission the person already gave.
             if (waitForFix) return fromGps() ?: home()
-            return fromGps(OPENING_FIX_TIMEOUT_MS) ?: home() ?: fromGps(FIX_TIMEOUT_MS - OPENING_FIX_TIMEOUT_MS)
+            return fromGps(PASSIVE_LOCATION_TIMEOUT_MILLIS) ?: home() ?: fromGps(FIX_TIMEOUT_MS - PASSIVE_LOCATION_TIMEOUT_MILLIS)
         }
 
         /** The person's home or, without one, their first saved place. */
@@ -116,8 +117,5 @@ class PlanLocationResolver
             const val PREFS = "pantopus.plans.location"
             const val KEY_PREFERS_HOME = "prefers_home"
             const val FIX_TIMEOUT_MS = 6_000L
-
-            /** Opening the map: Pulse's passive wait for a fix the provider doesn't have yet. */
-            const val OPENING_FIX_TIMEOUT_MS = 400L
         }
     }
