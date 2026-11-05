@@ -78,6 +78,7 @@ extension EditProfileView {
                 RoundedRectangle(cornerRadius: Radii.xl, style: .continuous)
                     .stroke(Theme.Color.appBorder, lineWidth: 1)
             )
+            .background(PreviewTypingAnchor())
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Preview: how neighbors see you")
             .accessibilityIdentifier("editProfilePreview")
@@ -351,4 +352,57 @@ struct PlaceRow {
     let detail: String?
     let value: String?
     let identifier: String
+}
+
+/// Keeps the field being typed in where it is while the live preview above it
+/// changes size (a tagline line, more of the bio): the form scrolls by the same
+/// amount in the same layout pass, so the field doesn't slide under the Save bar.
+private struct PreviewTypingAnchor: UIViewRepresentable {
+    func makeUIView(context _: Context) -> AnchorView {
+        AnchorView()
+    }
+
+    func updateUIView(_: AnchorView, context _: Context) {}
+
+    final class AnchorView: UIView {
+        private var height: CGFloat?
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isUserInteractionEnabled = false
+            accessibilityElementsHidden = true
+        }
+
+        @available(*, unavailable)
+        required init?(coder _: NSCoder) {
+            nil
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            let previous = height
+            height = bounds.height
+            guard let previous, bounds.height != previous, let scrollView = enclosingScrollView,
+                  Self.isTyping(in: scrollView) else { return }
+            let top = -scrollView.adjustedContentInset.top
+            scrollView.contentOffset.y = max(scrollView.contentOffset.y + bounds.height - previous, top)
+        }
+
+        private var enclosingScrollView: UIScrollView? {
+            var view = superview
+            while let current = view {
+                if let scrollView = current as? UIScrollView { return scrollView }
+                view = current.superview
+            }
+            return nil
+        }
+
+        /// A text box in the form has the keyboard. Asked at once rather than through
+        /// `TextEditingState`, which hears of it a moment later: what the form loads
+        /// just after a field takes focus can change the preview in between.
+        private static func isTyping(in view: UIView) -> Bool {
+            if view.isFirstResponder, view is UITextInput { return true }
+            return view.subviews.contains { isTyping(in: $0) }
+        }
+    }
 }
