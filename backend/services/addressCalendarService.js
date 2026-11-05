@@ -21,6 +21,7 @@ const crypto = require('crypto');
 const { RRule } = require('rrule');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const { GeoCache } = require('../utils/geoCache');
 const { resolveHomeTimezone } = require('../utils/timezone');
 
 const WINDOW_DAYS = 14;
@@ -109,6 +110,14 @@ function taxDateGuidance(state) {
 // little before Place's 3.5 s section budget. The lookup keeps running and
 // caches the county, so its rules show from the next load.
 const COUNTY_WAIT_MS = 3000;
+// County rules are public seed rows that only migrations write (a household's
+// pickup rules are home rows, read through the authorized RPC), and a migration
+// ships with a deploy that restarts this process. Today and the Place page read
+// them on every load after the county lookup, so a county's rows are kept here
+// for ten minutes (not under Jest). With the county remembered as well, the
+// calendar waits only for the household's own rules.
+const COUNTY_RULES_MEMO_MS = 10 * 60 * 1000;
+const countyRulesMemo = new GeoCache(500);
 
 async function loadCountyRules(home) {
   const state = String((home && home.state) || '').trim().toUpperCase();
@@ -124,13 +133,18 @@ async function loadCountyRules(home) {
       }),
     ]);
     if (!fips) return [];
+    const scopeKey = `${state}:${fips}`;
+    const remembered = countyRulesMemo.get(scopeKey);
+    if (remembered) return remembered;
     const { data, error } = await supabaseAdmin
       .from('AddressCalendarRule')
       .select(RULE_COLUMNS)
       .eq('scope_type', 'county')
-      .eq('scope_key', `${state}:${fips}`);
+      .eq('scope_key', scopeKey);
     if (error) throw new Error(error.message);
-    return data || [];
+    const rows = data || [];
+    if (process.env.NODE_ENV !== 'test') countyRulesMemo.set(scopeKey, rows, COUNTY_RULES_MEMO_MS);
+    return rows;
   } catch (err) {
     logger.warn('addressCalendar: county rules unavailable', { homeId: home.id, error: err.message });
     return [];
