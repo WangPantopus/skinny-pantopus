@@ -295,9 +295,9 @@ class CrewDayBookViewModel
             val cards = methods.filter { it.paymentMethodType == null || it.paymentMethodType == "card" }.distinctBy { it.stripeId }
             _state.update { state ->
                 val keep = state.methodId?.takeIf { id -> cards.any { it.stripeId == id } && !preferNewest }
-                val newest = cards.lastOrNull().takeIf { preferNewest }
-                val chosen = keep ?: newest ?: cards.firstOrNull { it.isDefault } ?: cards.firstOrNull()
-                state.copy(methods = cards, methodId = chosen?.stripeId, methodsLoaded = true)
+                val newest = cards.lastOrNull()?.takeIf { preferNewest }?.stripeId
+                val fallback = (cards.firstOrNull { it.isDefault } ?: cards.firstOrNull())?.stripeId
+                state.copy(methods = cards, methodId = keep ?: newest ?: fallback, methodsLoaded = true)
             }
         }
 
