@@ -1,3 +1,5 @@
+@file:Suppress("LongMethod")
+
 package app.pantopus.android.ui.screens.crewday.prep
 
 import androidx.compose.foundation.background

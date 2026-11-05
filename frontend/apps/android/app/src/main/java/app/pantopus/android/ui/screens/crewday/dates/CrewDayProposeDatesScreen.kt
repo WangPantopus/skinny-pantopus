@@ -97,8 +97,8 @@ data class ProposeDatesState(
     val dayWindow: ProposedWindow
         get() =
             ProposedWindow(
-                CrewDayFormat.time(view?.windowStart) ?: LocalTime.of(9, 0),
-                CrewDayFormat.time(view?.windowEnd) ?: LocalTime.of(13, 0),
+                CrewDayFormat.time(view?.windowStart) ?: DEFAULT_START,
+                CrewDayFormat.time(view?.windowEnd) ?: DEFAULT_END,
             )
 
     /** The day's window, an hour earlier, an hour later (board `ProposeDates`: 8–12, 9–1, 10–2). */
@@ -517,6 +517,8 @@ private fun Answers(
     }
 }
 
+private val DEFAULT_START: LocalTime = LocalTime.of(9, 0)
+private val DEFAULT_END: LocalTime = LocalTime.of(13, 0)
 private const val DAYS_PER_ROW = 7
 private const val DEADLINE_HOURS = 24L
 private val WEEKDAY = DateTimeFormatter.ofPattern("EEE", Locale.US)

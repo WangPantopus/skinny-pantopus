@@ -137,12 +137,15 @@ fun CrewDayRouteScreen(
                     route = current.route,
                     order = order,
                     working = working,
-                    onShowDate = viewModel::showDate,
-                    onOpen = { home -> actions.onOpenHome(viewModel.crewDayId, home.id, current.route.date) },
-                    onMyWay = { onWay = it },
-                    onLate = { late = true },
-                    onReorder = viewModel::startReorder,
-                    onMove = viewModel::move,
+                    events =
+                        RouteEvents(
+                            onShowDate = viewModel::showDate,
+                            onOpen = { home -> actions.onOpenHome(viewModel.crewDayId, home.id, current.route.date) },
+                            onMyWay = { onWay = it },
+                            onLate = { late = true },
+                            onReorder = viewModel::startReorder,
+                            onMove = viewModel::move,
+                        ),
                 )
         }
     }
@@ -170,17 +173,22 @@ fun CrewDayRouteScreen(
     ToastHost(controller = toast)
 }
 
+/** What the route's rows and buttons do. */
+private data class RouteEvents(
+    val onShowDate: (String) -> Unit,
+    val onOpen: (CrewDayHomeDto) -> Unit,
+    val onMyWay: (CrewDayHomeDto) -> Unit,
+    val onLate: () -> Unit,
+    val onReorder: () -> Unit,
+    val onMove: (Int, Int) -> Unit,
+)
+
 @Composable
 private fun RouteContent(
     route: CrewDayRouteDto,
     order: List<CrewDayHomeDto>?,
     working: Set<String>,
-    onShowDate: (String) -> Unit,
-    onOpen: (CrewDayHomeDto) -> Unit,
-    onMyWay: (CrewDayHomeDto) -> Unit,
-    onLate: () -> Unit,
-    onReorder: () -> Unit,
-    onMove: (Int, Int) -> Unit,
+    events: RouteEvents,
 ) {
     val homes = order ?: route.homes
     val next = route.homes.firstOrNull { it.isWaiting() && it.cantGetInAt == null }
@@ -190,7 +198,7 @@ private fun RouteContent(
             PlanChoiceGroup(
                 choices = route.dates.map { PlanChoice(it, CrewDayFormat.shortDate(it).orEmpty()) },
                 isSelected = { it.id == route.date },
-                onSelect = { onShowDate(it.id) },
+                onSelect = { events.onShowDate(it.id) },
                 tagFor = { "crewDayRouteDate_${it.id}" },
             )
         }
@@ -221,19 +229,17 @@ private fun RouteContent(
             homes.forEachIndexed { index, home ->
                 RouteRow(
                     index = index,
+                    lastIndex = homes.lastIndex,
                     home = home,
                     zone = zone,
-                    first = index == 0,
                     reordering = order != null,
-                    canMoveUp = index > 0,
-                    canMoveDown = index < homes.lastIndex,
-                    onOpen = { onOpen(home) },
-                    onMove = { delta -> onMove(index, delta) },
+                    onOpen = { events.onOpen(home) },
+                    onMove = { delta -> events.onMove(index, delta) },
                 )
                 if (order == null && home.id == next?.id) {
                     NextButtons(
-                        onMyWay = { onMyWay(home) },
-                        onLate = onLate,
+                        onMyWay = { events.onMyWay(home) },
+                        onLate = events.onLate,
                         onWayBusy = home.id in working,
                         lateBusy = CrewDayRouteViewModel.LATE in working,
                     )
@@ -241,7 +247,7 @@ private fun RouteContent(
             }
         }
         if (order == null && route.homes.size > 1) {
-            PlanTextButton(title = "Change the order", onClick = onReorder, modifier = Modifier.testTag("crewDayRouteReorder"))
+            PlanTextButton(title = "Change the order", onClick = events.onReorder, modifier = Modifier.testTag("crewDayRouteReorder"))
         }
     }
 }
@@ -292,18 +298,16 @@ private fun CrewDayHomeDto.place(): String = address?.line ?: label.orEmpty()
 @Composable
 private fun RouteRow(
     index: Int,
+    lastIndex: Int,
     home: CrewDayHomeDto,
     zone: ZoneId,
-    first: Boolean,
     reordering: Boolean,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
     onOpen: () -> Unit,
     onMove: (Int) -> Unit,
 ) {
     val tone = routeTone(home)
     PlanOptionRow(
-        first = first,
+        first = index == 0,
         onClick = if (reordering) null else onOpen,
         modifier = Modifier.testTag("crewDayRouteHome_${home.id}"),
     ) {
@@ -359,14 +363,14 @@ private fun RouteRow(
             PlanRoundButton(
                 icon = PantopusIcon.ChevronUp,
                 label = "Move ${home.place()} up",
-                onClick = { if (canMoveUp) onMove(-1) },
+                onClick = { if (index > 0) onMove(-1) },
                 glass = false,
                 modifier = Modifier.testTag("crewDayRouteUp_${home.id}"),
             )
             PlanRoundButton(
                 icon = PantopusIcon.ChevronDown,
                 label = "Move ${home.place()} down",
-                onClick = { if (canMoveDown) onMove(1) },
+                onClick = { if (index < lastIndex) onMove(1) },
                 glass = false,
                 modifier = Modifier.testTag("crewDayRouteDown_${home.id}"),
             )
