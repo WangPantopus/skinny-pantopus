@@ -6,6 +6,7 @@ import app.pantopus.android.core.network.HomeDocumentTemporaryFiles
 import app.pantopus.android.data.chats.ChatBadgeCoordinator
 import app.pantopus.android.data.chats.ChatConversationPreferences
 import app.pantopus.android.data.chats.ChatOutbox
+import app.pantopus.android.data.crewday.CrewDayCameraPhotos
 import app.pantopus.android.data.gigs.GigCameraPhotos
 import app.pantopus.android.data.gigs.GigDraftQueue
 import app.pantopus.android.data.mailbox.HolidayCardsRepository
@@ -86,6 +87,7 @@ class AccountDeviceData
                 runCatching { GigCameraPhotos.remove(context.cacheDir) }
                     .onFailure { Timber.w(it, "Sign-out could not remove the task camera photos") }
                 runCatching { PostCameraPhotos.remove(context.cacheDir) }
+                runCatching { CrewDayCameraPhotos.remove(context.cacheDir) }
                     .onFailure { Timber.w(it, "Sign-out could not remove the post camera photos") }
                 // And the mail enclosures it opened.
                 runCatching { MailEnclosureFiles.remove(context.cacheDir) }

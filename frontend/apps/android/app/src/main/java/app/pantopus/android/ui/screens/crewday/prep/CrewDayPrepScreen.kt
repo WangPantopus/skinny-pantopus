@@ -71,8 +71,14 @@ data class CrewDayPrepActions(
     val onShare: (url: String, message: String) -> Unit,
     /** "Printable flyer": the web flyer in the browser. */
     val onOpenFlyer: (url: String) -> Unit,
-    /** "Propose new dates" (screen 18). */
+    /** "Propose new dates" (screen 18), and its answers once sent. */
     val onProposeDates: (crewDayId: String) -> Unit,
+    /** "Open the route" (screen 16), from 6 PM the evening before. */
+    val onOpenRoute: (crewDayId: String) -> Unit,
+    /** "See invoices": the business's existing invoices. */
+    val onSeeInvoices: (businessId: String) -> Unit,
+    /** "Offer a Crew Day here again": New Crew Day prefilled from this one. */
+    val onRepeat: (businessId: String, crewDayId: String) -> Unit,
 )
 
 /**
@@ -97,10 +103,21 @@ fun CrewDayPrepScreen(
         }
     }
     val loaded = state as? CrewDayPrepUiState.Loaded
+    val after = loaded?.view?.isAfterTheDay() == true
     PlanPlainScaffold(
         onBack = actions.onBack,
         title = loaded?.view?.title ?: "Crew Day",
         modifier = Modifier.testTag("crewDayPrep"),
+        footer =
+            loaded?.view?.takeIf { after && it.canEdit && it.businessUserId != null }?.let { view ->
+                {
+                    PrimaryButton(
+                        title = "Offer a Crew Day here again",
+                        onClick = { actions.onRepeat(view.businessUserId.orEmpty(), view.id) },
+                        modifier = Modifier.fillMaxWidth().testTag("crewDayAfterRepeat"),
+                    )
+                }
+            },
     ) {
         when (val current = state) {
             CrewDayPrepUiState.Loading -> CrewDayListPlaceholder(modifier = Modifier.testTag("crewDayLoading"))
@@ -111,7 +128,12 @@ fun CrewDayPrepScreen(
                     onRetry = viewModel::retry,
                     modifier = Modifier.heightIn(min = 360.dp).testTag("crewDayLoadError"),
                 )
-            is CrewDayPrepUiState.Loaded -> PrepContent(current.view, working, actions, viewModel, onCopied = { toast.info("Link copied") })
+            is CrewDayPrepUiState.Loaded ->
+                if (after) {
+                    CrewDayAfterDay(view = current.view, onSeeInvoices = { current.view.businessUserId?.let(actions.onSeeInvoices) })
+                } else {
+                    PrepContent(current.view, working, actions, viewModel, onCopied = { toast.info("Link copied") })
+                }
         }
     }
     ToastHost(controller = toast)
@@ -136,6 +158,9 @@ private fun PrepContent(
     val open = day.status == "open"
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         PrepHeader(view, zone)
+        if (view.routeIsOpen()) {
+            CrewDayRouteCard(view = view, onOpenRoute = { actions.onOpenRoute(day.id) })
+        }
         StatusBanner(view, working, viewModel)
         NeedsYou(view, working, onPrice = { pricing = it }, onDecline = { declining = it }, onRelease = { releasing = it })
         HomesBooked(view)

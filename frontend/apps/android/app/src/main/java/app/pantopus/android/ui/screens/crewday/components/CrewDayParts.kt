@@ -2,15 +2,20 @@
 
 package app.pantopus.android.ui.screens.crewday.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -18,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.pantopus.android.data.api.models.crewday.CrewDayListItemDto
 import app.pantopus.android.data.crewday.CrewDayFormat
+import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.screens.plans.components.PlanFormCard
 import app.pantopus.android.ui.screens.plans.components.PlanIconTile
@@ -28,6 +34,7 @@ import app.pantopus.android.ui.screens.plans.components.planCard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusTextStyle
+import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 
 /** A Crew Day's own tile: home green for the household's side, business violet for the crew's. */
@@ -53,6 +60,35 @@ fun CrewDaySection(
     }
 }
 
+/** The tones of a Crew Day status chip (boards `Route`, `DatesAnswers`): done, told, home, waiting, needs a look. */
+enum class CrewDayTone(val background: Color, val ink: Color) {
+    Ok(PantopusColors.successLight, PantopusColors.success),
+    Info(PantopusColors.primary100, PantopusColors.info),
+    Home(PantopusColors.homeBg, PantopusColors.home),
+    Wait(PantopusColors.appSurfaceSunken, PantopusColors.appTextStrong),
+    Warn(PantopusColors.warmAmberBg, PantopusColors.warningStrong),
+}
+
+/** A small status chip in one of the [CrewDayTone]s. */
+@Composable
+fun CrewDayToneChip(
+    text: String,
+    tone: CrewDayTone,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = text,
+        style = PantopusTextStyle.caption.copy(fontWeight = FontWeight.Medium),
+        color = tone.ink,
+        modifier =
+            modifier
+                .heightIn(min = 20.dp)
+                .clip(RoundedCornerShape(Radii.pill))
+                .background(tone.background)
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+    )
+}
+
 /** What a crew's street day is doing, in the spec's words (01-spec screen 13). */
 fun crewDayStatusWord(item: CrewDayListItemDto): String =
     when (item.status) {
@@ -73,9 +109,13 @@ fun CrewDayDayRow(
     first: Boolean,
     onClick: () -> Unit,
     past: Boolean = false,
+    /** Today's days (board `CrewList`): "9 AM–1 PM · 2 of 6 done" and **Open the route**. */
+    onOpenRoute: (() -> Unit)? = null,
 ) {
     val counts =
-        if (past) {
+        if (onOpenRoute != null) {
+            "${item.doneCount} of ${item.bookedCount} done"
+        } else if (past) {
             listOfNotNull(
                 "${item.doneCount} ${if (item.doneCount == 1) "home" else "homes"}",
                 item.chargedCents.takeIf { it > 0 }?.let { "${CrewDayFormat.price(it)} charged" },
@@ -90,7 +130,15 @@ fun CrewDayDayRow(
                 },
             ).joinToString(" · ")
         }
-    val subtitle = listOf(CrewDayFormat.dateAndWindow(item.serviceDate, item.windowStart, item.windowEnd), counts)
+    val subtitle =
+        listOf(
+            if (onOpenRoute != null) {
+                CrewDayFormat.window(item.windowStart, item.windowEnd).orEmpty()
+            } else {
+                CrewDayFormat.dateAndWindow(item.serviceDate, item.windowStart, item.windowEnd)
+            },
+            counts,
+        )
     PlanRow(
         title = item.title,
         subtitle = subtitle.filter { it.isNotBlank() }.joinToString(" · "),
@@ -100,14 +148,26 @@ fun CrewDayDayRow(
         onClick = onClick,
         modifier = Modifier.testTag("crewDaysCrewRow_${item.id}"),
         below =
-            item.reviewNote?.takeIf { item.status == "declined" }?.let { note ->
-                {
-                    Text(
-                        text = "Pantopus: $note",
-                        style = PantopusTextStyle.small,
-                        color = PantopusColors.appTextSecondary,
-                    )
+            when {
+                onOpenRoute != null -> {
+                    {
+                        PrimaryButton(
+                            title = "Open the route",
+                            onClick = onOpenRoute,
+                            modifier = Modifier.fillMaxWidth().padding(top = Spacing.s2).testTag("crewDaysCrewRoute_${item.id}"),
+                        )
+                    }
                 }
+                item.status == "declined" && item.reviewNote != null -> {
+                    {
+                        Text(
+                            text = "Pantopus: ${item.reviewNote}",
+                            style = PantopusTextStyle.small,
+                            color = PantopusColors.appTextSecondary,
+                        )
+                    }
+                }
+                else -> null
             },
     )
 }

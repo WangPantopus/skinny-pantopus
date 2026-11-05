@@ -701,6 +701,8 @@ data class CrewDayCrewViewDto(
     @Json(name = "money") val money: CrewDayMoneyDto = CrewDayMoneyDto(),
     @Json(name = "needs_you") val needsYou: CrewDayNeedsYouDto = CrewDayNeedsYouDto(),
     @Json(name = "bookings") val bookings: List<CrewDayHomeDto> = emptyList(),
+    /** Homes that ended (cancelled or declined). */
+    @Json(name = "ended") val ended: List<CrewDayHomeDto> = emptyList(),
     @Json(name = "past_customers") val pastCustomers: Int = 0,
     @Json(name = "events") val events: List<CrewDayEventDto> = emptyList(),
 )

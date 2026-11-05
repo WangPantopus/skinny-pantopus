@@ -41,8 +41,10 @@ import app.pantopus.android.ui.theme.PantopusTextStyle
 /** Where the crew's list hands off. */
 data class CrewDaysCrewActions(
     val onBack: () -> Unit,
-    /** One of the business's street days (screen 15; the route on the day). */
+    /** One of the business's street days (screen 15). */
     val onOpenDay: (crewDayId: String, businessId: String) -> Unit,
+    /** Today's route (screen 16). */
+    val onOpenRoute: (crewDayId: String) -> Unit,
     /** New Crew Day (screen 14). */
     val onNewDay: (businessId: String) -> Unit,
     /** "Publish your business page": the business's own page. */
@@ -128,7 +130,7 @@ private fun CrewDaysCrewContent(
             ReadinessCard(data.readiness, state.businessId, actions)
         }
         val open: (CrewDayListItemDto) -> Unit = { actions.onOpenDay(it.id, state.businessId) }
-        DaySection("Today", data.today, open)
+        DaySection("Today", data.today, open, onOpenRoute = { actions.onOpenRoute(it.id) })
         DaySection("Upcoming", data.upcoming, open)
         DaySection("Waiting for Pantopus", data.pending, open)
         DaySection("Drafts", data.drafts, open)
@@ -152,11 +154,18 @@ private fun DaySection(
     items: List<CrewDayListItemDto>,
     onOpen: (CrewDayListItemDto) -> Unit,
     past: Boolean = false,
+    onOpenRoute: ((CrewDayListItemDto) -> Unit)? = null,
 ) {
     if (items.isEmpty()) return
     CrewDaySection(title) {
         items.forEachIndexed { index, item ->
-            CrewDayDayRow(item = item, first = index == 0, onClick = { onOpen(item) }, past = past)
+            CrewDayDayRow(
+                item = item,
+                first = index == 0,
+                onClick = { onOpen(item) },
+                past = past,
+                onOpenRoute = onOpenRoute?.let { { it(item) } },
+            )
         }
     }
 }
