@@ -121,7 +121,7 @@ household per Crew Day (a unique index), and `client_request_id` is unique per h
 `id`, `crew_day_id` (cascade), `booking_id` (nullable, cascade), `actor_user_id` (nullable for the system; set null),
 `actor_role` (`household`, `crew`, `operator`, `system`), `kind` (lowercase snake case, 3–40 characters), `data`
 jsonb object, `visible_to` (`household`, `crew`, `both`, `operator`), `created_at`.
-Kinds: `day_created`, `day_edited`, `day_submitted`, `day_approved`, `day_declined`, `day_cancelled`, `day_started`,
+Kinds: `day_created`, `day_edited`, `day_submitted`, `day_done`, `day_approved`, `day_declined`, `day_cancelled`, `day_started`,
 `dates_proposed`, `price_requested`, `price_offered`, `price_approved`, `price_declined`, `booked`, `booking_changed`,
 `booking_cancelled`, `release_asked`, `released`, `access_note_changed` (never the text), `gate_ready`, `on_the_way`,
 `eta_changed`, `cant_get_in`, `done`, `household_confirmed`, `charged`, `charge_failed`, `paid_by_household`,
@@ -131,9 +131,10 @@ both sides is drawn, and how the operator reads a case.
 
 ### Photos
 
-Completion and problem photos are images in a private storage bucket, under `crew-day/<crew_day_id>/<booking_id>/`,
-read through short-lived signed URLs. CDSRV prefers an existing private bucket and pattern; if a new bucket is needed
-it is created by the migration (additive) and listed in `FOUNDER.md` for production.
+Completion and problem photos are images in the existing private completion bucket (`GIG_COMPLETION_BUCKET`, the
+gig completion photos' bucket; no new bucket), under `crew-day/<crew_day_id>/<booking_id>/done-<uuid>.jpg` or
+`problem-<uuid>.jpg`, stored without metadata (location, camera, time; HEIC becomes JPEG, as every Pantopus photo
+upload), and read through signed URLs that last an hour (`photos: [{ path, url }]`).
 
 ## 3. Money
 
@@ -141,9 +142,9 @@ it is created by the migration (additive) and listed in `FOUNDER.md` for product
   (`backend/routes/pays.js` `GET/POST /api/pays/methods` and the existing add-card sheet / web add-card form). The
   booking stores the chosen `payment_method_id`; the server checks it belongs to the household's Stripe customer.
 - **Marking done** creates the invoice: one `BusinessInvoice` per booking (business = the crew, recipient = the
-  household, one line item per option and add-on, `total_cents` = `price_cents`, fee by
-  `stripeService.getEffectiveFeeRate`, `status` `sent`, memo "Crew Day: Gutter Day on Maple Lane, Tue, Nov 17",
-  due date = the charge day). No generic `invoice_received` notification and no Mail bill for these invoices (the
+  household, one line item per option and add-on (`{ description, amount_cents, quantity: 1 }`), `subtotal_cents` =
+  `total_cents` = `price_cents`, `fee_cents` by `stripeService.getEffectiveFeeRate` and `calculateFees`, `status`
+  `sent`, memo "Crew Day: Gutter Day on Maple Lane, Tue, Nov 17", `due_date` = `charge_due_at`). No generic `invoice_received` notification and no Mail bill for these invoices (the
   `crew_day_done` notice replaces them). It appears in the household's received invoices as usual.
 - **The charge** (`crewDayCharges` job, every 10 minutes, and at once on "Everything looks good"): for `done`
   bookings with no open problem whose `charge_due_at` has passed or that the household confirmed, pay the invoice
@@ -155,9 +156,18 @@ it is created by the migration (additive) and listed in `FOUNDER.md` for product
   invoice through the existing invoice pay screen, which marks the booking `paid`.
 - **Payout:** unchanged: the existing 48-hour hold and `processPendingTransfers` move the crew's share to its Stripe
   account. Crew Day requires payouts enabled, so the money never goes to an owner's wallet.
-- **Refunds:** operator only, through the existing refund machinery (`createSmartRefund`) on the invoice's payment;
-  the crew gets the existing refund notice. Before a charge, "refund" means the charge never runs: the invoice is
-  voided and the booking ends `cancelled` by the operator.
+- **Refunds:** operator only, through the existing refund machinery (`createSmartRefund`, admin mode) on the
+  invoice's payment, which refunds an invoice payment **in full** only (a partial refund would strand the rest in the
+  48-hour hold): after a charge the operator refunds all of it (`REFUND_IN_FULL` otherwise) and the booking ends
+  `refunded`. Before a charge, refunding the whole price means the charge never runs (the invoice is voided, the
+  booking ends `cancelled` by the operator, nothing is charged); an amount off ("Refunded $60 of $180") voids the
+  invoice, makes a new one for the rest ("…, less $60.00 from Pantopus support") and charges it at once, with
+  `refunded_cents` = the amount off.
+- **The shared path** is `backend/services/invoicePayments.js` (`startInvoicePayment`, `captureInvoicePayment`,
+  `markInvoicePaid`), used by `POST /api/businesses/invoices/:invoiceId/pay` and `/confirm` (unchanged) and by the
+  charges. `markInvoicePaid` also turns a Crew Day booking `paid` (event `charged`, or `paid_by_household` after a
+  failed charge) and sends `crew_day_charged`. A declined card ends `payment_failed` with `charge_failure` (Stripe's
+  decline code, or `authentication_required`).
 - **Known people:** a household with a booking counts as known to the crew in `knownInvoiceRecipients`
   (`relation: 'crew_day'`), so the crew can invoice extra work with the existing invoices.
 
@@ -174,27 +184,28 @@ routes add `requireAdmin`. Rate-limit the public routes like the Plans share rou
 | Route | Returns |
 |---|---|
 | `GET /api/crew-days/public/:code` | the invitation: `id`, `code`, `title`, `service`, `street_label`, `city`, `state`, `timezone`, `service_date`, `window_start`, `window_end`, `window_starts_at`, `window_ends_at`, `booking_closes_at`, `included`, `outside_only`, `price_from_cents`, `price_options`, `add_ons`, `capacity`, `booked_count`, `spots_left`, `availability` (`open`, `full`, `closed`, `cancelled`, `done`; `state` is the US state everywhere), `crew { business_user_id, name, username, avatar_url, verified, rating { average, count } or null }`, and when signed in `viewer { role: crew/household/none, booking_id }`. Also `service_label`, `price_options[{ id, label, price_cents or null, needs_look }]`, `add_ons[{ id, label, price_cents }]`. Never addresses, households or the area's coordinates. 404 `NOT_FOUND` ("This Crew Day isn't available.") for unknown or malformed codes and for days not yet approved (a day cancelled after approval stays readable as `cancelled`). Limited like the Plans share page (60 a minute per IP). |
-| `POST /api/crew-days/public/:code/quote` | body `{ latitude, longitude, address_line, option_id, add_on_ids }` → `{ in_area, price_cents or null, needs_look, message }` |
+| `POST /api/crew-days/public/:code/quote` | body `{ latitude, longitude, address_line, option_id, add_on_ids }` → `{ in_area, price_cents or null, needs_look, line_items, message }`. `message` is the out-of-area sentence ("This Crew Day doesn't reach 456 Oak Street. It covers homes near Maple Lane.") or the look-first one, else null. Same limits and 404 as the public read. |
 
 ### Household
 
 | Route | Does |
 |---|---|
-| `POST /api/crew-days/:id/bookings` | body `{ client_request_id, home_id?, address { line, city, state, zip, latitude, longitude }, option_id, add_on_ids, access_note?, payment_method_id, approve_terms: true }` → 201 `{ booking }` (`booked`, or `price_pending` for a look-first option). Refuses: `DAY_NOT_OPEN`, `BOOKING_CLOSED`, `DAY_FULL`, `OUT_OF_AREA`, `ALREADY_BOOKED`, `PAYMENT_METHOD_INVALID`, `OWN_CREW`, blocked (422, no reason given). A retry with the same `client_request_id` answers with the same booking. |
-| `GET /api/crew-days/mine` | `{ upcoming: [card], requests: [card], past: [card] }` for screen 10 |
-| `GET /api/crew-days/today` | `{ mine: [card], nearby: [card] }` for screen 9 (nearby: at most one open day whose area holds one of my homes, not booked, not dismissed) |
-| `POST /api/crew-days/:id/dismiss` | "Not for me" on the Today card |
-| `GET /api/crew-days/bookings/:bookingId` | the household's booking page (screen 5): the day summary, `status`, `steps`, `eta`, `prep_note`, `access_note`, address, option and add-ons, `price_cents`, card (brand, last4), `cancel_cutoff_at`, `can_cancel`, `can_change`, `charge { due_at, amount_cents, state }`, `invoice_id`, `photos` (signed URLs) and `done_note`, `problem`, `proposal` (when `new_dates`), `share { url, message, booked_count, spots_left }`, `events` (visible to the household) |
-| `PATCH /api/crew-days/bookings/:bookingId` | `{ access_note?, option_id?, add_on_ids?, remind_next_season? }`; option changes only before the cutoff, re-priced (look-first → `price_pending`) |
-| `POST /api/crew-days/bookings/:bookingId/cancel` | before the cutoff: `cancelled` (free). After: 409 `ASK_THE_CREW` |
-| `POST /api/crew-days/bookings/:bookingId/ask-release` | after the cutoff: records `release_asked` and tells the crew |
-| `POST /api/crew-days/bookings/:bookingId/price-answer` | `{ approve: true or false }` on `price_offered` |
+| `POST /api/crew-days/:id/bookings` | body `{ client_request_id (8–100), home_id?, address { line, city, state, zip, latitude, longitude }, option_id, add_on_ids, access_note?, payment_method_id, approve_terms: true }` → 201 `{ booking }` (the booking page below; `booked`, or `price_pending` for a look-first option). With `home_id` (one of the person's homes) the home's address and point are used and `address` is ignored. `payment_method_id` is a Stripe `pm_…` the household saved through the add-card flow (`GET /api/payments/methods`). Refuses: `VALIDATION` (422; also `approve_terms` not true), `NOT_FOUND`, `DAY_NOT_OPEN`, `BOOKING_CLOSED` (409, "Booking closed on Sun, Nov 15."), `DAY_FULL` (409, "This Crew Day filled up while you were booking."), `OUT_OF_AREA` (422, with the out-of-area sentence), `ALREADY_BOOKED` (409), `PAYMENT_METHOD_INVALID` (422, "Your card couldn't be saved. Try another card."), `OWN_CREW` (409), `CANNOT_BOOK` (422, a block either way; no reason given). A retry with the same `client_request_id` answers 200 with the same booking. |
+| `GET /api/crew-days/mine` | `{ upcoming: [card], requests: [request], past: [card] }` for screen 10. Booking card: `{ booking_id, crew_day_id, code, title, service, service_label, street_label, timezone, service_date, window_start, window_end, window_starts_at, status, price_cents, charge, eta, photo_count, problem_status, crew { name, username } }`; past cards add `book_again { crew_day_id, code, service_date }` or null (the same crew has an open day reaching this home). Request: `{ id, title, service, service_label, street_label, months, note, status, answer_note, answered_at, offer { crew_day_id, code } or null, created_at }`. |
+| `GET /api/crew-days/today` | `{ mine: [card + today_state], nearby: [card] }` for screen 9. `mine`: active bookings from 7 days before their date through 2 days after, or any that needs an answer; `today_state` is `price_ready`, `new_dates`, `payment_failed`, `done` (photos to check), `on_the_way`, `today`, `tomorrow`, or the status. `nearby`: at most one open day (booking still open, not full) whose area holds one of my homes, not booked, not dismissed, no block either way: `{ crew_day_id, code, title, service, service_label, street_label, timezone, service_date, window_start, window_end, price_from_cents, booking_closes_at }`. |
+| `POST /api/crew-days/:id/dismiss` | "Not for me" on the Today card → `{ dismissed: true }` (for good; idempotent) |
+| `GET /api/crew-days/bookings/:bookingId` | the household's booking page (screen 5), its household only (404 otherwise): `crew_day { id, code, title, service, service_label, street_label, city, state, timezone, status, included, outside_only, crew }`, `status`, `steps [{ key: booked/on_the_way/done/paid, label ("Requested" while the price is pending), state: done/current/todo }]`, `service_date`, `window_start`, `window_end`, `window_starts_at`, `window_ends_at`, `eta { start, end, updated_at }`, `gate_ready_at`, `cant_get_in_at`, `prep_note`, `access_note`, `address { line, city, state, zip }`, `home_id`, `option { id, label }`, `add_ons`, `line_items`, `price_cents`, `card { brand, last4 }`, `cancel_cutoff_at`, `can_cancel`, `can_change`, `can_ask_release`, `release_asked_at`, `charge { state, amount_cents, due_at, paid_at, refunded_cents, failure }`, `invoice_id`, `done_at`, `photos` (signed URLs, SRV-4) and `done_note`, `household_confirmed_at`, `problem`, `proposal` (when `new_dates`), `new_date_choice`, `remind_next_season`, `cancelled_by`, `cancelled_at`, `share { url, flyer_url, message, booked_count, spots_left }`, `events` (visible to the household) |
+| `PATCH /api/crew-days/bookings/:bookingId` | `{ access_note?, option_id?, add_on_ids?, remind_next_season? }` → `{ booking }`. The note changes until the work is done (`access_note_changed`, never the text); option and add-ons only before the cutoff (`ASK_THE_CREW` after), re-priced (look-first → `price_pending`, and the crew is asked); `remind_next_season` only once paid (`NOT_EDITABLE`) |
+| `POST /api/crew-days/bookings/:bookingId/cancel` | before the cutoff: `cancelled` (free) → `{ booking }`; the crew is told. After: 409 `ASK_THE_CREW`; once the work started: `NOT_CANCELLABLE` |
+| `POST /api/crew-days/bookings/:bookingId/ask-release` | after the cutoff: records `release_asked_at` and tells the crew → `{ booking }`. Before it: 409 `CAN_CANCEL` |
+| `POST /api/crew-days/bookings/:bookingId/price-answer` | `{ approve: true or false }` on `price_offered` → `{ booking }`: approve → `booked` (the household gets `crew_day_booked`, the crew `crew_day_new_booking`); decline → `cancelled` (free). Otherwise 409 `NO_PRICE_OFFER` |
 | `POST /api/crew-days/bookings/:bookingId/gate-ready` | sets `gate_ready_at`, tells the crew |
-| `POST /api/crew-days/bookings/:bookingId/confirm` | "Everything looks good": charges now; answers with the booking (`paid` or `payment_failed`) |
-| `POST /api/crew-days/bookings/:bookingId/problem` | `{ kind, note, photo_paths }` → `problem_status` `open`, charge paused, `problem_due_at` = next business day 5 PM local; tells the operator and the crew. A second call adds a note or photos. |
-| `POST /api/crew-days/bookings/:bookingId/new-date` | `{ proposal_id, choice: "YYYY-MM-DD" or "cancel" }` |
-| `POST /api/crew-days/uploads` | multipart image (JPEG, PNG or HEIC, ≤ 10 MB; HEIC converted) → `{ path }`; household or crew of that booking |
-| `POST /api/crew-days/requests` | `{ service, home_id, months, note }` → the request (`requested`); tells the operator |
+| `POST /api/crew-days/bookings/:bookingId/confirm` | "Everything looks good" on a `done` home: records `household_confirmed_at` and charges now → `{ booking }` (`paid`, or `payment_failed`, or still `done` if Stripe is settling). `NOT_DONE`, `PROBLEM_OPEN` |
+| `POST /api/crew-days/bookings/:bookingId/problem` | `{ kind (missed, damage, no_show, charge, other), note (1–1,000), photo_paths (≤ 4, uploaded as `problem`) }` → `problem_status` `open`, charge paused, `problem_due_at` = 5 PM local the next business day; tells the crew (`crew_day_problem`) and the operator (`crew_day_problem_opened`) → `{ booking }`. Once the crew has come (on or after the home's date). A second call while open adds a note or photos (`problem_note`). `NOT_REPORTABLE` |
+| `POST /api/crew-days/bookings/:bookingId/new-date` | `{ proposal_id, choice: "YYYY-MM-DD" or "cancel" }` on a `new_dates` booking before the deadline → `{ booking }`: a date books that date and window (`booked`); `cancel` ends it free. The crew gets `crew_day_dates_answered` ("1 of 3 picked a new date", in-app). `NO_PROPOSAL`, `CHANGED` (an older proposal id), `DEADLINE_PASSED` |
+| `POST /api/crew-days/uploads` | multipart: `photo` (JPEG, PNG or HEIC, ≤ 10 MB; HEIC converted), `booking_id`, `purpose` (`done`: any member of that booking's crew; `problem`: that booking's household) → 201 `{ path }`. Refuses `PHOTO_TOO_LARGE` (413), `PHOTO_UNREADABLE` / `PHOTO_TYPE` (415), `NOT_FOUND` (not your booking). |
+| `POST /api/crew-days/bookings/:bookingId/gate-ready` | on the day (from 6 PM the evening before) while the crew is coming: sets `gate_ready_at`, tells the crew → `{ booking }`. `TOO_EARLY`, `NOT_ON_ROUTE` |
+| `POST /api/crew-days/requests` | `{ service, home_id? (default: their first home), months (["YYYY-MM", …] in the next six, or ["any"]), note? (≤ 500) }` → 201 `{ request }` (the `mine` request card; title "Holiday lights on Oak Street", the street without the house number); tells the operator (`crew_day_request_new`). No home: 422 `HOME_REQUIRED` ("Add your home first.") |
 
 ### Crew
 
@@ -207,25 +218,26 @@ create, edit, prices, dates, cancel and release; any business access for reading
 | `POST /api/crew-days` | owners and editors (`profile.edit`). create: `{ business_id, service, street_label, city, state, center { latitude, longitude }, radius_m, service_date, window_start, window_end, capacity, booking_closes_at?, included, outside_only, prep_note, price_options, add_ons, submit, repeat_of?, title? }` → 201 `{ crew_day }`, `draft` or `pending_review`. Refuses `VALIDATION` (422, with `field`), `NOT_ALLOWED` (403, a member without `profile.edit`), `NOT_FOUND`, `BUSINESS_NOT_READY` (409, with `missing`). The date must be after today and within six months; booking must stay open at least an hour from now and close by the window's start (default: 48 hours before it). Option and add-on ids are made by the server (`opt_…`, `add_…`); send them back to keep them. |
 | `PATCH /api/crew-days/:id` | owners and editors; any form field above → `{ crew_day }`. Draft, declined and waiting days take every field; an open or started day takes only `capacity` (not below its active bookings: `CAPACITY_BELOW_BOOKED`), `included`, `outside_only`, `prep_note`, `price_options`, `add_ons` (an option or add-on a booking uses can be repriced, not removed: `OPTION_IN_USE`; existing bookings keep their prices). Other fields: 409 `NOT_EDITABLE` with `fields`. `crew_day.editable_fields` lists what the viewer may change. |
 | `POST /api/crew-days/:id/submit` | draft or declined → `pending_review` → `{ crew_day }`; tells the operator. Refuses `DAY_NOT_DRAFT`, `BUSINESS_NOT_READY`, `VALIDATION` (a date that has passed). |
-| `GET /api/crew-days/:id/crew` | any member. The crew's day (15): the whole form (`center`, `radius_m`, `included`, `prep_note`, `price_options`, `add_ons`, `price_from_cents`), the card fields, `can_edit`, `editable_fields`, `review_note`, `cancel_*`. From SRV-3/4 also: counts, `money { gross_cents, fee_rate, net_cents, charged_cents, scheduled_cents, paused_cents }`, `needs_you` (price checks, release asks), bookings (address and first name only when the privacy rule allows; otherwise `label` "Home 3"), events. |
-| `POST /api/crew-days/:id/bookings/:bookingId/price` | `{ price_cents }` → `price_offered`, or `{ decline: true, note }` → `declined` |
-| `POST /api/crew-days/:id/bookings/:bookingId/release` | a home inside the cutoff, at no charge → `cancelled` (`crew`) |
-| `POST /api/crew-days/:id/invite-past` | invites households this business served with a `paid` booking within the area in the last 400 days, once each → `{ invited }` |
-| `POST /api/crew-days/:id/propose-dates` | `{ dates: [{ date, window_start, window_end }] (2–3), note? }` → every `booked` booking on the original date becomes `new_dates`; deadline = 24 h before the earliest date |
-| `POST /api/crew-days/:id/cancel` | `{ reason }` → the day and every active booking `cancelled`, nobody charged |
-| `GET /api/crew-days/:id/route?date=` | ordered homes for the date, with what the job window allows |
-| `POST /api/crew-days/:id/route/order` | `{ booking_ids }` |
-| `POST /api/crew-days/bookings/:bookingId/on-the-way` | `{ eta_start, eta_end }` → `on_the_way` (the day becomes `in_progress`) |
-| `POST /api/crew-days/:id/running-late` | `{ minutes: 30, 60 or 90, date }` → shifts every remaining home's window and tells them |
-| `POST /api/crew-days/bookings/:bookingId/cant-get-in` | `{ note }` → event, tells the household |
-| `POST /api/crew-days/bookings/:bookingId/done` | `{ photo_paths (≥ 1), note? }` → `done`, the invoice, `charge_due_at` |
+| `GET /api/crew-days/:id/crew` | any member. The crew's day (15): the whole form (`center`, `radius_m`, `included`, `prep_note`, `price_options`, `add_ons`, `price_from_cents`), the card fields, `can_edit`, `editable_fields`, `review_note`, `cancel_*`, `money { gross_cents, fee_rate, net_cents, charged_cents, scheduled_cents, paused_cents }` (`fee_rate` in percent), `needs_you { price_checks: [home], release_asks: [home] }`, `bookings: [home]` (active, in booking order), `ended: [home]` (cancelled or declined), `events` (visible to the crew). Home: `{ id, label ("Home 3"), details ("Two stories · clean the gutter guards"), line_items, price_cents, status, service_date, window_start, window_end, address_visible, address { line, city, state, zip, latitude, longitude } or null, first_name or null, access_note or null, route_position, eta, gate_ready_at, cant_get_in_at, release_asked_at, done_at, photo_count, charge_state, charge_due_at, problem, new_date_choice, created_at }`. The address and first name show from 6 PM the evening before the home's date through that day, and at once while its price is pending or offered (never the access note then). |
+| `POST /api/crew-days/:id/bookings/:bookingId/price` | owners and editors. `{ price_cents }` (the look-first option's price; add-ons keep theirs; total = both) → `price_offered`, or `{ decline: true, note }` → `declined` → `{ booking }` (the crew's home shape). `NO_PRICE_CHECK` otherwise |
+| `POST /api/crew-days/:id/bookings/:bookingId/release` | owners and editors; a home not yet started, at no charge (a household's release ask, or the crew's own call) → `cancelled` (`crew`) → `{ booking }`; the household is told |
+| `POST /api/crew-days/:id/invite-past` | owners and editors, an open day: households this business served with a `paid` booking within the area in the last 400 days, not booked here and not blocked, once each per day (`crew_day_invite`, with their price when their past option's label is on this day's list) → `{ invited }`. The crew's day has `past_customers` (how many could be invited). |
+| `POST /api/crew-days/:id/propose-dates` | owners and editors. `{ dates: [{ date, window_start, window_end }] (2–3, after today, within 14 days), note? }` → every `booked` (or still-answering) home becomes `new_dates`; `crew_day.proposed_dates` = `{ id, dates, deadline_at (24 h before the earliest date's window), note, sent_at, homes }`; each household gets `crew_day_new_dates` → `{ crew_day }` (the crew's day). `NO_HOMES`, `DAY_NOT_OPEN` |
+| `POST /api/crew-days/:id/cancel` | owners and editors. `{ reason }` → the day `cancelled` (`cancelled_by: crew`) and every home not yet worked on `cancelled` (free; `crew_day_cancelled` to each); done or paid homes keep their state → `{ crew_day }`. The invitation then reads `cancelled`. |
+| `GET /api/crew-days/:id/route?date=` | any member. `{ crew_day_id, title, date, dates, timezone, window_start, window_end, total, done, homes: [home + photos, problem_photos, done_note] }` in the crew's order (`route_position`, then booking order), each with what the job window allows. Without `date`: the first of its dates from today. |
+| `POST /api/crew-days/:id/route/order` | any member. `{ booking_ids }` (homes on one date) → the route |
+| `POST /api/crew-days/bookings/:bookingId/on-the-way` | any member, on or after the home's date. `{ eta_start, eta_end }` (ISO instants, up to 4 hours apart) → `on_the_way` (the day becomes `in_progress`) → `{ booking }` (home shape); the household gets `crew_day_on_the_way`. Again on an `on_the_way` home: a new time (`crew_day_eta_changed`). `NOT_TODAY`, `NOT_ON_ROUTE` |
+| `POST /api/crew-days/:id/running-late` | any member. `{ minutes: 30, 60 or 90, date? (today) }` → every home still `booked` or `on_the_way` that date moves its window (and its expected time) back and is told → `{ date, minutes, moved, route }`. `TOO_LATE` past midnight |
+| `POST /api/crew-days/bookings/:bookingId/cant-get-in` | any member. `{ note }` (required) → `cant_get_in_at`, event with the note, `crew_day_cant_get_in` to the household → `{ booking }` |
+| `POST /api/crew-days/bookings/:bookingId/done` | any member, on or after the home's date. `{ photo_paths (1–8, uploaded for this booking as `done`), note? }` → `done`, the invoice (below), `charge_due_at` = now + 24 h, `crew_day_done` to the household → `{ booking }` (home shape). Repeating it answers the same. |
 
 ### Shapes
 
 - **Day card** (crew lists, and the base of every crew and operator day): `id`, `title`, `service`, `service_label`,
   `street_label`, `city`, `state`, `timezone`, `service_date`, `window_start`, `window_end` (`HH:MM`),
   `window_starts_at`, `window_ends_at`, `status`, `capacity`, `booked_count`, `spots_left`, `is_full`,
-  `booking_closes_at`, `is_closed`, `price_checks`, `release_asks`, `done_count`, `charged_cents`, `dates` (the dates
+  `booking_closes_at`, `is_closed`, `price_checks`, `release_asks`, `done_count`, `charged_cents`, `paid_out` (past
+  list only: every charge's money transferred to the crew), `dates` (the dates
   its active bookings are on, or its own date), `review_note` (declined only), `submitted_at`,
   `share { code, url, flyer_url }`, `updated_at`.
 - **Errors common to every route:** `UNAVAILABLE` (503, try again), `SERVER_ERROR` (500), `CHANGED` (409, someone
@@ -239,9 +251,9 @@ create, edit, prices, dates, cancel and release; any business access for reading
 | `GET /api/admin/crew-days/:id` | everything (21): `{ kind: "offer", day, money, bookings, events }` (every booking with `household { user_id, first_name, last_name, name, email }`, `address`, `line_items`, `price_cents`, `status`, `charge_state` (`not_yet`, `scheduled`, `paused`, `charged`, `partially_refunded`, `refunded`, `failed`, `none`), `invoice_id`, `problem`, …; every event) or `{ kind: "request", request }`; records `operator_viewed` (once per ten minutes per operator) |
 | `POST /api/admin/crew-days/:id/approve` | `{ note? }` → `open` → `{ crew_day }`; tells the crew. Refuses `NOT_WAITING`, `BUSINESS_NOT_READY`, `DAY_PASSED` (booking would already be closed) |
 | `POST /api/admin/crew-days/:id/decline` | `{ note }` (required, ≤ 500) → `declined` → `{ crew_day }`; tells the crew |
-| `POST /api/admin/crew-days/:id/cancel` | `{ reason }` |
-| `POST /api/admin/crew-days/bookings/:bookingId/problem` | `{ action: note, release, refund, resolve, amount_cents?, note }` |
-| `POST /api/admin/crew-days/requests/:id` | `{ action: offer_ready, crew_day_id }` or `{ action: no_crew, note }`; tells the household |
+| `POST /api/admin/crew-days/:id/cancel` | `{ reason }` (required) → as the crew's cancel, `cancelled_by: operator`; the crew gets `crew_day_cancelled` too → `{ crew_day }` |
+| `POST /api/admin/crew-days/bookings/:bookingId/problem` | `{ action, amount_cents?, note }` → `{ booking }` (operator shape + `crew_day`). `note`: a note to the household (`crew_day_problem_update`) and on the timeline. `release`: resolved (`released`), the charge runs now ("Charge released: $180 paid."). `refund`: see §3 (`amount_cents` defaults to the whole price). `resolve`: resolved with a required note to both; the charge then runs on its schedule. `NO_OPEN_PROBLEM`, `REFUND_IN_FULL`, `NOTHING_TO_REFUND` |
+| `POST /api/admin/crew-days/requests/:id` | `{ action: offer_ready, crew_day_id (an open day), note? }` or `{ action: no_crew, note }` → `{ request }` (operator request card); tells the household (`crew_day_request_answered`; an offer links `/crew-day/<code>`). The household's `mine` request shows `offer { crew_day_id, code }` while that day is open. |
 
 ## 5. Links
 
@@ -295,11 +307,15 @@ and the member who created the day.
 Follow `backend/jobs/planJobs.js` and `pgBossJobs.js`; every job skips while `crew_day` is off. Locally they run once
 through the existing job launcher, so scenarios don't wait for the clock.
 
-- `crewDayCharges` (every 10 min): §3.
-- `crewDayReminders` (every 15 min): `crew_day_reminder` at 6 PM local the evening before, once per booking.
-- `crewDayDeadlines` (every 15 min): new-date deadlines → unanswered bookings `cancelled` (`system`); price offers not
-  answered by `booking_closes_at` → `cancelled`; days whose bookings are all settled → `done`; access notes cleared
-  7 days after a booking ends.
+- `crewDayCharges` (every 10 min, `backend/jobs/crewDayJobs.js`; `POST /api/internal/jobs/crew-day-charges` runs it
+  once): §3. Each booking is claimed (`charge_claimed_at`) before charging; a claim older than 15 minutes is taken
+  again.
+- `crewDayReminders` (every 15 min; `POST /api/internal/jobs/crew-day-reminders`): `crew_day_reminder` from 6 PM
+  local the evening before until the window starts, once per booking (`reminder_sent_at`; a new date clears it).
+- `crewDayDeadlines` (every 15 min; `POST /api/internal/jobs/crew-day-deadlines`): new-date deadlines → unanswered
+  bookings `cancelled` (`system`, `no_new_date`); price checks not answered by `booking_closes_at` → `cancelled`
+  (`price_not_answered`); open or started days whose dates have passed and whose homes are all paid, refunded,
+  cancelled or declined → `done` (`day_done`); access notes cleared 7 days after the booking's day.
 
 ## 8. Privacy checks on the server
 
