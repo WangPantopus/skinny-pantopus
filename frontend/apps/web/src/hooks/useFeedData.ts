@@ -15,6 +15,7 @@ import type { FeedSurface, Post, PostType } from '@pantopus/api';
 import type { AudienceProfile, User } from '@pantopus/types';
 import type { PostComposerSubmitData } from '@/components/feed/PostComposer';
 import { queryKeys } from '@/lib/query-keys';
+import { FEED_PAGE_SIZE, buildFeedKey, feedLocationKey } from '@/lib/feedKeys';
 import { useFirstPageRefresh } from '@/lib/firstPageRefresh';
 import type { SportsMode, TopicKey } from '@/constants/feedTopics';
 import { fetchMe } from '@/lib/me';
@@ -56,26 +57,6 @@ type FeedPage = Awaited<ReturnType<typeof api.posts.getFeedV2>>;
 const FEED_FRESH_MS = 30_000;
 // Sports lane returns a richer cursor tuple: (rankBucket, createdAt, id).
 type FeedCursor = { createdAt: string; id: string; rankBucket?: number } | null;
-
-// Build the full query key with location + topic/mode params so different
-// lanes produce different cache entries. Location only applies to `place`;
-// topic/sportsMode/eventKey only apply when the Sports lane is active.
-function buildFeedKey(
-  surface: FeedSurface,
-  filter: FilterType,
-  locationKey: string,
-  topic: TopicKey | null,
-  sportsMode: SportsMode | null,
-  eventKey: string | null,
-) {
-  return [
-    ...queryKeys.feed(surface, filter),
-    locationKey,
-    topic ?? 'none',
-    topic === 'sports' ? (sportsMode ?? 'for_you') : 'na',
-    topic === 'sports' ? (eventKey ?? 'none') : 'na',
-  ] as const;
-}
 
 /**
  * Patch one post in every cached feed list. A save or like made on the post's own page or
@@ -149,11 +130,10 @@ export function useFeedData({
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   // Stable location key — only meaningful for `place` surface.
-  const locationKey = useMemo(() => {
-    if (surface !== 'place') return 'na';
-    if (viewingLat == null || viewingLng == null) return 'nogeo';
-    return `${viewingLat.toFixed(4)},${viewingLng.toFixed(4)},${radiusMiles ?? 100}`;
-  }, [surface, viewingLat, viewingLng, radiusMiles]);
+  const locationKey = useMemo(
+    () => feedLocationKey(surface, viewingLat, viewingLng, radiusMiles),
+    [surface, viewingLat, viewingLng, radiusMiles],
+  );
 
   const currentKey = useMemo(
     () => buildFeedKey(surface, filter, locationKey, topic, sportsMode, eventKey),
@@ -209,7 +189,7 @@ export function useFeedData({
     queryFn: async ({ pageParam }) => {
       const params: Parameters<typeof api.posts.getFeedV2>[0] = {
         surface,
-        limit: 20,
+        limit: FEED_PAGE_SIZE,
       };
 
       // The Sports topic lane swaps the post-type chip row for a mode row

@@ -11,11 +11,18 @@
 // after the first page, they start at once.
 
 import { useSyncExternalStore } from 'react';
+import { isFirstContentRoute } from '@/lib/firstContent';
 
 const HOLD_MS = 1500;
 
 const listeners = new Set<() => void>();
-let holding = typeof window !== 'undefined' && window.location.pathname === '/app/chat';
+// A Messages document rendered with its first content (lib/firstContent.ts: a
+// session that came with the request, nothing to recover, the plain address)
+// shows its rows from the HTML and restores nothing from storage: no hold.
+const rowsInHtml = typeof window !== 'undefined' && !window.location.search && isFirstContentRoute('/app/chat')
+  && /(?:^|;\s*)pantopus_session=1(?:;|$)/.test(document.cookie)
+  && !(window as Window & { __pantopusRecovery?: unknown }).__pantopusRecovery;
+let holding = typeof window !== 'undefined' && window.location.pathname === '/app/chat' && !rowsInHtml;
 if (holding) setTimeout(releaseShellReads, HOLD_MS);
 
 /** Called by the Messages inbox once its first rows, or its empty or error state, have painted. */

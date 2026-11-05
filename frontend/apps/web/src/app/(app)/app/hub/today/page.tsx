@@ -39,6 +39,7 @@ import { VerifyBanner } from '@/components/archetypes/place';
 import TodayDetail from '@/components/place/detail/TodayDetail';
 import { claimWaitingLabel } from '@/components/homes/ClaimApprovalChecklist';
 import { PLACE_FRESH_MS, gatedStaleTime, useAfterRecheck } from '@/lib/householdCopy';
+import { useHydrated } from '@/hooks/useHydrated';
 
 // ── Icon helpers ─────────────────────────────────────────────────
 
@@ -128,6 +129,9 @@ export default function HubTodayPage() {
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  // Times follow this browser's clock, time zone and locale: shown once hydrated,
+  // so the server's first content (lib/firstContent.ts) hydrates as rendered.
+  const hydrated = useHydrated();
 
   useEffect(() => {
     if (!mounted) return;
@@ -300,7 +304,7 @@ export default function HubTodayPage() {
                   <span className="truncate">{today.location.label}</span>
                 </div>
                 <span className="text-[11px] text-app-text-muted">
-                  Updated {freshnessLabel(today.fetched_at)}
+                  {hydrated ? `Updated ${freshnessLabel(today.fetched_at)}` : null}
                 </span>
               </div>
 
@@ -332,7 +336,7 @@ export default function HubTodayPage() {
                   <Droplets className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                   <span className="text-xs text-blue-700 dark:text-blue-400">
                     Precipitation expected in the next 6 hours
-                    {today.weather.precipitation_start_at && (
+                    {hydrated && today.weather.precipitation_start_at && (
                       <> — around {new Date(today.weather.precipitation_start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</>
                     )}
                   </span>
@@ -407,7 +411,7 @@ export default function HubTodayPage() {
                       <div className="text-sm font-semibold text-red-700 dark:text-red-400">
                         {alert.title}
                       </div>
-                      {(alert.starts_at || alert.ends_at) && (
+                      {hydrated && (alert.starts_at || alert.ends_at) && (
                         <div className="text-[11px] text-red-600/80 dark:text-red-400/80 mt-0.5">
                           {alert.starts_at && new Date(alert.starts_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                           {alert.ends_at && <> – {new Date(alert.ends_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</>}
