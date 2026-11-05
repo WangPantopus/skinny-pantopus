@@ -59,19 +59,19 @@ class CrewDayTodayViewModel
         /** "Gate is ready" on a booking whose crew is on the way. */
         fun gateReady(card: CrewDayCardDto) {
             val id = card.bookingId ?: return
-            act(card.id, done = { it.copy(gateTold = it.gateTold + card.id) }) { repository.gateReady(id) }
+            act(card.key, done = { it.copy(gateTold = it.gateTold + card.key) }) { repository.gateReady(id) }
         }
 
         /** "Everything looks good": charges now. */
         fun looksGood(card: CrewDayCardDto) {
             val id = card.bookingId ?: return
-            act(card.id, done = { it }) { repository.confirm(id) }
+            act(card.key, done = { it }) { repository.confirm(id) }
         }
 
         /** "Not for me" on "Coming to your street": hidden for good. */
         fun notForMe(card: CrewDayCardDto) {
-            val id = card.crewDayId ?: card.id
-            _ui.update { ui -> ui.copy(nearby = ui.nearby.filterNot { it.id == card.id }) }
+            val id = card.crewDayId ?: return
+            _ui.update { ui -> ui.copy(nearby = ui.nearby.filterNot { it.key == card.key }) }
             viewModelScope.launch { repository.dismiss(id) }
         }
 

@@ -41,8 +41,6 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
-import java.time.LocalDate
-import java.time.temporal.ChronoUnit
 
 /** What Today's Crew Day cards open. */
 data class CrewDayTodayActions(
@@ -77,8 +75,8 @@ fun CrewDayTodayCards(
         ui.mine.forEach { card ->
             BookingTodayCard(
                 card = card,
-                working = card.id in ui.working,
-                gateTold = card.id in ui.gateTold,
+                working = card.key in ui.working,
+                gateTold = card.key in ui.gateTold,
                 onOpen = { card.bookingId?.let(actions.onOpenBooking) },
                 onGateReady = { viewModel.gateReady(card) },
                 onLooksGood = { viewModel.looksGood(card) },
@@ -147,7 +145,7 @@ private fun BookingTodayCard(
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
         CardHeader(overline = bookingOverline(card), title = card.title, line = line, onOpen = onOpen)
-        when (card.status) {
+        when (card.todayState.takeIf { card.problemStatus != "open" }) {
             "on_the_way" ->
                 if (gateTold || card.gateReadyAt != null) {
                     Text(
@@ -221,23 +219,23 @@ private fun NearbyTodayCard(
     }
 }
 
-/** The card's overline, by what the booking needs now. */
+/** The card's overline, by what the booking needs now (the server's `today_state`). */
 private fun bookingOverline(card: CrewDayCardDto): String =
-    when (card.status) {
-        "on_the_way" -> "Crew on the way"
-        "done" -> "Done: check the photos"
-        "new_dates" -> "Pick a new date"
-        "price_offered" -> "Your price is ready"
-        "price_pending" -> "The crew is checking your price"
-        "payment_failed" -> "Your card didn't go through"
-        "paid" -> "Paid"
-        "cancelled" -> "Cancelled"
-        else ->
-            when (daysUntil(card)) {
-                0L -> "Crew Day today"
-                1L -> "Crew Day tomorrow"
-                else -> "Your Crew Day"
-            }
+    if (card.problemStatus == "open") {
+        "Pantopus support has this"
+    } else {
+        when (card.todayState ?: card.status) {
+            "price_ready", "price_offered" -> "Your price is ready"
+            "new_dates" -> "Pick a new date"
+            "payment_failed" -> "Your card didn't go through"
+            "done" -> "Done: check the photos"
+            "on_the_way" -> "Crew on the way"
+            "today" -> "Crew Day today"
+            "tomorrow" -> "Crew Day tomorrow"
+            "price_pending" -> "The crew is checking your price"
+            "paid" -> "Paid"
+            else -> "Your Crew Day"
+        }
     }
 
 /** Honest status words (01-spec rule 10): "Requested" isn't "Booked". */
@@ -255,8 +253,3 @@ private fun statusWord(status: String?): String? =
         "cancelled", "declined" -> "Cancelled"
         else -> null
     }
-
-private fun daysUntil(card: CrewDayCardDto): Long? {
-    val date = CrewDayFormat.date(card.serviceDate) ?: return null
-    return ChronoUnit.DAYS.between(LocalDate.now(CrewDayFormat.zone(card.timezone)), date)
-}
