@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import {
   AppWindow,
+  ChevronLeft,
   Droplets,
   House,
   Leaf,
@@ -146,18 +147,100 @@ export function CrewDayTopBar({
   );
 }
 
+/**
+ * A booking step's bar (boards `Price`, `Review`): a 44px round back button, the step's title in the middle and
+ * "1 of 2" on the right, on the page's own background (like the apps' Plans bar). `leading` replaces the back
+ * button (Booked's Close).
+ */
+export function CrewDayStepBar({
+  title,
+  backHref,
+  backLabel = 'Back',
+  step,
+  leading,
+}: {
+  title?: string;
+  backHref?: string | null;
+  backLabel?: string;
+  step?: string | null;
+  leading?: ReactNode;
+}) {
+  return (
+    <div className="flex min-h-[3.25rem] items-center gap-2 px-3 py-1">
+      <div className="flex min-w-11 flex-none justify-start">
+        {leading ??
+          (backHref ? (
+            <Link
+              href={backHref}
+              aria-label={backLabel}
+              className="grid h-11 w-11 place-items-center rounded-full bg-app-surface-sunken text-app-text hover:bg-app-hover"
+            >
+              <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+            </Link>
+          ) : null)}
+      </div>
+      {title ? (
+        <h1 className="min-w-0 flex-1 text-center text-[1.0625rem] font-semibold leading-[1.375rem] tracking-[-0.01em] text-app-text">
+          {title}
+        </h1>
+      ) : (
+        <span className="flex-1" />
+      )}
+      <span className="min-w-11 flex-none text-right text-[0.8125rem] font-semibold leading-[1.125rem] text-app-text-secondary">
+        {step ?? ''}
+      </span>
+    </div>
+  );
+}
+
+/** A 32px tile with a glyph, on the sunken fill (or home green), for list rows. */
+export function CrewDayIconTile({ children, tone = 'sunken' }: { children: ReactNode; tone?: 'sunken' | 'home' }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`grid h-8 w-8 flex-none place-items-center rounded-[0.5625rem] ${tone === 'home' ? 'bg-app-home-bg text-app-home' : 'bg-app-surface-sunken text-app-text-strong'}`}
+    >
+      {children}
+    </span>
+  );
+}
+
 export const CREW_DAY_PRIMARY_BUTTON =
   'flex min-h-[3.125rem] w-full items-center justify-center rounded-xl bg-primary-600 px-4 py-2 text-center text-base font-semibold text-white shadow-[0_6px_16px_rgba(2,132,199,0.18)] hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none';
 
 export const CREW_DAY_SECONDARY_BUTTON =
   'flex min-h-[3.125rem] w-full items-center justify-center rounded-xl border border-app-border-strong bg-app-surface px-4 py-2 text-center text-base font-semibold text-app-text hover:bg-app-hover disabled:cursor-not-allowed disabled:opacity-50';
 
-/** A card section's overline heading: 11px, upper case, spaced. */
-export function CrewDaySectionTitle({ id, children }: { id?: string; children: ReactNode }) {
+/** A Crew Day page whose read failed for a reason other than "no such day": a retry, never a dead end. */
+export function CrewDayLoadFailed({ code, retryHref }: { code: string; retryHref: string }) {
+  return (
+    <main className="min-h-screen bg-app text-app-text">
+      <div className="mx-auto w-full max-w-md">
+        <CrewDayTopBar code={code} />
+        <div className="flex flex-col gap-4 px-4 pt-10 text-center">
+          <h1 className="text-xl font-semibold leading-[1.625rem]">Couldn&apos;t load this Crew Day</h1>
+          <p className="text-sm leading-5 text-app-text-secondary">Something went wrong on our side. Try again in a moment.</p>
+          <a href={retryHref} className={CREW_DAY_PRIMARY_BUTTON}>
+            Try again
+          </a>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+/** The overline over a card: 12px, upper case, spaced (the invitation's are 11px: `small`). */
+export const CREW_DAY_OVERLINE = 'text-xs font-semibold uppercase leading-4 tracking-[0.07em] text-app-text-secondary';
+
+export function CrewDaySectionTitle({ id, children, small = false }: { id?: string; children: ReactNode; small?: boolean }) {
   return (
     <h2
       id={id}
-      className="text-[0.6875rem] font-semibold uppercase leading-4 tracking-[0.06em] text-app-text-secondary"
+      className={
+        small
+          ? 'text-[0.6875rem] font-semibold uppercase leading-4 tracking-[0.06em] text-app-text-secondary'
+          : CREW_DAY_OVERLINE
+      }
     >
       {children}
     </h2>
