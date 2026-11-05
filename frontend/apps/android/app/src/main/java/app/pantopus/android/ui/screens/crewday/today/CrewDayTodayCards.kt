@@ -158,7 +158,19 @@ private fun BookingTodayCard(
             "on_the_way" ->
                 if (gateTold || card.gateReadyAt != null) {
                     Text(text = "We told the crew the gate is ready.", style = PantopusTextStyle.small, color = PantopusColors.appText)
-                    CardButton("Open", onOpen, tonal = true, tag = "crewDayTodayOpen")
+                    // The household can still reach the crew while it's on the way.
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (onMessageCrew != null) {
+                            CardButton(
+                                "Message the crew",
+                                onMessageCrew,
+                                tonal = true,
+                                tag = "crewDayTodayMessage",
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        CardButton("Open", onOpen, tonal = true, tag = "crewDayTodayOpen", modifier = Modifier.weight(1f))
+                    }
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (onMessageCrew != null) {
