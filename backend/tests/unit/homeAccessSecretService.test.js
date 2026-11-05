@@ -6,7 +6,7 @@ test('read binds Home and authenticated actor to one RPC', async () => {
   const secrets = [{ id: 'secret', secret_value: 'synthetic-value' }];
   const rpc = jest.fn(async () => ({ data: { ok: true, secrets }, error: null }));
   db.setRpcMock(rpc);
-  await expect(service.list('home', 'actor')).resolves.toEqual(secrets);
+  await expect(service.list('home', 'actor')).resolves.toEqual({ secrets, canManage: false, allowedVisibilities: [] });
   expect(rpc).toHaveBeenCalledWith('get_home_access_secrets', { p_home_id: 'home', p_actor_id: 'actor' });
 });
 
