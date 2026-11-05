@@ -1,8 +1,8 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { bindPlaceArrival } from '@/components/place/pendingPlace';
 import PantopusBadge from '@/components/PantopusBadge';
@@ -21,10 +21,10 @@ import {
   readAuthRedirectQuery,
   safeRedirectPath,
 } from '@/lib/auth-utils';
+import WithSearchParams, { type SearchParamsProps } from '@/components/auth/WithSearchParams';
 
-function LoginContent() {
+function LoginContent({ searchParams }: SearchParamsProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const redirectTo = safeRedirectPath(readAuthRedirectQuery(searchParams), '/app/place');
   // Kept for "Sign up": someone who came from a friend's invite link still credits them.
   const inviteCode = (searchParams?.get('invite_code') || '').trim();
@@ -356,5 +356,5 @@ function LoginContent() {
 }
 
 export default function LoginPage() {
-  return <Suspense><LoginContent /></Suspense>;
+  return <WithSearchParams Content={LoginContent} />;
 }
