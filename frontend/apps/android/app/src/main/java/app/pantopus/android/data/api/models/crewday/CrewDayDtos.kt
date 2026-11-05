@@ -139,14 +139,18 @@ data class CrewDaySavedCardDto(
     @Json(name = "last4") val last4: String? = null,
 )
 
-/** `charge`: when and how much, and `scheduled`, `charged`, `paused`, `failed`, `refunded` or `none`. */
+/**
+ * `charge`: when and how much, and its [state]: `not_yet`, `scheduled`, `paused`, `charged`, `partially_refunded`,
+ * `refunded`, `failed` or `none`. [failure] is why a charge failed (`card_declined`, `authentication_required`, …).
+ */
 @JsonClass(generateAdapter = true)
 data class CrewDayChargeDto(
     @Json(name = "due_at") val dueAt: String? = null,
     @Json(name = "amount_cents") val amountCents: Int? = null,
     @Json(name = "state") val state: String? = null,
-    @Json(name = "charged_at") val chargedAt: String? = null,
+    @Json(name = "paid_at") val paidAt: String? = null,
     @Json(name = "refunded_cents") val refundedCents: Int? = null,
+    @Json(name = "failure") val failure: String? = null,
 )
 
 /** "On the way · expected 10–11 AM", updated by the crew at [updatedAt]. */
@@ -165,20 +169,13 @@ data class CrewDayStepDto(
     @Json(name = "state") val state: String? = null,
 )
 
-/** A completion or problem photo: a short-lived signed URL. */
-@JsonClass(generateAdapter = true)
-data class CrewDayPhotoDto(
-    @Json(name = "path") val path: String? = null,
-    @Json(name = "url") val url: String? = null,
-)
-
 /** The household's problem case (screen 7): `open` or `resolved`, and how it ended. */
 @JsonClass(generateAdapter = true)
 data class CrewDayProblemDto(
     @Json(name = "status") val status: String? = null,
     @Json(name = "kind") val kind: String? = null,
     @Json(name = "note") val note: String? = null,
-    @Json(name = "photos") val photos: List<CrewDayPhotoDto> = emptyList(),
+    @Json(name = "photos") val photosRaw: List<Any?> = emptyList(),
     @Json(name = "opened_at") val openedAt: String? = null,
     @Json(name = "due_at") val dueAt: String? = null,
     @Json(name = "resolved_at") val resolvedAt: String? = null,
@@ -214,23 +211,26 @@ data class CrewDayShareDto(
     @Json(name = "flyer_url") val flyerUrl: String? = null,
 )
 
-/** A timeline line: what happened, who did it, when (`CrewDayEvent`). */
+/** A timeline line: what happened ([kind] and its [data]), who did it, when (`CrewDayEvent`). */
 @JsonClass(generateAdapter = true)
 data class CrewDayEventDto(
     @Json(name = "id") val id: String,
     @Json(name = "kind") val kind: String,
+    @Json(name = "booking_id") val bookingId: String? = null,
     @Json(name = "actor_role") val actorRole: String? = null,
+    @Json(name = "visible_to") val visibleTo: String? = null,
+    @Json(name = "data") val data: Map<String, Any?>? = null,
     @Json(name = "created_at") val createdAt: String? = null,
-    @Json(name = "text") val text: String? = null,
 )
 
-/** The day as a booking page shows it: title, date and window, the crew, its prep note and included items. */
+/** The day as a booking page shows it (`crew_day`): title, the crew, its status and included items. */
 @JsonClass(generateAdapter = true)
 data class CrewDaySummaryDto(
     @Json(name = "id") val id: String,
     @Json(name = "code") val code: String? = null,
     @Json(name = "title") val title: String = "",
     @Json(name = "service") val service: String? = null,
+    @Json(name = "service_label") val serviceLabel: String? = null,
     @Json(name = "street_label") val streetLabel: String? = null,
     @Json(name = "city") val city: String? = null,
     @Json(name = "state") val state: String? = null,
@@ -257,37 +257,62 @@ data class CrewDayBookingDto(
     @Json(name = "id") val id: String,
     @Json(name = "crew_day_id") val crewDayId: String? = null,
     @Json(name = "status") val status: String = "",
-    @Json(name = "day") val day: CrewDaySummaryDto? = null,
+    @Json(name = "crew_day") val crewDay: CrewDaySummaryDto? = null,
     @Json(name = "steps") val steps: List<CrewDayStepDto> = emptyList(),
     @Json(name = "eta") val eta: CrewDayEtaDto? = null,
     @Json(name = "prep_note") val prepNote: String? = null,
     @Json(name = "access_note") val accessNote: String? = null,
     @Json(name = "address") val address: CrewDayAddressDto? = null,
+    @Json(name = "home_id") val homeId: String? = null,
     @Json(name = "option_id") val optionId: String? = null,
     @Json(name = "option") val option: CrewDayPriceOptionDto? = null,
     @Json(name = "add_on_ids") val addOnIds: List<String> = emptyList(),
     @Json(name = "add_ons") val addOns: List<CrewDayAddOnDto> = emptyList(),
+    @Json(name = "line_items") val lineItems: List<CrewDayLineItemDto> = emptyList(),
     @Json(name = "price_cents") val priceCents: Int? = null,
     @Json(name = "card") val card: CrewDaySavedCardDto? = null,
     @Json(name = "service_date") val serviceDate: String? = null,
     @Json(name = "window_start") val windowStart: String? = null,
     @Json(name = "window_end") val windowEnd: String? = null,
+    @Json(name = "window_starts_at") val windowStartsAt: String? = null,
+    @Json(name = "window_ends_at") val windowEndsAt: String? = null,
     @Json(name = "cancel_cutoff_at") val cancelCutoffAt: String? = null,
     @Json(name = "can_cancel") val canCancel: Boolean = false,
     @Json(name = "can_change") val canChange: Boolean = false,
+    @Json(name = "can_ask_release") val canAskRelease: Boolean = false,
+    @Json(name = "release_asked_at") val releaseAskedAt: String? = null,
     @Json(name = "gate_ready_at") val gateReadyAt: String? = null,
+    @Json(name = "cant_get_in_at") val cantGetInAt: String? = null,
     @Json(name = "done_at") val doneAt: String? = null,
     @Json(name = "done_note") val doneNote: String? = null,
-    @Json(name = "photos") val photos: List<CrewDayPhotoDto> = emptyList(),
+    /** Signed photo URLs, as strings or `{ path, url }` objects; read them through [photoUrls]. */
+    @Json(name = "photos") val photosRaw: List<Any?> = emptyList(),
+    @Json(name = "household_confirmed_at") val householdConfirmedAt: String? = null,
     @Json(name = "charge") val charge: CrewDayChargeDto? = null,
     @Json(name = "invoice_id") val invoiceId: String? = null,
     @Json(name = "problem") val problem: CrewDayProblemDto? = null,
     @Json(name = "proposal") val proposal: CrewDayProposalDto? = null,
+    /** The household's answer to the rain proposal: `{ proposal_id, date or "cancel", answered_at }`. */
+    @Json(name = "new_date_choice") val newDateChoice: Map<String, Any?>? = null,
     @Json(name = "remind_next_season") val remindNextSeason: Boolean = false,
     @Json(name = "cancelled_by") val cancelledBy: String? = null,
     @Json(name = "cancelled_at") val cancelledAt: String? = null,
+    @Json(name = "cancel_reason") val cancelReason: String? = null,
     @Json(name = "share") val share: CrewDayShareDto? = null,
     @Json(name = "events") val events: List<CrewDayEventDto> = emptyList(),
+) {
+    /** The completion photos' signed URLs. */
+    val photoUrls: List<String>
+        get() = photosRaw.mapNotNull { item -> (item as? String) ?: ((item as? Map<*, *>)?.get("url") as? String) }
+}
+
+/** What a booking was priced as when it was made: an option or an add-on, with its price then. */
+@JsonClass(generateAdapter = true)
+data class CrewDayLineItemDto(
+    @Json(name = "kind") val kind: String? = null,
+    @Json(name = "id") val id: String? = null,
+    @Json(name = "label") val label: String = "",
+    @Json(name = "price_cents") val priceCents: Int? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -341,34 +366,54 @@ data class CrewDayRequestBody(
 
 /**
  * One card on Today (screen 9) or Your Crew Days (screen 10): a booking ([bookingId]), an open day near one of the
- * person's homes, or a street request ([kind] `request`). [status] is the booking's or the request's status.
+ * person's homes ([crewDayId] and [code] only), or a street request ([id], [months], [answerNote], [offer]).
+ * [status] is the booking's or the request's; [todayState] is what Today's card leads with.
  */
 @JsonClass(generateAdapter = true)
 data class CrewDayCardDto(
-    @Json(name = "id") val id: String,
-    @Json(name = "kind") val kind: String? = null,
-    @Json(name = "crew_day_id") val crewDayId: String? = null,
+    @Json(name = "id") val id: String? = null,
     @Json(name = "booking_id") val bookingId: String? = null,
+    @Json(name = "crew_day_id") val crewDayId: String? = null,
     @Json(name = "code") val code: String? = null,
     @Json(name = "title") val title: String = "",
     @Json(name = "service") val service: String? = null,
+    @Json(name = "service_label") val serviceLabel: String? = null,
     @Json(name = "street_label") val streetLabel: String? = null,
-    @Json(name = "city") val city: String? = null,
     @Json(name = "timezone") val timezone: String? = null,
     @Json(name = "service_date") val serviceDate: String? = null,
     @Json(name = "window_start") val windowStart: String? = null,
     @Json(name = "window_end") val windowEnd: String? = null,
+    @Json(name = "window_starts_at") val windowStartsAt: String? = null,
     @Json(name = "status") val status: String? = null,
+    @Json(name = "today_state") val todayState: String? = null,
     @Json(name = "price_cents") val priceCents: Int? = null,
     @Json(name = "price_from_cents") val priceFromCents: Int? = null,
+    @Json(name = "booking_closes_at") val bookingClosesAt: String? = null,
     @Json(name = "photo_count") val photoCount: Int = 0,
     @Json(name = "eta") val eta: CrewDayEtaDto? = null,
-    @Json(name = "gate_ready_at") val gateReadyAt: String? = null,
     @Json(name = "charge") val charge: CrewDayChargeDto? = null,
+    @Json(name = "problem_status") val problemStatus: String? = null,
     @Json(name = "crew") val crew: CrewDayCrewDto? = null,
-    @Json(name = "request_months") val requestMonths: List<String> = emptyList(),
-    /** A new day this crew opened nearby: "Book again" opens its invitation. */
-    @Json(name = "book_again_code") val bookAgainCode: String? = null,
+    /** Past cards: a new day the same crew opened that reaches this home ("Book again"). */
+    @Json(name = "book_again") val bookAgain: CrewDayBookAgainDto? = null,
+    @Json(name = "months") val months: List<String> = emptyList(),
+    @Json(name = "note") val note: String? = null,
+    @Json(name = "answer_note") val answerNote: String? = null,
+    @Json(name = "answered_at") val answeredAt: String? = null,
+    /** A request Pantopus answered with an open day. */
+    @Json(name = "offer") val offer: CrewDayBookAgainDto? = null,
+    @Json(name = "created_at") val createdAt: String? = null,
+) {
+    /** One key per card: the booking, else the day, else the request. */
+    val key: String get() = bookingId ?: crewDayId ?: id.orEmpty()
+}
+
+/** An open day to book from a past card or an answered request. */
+@JsonClass(generateAdapter = true)
+data class CrewDayBookAgainDto(
+    @Json(name = "crew_day_id") val crewDayId: String? = null,
+    @Json(name = "code") val code: String? = null,
+    @Json(name = "service_date") val serviceDate: String? = null,
 )
 
 /** `GET /api/crew-days/mine` (screen 10). */
@@ -520,37 +565,41 @@ data class CrewDayMoneyDto(
 )
 
 /**
- * A home on the crew's day or route. Before the job window it is [label] ("Home 3") and its details; from 6 PM the
+ * A home on the crew's day or route. Before the job window it is [label] ("Home 3") and its [details]; from 6 PM the
  * evening before (or at once for a price check) it also has the [address], the household's [firstName] and the
- * [accessNote].
+ * [accessNote] ([addressVisible]).
  */
 @JsonClass(generateAdapter = true)
 data class CrewDayHomeDto(
     @Json(name = "id") val id: String,
     @Json(name = "label") val label: String? = null,
-    @Json(name = "status") val status: String? = null,
-    @Json(name = "route_position") val routePosition: Int? = null,
-    @Json(name = "address") val address: CrewDayAddressDto? = null,
-    @Json(name = "first_name") val firstName: String? = null,
-    @Json(name = "access_note") val accessNote: String? = null,
-    @Json(name = "option") val option: CrewDayPriceOptionDto? = null,
-    @Json(name = "add_ons") val addOns: List<CrewDayAddOnDto> = emptyList(),
+    /** "Two stories · gutter guards". */
+    @Json(name = "details") val details: String? = null,
+    @Json(name = "line_items") val lineItems: List<CrewDayLineItemDto> = emptyList(),
     @Json(name = "price_cents") val priceCents: Int? = null,
+    @Json(name = "status") val status: String? = null,
     @Json(name = "service_date") val serviceDate: String? = null,
     @Json(name = "window_start") val windowStart: String? = null,
     @Json(name = "window_end") val windowEnd: String? = null,
+    @Json(name = "address_visible") val addressVisible: Boolean = false,
+    @Json(name = "address") val address: CrewDayAddressDto? = null,
+    @Json(name = "first_name") val firstName: String? = null,
+    @Json(name = "access_note") val accessNote: String? = null,
+    @Json(name = "route_position") val routePosition: Int? = null,
     @Json(name = "eta") val eta: CrewDayEtaDto? = null,
     @Json(name = "gate_ready_at") val gateReadyAt: String? = null,
+    @Json(name = "cant_get_in_at") val cantGetInAt: String? = null,
+    @Json(name = "release_asked_at") val releaseAskedAt: String? = null,
     @Json(name = "done_at") val doneAt: String? = null,
     @Json(name = "done_note") val doneNote: String? = null,
-    @Json(name = "photos") val photos: List<CrewDayPhotoDto> = emptyList(),
-    @Json(name = "problem_status") val problemStatus: String? = null,
-    @Json(name = "charge") val charge: CrewDayChargeDto? = null,
-    @Json(name = "new_date_choice") val newDateChoice: String? = null,
-    @Json(name = "asked_at") val askedAt: String? = null,
-    @Json(name = "release_asked_at") val releaseAskedAt: String? = null,
-    @Json(name = "cant_get_in_at") val cantGetInAt: String? = null,
-    @Json(name = "household_user_id") val householdUserId: String? = null,
+    @Json(name = "photo_count") val photoCount: Int = 0,
+    /** Signed photo URLs when the read carries them. */
+    @Json(name = "photos") val photosRaw: List<Any?> = emptyList(),
+    @Json(name = "charge_state") val chargeState: String? = null,
+    @Json(name = "charge_due_at") val chargeDueAt: String? = null,
+    @Json(name = "problem") val problem: CrewDayProblemDto? = null,
+    @Json(name = "new_date_choice") val newDateChoice: Map<String, Any?>? = null,
+    @Json(name = "created_at") val createdAt: String? = null,
 )
 
 /** What waits on the crew (screen 15): price checks and release requests. */
