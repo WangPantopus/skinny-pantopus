@@ -3,65 +3,21 @@
 // times and money: times in the Crew Day's own time zone ("9 AM–1 PM", "Tue, Nov 17"), whole-dollar prices
 // ("$180") and receipts with cents ("$180.00").
 
-export type CrewDayService =
-  | 'gutter_cleaning'
-  | 'leaf_cleanup'
-  | 'roof_moss'
-  | 'holiday_lights'
-  | 'window_washing'
-  | 'pressure_washing'
-  | 'other';
+import type { CrewDayAvailability, CrewDayService, PublicCrewDay } from '@pantopus/types';
 
-export type CrewDayPriceOption = { id: string; label: string; price_cents: number | null; needs_look: boolean };
-export type CrewDayAddOn = { id: string; label: string; price_cents: number };
+export type {
+  CrewDayAddOn,
+  CrewDayAvailability,
+  CrewDayCrew,
+  CrewDayPriceOption,
+  CrewDayService,
+  CrewDayViewer,
+  PublicCrewDay,
+} from '@pantopus/types';
 
-/** What the invitation can say about the day: open, every spot taken, past its booking cutoff, cancelled or done. */
-export type CrewDayInvitationState = 'open' | 'full' | 'closed' | 'cancelled' | 'done';
+const INVITATION_STATES: ReadonlyArray<CrewDayAvailability> = ['open', 'full', 'closed', 'cancelled', 'done'];
 
-export type CrewDayCrew = {
-  business_user_id: string;
-  name: string;
-  username: string | null;
-  avatar_url: string | null;
-  /** Pantopus verified the business's documents: the "Insured and registered" badge. */
-  verified: boolean;
-  rating: { average: number; count: number } | null;
-};
-
-/** GET /api/crew-days/public/:code: counts only, never addresses, households or the area's coordinates. */
-export type PublicCrewDay = {
-  id: string;
-  code: string;
-  title: string;
-  service: CrewDayService;
-  street_label: string;
-  city: string | null;
-  state: string | null;
-  timezone: string;
-  service_date: string;
-  window_start: string;
-  window_end: string;
-  window_starts_at: string;
-  window_ends_at: string;
-  booking_closes_at: string;
-  included: string[];
-  outside_only: boolean;
-  price_from_cents: number | null;
-  price_options: CrewDayPriceOption[];
-  add_ons: CrewDayAddOn[];
-  capacity: number;
-  booked_count: number;
-  spots_left: number;
-  /** The invitation's state. The contract's first draft named it `state` beside the US state; see `toPublicCrewDay`. */
-  availability: CrewDayInvitationState;
-  crew: CrewDayCrew;
-  /** Signed in only: the crew's own members, a household with a booking on this day, or anyone else. */
-  viewer?: { role: 'crew' | 'household' | 'none'; booking_id: string | null } | null;
-};
-
-const INVITATION_STATES: ReadonlyArray<CrewDayInvitationState> = ['open', 'full', 'closed', 'cancelled', 'done'];
-
-function isInvitationState(value: unknown): value is CrewDayInvitationState {
+function isInvitationState(value: unknown): value is CrewDayAvailability {
   return typeof value === 'string' && (INVITATION_STATES as ReadonlyArray<string>).includes(value);
 }
 
@@ -76,7 +32,7 @@ export function toPublicCrewDay(raw: Record<string, unknown>): PublicCrewDay {
   const availability = isInvitationState(day.availability)
     ? day.availability
     : stateIsAvailability
-      ? (day.state as CrewDayInvitationState)
+      ? (day.state as CrewDayAvailability)
       : 'open';
   return {
     ...day,
