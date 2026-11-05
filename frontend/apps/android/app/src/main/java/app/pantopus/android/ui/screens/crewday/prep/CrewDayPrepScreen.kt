@@ -165,7 +165,8 @@ private fun PrepContent(
         StatusBanner(view, working, viewModel)
         NeedsYou(view, working, onPrice = { pricing = it }, onDecline = { declining = it }, onRelease = { releasing = it })
         HomesBooked(view)
-        if (open) {
+        // As the web: no more homes can come once booking closed or the day is full.
+        if (open && !view.isClosed && !view.isFull) {
             BringInMore(
                 view = view,
                 inviting = CrewDayPrepViewModel.DAY in working,
@@ -182,7 +183,7 @@ private fun PrepContent(
             )
         }
         MoneyPreview(view)
-        if (day.status == "open" || day.status == "in_progress") {
+        if (day.canEdit && (day.status == "open" || day.status == "in_progress")) {
             CrewDaySection("If plans change") {
                 PlanOptionRow(first = true) {
                     PlanTonalButton(
@@ -262,7 +263,7 @@ private fun PrepHeader(
         modifier = Modifier.fillMaxWidth().planCard().padding(Spacing.s4),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
-        PlanStatusChip(text = dayStatusWord(day.status, view.isFull))
+        PlanStatusChip(text = dayStatusWord(day.status, view.isFull, view.isClosed))
         Text(
             text = day.title,
             style = PantopusTextStyle.h3.copy(fontWeight = FontWeight.Bold),
@@ -308,12 +309,14 @@ private fun StatusBanner(
                 icon = PantopusIcon.FileText,
                 tone = PlanBannerTone.Neutral,
             )
-            PrimaryButton(
-                title = "Send to Pantopus for approval",
-                onClick = viewModel::submit,
-                isLoading = CrewDayPrepViewModel.DAY in working,
-                modifier = Modifier.fillMaxWidth().testTag("crewDayPrepSubmit"),
-            )
+            if (day.canEdit) {
+                PrimaryButton(
+                    title = "Send to Pantopus for approval",
+                    onClick = viewModel::submit,
+                    isLoading = CrewDayPrepViewModel.DAY in working,
+                    modifier = Modifier.fillMaxWidth().testTag("crewDayPrepSubmit"),
+                )
+            }
         }
         "pending_review" ->
             PlanBanner(
@@ -329,12 +332,14 @@ private fun StatusBanner(
                 icon = PantopusIcon.AlertCircle,
                 tone = PlanBannerTone.Warning,
             )
-            PrimaryButton(
-                title = "Send to Pantopus again",
-                onClick = viewModel::submit,
-                isLoading = CrewDayPrepViewModel.DAY in working,
-                modifier = Modifier.fillMaxWidth().testTag("crewDayPrepSubmit"),
-            )
+            if (day.canEdit) {
+                PrimaryButton(
+                    title = "Send to Pantopus again",
+                    onClick = viewModel::submit,
+                    isLoading = CrewDayPrepViewModel.DAY in working,
+                    modifier = Modifier.fillMaxWidth().testTag("crewDayPrepSubmit"),
+                )
+            }
         }
         "cancelled" ->
             PlanBanner(
@@ -374,6 +379,15 @@ private fun NeedsYou(
                         style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
                         color = PantopusColors.appText,
                     )
+                    if (!view.canEdit) {
+                        // As the web: a team seat sees the check; an owner or editor sets the price.
+                        Text(
+                            text = "An owner or editor sets its price.",
+                            style = PantopusTextStyle.small,
+                            color = PantopusColors.appTextSecondary,
+                        )
+                        return@Column
+                    }
                     Text(
                         text = "Look at the home, then set its price. The household approves it before anything is booked.",
                         style = PantopusTextStyle.small,
@@ -415,12 +429,14 @@ private fun NeedsYou(
                         style = PantopusTextStyle.small,
                         color = PantopusColors.appTextSecondary,
                     )
-                    PrimaryButton(
-                        title = "Release at no charge",
-                        onClick = { onRelease(home) },
-                        isLoading = home.id in working,
-                        modifier = Modifier.fillMaxWidth().testTag("crewDayPrepRelease"),
-                    )
+                    if (view.canEdit) {
+                        PrimaryButton(
+                            title = "Release at no charge",
+                            onClick = { onRelease(home) },
+                            isLoading = home.id in working,
+                            modifier = Modifier.fillMaxWidth().testTag("crewDayPrepRelease"),
+                        )
+                    }
                 }
             }
         }
@@ -445,7 +461,11 @@ private fun HomesBooked(view: CrewDayCrewViewDto) {
                         text =
                             listOfNotNull(
                                 jobWords(home),
-                                home.priceCents?.let(CrewDayFormat::price) ?: "Price to confirm",
+                                if (home.status == "price_offered") {
+                                    "${CrewDayFormat.price(home.priceCents)} offered · waiting for their OK"
+                                } else {
+                                    home.priceCents?.let(CrewDayFormat::price) ?: "Price to confirm"
+                                },
                             ).joinToString(" · "),
                         style = PantopusTextStyle.small,
                         color = PantopusColors.appTextSecondary,
@@ -510,6 +530,8 @@ private fun BringInMore(
                 )
             }
         }
+        // Inviting past customers is for owners and editors (the server's `profile.edit`), as on the web.
+        if (!view.canEdit) return@CrewDaySection
         PlanOptionRow {
             Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 Text(
@@ -540,6 +562,18 @@ private fun BringInMore(
     }
 }
 
+/** "If all 6 are done", or only the homes with a price while others wait on one ("If the 4 priced homes are done"). */
+private fun ifDoneWords(view: CrewDayCrewViewDto): String {
+    val active = view.bookings.filter { it.status !in setOf("cancelled", "declined", "refunded") }
+    val priced = active.count { it.priceCents != null }
+    return when {
+        priced == active.size && priced == 1 -> "If the 1 home is done"
+        priced == active.size -> "If all $priced are done"
+        priced == 1 -> "If the 1 priced home is done"
+        else -> "If the $priced priced homes are done"
+    }
+}
+
 /** Money (board `CrewDayPrep`): "If all 6 are done", "$1,020 charged", "You receive $918 after the 10% founding fee." */
 @Composable
 private fun MoneyPreview(view: CrewDayCrewViewDto) {
@@ -555,7 +589,7 @@ private fun MoneyPreview(view: CrewDayCrewViewDto) {
         PlanOptionRow(first = true, modifier = Modifier.semantics(mergeDescendants = true) {}) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    text = "If all ${view.bookedCount} are done",
+                    text = ifDoneWords(view),
                     style = PantopusTextStyle.small,
                     color = PantopusColors.appTextSecondary,
                 )
@@ -723,12 +757,18 @@ private fun homeName(home: CrewDayHomeDto): String = home.address?.line ?: home.
 private fun dayStatusWord(
     status: String?,
     full: Boolean,
+    closed: Boolean,
 ): String =
     when (status) {
         "draft" -> "Draft"
         "pending_review" -> "Waiting for approval"
         "declined" -> "Not approved"
-        "open" -> if (full) "Full" else "Open"
+        "open" ->
+            when {
+                full -> "Full"
+                closed -> "Booking closed"
+                else -> "Open"
+            }
         "in_progress" -> "Today"
         "done" -> "Done"
         "cancelled" -> "Cancelled"
