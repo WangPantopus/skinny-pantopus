@@ -111,7 +111,7 @@ private fun ServiceStep(
     state: NewCrewDayState,
     viewModel: NewCrewDayViewModel,
 ) {
-    StepHeading("Service and what's included", "Households see this list before they book.")
+    StepHeading("Service and what's included", "Households see these lines on the invitation.")
     PlanField("Service") {
         PlanChoiceGroup(
             choices = (state.services.map { it.key }.ifEmpty { CrewDayFormat.SERVICES }).map { PlanChoice(it, state.serviceLabel(it)) },
@@ -121,6 +121,11 @@ private fun ServiceStep(
         )
     }
     PlanField("What's included") {
+        Text(
+            text = "Up to 6 lines. We started you with the usual ones for ${state.serviceLabel(state.service).lowercase()}.",
+            style = PantopusTextStyle.small,
+            color = PantopusColors.appTextSecondary,
+        )
         state.included.forEachIndexed { index, item ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 Column(modifier = Modifier.weight(1f).testTag("crewDayNewIncluded_$index")) {
@@ -143,7 +148,7 @@ private fun ServiceStep(
             }
         }
         if (state.included.size < NewCrewDayState.MAX_INCLUDED) {
-            PlanTextButton(title = "Add an item", onClick = viewModel::addIncluded, modifier = Modifier.testTag("crewDayNewIncludedAdd"))
+            PlanTextButton(title = "Add a line", onClick = viewModel::addIncluded, modifier = Modifier.testTag("crewDayNewIncludedAdd"))
         }
     }
     PlanFormCard(modifier = Modifier.testTag("crewDayNewOutsideOnly")) {
@@ -168,7 +173,10 @@ private fun WhereWhenStep(
     var pickingDate by remember { mutableStateOf(false) }
     var pickingStart by remember { mutableStateOf(false) }
     var pickingEnd by remember { mutableStateOf(false) }
-    StepHeading("Where and when", "One street or a few blocks, on one day.")
+    StepHeading(
+        "Where and when",
+        "Only homes inside your reach can book. You can't move the date later except by proposing new dates.",
+    )
     PlanField("Street or area name", modifier = Modifier.testTag("crewDayNewStreet")) {
         PlanTextArea(
             value = state.streetLabel,
@@ -177,18 +185,25 @@ private fun WhereWhenStep(
             label = "Street or area name",
             singleLine = true,
         )
+        state.streetLabel.trim().takeIf { it.isNotEmpty() }?.let { street ->
+            Text(
+                text = "Households see \"${titleWord(state.service)} Day on $street\".",
+                style = PantopusTextStyle.small,
+                color = PantopusColors.appTextSecondary,
+            )
+        }
     }
-    PlanField("The center") {
+    PlanField("Center of the area") {
         CrewDayAddressField(
             query = state.centerQuery,
             onQuery = viewModel::setCenterQuery,
             suggestions = state.centerSuggestions,
             onPick = viewModel::pickCenter,
-            label = "The center",
+            label = "Center of the area",
             placeholder = "An address on the street",
             testTag = "crewDayNewCenter",
         )
-        PlanLockLine("Households never see this address, only the street's name.")
+        PlanLockLine("Never shown to households.")
     }
     PlanField("Reach") {
         PlanChoiceGroup(
@@ -210,8 +225,8 @@ private fun WhereWhenStep(
     PlanFormCard {
         PlanOptionRow(first = true) {
             PlanStepperRow(
-                title = "Homes you can take",
-                caption = null,
+                title = "How many homes you can take",
+                caption = "1 to 60",
                 value = state.capacity,
                 range = 1..60,
                 onChange = viewModel::setCapacity,
@@ -290,8 +305,8 @@ private fun PricesStep(
     state: NewCrewDayState,
     viewModel: NewCrewDayViewModel,
 ) {
-    StepHeading("Prices", "One price per home, from your list. Neighbors joining never changes it.")
-    PlanField("Prices") {
+    StepHeading("Prices", "Each home pays its own price. It never changes with how many neighbors book.")
+    PlanField("Options") {
         state.options.forEachIndexed { index, option ->
             PlanFormCard(modifier = Modifier.testTag("crewDayNewOption_${option.id}")) {
                 Column(modifier = Modifier.padding(vertical = Spacing.s3), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
@@ -335,10 +350,10 @@ private fun PricesStep(
             }
         }
         if (state.options.size < NewCrewDayState.MAX_OPTIONS) {
-            PlanTextButton(title = "Add a price", onClick = viewModel::addOption, modifier = Modifier.testTag("crewDayNewOptionAdd"))
+            PlanTextButton(title = "Add an option", onClick = viewModel::addOption, modifier = Modifier.testTag("crewDayNewOptionAdd"))
         }
     }
-    PlanField("Add-ons (optional)") {
+    PlanField("Add-ons") {
         state.addOns.forEachIndexed { index, addOn ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -381,7 +396,7 @@ private fun PricesStep(
             color = PantopusColors.appTextSecondary,
         )
     }
-    PlanField("A note for households (optional)", modifier = Modifier.testTag("crewDayNewPrepNote")) {
+    PlanField("Note for households", modifier = Modifier.testTag("crewDayNewPrepNote")) {
         PlanTextArea(
             value = state.prepNote,
             onValue = viewModel::setPrepNote,
@@ -389,7 +404,7 @@ private fun PricesStep(
             label = "A note for households",
         )
         Text(
-            text = "Households see it once they book.",
+            text = "Households see this once they book, and again the evening before.",
             style = PantopusTextStyle.small,
             color = PantopusColors.appTextSecondary,
         )
@@ -409,7 +424,10 @@ private val PRICE_WIDTH = 96.dp
 
 @Composable
 private fun ReviewStep(state: NewCrewDayState) {
-    StepHeading("Review and send", "Pantopus looks at every Crew Day before its link works.")
+    StepHeading(
+        "Review and send",
+        "Pantopus checks the day and your price list. Once approved, the invitation link works and you can share it.",
+    )
     val street = state.streetLabel.trim()
     val title = "${titleWord(state.service)} Day on $street"
     PlanFormCard {
