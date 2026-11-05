@@ -66,6 +66,15 @@ const HOME_STATUS: Record<string, string> = {
   declined: "Couldn't take it",
 };
 
+/** The row's status words; a paid home Pantopus support took money off says what was charged ("Paid $80 · $60 refunded"). */
+function homeStatus(home: CrewDayHome): string {
+  if (home.problem?.status === 'open') return 'Problem with Pantopus support';
+  if (home.status === 'paid' && home.refunded_cents > 0 && home.price_cents != null) {
+    return `Paid ${formatPrice(home.price_cents - home.refunded_cents)} · ${formatPrice(home.refunded_cents)} refunded`;
+  }
+  return HOME_STATUS[home.status] ?? home.status;
+}
+
 function homeName(home: CrewDayHome): string {
   return home.address_visible && home.address ? home.address.line : home.label;
 }
@@ -544,9 +553,11 @@ export default function CrewDayCrewScreen({ businessId, crewDayId }: { businessI
             <Check className="h-5 w-5 flex-none text-app-home" aria-hidden="true" />
             {workedOn.length < live.length
               ? `${workedOn.length} of ${live.length} homes done`
-              : live.length === 1
-                ? 'The home is done'
-                : `All ${live.length} homes done`}
+              : live.length === 0
+                ? 'This day is over'
+                : live.length === 1
+                  ? 'The home is done'
+                  : 'Every home is done'}
           </p>
           <p className="text-sm text-app-secondary">{(day.dates?.length ? day.dates : [day.service_date]).map((d) => formatCrewDate(d)).join(', ')}</p>
         </div>
@@ -564,7 +575,7 @@ export default function CrewDayCrewScreen({ businessId, crewDayId }: { businessI
                       {home.first_name ? ` · ${home.first_name}` : ''} · {home.details}
                     </span>
                     <span className="text-xs font-medium text-app-secondary">
-                      {home.problem?.status === 'open' ? 'Problem with Pantopus support' : (HOME_STATUS[home.status] ?? home.status)}
+                      {homeStatus(home)}
                     </span>
                   </span>
                   <span className="flex-none text-right text-[0.9375rem] font-semibold [font-variant-numeric:tabular-nums]">
