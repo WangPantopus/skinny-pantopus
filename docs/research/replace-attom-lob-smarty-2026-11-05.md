@@ -116,8 +116,9 @@ Founder decisions:
    national estimates (my recommendation now), public-records requests county by county (price them for the largest
    uncovered counties: `uncovered-counties-2026-11-05.csv`), or buying reseller files / a national parcel license
    (a subscription again).
-2. **Phase 1 go-ahead** (backend only, web/iOS/Android unchanged). One part loosens a rule and needs an explicit yes:
-   when Google is down, let people continue and prove the address by mail instead of showing an error.
+2. **Phase 1 go-ahead** (backend only, web/iOS/Android unchanged). Two parts change a verification rule and need an
+   explicit yes: what happens when Google is down, and what happens when Google leaves the home-or-business flag blank
+   (section 6).
 3. Founder-only facts: any Smarty account or signed agreement; ATTOM plan and license (trial or paid, retention and
    exit purge); which Google billing SKU CASS requests use; a private storage account for the national record; Lob
    live key and real return address.
@@ -134,3 +135,52 @@ Research left (no founder action needed unless marked):
 - North Carolina's statewide building layer mixes county parcel data with model estimates; only the parcel-derived
   share should count as county facts.
 - Per-state inventory of statewide files beyond those found.
+
+## 6. Plans written down for the founder's decisions (Nov 5, evening)
+
+Asked in chat on Nov 5 (~22:00 UTC); nothing below is approved or started.
+
+### Phase 1: Smarty no longer needed (backend only)
+
+What changes, in plain words:
+- The server stops calling Smarty. It reads the USPS answers Google already returns with every address check
+  (deliverable or not, vacant, mail-drop store, PO box, unit needed, carrier route) and Google's home-or-business flag.
+- Add Home loses one wait of up to 2.5 seconds (`pipelineService.js:397`, `:434`).
+- Every refusal stays: undeliverable, business, mail-drop store, PO box, missing unit, conflicts.
+- Web, iOS and Android screens do not change. Production still needs the founder's Google key to work at all.
+- Google's data is kept only as its terms allow (details in the build plan).
+
+Two rule changes that need the founder's explicit yes (recommended yes to both):
+- **Google down.** Today the check returns SERVICE_ERROR (`addressDecisionEngine.js:206`, `:478`) and Home create
+  answers 503 (`routes/home.js:1060`). Proposed: let the person finish Add Home; the home stays unverified, no postcard
+  is mailed and nothing unlocks until a background re-check passes; if the re-check fails, ask them to fix the address.
+- **Home-or-business flag blank.** Smarty usually filled it (`addressDecisionEngine.js:331`). When Google leaves it
+  blank, the business check uses map place types and parcel type, the rule already used for Smarty's "unknown". A
+  business with no other business signal could then be added as a home; mail proof is still required.
+
+Done when: Add Home works with only a Google key, checked on web, iOS and Android against a local backend.
+
+### Decision 1: counties with no free bulk data (recommended plan)
+
+- Nationwide floor: building size, stories and age from the national structure inventory (USACE NSI) and Census
+  neighborhood figures (ACS), always labeled "estimate", never shown as the county's record.
+- Households enter or correct bedrooms, baths and other facts; each entry is kept beside the county value with who and
+  when, and verified households' entries count for more.
+- Research only, no money: price public-records requests for the 20 largest uncovered counties
+  (`uncovered-counties-2026-11-05.csv` already lists the prices found).
+- Not recommended: reseller files or a national license (a subscription again; their licenses usually forbid showing
+  the data to users).
+- Before any build: a plain-words plan of what people see on Add Home, Place and Property details on web, iOS and
+  Android, for the founder's OK.
+
+### Founder-only facts
+
+Smarty account or agreement; ATTOM plan and license terms; the Google billing SKU for USPS (CASS) checks and the
+production key; a private storage account for the national data files; Lob live key and return address; whether to
+accept Washington's commercial-use attestation to open Spokane's free files.
+
+### Sources
+
+Every link checked in the second pass, with what it holds and its terms caveat:
+[property-data-sources-2026-11-05.csv](property-data-sources-2026-11-05.csv). First-pass rows name their publisher in
+the survey table.
