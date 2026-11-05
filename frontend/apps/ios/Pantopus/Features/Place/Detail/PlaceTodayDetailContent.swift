@@ -133,6 +133,10 @@ struct PlaceTodayDetailContent: View {
                     TodayNeedsYouCard(model: needsYou, hiddenTaskIds: agendaTaskIds, onOpenTask: tab?.onOpenTask)
                 }
                 agendaSection(proxy: proxy)
+                // Crew Day (launch cut #13): the booking and "Coming to your street", beside the plans.
+                if tab != nil, LaunchFeatures.crewDay {
+                    CrewDayTodayCards(gapAbove: true)
+                }
                 // The person's plans today (Directions, On my way, Message guests) right under the agenda.
                 if tab != nil, PlansFlags.shared.plans {
                     PlansTodayCards(gapAbove: true)
