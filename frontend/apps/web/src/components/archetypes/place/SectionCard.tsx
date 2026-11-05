@@ -16,6 +16,7 @@ import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { CloudOff, RefreshCw } from 'lucide-react';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
+import { useHydrated } from '@/hooks/useHydrated';
 import Chip, { type ChipVariant } from '../primitives/Chip';
 import { Chevron, IconTile, StatusDot, Sparkline, TextButton, cardButtonProps, type StatusDotTone } from './primitives';
 
@@ -81,6 +82,8 @@ export default function SectionCard({
   const loading = state === 'loading';
   const isReading = state === 'loaded' || state === 'stale';
   const tone = state === 'empty' || state === 'unavailable' ? 'muted' : 'home';
+  // An as-of time reads in this browser's time zone: shown once hydrated (hooks/useHydrated.ts).
+  const hydrated = useHydrated();
 
   // ── INLINE: compact single-line reading ──────────────────
   if (inline && isReading) {
@@ -185,7 +188,7 @@ export default function SectionCard({
         <div className="flex-1 min-w-0">
           <div className="text-[15px] font-semibold text-app-text -tracking-[0.01em]">{title}</div>
         </div>
-        {asOf && !loading ? (
+        {asOf && !loading && hydrated ? (
           <div
             className={`flex items-center gap-1.5 text-xs whitespace-nowrap ${
               state === 'stale' ? 'text-app-warning' : 'text-app-text-muted'

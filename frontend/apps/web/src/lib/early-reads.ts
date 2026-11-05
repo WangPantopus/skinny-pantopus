@@ -10,8 +10,9 @@
  * reads with no client-side precondition belong here: the Messages inbox reads
  * its storage fence before its request (lib/conversations.ts), so it is not one.
  *
- * Keep this file dependency-free: the layout renders it on the server.
+ * Keep this file dependency-free (lib/firstContent.ts is too): the layout renders it on the server.
  */
+import { FIRST_CONTENT_ENABLED, FIRST_CONTENT_ROUTES } from './firstContent';
 
 /** Reads the app shell makes on every page. */
 export const EARLY_SHELL_READS = [
@@ -36,10 +37,15 @@ export const EARLY_ROUTE_READS: Record<string, string[]> = {
 // while this browser's session marker is the one the script saw.
 const SESSION_CHANGE_KEY = 'pantopus_auth_session_change';
 
+// The reads a tab's document already carries as first content (lib/firstContent.ts).
+const FIRST_CONTENT_READS = FIRST_CONTENT_ENABLED ? FIRST_CONTENT_ROUTES : {};
+
 /**
  * With the session flag set, starts the shell's and this path's reads. A
  * session being recovered in place (lib/session-refresh.ts) is refreshed
- * first; a failed recovery starts none.
+ * first; a failed recovery starts none. A tab document whose access cookie
+ * came with it (nothing to recover) at its plain address was rendered with
+ * its first content, so the reads that content covers are not asked again.
  *
  * At low fetch priority: the page's scripts load as async scripts (low
  * priority) and content waits for them, so on a slow link these reads must
@@ -49,9 +55,10 @@ export const EARLY_READS_SCRIPT = `(function(){try{
 if(!/(?:^|;\\s*)pantopus_session=1(?:;|$)/.test(document.cookie))return;
 var p=location.pathname.replace(/\\/+$/,'')||'/';
 var routes=${JSON.stringify(EARLY_ROUTE_READS)};
-var urls=${JSON.stringify(EARLY_SHELL_READS)}.concat(routes[p]||[]);
-var k='';try{k=localStorage.getItem('${SESSION_CHANGE_KEY}')||'';}catch(e){}
 var rec=window.__pantopusRecovery;
+var held=!rec&&!location.search&&${JSON.stringify(FIRST_CONTENT_READS)}[p]||[];
+var urls=${JSON.stringify(EARLY_SHELL_READS)}.concat((routes[p]||[]).filter(function(u){return held.indexOf(u)<0;}));
+var k='';try{k=localStorage.getItem('${SESSION_CHANGE_KEY}')||'';}catch(e){}
 var ready=rec&&rec.promise?rec.promise:Promise.resolve({status:'success'});
 var e=window.__pantopusEarly={marker:k,at:Date.now(),reads:{}};
 urls.forEach(function(u){e.reads[u]=ready.then(function(o){return o&&o.status==='success'?fetch(u,{credentials:'same-origin',priority:'low',headers:{'Accept':'application/json, text/plain, */*','x-token-transport':'cookie'}}):null;}).catch(function(){return null;});});

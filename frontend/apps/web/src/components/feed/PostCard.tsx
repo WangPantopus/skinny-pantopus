@@ -27,6 +27,7 @@ import { canSharePost, sharePostLink } from './sharePostLink';
 import type { AudienceProfile, Post } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
 import { canOfferProfilePin } from '@/hooks/useProfilePin';
+import { useHydrated } from '@/hooks/useHydrated';
 
 // ─── Lucide icon lookup (platform-specific JSX — data from shared config) ──
 const LUCIDE_MAP: Record<string, LucideIcon> = {
@@ -147,6 +148,7 @@ function PostCard({
 }: PostCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [solving, setSolving] = useState(false);
+  const hydrated = useHydrated();
   const config = getPostTypeConfig(post.post_type || 'general');
   const typeIconNode = getTypeIcon(post.post_type || 'general');
   const ctaIconNode = getTypeCtaIcon(post.post_type || 'general');
@@ -222,8 +224,13 @@ function PostCard({
             <Plane className="w-3 h-3" /> Visitor
           </span>
         )}
-        <span className="text-[10px] text-app-muted">·</span>
-        <span className="text-[10px] text-app-muted">{timeAgo(post.created_at)}</span>
+        {/* "5m ago" follows the clock: shown once hydrated (hooks/useHydrated.ts). */}
+        {hydrated ? (
+          <>
+            <span className="text-[10px] text-app-muted">·</span>
+            <span className="text-[10px] text-app-muted">{timeAgo(post.created_at)}</span>
+          </>
+        ) : null}
         {post.is_edited && (
           <>
             <span className="text-[10px] text-app-muted">·</span>

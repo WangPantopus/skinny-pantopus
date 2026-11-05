@@ -7,10 +7,11 @@ import type { UnifiedConversationItem } from '@pantopus/types';
 import type { QueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
 import { activateChatStorage, captureChatHistoryFence, isChatStorageActiveFor, writeChatRecords } from '@/components/chat/chatStorage';
+import { CONVERSATIONS_LIMIT } from '@/lib/conversationOrder';
 
 type ConversationTail = { generation?: string; rows: UnifiedConversationItem[]; nextCursor: string | null; hasMore: boolean };
 export type ConversationsReply = Awaited<ReturnType<typeof getUnifiedConversations>> & { refreshId?: string; keptTail?: ConversationTail };
-export const CONVERSATIONS_LIMIT = 50;
+export { CONVERSATIONS_LIMIT };
 export const INBOX_KEY = 'personal-inbox-v1';
 export type SavedInbox = { inbox: ConversationsReply; roomIds: string[]; historyGeneration: number };
 

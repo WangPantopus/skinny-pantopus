@@ -13,7 +13,7 @@ import { useQuery, type QueryFunctionContext } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { queryKeys } from '@/lib/query-keys';
 import { activeQueryClient } from '@/lib/active-query-client';
-import { gatedStaleTime, showsHomeCopy, useAfterRecheck } from '@/lib/householdCopy';
+import { gatedStaleTime, showsPrimaryCopy as showsPrimaryHomeCopy, useAfterRecheck } from '@/lib/householdCopy';
 import { myHomesQuery, MY_HOMES_FRESH_MS } from '@/lib/myHomes';
 
 export type PrimaryHomeReply = Awaited<ReturnType<typeof api.homes.getPrimaryHome>>;
@@ -21,6 +21,8 @@ export type PrimaryHomeReply = Awaited<ReturnType<typeof api.homes.getPrimaryHom
 // The source list can already be a minute old. Keep this derived entry for
 // at most another minute so its total age stays within the two-minute contract.
 export const PRIMARY_HOME_FRESH_MS = MY_HOMES_FRESH_MS;
+
+const showsPrimaryCopy = (reply: PrimaryHomeReply): boolean => showsPrimaryHomeCopy(reply);
 
 async function readPrimaryHome({ client }: QueryFunctionContext): Promise<PrimaryHomeReply> {
   // Use this query's session client, including while an account switch retires
@@ -30,10 +32,6 @@ async function readPrimaryHome({ client }: QueryFunctionContext): Promise<Primar
   // Backward compatible with a web deploy that precedes the backend deploy.
   // A failed list read must still fail closed, rather than bypass its recheck.
   return api.homes.getPrimaryHome();
-}
-
-function showsPrimaryCopy(reply: PrimaryHomeReply): boolean {
-  return reply.home === null || showsHomeCopy(reply.home);
 }
 
 export function primaryHomeQuery() {

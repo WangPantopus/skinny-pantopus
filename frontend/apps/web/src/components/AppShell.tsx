@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import * as api from '@pantopus/api';
@@ -27,6 +27,7 @@ import { businessAccessQuery } from '@/components/business/useBusinessData';
 import { conversationsQuery, useConversationEvents } from '@/lib/conversations';
 import type { PostComposerSubmitData } from '@/components/feed/PostComposer';
 import { identityCopy } from '@/lib/identityLabels';
+import PrerenderSuspense from '@/components/first-content/PrerenderSuspense';
 
 // Dynamic imports for heavy modal composers (PostComposer is ~800 lines,
 // MagicTaskComposerV2 is 12 files). Deferring these chunks until the user
@@ -208,7 +209,9 @@ function shellFrame(content: React.ReactNode) {
 // this boundary's fallback and the browser renders the shell and page itself
 // once the scripts arrive. Drawing the frame (with the app's usual loading
 // spinner where the page goes) as that fallback gives the first paint the app's
-// own frame instead of a blank screen while the scripts download.
+// own frame instead of a blank screen while the scripts download. A tab document
+// with its first content renders per request and has no boundary here, so its
+// screen goes out with the frame (components/first-content/PrerenderSuspense.tsx).
 const SHELL_FALLBACK = shellFrame(
   <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center" aria-hidden="true">
     <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600" />
@@ -758,9 +761,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <SocketProvider>
       <BadgeProvider>
-        <Suspense fallback={SHELL_FALLBACK}>
+        <PrerenderSuspense fallback={SHELL_FALLBACK}>
           <AppShellInner>{children}</AppShellInner>
-        </Suspense>
+        </PrerenderSuspense>
       </BadgeProvider>
     </SocketProvider>
   );

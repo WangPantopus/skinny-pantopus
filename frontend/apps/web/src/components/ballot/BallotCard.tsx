@@ -33,6 +33,7 @@ import type {
   PlaceBallotElectionData,
 } from '@pantopus/types';
 import { BallotTile } from './BallotGlyph';
+import { useHydrated } from '@/hooks/useHydrated';
 import DeadlineTimeline from './DeadlineTimeline';
 import LiveCount from './LiveCount';
 import { asOfLabel } from './format';
@@ -270,7 +271,9 @@ export interface BallotCardProps {
 export default function BallotCard({ data, asOf = null, onOpenGovernments, className = '' }: BallotCardProps) {
   const phase = data.phase;
   const inSeason = phase === 'in_season' && data.coverage === 'supported';
-  const when = asOfLabel(asOf);
+  // Today's clock time or a date, in this browser's day: shown once hydrated (hooks/useHydrated.ts).
+  const hydrated = useHydrated();
+  const when = hydrated ? asOfLabel(asOf) : null;
   const source = data.source_line ? `${data.source_line}${when ? ` · as of ${when}` : ''}` : null;
   const timeline = inSeason && data.deadlines && data.today ? data.deadlines : null;
   const note = data.live_count ? data.live_count.note : data.note;
