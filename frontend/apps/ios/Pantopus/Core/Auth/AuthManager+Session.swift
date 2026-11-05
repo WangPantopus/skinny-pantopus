@@ -455,11 +455,13 @@ extension AuthManager {
     /// `expiresAt - now < 120 s` (and there is something to refresh with).
     /// Read by `APIClient` / `MultipartUploader` before every authenticated
     /// request; never true for the refresh endpoint's own round-trip
-    /// because that goes through `sendRaw`.
+    /// because that goes through `sendRaw`. The expiry is checked first: the
+    /// refresh token is a Keychain read on the main actor, which every request
+    /// paid while the token had most of its hour left.
     var isAccessTokenExpiringSoon: Bool {
         guard accessToken != nil, let expiresAt,
-              nonEmpty(store.get(SecureStoreKey.refreshToken)) != nil else { return false }
-        return expiresAt.timeIntervalSince(now()) < Self.proactiveRefreshWindow
+              expiresAt.timeIntervalSince(now()) < Self.proactiveRefreshWindow else { return false }
+        return nonEmpty(store.get(SecureStoreKey.refreshToken)) != nil
     }
 
     /// Foreground hook (`scenePhase == .active`): renew a token that is
