@@ -244,6 +244,14 @@ struct PlansMapSheet: View {
         // Content taller than the sheet (the largest text) runs off its bottom, never over the map.
         .frame(height: layout.sheetHeight, alignment: .top)
         .clipped()
+        // Below full, what the sheet holds stops at the top of the tab bar, and a tap under the bar reaches nothing
+        // hidden there (PlansSheetTabBar.swift). At full the list scrolls under the bar, as before.
+        .mask(alignment: .top) { PlansSheetAboveTabBar(drag: drag, layout: layout, stop: stop) }
+        .overlay(alignment: .top) {
+            if stop != .full {
+                PlansSheetUnderTabBar(drag: drag, layout: layout, stop: stop)
+            }
+        }
         .background(alignment: .top) {
             // Taller than the sheet, so a pull past full never shows the map under it.
             UnevenRoundedRectangle(topLeadingRadius: Radii.xl3, topTrailingRadius: Radii.xl3, style: .continuous)
