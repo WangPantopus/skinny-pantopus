@@ -75,13 +75,13 @@ object EmergencyCardPdf {
 
     private fun detailOf(dto: HomeEmergencyDto): String {
         val details = dto.details
-        val detail = details?.get("detail").orEmpty()
-        if (detail.isNotEmpty()) return detail
+        // The phone stays beside the note, whichever key holds it.
+        val note = dto.noteText.orEmpty()
         val phone = details?.get("phone").orEmpty()
         if (phone.isNotEmpty()) {
-            val note = details?.get("note").orEmpty()
             return if (note.isNotEmpty()) "$phone · $note" else phone
         }
+        if (note.isNotEmpty()) return note
         return dto.location.orEmpty()
     }
 

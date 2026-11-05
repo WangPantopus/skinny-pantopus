@@ -61,7 +61,7 @@ data class EmergencyFormDraft(
                 category = category,
                 title = dto.label,
                 severity = EmergencySeverity.fromValue(dto.details?.get("severity")),
-                details = dto.details?.get("detail").orEmpty(),
+                details = dto.noteText.orEmpty(),
                 verifiedByUserId = dto.details?.get("verified_by"),
                 lastUpdated = parseInstant(dto.updatedAt) ?: parseInstant(dto.createdAt) ?: Instant.now(),
                 location = dto.location,
@@ -458,8 +458,11 @@ class AddEmergencyInfoFormViewModel
         ): Map<String, String> {
             val out = originalDraft.rawDetails.toMutableMap()
             if (current.detailsField.isDirty) {
+                // The field showed the entry's one note (`detail`, else an older web entry's `notes`); the edit
+                // replaces it, so a cleared note stays cleared and no stale copy is left behind.
+                HomeEmergencyDto.NOTE_KEYS.forEach(out::remove)
                 val detail = current.detailsField.value.trim()
-                if (detail.isEmpty()) out.remove("detail") else out["detail"] = detail
+                if (detail.isNotEmpty()) out["detail"] = detail
             }
             if (current.severity != originalDraft.severity) {
                 val severity = current.severity?.id

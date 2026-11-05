@@ -66,7 +66,7 @@ test('real HomeEmergency rows render under their type\'s category with label, lo
 test('adding a medical entry saves first_aid with its details through the API and shows the saved row', async () => {
   jest.mocked(api.homeProfile.createHomeEmergency).mockResolvedValue({ emergency: {
     id: 'meds', home_id: 'home', type: 'first_aid', label: 'Insulin', location: null,
-    details: { phone: '+1 555 0100', notes: 'Fridge door' }, created_by: 'u', created_at: '', updated_at: '',
+    details: { phone: '+1 555 0100', detail: 'Fridge door' }, created_by: 'u', created_at: '', updated_at: '',
   } });
   render(<EmergencyPage />);
   fireEvent.click(await screen.findByRole('button', { name: /^Add$/ }));
@@ -82,7 +82,7 @@ test('adding a medical entry saves first_aid with its details through the API an
   fireEvent.change(screen.getByPlaceholderText('Details (optional)'), { target: { value: 'Fridge door' } });
   fireEvent.click(screen.getByRole('button', { name: 'Add Emergency Info' }));
   await waitFor(() => expect(api.homeProfile.createHomeEmergency).toHaveBeenCalledWith('home',
-    { type: 'first_aid', label: 'Insulin', details: { phone: '+1 555 0100', notes: 'Fridge door' }, clientRequestId: expect.any(String) }));
+    { type: 'first_aid', label: 'Insulin', details: { phone: '+1 555 0100', detail: 'Fridge door' }, clientRequestId: expect.any(String) }));
   expect(await screen.findByText('Insulin')).toBeInTheDocument();
   expect(screen.getByText('Fridge door')).toBeInTheDocument();
   expect(toast.success).toHaveBeenCalledWith('Emergency info added');
