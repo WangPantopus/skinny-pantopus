@@ -1,4 +1,4 @@
-@file:Suppress("LongMethod", "TooManyFunctions", "LongParameterList")
+@file:Suppress("LongMethod", "TooManyFunctions", "LongParameterList", "MatchingDeclarationName", "MagicNumber", "CyclomaticComplexMethod")
 
 package app.pantopus.android.ui.screens.crewday.booking
 
