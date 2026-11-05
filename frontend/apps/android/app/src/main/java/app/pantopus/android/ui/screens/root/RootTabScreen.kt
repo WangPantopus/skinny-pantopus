@@ -3052,6 +3052,17 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             CrewDayTodayActions(
                                 onOpenBooking = { id -> navController.navigate(CrewDayRoutes.booking(id)) },
                                 onOpenInvitation = { code -> navController.navigate(CrewDayRoutes.invitation(code)) },
+                                onMessageCrew = { userId, name ->
+                                    navController.navigate(
+                                        ChildRoutes.chatConversationFromPicker(
+                                            userId = userId,
+                                            displayName = name,
+                                            initials = name.trim().take(1).uppercase(),
+                                            verified = false,
+                                            locality = null,
+                                        ),
+                                    )
+                                },
                             ).takeIf { LaunchFeatures.crewDay },
                     )
                 }
