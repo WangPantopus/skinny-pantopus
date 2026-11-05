@@ -386,7 +386,7 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
         </Link>
       </StateCard>
     );
-  } else if (b.problem?.status === 'resolved' && b.problem.resolution) {
+  } else if (b.problem?.status === 'resolved' && b.problem.resolution && !(b.problem.resolution === 'resolved' && b.status === 'done')) {
     const r = b.problem;
     const total = b.price_cents ?? 0;
     const title =
@@ -400,7 +400,7 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
     state = (
       <StateCard tone="success" icon={ShieldCheck} title={title}>
         {r.resolved_at ? <Body>Pantopus support closed this case on {formatInstantDate(r.resolved_at, tz)}.</Body> : null}
-        {b.invoice_id ? (
+        {b.invoice_id && ['charged', 'partially_refunded', 'refunded'].includes(b.charge.state) ? (
           <Link href={`/app/invoice/${encodeURIComponent(b.invoice_id)}`} className="text-[0.9375rem] font-semibold text-app-link">
             See receipt
           </Link>
@@ -502,6 +502,9 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
             <span className="text-xs font-semibold uppercase tracking-[0.07em] text-app-text-secondary">Note from {crew}</span>
             <p className="text-[0.9375rem] leading-[1.375rem]">{b.done_note}</p>
           </div>
+        ) : null}
+        {b.problem?.status === 'resolved' && b.problem.resolved_at ? (
+          <Body>Pantopus support closed your case on {formatInstantDate(b.problem.resolved_at, tz)}. Your charge runs as planned.</Body>
         ) : null}
         {price && due ? (
           <Body>
