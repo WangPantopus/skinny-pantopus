@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { del, get, post } from '@pantopus/api';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 
 // ============================================================
@@ -109,7 +110,6 @@ export default function ManageMemberModal({
     (async () => {
       setLoading(true);
       try {
-        const { get } = await import('@pantopus/api');
         const [permsRes, presetsRes] = await Promise.allSettled([
           get(`/api/homes/${homeId}/members/${member.user_id}/permissions`),
           get(`/api/homes/${homeId}/role-presets`),
@@ -138,11 +138,9 @@ export default function ManageMemberModal({
 	    setSaving(true);
 	    setError('');
 	    try {
-	      const { post } = await import('@pantopus/api');
 	      await post(`/api/homes/${homeId}/members/${memberUserId}/role`, { preset_key: presetKey });
 
 	      // Reload permissions
-	      const { get } = await import('@pantopus/api');
 	      const data = await get(`/api/homes/${homeId}/members/${memberUserId}/permissions`) as Record<string, any>;
       setPermissions(data.permissions || []);
       setRoleBase(data.role_base || 'member');
@@ -160,7 +158,6 @@ export default function ManageMemberModal({
 	    setSaving(true);
 	    setError('');
 	    try {
-	      const { post } = await import('@pantopus/api');
 	      await post(`/api/homes/${homeId}/members/${memberUserId}/permissions`, { permission, allowed });
 
       // Update local state
@@ -182,7 +179,6 @@ export default function ManageMemberModal({
 	    setSaving(true);
 	    setError('');
 	    try {
-	      const { del } = await import('@pantopus/api');
 	      await del(`/api/homes/${homeId}/members/${memberUserId}`);
       onRemove();
       onClose();

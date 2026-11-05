@@ -64,16 +64,18 @@ export default function BusinessSettingsProfilePage() {
     try {
       await api.businesses.updateBusiness(businessId, {
         name: form.name.trim(),
-        tagline: form.tagline.trim() || undefined,
-        description: form.description.trim() || undefined,
+        // PATCH omits undefined fields. Send an explicit empty value when the
+        // owner removes public information, so a successful save removes it.
+        tagline: form.tagline.trim(),
+        description: form.description.trim(),
         // Only a known entity key is sent; a legacy value the select can't show is left as is.
         business_type: (ENTITY_TYPES as string[]).includes(form.business_type) ? form.business_type : undefined,
         categories: form.categories.split(',').map((s) => s.trim()).filter(Boolean),
-        public_email: form.public_email.trim() || undefined,
-        public_phone: form.public_phone.trim() || undefined,
-        website: form.website.trim() || undefined,
-        founded_year: form.founded_year ? Number(form.founded_year) : undefined,
-        employee_count: form.employee_count.trim() || undefined,
+        public_email: form.public_email.trim(),
+        public_phone: form.public_phone.trim(),
+        website: form.website.trim(),
+        founded_year: form.founded_year.trim() ? Number(form.founded_year) : null,
+        employee_count: form.employee_count.trim(),
       });
       await load();
     } catch (e: unknown) {
@@ -104,12 +106,12 @@ export default function BusinessSettingsProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+        <div className="min-w-0 max-w-full">
           <h1 className="text-xl font-semibold text-app-text">Business Profile Settings</h1>
-          <p className="text-sm text-app-text-secondary mt-1">@{business?.username || 'business'}</p>
+          <p className="text-sm text-app-text-secondary mt-1 break-all">@{business?.username || 'business'}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <button
             onClick={togglePublish}
             disabled={saving}

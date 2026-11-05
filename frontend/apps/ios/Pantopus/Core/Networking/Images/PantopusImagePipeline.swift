@@ -134,10 +134,25 @@ final class PantopusImagePipeline: @unchecked Sendable {
         else { return nil }
         keep(image, key: key, generation: started)
         // Web links only: a local file is already on the phone.
-        if keepsOnDisk, maxPixelSize == nil, url.scheme?.hasPrefix("http") == true, bytes.count <= Self.maxFileBytes {
-            write(bytes, to: file, generation: started)
+        if keepsOnDisk, url.scheme?.hasPrefix("http") == true {
+            // Sharp feed previews are decoded from the original, but only the
+            // bounded preview belongs on disk. Reopening a feed must not fetch
+            // the camera original again after its memory entry is evicted.
+            let savedBytes = maxPixelSize == nil ? bytes : Self.previewData(image)
+            if let savedBytes, savedBytes.count <= Self.maxFileBytes {
+                write(savedBytes, to: file, generation: started)
+            }
         }
         return image
+    }
+
+    private static func previewData(_ image: UIImage) -> Data? {
+        switch image.cgImage?.alphaInfo {
+        case .first, .last, .premultipliedFirst, .premultipliedLast:
+            image.pngData()
+        default:
+            image.jpegData(compressionQuality: 0.9)
+        }
     }
 
     private static func isNeverKept(_ mimeType: String?) -> Bool {

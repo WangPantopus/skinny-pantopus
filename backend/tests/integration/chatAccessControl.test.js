@@ -404,7 +404,9 @@ describe('Business identity — without permission', () => {
       });
 
     expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/permission/i);
+    // The requested business has no authorized room membership; the
+    // caller's personal row no longer lets this reach the sender check.
+    expect(res.body.error).toBe('Not a participant');
   });
 });
 

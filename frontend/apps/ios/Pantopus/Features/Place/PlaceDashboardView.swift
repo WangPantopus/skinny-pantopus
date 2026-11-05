@@ -226,49 +226,56 @@ struct PlaceDashboardView: View {
 
                     // One order on both apps: the next step (verify, or the claim's
                     // status), the home and its tools, what's worth a look, the home
-                    // at a glance, then neighbors, privacy and Ask.
-                    leadBanner(claim: claim)
-                    PlaceHomeCard(
-                        intel: intel,
-                        claimInReview: claim != nil,
-                        shortcuts: viewModel.homeShortcuts,
-                        onUnlock: canVerify ? { showVerify = true } : nil,
-                        showsVerify: showsVerify && claim == nil,
-                        onOpenTools: {
-                            viewModel.reloadOnReturn()
-                            viewModel.onOpenHubHome()
-                        },
-                        onShortcut: { shortcut in
-                            viewModel.reloadOnReturn()
-                            viewModel.onOpenHomeShortcut(shortcut)
+                    // at a glance, then neighbors, privacy and Ask. On the open Duo the
+                    // first three are a column beside the rest.
+                    PlaceColumns {
+                        VStack(alignment: .leading, spacing: 0) {
+                            leadBanner(claim: claim)
+                            PlaceHomeCard(
+                                intel: intel,
+                                claimInReview: claim != nil,
+                                shortcuts: viewModel.homeShortcuts,
+                                onUnlock: canVerify ? { showVerify = true } : nil,
+                                showsVerify: showsVerify && claim == nil,
+                                onOpenTools: {
+                                    viewModel.reloadOnReturn()
+                                    viewModel.onOpenHubHome()
+                                },
+                                onShortcut: { shortcut in
+                                    viewModel.reloadOnReturn()
+                                    viewModel.onOpenHomeShortcut(shortcut)
+                                }
+                            )
+                            .padding(.top, 12)
+                            worthALook(intel)
                         }
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-
-                    VStack(alignment: .leading, spacing: 0) {
-                        worthALook(intel)
-                        glance(intel, claim: claim)
-                        if isVerified {
-                            messagesEntry(address: intel.place.label)
-                        }
-                        // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does.
-                        if claim == nil {
-                            privacyMirrorRow
+                        .placeColumn(.leading, order: 0)
+                        VStack(alignment: .leading, spacing: 0) {
+                            glance(intel, claim: claim)
+                            if isVerified {
+                                messagesEntry(address: intel.place.label)
+                            }
+                            // The privacy mirror (Wedge v2 §2): one tap to see yourself as a neighbor does.
+                            if claim == nil {
+                                privacyMirrorRow
+                                    .padding(.top, 24)
+                            }
+                            AskPantopusBox(
+                                title: "Ask Pantopus about your home",
+                                subtitle: nil,
+                                spokenLabel: "Ask Pantopus about your home",
+                                identifier: "place.askPantopusEntry"
+                            ) { askTopic = .place(homeId: viewModel.homeId) }
                                 .padding(.top, 24)
                         }
-                        AskPantopusBox(
-                            title: "Ask Pantopus about your home",
-                            subtitle: nil,
-                            spokenLabel: "Ask Pantopus about your home",
-                            identifier: "place.askPantopusEntry"
-                        ) { askTopic = .place(homeId: viewModel.homeId) }
-                            .padding(.top, 24)
+                        // Level with the home card when it starts the column.
+                        .placeColumn(.trailing, order: 1, trimsTop: Spacing.s3)
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, Spacing.s10)
                 }
             }
+            .readableColumnWidens(from: PlaceColumnsSplit.minimumScreenWidth)
             .onChange(of: scrollToTop) { _, _ in
                 withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(Self.topAnchor, anchor: .top) }
             }
@@ -305,7 +312,6 @@ struct PlaceDashboardView: View {
     private func leadBanner(claim: OwnershipClaimDTO?) -> some View {
         if let claim {
             claimBanner(claim)
-                .padding(.horizontal, 16)
                 .padding(.top, Spacing.s3)
         }
     }
@@ -964,27 +970,39 @@ struct PlaceDashboardSkeleton: View {
                 .padding(.horizontal, 18)
                 .padding(.top, Spacing.s2)
 
-                PlaceSkeleton(widthFraction: 1, height: 132, radius: 16)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
-
-                VStack(spacing: 24) {
-                    ForEach(0..<3, id: \.self) { _ in
-                        VStack(alignment: .leading, spacing: 9) {
-                            PlaceSkeleton(width: 90, height: 11)
-                            VStack(spacing: 8) {
-                                ForEach(0..<2, id: \.self) { _ in
-                                    PlaceSkeleton(widthFraction: 1, height: 76, radius: 16)
-                                }
-                            }
-                        }
+                // The home card and a group, beside the other two where the page has two columns.
+                PlaceColumns {
+                    VStack(alignment: .leading, spacing: 0) {
+                        PlaceSkeleton(widthFraction: 1, height: 132, radius: 16)
+                            .padding(.top, 16)
+                        group
+                            .padding(.top, 20)
                     }
+                    .placeColumn(.leading, order: 0)
+                    VStack(spacing: 24) {
+                        group
+                        group
+                    }
+                    .padding(.top, 24)
+                    // Level with the home card.
+                    .placeColumn(.trailing, order: 1, trimsTop: 8)
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 20)
             }
         }
+        .readableColumnWidens(from: PlaceColumnsSplit.minimumScreenWidth)
         .accessibilityLabel("Loading your place")
+    }
+
+    private var group: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            PlaceSkeleton(width: 90, height: 11)
+            VStack(spacing: 8) {
+                ForEach(0..<2, id: \.self) { _ in
+                    PlaceSkeleton(widthFraction: 1, height: 76, radius: 16)
+                }
+            }
+        }
     }
 }
 

@@ -77,6 +77,7 @@ extension PublicProfileView {
                         .padding(.top, 28)
                 }
                 .padding(.bottom, Spacing.s12)
+                .keepsScrollPlace(viewModel.scrollPlace)
             }
             .refreshable { await Task { await refreshOwnPage() }.value }
         }

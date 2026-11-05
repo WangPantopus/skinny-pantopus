@@ -39,6 +39,8 @@ public struct ContentDetailShell<HeaderView: View, BodyView: View, CTAView: View
     private let onRefresh: (@Sendable () async -> Void)?
     private let scalesType: Bool
     private let scrollOverlay: AnyView?
+    /// Where the reader was down the page, when the screen's model keeps it through a fold (`ScrollPlace`).
+    private let scrollPlace: ScrollPlace?
     private let headerContent: HeaderView
     private let bodyContent: BodyView
     private let ctaContent: CTAView
@@ -53,6 +55,7 @@ public struct ContentDetailShell<HeaderView: View, BodyView: View, CTAView: View
         onRefresh: (@Sendable () async -> Void)? = nil,
         scalesType: Bool = false,
         scrollOverlay: AnyView? = nil,
+        scrollPlace: ScrollPlace? = nil,
         @ViewBuilder header: () -> HeaderView,
         @ViewBuilder body: () -> BodyView,
         @ViewBuilder cta: () -> CTAView = { EmptyView() }
@@ -64,6 +67,7 @@ public struct ContentDetailShell<HeaderView: View, BodyView: View, CTAView: View
         self.onRefresh = onRefresh
         self.scalesType = scalesType
         self.scrollOverlay = scrollOverlay
+        self.scrollPlace = scrollPlace
         headerContent = header()
         bodyContent = body()
         ctaContent = cta()
@@ -110,6 +114,7 @@ public struct ContentDetailShell<HeaderView: View, BodyView: View, CTAView: View
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, Spacing.s4)
+            .keepsScrollPlace(scrollPlace)
         }
     }
 }

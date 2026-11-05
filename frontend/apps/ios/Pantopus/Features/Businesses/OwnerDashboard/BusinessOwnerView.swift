@@ -28,6 +28,9 @@ import SwiftUI
 public struct BusinessOwnerView: View {
     @State private var viewModel: BusinessOwnerViewModel
     @State private var mode: OwnerViewMode = .owner
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isVisible = false
+    @State private var wasInBackground = false
 
     private let businessId: String
     private let onBack: @MainActor () -> Void
@@ -91,6 +94,23 @@ public struct BusinessOwnerView: View {
             // returns to it; a swipe from the edge would close the dashboard too.
             .swipeBackDisabled(mode != .owner)
             .task { await viewModel.load() }
+            .onAppear { isVisible = true }
+            .onDisappear { isVisible = false }
+            // Access can change while the app is away (a removed teammate), so coming
+            // back from the background re-reads the dashboard; the page stays until
+            // the reads answer.
+            .onChange(of: scenePhase) { _, phase in
+                guard isVisible else { return }
+                switch phase {
+                case .background:
+                    wasInBackground = true
+                case .active where wasInBackground:
+                    wasInBackground = false
+                    Task { await viewModel.refresh() }
+                default:
+                    break
+                }
+            }
     }
 
     @ViewBuilder private var content: some View {

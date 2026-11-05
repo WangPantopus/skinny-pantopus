@@ -254,6 +254,11 @@ public final class PulseFeedViewModel {
     public private(set) var newPostsCount = 0
     /// Set by the list: its first card is on screen.
     public var isReadingAtTop = true
+    /// The post the reader scrolled to the top of the list, and whether they are at the list's top instead: a fold
+    /// or a turn of the iPhone Duo puts up a new feed screen for this model (the Nearby tab keeps it), which opens
+    /// the list there. Not observed: they change as the list scrolls.
+    @ObservationIgnored var readingPostId: String?
+    @ObservationIgnored var readsFeedTop = true
 
     private struct PendingFirstPage {
         let response: FeedResponse
@@ -1121,9 +1126,10 @@ public final class PulseFeedViewModel {
             return (FeedArea(latitude: cached.latitude, longitude: cached.longitude), nil)
         }
         // Asking for location is "Use my location"'s job. Opening Pulse uses a fresh fix only
-        // when it needs no prompt; otherwise the server falls back to the person's own place.
+        // when it needs no prompt. Keep that passive wait brief: a slow GPS fix must not
+        // hold up the feed when the server can fall back to the person's own place.
         if locationProvider.canLocateWithoutAsking,
-           let fresh = await locationProvider.requestCurrent(timeoutSeconds: 4) {
+           let fresh = await locationProvider.requestCurrent(timeoutSeconds: passiveLocationTimeoutSeconds) {
             resolvedLatitude = fresh.latitude
             resolvedLongitude = fresh.longitude
             return (FeedArea(latitude: fresh.latitude, longitude: fresh.longitude), nil)
