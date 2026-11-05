@@ -254,6 +254,23 @@ public final class MultipartUploader: @unchecked Sendable {
         }
     }
 
+    /// Crew Day (launch cut #13): one completion (`done`, the crew) or problem (`problem`, the household)
+    /// photo for a booking → its stored path, sent next with `/done` or `/problem`. Route
+    /// `backend/routes/crewDays.js` `POST /api/crew-days/uploads` (multipart `photo`, `booking_id`, `purpose`).
+    func uploadCrewDayPhoto(bookingId: String, purpose: String, file: MultipartFile) async throws -> String {
+        let boundary = "PantopusBoundary-\(UUID().uuidString)"
+        let url = environment.apiBaseURL.appendingPathComponent(CrewDayEndpoints.uploadsPath)
+        let part = MultipartFile(fieldName: "photo", filename: file.filename, mimeType: file.mimeType, data: file.data)
+        let body = Self.buildBody(boundary: boundary, file: part, fields: ["booking_id": bookingId, "purpose": purpose])
+        let (data, http) = try await performUpload(to: url, boundary: boundary, body: body)
+        switch http.statusCode {
+        case 200..<300: return try JSONDecoder().decode(CrewDayUploadResponse.self, from: data).path
+        case 401: throw APIError.unauthorized
+        case 400..<500: throw APIError.clientError(status: http.statusCode, message: String(data: data, encoding: .utf8))
+        default: throw APIError.server(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
+        }
+    }
+
     /// Reuses private multipart delivery while binding every retry to the opening lease session.
     func uploadLeaseFile(
         scope: TenantLeaseFileSession,

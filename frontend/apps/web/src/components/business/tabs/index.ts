@@ -12,3 +12,4 @@ export { default as InvoicesTab } from './InvoicesTab';
 export { default as LegalTab } from './LegalTab';
 export { default as ActivityTab } from './ActivityTab';
 export { default as InboxTab } from './InboxTab';
+export { default as CrewDaysTab } from './CrewDaysTab';
