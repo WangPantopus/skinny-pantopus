@@ -433,7 +433,7 @@ async function seedAuthedBrowserSession(page: Page) {
   ]);
 }
 
-async function authed(page: Page, path = '/app/hub') {
+async function authed(page: Page, path = '/app/place') {
   await mockApi(page);
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await seedAuthedBrowserSession(page);
@@ -448,7 +448,7 @@ test.describe('Auth Flows', () => {
     await page.fill('input[name="email"]', USER_A.email);
     await page.fill('input[name="password"]', USER_A.password);
     await page.click('button[type="submit"]');
-    await page.waitForURL('**/app/hub**', { timeout: 20000 });
+    await page.waitForURL('**/app/place**', { timeout: 20000 });
   });
 
   test('Login wrong password → error visible', async ({ page }) => {
@@ -499,7 +499,7 @@ test.describe('Auth Flows', () => {
 // ═══ NAVIGATION ═══
 test.describe('Navigation', () => {
   const routes = [
-    '/app/hub', '/app/feed', '/app/marketplace', '/app/map', '/app/discover',
+    '/app/place', '/app/feed', '/app/marketplace', '/app/map', '/app/discover',
     '/app/gigs', '/app/chat', '/app/mailbox', '/app/homes', '/app/businesses',
     '/app/notifications', '/app/profile', '/app/my-gigs', '/app/my-bids',
     '/app/my-listings', '/app/saved-listings', '/app/connections', '/app/professional',
@@ -531,18 +531,18 @@ test.describe('Navigation', () => {
     await expect(page.locator('button[aria-label="Messages"]')).toBeVisible();
   });
 
-  test('Root redirects to app hub for returning session user', async ({ page }) => {
+  test('Root redirects to Place for returning session user', async ({ page }) => {
     await mockApi(page);
     await page.goto('/login', { waitUntil: 'domcontentloaded' });
     await seedAuthedBrowserSession(page);
     await page.goto('/', { waitUntil: 'domcontentloaded' });
-    await page.waitForURL('**/app/hub**', { timeout: 15000 });
+    await page.waitForURL('**/app/place**', { timeout: 15000 });
   });
 
   test('App routes redirect unauthenticated users to login with redirectTo', async ({ page }) => {
     await mockApi(page);
-    await page.goto('/app/hub', { waitUntil: 'domcontentloaded' });
-    await page.waitForURL('**/login?redirectTo=%2Fapp%2Fhub**', { timeout: 15000 });
+    await page.goto('/app/place', { waitUntil: 'domcontentloaded' });
+    await page.waitForURL('**/login?redirectTo=%2Fapp%2Fplace**', { timeout: 15000 });
   });
 });
 
@@ -902,7 +902,7 @@ test.describe('Error States', () => {
 
   test('No auth → redirect to login', async ({ page }) => {
     await mockApi(page);
-    await page.goto('/app/hub');
+    await page.goto('/app/place');
     await page.waitForURL('**/login**', { timeout: 15000 });
   });
 });

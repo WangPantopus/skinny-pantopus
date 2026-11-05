@@ -18,6 +18,9 @@ struct EmergencyInfoView: View {
     @State private var viewModel: EmergencyInfoViewModel
     @State private var shareText: ShareTextItem?
     @State private var cardPDF: CardPDFItem?
+    @State private var isVisible = false
+    @State private var needsForegroundRead = false
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
 
     init(viewModel: EmergencyInfoViewModel) {
@@ -30,7 +33,27 @@ struct EmergencyInfoView: View {
         }
         .accessibilityIdentifier("emergencyInfoList")
         .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
-        .onAppear { Analytics.track(.screenEmergencyInfoViewed) }
+        .onAppear {
+            isVisible = true
+            needsForegroundRead = false
+            Analytics.track(.screenEmergencyInfoViewed)
+        }
+        .onDisappear {
+            isVisible = false
+            viewModel.suspend()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard isVisible else { return }
+            if phase == .background {
+                needsForegroundRead = true
+                viewModel.suspend()
+                shareText = nil
+                cardPDF = nil
+            } else if phase == .active, needsForegroundRead {
+                needsForegroundRead = false
+                Task { await viewModel.load() }
+            }
+        }
         .onChange(of: viewModel.shareRequested) { _, requested in
             guard requested else { return }
             viewModel.shareRequested = false

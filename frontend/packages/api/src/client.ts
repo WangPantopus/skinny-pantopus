@@ -5,6 +5,7 @@
 // ============================================================
 
 import axios, {
+  AxiosAdapter,
   AxiosInstance,
   AxiosError,
   AxiosRequestConfig,
@@ -557,6 +558,50 @@ async function awaitStartupRecovery(): Promise<void> {
     }
   });
 })();
+
+// ============ EARLY READS (web) ============
+// An app document starts its first GET requests from an inline script while
+// its scripts download (apps/web src/lib/early-reads.ts). This page's first
+// request for the same URL takes that response instead of asking again: once,
+// only a successful one, only while it is fresh and only for the session that
+// started it. Interceptors run as for any request.
+
+type EarlyReads = { marker: string; at: number; reads: Record<string, Promise<Response | null> | undefined> };
+const EARLY_READ_MAX_AGE_MS = 30_000;
+
+function takeEarlyRead(config: InternalAxiosRequestConfig): Promise<Response | null> | null {
+  if (!_isWeb || typeof window === 'undefined' || _authChangeSequence !== 0) return null;
+  if ((config.method || 'get').toLowerCase() !== 'get') return null;
+  const early = (window as unknown as { __pantopusEarly?: EarlyReads }).__pantopusEarly;
+  if (!early?.reads) return null;
+  const url = apiClient.getUri(config);
+  const read = early.reads[url];
+  if (!read) return null;
+  delete early.reads[url];
+  let marker = '';
+  try { marker = window.localStorage.getItem(AUTH_SESSION_CHANGE_KEY) || ''; } catch { /* no storage, no marker */ }
+  if (marker !== early.marker || Date.now() - early.at > EARLY_READ_MAX_AGE_MS) return null;
+  return read;
+}
+
+// axios's own choice of transport, resolved per request as axios does.
+const defaultAdapters = apiClient.defaults.adapter;
+const networkAdapter: AxiosAdapter = (config) => axios.getAdapter(defaultAdapters)(config);
+apiClient.defaults.adapter = async (config) => {
+  const early = takeEarlyRead(config);
+  if (early) {
+    const response = await early.catch(() => null);
+    if (response?.ok) {
+      try {
+        const data = await response.json();
+        const headers: Record<string, string> = {};
+        response.headers.forEach((value, name) => { headers[name] = value; });
+        return { data, status: response.status, statusText: response.statusText, headers, config, request: null };
+      } catch { /* not JSON: ask the network */ }
+    }
+  }
+  return networkAdapter(config);
+};
 
 // ============ REQUEST INTERCEPTOR ============
 

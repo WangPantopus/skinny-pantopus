@@ -81,6 +81,8 @@ public struct HomeEmergencyDTO: Decodable, Sendable, Hashable, Identifiable {
 /// `{ "emergencies": [HomeEmergencyDTO, …] }`.
 public struct GetHomeEmergenciesResponse: Decodable, Sendable {
     public let emergencies: [HomeEmergencyDTO]
+    /// Returned with the same current access check as the rows. Older servers grant no editing.
+    public let canManage: Bool?
 }
 
 /// Wrapper for the create response — backend returns

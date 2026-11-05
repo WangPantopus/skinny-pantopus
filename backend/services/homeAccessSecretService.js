@@ -34,7 +34,11 @@ async function rpc(name, args) {
 async function list(homeId, actorId) {
   const result = await rpc('get_home_access_secrets', { p_home_id: homeId, p_actor_id: actorId });
   if (!Array.isArray(result.secrets)) throw failure();
-  return result.secrets;
+  // Older database replies retain readable rows but cannot authorize editor controls.
+  const scopes = result.allowed_visibilities;
+  const canManage = result.can_manage === true && Array.isArray(scopes) && scopes.length > 0
+    && scopes.every(scope => ['public', 'members', 'managers', 'sensitive'].includes(scope));
+  return { secrets: result.secrets, canManage, allowedVisibilities: canManage ? scopes : [] };
 }
 
 async function mutate({ homeId, actorId, secretId = null, action, payload = {} }) {
