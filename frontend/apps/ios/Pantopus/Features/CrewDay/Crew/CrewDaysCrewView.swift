@@ -17,6 +17,8 @@ struct CrewDaysCrewView: View {
     let onNewDay: (String) -> Void
     /// A readiness step: the business page, payouts or documents.
     let onOpenBusinessStep: (HubRoute) -> Void
+    /// A day's route (Today's days).
+    var onOpenRoute: (String) -> Void = { _ in }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -50,7 +52,7 @@ struct CrewDaysCrewView: View {
                     if response.isEmpty {
                         empty(ready: response.readiness?.isReady ?? true)
                     } else {
-                        section("Today", response.today)
+                        section("Today", response.today, route: true)
                         section("Upcoming", response.upcoming)
                         section("Waiting for Pantopus", response.pending)
                         section("Drafts", response.drafts)
@@ -158,11 +160,18 @@ struct CrewDaysCrewView: View {
     // MARK: - Sections
 
     @ViewBuilder
-    private func section(_ title: String, _ days: [CrewDaySummaryDTO]) -> some View {
+    private func section(_ title: String, _ days: [CrewDaySummaryDTO], route: Bool = false) -> some View {
         if !days.isEmpty {
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 Text.planOverline(title)
-                ForEach(days) { day in row(day) }
+                ForEach(days) { day in
+                    row(day)
+                    if route, ["open", "in_progress"].contains(day.status) {
+                        Button("Open the route") { onOpenRoute(day.id) }
+                            .planButton(.primary, size: .small)
+                            .accessibilityIdentifier("crewDaysCrewRoute_\(day.id)")
+                    }
+                }
             }
         }
     }
