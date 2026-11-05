@@ -151,11 +151,16 @@ async function pastCustomers(day) {
   const { data: current } = await supabaseAdmin.from('CrewDayBooking').select('household_user_id').eq('crew_day_id', day.id)
     .not('status', 'in', `(${rules.INACTIVE_BOOKING_STATUSES.join(',')})`);
   const booked = new Set((current || []).map((b) => String(b.household_user_id)));
+  // One row per household: its latest paid booking whose option this day also prices (so the invite can say their
+  // price), else its latest.
+  const listed = new Set((day.price_options || []).filter((o) => !o.needs_look).map((o) => o.label));
+  const onList = (b) => listed.has((b.line_items || []).find((i) => i.kind === 'option')?.label);
+  const better = (b, prev) => (onList(b) !== onList(prev) ? onList(b) : prev.service_date < b.service_date);
   const byHousehold = new Map();
   for (const b of rows || []) {
     if (booked.has(String(b.household_user_id)) || !rules.inArea(day, b)) continue;
     const prev = byHousehold.get(String(b.household_user_id));
-    if (!prev || prev.service_date < b.service_date) byHousehold.set(String(b.household_user_id), b);
+    if (!prev || better(b, prev)) byHousehold.set(String(b.household_user_id), b);
   }
   return [...byHousehold.values()];
 }
