@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -40,6 +41,7 @@ import app.pantopus.android.ui.screens.crewday.components.CrewDayFlowScaffold
 import app.pantopus.android.ui.screens.plans.components.PlanField
 import app.pantopus.android.ui.screens.plans.components.PlanFormCard
 import app.pantopus.android.ui.screens.plans.components.PlanOptionRow
+import app.pantopus.android.ui.screens.plans.components.PlanOverline
 import app.pantopus.android.ui.screens.plans.components.PlanTextArea
 import app.pantopus.android.ui.screens.plans.components.PlanTonalButton
 import app.pantopus.android.ui.screens.plans.detail.PlanFooterCaption
@@ -122,6 +124,7 @@ fun CrewDayProblemScreen(
             color = PantopusColors.appTextStrong,
         )
         if (!state.adding) {
+            PlanOverline("What's wrong?", modifier = Modifier.semantics { heading() })
             PlanFormCard(modifier = Modifier.testTag("crewDayProblemKinds")) {
                 KINDS.forEachIndexed { index, (key, label) ->
                     val selected = state.kind == key
