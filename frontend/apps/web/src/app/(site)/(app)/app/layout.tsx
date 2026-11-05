@@ -1,7 +1,7 @@
-import AppShell from '../../../components/AppShell';
-import PrerenderSuspense from '../../../components/first-content/PrerenderSuspense';
-import { SESSION_RECOVERY_SCRIPT } from '../../../lib/session-refresh';
-import { EARLY_READS_SCRIPT } from '../../../lib/early-reads';
+import AppShell from '../../../../components/AppShell';
+import PrerenderSuspense from '../../../../components/first-content/PrerenderSuspense';
+import { SESSION_RECOVERY_SCRIPT } from '../../../../lib/session-refresh';
+import { EARLY_READS_SCRIPT } from '../../../../lib/early-reads';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (

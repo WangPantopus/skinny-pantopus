@@ -4,7 +4,7 @@ import { LayoutDashboard } from 'lucide-react';
 // ─────────────────────────────────────────────────────────────────────────────
 // Pantopus — /child-safety
 // Child Safety Standards (CSAE policy for Google Play compliance)
-// frontend/apps/web/src/app/child-safety/page.tsx
+// frontend/apps/web/src/app/(site)/child-safety/page.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function ChildSafetyPage() {

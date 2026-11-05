@@ -118,7 +118,7 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 function loadPage() {
-  const Page = require('../src/app/(app)/app/settings/security/page').default;
+  const Page = require('../src/app/(site)/(app)/app/settings/security/page').default;
   return render(<Page />);
 }
 

@@ -3,7 +3,7 @@ import { LayoutDashboard } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pantopus — /terms
-// frontend/apps/web/src/app/terms/page.tsx
+// frontend/apps/web/src/app/(site)/terms/page.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function TermsPage() {

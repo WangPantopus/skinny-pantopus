@@ -127,23 +127,23 @@ describe('AudienceZoneHeader coverage (P2.2)', () => {
   // Source-level checks: every audience-zone page imports + renders
   // <AudienceZoneHeader />, and Personal-zone pages do not.
   const AUDIENCE_PAGES = [
-    'app/(app)/app/audience/page.tsx',
-    'app/(app)/app/audience/setup/page.tsx',
-    'app/(app)/app/audience/manage/tiers/page.tsx',
-    'app/(app)/app/audience/manage/blocks/page.tsx',
-    'app/(app)/app/audience/inbox/page.tsx',
-    'app/(app)/app/audience/inbox/[membershipId]/page.tsx',
-    'app/(app)/app/audience/membership/[personaId]/page.tsx',
-    'app/(app)/app/audience/membership/[personaId]/inbox/page.tsx',
+    'app/(site)/(app)/app/audience/page.tsx',
+    'app/(site)/(app)/app/audience/setup/page.tsx',
+    'app/(site)/(app)/app/audience/manage/tiers/page.tsx',
+    'app/(site)/(app)/app/audience/manage/blocks/page.tsx',
+    'app/(site)/(app)/app/audience/inbox/page.tsx',
+    'app/(site)/(app)/app/audience/inbox/[membershipId]/page.tsx',
+    'app/(site)/(app)/app/audience/membership/[personaId]/page.tsx',
+    'app/(site)/(app)/app/audience/membership/[personaId]/inbox/page.tsx',
   ];
 
   const PERSONAL_PAGES = [
-    'app/(app)/app/feed/post/[id]/page.tsx',
-    'app/(app)/app/marketplace/ListingCard.tsx',
-    'app/(app)/app/gigs/page.tsx',
-    'app/(app)/app/my-gigs/page.tsx',
-    'app/(app)/app/my-bids/page.tsx',
-    'app/(app)/app/profile/page.tsx',
+    'app/(site)/(app)/app/feed/post/[id]/page.tsx',
+    'app/(site)/(app)/app/marketplace/ListingCard.tsx',
+    'app/(site)/(app)/app/gigs/page.tsx',
+    'app/(site)/(app)/app/my-gigs/page.tsx',
+    'app/(site)/(app)/app/my-bids/page.tsx',
+    'app/(site)/(app)/app/profile/page.tsx',
   ];
 
   test.each(AUDIENCE_PAGES)(
@@ -189,7 +189,7 @@ describe('Audience destination empty state (unified-IA §3.3)', () => {
       __dirname,
       '..',
       'src',
-      'app/(app)/app/audience/page.tsx',
+      'app/(site)/(app)/app/audience/page.tsx',
     );
     const source = fs.readFileSync(file, 'utf8');
     expect(source).toMatch(/Create a Beacon/);

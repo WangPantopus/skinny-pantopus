@@ -7,7 +7,7 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
-import HomePrivacyMirrorPage from '@/app/(app)/app/homes/[id]/privacy/page';
+import HomePrivacyMirrorPage from '@/app/(site)/(app)/app/homes/[id]/privacy/page';
 
 jest.mock('next/navigation', () => ({
   useParams: () => ({ id: 'h1' }),

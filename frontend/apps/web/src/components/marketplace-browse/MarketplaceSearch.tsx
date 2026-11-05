@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as api from '@pantopus/api';
-import { CategoryIcon } from '@/app/(app)/app/marketplace/iconMap';
-import { CATEGORIES } from '@/app/(app)/app/marketplace/constants';
+import { CategoryIcon } from '@/app/(site)/(app)/app/marketplace/iconMap';
+import { CATEGORIES } from '@/app/(site)/(app)/app/marketplace/constants';
 
 const SUGGESTION_CHIPS = ['Furniture', 'Free Stuff', 'Electronics', 'Tools', 'Baby & Kids'];
 const STORAGE_KEY = 'pantopus_marketplace_recent';

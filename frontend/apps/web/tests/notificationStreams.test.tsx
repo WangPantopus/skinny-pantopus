@@ -259,7 +259,7 @@ describe('NotificationBell — split by firewall mode (P2.3)', () => {
 
 describe('Notifications page zone tabs (P2.3)', () => {
   function loadPage() {
-    const NotificationsPage = require('../src/app/(app)/app/notifications/page').default;
+    const NotificationsPage = require('../src/app/(site)/(app)/app/notifications/page').default;
     return renderWithClient(<NotificationsPage />);
   }
 

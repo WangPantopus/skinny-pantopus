@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
-import AppShell from '../../components/AppShell';
+import AppShell from '../../../components/AppShell';
 import { fetchPublicUser, normalizePublicProfileIdentifier } from '@/lib/publicShare';
 
 export default async function UsernameLayout({

@@ -3,7 +3,7 @@ import { LayoutDashboard } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pantopus — /contact
-// frontend/apps/web/src/app/contact/page.tsx
+// frontend/apps/web/src/app/(site)/contact/page.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function ContactPage() {

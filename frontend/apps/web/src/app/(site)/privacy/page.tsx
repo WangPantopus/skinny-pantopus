@@ -3,7 +3,7 @@ import { LayoutDashboard } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pantopus — /privacy
-// frontend/apps/web/src/app/privacy/page.tsx
+// frontend/apps/web/src/app/(site)/privacy/page.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function PrivacyPage() {

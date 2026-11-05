@@ -9,7 +9,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as api from '@pantopus/api';
 import { toast } from '../src/components/ui/toast-store';
-import EmergencyPage from '../src/app/(app)/app/homes/[id]/emergency/page';
+import EmergencyPage from '../src/app/(site)/(app)/app/homes/[id]/emergency/page';
 import EmergencyCard, { EmergencyCardPreview } from '../src/components/home/cards/EmergencyCard';
 
 jest.mock('@pantopus/api', () => ({

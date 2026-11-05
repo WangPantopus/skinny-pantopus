@@ -10,13 +10,13 @@ import type {
   EarningsSummary,
   SpendingSummary,
 } from "@pantopus/types";
-import StripeProvider from "../../../../../components/payments/StripeProvider";
-import PaymentMethodForm from "../../../../../components/payments/PaymentMethodForm";
-import PaymentMethodList from "../../../../../components/payments/PaymentMethodList";
-import StripeConnectOnboarding from "../../../../../components/payments/StripeConnectOnboarding";
-import WalletBalanceCard from "../../../../../components/wallet/WalletBalanceCard";
-import WithdrawModal from "../../../../../components/wallet/WithdrawModal";
-import WalletTransactionList from "../../../../../components/wallet/WalletTransactionList";
+import StripeProvider from "../../../../../../components/payments/StripeProvider";
+import PaymentMethodForm from "../../../../../../components/payments/PaymentMethodForm";
+import PaymentMethodList from "../../../../../../components/payments/PaymentMethodList";
+import StripeConnectOnboarding from "../../../../../../components/payments/StripeConnectOnboarding";
+import WalletBalanceCard from "../../../../../../components/wallet/WalletBalanceCard";
+import WithdrawModal from "../../../../../../components/wallet/WithdrawModal";
+import WalletTransactionList from "../../../../../../components/wallet/WalletTransactionList";
 import SchedulingConnectPanel from "@/components/scheduling/payments/SchedulingConnectPanel";
 import { launchFeatures, webFeatureFlags } from "@/lib/featureFlags";
 
