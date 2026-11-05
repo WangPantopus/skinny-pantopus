@@ -420,7 +420,11 @@ private fun HomesBooked(view: CrewDayCrewViewDto) {
                         text =
                             listOfNotNull(
                                 jobWords(home),
-                                home.priceCents?.let(CrewDayFormat::price) ?: "Price to confirm",
+                                if (home.status == "price_offered") {
+                                    "${CrewDayFormat.price(home.priceCents)} offered · waiting for their OK"
+                                } else {
+                                    home.priceCents?.let(CrewDayFormat::price) ?: "Price to confirm"
+                                },
                             ).joinToString(" · "),
                         style = PantopusTextStyle.small,
                         color = PantopusColors.appTextSecondary,
@@ -515,6 +519,18 @@ private fun BringInMore(
     }
 }
 
+/** "If all 6 are done", or only the homes with a price while others wait on one ("If the 4 priced homes are done"). */
+private fun ifDoneWords(view: CrewDayCrewViewDto): String {
+    val active = view.bookings.filter { it.status !in setOf("cancelled", "declined", "refunded") }
+    val priced = active.count { it.priceCents != null }
+    return when {
+        priced == active.size && priced == 1 -> "If the 1 home is done"
+        priced == active.size -> "If all $priced are done"
+        priced == 1 -> "If the 1 priced home is done"
+        else -> "If the $priced priced homes are done"
+    }
+}
+
 /** Money (board `CrewDayPrep`): "If all 6 are done", "$1,020 charged", "You receive $918 after the 10% founding fee." */
 @Composable
 private fun MoneyPreview(view: CrewDayCrewViewDto) {
@@ -530,7 +546,7 @@ private fun MoneyPreview(view: CrewDayCrewViewDto) {
         PlanOptionRow(first = true, modifier = Modifier.semantics(mergeDescendants = true) {}) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    text = "If all ${view.bookedCount} are done",
+                    text = ifDoneWords(view),
                     style = PantopusTextStyle.small,
                     color = PantopusColors.appTextSecondary,
                 )
