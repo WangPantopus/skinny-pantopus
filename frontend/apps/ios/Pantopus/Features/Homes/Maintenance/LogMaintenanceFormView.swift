@@ -23,6 +23,10 @@ struct LogMaintenanceFormView: View {
     @State private var photoPickerShown: Bool = false
     @State private var receiptPickerShown: Bool = false
     @State private var errorToast: ToastMessage?
+    /// Current authority: `false` until confirmed or when refused, `nil` when the last check
+    /// couldn't complete (Save stays available and checks again first).
+    @State private var canManage: Bool? = false
+    @State private var isConfirmingPermission = false
     private let onClose: @Sendable () -> Void
     private let onSubmitted: @Sendable (String) -> Void
 
@@ -40,7 +44,7 @@ struct LogMaintenanceFormView: View {
         FormShell(
             title: viewModel.screenTitle,
             rightActionLabel: viewModel.submitLabel,
-            isValid: viewModel.canSubmit,
+            isValid: canManage != false && viewModel.canSubmit && !isConfirmingPermission,
             isDirty: viewModel.isDirty,
             isSaving: viewModel.isSubmitting,
             onClose: onClose,
@@ -106,14 +110,23 @@ struct LogMaintenanceFormView: View {
                     }
             }
         }
-        .disabled(viewModel.isSubmitting)
-        .interactiveDismissDisabled(viewModel.isSubmitting || viewModel.isDirty)
+        .disabled(viewModel.isSubmitting || isConfirmingPermission)
+        .interactiveDismissDisabled(viewModel.isSubmitting || isConfirmingPermission || viewModel.isDirty)
         .onAppear { Analytics.track(.screenLogMaintenanceViewed) }
-        .task { await viewModel.loadIfNeeded() }
+        .task {
+            await viewModel.loadIfNeeded()
+            canManage = await viewModel.confirmPermission()
+        }
     }
 
     private func commit() {
-        Task { await viewModel.submit() }
+        Task {
+            isConfirmingPermission = true
+            canManage = await viewModel.confirmPermission()
+            isConfirmingPermission = false
+            guard canManage == true else { return }
+            await viewModel.submit()
+        }
     }
 
     private func handlePhotoSelection(_ items: [PhotosPickerItem]) {

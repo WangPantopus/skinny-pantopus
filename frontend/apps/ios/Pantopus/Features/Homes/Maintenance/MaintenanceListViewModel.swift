@@ -133,7 +133,8 @@ final class MaintenanceListViewModel: ListOfRowsDataSource {
     }
 
     var fab: FABAction? {
-        FABAction(
+        guard canManage else { return nil }
+        return FABAction(
             icon: .plus,
             accessibilityLabel: "Log maintenance",
             variant: .canonicalCreate,
@@ -160,12 +161,14 @@ final class MaintenanceListViewModel: ListOfRowsDataSource {
     private(set) var state: ListOfRowsState = .loading
     var refreshFailureMessage: String?
     private(set) var staleNotice: String?
+    private(set) var canManage = false
 
     /// Last-fetched payload so tab swaps don't refetch.
     private var tasks: [MaintenanceTaskDTO]?
 
     let homeId: String
     private let store: ScreenStore
+    private let authority: HomeDashboardAccess
     private let onOpenTask: @Sendable (String) -> Void
     private let onAddTask: @Sendable () -> Void
     /// Route to the per-home issue tracker. Nil hides the top-bar action.
@@ -182,6 +185,7 @@ final class MaintenanceListViewModel: ListOfRowsDataSource {
     ) {
         self.homeId = homeId
         store = ScreenStore.store(for: api)
+        authority = HomeDashboardAccess(homeId: homeId, api: api)
         self.onOpenTask = onOpenTask
         self.onAddTask = onAddTask
         self.onOpenIssues = onOpenIssues
@@ -209,6 +213,19 @@ final class MaintenanceListViewModel: ListOfRowsDataSource {
     }
 
     private func fetch(force: Bool) async {
+        async let permissions: Void = refreshPermissions()
+        await fetchEntries(force: force)
+        await permissions
+    }
+
+    private func refreshPermissions() async {
+        canManage = false
+        rebuildState()
+        canManage = await (try? authority.read().access?.can("home.edit")) == true
+        rebuildState()
+    }
+
+    private func fetchEntries(force: Bool) async {
         let household = HomeCopyGate.showsCopy(homeId: homeId, store: store)
         let gate: @Sendable (GetHomeMaintenanceResponse) -> Bool = { _ in household }
         let endpoint = HomesEndpoints.maintenance(homeId: homeId)
@@ -268,8 +285,9 @@ final class MaintenanceListViewModel: ListOfRowsDataSource {
                     icon: .hammer,
                     headline: headline,
                     subcopy: subcopy,
-                    ctaTitle: "Log maintenance"
-                ) { [onAddTask] in onAddTask() }
+                    ctaTitle: canManage ? "Log maintenance" : nil,
+                    onCTA: canManage ? onAddTask : nil
+                )
             )
             return
         }

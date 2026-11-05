@@ -78,6 +78,7 @@ final class LogMaintenanceFormViewModel {
     private let api: APIClient
     private let draftStore: MaintenanceDraftStore
     private let uploader: MultipartUploader
+    private let authority: HomeDashboardAccess
     private let now: @Sendable () -> Date
     private var initial: Snapshot
     private var pendingCreate: (draft: CreateMaintenanceRequest, id: String)?
@@ -155,6 +156,7 @@ final class LogMaintenanceFormViewModel {
         self.api = api
         self.draftStore = draftStore
         self.uploader = uploader
+        authority = HomeDashboardAccess(homeId: homeId, api: api)
         self.now = now
 
         // Compute the initial pose into a Snapshot first so the
@@ -260,6 +262,19 @@ final class LogMaintenanceFormViewModel {
             apply(existing: dto, taskId: taskId)
         } catch {
             submitError = "Couldn't load this maintenance entry. Close and reopen it to try again."
+        }
+    }
+
+    /// The form checks current authority before enabling or committing a write. `nil` means the
+    /// check couldn't complete: the draft stays and the next Save checks again before writing.
+    func confirmPermission() async -> Bool? {
+        do {
+            let canManage = try await authority.read().access?.can("home.edit") == true
+            if !canManage { submitError = "You don't have permission to manage maintenance." }
+            return canManage
+        } catch {
+            submitError = "Couldn't confirm your permission to manage maintenance. Check your connection and try again."
+            return nil
         }
     }
 

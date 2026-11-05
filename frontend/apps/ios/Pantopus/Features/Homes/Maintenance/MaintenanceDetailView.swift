@@ -32,11 +32,13 @@ final class MaintenanceDetailViewModel {
     private(set) var state: State = .loading
     private(set) var isMutating: Bool = false
     private(set) var actionError: String?
+    private(set) var canManage = false
 
     let homeId: String
     private let taskId: String
     private let api: APIClient
     private let store: ScreenStore
+    private let authority: HomeDashboardAccess
     private let draftStore: MaintenanceDraftStore
     private let onChanged: @Sendable () -> Void
     private let onDeleted: @Sendable () -> Void
@@ -53,6 +55,7 @@ final class MaintenanceDetailViewModel {
         self.taskId = taskId
         self.api = api
         store = ScreenStore.store(for: api)
+        authority = HomeDashboardAccess(homeId: homeId, api: api)
         self.draftStore = draftStore
         self.onChanged = onChanged
         self.onDeleted = onDeleted
@@ -99,6 +102,17 @@ final class MaintenanceDetailViewModel {
 
     /// The log through the screen store (the list's entry): at once when fresh, read again when out of date.
     private func fetch(force: Bool) async {
+        async let permissions: Void = refreshPermissions()
+        await fetchEntry(force: force)
+        await permissions
+    }
+
+    private func refreshPermissions() async {
+        canManage = false
+        canManage = await (try? authority.read().access?.can("home.edit")) == true
+    }
+
+    private func fetchEntry(force: Bool) async {
         let household = HomeCopyGate.showsCopy(homeId: homeId, store: store)
         let gate: @Sendable (GetHomeMaintenanceResponse) -> Bool = { _ in household }
         do {
@@ -162,6 +176,7 @@ public struct MaintenanceDetailView: View {
                     task: task,
                     draft: viewModel.draft,
                     isMutating: viewModel.isMutating,
+                    canManage: viewModel.canManage,
                     actionError: viewModel.actionError,
                     onBack: onBack,
                     onEdit: onEdit,
@@ -265,6 +280,7 @@ private struct LoadedBody: View {
     let task: MaintenanceTaskDTO
     let draft: MaintenanceDraft?
     let isMutating: Bool
+    let canManage: Bool
     let actionError: String?
     let onBack: @Sendable () -> Void
     let onEdit: @Sendable () -> Void
@@ -308,11 +324,13 @@ private struct LoadedBody: View {
                             .foregroundStyle(Theme.Color.error)
                             .accessibilityIdentifier("maintenanceDetail_actionError")
                     }
-                    DetailActions(
-                        isMutating: isMutating,
-                        onEdit: onEdit,
-                        onDelete: onDelete
-                    )
+                    if canManage {
+                        DetailActions(
+                            isMutating: isMutating,
+                            onEdit: onEdit,
+                            onDelete: onDelete
+                        )
+                    }
                 }
                 .padding(.horizontal, Spacing.s4)
             }

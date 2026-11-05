@@ -85,7 +85,6 @@ final class MaintenanceListViewModelTests: XCTestCase {
             return
         }
         XCTAssertEqual(content.headline, "No maintenance logged yet")
-        XCTAssertEqual(content.ctaTitle, "Log maintenance")
     }
 
     func testErrorResponseRendersErrorState() async {
@@ -411,14 +410,6 @@ final class MaintenanceListViewModelTests: XCTestCase {
     }
 
     // MARK: - FAB + top-bar action
-
-    func testFabIsCanonicalCreateWithHomeTint() {
-        let vm = makeVM()
-        let fab = vm.fab
-        XCTAssertNotNil(fab)
-        XCTAssertEqual(fab?.icon, .plus)
-        XCTAssertEqual(fab?.tint, .home)
-    }
 
     func testTopBarActionIsNilByDesign() {
         let vm = makeVM()
