@@ -134,14 +134,24 @@ class CrewDayHomeViewModel
             _state.update { it.copy(saving = true, error = null) }
             viewModelScope.launch {
                 when (val result = repository.cantGetIn(bookingId, note.trim())) {
-                    is NetworkResult.Success ->
+                    is NetworkResult.Success -> {
                         _state.update { it.copy(saving = false, home = result.data, notice = "We told the household you can't get in.") }
+                        result.data.householdUserId?.let { id -> _chat.value = id to (result.data.firstName ?: "The household") }
+                    }
                     is NetworkResult.Failure -> _state.update { it.copy(saving = false, error = result.error.crewDayMessage) }
                 }
             }
         }
 
         fun noticeShown() = _state.update { it.copy(notice = null) }
+
+        /** After Can't get in: the conversation with the household, once (null when the server doesn't say who). */
+        private val _chat = MutableStateFlow<Pair<String, String>?>(null)
+        val chat: StateFlow<Pair<String, String>?> = _chat.asStateFlow()
+
+        fun chatOpened() {
+            _chat.value = null
+        }
 
         /** Uploads one photo and keeps its path; null (with the error shown) if it fails. */
         private suspend fun upload(photo: CrewDayDonePhoto): String? =

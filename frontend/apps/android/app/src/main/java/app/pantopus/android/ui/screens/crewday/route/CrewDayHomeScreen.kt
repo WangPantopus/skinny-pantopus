@@ -83,9 +83,17 @@ import java.io.File
 @Composable
 fun CrewDayHomeScreen(
     onBack: () -> Unit,
+    onOpenChat: (userId: String, name: String) -> Unit,
     viewModel: CrewDayHomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val chat by viewModel.chat.collectAsStateWithLifecycle()
+    LaunchedEffect(chat) {
+        chat?.let { (id, name) ->
+            viewModel.chatOpened()
+            onOpenChat(id, name)
+        }
+    }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val toast = remember { ToastController() }
