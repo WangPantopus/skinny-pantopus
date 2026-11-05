@@ -18,6 +18,8 @@ const store = require('../services/crewDay/store');
 const bookings = require('../services/crewDay/bookings');
 const reads = require('../services/crewDay/reads');
 const dayOf = require('../services/crewDay/dayOf');
+const money = require('../services/crewDay/money');
+const problems = require('../services/crewDay/problems');
 
 // One photo per request, up to 10 MB (JPEG, PNG or HEIC; stored as JPEG or PNG without metadata).
 const photoUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
@@ -96,6 +98,17 @@ router.post('/bookings/:bookingId/ask-release', verifyToken, handle('ask_release
 // POST /api/crew-days/bookings/:bookingId/price-answer { approve }: approve the crew's price, or decline it (free).
 router.post('/bookings/:bookingId/price-answer', verifyToken, handle('price_answer', async (req, res) => {
   await bookingAnswer(req, res, await bookings.answerPrice(req.params.bookingId, req.user.id, req.body || {}));
+}));
+
+// POST /api/crew-days/bookings/:bookingId/confirm: "Everything looks good": the charge runs now.
+router.post('/bookings/:bookingId/confirm', verifyToken, handle('confirm', async (req, res) => {
+  await bookingAnswer(req, res, await money.confirm(req.params.bookingId, req.user.id));
+}));
+
+// POST /api/crew-days/bookings/:bookingId/problem { kind, note, photo_paths }: "Something needs attention" (the
+// charge waits); again, a note or photos for the open case.
+router.post('/bookings/:bookingId/problem', verifyToken, handle('problem', async (req, res) => {
+  await bookingAnswer(req, res, await problems.report(req.params.bookingId, req.user.id, req.body || {}));
 }));
 
 // POST /api/crew-days/bookings/:bookingId/gate-ready: on the day, tell the crew the gate is open.

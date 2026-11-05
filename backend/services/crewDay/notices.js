@@ -179,7 +179,40 @@ async function workDone(day, booking) {
   }, { day, booking, link: links.booking(booking.id) });
 }
 
+async function charged(day, booking, crew) {
+  const amount = (booking.price_cents || 0) - (booking.refunded_cents || 0);
+  await send([booking.household_user_id], {
+    type: 'crew_day_charged',
+    title: `Paid: ${rules.formatReceipt(amount)} to ${businessName(crew)}`,
+    body: null,
+  }, { day, booking, link: links.booking(booking.id), push: false });
+}
+
+async function chargeFailed(day, booking, crew) {
+  await send([booking.household_user_id], {
+    type: 'crew_day_charge_failed',
+    title: "Your card didn't go through",
+    body: `Pay ${rules.formatMoney((booking.price_cents || 0) - (booking.refunded_cents || 0))} to ${businessName(crew)} in Pantopus.`,
+  }, { day, booking, link: links.booking(booking.id) });
+}
+
+async function problemUpdate(day, booking, body) {
+  await send([booking.household_user_id], {
+    type: 'crew_day_problem_update',
+    title: 'Update on your Crew Day',
+    body,
+  }, { day, booking, link: links.booking(booking.id) });
+}
+
 // ── Crew (about one home) ─────────────────────────────────────
+
+async function problemReported(day, booking) {
+  await send(await crewRecipients(day), {
+    type: 'crew_day_problem',
+    title: 'A household reported a problem',
+    body: 'Pantopus support has it. Their charge waits.',
+  }, { day, booking, link: links.crewDay(day.business_user_id, day.id) });
+}
 
 async function gateReady(day, booking) {
   await send(await crewRecipients(day), {
@@ -224,6 +257,15 @@ async function releaseAsked(day, booking) {
 
 // ── Operator ───────────────────────────────────────────────────
 
+async function problemOpened(day, booking) {
+  const due = rules.formatDayRelative(booking.problem_due_at, day.timezone);
+  await send(await adminRecipients(), {
+    type: 'crew_day_problem_opened',
+    title: 'A Crew Day problem needs a reply',
+    body: `${day.title}: reply ${due} by ${rules.formatTime(booking.problem_due_at, day.timezone)}.`,
+  }, { day, booking, link: links.admin(day.id), push: false });
+}
+
 async function reviewNeeded(day, { businessName }) {
   const recipients = await adminRecipients();
   await send(recipients, {
@@ -234,6 +276,11 @@ async function reviewNeeded(day, { businessName }) {
 }
 
 module.exports = {
+  charged,
+  chargeFailed,
+  problemUpdate,
+  problemReported,
+  problemOpened,
   onTheWay,
   etaChanged,
   cantGetIn,

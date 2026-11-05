@@ -12,6 +12,8 @@ const { requireCrewDay } = require('../services/crewDay/gate');
 const { CrewDayError } = require('../services/crewDay/rules');
 const admin = require('../services/crewDay/admin');
 const days = require('../services/crewDay/days');
+const problems = require('../services/crewDay/problems');
+const store = require('../services/crewDay/store');
 
 // Platform admins only (the same check as requireAdmin), answered in the Crew Day error shape.
 function requireOperator(req, res, next) {
@@ -45,6 +47,15 @@ const handle = (where, fn) => async (req, res) => {
 // GET /api/admin/crew-days?tab=waiting|open|today|problems|done|requests (screens 20, 22, 23)
 router.get('/', handle('list', async (req, res) => {
   res.json(await admin.list(String(req.query.tab || 'waiting')));
+}));
+
+// POST /api/admin/crew-days/bookings/:bookingId/problem { action: note|release|refund|resolve, amount_cents?, note }
+router.post('/bookings/:bookingId/problem', handle('problem', async (req, res) => {
+  const booking = await problems.operatorAction(req.params.bookingId, req.user.id, req.body || {});
+  const people = await admin.households([booking.household_user_id]);
+  const day = await store.getDay(booking.crew_day_id);
+  res.json({ booking: { ...admin.adminBooking(booking, people.get(String(booking.household_user_id))),
+    crew_day: { id: day.id, title: day.title, timezone: day.timezone } } });
 }));
 
 // GET /api/admin/crew-days/:id: everything about one day (screen 21); records operator_viewed.
