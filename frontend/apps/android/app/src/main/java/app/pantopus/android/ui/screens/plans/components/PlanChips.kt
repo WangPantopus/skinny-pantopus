@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -252,6 +253,8 @@ fun PlanChoiceGroup(
     modifier: Modifier = Modifier,
     multiSelect: Boolean = false,
     onLongClick: ((PlanChoice) -> Unit)? = null,
+    /** A test tag for each choice (Crew Day's `crewDayNewService_<key>`); null tags none. */
+    tagFor: ((PlanChoice) -> String)? = null,
 ) {
     val fontScale = LocalDensity.current.fontScale
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
@@ -268,7 +271,14 @@ fun PlanChoiceGroup(
             ) {
                 choices.forEachIndexed { index, choice ->
                     if (index > 0) HorizontalDivider(color = PantopusColors.appBorder)
-                    PlanChoiceRow(choice, isSelected(choice), role, { onSelect(choice) }, onLongClick?.let { { it(choice) } })
+                    PlanChoiceRow(
+                        choice,
+                        isSelected(choice),
+                        role,
+                        { onSelect(choice) },
+                        onLongClick?.let { { it(choice) } },
+                        tagFor?.let { tag -> Modifier.testTag(tag(choice)) } ?: Modifier,
+                    )
                 }
             }
         } else {
@@ -284,6 +294,7 @@ fun PlanChoiceGroup(
                         role = role,
                         onClick = { onSelect(choice) },
                         onLongClick = onLongClick?.let { { it(choice) } },
+                        modifier = tagFor?.let { tag -> Modifier.testTag(tag(choice)) } ?: Modifier,
                     )
                 }
             }
@@ -299,10 +310,11 @@ private fun PlanChoiceRow(
     role: Role,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
 ) {
     Row(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .heightIn(min = 52.dp)
                 .alpha(if (choice.enabled) 1f else 0.5f)
