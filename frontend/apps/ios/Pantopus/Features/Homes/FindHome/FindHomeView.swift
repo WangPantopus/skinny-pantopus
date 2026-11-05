@@ -165,8 +165,7 @@ public struct FindHomeView: View {
     }
 
     private var idleFrame: some View {
-        VStack(spacing: Spacing.s3) {
-            Spacer(minLength: Spacing.s0)
+        stateFrame {
             EmptyState(
                 icon: .search,
                 headline: "Search for your home",
@@ -177,10 +176,17 @@ public struct FindHomeView: View {
                 tint: Theme.Color.homeBg,
                 accent: Theme.Color.home
             )
-            Spacer(minLength: Spacing.s0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("findHomeIdle")
+    }
+
+    /// A state centered in the room between the search and the invite row; it scrolls when the keyboard leaves too
+    /// little room (the iPhone Duo closed, an SE), so the header stays in view instead of the screen moving up.
+    private func stateFrame(@ViewBuilder _ content: @escaping () -> some View) -> some View {
+        GeometryReader { proxy in
+            ScrollView { content().centeredClearOfFold(minHeight: proxy.size.height) }
+                .scrollBounceBehavior(.basedOnSize)
+        }
     }
 
     private var shimmerFrame: some View {
@@ -230,8 +236,7 @@ public struct FindHomeView: View {
     }
 
     private var emptyFrame: some View {
-        VStack(spacing: Spacing.s3) {
-            Spacer(minLength: Spacing.s0)
+        stateFrame {
             EmptyState(
                 icon: .home,
                 headline: "No homes found",
@@ -242,40 +247,37 @@ public struct FindHomeView: View {
                 tint: Theme.Color.homeBg,
                 accent: Theme.Color.home
             )
-            Spacer(minLength: Spacing.s0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("findHomeEmpty")
     }
 
     private func errorFrame(_ message: String) -> some View {
-        VStack(spacing: Spacing.s3) {
-            Spacer(minLength: Spacing.s0)
-            Icon(.alertCircle, size: 32, color: Theme.Color.error)
-            Text("Couldn't search homes")
-                .pantopusTextStyle(.h3)
-                .foregroundStyle(Theme.Color.appText)
-            Text(message)
-                .pantopusTextStyle(.caption)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, Spacing.s10)
-            Button {
-                Task { await viewModel.refresh() }
-            } label: {
-                Text("Retry")
-                    .pantopusTextStyle(.body)
-                    .foregroundStyle(Theme.Color.appTextInverse)
-                    .padding(.horizontal, Spacing.s5)
-                    .frame(height: 44)
-                    .background(Theme.Color.primarySolid)
-                    .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+        stateFrame {
+            VStack(spacing: Spacing.s3) {
+                Icon(.alertCircle, size: 32, color: Theme.Color.error)
+                Text("Couldn't search homes")
+                    .pantopusTextStyle(.h3)
+                    .foregroundStyle(Theme.Color.appText)
+                Text(message)
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, Spacing.s10)
+                Button {
+                    Task { await viewModel.refresh() }
+                } label: {
+                    Text("Retry")
+                        .pantopusTextStyle(.body)
+                        .foregroundStyle(Theme.Color.appTextInverse)
+                        .padding(.horizontal, Spacing.s5)
+                        .frame(height: 44)
+                        .background(Theme.Color.primarySolid)
+                        .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("findHomeRetry")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("findHomeRetry")
-            Spacer(minLength: Spacing.s0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("findHomeError")
     }
 

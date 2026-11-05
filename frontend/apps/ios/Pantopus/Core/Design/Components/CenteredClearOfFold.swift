@@ -21,27 +21,40 @@ public extension View {
     /// view fits there. For placeholders and short notes (an empty column, an error with Try again), not for content
     /// that scrolls.
     func centeredClearOfFold() -> some View {
-        modifier(CenteredClearOfFold())
+        modifier(CenteredClearOfFold(minHeight: 0, bottomClearance: 0))
+    }
+
+    /// The same for a placeholder in a scroll view, which offers no height: at least `minHeight` tall (pass the
+    /// scroll view's height, so the placeholder fills the screen and still scrolls when the text is large), as
+    /// `.frame(minHeight:)` would make it. Beside the fold it also stays above the bottom `bottomClearance` points,
+    /// where a floating button sits over it.
+    func centeredClearOfFold(minHeight: CGFloat, bottomClearance: CGFloat = 0) -> some View {
+        modifier(CenteredClearOfFold(minHeight: minHeight, bottomClearance: bottomClearance))
     }
 }
 
 private struct CenteredClearOfFold: ViewModifier {
+    let minHeight: CGFloat
+    let bottomClearance: CGFloat
     /// The active fold where it crosses this view, with the room to keep clear beside it, in its own coordinates.
     @State private var fold: CGRect?
 
     func body(content: Content) -> some View {
-        FoldClearCentering(fold: fold) { content }
+        FoldClearCentering(fold: fold, minHeight: minHeight, bottomClearance: bottomClearance) { content }
             .readsActiveFold($fold)
     }
 }
 
-/// Centers its one subview in the space offered, or in the larger part beside `fold` when the subview fits there.
+/// Centers its one subview in the space offered (at least `minHeight` tall), or in the larger part beside `fold`
+/// (above the bottom `bottomClearance`) when the subview fits there.
 private struct FoldClearCentering: Layout {
     let fold: CGRect?
+    let minHeight: CGFloat
+    let bottomClearance: CGFloat
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
         let natural = subviews.first?.sizeThatFits(proposal) ?? .zero
-        return CGSize(width: proposal.width ?? natural.width, height: proposal.height ?? natural.height)
+        return CGSize(width: proposal.width ?? natural.width, height: max(proposal.height ?? natural.height, minHeight))
     }
 
     func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
@@ -55,15 +68,16 @@ private struct FoldClearCentering: Layout {
     private func clearArea(in bounds: CGRect, for content: LayoutSubview) -> CGRect? {
         guard let fold else { return nil }
         let crease = fold.offsetBy(dx: bounds.minX, dy: bounds.minY)
+        let bottom = bounds.maxY - bottomClearance
         let sides: [CGRect] = if crease.height > crease.width {
             [
-                CGRect(x: bounds.minX, y: bounds.minY, width: crease.minX - bounds.minX, height: bounds.height),
-                CGRect(x: crease.maxX, y: bounds.minY, width: bounds.maxX - crease.maxX, height: bounds.height)
+                CGRect(x: bounds.minX, y: bounds.minY, width: crease.minX - bounds.minX, height: bottom - bounds.minY),
+                CGRect(x: crease.maxX, y: bounds.minY, width: bounds.maxX - crease.maxX, height: bottom - bounds.minY)
             ]
         } else {
             [
                 CGRect(x: bounds.minX, y: bounds.minY, width: bounds.width, height: crease.minY - bounds.minY),
-                CGRect(x: bounds.minX, y: crease.maxY, width: bounds.width, height: bounds.maxY - crease.maxY)
+                CGRect(x: bounds.minX, y: crease.maxY, width: bounds.width, height: bottom - crease.maxY)
             ]
         }
         // Only a fold through the content's space: one along its edge leaves nothing to avoid.
