@@ -35,6 +35,8 @@ export function safeRedirectPath(redirectTo: string | null | undefined, fallback
       /^\/b\/[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)?$/.test(path) ||
       // A letter's claim page (/open/:mailId?token=…), opened from its email before signing in.
       /^\/open\/[a-fA-F0-9-]+$/.test(path) ||
+      // A Crew Day invitation and its booking steps (/crew-day/:code, /price, /book, /booked).
+      /^\/crew-day\/[a-z2-9]{6,16}(?:\/(?:price|book|booked))?$/.test(path) ||
       /^\/@[a-zA-Z0-9_-]+$/.test(path);
     return allowed ? path + suffix : fallback;
   } catch {

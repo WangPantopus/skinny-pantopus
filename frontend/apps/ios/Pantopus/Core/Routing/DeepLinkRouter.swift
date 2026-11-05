@@ -249,6 +249,20 @@ final class DeepLinkRouter {
         case planRequests(id: String)
         /// `/plans/new` — the host composer (H1).
         case planNew
+        /// `/crew-day/:code` (and its `/price`, `/book`, `/booked`) — a Crew
+        /// Day invitation (launch cut #13). The flyer and the two help pages
+        /// under `/crew-day/` stay on the web.
+        case crewDayInvitation(code: String)
+        /// `/app/crew-days` — Your Crew Days.
+        case crewDays
+        /// `/app/crew-days/ask` — ask for a Crew Day on my street.
+        case crewDayAsk
+        /// `/app/crew-days/bookings/:bookingId` — the household's booking.
+        case crewDayBooking(bookingId: String)
+        /// `/app/businesses/:businessId/dashboard?tab=crew-days` — the crew's list.
+        case crewDaysCrew(businessId: String)
+        /// `/app/businesses/:businessId/crew-days/:crewDayId` — the crew's day.
+        case crewDayCrew(businessId: String, crewDayId: String)
         case unknown(URL)
     }
 
@@ -592,6 +606,19 @@ final class DeepLinkRouter {
             if id == "new" { return .planNew }
             if segments.dropFirst(2).first == "requests" { return .planRequests(id: id) }
             return .plan(id: id, invite: queryValue("invite", in: comps).flatMap { $0.isEmpty ? nil : $0 })
+        case "crew-day":
+            // `/crew-day/:code`, `/crew-day/:code/price|book|booked`. The flyer
+            // and the help pages are web pages.
+            guard segments.count >= 2, !["how-it-works", "who-sees-what"].contains(segments[1]),
+                  segments.count == 2 || (segments.count == 3 && ["price", "book", "booked"].contains(segments[2]))
+            else { return .unknown(url) }
+            return .crewDayInvitation(code: segments[1])
+        case "crew-days":
+            // `/app/crew-days`, `/app/crew-days/ask`, `/app/crew-days/bookings/:id`.
+            if segments.count == 1 { return .crewDays }
+            if segments.count == 2, segments[1] == "ask" { return .crewDayAsk }
+            if segments.count == 3, segments[1] == "bookings" { return .crewDayBooking(bookingId: segments[2]) }
+            return .unknown(url)
         case "notifications":
             return .notifications
         case "support-trains", "support_train":
@@ -930,6 +957,14 @@ final class DeepLinkRouter {
            UUID(uuidString: roomId) != nil {
             return .businessConversation(businessId: id, roomId: roomId.lowercased())
         }
+        // Crew Day (launch cut #13): the crew's list and one of its days.
+        if trailing.first == "crew-days", trailing.count == 2 {
+            return .crewDayCrew(businessId: id, crewDayId: trailing[1])
+        }
+        if trailing.first == "dashboard",
+           queryValue("tab", in: URLComponents(url: url, resolvingAgainstBaseURL: false)) == "crew-days" {
+            return .crewDaysCrew(businessId: id)
+        }
         return .businessOwner(businessId: id)
     }
 
@@ -1093,6 +1128,10 @@ extension DeepLinkRouter.Destination {
         // Launch cut #8 (Mail extras): letter translations and Earn.
         case .mailTranslation, .earn:
             LaunchFeatures.mailExtras
+        // Launch cut #13 (Crew Day): the invitation, the household's and the
+        // crew's screens.
+        case .crewDayInvitation, .crewDays, .crewDayAsk, .crewDayBooking, .crewDaysCrew, .crewDayCrew:
+            LaunchFeatures.crewDay
         default:
             true
         }
@@ -1135,6 +1174,9 @@ extension DeepLinkRouter {
         } else if key.hasPrefix("mail_") || key.hasPrefix("home_mail") {
             // Mailbox: new mail, Mail Day, the mail summary and letters.
             LaunchFeatures.mailbox
+        } else if key.hasPrefix("crew_day") {
+            // Crew Day (launch cut #13): every booking, crew and operator notice.
+            LaunchFeatures.crewDay
         } else {
             true
         }
