@@ -431,6 +431,7 @@ app.use('/api/homes', homeRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/pulse', require('./routes/pulse'));  // Pulse (docs/product/pulse-build/02-contract.md)
 app.use('/api/plans', require('./routes/plans'));  // Nearby Plans (404 while the `plans` flag is off)
+app.use('/api/crew-days', require('./routes/crewDays'));  // Crew Day (403 while the `crew_day` key is unlisted)
 app.use('/api/sports', require('./routes/sports'));  // Sports topic lane (active events)
 app.use('/api/files', fileRoutes);
 app.use('/api/chat', chatRoutes);
@@ -503,6 +504,7 @@ app.use('/api/saved-places', require('./routes/savedPlaces')); // Saved Places
 app.use('/api/neighbor-messages', require('./routes/neighborMessages')); // Place — verified-only neighbor messaging (W2.6)
 app.use('/api/v1/address', require('./routes/addressValidation')); // Address validation pipeline
 app.use('/api/v1', require('./routes/landlordTenant'));            // Landlord portal + tenant flows
+app.use('/api/admin/crew-days', require('./routes/adminCrewDays')); // Crew Day operator (before /api/admin: the key's 403 first)
 app.use('/api/admin', require('./routes/admin'));             // Platform admin
 app.use('/api/admin/verification', require('./routes/adminVerification')); // Admin verification queue
 app.use('/api/admin/reports', require('./routes/adminReports')); // Admin report review queue
