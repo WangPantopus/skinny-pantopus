@@ -121,7 +121,7 @@ household per Crew Day (a unique index), and `client_request_id` is unique per h
 `id`, `crew_day_id` (cascade), `booking_id` (nullable, cascade), `actor_user_id` (nullable for the system; set null),
 `actor_role` (`household`, `crew`, `operator`, `system`), `kind` (lowercase snake case, 3–40 characters), `data`
 jsonb object, `visible_to` (`household`, `crew`, `both`, `operator`), `created_at`.
-Kinds: `day_created`, `day_edited`, `day_submitted`, `day_approved`, `day_declined`, `day_cancelled`, `day_started`,
+Kinds: `day_created`, `day_edited`, `day_submitted`, `day_done`, `day_approved`, `day_declined`, `day_cancelled`, `day_started`,
 `dates_proposed`, `price_requested`, `price_offered`, `price_approved`, `price_declined`, `booked`, `booking_changed`,
 `booking_cancelled`, `release_asked`, `released`, `access_note_changed` (never the text), `gate_ready`, `on_the_way`,
 `eta_changed`, `cant_get_in`, `done`, `household_confirmed`, `charged`, `charge_failed`, `paid_by_household`,
@@ -202,10 +202,10 @@ routes add `requireAdmin`. Rate-limit the public routes like the Plans share rou
 | `POST /api/crew-days/bookings/:bookingId/gate-ready` | sets `gate_ready_at`, tells the crew |
 | `POST /api/crew-days/bookings/:bookingId/confirm` | "Everything looks good" on a `done` home: records `household_confirmed_at` and charges now → `{ booking }` (`paid`, or `payment_failed`, or still `done` if Stripe is settling). `NOT_DONE`, `PROBLEM_OPEN` |
 | `POST /api/crew-days/bookings/:bookingId/problem` | `{ kind (missed, damage, no_show, charge, other), note (1–1,000), photo_paths (≤ 4, uploaded as `problem`) }` → `problem_status` `open`, charge paused, `problem_due_at` = 5 PM local the next business day; tells the crew (`crew_day_problem`) and the operator (`crew_day_problem_opened`) → `{ booking }`. Once the crew has come (on or after the home's date). A second call while open adds a note or photos (`problem_note`). `NOT_REPORTABLE` |
-| `POST /api/crew-days/bookings/:bookingId/new-date` | `{ proposal_id, choice: "YYYY-MM-DD" or "cancel" }` |
+| `POST /api/crew-days/bookings/:bookingId/new-date` | `{ proposal_id, choice: "YYYY-MM-DD" or "cancel" }` on a `new_dates` booking before the deadline → `{ booking }`: a date books that date and window (`booked`); `cancel` ends it free. The crew gets `crew_day_dates_answered` ("1 of 3 picked a new date", in-app). `NO_PROPOSAL`, `CHANGED` (an older proposal id), `DEADLINE_PASSED` |
 | `POST /api/crew-days/uploads` | multipart: `photo` (JPEG, PNG or HEIC, ≤ 10 MB; HEIC converted), `booking_id`, `purpose` (`done`: any member of that booking's crew; `problem`: that booking's household) → 201 `{ path }`. Refuses `PHOTO_TOO_LARGE` (413), `PHOTO_UNREADABLE` / `PHOTO_TYPE` (415), `NOT_FOUND` (not your booking). |
 | `POST /api/crew-days/bookings/:bookingId/gate-ready` | on the day (from 6 PM the evening before) while the crew is coming: sets `gate_ready_at`, tells the crew → `{ booking }`. `TOO_EARLY`, `NOT_ON_ROUTE` |
-| `POST /api/crew-days/requests` | `{ service, home_id, months, note }` → the request (`requested`); tells the operator |
+| `POST /api/crew-days/requests` | `{ service, home_id? (default: their first home), months (["YYYY-MM", …] in the next six, or ["any"]), note? (≤ 500) }` → 201 `{ request }` (the `mine` request card; title "Holiday lights on Oak Street", the street without the house number); tells the operator (`crew_day_request_new`). No home: 422 `HOME_REQUIRED` ("Add your home first.") |
 
 ### Crew
 
@@ -221,9 +221,9 @@ create, edit, prices, dates, cancel and release; any business access for reading
 | `GET /api/crew-days/:id/crew` | any member. The crew's day (15): the whole form (`center`, `radius_m`, `included`, `prep_note`, `price_options`, `add_ons`, `price_from_cents`), the card fields, `can_edit`, `editable_fields`, `review_note`, `cancel_*`, `money { gross_cents, fee_rate, net_cents, charged_cents, scheduled_cents, paused_cents }` (`fee_rate` in percent), `needs_you { price_checks: [home], release_asks: [home] }`, `bookings: [home]` (active, in booking order), `ended: [home]` (cancelled or declined), `events` (visible to the crew). Home: `{ id, label ("Home 3"), details ("Two stories · clean the gutter guards"), line_items, price_cents, status, service_date, window_start, window_end, address_visible, address { line, city, state, zip, latitude, longitude } or null, first_name or null, access_note or null, route_position, eta, gate_ready_at, cant_get_in_at, release_asked_at, done_at, photo_count, charge_state, charge_due_at, problem, new_date_choice, created_at }`. The address and first name show from 6 PM the evening before the home's date through that day, and at once while its price is pending or offered (never the access note then). |
 | `POST /api/crew-days/:id/bookings/:bookingId/price` | owners and editors. `{ price_cents }` (the look-first option's price; add-ons keep theirs; total = both) → `price_offered`, or `{ decline: true, note }` → `declined` → `{ booking }` (the crew's home shape). `NO_PRICE_CHECK` otherwise |
 | `POST /api/crew-days/:id/bookings/:bookingId/release` | owners and editors; a home not yet started, at no charge (a household's release ask, or the crew's own call) → `cancelled` (`crew`) → `{ booking }`; the household is told |
-| `POST /api/crew-days/:id/invite-past` | invites households this business served with a `paid` booking within the area in the last 400 days, once each → `{ invited }` |
-| `POST /api/crew-days/:id/propose-dates` | `{ dates: [{ date, window_start, window_end }] (2–3), note? }` → every `booked` booking on the original date becomes `new_dates`; deadline = 24 h before the earliest date |
-| `POST /api/crew-days/:id/cancel` | `{ reason }` → the day and every active booking `cancelled`, nobody charged |
+| `POST /api/crew-days/:id/invite-past` | owners and editors, an open day: households this business served with a `paid` booking within the area in the last 400 days, not booked here and not blocked, once each per day (`crew_day_invite`, with their price when their past option's label is on this day's list) → `{ invited }`. The crew's day has `past_customers` (how many could be invited). |
+| `POST /api/crew-days/:id/propose-dates` | owners and editors. `{ dates: [{ date, window_start, window_end }] (2–3, after today, within 14 days), note? }` → every `booked` (or still-answering) home becomes `new_dates`; `crew_day.proposed_dates` = `{ id, dates, deadline_at (24 h before the earliest date's window), note, sent_at, homes }`; each household gets `crew_day_new_dates` → `{ crew_day }` (the crew's day). `NO_HOMES`, `DAY_NOT_OPEN` |
+| `POST /api/crew-days/:id/cancel` | owners and editors. `{ reason }` → the day `cancelled` (`cancelled_by: crew`) and every home not yet worked on `cancelled` (free; `crew_day_cancelled` to each); done or paid homes keep their state → `{ crew_day }`. The invitation then reads `cancelled`. |
 | `GET /api/crew-days/:id/route?date=` | any member. `{ crew_day_id, title, date, dates, timezone, window_start, window_end, total, done, homes: [home + photos, problem_photos, done_note] }` in the crew's order (`route_position`, then booking order), each with what the job window allows. Without `date`: the first of its dates from today. |
 | `POST /api/crew-days/:id/route/order` | any member. `{ booking_ids }` (homes on one date) → the route |
 | `POST /api/crew-days/bookings/:bookingId/on-the-way` | any member, on or after the home's date. `{ eta_start, eta_end }` (ISO instants, up to 4 hours apart) → `on_the_way` (the day becomes `in_progress`) → `{ booking }` (home shape); the household gets `crew_day_on_the_way`. Again on an `on_the_way` home: a new time (`crew_day_eta_changed`). `NOT_TODAY`, `NOT_ON_ROUTE` |
@@ -236,7 +236,8 @@ create, edit, prices, dates, cancel and release; any business access for reading
 - **Day card** (crew lists, and the base of every crew and operator day): `id`, `title`, `service`, `service_label`,
   `street_label`, `city`, `state`, `timezone`, `service_date`, `window_start`, `window_end` (`HH:MM`),
   `window_starts_at`, `window_ends_at`, `status`, `capacity`, `booked_count`, `spots_left`, `is_full`,
-  `booking_closes_at`, `is_closed`, `price_checks`, `release_asks`, `done_count`, `charged_cents`, `dates` (the dates
+  `booking_closes_at`, `is_closed`, `price_checks`, `release_asks`, `done_count`, `charged_cents`, `paid_out` (past
+  list only: every charge's money transferred to the crew), `dates` (the dates
   its active bookings are on, or its own date), `review_note` (declined only), `submitted_at`,
   `share { code, url, flyer_url }`, `updated_at`.
 - **Errors common to every route:** `UNAVAILABLE` (503, try again), `SERVER_ERROR` (500), `CHANGED` (409, someone
@@ -250,9 +251,9 @@ create, edit, prices, dates, cancel and release; any business access for reading
 | `GET /api/admin/crew-days/:id` | everything (21): `{ kind: "offer", day, money, bookings, events }` (every booking with `household { user_id, first_name, last_name, name, email }`, `address`, `line_items`, `price_cents`, `status`, `charge_state` (`not_yet`, `scheduled`, `paused`, `charged`, `partially_refunded`, `refunded`, `failed`, `none`), `invoice_id`, `problem`, …; every event) or `{ kind: "request", request }`; records `operator_viewed` (once per ten minutes per operator) |
 | `POST /api/admin/crew-days/:id/approve` | `{ note? }` → `open` → `{ crew_day }`; tells the crew. Refuses `NOT_WAITING`, `BUSINESS_NOT_READY`, `DAY_PASSED` (booking would already be closed) |
 | `POST /api/admin/crew-days/:id/decline` | `{ note }` (required, ≤ 500) → `declined` → `{ crew_day }`; tells the crew |
-| `POST /api/admin/crew-days/:id/cancel` | `{ reason }` |
+| `POST /api/admin/crew-days/:id/cancel` | `{ reason }` (required) → as the crew's cancel, `cancelled_by: operator`; the crew gets `crew_day_cancelled` too → `{ crew_day }` |
 | `POST /api/admin/crew-days/bookings/:bookingId/problem` | `{ action, amount_cents?, note }` → `{ booking }` (operator shape + `crew_day`). `note`: a note to the household (`crew_day_problem_update`) and on the timeline. `release`: resolved (`released`), the charge runs now ("Charge released: $180 paid."). `refund`: see §3 (`amount_cents` defaults to the whole price). `resolve`: resolved with a required note to both; the charge then runs on its schedule. `NO_OPEN_PROBLEM`, `REFUND_IN_FULL`, `NOTHING_TO_REFUND` |
-| `POST /api/admin/crew-days/requests/:id` | `{ action: offer_ready, crew_day_id }` or `{ action: no_crew, note }`; tells the household |
+| `POST /api/admin/crew-days/requests/:id` | `{ action: offer_ready, crew_day_id (an open day), note? }` or `{ action: no_crew, note }` → `{ request }` (operator request card); tells the household (`crew_day_request_answered`; an offer links `/crew-day/<code>`). The household's `mine` request shows `offer { crew_day_id, code }` while that day is open. |
 
 ## 5. Links
 
@@ -309,10 +310,12 @@ through the existing job launcher, so scenarios don't wait for the clock.
 - `crewDayCharges` (every 10 min, `backend/jobs/crewDayJobs.js`; `POST /api/internal/jobs/crew-day-charges` runs it
   once): §3. Each booking is claimed (`charge_claimed_at`) before charging; a claim older than 15 minutes is taken
   again.
-- `crewDayReminders` (every 15 min): `crew_day_reminder` at 6 PM local the evening before, once per booking.
-- `crewDayDeadlines` (every 15 min): new-date deadlines → unanswered bookings `cancelled` (`system`); price offers not
-  answered by `booking_closes_at` → `cancelled`; days whose bookings are all settled → `done`; access notes cleared
-  7 days after a booking ends.
+- `crewDayReminders` (every 15 min; `POST /api/internal/jobs/crew-day-reminders`): `crew_day_reminder` from 6 PM
+  local the evening before until the window starts, once per booking (`reminder_sent_at`; a new date clears it).
+- `crewDayDeadlines` (every 15 min; `POST /api/internal/jobs/crew-day-deadlines`): new-date deadlines → unanswered
+  bookings `cancelled` (`system`, `no_new_date`); price checks not answered by `booking_closes_at` → `cancelled`
+  (`price_not_answered`); open or started days whose dates have passed and whose homes are all paid, refunded,
+  cancelled or declined → `done` (`day_done`); access notes cleared 7 days after the booking's day.
 
 ## 8. Privacy checks on the server
 

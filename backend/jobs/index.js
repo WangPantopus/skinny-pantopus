@@ -756,6 +756,16 @@ function startJobs(options = {}) {
     scheduled: true,
     timezone: 'UTC',
   });
+  // Every 15 minutes: the evening-before reminders (6 PM local, once per booking), then the deadlines (unanswered new
+  // dates and price offers end free, finished days close, access notes are cleared a week after the day).
+  scheduleCron('4,19,34,49 * * * *', wrapJob('crewDayReminders', crewDayJobs.crewDayReminders), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+  scheduleCron('8,23,38,53 * * * *', wrapJob('crewDayDeadlines', crewDayJobs.crewDayDeadlines), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
 
   // ─── Assistant suggestions ───
   // Every 5 minutes: nudge and brief pushes held for quiet hours go out once they end,
