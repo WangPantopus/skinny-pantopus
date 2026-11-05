@@ -386,21 +386,23 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
         </Link>
       </StateCard>
     );
-  } else if (b.problem?.status === 'resolved' && b.problem.resolution) {
+  } else if (b.problem?.status === 'resolved' && b.problem.resolution && !(b.problem.resolution === 'resolved' && b.status === 'done')) {
     const r = b.problem;
     const total = b.price_cents ?? 0;
     const title =
       r.resolution === 'released'
         ? `Charge released: ${formatPrice(total)} paid`
         : r.resolution === 'refunded'
-          ? `Refunded ${formatPrice(r.refunded_cents || total)} to ${card(b)}`
+          ? b.status === 'cancelled'
+            ? `We cancelled the ${formatPrice(total)} charge. Nothing was charged.`
+            : `Refunded ${formatPrice(r.refunded_cents || total)} to ${card(b)}`
           : r.resolution === 'partial_refund'
             ? `Refunded ${formatPrice(r.refunded_cents)} of ${formatPrice(total)}`
             : 'Pantopus support resolved this';
     state = (
       <StateCard tone="success" icon={ShieldCheck} title={title}>
         {r.resolved_at ? <Body>Pantopus support closed this case on {formatInstantDate(r.resolved_at, tz)}.</Body> : null}
-        {b.invoice_id ? (
+        {b.invoice_id && ['charged', 'partially_refunded', 'refunded'].includes(b.charge.state) ? (
           <Link href={`/app/invoice/${encodeURIComponent(b.invoice_id)}`} className="text-[0.9375rem] font-semibold text-app-link">
             See receipt
           </Link>
@@ -503,6 +505,9 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
             <p className="text-[0.9375rem] leading-[1.375rem]">{b.done_note}</p>
           </div>
         ) : null}
+        {b.problem?.status === 'resolved' && b.problem.resolved_at ? (
+          <Body>Pantopus support closed your case on {formatInstantDate(b.problem.resolved_at, tz)}. Your charge runs as planned.</Body>
+        ) : null}
         {price && due ? (
           <Body>
             We&apos;ll charge {price} {formatInstantDate(due, tz) === formatInstantDate(new Date().toISOString(), tz) ? 'today' : 'tomorrow'} at {formatInstantTime(due, tz)} unless you tell us something needs attention.
@@ -559,16 +564,26 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
   } else if (b.status === 'refunded') {
     state = <StateCard tone="neutral" icon={CreditCard} title={`Refunded ${formatPrice(b.charge.refunded_cents || b.price_cents || 0)} to ${card(b)}`} />;
   } else if (ended) {
+    // Who ended it and how, in honest words: the day called off, a home released, the deadline, an unpriced home.
+    const dayCancelled = b.crew_day.status === 'cancelled';
     const who =
       b.status === 'declined'
         ? `${crew} can't take your home this time. Nothing was charged.`
         : b.cancelled_by === 'household'
           ? 'You cancelled. Nothing was charged.'
           : b.cancelled_by === 'crew'
-            ? `${crew} cancelled. Nothing was charged.`
+            ? dayCancelled
+              ? `${crew} cancelled this day. Nothing was charged.`
+              : b.release_asked_at
+                ? `${crew} released your home at no charge.`
+                : `${crew} cancelled your booking. Nothing was charged.`
             : b.cancelled_by === 'operator'
-              ? 'Pantopus cancelled this Crew Day. Nothing was charged.'
-              : 'No new date was picked, so this booking was cancelled. Nothing was charged.';
+              ? dayCancelled
+                ? 'Pantopus cancelled this Crew Day. Nothing was charged.'
+                : 'Pantopus support cancelled this booking. Nothing was charged.'
+              : b.cancel_reason === 'price_not_answered'
+                ? `${crew} didn't confirm your price before booking closed, so this request ended. Nothing was charged.`
+                : 'No new date was picked, so this booking was cancelled. Nothing was charged.';
     state = (
       <StateCard tone="neutral" icon={CalendarX} title={who}>
         <div className="flex flex-col gap-2.5">

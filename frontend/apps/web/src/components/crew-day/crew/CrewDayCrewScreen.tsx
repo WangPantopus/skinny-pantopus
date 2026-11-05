@@ -298,9 +298,16 @@ export default function CrewDayCrewScreen({ businessId, crewDayId }: { businessI
             ? "This Crew Day isn't one of your business's."
             : "We couldn't load this Crew Day. Check your connection and try again."}
         </p>
-        <Link href={dashboard} className="text-sm font-semibold text-violet-700 hover:underline dark:text-violet-300">
-          Back to Crew Days
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          {(query.error as { statusCode?: number } | null)?.statusCode !== 404 ? (
+            <button type="button" onClick={() => void query.refetch()} className={SECONDARY}>
+              Try again
+            </button>
+          ) : null}
+          <Link href={dashboard} className="text-sm font-semibold text-violet-700 hover:underline dark:text-violet-300">
+            Back to Crew Days
+          </Link>
+        </div>
       </div>
     );
   }

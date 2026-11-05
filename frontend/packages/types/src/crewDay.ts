@@ -480,3 +480,93 @@ export interface CrewDayForm {
   submit?: boolean;
   repeat_of?: string;
 }
+
+// ─── Operator (Pantopus support, web only) ──────────────────────────────
+
+export type AdminCrewDayTab = 'waiting' | 'open' | 'today' | 'problems' | 'done' | 'requests';
+
+/** The crew as the operator sees it beside a day. */
+export interface AdminCrewDayCrew extends CrewDayCrew {
+  published: boolean;
+  payouts_enabled: boolean;
+  founding: boolean;
+  past_days?: number;
+  problems?: number;
+}
+
+/** A day in the operator's lists: the crew's day without its homes, plus the crew's standing. */
+export type AdminCrewDayItem = Omit<CrewDayCrewView, 'crew' | 'money' | 'needs_you' | 'bookings' | 'ended' | 'events' | 'past_customers'> & {
+  crew: AdminCrewDayCrew;
+};
+
+/** A booking as the operator sees it: everything, for support. */
+export interface AdminCrewDayBooking {
+  id: string;
+  crew_day_id: string;
+  household: { user_id: string; first_name: string | null; last_name: string | null; name: string | null; email: string | null };
+  address: { line: string; city: string | null; state: string | null; zip: string | null };
+  option_id: string;
+  add_on_ids: string[];
+  line_items: CrewDayLineItem[];
+  price_cents: number | null;
+  status: CrewDayBookingStatus;
+  service_date: string;
+  window_start: string;
+  window_end: string;
+  access_note: string | null;
+  charge_state: CrewDayChargeState;
+  charge_due_at: string | null;
+  invoice_id: string | null;
+  charge_failure: string | null;
+  refunded_cents: number;
+  paid_at: string | null;
+  done_at: string | null;
+  problem: (Omit<CrewDayProblem, 'refunded_cents'> & { refunded_cents?: number }) | null;
+  cancelled_by: 'household' | 'crew' | 'operator' | 'system' | null;
+  cancelled_at: string | null;
+  created_at: string;
+  photos?: CrewDayPhoto[];
+  problem_photos?: CrewDayPhoto[];
+  done_note?: string | null;
+  /** The Problems tab adds these. */
+  crew_day?: { id: string; title: string; timezone: string; business_user_id: string };
+  crew?: AdminCrewDayCrew;
+}
+
+/** A household's street request as the operator sees it (first name only). */
+export interface AdminCrewDayRequest {
+  id: string;
+  kind: 'request';
+  title: string;
+  service: CrewDayService;
+  service_label: string;
+  street_label: string;
+  city: string | null;
+  state: string | null;
+  months: string[];
+  note: string | null;
+  status: 'requested' | 'offer_ready' | 'no_crew';
+  asked_by: { user_id: string; first_name: string | null };
+  answer_note: string | null;
+  answered_at: string | null;
+  offer_crew_day_id: string | null;
+  created_at: string;
+}
+
+/** GET /api/admin/crew-days?tab= */
+export interface AdminCrewDayList {
+  tab: AdminCrewDayTab;
+  counts: Record<AdminCrewDayTab, number>;
+  items: Array<AdminCrewDayItem | AdminCrewDayBooking | AdminCrewDayRequest>;
+}
+
+/** GET /api/admin/crew-days/:id */
+export type AdminCrewDayDetail =
+  | {
+      kind: 'offer';
+      day: AdminCrewDayItem;
+      money: CrewDayCrewView['money'];
+      bookings: AdminCrewDayBooking[];
+      events: Array<CrewDayEvent & { booking_id: string | null; visible_to: string }>;
+    }
+  | { kind: 'request'; request: AdminCrewDayRequest };
