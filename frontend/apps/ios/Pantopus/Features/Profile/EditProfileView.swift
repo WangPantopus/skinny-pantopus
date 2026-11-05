@@ -197,6 +197,9 @@ public struct EditProfileView: View {
             }
         )
         .formShakeOnChange(of: viewModel.shakeTrigger)
+        // With the keyboard up, the form scrolls only a focused field's text above the Save bar, leaving the lower
+        // half of the field's box under the bar; a margin under the form's content keeps the whole box above it.
+        .contentMargins(.bottom, Spacing.s4, for: .scrollContent)
         .accessibilityIdentifier("editProfileShell")
     }
 }
