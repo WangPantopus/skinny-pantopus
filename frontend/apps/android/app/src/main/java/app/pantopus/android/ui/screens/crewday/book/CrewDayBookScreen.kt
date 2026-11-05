@@ -8,10 +8,12 @@ import android.provider.CalendarContract
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -195,7 +197,8 @@ private fun PriceStep(
                         PlanTextButton(
                             title = "Change",
                             onClick = viewModel::changeHome,
-                            modifier = Modifier.padding(start = Spacing.s2).testTag("crewDayPriceChangeAddress").fillMaxWidth(0.3f),
+                            // As wide as its word: a share of the row broke "Change" in two at 200% text.
+                            modifier = Modifier.padding(start = Spacing.s2).testTag("crewDayPriceChangeAddress").width(IntrinsicSize.Max),
                         )
                     }
                 }
@@ -470,7 +473,7 @@ private fun ReviewStep(
                         PlanTextButton(
                             title = "Change",
                             onClick = { choosingCard = true },
-                            modifier = Modifier.fillMaxWidth(0.35f).testTag("crewDayReviewChangeCard"),
+                            modifier = Modifier.width(IntrinsicSize.Max).testTag("crewDayReviewChangeCard"),
                         )
                     }
                 } else {
