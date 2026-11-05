@@ -59,8 +59,10 @@ function shareFor(day, stats) {
   };
 }
 
+// A refund Pantopus support made without a reported problem shows as a resolved case with no kind, so every app
+// shows its outcome in words ("Refunded $60 of $180").
 function problemFor(b) {
-  if (!b.problem_kind) return null;
+  if (!b.problem_kind && !b.problem_resolution) return null;
   return { status: b.problem_status, kind: b.problem_kind, note: b.problem_note, opened_at: b.problem_opened_at,
     due_at: b.problem_due_at, resolved_at: b.problem_resolved_at, resolution: b.problem_resolution,
     refunded_cents: b.refunded_cents || 0 };
