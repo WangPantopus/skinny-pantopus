@@ -63,6 +63,11 @@ public enum LaunchFeature: String, CaseIterable, Sendable {
     /// four-step card flow. Needs `mailbox` on too. A card that comes is
     /// drawn as a card either way, as on the web.
     case holidayCards = "holiday_cards"
+    /// 13. Crew Day (founder decision, 2026-11-05): a local crew's street
+    /// day that each household books, approves and pays for. The side menu's
+    /// Crew Days rows, the Today cards, the invitation link and every Crew
+    /// Day screen and notice.
+    case crewDay = "crew_day"
 }
 
 /// Read-only switches for the features cut from the first launch.
@@ -128,6 +133,10 @@ public enum LaunchFeatures {
 
     public static var holidayCards: Bool {
         isEnabled(.holidayCards)
+    }
+
+    public static var crewDay: Bool {
+        isEnabled(.crewDay)
     }
 
     /// Parses a comma-separated key list ("all" enables every feature).
