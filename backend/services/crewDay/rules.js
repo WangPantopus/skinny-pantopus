@@ -123,6 +123,12 @@ function formatDay(date, { long = false } = {}) {
   return at.toFormat(long ? 'cccc, LLL d' : 'ccc, LLL d');
 }
 
+// "December 2026" from "2026-12"
+function formatMonth(month) {
+  const at = DateTime.fromFormat(String(month), 'yyyy-MM');
+  return at.isValid ? at.toFormat('LLLL yyyy') : '';
+}
+
 // "9 AM", "9:30 AM"
 function formatClock(time) {
   const [h, m] = hhmm(time).split(':').map(Number);
@@ -236,6 +242,7 @@ module.exports = {
   cancelCutoffAt,
   todayIn,
   formatDay,
+  formatMonth,
   formatWindow,
   formatInstantWindow,
   formatDayRelative,
