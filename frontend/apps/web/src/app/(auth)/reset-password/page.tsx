@@ -1,19 +1,19 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import PantopusBadge from '@/components/PantopusBadge';
 import AuthForm from '@/components/auth/AuthForm';
 import * as api from '@pantopus/api';
 import { authPageHref, readAuthRedirectQuery, safeRedirectPath, extractApiError } from '@/lib/auth-utils';
 import { rememberSignInHandoff } from '@/lib/email-verified-handoff';
+import WithSearchParams, { type SearchParamsProps } from '@/components/auth/WithSearchParams';
 
 const PASSWORD_MIN_LENGTH = 12;
 
-function ResetPasswordPageContent() {
+function ResetPasswordPageContent({ searchParams }: SearchParamsProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const loginHref = authPageHref('/login', safeRedirectPath(readAuthRedirectQuery(searchParams), '/app/place'));
   const [tokenFromHash, setTokenFromHash] = useState('');
   const [emailFromHash, setEmailFromHash] = useState('');
@@ -183,9 +183,5 @@ function ResetPasswordPageContent() {
 }
 
 export default function ResetPasswordPage() {
-  return (
-    <Suspense>
-      <ResetPasswordPageContent />
-    </Suspense>
-  );
+  return <WithSearchParams Content={ResetPasswordPageContent} />;
 }

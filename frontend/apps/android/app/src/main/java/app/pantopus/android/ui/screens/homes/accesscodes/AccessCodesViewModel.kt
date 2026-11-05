@@ -7,6 +7,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pantopus.android.data.api.models.homes.HomeAccessSecretDto
+import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.ui.screens.shared.list_of_rows.ChipStripConfig
@@ -28,6 +29,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/**
+ * What the screens say when the server refuses a read with 403: the person no longer has permission (as the
+ * web says), not that loading failed. Mirrors iOS `AccessCodesRefusal`.
+ */
+object AccessCodesRefusal {
+    const val LIST = "You don't have permission to view this household's access codes."
+    const val CODE = "You don't have permission to view this access code."
+
+    fun matches(error: NetworkError): Boolean = error is NetworkError.Forbidden
+}
 
 /** Stable chip ids. */
 object AccessCodesChip {
@@ -205,7 +217,13 @@ class AccessCodesViewModel
                         }
                         is NetworkResult.Failure -> {
                             _state.value =
-                                ListOfRowsUiState.Error("Couldn't load access codes. Try again.")
+                                ListOfRowsUiState.Error(
+                                    if (AccessCodesRefusal.matches(result.error)) {
+                                        AccessCodesRefusal.LIST
+                                    } else {
+                                        "Couldn't load access codes. Try again."
+                                    },
+                                )
                         }
                     }
                 }

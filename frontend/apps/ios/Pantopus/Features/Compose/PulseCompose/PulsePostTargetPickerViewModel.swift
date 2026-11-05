@@ -29,6 +29,10 @@ public final class PulsePostTargetPickerViewModel {
     public private(set) var state: PulsePostTargetPickerState = .loading
     public private(set) var homes: [PulseHomeTargetOption] = []
     public private(set) var isLocating = false
+    /// The step's screens: one rebuilt by a fold or a turn reads nothing again (`load()`).
+    let screens = PulseScreenRebuilds()
+    /// The last read ran to its end (a screen that leaves mid-read cancels it).
+    @ObservationIgnored private var lastLoadFinished = false
 
     private let api: APIClient
     private let locationProvider: any LocationProviding
@@ -42,6 +46,9 @@ public final class PulsePostTargetPickerViewModel {
     }
 
     public func load() async {
+        if lastLoadFinished, screens.isRebuilding { return }
+        lastLoadFinished = false
+        defer { lastLoadFinished = !Task.isCancelled }
         state = .loading
         do {
             let homesResponse: MyHomesResponse = try await api.request(HomesEndpoints.myHomes())
@@ -56,6 +63,8 @@ public final class PulsePostTargetPickerViewModel {
             }
             state = .ready
         } catch {
+            // A fold or a turn that takes the screen away mid-read cancels it; the rebuilt screen reads again.
+            guard !Task.isCancelled else { return }
             state = .error(error.localizedDescription)
         }
     }

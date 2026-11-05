@@ -28,7 +28,10 @@ import { HERO_ID, skyPhaseScript } from './_components/skyScene';
 import styles from './_components/home.module.css';
 
 const serif = Newsreader({ subsets: ['latin'], style: ['normal', 'italic'], axes: ['opsz'], variable: '--home-serif', display: 'swap' });
-const mono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500'], variable: '--home-mono', display: 'swap' });
+// Plex Mono's fallbacks are in home.module.css (adjustFontFallback is off): next/font's Arial-based one has wider
+// capitals than Plex Mono, so when the page painted before Plex Mono arrived, the hero's eyebrow wrapped
+// differently and the hero moved when the font landed. A Courier New face with Plex Mono's advance stands in.
+const mono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500'], variable: '--home-mono', display: 'swap', adjustFontFallback: false });
 
 const TITLE = 'Pantopus · Your home and neighborhood, connected';
 const DESCRIPTION =

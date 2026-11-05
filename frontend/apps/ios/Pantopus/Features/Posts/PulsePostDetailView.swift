@@ -178,10 +178,14 @@ public struct PulsePostDetailView: View {
         .task { await viewModel.load() }
         .task { await viewModel.loadNearbyProviders() }
         .refreshesAfterAssistant(postId: viewModel.postId) { await viewModel.refresh() }
-        .onAppear { isVisible = true }
+        .onAppear {
+            isVisible = true
+            viewModel.screens.screenDidAppear()
+        }
         .onDisappear {
             isVisible = false
             showsShareSheet = false
+            viewModel.screens.screenDidDisappear()
         }
         .task(id: canPollReplies) {
             guard canPollReplies else { return }
@@ -281,6 +285,8 @@ public struct PulsePostDetailView: View {
             topBarAction: overflowAction,
             topBarSecondaryAction: viewModel.canSharePost ? shareAction : nil,
             scrollPlace: viewModel.scrollPlace,
+            returnsToComposer: viewModel.returnsToComposer,
+            onComposerFocusChange: { [viewModel] focused in viewModel.isComposing = focused },
             nearbyProviders: viewModel.nearbyProviders,
             onOpenBusiness: onOpenBusiness,
             onBack: onBack,

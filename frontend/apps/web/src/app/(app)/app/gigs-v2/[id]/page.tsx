@@ -11,6 +11,8 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import dynamic from 'next/dynamic';
+// The mini map below renders react-leaflet directly, so it brings Leaflet's stylesheet itself.
+import 'leaflet/dist/leaflet.css';
 import * as api from '@pantopus/api';
 import { getAuthToken } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';

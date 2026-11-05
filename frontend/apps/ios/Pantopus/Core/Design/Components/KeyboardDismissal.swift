@@ -9,7 +9,9 @@
 //  return. Composers that keep typing after a tap (chat's Send, a search
 //  box's clear button) opt out with `keepsKeyboardOnTap()`; a list under a
 //  search box, or a post while its reply is typed, takes only the closing
-//  tap with `closesKeyboardFirst`.
+//  tap with `closesKeyboardFirst`. When the keyboard moves (the iPhone Duo
+//  folded or turned while typing), the text being typed scrolls back into
+//  view.
 //
 
 import SwiftUI
@@ -115,6 +117,7 @@ final class KeyboardTapDismissal: NSObject, UIGestureRecognizerDelegate {
 
     func install(in window: UIWindow) {
         _ = TextEditingState.shared
+        _ = FocusedTextKeeper.shared
         guard !(window.gestureRecognizers ?? []).contains(where: { $0 is ClosingTap }) else { return }
         let tap = ClosingTap(target: self, action: #selector(closeKeyboard(_:)))
         tap.cancelsTouchesInView = false
@@ -159,6 +162,48 @@ final class KeyboardTapDismissal: NSObject, UIGestureRecognizerDelegate {
         shouldRecognizeSimultaneouslyWith _: UIGestureRecognizer
     ) -> Bool {
         true
+    }
+}
+
+/// Keeps the text being typed in view when the keyboard moves. SwiftUI scrolls
+/// a form to its text box when the keyboard comes up, but not when the screen
+/// changes size under it: folding the iPhone Duo to tabletop while typing left
+/// the box behind the keyboard, with nothing to show what was typed. Once the
+/// keyboard has settled, the scroll view around the box brings the cursor into
+/// view; a box already in view doesn't move.
+@MainActor
+final class FocusedTextKeeper {
+    static let shared = FocusedTextKeeper()
+
+    private init() {
+        // Lives as long as the app, like the typing observers above.
+        _ = NotificationCenter.default.addObserver(
+            forName: UIResponder.keyboardDidChangeFrameNotification, object: nil, queue: .main
+        ) { _ in
+            Task { @MainActor in FocusedTextKeeper.shared.revealTypedText() }
+        }
+    }
+
+    private func revealTypedText() {
+        guard let box = FirstResponder.current as? UIView, let input = box as? UITextInput, box.window != nil else {
+            return
+        }
+        // A one-line field shows whole; in a longer text view, the line being typed.
+        var target = box.bounds
+        if box is UITextView, let selection = input.selectedTextRange {
+            target = input.caretRect(for: selection.end).insetBy(dx: 0, dy: -Spacing.s3)
+        }
+        var view = box.superview
+        while let current = view {
+            if let scrollView = current as? UIScrollView, !(current is UITextView), scrollView.isScrollEnabled {
+                scrollView.scrollRectToVisible(
+                    box.convert(target, to: scrollView).insetBy(dx: 0, dy: -Spacing.s2),
+                    animated: true
+                )
+                return
+            }
+            view = current.superview
+        }
     }
 }
 

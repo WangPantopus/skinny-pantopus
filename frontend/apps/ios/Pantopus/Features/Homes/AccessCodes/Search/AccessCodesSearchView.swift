@@ -35,6 +35,12 @@ struct AccessCodesSearchView: View {
                     headline: "No matching codes",
                     subcopy: "Try a different label or category, or check the spelling."
                 )
+                : viewModel.accessDenied
+                ? EmptyStateContent(
+                    icon: .alertCircle,
+                    headline: "No permission to view codes",
+                    subcopy: "Your search is kept. Try again once a household manager gives you access."
+                )
                 : EmptyStateContent(
                     icon: .alertCircle,
                     headline: "Couldn't load access codes",

@@ -14,6 +14,12 @@ public struct PulsePostDetailLoadedContent: View {
     private let topBarSecondaryAction: ContentDetailTopBarAction?
     /// Where the reader was down the post, kept by its model through a fold.
     private let scrollPlace: ScrollPlace?
+    /// The comment box had the keyboard as the last screen for this post left (a fold or a turn), so this one gives
+    /// it back. Read once, as the screen is made.
+    @State private var returnsToComposer: Bool
+    /// The comment box, the one text field under the post, has the keyboard.
+    @FocusState private var composerFocused: Bool
+    private let onComposerFocusChange: (@MainActor (Bool) -> Void)?
     /// Organically matched local businesses — empty hides the card.
     private let nearbyProviders: [NearbyProviderRow]
     private let onOpenBusiness: @MainActor (String) -> Void
@@ -41,6 +47,8 @@ public struct PulsePostDetailLoadedContent: View {
         topBarAction: ContentDetailTopBarAction? = nil,
         topBarSecondaryAction: ContentDetailTopBarAction? = nil,
         scrollPlace: ScrollPlace? = nil,
+        returnsToComposer: Bool = false,
+        onComposerFocusChange: (@MainActor (Bool) -> Void)? = nil,
         nearbyProviders: [NearbyProviderRow] = [],
         onOpenBusiness: @escaping @MainActor (String) -> Void = { _ in },
         onBack: @escaping @MainActor () -> Void = {},
@@ -63,6 +71,8 @@ public struct PulsePostDetailLoadedContent: View {
         self.topBarAction = topBarAction
         self.topBarSecondaryAction = topBarSecondaryAction
         self.scrollPlace = scrollPlace
+        _returnsToComposer = State(initialValue: returnsToComposer)
+        self.onComposerFocusChange = onComposerFocusChange
         self.nearbyProviders = nearbyProviders
         self.onOpenBusiness = onOpenBusiness
         self.onBack = onBack
@@ -176,9 +186,24 @@ public struct PulsePostDetailLoadedContent: View {
                 ) { userId in
                     onOpenProfile(userId)
                 }
+                .focused($composerFocused)
             },
             cta: { InlineReplyCTA() }
         )
+        .onChange(of: composerFocused) { _, focused in onComposerFocusChange?(focused) }
+        .task { await returnToComposer() }
+    }
+
+    /// A fold or a turn rebuilt the screen while the comment box had the keyboard: it gets it back, once the box is
+    /// in the window (closed, the window takes a moment to settle on the outer screen).
+    private func returnToComposer() async {
+        guard returnsToComposer else { return }
+        returnsToComposer = false
+        for delayMs: UInt64 in [80, 170, 250, 500] {
+            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+            guard !Task.isCancelled, !composerFocused else { return }
+            composerFocused = true
+        }
     }
 }
 

@@ -319,6 +319,8 @@ private struct FormBottomCTA: View {
         }
         .background(isEnabled ? Theme.Color.primarySolid : Theme.Color.appBorderStrong)
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+        // Half folded like a book, on one side of the iPhone Duo's fold; the bar itself stays full width.
+        .besideFold()
         .padding(.horizontal, Spacing.s4)
         .padding(.vertical, Spacing.s3)
         .background(Theme.Color.appSurface)

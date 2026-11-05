@@ -25,6 +25,8 @@ public final class PulseComposeSession {
     fileprivate var step: PulseComposeFlowStep
     /// The draft step's form, for the target and purpose it was made for.
     @ObservationIgnored private var draft: (step: PulseComposeFlowStep, model: PulseComposeViewModel)?
+    /// The first step's homes, read once per visit to it: a screen rebuilt by a fold or a turn shows them again.
+    @ObservationIgnored private var targetPicker: PulsePostTargetPickerViewModel?
 
     /// - Parameter editing: The composer edits a saved post, which opens on its draft.
     public init(editing: Bool = false) {
@@ -37,6 +39,25 @@ public final class PulseComposeSession {
         let model = make()
         draft = (step, model)
         return model
+    }
+
+    /// The first step's homes for this visit: the ones read earlier, or new ones.
+    fileprivate func targetPickerModel() -> PulsePostTargetPickerViewModel {
+        if let targetPicker { return targetPicker }
+        let model = PulsePostTargetPickerViewModel()
+        targetPicker = model
+        return model
+    }
+
+    /// Leaving the first step: coming back to it reads the homes again, as before.
+    fileprivate func leaveTargetPicker() {
+        targetPicker = nil
+    }
+
+    /// A fold or a turn moved the composer to the tab's other layout: its rebuilt screens read nothing again.
+    func screensMoved() {
+        draft?.model.screens.screensMoved()
+        targetPicker?.screens.screensMoved()
     }
 }
 
@@ -95,6 +116,7 @@ public struct PulseComposeFlowView: View {
             switch current.step {
             case .targetPicker:
                 PulsePostTargetPickerView(
+                    viewModel: current.targetPickerModel(),
                     onSelect: handleTargetSelected,
                     onCancel: onCancel,
                     hidesNetworkTarget: taskShare != nil
@@ -146,6 +168,7 @@ public struct PulseComposeFlowView: View {
     }
 
     private func handleTargetSelected(_ target: PulsePostingTarget) {
+        current.leaveTargetPicker()
         // A task share always lands on the Local Update draft — RN skips
         // the purpose grid entirely (`gig/[id].tsx:541-542`).
         if taskShare != nil {

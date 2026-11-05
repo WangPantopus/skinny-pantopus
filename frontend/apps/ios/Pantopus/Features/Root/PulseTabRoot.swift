@@ -95,6 +95,19 @@ public struct PulseTabRoot: View {
     }
 
     public var body: some View {
+        // A fold or a turn replaces the layout inside (one stack or two columns); this stays, so it sees the change.
+        ZStack {
+            tabContent
+        }
+        .onChange(of: rootTabs.selected, initial: true) { _, selected in
+            detailModels.tabSelected(selected == RootTab.pulseHome)
+        }
+        .onChange(of: isSideBySide) { _, _ in
+            if detailModels.layoutChanged() { feed.screens.screensMoved() }
+        }
+    }
+
+    private var tabContent: some View {
         navigationLayout
             .accessibilityIdentifier("pulseTabRoot")
             .onChange(of: retainedRoutes) { _, routes in
@@ -395,6 +408,8 @@ private final class PulseDetailModels {
     private var composeSessions: [PulseRoute: PulseComposeSession] = [:]
     private var conversations: [InboxConversationDestination: ChatConversationViewModel] = [:]
     private var profiles: [PulseRoute: PublicProfileViewModel] = [:]
+    /// Since when the tab has been the one picked; nil while another is.
+    private var selectedSince: Date?
 
     func model(postId: String, userId: String) -> PulsePostDetailViewModel {
         if self.userId != userId { retain(routes: [], userId: userId) }
@@ -434,6 +449,21 @@ private final class PulseDetailModels {
         let model = PublicProfileViewModel(userId: profileId)
         profiles[route] = model
         return model
+    }
+
+    /// The tab was picked, or another one was.
+    func tabSelected(_ isSelected: Bool) {
+        selectedSince = isSelected ? Date() : nil
+    }
+
+    /// The tab moved its screens to its other layout. With the tab up a moment, that is a fold or a turn (not the
+    /// tab coming back): the open screens move, and the ones under them show for a moment as the stack is rebuilt.
+    /// None of them reads again for it. Returns whether it was such a move.
+    func layoutChanged() -> Bool {
+        guard let selectedSince, Date().timeIntervalSince(selectedSince) >= 0.5 else { return false }
+        models.values.forEach { $0.screens.screensMoved() }
+        composeSessions.values.forEach { $0.screensMoved() }
+        return true
     }
 
     func retain(routes: [PulseRoute], userId: String) {

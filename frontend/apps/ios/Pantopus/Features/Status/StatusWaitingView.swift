@@ -120,6 +120,8 @@ public struct StatusWaitingView: View {
                     .accessibilityIdentifier("statusSecondaryCta")
                 }
             }
+            // Half folded like a book, on one side of the iPhone Duo's fold; the bar itself stays full width.
+            .besideFold()
             .padding(.horizontal, Spacing.s4)
             .padding(.top, Spacing.s3)
             .padding(.bottom, Spacing.s6)

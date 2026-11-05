@@ -46,6 +46,10 @@ const FIRST_CONTENT_READS = FIRST_CONTENT_ENABLED ? FIRST_CONTENT_ROUTES : {};
  * first; a failed recovery starts none. A tab document whose access cookie
  * came with it (nothing to recover) at its plain address was rendered with
  * its first content, so the reads that content covers are not asked again.
+ *
+ * At low fetch priority: the page's scripts load as async scripts (low
+ * priority) and content waits for them, so on a slow link these reads must
+ * not take the bandwidth first. A browser without fetch priorities ignores it.
  */
 export const EARLY_READS_SCRIPT = `(function(){try{
 if(!/(?:^|;\\s*)pantopus_session=1(?:;|$)/.test(document.cookie))return;
@@ -57,5 +61,5 @@ var urls=${JSON.stringify(EARLY_SHELL_READS)}.concat((routes[p]||[]).filter(func
 var k='';try{k=localStorage.getItem('${SESSION_CHANGE_KEY}')||'';}catch(e){}
 var ready=rec&&rec.promise?rec.promise:Promise.resolve({status:'success'});
 var e=window.__pantopusEarly={marker:k,at:Date.now(),reads:{}};
-urls.forEach(function(u){e.reads[u]=ready.then(function(o){return o&&o.status==='success'?fetch(u,{credentials:'same-origin',headers:{'Accept':'application/json, text/plain, */*','x-token-transport':'cookie'}}):null;}).catch(function(){return null;});});
+urls.forEach(function(u){e.reads[u]=ready.then(function(o){return o&&o.status==='success'?fetch(u,{credentials:'same-origin',priority:'low',headers:{'Accept':'application/json, text/plain, */*','x-token-transport':'cookie'}}):null;}).catch(function(){return null;});});
 }catch(x){}})();`;

@@ -206,8 +206,10 @@ public struct PulseComposeView: View {
             }
         }
         .onAppear {
+            viewModel.screens.screenDidAppear()
             Analytics.track(.screenPulseComposeViewed(intent: viewModel.activeIntent.rawValue))
         }
+        .onDisappear { viewModel.screens.screenDidDisappear() }
         .onChange(of: viewModel.shouldDismiss) { _, newValue in
             guard newValue else { return }
             let postId: String? = {
@@ -259,7 +261,8 @@ public struct PulseComposeView: View {
         case .ready:
             PulseComposeContent(
                 state: viewModel.contentState,
-                actions: actions
+                actions: actions,
+                returnsToField: viewModel.returnsToField
             )
             // Words the AI suggested are checked before they go out under the person's name.
             .alert(
@@ -302,7 +305,8 @@ public struct PulseComposeView: View {
                 showsDocumentPicker = true
             },
             onRemovePhoto: { viewModel.remove(photo: $0) },
-            onBodyEditingEnded: { Task { await viewModel.runPrecheck() } },
+            onBodyEditingEnded: { Task { await viewModel.bodyEditingEnded() } },
+            onKeyboardFieldChange: { viewModel.keyboardField = $0 },
             onDismissPrecheckNudge: { viewModel.precheckNudge = nil },
             onAddLocation: { showsPlacePicker = true },
             onClearLocation: { viewModel.clearPlaceTag() },

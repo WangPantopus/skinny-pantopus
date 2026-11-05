@@ -29,6 +29,8 @@ final class AccessCodesSearchViewModel {
     /// True only while the one-shot corpus fetch is in flight.
     private(set) var isLoading = false
     private(set) var errorMessage: String?
+    /// The last read was refused (403): the person may not view these codes.
+    private(set) var accessDenied = false
 
     private var corpus: [HomeAccessSecretDTO] = []
     private var loadedOnce = false
@@ -68,6 +70,7 @@ final class AccessCodesSearchViewModel {
         let generation = readGeneration
         isLoading = true
         errorMessage = nil
+        accessDenied = false
         defer { if generation == readGeneration { isLoading = false } }
         do {
             let response: HomeAccessSecretsResponse = try await api.request(
@@ -79,7 +82,8 @@ final class AccessCodesSearchViewModel {
         } catch {
             guard generation == readGeneration, !Task.isCancelled else { return }
             corpus = []
-            errorMessage = "Couldn't load access codes. Try again."
+            accessDenied = AccessCodesRefusal.matches(error)
+            errorMessage = accessDenied ? AccessCodesRefusal.list : "Couldn't load access codes. Try again."
         }
     }
 
@@ -89,6 +93,7 @@ final class AccessCodesSearchViewModel {
         loadedOnce = false
         isLoading = true
         errorMessage = nil
+        accessDenied = false
     }
 
     // MARK: - Intents
