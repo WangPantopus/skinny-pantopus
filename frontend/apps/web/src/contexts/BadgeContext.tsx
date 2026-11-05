@@ -84,6 +84,11 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
     refetchOnWindowFocus: true,
   });
   const socketNotifications = useRef<number | null>(null);
+  // When this session's last full badge read succeeded, and the notification
+  // total it saw. The socket's own badge:update on connect carries the same
+  // counts, so connecting right after a read does not read them again.
+  const lastPolledAt = useRef(0);
+  const polledNotifications = useRef<number | null>(null);
   const fallbackRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const active = useRef(true);
   const revision = useRef(0);
@@ -105,6 +110,13 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
         launchFeatures.openGigs ? api.gigs.getReceivedOffers(undefined, { suppressDevErrorOverlay: true }) : Promise.resolve({ offers: [] }),
       ]);
       if (!active.current || marker !== api.authSessionMarker() || startedRevision !== revision.current) return true;
+      const succeeded = notifRes.status === 'fulfilled' && Boolean(notifRes.value)
+        && chatRes.status === 'fulfilled' && Boolean(chatRes.value?.stats);
+      if (succeeded) lastPolledAt.current = Date.now();
+      if (notifRes.status === 'fulfilled' && notifRes.value) {
+        const value = notifRes.value as { count?: number; total?: number };
+        polledNotifications.current = Number(value.total ?? value.count) || 0;
+      }
       setCounts((previous) => {
         const next = { ...previous };
         if (notifRes.status === 'fulfilled' && notifRes.value) {
@@ -123,8 +135,7 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
         if (offersRes.status === 'fulfilled' && Array.isArray(offersRes.value?.offers)) next.pendingOffers = offersRes.value.offers.filter((offer: { status?: string }) => offer.status === 'pending').length;
         return next;
       });
-      return notifRes.status === 'fulfilled' && Boolean(notifRes.value)
-        && chatRes.status === 'fulfilled' && Boolean(chatRes.value?.stats);
+      return succeeded;
     })().finally(() => { if (pollInFlight.current?.promise === promise) pollInFlight.current = null; });
     pollInFlight.current = { marker, promise };
     return promise;
@@ -162,6 +173,8 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
     const changed = () => {
       revision.current += 1;
       socketNotifications.current = null;
+      lastPolledAt.current = 0;
+      polledNotifications.current = null;
       setCounts(defaultCounts);
       void pollBadges();
     };
@@ -195,8 +208,16 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
       if (data?.notifications != null) {
         const total = Number(data.notifications) || 0;
         if (total !== socketNotifications.current) {
+          // The first push after connecting usually repeats the total this
+          // session's startup badge read just loaded with its breakdown. Any
+          // other first push still reads the breakdown: one that arrives before
+          // that read has landed (a read still under way is discarded by this
+          // push, and a cold Messages inbox holds it until its rows paint) or
+          // after it failed.
+          const repeatsRead = socketNotifications.current === null
+            && polledNotifications.current !== null && total === polledNotifications.current;
           socketNotifications.current = total;
-          void refreshNotificationContexts();
+          if (!repeatsRead) void refreshNotificationContexts();
         }
       }
       setCounts((prev) => ({
@@ -229,8 +250,17 @@ export function BadgeProvider({ children }: { children: ReactNode }) {
       if (navigator.onLine && document.visibilityState === 'visible') { delay = FALLBACK_POLL_MS; void poll(); }
       else stop();
     };
+    // This effect also runs again when the socket connects or drops. A read
+    // that just succeeded is current: the socket's badge:update on connect
+    // carries the same counts, and a dropped socket resumes the fallback reads
+    // on their usual interval.
+    const start = () => {
+      const age = Date.now() - lastPolledAt.current;
+      if (age >= FALLBACK_POLL_MS) { foreground(); return; }
+      if (!connected) fallbackRef.current = setTimeout(() => void poll(), FALLBACK_POLL_MS - age + Math.random() * 500);
+    };
     // A cold Messages inbox paints its rows first (lib/shellReads.ts).
-    const cancelStart = afterInboxRows(foreground);
+    const cancelStart = afterInboxRows(start);
     document.addEventListener('visibilitychange', foreground);
     window.addEventListener('online', foreground);
     window.addEventListener('offline', foreground);
