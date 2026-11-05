@@ -158,7 +158,7 @@ private fun PrepContent(
             )
         }
         MoneyPreview(view)
-        if (day.status == "open" || day.status == "in_progress") {
+        if (day.canEdit && (day.status == "open" || day.status == "in_progress")) {
             CrewDaySection("If plans change") {
                 PlanOptionRow(first = true) {
                     PlanTonalButton(
@@ -284,12 +284,14 @@ private fun StatusBanner(
                 icon = PantopusIcon.FileText,
                 tone = PlanBannerTone.Neutral,
             )
-            PrimaryButton(
-                title = "Send to Pantopus for approval",
-                onClick = viewModel::submit,
-                isLoading = CrewDayPrepViewModel.DAY in working,
-                modifier = Modifier.fillMaxWidth().testTag("crewDayPrepSubmit"),
-            )
+            if (day.canEdit) {
+                PrimaryButton(
+                    title = "Send to Pantopus for approval",
+                    onClick = viewModel::submit,
+                    isLoading = CrewDayPrepViewModel.DAY in working,
+                    modifier = Modifier.fillMaxWidth().testTag("crewDayPrepSubmit"),
+                )
+            }
         }
         "pending_review" ->
             PlanBanner(
@@ -305,12 +307,14 @@ private fun StatusBanner(
                 icon = PantopusIcon.AlertCircle,
                 tone = PlanBannerTone.Warning,
             )
-            PrimaryButton(
-                title = "Send to Pantopus again",
-                onClick = viewModel::submit,
-                isLoading = CrewDayPrepViewModel.DAY in working,
-                modifier = Modifier.fillMaxWidth().testTag("crewDayPrepSubmit"),
-            )
+            if (day.canEdit) {
+                PrimaryButton(
+                    title = "Send to Pantopus again",
+                    onClick = viewModel::submit,
+                    isLoading = CrewDayPrepViewModel.DAY in working,
+                    modifier = Modifier.fillMaxWidth().testTag("crewDayPrepSubmit"),
+                )
+            }
         }
         "cancelled" ->
             PlanBanner(
@@ -350,6 +354,15 @@ private fun NeedsYou(
                         style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
                         color = PantopusColors.appText,
                     )
+                    if (!view.canEdit) {
+                        // As the web: a team seat sees the check; an owner or editor sets the price.
+                        Text(
+                            text = "An owner or editor sets its price.",
+                            style = PantopusTextStyle.small,
+                            color = PantopusColors.appTextSecondary,
+                        )
+                        return@Column
+                    }
                     Text(
                         text = "Look at the home, then set its price. The household approves it before anything is booked.",
                         style = PantopusTextStyle.small,
@@ -391,12 +404,14 @@ private fun NeedsYou(
                         style = PantopusTextStyle.small,
                         color = PantopusColors.appTextSecondary,
                     )
-                    PrimaryButton(
-                        title = "Release at no charge",
-                        onClick = { onRelease(home) },
-                        isLoading = home.id in working,
-                        modifier = Modifier.fillMaxWidth().testTag("crewDayPrepRelease"),
-                    )
+                    if (view.canEdit) {
+                        PrimaryButton(
+                            title = "Release at no charge",
+                            onClick = { onRelease(home) },
+                            isLoading = home.id in working,
+                            modifier = Modifier.fillMaxWidth().testTag("crewDayPrepRelease"),
+                        )
+                    }
                 }
             }
         }
@@ -490,6 +505,8 @@ private fun BringInMore(
                 )
             }
         }
+        // Inviting past customers is for owners and editors (the server's `profile.edit`), as on the web.
+        if (!view.canEdit) return@CrewDaySection
         PlanOptionRow {
             Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 Text(
