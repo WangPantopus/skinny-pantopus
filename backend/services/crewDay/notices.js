@@ -10,6 +10,7 @@ const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
 const notificationService = require('../notificationService');
 const { getBusinessPrimaryOwnerId, getActiveMembership } = require('../../utils/businessPermissions');
+const rules = require('./rules');
 
 const links = {
   booking: (bookingId) => `/app/crew-days/bookings/${bookingId}`,
@@ -82,6 +83,89 @@ async function dayDeclined(day) {
   }, { day, link: links.crewDay(day.business_user_id, day.id) });
 }
 
+function dayWhen(day, booking) {
+  const date = booking?.service_date || day.service_date;
+  return `${rules.formatDay(date)}, ${rules.formatWindow(booking?.window_start || day.window_start,
+    booking?.window_end || day.window_end)}`;
+}
+function serviceDayName(day) {
+  return (rules.SERVICES[day.service] || rules.SERVICES.other).day;
+}
+function businessName(crew) {
+  return crew?.name || 'The crew';
+}
+
+// ── Household ─────────────────────────────────────────────────
+
+async function booked(day, booking) {
+  await send([booking.household_user_id], {
+    type: 'crew_day_booked',
+    title: "You're on the route",
+    body: `${day.title}, ${dayWhen(day, booking)}. Total ${rules.formatMoney(booking.price_cents)}. We'll remind you the evening before.`,
+  }, { day, booking, link: links.booking(booking.id) });
+}
+
+async function priceOffered(day, booking, crew) {
+  await send([booking.household_user_id], {
+    type: 'crew_day_price_offered',
+    title: `Your price is ready: ${rules.formatMoney(booking.price_cents)}`,
+    body: `${businessName(crew)} looked at your home. Approve it to book.`,
+  }, { day, booking, link: links.booking(booking.id) });
+}
+
+// Who cancelled, in words: the crew released the home, couldn't take it, or cancelled the day; the operator; the
+// system (no new date picked). Nothing is ever charged for a cancellation.
+async function bookingCancelled(day, booking, crew, reason) {
+  const lines = {
+    crew_released: `${businessName(crew)} released your home at no charge.`,
+    crew_declined: `${businessName(crew)} can't take your home this time.`,
+    crew_cancelled_day: `${businessName(crew)} cancelled this day.`,
+    operator: 'Pantopus cancelled this booking.',
+    no_new_date: "No new date was picked, so this booking was cancelled.",
+    price_not_answered: "The price wasn't approved before booking closed, so this booking was cancelled.",
+  };
+  await send([booking.household_user_id], {
+    type: 'crew_day_cancelled',
+    title: `Your ${serviceDayName(day)} was cancelled`,
+    body: `${lines[reason] || 'This booking was cancelled.'} Nothing was charged.`,
+  }, { day, booking, link: links.booking(booking.id) });
+}
+
+// ── Crew (about one home) ─────────────────────────────────────
+
+async function newBooking(day, booking, bookedCount) {
+  await send(await crewRecipients(day), {
+    type: 'crew_day_new_booking',
+    title: 'New home on your route',
+    body: `${day.title}: ${bookedCount} of ${day.capacity} booked.`,
+  }, { day, booking, link: links.crewDay(day.business_user_id, day.id) });
+}
+
+async function priceNeeded(day, booking) {
+  const option = (booking.line_items || []).find((i) => i.kind === 'option');
+  await send(await crewRecipients(day), {
+    type: 'crew_day_price_needed',
+    title: 'A home needs your price',
+    body: `${option?.label || 'A home'} on ${day.street_label}.`,
+  }, { day, booking, link: links.crewDay(day.business_user_id, day.id) });
+}
+
+async function homeCancelled(day, booking, bookedCount) {
+  await send(await crewRecipients(day), {
+    type: 'crew_day_booking_cancelled',
+    title: 'A home cancelled',
+    body: `${day.title}: ${bookedCount} of ${day.capacity} booked.`,
+  }, { day, booking, link: links.crewDay(day.business_user_id, day.id) });
+}
+
+async function releaseAsked(day, booking) {
+  await send(await crewRecipients(day), {
+    type: 'crew_day_release_asked',
+    title: 'A home asks to cancel',
+    body: 'Release it at no charge in Crew Days.',
+  }, { day, booking, link: links.crewDay(day.business_user_id, day.id) });
+}
+
 // ── Operator ───────────────────────────────────────────────────
 
 async function reviewNeeded(day, { businessName }) {
@@ -94,6 +178,15 @@ async function reviewNeeded(day, { businessName }) {
 }
 
 module.exports = {
+  booked,
+  priceOffered,
+  bookingCancelled,
+  newBooking,
+  priceNeeded,
+  homeCancelled,
+  releaseAsked,
+  dayWhen,
+  serviceDayName,
   links,
   crewRecipients,
   adminRecipients,
