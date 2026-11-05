@@ -1399,7 +1399,7 @@ public final class ChatConversationViewModel {
         if !onlyIfChanged { fallbackRefreshOnlyIfChanged = false }
         guard fallbackRefreshTask == nil else {
             // An ask while the catch-up is reading can concern a later change.
-            fallbackRefreshAgain = true
+            if !onlyIfChanged { fallbackRefreshAgain = true }
             return
         }
         fallbackRefreshOnlyIfChanged = onlyIfChanged
