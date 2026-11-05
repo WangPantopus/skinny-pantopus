@@ -3,7 +3,7 @@ import { LayoutDashboard } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pantopus — /about
-// frontend/apps/web/src/app/about/page.tsx
+// frontend/apps/web/src/app/(site)/about/page.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function AboutPage() {

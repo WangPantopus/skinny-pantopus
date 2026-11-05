@@ -2,7 +2,7 @@
  * Web session recovery (persistent login, design §11 / docs/01 §1.5).
  *
  * Shared between `src/middleware.ts` (Edge) and the client route
- * `src/app/session/refresh/page.tsx`. Keep this file dependency-free and
+ * `src/app/(site)/session/refresh/page.tsx`. Keep this file dependency-free and
  * Edge-safe (no DOM, no Node built-ins).
  */
 

@@ -27,7 +27,7 @@ import Login from '../src/app/(auth)/login/page';
 import Register from '../src/app/(auth)/register/page';
 import VerifySent from '../src/app/(auth)/verify-email-sent/page';
 import VerifyEmail from '../src/app/(auth)/verify-email/page';
-import Callback from '../src/app/auth/callback/page';
+import Callback from '../src/app/(site)/auth/callback/page';
 import ForgotPassword from '../src/app/(auth)/forgot-password/page';
 import ResetPassword from '../src/app/(auth)/reset-password/page';
 

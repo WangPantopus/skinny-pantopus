@@ -83,7 +83,7 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 function renderPage() {
-  const AudienceProfileClient = require('@/app/persona/[personaHandle]/AudienceProfileClient').default;
+  const AudienceProfileClient = require('@/app/(site)/persona/[personaHandle]/AudienceProfileClient').default;
   return render(
     <AudienceProfileClient
       initialPersona={PERSONA as any}

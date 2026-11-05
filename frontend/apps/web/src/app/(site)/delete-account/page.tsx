@@ -7,7 +7,7 @@ import { LayoutDashboard } from 'lucide-react';
 // How to delete an account, and what is deleted or kept (the "Delete account
 // URL" Google Play's Data safety form asks for). The text is the founder-
 // approved docs/compliance/account-deletion-page.md (October 7); keep the two in step.
-// frontend/apps/web/src/app/delete-account/page.tsx
+// frontend/apps/web/src/app/(site)/delete-account/page.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const metadata: Metadata = {

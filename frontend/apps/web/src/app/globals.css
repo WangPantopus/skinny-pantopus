@@ -1,3 +1,9 @@
+/* Loaded by every page (root layout), first. Its utilities come only from what the homepage, the sign-in
+   pages, not-found and error render (tailwind.entry.config.js), so those pages block on a light stylesheet.
+   Every other page also loads src/app/(site)/site.css: all utilities, in the same order, and the
+   features' own CSS. */
+@config "../../tailwind.entry.config.js";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -684,6 +690,8 @@ body {
 }
 
 /* ── Semantic utility classes ───────────────────────────────── */
+/* The same block is in src/app/(site)/site.css: each stylesheet emits the ones its pages use, in the same place
+   among the utilities. Change both. */
 @layer utilities {
   /* Backgrounds */
   .bg-app {
@@ -750,57 +758,6 @@ body {
   }
 }
 
-/* ── Animations ────────────────────────────────────────────── */
-@keyframes slide-in-right {
-  from { transform: translateX(100%); }
-  to   { transform: translateX(0); }
-}
-.animate-slide-in-right {
-  animation: slide-in-right 0.2s ease-out;
-}
-
-@keyframes slide-in-left {
-  from { transform: translateX(-100%); }
-  to   { transform: translateX(0); }
-}
-.animate-slide-in-left {
-  animation: slide-in-left 0.2s ease-out;
-}
-
-@keyframes pulse-ring {
-  0% { box-shadow: 0 0 0 3px rgba(13,148,136,.3), 0 2px 8px rgba(0,0,0,.2); }
-  50% { box-shadow: 0 0 0 8px rgba(13,148,136,.08), 0 2px 8px rgba(0,0,0,.2); }
-  100% { box-shadow: 0 0 0 3px rgba(13,148,136,.3), 0 2px 8px rgba(0,0,0,.2); }
-}
-
-/* Ballot — the peel story (Board: The peel). One government is 1.2 s: in
-   by 0.18 s, held to 1.02 s, out by 1.2 s — the board's 12 s cycle
-   (1.5%, 8.5%, 10%) per step. Callers set each step's delay and play it
-   once; the final caption then holds. */
-@keyframes ballotCap {
-  0% { opacity: 0; transform: translateY(8px); }
-  15%, 85% { opacity: 1; transform: translateY(0); }
-  100% { opacity: 0; transform: translateY(-4px); }
-}
-@keyframes ballotCapIn {
-  0% { opacity: 0; transform: translateY(8px); }
-  100% { opacity: 1; transform: translateY(0); }
-}
-@keyframes ballotHi {
-  0% { opacity: 0; }
-  15%, 85% { opacity: 1; }
-  100% { opacity: 0; }
-}
-@keyframes ballotLift {
-  0% { transform: translateY(0); }
-  15%, 85% { transform: translateY(-8px); }
-  100% { transform: translateY(0); }
-}
-@keyframes ballotBar {
-  0% { transform: scaleX(0); }
-  100% { transform: scaleX(1); }
-}
-
 /* ── Reduced motion: disable custom animations ───────────── */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -809,114 +766,5 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
-  }
-}
-
-/* Leaflet popup overrides for Discover map */
-.discover-biz-pin, .discover-gig-pin, .discover-post-pin,
-.discover-home-pin, .discover-gps-pin, .discover-cluster-pin,
-.map-cluster-pin {
-  background: transparent !important;
-  border: none !important;
-}
-
-.feed-map-popup .leaflet-popup-content-wrapper {
-  padding: 0;
-  border-radius: 20px;
-  background: transparent;
-  box-shadow: none;
-}
-
-.feed-map-popup .leaflet-popup-content {
-  margin: 0;
-}
-
-.feed-map-popup .leaflet-popup-tip {
-  background: rgb(var(--app-surface) / 0.96);
-  border: 1px solid rgb(var(--app-border));
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
-}
-
-.feed-map-popup-card {
-  width: min(280px, calc(100vw - 40px));
-  max-width: calc(100vw - 40px);
-  padding: 14px;
-  border: 1px solid rgb(var(--app-border));
-  border-radius: 20px;
-  background: rgb(var(--app-surface) / 0.96);
-  backdrop-filter: blur(14px);
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
-}
-
-/* ─── Map pin transition animations ──────────────────────────── */
-/* These classes sit on .leaflet-marker-icon, which Leaflet places with an inline
-   transform: translate3d(). A keyframe transform would replace it and draw the pin
-   at the map's top-left corner, so the scale is added to it instead
-   (animation-composition: add); browsers without that get the fade alone. */
-
-@keyframes pin-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-@keyframes pin-fade-out {
-  from { opacity: 1; }
-  to   { opacity: 0; }
-}
-
-@keyframes pin-scale-in {
-  from { transform: scale(0.7); }
-  to   { transform: scale(1);   }
-}
-
-@keyframes pin-scale-out {
-  from { transform: scale(1);   }
-  to   { transform: scale(0.7); }
-}
-
-@keyframes cluster-count-pop {
-  0%   { transform: scale(1);   }
-  40%  { transform: scale(1.18); }
-  100% { transform: scale(1);   }
-}
-
-/* Enter: new pins fade + scale in. No fill: a class left on (Explore Map) does
-   nothing once the animation ends. */
-.pin-enter {
-  animation: pin-fade-in 200ms ease-out;
-}
-
-/* Exit: removed pins fade + scale out, then become non-interactive */
-.pin-exit {
-  animation: pin-fade-out 150ms ease-in both;
-}
-
-/* Outranks Leaflet's .leaflet-marker-icon.leaflet-interactive { pointer-events: auto } */
-.leaflet-marker-icon.leaflet-interactive.pin-exit {
-  pointer-events: none;
-}
-
-@supports (animation-composition: add) {
-  /* Scale about the icon's center, where every caller anchors it, not Leaflet's 0 0 */
-  .leaflet-marker-icon.pin-enter,
-  .leaflet-marker-icon.pin-exit {
-    transform-origin: 50% 50%;
-  }
-
-  .pin-enter {
-    animation: pin-fade-in 200ms ease-out, pin-scale-in 200ms ease-out;
-    animation-composition: replace, add;
-  }
-
-  .pin-exit {
-    animation: pin-fade-out 150ms ease-in both, pin-scale-out 150ms ease-in both;
-    animation-composition: replace, add;
-  }
-
-  /* Cluster count badge pops when the icon is re-created (count change), on top of
-     the badge's own transform (Explore Map centers it with translate(-50%, -50%)) */
-  .cluster-pop > div {
-    animation: cluster-count-pop 250ms ease-out;
-    animation-composition: add;
   }
 }

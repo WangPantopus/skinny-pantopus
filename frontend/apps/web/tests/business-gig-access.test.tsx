@@ -1,5 +1,5 @@
 import { webcrypto } from 'node:crypto';
-import LegalPage from '../src/app/(app)/app/business/[id]/settings/legal/page';
+import LegalPage from '../src/app/(site)/(app)/app/business/[id]/settings/legal/page';
 import LegalTab from '../src/components/business/tabs/LegalTab';
 import { toast } from '../src/components/ui/toast-store';
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';

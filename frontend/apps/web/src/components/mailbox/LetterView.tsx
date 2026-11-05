@@ -13,7 +13,7 @@ import type { BookletItem, MailItemV2 } from '@/types/mailbox';
 import { getEnclosureLink, MailboxApiError } from '@/lib/mailbox-api';
 import MailPiece, { pieceKind, pieceOutside, pieceTrust } from './MailPiece';
 import { mailLoadMessage } from './mailLoadMessage';
-import MailContentRenderer from '@/app/(app)/app/mailbox/_components/MailContentRenderer';
+import MailContentRenderer from '@/app/(site)/(app)/app/mailbox/_components/MailContentRenderer';
 import BookletViewer from './BookletViewer';
 
 const SERIF = "'Iowan Old Style', 'Hoefler Text', Charter, Georgia, serif";

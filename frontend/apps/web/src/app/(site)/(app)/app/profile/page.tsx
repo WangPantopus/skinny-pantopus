@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getAuthToken } from '@pantopus/api';
-import PublicProfileClient from '@/app/[username]/PublicProfileClient';
+import PublicProfileClient from '@/app/(site)/[username]/PublicProfileClient';
 import ErrorState from '@/components/ui/ErrorState';
 import { useMe } from '@/lib/me';
 

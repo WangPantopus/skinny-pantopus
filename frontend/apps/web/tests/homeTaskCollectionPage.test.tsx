@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as api from '@pantopus/api';
-import TasksPage from '../src/app/(app)/app/homes/[id]/tasks/page';
+import TasksPage from '../src/app/(site)/(app)/app/homes/[id]/tasks/page';
 
 const home = 'ddf25100-0000-4000-8000-000000000100';
 const actor = 'ddf25100-0000-4000-8000-000000000001';

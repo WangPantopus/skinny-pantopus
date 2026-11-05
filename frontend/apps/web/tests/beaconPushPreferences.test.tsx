@@ -4,7 +4,7 @@ import type { UserNotificationPreferences } from '@pantopus/types';
 import * as api from '@pantopus/api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { setActiveQueryClient } from '@/lib/active-query-client';
-import NotificationPreferencesPage from '../src/app/(app)/app/settings/notifications/page';
+import NotificationPreferencesPage from '../src/app/(site)/(app)/app/settings/notifications/page';
 
 const mockRouter = { replace: jest.fn(), back: jest.fn() };
 jest.mock('next/navigation', () => ({ useRouter: () => mockRouter }));
