@@ -79,6 +79,8 @@ struct VerifyEmailView: View {
         }
         .background(Theme.Color.appSurface)
         .navigationBarHidden(true)
+        // Half folded like a book, the screen keeps to one page instead of running its buttons across the crease.
+        .readableColumnBesideFold()
         .accessibilityIdentifier("verifyEmailScreen")
         .task {
             await viewModel.verifyOnAppearIfNeeded(using: auth)

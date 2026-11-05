@@ -121,6 +121,8 @@ struct SignUpView: View {
             .padding(.horizontal, Spacing.s4)
         }
         .toolbar(.hidden, for: .navigationBar)
+        // Half folded like a book, the form keeps to one page instead of running its buttons across the crease.
+        .readableColumnBesideFold()
         .onAppear { seedInviteCode() }
         .task { await seedInvitedEmail() }
         .task { await viewModel.loadInviteSender(code: inviteCode) }

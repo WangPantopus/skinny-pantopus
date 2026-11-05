@@ -133,6 +133,8 @@ struct PlaceLaunchView: View {
                 }
             }
         }
+        // Half folded like a book, the funnel keeps to one page instead of running its buttons across the crease.
+        .readableColumnBesideFold()
     }
 
     private var signedInEntry: Bool {

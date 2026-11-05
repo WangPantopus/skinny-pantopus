@@ -52,6 +52,8 @@ struct SetNewPasswordView: View {
         }
         .background(Theme.Color.appSurface)
         .navigationBarHidden(true)
+        // Half folded like a book, the form keeps to one page instead of running its button across the crease.
+        .readableColumnBesideFold()
         .accessibilityIdentifier("setPasswordScreen")
     }
 

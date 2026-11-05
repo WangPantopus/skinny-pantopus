@@ -95,6 +95,9 @@ struct MyBusinessesEmptyView: View {
             .padding(.horizontal, Spacing.s6)
             .padding(.vertical, Spacing.s10)
             .frame(maxWidth: .infinity)
+            // Half folded like a book, the page keeps to the larger side of the fold instead of centering its
+            // Create button on the crease.
+            .besideFold()
         }
         .accessibilityIdentifier("myBusinessesEmpty")
     }
