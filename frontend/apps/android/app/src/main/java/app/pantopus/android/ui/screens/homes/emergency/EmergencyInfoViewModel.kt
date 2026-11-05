@@ -565,12 +565,11 @@ class EmergencyInfoViewModel
 
             private fun detailString(dto: HomeEmergencyDto): String {
                 val details = dto.details
-                val detail = details?.get("detail").orEmpty()
                 val phone = details?.get("phone").orEmpty()
-                // An older web entry holds its note as `notes`.
-                val note = details?.get("notes")?.takeIf { it.isNotEmpty() } ?: details?.get("note").orEmpty()
+                // The phone stays on the row whichever key holds the note ([HomeEmergencyDto.noteText]), so
+                // editing a web contact's note doesn't hide its number.
+                val note = dto.noteText.orEmpty()
                 return when {
-                    detail.isNotEmpty() -> detail
                     phone.isNotEmpty() && note.isNotEmpty() -> "$phone · $note"
                     phone.isNotEmpty() -> phone
                     note.isNotEmpty() -> note

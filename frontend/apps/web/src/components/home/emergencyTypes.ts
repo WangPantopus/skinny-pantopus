@@ -46,7 +46,8 @@ export function emergencyDetail(row: { details?: unknown }, key: string): string
 
 // The entry's free-text note. Every client writes it as `detail`, the key all
 // installed iOS and Android versions read; entries saved on the web before
-// that hold it as `notes`. `detail` wins: an app edit of such an entry writes it.
+// that hold it as `notes`, and older ones as `note`. `detail` wins: an app edit
+// of such an entry writes it.
 export function emergencyNote(row: { details?: unknown }): string {
-  return emergencyDetail(row, 'detail') || emergencyDetail(row, 'notes');
+  return emergencyDetail(row, 'detail') || emergencyDetail(row, 'notes') || emergencyDetail(row, 'note');
 }

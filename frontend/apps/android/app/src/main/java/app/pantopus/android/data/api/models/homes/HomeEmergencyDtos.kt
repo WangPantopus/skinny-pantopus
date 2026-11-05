@@ -44,10 +44,10 @@ data class HomeEmergencyDto(
     companion object {
         /**
          * Keys that hold the note, newest first. Every client writes `detail` (the key every installed app
-         * version reads); entries saved on the web before that hold it as `notes`. An app edit of such an
-         * entry writes `detail`, so `detail` wins.
+         * version reads); entries saved on the web before that hold it as `notes`, and older ones as `note`.
+         * An app edit of such an entry writes `detail`, so `detail` wins.
          */
-        val NOTE_KEYS = listOf("detail", "notes")
+        val NOTE_KEYS = listOf("detail", "notes", "note")
     }
 }
 

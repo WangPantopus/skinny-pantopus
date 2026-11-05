@@ -79,9 +79,9 @@ public struct HomeEmergencyDTO: Decodable, Sendable, Hashable, Identifiable {
 
     /// Keys that hold the entry's free-text note, newest first. Every client
     /// writes `detail` (the key every installed app version reads); entries
-    /// saved on the web before that hold it as `notes`. An app edit of such
-    /// an entry writes `detail`, so `detail` wins.
-    public static let noteKeys = ["detail", "notes"]
+    /// saved on the web before that hold it as `notes`, and older ones as
+    /// `note`. An app edit of such an entry writes `detail`, so `detail` wins.
+    public static let noteKeys = ["detail", "notes", "note"]
 
     /// The entry's free-text note, or `nil` when it has none.
     public var noteText: String? {
