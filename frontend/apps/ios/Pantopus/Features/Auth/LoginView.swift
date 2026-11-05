@@ -262,6 +262,8 @@ struct LoginView: View {
                     .padding(.trailing, Spacing.s4)
                 }
             }
+            // Half folded like a book, the form keeps to one page instead of running its buttons across the crease.
+            .readableColumnBesideFold()
             .readableColumn()
             .navigationBarHidden(true)
             .swipesBackFromEdge()
