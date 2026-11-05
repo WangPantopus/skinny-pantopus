@@ -322,7 +322,8 @@ private fun preview(
     val list = if (names.size > 1) "${names.dropLast(1).joinToString(", ")} or ${names.last()}" else names.firstOrNull().orEmpty()
     val first = state.dates.firstOrNull()?.let { state.picks.getValue(it).start.atDate(it).atZone(zone).minusHours(DEADLINE_HOURS) }
     val deadline = first?.let { "${it.format(WEEKDAY)} ${CrewDayFormat.clock(it.toLocalTime())}" }
-    return "Your crew can come $list at the same price. No payment has been taken." +
+    val crew = state.view?.crew?.name?.takeIf { it.isNotBlank() } ?: "Your crew"
+    return "$crew can come $list at the same price. No payment has been taken." +
         (deadline?.let { " If you don't answer by $it, we won't book a new date." } ?: "")
 }
 

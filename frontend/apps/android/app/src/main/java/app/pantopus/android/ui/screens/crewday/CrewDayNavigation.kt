@@ -283,7 +283,7 @@ fun NavGraphBuilder.crewDayRoutes(
                 dateArgument,
             ),
     ) {
-        CrewDayHomeScreen(onBack = back)
+        CrewDayHomeScreen(onBack = back, onOpenChat = external.openChat)
     }
     composable(
         route = CrewDayRoutes.CREW_DAY,
