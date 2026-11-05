@@ -144,7 +144,7 @@ fun CrewDayChangeSheet(
                 }
                 SheetRow(
                     title = "Edit the note for the crew",
-                    body = null,
+                    body = "The crew sees it on the day only.",
                     first = !booking.canChange,
                     tag = "crewDayCancelNote",
                     onClick = onEditNote,
