@@ -228,7 +228,7 @@ class EmergencyInfoViewModelTest {
         assertEquals("911", projection.title)
         assertEquals(EmergencyCategory.Contact, projection.category)
         assertEquals(PantopusIcon.Phone, projection.glyph)
-        assertEquals("Dispatcher will ask address.", projection.body)
+        assertEquals("911 · Dispatcher will ask address.", projection.body)
         assertEquals(PantopusIcon.Phone, projection.bodyIcon)
         assertEquals("911", projection.actionTarget)
         assertFalse(projection.needsReview)

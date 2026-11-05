@@ -39,6 +39,18 @@ enum AccessCodesA11y {
     static let fab = "accessCodes_fab"
 }
 
+/// What the screens say when the server refuses a read with 403: the person
+/// no longer has permission (as the web says), not that loading failed.
+enum AccessCodesRefusal {
+    static let list = "You don't have permission to view this household's access codes."
+    static let code = "You don't have permission to view this access code."
+
+    static func matches(_ error: any Error) -> Bool {
+        if case APIError.forbidden = error { return true }
+        return false
+    }
+}
+
 /// Outbound routing target. The host (`YouTabRoot`) maps these onto the
 /// appropriate `YouRoute.*` push or a sheet present.
 enum AccessCodesTarget: Hashable {
@@ -99,8 +111,11 @@ final class AccessCodesViewModel: ListOfRowsDataSource {
     /// view; cleared after a short window. Public so tests can assert.
     private(set) var toastMessage: String?
 
+    /// Only with a current read: after a failed or refused read there are
+    /// no codes to filter, so no zero-count chips sit above its error.
     var chipStrip: ChipStripConfig? {
-        ChipStripConfig(
+        guard loadedOnce else { return nil }
+        return ChipStripConfig(
             chips: chipConfig(),
             selectedId: selectedChip
         ) { [weak self] id in
@@ -237,7 +252,9 @@ final class AccessCodesViewModel: ListOfRowsDataSource {
             secrets = []
             loadedOnce = false
             revealedIds = []
-            state = .error(message: "Couldn't load access codes. Try again.")
+            state = .error(message: AccessCodesRefusal.matches(error)
+                ? AccessCodesRefusal.list
+                : "Couldn't load access codes. Try again.")
         }
     }
 

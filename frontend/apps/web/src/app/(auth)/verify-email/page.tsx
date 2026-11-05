@@ -1,22 +1,22 @@
 'use client';
 
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import PantopusBadge from '@/components/PantopusBadge';
 import { authPageHref, readAuthRedirectQuery, safeRedirectPath, extractApiError, normalizeEmail } from '@/lib/auth-utils';
 import { rememberSignInHandoff, takeSignInHandoff } from '@/lib/email-verified-handoff';
 import { announceEmailConfirmed } from '@/lib/pending-sign-in';
+import WithSearchParams, { type SearchParamsProps } from '@/components/auth/WithSearchParams';
 
 type VerifyState = 'verifying' | 'success' | 'error';
 
 /** How long a sign-up tab in this browser gets to sign in before this one offers Log in. */
 const SIGN_UP_TAB_WAIT_MS = 3000;
 
-function VerifyEmailPageContent() {
+function VerifyEmailPageContent({ searchParams }: SearchParamsProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const redirectTo = safeRedirectPath(readAuthRedirectQuery(searchParams), '/app/place');
   const loginHref = authPageHref('/login', redirectTo);
   // Log in after a confirmation says so instead of "Welcome back".
@@ -201,9 +201,5 @@ function VerifyEmailPageContent() {
 }
 
 export default function VerifyEmailPage() {
-  return (
-    <Suspense>
-      <VerifyEmailPageContent />
-    </Suspense>
-  );
+  return <WithSearchParams Content={VerifyEmailPageContent} />;
 }

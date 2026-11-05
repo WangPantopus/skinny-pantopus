@@ -35,11 +35,19 @@ export const CATEGORY_CREATE_TYPE: Record<Exclude<EmergencyCategory, 'shutoff'>,
   other: 'other',
 };
 
-// `details` is a free-form jsonb object (the native forms write phone, notes
-// and detail keys). Read one string out of it; never render the object itself.
+// `details` is a free-form jsonb object (phone, detail and, on older web
+// entries, notes). Read one string out of it; never render the object itself.
 export function emergencyDetail(row: { details?: unknown }, key: string): string {
   const details = row.details;
   if (!details || typeof details !== 'object' || Array.isArray(details)) return '';
   const value = (details as Record<string, unknown>)[key];
   return typeof value === 'string' ? value : '';
+}
+
+// The entry's free-text note. Every client writes it as `detail`, the key all
+// installed iOS and Android versions read; entries saved on the web before
+// that hold it as `notes`, and older ones as `note`. `detail` wins: an app edit
+// of such an entry writes it.
+export function emergencyNote(row: { details?: unknown }): string {
+  return emergencyDetail(row, 'detail') || emergencyDetail(row, 'notes') || emergencyDetail(row, 'note');
 }

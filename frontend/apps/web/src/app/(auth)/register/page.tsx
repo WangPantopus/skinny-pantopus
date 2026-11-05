@@ -10,9 +10,9 @@
 // /start, and lands on /app/place to claim it.
 // ============================================================
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { bindPlaceArrival } from '@/components/place/pendingPlace';
 import PantopusBadge from '@/components/PantopusBadge';
@@ -29,12 +29,12 @@ import {
 import { launchFeatures } from '@/lib/featureFlags';
 import { OAUTH_ATTEMPT_UNAVAILABLE_ERROR, beginOAuthAttempt } from '@/lib/oauth-attempt';
 import { rememberPendingSignIn } from '@/lib/pending-sign-in';
+import WithSearchParams, { type SearchParamsProps } from '@/components/auth/WithSearchParams';
 
 const PASSWORD_MIN_LENGTH = 12;
 
-function RegisterContent() {
+function RegisterContent({ searchParams }: SearchParamsProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const prefillEmail = (searchParams?.get('email') || '').trim().toLowerCase();
   const redirectTo = safeRedirectPath(readAuthRedirectQuery(searchParams), '/app/place');
   // A friend's invite link (/join/:code) arrives as ?invite_code=; sending it credits them with this account.
@@ -469,9 +469,5 @@ function RegisterContent() {
 }
 
 export default function RegisterPage() {
-  return (
-    <Suspense>
-      <RegisterContent />
-    </Suspense>
-  );
+  return <WithSearchParams Content={RegisterContent} />;
 }

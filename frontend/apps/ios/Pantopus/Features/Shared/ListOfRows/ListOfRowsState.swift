@@ -342,6 +342,16 @@ public protocol ListOfRowsDataSource: AnyObject, Observable {
     /// Optional banner supplied by the concrete screen. Keep it a protocol
     /// requirement so generic renderers dispatch to the observed data source.
     var banner: BannerConfig? { get }
+    /// Optional chrome supplied by the concrete screen. Like `banner`, each is
+    /// a requirement (with a `nil` default below): `ListOfRowsView` is generic
+    /// over its data source, so a member declared only in the protocol
+    /// extension would always resolve to the extension's `nil`, whatever the
+    /// screen defines.
+    var searchBar: SearchBarConfig? { get }
+    var chipStrip: ChipStripConfig? { get }
+    var listingContext: ListingContextConfig? { get }
+    var topBarSubtitle: String? { get }
+    var monoFooter: String? { get }
     /// Observed UI state.
     var state: ListOfRowsState { get }
 

@@ -1,8 +1,8 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { bindPlaceArrival } from '@/components/place/pendingPlace';
 import PantopusBadge from '@/components/PantopusBadge';
@@ -14,11 +14,11 @@ import {
   listenForEmailConfirmed,
   pendingSignInFor,
 } from '@/lib/pending-sign-in';
+import WithSearchParams, { type SearchParamsProps } from '@/components/auth/WithSearchParams';
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
-function VerifyEmailSentPageContent() {
-  const searchParams = useSearchParams();
+function VerifyEmailSentPageContent({ searchParams }: SearchParamsProps) {
   const redirectTo = safeRedirectPath(readAuthRedirectQuery(searchParams), '/app/place');
   const loginHref = authPageHref('/login', redirectTo);
   const emailParam = searchParams?.get('email') || '';
@@ -147,9 +147,5 @@ function VerifyEmailSentPageContent() {
 }
 
 export default function VerifyEmailSentPage() {
-  return (
-    <Suspense>
-      <VerifyEmailSentPageContent />
-    </Suspense>
-  );
+  return <WithSearchParams Content={VerifyEmailSentPageContent} />;
 }

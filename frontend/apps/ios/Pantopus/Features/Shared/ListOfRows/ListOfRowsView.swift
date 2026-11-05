@@ -174,7 +174,11 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
                         tint: content.tint ?? Theme.Color.personalBg,
                         accent: content.accent ?? Theme.Color.primary600
                     )
-                    .frame(minHeight: proxy.size.height)
+                    // Beside the iPhone Duo's fold, above the floating button as the loaded list keeps clear of it.
+                    .centeredClearOfFold(
+                        minHeight: proxy.size.height,
+                        bottomClearance: dataSource.fab == nil ? 0 : Spacing.s16 + Spacing.s5
+                    )
                     .closesKeyboardFirst(searchFocused)
                 }
                 .refreshable { await dataSource.refresh() }
@@ -297,6 +301,9 @@ private struct SearchBarRow: View {
             .submitLabel(SubmitLabel.search)
             .onSubmit { config.onSubmit?() }
             .focused(focus)
+            // The placeholder disappears once a query is typed; keep it as the
+            // field's name for VoiceOver (as the search screens do).
+            .accessibilityLabel(config.placeholder)
         }
         .padding(.horizontal, Spacing.s3)
         .padding(.vertical, Spacing.s2)
@@ -336,6 +343,9 @@ private struct ChipStripRow: View {
                                 .stroke(borderColor(for: chip.id), lineWidth: 1)
                         )
                         .clipShape(RoundedRectangle(cornerRadius: Radii.pill, style: .continuous))
+                        // 44 pt to tap, inside the strip's own padding; the
+                        // chip draws as before.
+                        .hitArea(vertical: 7)
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("chip.\(chip.id)")

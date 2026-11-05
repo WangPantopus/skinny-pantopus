@@ -88,6 +88,8 @@ public final class ReviewSignupsViewModel: ListOfRowsDataSource {
     public func updateFilter(_ id: String) {
         guard selectedFilter != id else { return }
         selectedFilter = id
+        // Before a read succeeds the loading or error state stays.
+        guard loadedOnce else { return }
         rebuild()
     }
 
@@ -190,7 +192,9 @@ public final class ReviewSignupsViewModel: ListOfRowsDataSource {
     private var filteredReservations: [SupportTrainReservationDTO] {
         switch selectedFilter {
         case ReviewSignupsFilter.pending:
-            reservations.filter { ($0.status ?? "") == "pending" }
+            // The rows labelled "Pending": the server's not-yet-confirmed
+            // signups are `reserved` (and `delivered`), never `pending`.
+            reservations.filter { Self.pendingStatuses.contains($0.status ?? "") }
         case ReviewSignupsFilter.confirmed:
             reservations.filter { ($0.status ?? "") == "confirmed" }
         case ReviewSignupsFilter.edited:
@@ -201,6 +205,9 @@ public final class ReviewSignupsViewModel: ListOfRowsDataSource {
             reservations.filter { ($0.status ?? "") != "canceled" }
         }
     }
+
+    /// Statuses whose row chip reads "Pending" (see `statusChipFor`).
+    private static let pendingStatuses: Set<String> = ["pending", "reserved", "delivered"]
 
     private var emptyHeadline: String {
         switch selectedFilter {

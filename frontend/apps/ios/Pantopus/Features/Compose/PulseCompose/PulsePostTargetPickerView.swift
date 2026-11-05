@@ -10,10 +10,10 @@
 
 import SwiftUI
 
-// swiftlint:disable function_parameter_count multiple_closures_with_trailing_closure
+// swiftlint:disable function_parameter_count multiple_closures_with_trailing_closure type_body_length
 
 public struct PulsePostTargetPickerView: View {
-    @State private var viewModel = PulsePostTargetPickerViewModel()
+    @State private var viewModel: PulsePostTargetPickerViewModel
     @State private var expandedHomeList = false
     @State private var locationError: String?
 
@@ -25,11 +25,15 @@ public struct PulsePostTargetPickerView: View {
     /// (No business card here: businesses don't post to Pulse.)
     private let hidesNetworkTarget: Bool
 
+    /// - Parameter viewModel: The step's homes when the composer keeps them (through a fold or a turn); new ones
+    ///   otherwise.
     public init(
+        viewModel: PulsePostTargetPickerViewModel? = nil,
         onSelect: @escaping @MainActor (PulsePostingTarget) -> Void,
         onCancel: @escaping @MainActor () -> Void,
         hidesNetworkTarget: Bool = false
     ) {
+        _viewModel = State(initialValue: viewModel ?? PulsePostTargetPickerViewModel())
         self.onSelect = onSelect
         self.onCancel = onCancel
         self.hidesNetworkTarget = hidesNetworkTarget
@@ -63,6 +67,8 @@ public struct PulsePostTargetPickerView: View {
             }
         )
         .task { await viewModel.load() }
+        .onAppear { viewModel.screens.screenDidAppear() }
+        .onDisappear { viewModel.screens.screenDidDisappear() }
         .accessibilityIdentifier("pulsePostTargetPicker")
     }
 

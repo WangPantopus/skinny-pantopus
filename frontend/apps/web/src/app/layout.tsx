@@ -3,7 +3,8 @@ import QueryProvider from '@/lib/query-provider';
 import ToastContainer from '@/components/ui/ToastContainer';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import './globals.css';
-import 'leaflet/dist/leaflet.css';
+// Leaflet's stylesheet is imported by the map components themselves (components/map/leaflet-setup.ts and
+// each map that doesn't use it), so it loads with a map instead of blocking every page's first paint.
 
 export const metadata: Metadata = {
   // Mirrors the wedge copy on /start, which is the canonical promise. This

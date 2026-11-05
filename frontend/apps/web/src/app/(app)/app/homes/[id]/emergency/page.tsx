@@ -11,7 +11,7 @@ import { confirmStore } from '@/components/ui/confirm-store';
 import { failureMessage, shareFailure } from '@/components/home/share/shareFailure';
 import { onSyncTopic, touchesHome } from '@/lib/syncSignals';
 import {
-  CATEGORY_CREATE_TYPE, emergencyCategory, emergencyDetail, type EmergencyCategory,
+  CATEGORY_CREATE_TYPE, emergencyCategory, emergencyDetail, emergencyNote, type EmergencyCategory,
 } from '@/components/home/emergencyTypes';
 
 const CATEGORY_META: Record<EmergencyCategory, { icon: typeof Droplets; color: string; label: string }> = {
@@ -140,7 +140,7 @@ function EmergencyContent() {
     setCreating(true);
     const details: Record<string, string> = {};
     if (newPhone.trim()) details.phone = newPhone.trim();
-    if (newDetails.trim()) details.notes = newDetails.trim();
+    if (newDetails.trim()) details.detail = newDetails.trim();
     try {
       const payload = { type: newCategory === 'shutoff' ? newShutoffType as HomeEmergencyType : CATEGORY_CREATE_TYPE[newCategory], label: newTitle.trim(), details };
       const draft = JSON.stringify(payload);
@@ -282,7 +282,7 @@ function EmergencyContent() {
                 <div className="space-y-1.5">
                   {(grouped[cat] || []).map((item) => {
                     // `details` is a jsonb object; render its strings, never the object.
-                    const notes = emergencyDetail(item, 'notes') || emergencyDetail(item, 'detail');
+                    const notes = emergencyNote(item);
                     const phone = emergencyDetail(item, 'phone');
                     return (
                     <div key={item.id} className="flex items-start gap-3 bg-app-surface border border-app-border rounded-xl p-4">

@@ -230,7 +230,9 @@ final class EditAccessCodeFormViewModel {
             hasCurrentAccess = false
             canManage = false
             availableVisibilities = []
-            state = .error("Couldn't load access code. Try again.")
+            state = .error(AccessCodesRefusal.matches(error)
+                ? AccessCodesRefusal.code
+                : "Couldn't load access code. Try again.")
         }
     }
 

@@ -565,6 +565,9 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
     }
 
     private func rebuild() {
+        // Nothing read yet (or every read failed): the loading or error state
+        // stays, whatever the search or tab.
+        guard loadedOnce else { return }
         let rows: [RowModel] = switch selectedTab {
         case ConnectionsTab.pending:
             filteredPending.map { rowForPending($0) }
@@ -578,11 +581,21 @@ public final class ConnectionsViewModel: ListOfRowsDataSource {
             filteredAccepted.map { rowForAccepted($0) }
         }
         if rows.isEmpty {
-            state = .empty(emptyContent(for: selectedTab))
+            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            state = .empty(query.isEmpty ? emptyContent(for: selectedTab) : noMatchesContent(for: query))
             return
         }
         let section = RowSection(id: "connections", rows: rows)
         state = .loaded(sections: [section], hasMore: false)
+    }
+
+    /// The search filtered this tab down to nothing.
+    private func noMatchesContent(for query: String) -> ListOfRowsState.EmptyContent {
+        ListOfRowsState.EmptyContent(
+            icon: .search,
+            headline: "No matches",
+            subcopy: "No one here matches \u{201C}\(query)\u{201D}. Try another name or neighborhood."
+        )
     }
 
     private func emptyContent(for tab: String) -> ListOfRowsState.EmptyContent {

@@ -237,7 +237,7 @@ public struct SavedPlacesView: View {
                 .accessibilityIdentifier("savedPlaces.exploreNearbyBtn")
         }
         .padding(.horizontal, Spacing.s6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .centeredClearOfFold()
         .background(Theme.Color.appSurfaceMuted)
         .accessibilityIdentifier("savedPlaces.empty")
     }

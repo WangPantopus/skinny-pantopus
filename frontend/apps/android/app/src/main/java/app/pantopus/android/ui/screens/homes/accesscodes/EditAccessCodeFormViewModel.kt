@@ -242,7 +242,13 @@ class EditAccessCodeFormViewModel
                         is NetworkResult.Success -> applyRead(result.data, request)
                         is NetworkResult.Failure -> {
                             if (result.error is NetworkError.Forbidden || result.error == NetworkError.NotFound) retainedDraft = null
-                            _state.update { it.copy(loadError = "Couldn't load access code. Try again.") }
+                            val message =
+                                if (AccessCodesRefusal.matches(result.error)) {
+                                    AccessCodesRefusal.CODE
+                                } else {
+                                    "Couldn't load access code. Try again."
+                                }
+                            _state.update { it.copy(loadError = message) }
                         }
                     }
                 }

@@ -141,6 +141,8 @@ public struct PulseComposeContentActions {
     public var onRemovePhoto: (UUID) -> Void
     /// Body-field blur — runs `POST /api/posts/precheck`.
     public var onBodyEditingEnded: () -> Void
+    /// The field with the keyboard changed (nil: none has it).
+    public var onKeyboardFieldChange: (PulseComposeField?) -> Void
     /// X on the precheck nudge banner.
     public var onDismissPrecheckNudge: () -> Void
     /// "Add location" row (also re-opens the picker when a tag is set).
@@ -176,6 +178,7 @@ public struct PulseComposeContentActions {
         onPickDocuments: @escaping () -> Void = {},
         onRemovePhoto: @escaping (UUID) -> Void = { _ in },
         onBodyEditingEnded: @escaping () -> Void = {},
+        onKeyboardFieldChange: @escaping (PulseComposeField?) -> Void = { _ in },
         onDismissPrecheckNudge: @escaping () -> Void = {},
         onAddLocation: @escaping () -> Void = {},
         onClearLocation: @escaping () -> Void = {},
@@ -202,6 +205,7 @@ public struct PulseComposeContentActions {
         self.onPickDocuments = onPickDocuments
         self.onRemovePhoto = onRemovePhoto
         self.onBodyEditingEnded = onBodyEditingEnded
+        self.onKeyboardFieldChange = onKeyboardFieldChange
         self.onDismissPrecheckNudge = onDismissPrecheckNudge
         self.onAddLocation = onAddLocation
         self.onClearLocation = onClearLocation
@@ -222,10 +226,25 @@ public struct PulseComposeContent: View {
     private let state: PulseComposeContentState
     private let actions: PulseComposeContentActions
     @FocusState private var isBodyFieldFocused: Bool
+    /// The one-line field with the keyboard (the body has its own focus, above).
+    @FocusState private var focusedTextField: PulseComposeField?
+    /// The field that had the keyboard as the last screen for this draft left (a fold or a turn), so this one gives
+    /// it back. Read once, as the screen is made.
+    @State private var returnsToField: PulseComposeField?
 
-    public init(state: PulseComposeContentState, actions: PulseComposeContentActions) {
+    public init(
+        state: PulseComposeContentState,
+        actions: PulseComposeContentActions,
+        returnsToField: PulseComposeField? = nil
+    ) {
         self.state = state
         self.actions = actions
+        _returnsToField = State(initialValue: returnsToField)
+    }
+
+    /// The field with the keyboard, the body included.
+    private var keyboardField: PulseComposeField? {
+        isBodyFieldFocused ? .body : focusedTextField
     }
 
     public var body: some View {
@@ -270,12 +289,36 @@ public struct PulseComposeContent: View {
                 visibilitySection
             }
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") { isBodyFieldFocused = false }
-                    .font(.system(size: 16, weight: .semibold))
-                    .accessibilityIdentifier("composePulseBodyKeyboardDone")
+        // The Done bar above the keyboard belongs to a view behind the form, not to the form: declared on the form,
+        // its bar item is measured with the form's layout, and once the iPhone Duo folds or turns, any accessibility
+        // client (VoiceOver) measuring it loops forever.
+        .background {
+            Color.clear
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") { isBodyFieldFocused = false }
+                            .font(.system(size: 16, weight: .semibold))
+                            .accessibilityIdentifier("composePulseBodyKeyboardDone")
+                    }
+                }
+        }
+        .onChange(of: keyboardField) { _, field in actions.onKeyboardFieldChange(field) }
+        .task { await returnToField() }
+    }
+
+    /// A fold or a turn rebuilt the screen while a field had the keyboard: that field gets it back, once it is in the
+    /// window (closed, the window takes a moment to settle on the outer screen).
+    private func returnToField() async {
+        guard let field = returnsToField else { return }
+        returnsToField = nil
+        for delayMs: UInt64 in [80, 170, 250, 500] {
+            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+            guard !Task.isCancelled, keyboardField == nil else { return }
+            if field == .body {
+                isBodyFieldFocused = true
+            } else {
+                focusedTextField = field
             }
         }
     }
@@ -1195,6 +1238,7 @@ public struct PulseComposeContent: View {
             keyboardType: keyboardType,
             identifier: "composePulseField_\(key.rawValue)"
         )
+        .focused($focusedTextField, equals: key)
     }
 
     @ViewBuilder

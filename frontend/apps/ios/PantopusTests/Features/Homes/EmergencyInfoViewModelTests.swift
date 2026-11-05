@@ -217,7 +217,7 @@ final class EmergencyInfoViewModelTests: XCTestCase {
         XCTAssertEqual(projection.title, "911")
         XCTAssertEqual(projection.category, .contact)
         XCTAssertEqual(projection.glyph, .phone)
-        XCTAssertEqual(projection.body, "Dispatcher will ask address.")
+        XCTAssertEqual(projection.body, "911 · Dispatcher will ask address.")
         XCTAssertEqual(projection.bodyIcon, .phone)
         XCTAssertEqual(projection.actionTarget, "911")
         XCTAssertFalse(projection.needsReview)

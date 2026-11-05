@@ -1,17 +1,16 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import PantopusBadge from '@/components/PantopusBadge';
 import AuthForm from '@/components/auth/AuthForm';
 import * as api from '@pantopus/api';
 import { authPageHref, safeRedirectPath, readAuthRedirectQuery, extractApiError, normalizeEmail } from '@/lib/auth-utils';
+import WithSearchParams, { type SearchParamsProps } from '@/components/auth/WithSearchParams';
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
-function ForgotPasswordContent() {
-  const params = useSearchParams();
+function ForgotPasswordContent({ searchParams: params }: SearchParamsProps) {
   const redirectTo = safeRedirectPath(readAuthRedirectQuery(params), '/app/place');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -114,5 +113,5 @@ function ForgotPasswordContent() {
 }
 
 export default function ForgotPasswordPage() {
-  return <Suspense><ForgotPasswordContent /></Suspense>;
+  return <WithSearchParams Content={ForgotPasswordContent} />;
 }

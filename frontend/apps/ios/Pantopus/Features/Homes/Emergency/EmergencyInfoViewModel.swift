@@ -155,7 +155,11 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
     /// Chip-strip filter — primary navigation for the screen. Lives on
     /// `chipStrip` (mutually exclusive with `tabs`); the shell renders
     /// it as the secondary header row beneath the top bar.
+    ///
+    /// Only with a current read: while loading, after leaving or after a
+    /// failed read there is nothing to filter, so no zero-count chips show.
     var chipStrip: ChipStripConfig? {
+        guard emergencies != nil else { return nil }
         let counts = rowsByCategory().mapValues(\.count)
         let totalCount = counts.values.reduce(0, +)
         let chips: [ChipStripConfig.Chip] = EmergencyFilter.allCases.map { filter in
@@ -475,17 +479,18 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
         )
     }
 
-    /// Compose the row's body string from the DTO. Prefers
-    /// `details.detail` (a free-form sentence), falling back to
-    /// `location` then to an empty string.
+    /// Compose the row's body string from the DTO: the phone with the note
+    /// (`noteText`: `detail`, an older web entry's `notes`, or `note`), either
+    /// alone, then `location`, then an empty string. The phone stays on the
+    /// row whichever key holds the note, so editing a web contact's note in
+    /// the app doesn't hide its number.
     private nonisolated static func detailString(dto: HomeEmergencyDTO) -> String {
-        if let detail = dto.details["detail"], !detail.isEmpty { return detail }
+        let note = dto.noteText
         if let phone = dto.details["phone"], !phone.isEmpty {
-            if let note = dto.details["note"], !note.isEmpty {
-                return "\(phone) · \(note)"
-            }
+            if let note { return "\(phone) · \(note)" }
             return phone
         }
+        if let note { return note }
         if let location = dto.location, !location.isEmpty { return location }
         return ""
     }
