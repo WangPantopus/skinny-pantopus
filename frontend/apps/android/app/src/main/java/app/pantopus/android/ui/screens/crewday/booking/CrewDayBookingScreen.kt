@@ -264,10 +264,13 @@ private enum class StepTone { Normal, Warning, Error }
  * waiting on its price stands, "Pick a date" while rain moved it, "Paused" while support has a problem, "Payment due"
  * after a declined card.
  */
-private fun boardSteps(booking: CrewDayBookingDto): List<BoardStep> =
-    booking.steps.map { step ->
+private fun boardSteps(booking: CrewDayBookingDto): List<BoardStep> {
+    // Waiting on support or on a payment comes after the work: every step before Paid is done (board `CdAttention`).
+    val stuckAtPaid = booking.problem?.status == "open" || booking.status == "payment_failed"
+    return booking.steps.map { step ->
         val label = step.label ?: step.key
         when {
+            stuckAtPaid && step.key != "paid" -> BoardStep(step.key, label, "done", StepTone.Normal)
             booking.status in setOf("price_pending", "price_offered") && step.key == "booked" ->
                 BoardStep(step.key, label, "current", StepTone.Normal)
             booking.status == "new_dates" && step.key == "booked" -> BoardStep(step.key, "Pick a date", "current", StepTone.Warning)
@@ -276,6 +279,7 @@ private fun boardSteps(booking: CrewDayBookingDto): List<BoardStep> =
             else -> BoardStep(step.key, label, step.state, StepTone.Normal)
         }
     }
+}
 
 /**
  * The four-step status line (Booked · On the way · Done · Paid). With large text it becomes a list, so no word has to
