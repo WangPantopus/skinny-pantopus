@@ -14,6 +14,7 @@ struct CrewDayPriceView: View {
     @Bindable var model: CrewDayBookingFlowModel
     let invitation: CrewDayInvitationDTO
     let onAsk: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,8 +29,10 @@ struct CrewDayPriceView: View {
                     if model.outOfArea, let address = model.address { outOfArea(address) }
                 }
                 .padding(Spacing.s4)
+                // At the accessibility text sizes the total and Continue end the page; pinned, they'd cover half of it.
+                if typeSize.isAccessibilitySize { footer }
             }
-            footer
+            if !typeSize.isAccessibilitySize { footer }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("crewDayPrice")
@@ -42,7 +45,7 @@ struct CrewDayPriceView: View {
             CrewDaySectionTitle(text: "Your home")
             if let address = model.address, !model.isTypingAddress {
                 CrewDayCard {
-                    HStack(alignment: .top) {
+                    CrewDayHeaderRow {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(address.short).planFont(.bodyStrong).foregroundStyle(Theme.Color.appText)
                             Text([address.city, address.state].filter { !$0.isEmpty }.joined(separator: ", "))
@@ -55,11 +58,14 @@ struct CrewDayPriceView: View {
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        // One stop for the address, so VoiceOver reads Change after it, not between its lines.
+                        .accessibilityElement(children: .combine)
+                    } trailing: {
                         Button("Change") {
                             model.addressQuery = ""
                             model.isTypingAddress = true
                         }
-                        .planButton(.text, size: .extraSmall)
+                        .crewDayButton(.text, size: .extraSmall)
                         .accessibilityIdentifier("crewDayPriceChangeAddress")
                     }
                     CrewDayLockLine(text: "Visible to your crew and Pantopus.")
@@ -78,7 +84,7 @@ struct CrewDayPriceView: View {
                     Button { model.useHome(home) } label: {
                         Text("Use \(home.short)").planFont(.label)
                     }
-                    .planButton(.text, size: .extraSmall)
+                    .crewDayButton(.text, size: .extraSmall)
                 }
                 CrewDayLockLine(text: "Visible to your crew and Pantopus.")
             }
@@ -152,7 +158,7 @@ struct CrewDayPriceView: View {
                 .foregroundStyle(Theme.Color.appText)
                 .fixedSize(horizontal: false, vertical: true)
             Button("Ask for one on your street", action: onAsk)
-                .planButton(.secondary)
+                .crewDayButton(.secondary)
                 .accessibilityIdentifier("crewDayPriceAsk")
         }
         .accessibilityElement(children: .contain)
@@ -169,9 +175,9 @@ struct CrewDayPriceView: View {
                     .foregroundStyle(Theme.Color.appText)
                     .multilineTextAlignment(.center)
             } else {
-                HStack {
+                CrewDayHeaderRow {
                     Text("Your price").planFont(.bodyStrong).foregroundStyle(Theme.Color.appText)
-                    Spacer()
+                } trailing: {
                     Text(model.priceCents.map { "\(CrewDayFormat.price($0)) · including tax" } ?? "")
                         .planFont(.bodyStrong)
                         .monospacedDigit()
@@ -181,12 +187,13 @@ struct CrewDayPriceView: View {
                 Text("Nothing is charged until the work is done.")
                     .planFont(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if let error = model.error { CrewDayErrorText(text: error, identifier: "crewDayPriceError") }
             Button { Task { await model.continueToReview() } } label: {
                 PlanButtonLabel(title: "Continue", isLoading: model.isQuoting)
             }
-            .planButton(.primary)
+            .crewDayButton(.primary)
             .disabled(!model.canContinue || model.outOfArea)
             .accessibilityIdentifier("crewDayPriceContinue")
         }

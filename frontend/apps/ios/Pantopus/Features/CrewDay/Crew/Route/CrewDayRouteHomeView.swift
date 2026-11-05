@@ -23,15 +23,16 @@ struct CrewDayRouteHomeView: View {
     @State private var showsOnMyWay = false
     @State private var viewer: CrewDayPhotoViewerRequest?
     @State private var toast: String?
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(spacing: 0) {
-            PlanNavBar(title: model.home.map(CrewDayRouteCopy.place) ?? "Home", trailing: model.position, onLeading: onBack)
+            PlanNavBar.crewDay(title: model.home.map(CrewDayRouteCopy.place) ?? "Home", trailing: model.position, onLeading: onBack)
             switch model.state {
             case .loading:
                 CrewDayLoadingView()
             case let .failed(message):
-                CrewDayErrorView(message: message) { await model.load() }
+                CrewDayErrorView(headline: "Couldn't load this home", message: message) { await model.load() }
             case let .loaded(home):
                 page(home)
             }
@@ -73,7 +74,10 @@ struct CrewDayRouteHomeView: View {
     }
 
     private func page(_ home: CrewDayHomeDTO) -> some View {
-        VStack(spacing: 0) {
+        let hasActions = !model.isDone && !["cancelled", "declined"].contains(home.status)
+        // At the accessibility text sizes the actions end the page; pinned, they'd cover half of it.
+        let inline = typeSize.isAccessibilitySize
+        return VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s5) {
                     addressCard(home)
@@ -85,10 +89,11 @@ struct CrewDayRouteHomeView: View {
                 }
                 .padding(.horizontal, Spacing.s4)
                 .padding(.vertical, Spacing.s2)
+                if hasActions, inline { footer(home) }
             }
             .scrollDismissesKeyboard(.interactively)
             .refreshable { await model.load() }
-            if !model.isDone, !["cancelled", "declined"].contains(home.status) { footer(home) }
+            if hasActions, !inline { footer(home) }
         }
     }
 
@@ -121,7 +126,7 @@ struct CrewDayRouteHomeView: View {
                 Button { openMaps(home) } label: {
                     PlanButtonLabel(title: "Open in Maps", icon: .navigation, kind: .secondary)
                 }
-                .planButton(.secondary, size: .small)
+                .crewDayButton(.secondary, size: .small)
                 .accessibilityIdentifier("crewDayRouteHomeMaps")
             }
         }
@@ -217,21 +222,24 @@ struct CrewDayRouteHomeView: View {
 private extension CrewDayRouteHomeView {
     var photosSection: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            HStack(alignment: .firstTextBaseline) {
+            CrewDayHeaderRow {
                 Text.planOverline("Photos")
-                Spacer()
+            } trailing: {
                 Text("At least one, up to 8").planFont(.footnote).foregroundStyle(Theme.Color.appTextSecondary)
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.s2), count: 4), spacing: Spacing.s2) {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.s2), count: typeSize.isAccessibilitySize ? 2 : 4),
+                spacing: Spacing.s2
+            ) {
                 ForEach(model.photos) { photo in thumbnail(photo) }
             }
             if model.photos.count < CrewDayRouteHomeModel.photoLimit {
-                HStack(spacing: Spacing.s2) {
+                CrewDayButtonRow(spacing: Spacing.s2) {
                     if UIImagePickerController.isSourceTypeAvailable(.camera) {
                         Button { showsCamera = true } label: {
                             PlanButtonLabel(title: "Camera", icon: .camera, kind: .tonal)
                         }
-                        .planButton(.tonal, size: .small)
+                        .crewDayButton(.tonal, size: .small)
                         .accessibilityIdentifier("crewDayRouteHomeCamera")
                     }
                     PhotosPicker(
@@ -241,7 +249,7 @@ private extension CrewDayRouteHomeView {
                     ) {
                         PlanButtonLabel(title: "Photo library", icon: .image, kind: .tonal)
                     }
-                    .planButton(.tonal, size: .small)
+                    .crewDayButton(.tonal, size: .small)
                     .accessibilityIdentifier("crewDayRouteHomeLibrary")
                 }
             }
@@ -302,25 +310,27 @@ private extension CrewDayRouteHomeView {
             Button { Task { await model.markDone() } } label: {
                 PlanButtonLabel(title: "Mark done", isLoading: model.working)
             }
-            .planButton(.primary)
+            .crewDayButton(.primary)
             .disabled(!model.canMarkDone)
             .accessibilityIdentifier("crewDayRouteHomeDone")
             if model.photos.allSatisfy({ $0.path == nil }) {
                 Text("Add at least one photo to mark this home done.")
                     .planFont(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            HStack(spacing: Spacing.s2) {
+            CrewDayButtonRow(spacing: Spacing.s2) {
                 if home.status == "booked" || home.status == "on_the_way" {
                     Button(home.status == "on_the_way" ? "New time" : "On my way") { showsOnMyWay = true }
-                        .planButton(.secondary, size: .small)
+                        .crewDayButton(.secondary, size: .small)
                         .accessibilityIdentifier("crewDayRouteHomeOnMyWay")
                 }
                 Button("Can't get in") {
                     cantGetInNote = "I'm at your home and can't get in. Can you open the gate?"
                     asksCantGetIn = true
                 }
-                .planButton(.secondary, size: .small)
+                .crewDayButton(.secondary, size: .small)
                 .accessibilityIdentifier("crewDayRouteHomeCantGetIn")
             }
         }
@@ -346,45 +356,28 @@ struct CrewDayHomeOnMyWaySheet: View {
     var body: some View {
         let end = start.addingTimeInterval(3600)
         let who = model.home.map(CrewDayRouteCopy.who) ?? "the household"
-        VStack(alignment: .leading, spacing: Spacing.s4) {
-            CrewDaySheetHeader(title: "On my way to \(model.home.map(CrewDayRouteCopy.place) ?? "this home")") { dismiss() }
-            Text("\(who) gets a push with this window and can tell you when the gate is ready.")
-                .planFont(.body)
-                .foregroundStyle(Theme.Color.appTextStrong)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: Spacing.s3) {
-                Text("Expected").planFont(.label).foregroundStyle(Theme.Color.appTextSecondary)
-                Spacer()
-                Button { start = start.addingTimeInterval(-15 * 60) } label: {
-                    Icon(.minus, size: 18, color: Theme.Color.appText).frame(width: 44, height: 44)
-                        .background(Circle().fill(Theme.Color.appSurfaceSunken))
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.s4) {
+                CrewDaySheetHeader(title: "On my way to \(model.home.map(CrewDayRouteCopy.place) ?? "this home")") { dismiss() }
+                Text("\(who) gets a push with this window and can tell you when the gate is ready.")
+                    .planFont(.body)
+                    .foregroundStyle(Theme.Color.appTextStrong)
+                    .fixedSize(horizontal: false, vertical: true)
+                CrewDayExpectedWindow(start: $start, timezone: model.route?.timezone)
+                Button {
+                    Task { if await model.onMyWay(start: start, end: end) { dismiss() } }
+                } label: {
+                    PlanButtonLabel(title: "Tell \(who)", isLoading: model.working)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("15 minutes earlier")
-                Text(CrewDayFormat.window(from: start, to: end, timezone: model.route?.timezone))
-                    .planFont(.bodyStrong)
-                    .monospacedDigit()
-                    .accessibilityIdentifier("crewDayRouteOnMyWayTime")
-                Button { start = start.addingTimeInterval(15 * 60) } label: {
-                    Icon(.plus, size: 18, color: Theme.Color.appText).frame(width: 44, height: 44)
-                        .background(Circle().fill(Theme.Color.appSurfaceSunken))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("15 minutes later")
+                .crewDayButton(.primary)
+                .disabled(model.working)
+                .accessibilityIdentifier("crewDayRouteOnMyWaySend")
             }
-            Button {
-                Task { if await model.onMyWay(start: start, end: end) { dismiss() } }
-            } label: {
-                PlanButtonLabel(title: "Tell \(who)", isLoading: model.working)
-            }
-            .planButton(.primary)
-            .disabled(model.working)
-            .accessibilityIdentifier("crewDayRouteOnMyWaySend")
-            Spacer(minLength: 0)
+            .padding(.horizontal, Spacing.s4)
+            .padding(.bottom, Spacing.s4)
         }
-        .padding(.horizontal, Spacing.s4)
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
+        .scrollBounceBehavior(.basedOnSize)
+        .crewDaySheetDetents([.medium])
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("crewDayRouteOnMyWaySheet")
     }

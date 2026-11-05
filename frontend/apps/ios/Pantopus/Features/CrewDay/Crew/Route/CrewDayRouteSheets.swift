@@ -31,40 +31,75 @@ struct CrewDayOnMyWaySheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s4) {
-            CrewDaySheetHeader(title: "On my way to \(CrewDayRouteCopy.place(home))") { dismiss() }
-            Text("\(CrewDayRouteCopy.who(home)) gets a push with this window and can tell you when the gate is ready.")
-                .planFont(.body)
-                .foregroundStyle(Theme.Color.appTextStrong)
-                .fixedSize(horizontal: false, vertical: true)
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.s4) {
+                CrewDaySheetHeader(title: "On my way to \(CrewDayRouteCopy.place(home))") { dismiss() }
+                Text("\(CrewDayRouteCopy.who(home)) gets a push with this window and can tell you when the gate is ready.")
+                    .planFont(.body)
+                    .foregroundStyle(Theme.Color.appTextStrong)
+                    .fixedSize(horizontal: false, vertical: true)
+                CrewDayExpectedWindow(start: $start, timezone: timezone)
+                if let error = viewModel.actionError { CrewDayErrorText(text: error, identifier: "crewDayRouteOnMyWayError") }
+                Button {
+                    Task { if await viewModel.onMyWay(home, start: start, end: end) { dismiss() } }
+                } label: {
+                    PlanButtonLabel(title: "Tell \(CrewDayRouteCopy.who(home))", isLoading: viewModel.working)
+                }
+                .crewDayButton(.primary)
+                .disabled(viewModel.working)
+                .accessibilityIdentifier("crewDayRouteOnMyWaySend")
+            }
+            .padding(.horizontal, Spacing.s4)
+            .padding(.bottom, Spacing.s4)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .crewDaySheetDetents([.medium])
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("crewDayRouteOnMyWaySheet")
+    }
+}
+
+/// "Expected": a one-hour window, 15 minutes earlier (not before a quarter hour ago) or later. The time wraps at
+/// the large text sizes, and VoiceOver adjusts it with a swipe up or down.
+struct CrewDayExpectedWindow: View {
+    @Binding var start: Date
+    let timezone: String?
+
+    private var window: String {
+        CrewDayFormat.window(from: start, to: start.addingTimeInterval(3600), timezone: timezone)
+    }
+
+    private var canGoEarlier: Bool {
+        start > Date().addingTimeInterval(-15 * 60)
+    }
+
+    var body: some View {
+        CrewDayHeaderRow {
+            // The time itself is the "Expected" VoiceOver stop.
+            Text("Expected").planFont(.label).foregroundStyle(Theme.Color.appTextSecondary).accessibilityHidden(true)
+        } trailing: {
             HStack(spacing: Spacing.s3) {
-                Text("Expected").planFont(.label).foregroundStyle(Theme.Color.appTextSecondary)
-                Spacer()
                 stepper(icon: .minus, label: "15 minutes earlier") { start = start.addingTimeInterval(-15 * 60) }
-                    .disabled(start <= Date().addingTimeInterval(-15 * 60))
-                Text(CrewDayFormat.window(from: start, to: end, timezone: timezone))
+                    .disabled(!canGoEarlier)
+                Text(window)
                     .planFont(.bodyStrong)
                     .monospacedDigit()
                     .foregroundStyle(Theme.Color.appText)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("Expected")
+                    .accessibilityValue(window)
+                    .accessibilityAdjustableAction { direction in
+                        switch direction {
+                        case .increment: start = start.addingTimeInterval(15 * 60)
+                        case .decrement: if canGoEarlier { start = start.addingTimeInterval(-15 * 60) }
+                        @unknown default: break
+                        }
+                    }
                     .accessibilityIdentifier("crewDayRouteOnMyWayTime")
                 stepper(icon: .plus, label: "15 minutes later") { start = start.addingTimeInterval(15 * 60) }
             }
-            if let error = viewModel.actionError { CrewDayErrorText(text: error, identifier: "crewDayRouteOnMyWayError") }
-            Button {
-                Task { if await viewModel.onMyWay(home, start: start, end: end) { dismiss() } }
-            } label: {
-                PlanButtonLabel(title: "Tell \(CrewDayRouteCopy.who(home))", isLoading: viewModel.working)
-            }
-            .planButton(.primary)
-            .disabled(viewModel.working)
-            .accessibilityIdentifier("crewDayRouteOnMyWaySend")
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, Spacing.s4)
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("crewDayRouteOnMyWaySheet")
     }
 
     private func stepper(icon: PantopusIcon, label: String, action: @escaping () -> Void) -> some View {
@@ -84,50 +119,52 @@ struct CrewDayRunningLateSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s4) {
-            CrewDaySheetHeader(title: "Running late?") { dismiss() }
-            Text("Every home that isn't done moves back by the same amount, and each one is told.")
-                .planFont(.body)
-                .foregroundStyle(Theme.Color.appTextStrong)
-                .fixedSize(horizontal: false, vertical: true)
-            Text.planOverline("How late")
-            HStack(spacing: Spacing.s2) {
-                ForEach([30, 60, 90], id: \.self) { value in
-                    let selected = minutes == value
-                    Button { minutes = value } label: {
-                        Text("\(value) min")
-                            .planFont(selected ? .bodyStrong : .body)
-                            .foregroundStyle(selected ? Theme.Color.primary700 : Theme.Color.appText)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .background(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
-                                .fill(selected ? Theme.Color.primary50 : Theme.Color.appSurface))
-                            .overlay(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
-                                .stroke(selected ? Theme.Color.primary700 : Theme.Color.appBorderStrong, lineWidth: 1))
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.s4) {
+                CrewDaySheetHeader(title: "Running late?") { dismiss() }
+                Text("Every home that isn't done moves back by the same amount, and each one is told.")
+                    .planFont(.body)
+                    .foregroundStyle(Theme.Color.appTextStrong)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text.planOverline("How late")
+                CrewDayButtonRow(spacing: Spacing.s2) {
+                    ForEach([30, 60, 90], id: \.self) { value in
+                        let selected = minutes == value
+                        Button { minutes = value } label: {
+                            Text("\(value) min")
+                                .planFont(selected ? .bodyStrong : .body)
+                                .foregroundStyle(selected ? Theme.Color.primary700 : Theme.Color.appText)
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .background(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
+                                    .fill(selected ? Theme.Color.primary50 : Theme.Color.appSurface))
+                                .overlay(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
+                                    .stroke(selected ? Theme.Color.primary700 : Theme.Color.appBorderStrong, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+                        .accessibilityIdentifier("crewDayRouteLate_\(value)")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-                    .accessibilityIdentifier("crewDayRouteLate_\(value)")
                 }
+                Text(preview)
+                    .planFont(.body)
+                    .foregroundStyle(Theme.Color.appTextStrong)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("crewDayRouteLatePreview")
+                if let error = viewModel.actionError { CrewDayErrorText(text: error, identifier: "crewDayRouteLateError") }
+                Button {
+                    Task { if await viewModel.runningLate(minutes: minutes) { dismiss() } }
+                } label: {
+                    PlanButtonLabel(title: "Tell \(CrewDayFormat.homes(count))", isLoading: viewModel.working)
+                }
+                .crewDayButton(.primary)
+                .disabled(viewModel.working || viewModel.lateHomes.isEmpty)
+                .accessibilityIdentifier("crewDayRouteLateSend")
             }
-            Text(preview)
-                .planFont(.body)
-                .foregroundStyle(Theme.Color.appTextStrong)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("crewDayRouteLatePreview")
-            if let error = viewModel.actionError { CrewDayErrorText(text: error, identifier: "crewDayRouteLateError") }
-            Button {
-                Task { if await viewModel.runningLate(minutes: minutes) { dismiss() } }
-            } label: {
-                PlanButtonLabel(title: "Tell \(CrewDayFormat.homes(count))", isLoading: viewModel.working)
-            }
-            .planButton(.primary)
-            .disabled(viewModel.working || viewModel.lateHomes.isEmpty)
-            .accessibilityIdentifier("crewDayRouteLateSend")
-            Spacer(minLength: 0)
+            .padding(.horizontal, Spacing.s4)
+            .padding(.bottom, Spacing.s4)
         }
-        .padding(.horizontal, Spacing.s4)
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        .scrollBounceBehavior(.basedOnSize)
+        .crewDaySheetDetents([.medium, .large])
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("crewDayRouteLateSheet")
     }

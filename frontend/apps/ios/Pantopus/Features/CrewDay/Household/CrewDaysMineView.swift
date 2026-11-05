@@ -17,10 +17,11 @@ struct CrewDaysMineView: View {
     let onOpenBooking: (String) -> Void
     let onOpenInvitation: (String) -> Void
     let onAsk: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(spacing: 0) {
-            PlanNavBar(title: "Your Crew Days", onLeading: onBack)
+            PlanNavBar.crewDay(title: "Your Crew Days", onLeading: onBack)
             content
         }
         .background(Theme.Color.appBg)
@@ -38,7 +39,7 @@ struct CrewDaysMineView: View {
         case .loading:
             CrewDayLoadingView()
         case let .failed(message):
-            CrewDayErrorView(message: message) { await viewModel.load() }
+            CrewDayErrorView(headline: "Couldn't load your Crew Days", message: message) { await viewModel.load() }
         case let .loaded(mine):
             if mine.upcoming.isEmpty, mine.requests.isEmpty, mine.past.isEmpty {
                 empty
@@ -104,7 +105,7 @@ struct CrewDaysMineView: View {
     }
 
     private func pastRow(_ card: CrewDayCardDTO) -> some View {
-        HStack(spacing: Spacing.s2) {
+        CrewDayButtonRow(spacing: Spacing.s2) {
             rowButton(identifier: "crewDaysMinePast_\(card.bookingId ?? card.id)") {
                 if let bookingId = card.bookingId { onOpenBooking(bookingId) }
             } label: {
@@ -112,7 +113,7 @@ struct CrewDaysMineView: View {
             }
             if let code = card.bookAgainCode {
                 Button("Book again") { onOpenInvitation(code) }
-                    .planButton(.tonal, size: .extraSmall)
+                    .crewDayButton(.tonal, size: .extraSmall)
                     .padding(.trailing, Spacing.s4)
                     .accessibilityIdentifier("crewDaysMineBookAgain_\(card.bookingId ?? card.id)")
             }
@@ -134,7 +135,7 @@ struct CrewDaysMineView: View {
         note: String? = nil,
         chevron: Bool = false
     ) -> some View {
-        HStack(alignment: .center, spacing: Spacing.s3) {
+        HStack(alignment: typeSize.isAccessibilitySize ? .top : .center, spacing: Spacing.s3) {
             CrewDayTile(size: 40)
             VStack(alignment: .leading, spacing: 2) {
                 ViewThatFits(in: .horizontal) {
@@ -186,7 +187,7 @@ struct CrewDaysMineView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Button("Ask for a Crew Day", action: onAsk)
-                .planButton(.secondary)
+                .crewDayButton(.secondary)
                 .accessibilityIdentifier("crewDaysMineAsk")
         }
     }

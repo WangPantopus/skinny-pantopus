@@ -50,17 +50,25 @@ struct PlanButtonStyle: ButtonStyle {
 
     let kind: Kind
     var size: Size = .regular
+    /// At the accessibility text sizes the label wraps instead of truncating (opt-in; Crew Day's buttons).
+    var wrapsAtLargeText = false
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private var wraps: Bool {
+        wrapsAtLargeText && typeSize.isAccessibilitySize
+    }
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .planFont(size == .regular ? .bodyStrong : size == .stack ? .label : .buttonSmall)
             .foregroundStyle(kind.foreground)
-            .lineLimit(size == .stack ? 2 : 1)
-            .minimumScaleFactor(0.85)
+            .lineLimit(wraps ? 4 : size == .stack ? 2 : 1)
+            .minimumScaleFactor(wraps ? 1 : 0.85)
+            .fixedSize(horizontal: false, vertical: wraps)
             .multilineTextAlignment(.center)
             .padding(.horizontal, size == .extraSmall ? 14 : Spacing.s3)
-            .padding(.vertical, size == .stack ? Spacing.s2 : 0)
+            .padding(.vertical, wraps ? Spacing.s2 : size == .stack ? Spacing.s2 : 0)
             .frame(maxWidth: size == .extraSmall ? nil : .infinity, minHeight: height)
             .background(background)
             .overlay(border)
@@ -140,5 +148,10 @@ struct PlanButtonLabel: View {
 extension View {
     func planButton(_ kind: PlanButtonStyle.Kind, size: PlanButtonStyle.Size = .regular) -> some View {
         buttonStyle(PlanButtonStyle(kind: kind, size: size))
+    }
+
+    /// A Plans button whose label wraps at the accessibility text sizes (Crew Day: nothing truncates there).
+    func crewDayButton(_ kind: PlanButtonStyle.Kind, size: PlanButtonStyle.Size = .regular) -> some View {
+        buttonStyle(PlanButtonStyle(kind: kind, size: size, wrapsAtLargeText: true))
     }
 }
