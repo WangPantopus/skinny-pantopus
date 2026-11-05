@@ -27,6 +27,7 @@ data class MaintenanceTaskDto(
     val notes: String? = null,
     val category: String? = null,
     @Json(name = "performer_contact") val performerContact: String? = null,
+    @Json(name = "document_id") val documentId: String? = null,
     val vendor: String? = null,
     @MaintenanceCost val cost: BigDecimal? = null,
     val recurrence: String = "one_time",
@@ -85,6 +86,7 @@ data class CreateMaintenanceRequest(
     @Json(name = "performed_at") val performedAt: String? = null,
     val status: String? = null,
     val clientRequestId: String? = null,
+    @Json(name = "document_id") val documentId: String? = null,
 )
 
 /** Body for `PUT /api/homes/:id/maintenance/:taskId`. All fields optional. */
@@ -101,6 +103,8 @@ data class UpdateMaintenanceRequest(
     val status: String? = null,
     val clearVendor: Boolean = false,
     val clearCost: Boolean = false,
+    val documentId: String? = null,
+    val clearDocument: Boolean = false,
 )
 
 /** Preserve omitted fields while sending deliberate clears as JSON null. */
@@ -120,6 +124,7 @@ class UpdateMaintenanceRequestJsonAdapter {
             value.performerContact?.let { writer.name("performer_contact").value(it) }
             if (value.vendor != null || value.clearVendor) writer.name("vendor").value(value.vendor)
             if (value.cost != null || value.clearCost) writer.name("cost").value(value.cost)
+            if (value.documentId != null || value.clearDocument) writer.name("document_id").value(value.documentId)
             value.recurrence?.let { writer.name("recurrence").value(it) }
             value.dueDate?.let { writer.name("due_date").value(it) }
             value.performedAt?.let { writer.name("performed_at").value(it) }

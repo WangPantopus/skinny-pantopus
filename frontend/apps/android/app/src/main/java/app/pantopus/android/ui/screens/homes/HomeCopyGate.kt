@@ -39,6 +39,10 @@ class HomeCopyGate(
     /** The last known access is a household one: copies may show before the re-check, and they stay stored. */
     private var allowsCopy: Boolean = householdAccess(access.storedAuthority(homeId))
     private var hasLeft = false
+
+    /** Effective permission from the same authority read that governs the stored Home copy. */
+    fun can(permission: String): Boolean = access.storedAuthority(homeId)?.let { it.hasAccess && permission in it.permissions } == true
+
     var showsCopy: Boolean
         get() = allowsCopy && householdAccess(access.storedAuthority(homeId))
         private set(value) {

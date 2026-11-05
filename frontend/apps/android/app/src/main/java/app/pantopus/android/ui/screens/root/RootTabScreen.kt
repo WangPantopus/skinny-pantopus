@@ -4756,6 +4756,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     val taskId = entry.arguments?.getString(MAINTENANCE_DETAIL_TASK_ID_KEY) ?: ""
                     MaintenanceDetailScreen(
                         onBack = { navController.popBackStack() },
+                        onOpenDocument = { documentId ->
+                            navController.navigate(ChildRoutes.documentDetail(homeId, documentId))
+                        },
                         onEdit = {
                             navController.navigate(ChildRoutes.editMaintenance(homeId, taskId))
                         },
