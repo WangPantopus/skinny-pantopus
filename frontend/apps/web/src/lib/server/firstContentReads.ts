@@ -3,7 +3,7 @@
 // same shapes, the same copy rules (founder decision 3: a copy that may not show
 // before its re-check is left to the browser, which reads it again).
 import { cache } from 'react';
-import type { DehydratedState } from '@tanstack/react-query';
+import type { DehydratedState } from '@tanstack/query-core';
 import type { HubPayload, MyHome } from '@pantopus/api';
 import type { PrimaryHome } from '@pantopus/api/endpoints/homes';
 import type { HubToday, PlaceIntelligence, UnifiedConversationItem } from '@pantopus/types';

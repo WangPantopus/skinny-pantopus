@@ -5,7 +5,10 @@
 // or failure leaves the screen to load its data in the browser, as it does without
 // first content. Nothing here may be shared between requests.
 import { cookies, headers } from 'next/headers';
-import { QueryClient, dehydrate, type DehydratedState, type QueryKey } from '@tanstack/react-query';
+// The core, not '@tanstack/react-query': that package's index also re-exports its
+// fifteen 'use client' hooks, and every client module a server module reaches goes
+// out to the browser with the page (importing it here added up to 5 KB gz to each tab).
+import { QueryClient, dehydrate, type DehydratedState, type QueryKey } from '@tanstack/query-core';
 import { FIRST_CONTENT_ENABLED, FIRST_CONTENT_HEADER, firstContentTag } from '@/lib/firstContent';
 
 // The API the web's rewrites forward to (next.config.js), read directly from here.
