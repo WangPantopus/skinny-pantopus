@@ -64,6 +64,7 @@ struct CrewDayPriceView: View {
                     }
                     CrewDayLockLine(text: "Visible to your crew and Pantopus.")
                 }
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("crewDayPriceAddress")
             } else {
                 CrewDayAddressField(
@@ -154,6 +155,7 @@ struct CrewDayPriceView: View {
                 .planButton(.secondary)
                 .accessibilityIdentifier("crewDayPriceAsk")
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("crewDayPriceOutOfArea")
     }
 

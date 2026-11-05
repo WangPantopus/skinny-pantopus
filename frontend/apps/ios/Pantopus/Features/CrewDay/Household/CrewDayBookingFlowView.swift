@@ -88,6 +88,16 @@ struct CrewDayBookedView: View {
                         .planFont(.body)
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .fixedSize(horizontal: false, vertical: true)
+                    if !asked, let note = booking?.prepNote, !note.isEmpty {
+                        CrewDayCard {
+                            CrewDaySectionTitle(text: "One thing to do")
+                            Text(note)
+                                .planFont(.body)
+                                .foregroundStyle(Theme.Color.appText)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .accessibilityIdentifier("crewDayBookedPrepNote")
+                    }
                     if !asked { whatNext }
                     actions
                 }

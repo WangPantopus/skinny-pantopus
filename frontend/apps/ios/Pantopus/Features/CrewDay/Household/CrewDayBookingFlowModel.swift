@@ -41,10 +41,13 @@ struct CrewDayBookingWritten: Decodable {
         let id: String
         let status: String
         let priceCents: Int?
+        /// The crew's one thing for households to do.
+        let prepNote: String?
 
         private enum CodingKeys: String, CodingKey {
             case id, status
             case priceCents = "price_cents"
+            case prepNote = "prep_note"
         }
     }
 }
