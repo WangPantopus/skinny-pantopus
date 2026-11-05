@@ -62,8 +62,7 @@ struct CrewDayShareSheet: View {
             .padding(.bottom, Spacing.s5)
         }
         .scrollDismissesKeyboard(.interactively)
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
+        .crewDaySheetDetents([.large])
         .sheet(item: $systemSheet) { $0.makeView() }
         .sheet(isPresented: $showsQR) { CrewDayQRSheet(link: link, title: booking.crewDay.title) }
         .task {
@@ -138,34 +137,34 @@ struct CrewDayShareSheet: View {
     }
 
     private var buttons: some View {
-        Grid(horizontalSpacing: 10, verticalSpacing: 10) {
-            GridRow {
+        VStack(spacing: 10) {
+            CrewDayButtonRow(spacing: 10) {
                 Button {
                     UIPasteboard.general.string = link
                     copied = true
                 } label: {
                     PlanButtonLabel(title: copied ? "Link copied" : "Copy link", icon: copied ? .check : .link, kind: .tonal)
                 }
-                .planButton(.tonal)
+                .crewDayButton(.tonal)
                 .accessibilityIdentifier("crewDayShareCopy")
                 Button { systemSheet = .share(items: [message]) } label: {
                     PlanButtonLabel(title: "Share…", icon: .share)
                 }
-                .planButton(.primary)
+                .crewDayButton(.primary)
                 .accessibilityIdentifier("crewDayShareShare")
             }
-            GridRow {
+            CrewDayButtonRow(spacing: 10) {
                 Button { showsQR = true } label: {
                     PlanButtonLabel(title: "Show QR code", icon: .qrCode, kind: .tonal)
                 }
-                .planButton(.tonal)
+                .crewDayButton(.tonal)
                 .accessibilityIdentifier("crewDayShareQR")
                 Button {
                     if let url = URL(string: InviteLinks.publicPageURLString(path: "/crew-day/\(code)/flyer")) { openURL(url) }
                 } label: {
                     PlanButtonLabel(title: "Printable flyer", icon: .printer, kind: .tonal)
                 }
-                .planButton(.tonal)
+                .crewDayButton(.tonal)
                 .accessibilityIdentifier("crewDayShareFlyer")
             }
         }
