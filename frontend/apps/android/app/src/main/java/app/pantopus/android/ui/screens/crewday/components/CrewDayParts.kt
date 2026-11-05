@@ -142,7 +142,8 @@ fun CrewDayDayRow(
     PlanRow(
         title = item.title,
         subtitle = subtitle.filter { it.isNotBlank() }.joinToString(" · "),
-        end = PlanRowEnd.Status(crewDayStatusWord(item)),
+        // Today's rows carry the route button instead (board `CrewList`); the section already says Today.
+        end = if (onOpenRoute != null) PlanRowEnd.None else PlanRowEnd.Status(crewDayStatusWord(item)),
         first = first,
         leading = { CrewDayTile(crew = true) },
         onClick = onClick,
@@ -177,7 +178,7 @@ fun CrewDayDayRow(
 fun CrewDayListPlaceholder(modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
         Shimmer(width = 120.dp, height = 12.dp)
-        repeat(3) {
+        repeat(PLACEHOLDER_ROWS) {
             Row(
                 modifier = Modifier.fillMaxWidth().planCard().padding(Spacing.s4),
                 verticalAlignment = Alignment.CenterVertically,
@@ -210,3 +211,5 @@ fun CrewDayPageTitle(
         subtitle?.let { Text(text = it, style = PantopusTextStyle.body, color = PantopusColors.appTextSecondary) }
     }
 }
+
+private const val PLACEHOLDER_ROWS = 3

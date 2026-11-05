@@ -1,3 +1,5 @@
+@file:Suppress("MagicNumber")
+
 package app.pantopus.android.ui.screens.crewday.route
 
 import androidx.lifecycle.SavedStateHandle

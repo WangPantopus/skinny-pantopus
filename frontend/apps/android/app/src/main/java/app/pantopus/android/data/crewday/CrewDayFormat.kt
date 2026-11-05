@@ -16,6 +16,7 @@ import java.util.Locale
  * Crew Day's words for money and time (01-spec.md, "Copy"): times in the Crew Day's own time zone, written
  * "9 AM–1 PM" and "Tue, Nov 17"; whole-dollar prices without cents ("$180") and receipts with them ("$180.00").
  */
+@Suppress("TooManyFunctions")
 object CrewDayFormat {
     private val locale: Locale get() = Locale.US
     private val dateShort: DateTimeFormatter get() = DateTimeFormatter.ofPattern("EEE, MMM d", locale)

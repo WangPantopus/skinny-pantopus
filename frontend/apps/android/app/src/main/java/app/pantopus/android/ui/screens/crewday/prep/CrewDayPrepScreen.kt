@@ -1,4 +1,4 @@
-@file:Suppress("LongMethod", "TooManyFunctions", "MagicNumber")
+@file:Suppress("LongMethod", "TooManyFunctions", "MagicNumber", "MatchingDeclarationName")
 
 package app.pantopus.android.ui.screens.crewday.prep
 
@@ -715,8 +715,7 @@ private fun askedOn(
 ): String? = CrewDayFormat.shortDate(CrewDayFormat.instant(home.createdAt), zone)?.let { "asked ${it.substringAfter(", ")}" }
 
 /** "Two stories · gutter guards". */
-private fun jobWords(home: CrewDayHomeDto): String? =
-    home.details?.takeIf { it.isNotBlank() }
+private fun jobWords(home: CrewDayHomeDto): String? = home.details?.takeIf { it.isNotBlank() }
 
 /** "Home 3", or the address once the crew may see it. */
 private fun homeName(home: CrewDayHomeDto): String = home.address?.line ?: home.label ?: "A home"

@@ -1,4 +1,4 @@
-@file:Suppress("LongMethod", "TooManyFunctions")
+@file:Suppress("LongMethod", "TooManyFunctions", "CyclomaticComplexMethod")
 
 package app.pantopus.android.ui.screens.crewday.dates
 

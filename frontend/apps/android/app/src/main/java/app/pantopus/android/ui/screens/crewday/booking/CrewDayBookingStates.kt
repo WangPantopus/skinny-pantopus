@@ -1,4 +1,4 @@
-@file:Suppress("TooManyFunctions", "CyclomaticComplexMethod")
+@file:Suppress("TooManyFunctions", "CyclomaticComplexMethod", "MatchingDeclarationName")
 
 package app.pantopus.android.ui.screens.crewday.booking
 
