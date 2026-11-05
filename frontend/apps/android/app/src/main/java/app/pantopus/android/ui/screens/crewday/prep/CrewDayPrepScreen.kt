@@ -140,7 +140,8 @@ private fun PrepContent(
         StatusBanner(view, working, viewModel)
         NeedsYou(view, working, onPrice = { pricing = it }, onDecline = { declining = it }, onRelease = { releasing = it })
         HomesBooked(view)
-        if (open) {
+        // As the web: no more homes can come once booking closed or the day is full.
+        if (open && !view.isClosed && !view.isFull) {
             BringInMore(
                 view = view,
                 inviting = CrewDayPrepViewModel.DAY in working,
@@ -237,7 +238,7 @@ private fun PrepHeader(
         modifier = Modifier.fillMaxWidth().planCard().padding(Spacing.s4),
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
-        PlanStatusChip(text = dayStatusWord(day.status, view.isFull))
+        PlanStatusChip(text = dayStatusWord(day.status, view.isFull, view.isClosed))
         Text(
             text = day.title,
             style = PantopusTextStyle.h3.copy(fontWeight = FontWeight.Bold),
@@ -714,12 +715,18 @@ private fun homeName(home: CrewDayHomeDto): String = home.address?.line ?: home.
 private fun dayStatusWord(
     status: String?,
     full: Boolean,
+    closed: Boolean,
 ): String =
     when (status) {
         "draft" -> "Draft"
         "pending_review" -> "Waiting for approval"
         "declined" -> "Not approved"
-        "open" -> if (full) "Full" else "Open"
+        "open" ->
+            when {
+                full -> "Full"
+                closed -> "Booking closed"
+                else -> "Open"
+            }
         "in_progress" -> "Today"
         "done" -> "Done"
         "cancelled" -> "Cancelled"
