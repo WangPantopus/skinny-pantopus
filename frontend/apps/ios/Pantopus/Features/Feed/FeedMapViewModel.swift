@@ -186,9 +186,12 @@ public final class FeedMapViewModel {
             userCoordinate = locationProvider.cachedCoordinate()
         }
         // With an area chosen, opening the map doesn't ask for location; where
-        // it's allowed, a fix still marks where you are.
+        // it's allowed, a fix still marks where you are. That passive look is brief,
+        // as on the list: the markers fall back to your own place. Asking keeps the
+        // full window for the answer.
         if userCoordinate == nil, shownArea == nil || locationProvider.canLocateWithoutAsking {
-            userCoordinate = await locationProvider.requestCurrent(timeoutSeconds: 4)
+            let timeout = locationProvider.canLocateWithoutAsking ? passiveLocationTimeoutSeconds : 4
+            userCoordinate = await locationProvider.requestCurrent(timeoutSeconds: timeout)
         }
         if shownArea == nil, let center = await fallbackCenter(homes: payload.homes) {
             moveCamera(to: openingRegion(latitude: center.latitude, longitude: center.longitude))
