@@ -141,6 +141,8 @@ public struct OwnersListView: View {
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 .accessibilityIdentifier("ownersList_transferCTA")
             }
+            // Half folded like a book, on one side of the iPhone Duo's fold; the bar itself stays full width.
+            .besideFold()
             .padding(.horizontal, Spacing.s4)
             .padding(.top, Spacing.s2)
             .padding(.bottom, Spacing.s4)

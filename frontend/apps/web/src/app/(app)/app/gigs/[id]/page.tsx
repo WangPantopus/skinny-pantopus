@@ -7,6 +7,8 @@ import { usePaymentRedirectCleanup } from '@/hooks/usePaymentRedirectCleanup';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
+// The mini map below renders react-leaflet directly, so it brings Leaflet's stylesheet itself.
+import 'leaflet/dist/leaflet.css';
 import Image from 'next/image';
 import { FileText, Lock, CircleDot } from 'lucide-react';
 import * as api from '@pantopus/api';

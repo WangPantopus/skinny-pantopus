@@ -45,6 +45,8 @@ public struct HomePhotosView: View {
                         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                // Half folded like a book, on one side of the iPhone Duo's fold.
+                .besideFold()
             }
         )
         .background(Theme.Color.appBg)

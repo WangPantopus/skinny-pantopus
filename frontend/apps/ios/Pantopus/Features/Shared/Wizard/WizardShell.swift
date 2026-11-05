@@ -145,6 +145,8 @@ public struct WizardShell<Content: View>: View {
                 }
                 .accessibilityIdentifier(chrome.primaryCTAIdentifier)
             }
+            // Half folded like a book, on one side of the iPhone Duo's fold; the bar itself stays full width.
+            .besideFold()
             .padding(Spacing.s4)
             .background(Theme.Color.appSurface)
         }

@@ -88,6 +88,8 @@ public struct DataExportView: View {
             }
             .accessibilityIdentifier("dataExportRequestCTA")
         }
+        // Half folded like a book, on one side of the iPhone Duo's fold; the bar itself stays full width.
+        .besideFold()
         .padding(.horizontal, Spacing.s4)
         .padding(.vertical, Spacing.s3)
         .background(Theme.Color.appSurface)

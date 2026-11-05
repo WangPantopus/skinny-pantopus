@@ -9,6 +9,7 @@ import app.pantopus.android.data.api.models.homes.HomeAccessSecretDto
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.ui.screens.homes.accesscodes.AccessCategory
+import app.pantopus.android.ui.screens.homes.accesscodes.AccessCodesRefusal
 import app.pantopus.android.ui.screens.homes.accesscodes.AccessCodesViewModel
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowLeading
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowModel
@@ -106,7 +107,13 @@ class AccessCodesSearchViewModel
                             corpus = result.data.secrets
                             loadedOnce = true
                         }
-                        is NetworkResult.Failure -> _error.value = "Couldn't load access codes. Try again."
+                        is NetworkResult.Failure ->
+                            _error.value =
+                                if (AccessCodesRefusal.matches(result.error)) {
+                                    AccessCodesRefusal.LIST
+                                } else {
+                                    "Couldn't load access codes. Try again."
+                                }
                     }
                     _isLoading.value = false
                     recompute()

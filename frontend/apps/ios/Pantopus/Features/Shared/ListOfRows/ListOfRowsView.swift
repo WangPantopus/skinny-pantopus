@@ -174,7 +174,11 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
                         tint: content.tint ?? Theme.Color.personalBg,
                         accent: content.accent ?? Theme.Color.primary600
                     )
-                    .frame(minHeight: proxy.size.height)
+                    // Beside the iPhone Duo's fold, above the floating button as the loaded list keeps clear of it.
+                    .centeredClearOfFold(
+                        minHeight: proxy.size.height,
+                        bottomClearance: dataSource.fab == nil ? 0 : Spacing.s16 + Spacing.s5
+                    )
                     .closesKeyboardFirst(searchFocused)
                 }
                 .refreshable { await dataSource.refresh() }

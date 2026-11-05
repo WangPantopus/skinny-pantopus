@@ -43,12 +43,9 @@ import app.pantopus.android.push.FcmTokenProvider
 import app.pantopus.android.push.NotificationDispatcher
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -373,26 +370,19 @@ class AuthRepository
                 return
             }
             val cached = loadCachedUser()
-            if (cached != null && !network.isOnline.value) {
-                // Android already knows there is no connection. Open the saved session now rather than
-                // keeping its pages behind profile/refresh retries. Online requests still check the session.
+            if (cached != null) {
+                // The splash waited here for the profile read, and for a token refresh first when the hour-long
+                // access token had lapsed: one or two round trips on every cold launch. With the saved identity the
+                // app opens on it at once, on the copies its screens saved (Instant Screens). Their first requests
+                // wait for the same single-flight refresh (AuthInterceptor renews a lapsing token before sending),
+                // and the restore below finishes in the background: a fresh profile replaces the saved one and a
+                // rejected session still signs out. With no connection, online requests check the session later.
                 finishSignedIn(cached, token)
+                if (network.isOnline.value) restoreSignedIn(token, cached)
                 return
             }
-            coroutineScope {
-                // Each call can wait out its timeouts and retries, so a slow or failing server once held the
-                // launch screen for a minute or more. With a cached identity the app opens on it after
-                // LAUNCH_RESTORE_CAP_MILLIS, and the restore below finishes in the background.
-                val opener =
-                    cached?.let { user ->
-                        launch {
-                            delay(LAUNCH_RESTORE_CAP_MILLIS)
-                            if (_state.value == State.Unknown) finishSignedIn(user, token)
-                        }
-                    }
-                restoreSignedIn(token, cached)
-                opener?.cancel()
-            }
+            // No saved identity to open on: the splash stays until the server answers.
+            restoreSignedIn(token, null)
         }
 
         /** L1: renew a lapsing access token, then hydrate the profile; the cached identity covers outages. */
@@ -1423,8 +1413,6 @@ class AuthRepository
         private companion object {
             const val PROACTIVE_REFRESH_WINDOW_SECONDS = 120L
 
-            /** How long launch waits for the restore before opening on the cached identity. */
-            const val LAUNCH_RESTORE_CAP_MILLIS = 5_000L
             const val MILLIS_PER_SECOND = 1000L
             const val FCM_TOKEN_TIMEOUT_MS = 5_000L
             const val LOGOUT_TIMEOUT_MS = 5_000L

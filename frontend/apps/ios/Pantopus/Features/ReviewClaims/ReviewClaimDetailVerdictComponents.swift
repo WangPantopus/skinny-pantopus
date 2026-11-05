@@ -163,6 +163,8 @@ struct VerdictBar: View {
                 .accessibilityLabel("Reject claim")
             }
         }
+        // Half folded like a book, on one side of the iPhone Duo's fold; the card itself stays full width.
+        .besideFold()
         .padding(Spacing.s4)
         .frame(maxWidth: .infinity)
         .background(Theme.Color.appSurface)
