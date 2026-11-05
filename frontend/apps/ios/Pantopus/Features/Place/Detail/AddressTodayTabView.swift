@@ -151,12 +151,14 @@ struct AddressTodayTabView: View {
         } else if loadFailed {
             VStack(spacing: 0) {
                 TodayNeedsYouCard(model: needsYou).padding(.horizontal, Spacing.s4)
+                if LaunchFeatures.crewDay { CrewDayTodayCards().padding(.horizontal, Spacing.s4) }
                 if PlansFlags.shared.plans { PlansTodayCards().padding(.horizontal, Spacing.s4) }
                 couldNotLoad
             }
         } else {
             VStack(spacing: 0) {
                 TodayNeedsYouCard(model: needsYou).padding(.horizontal, Spacing.s4)
+                if LaunchFeatures.crewDay { CrewDayTodayCards().padding(.horizontal, Spacing.s4) }
                 if PlansFlags.shared.plans { PlansTodayCards().padding(.horizontal, Spacing.s4) }
                 noPlace
             }
