@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.homes.accesscodes
 
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -17,6 +18,7 @@ import app.pantopus.android.ui.screens.shared.list_of_rows.RowSection
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowTemplate
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowTrailing
 import app.pantopus.android.ui.screens.shared.list_of_rows.SectionStyle
+import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -81,6 +83,10 @@ class AccessCodesViewModel
 
         private val _chipStrip = MutableStateFlow<ChipStripConfig?>(null)
         val chipStrip: StateFlow<ChipStripConfig?> = _chipStrip.asStateFlow()
+
+        private val _canManage = MutableStateFlow(false)
+        val canManage: StateFlow<Boolean> = _canManage.asStateFlow()
+        private var writableVisibilities: Set<String> = emptySet()
 
         private var secrets: List<HomeAccessSecretDto> = emptyList()
         private var loadedOnce: Boolean = false
@@ -161,11 +167,13 @@ class AccessCodesViewModel
         /** Open the kebab menu for a secret (currently routes to Edit). */
         fun openKebab(secretId: String) {
             if (!hasCurrentSecrets || secrets.none { it.id == secretId }) return
+            if (secrets.first { it.id == secretId }.visibility !in writableVisibilities) return
             onSelect(AccessCodesTarget.EditCode(homeId = homeId, secretId = secretId))
         }
 
         /** Trigger from the FAB or an empty-state CTA. */
         fun startAddCode(category: AccessCategory? = null) {
+            if (!hasCurrentSecrets || !_canManage.value) return
             onSelect(AccessCodesTarget.AddCode(homeId = homeId, category = category))
         }
 
@@ -188,6 +196,8 @@ class AccessCodesViewModel
                     when (result) {
                         is NetworkResult.Success -> {
                             secrets = result.data.secrets
+                            writableVisibilities = result.data.allowedVisibilities.toSet().takeIf { result.data.canManage }.orEmpty()
+                            _canManage.value = writableVisibilities.isNotEmpty()
                             hasCurrentSecrets = true
                             loadedOnce = true
                             rebuildChipStrip()
@@ -204,6 +214,8 @@ class AccessCodesViewModel
         private fun clearSecrets() {
             secrets = emptyList()
             hasCurrentSecrets = false
+            writableVisibilities = emptySet()
+            _canManage.value = false
             _revealed.value = emptySet()
             _chipStrip.value = null
             toastJob?.cancel()
@@ -290,7 +302,7 @@ class AccessCodesViewModel
                         header = category.label,
                         rows = rows.map { rowFor(it) },
                         count = rows.size,
-                        onSeeAll = { startAddCode(category) },
+                        onSeeAll = if (_canManage.value) ({ startAddCode(category) }) else null,
                         style = SectionStyle.Card,
                     ),
                 )
@@ -314,20 +326,22 @@ class AccessCodesViewModel
                     icon = PantopusIcon.KeyRound,
                     headline = "No $labelLower codes yet",
                     subcopy =
-                        "Add a $labelLower code so household members can find it " +
-                            "when they need it.",
-                    ctaTitle = "Add ${filteredCategory.label} code",
-                    onCta = { startAddCode(filteredCategory) },
+                        if (_canManage.value) {
+                            "Add a $labelLower code so household members can find it when they need it."
+                        } else {
+                            "Codes shared with you will appear here."
+                        },
+                    ctaTitle = "Add ${filteredCategory.label} code".takeIf { _canManage.value },
+                    onCta = if (_canManage.value) ({ startAddCode(filteredCategory) }) else null,
                 )
             }
             return ListOfRowsUiState.Empty(
                 icon = PantopusIcon.KeyRound,
                 headline = "No access codes yet",
                 subcopy =
-                    "One vault for every code at this address. Codes are encrypted, " +
-                        "masked by default, and only shared with members you choose.",
-                ctaTitle = "Add your first code",
-                onCta = { startAddCode(null) },
+                    "Codes you have permission to view appear here, masked by default.",
+                ctaTitle = "Add your first code".takeIf { _canManage.value },
+                onCta = if (_canManage.value) ({ startAddCode(null) }) else null,
             )
         }
 
@@ -350,20 +364,30 @@ class AccessCodesViewModel
                         foreground = category.foreground,
                     ),
                 trailing =
-                    RowTrailing.IconActions(
-                        primary =
-                            RowIconAction(
-                                icon = PantopusIcon.Copy,
-                                accessibilityLabel = "Copy ${secret.label}",
-                                onClick = { copyValue(secret.id) },
-                            ),
-                        secondary =
-                            RowIconAction(
-                                icon = PantopusIcon.MoreHorizontal,
-                                accessibilityLabel = "More actions for ${secret.label}",
-                                onClick = { openKebab(secret.id) },
-                            ),
-                    ),
+                    if (secret.visibility !in writableVisibilities) {
+                        RowTrailing.CircularAction(
+                            icon = PantopusIcon.Copy,
+                            accessibilityLabel = "Copy ${secret.label}",
+                            background = Color.Transparent,
+                            foreground = PantopusColors.appTextSecondary,
+                            onClick = { copyValue(secret.id) },
+                        )
+                    } else {
+                        RowTrailing.IconActions(
+                            primary =
+                                RowIconAction(
+                                    icon = PantopusIcon.Copy,
+                                    accessibilityLabel = "Copy ${secret.label}",
+                                    onClick = { copyValue(secret.id) },
+                                ),
+                            secondary =
+                                RowIconAction(
+                                    icon = PantopusIcon.MoreHorizontal,
+                                    accessibilityLabel = "More actions for ${secret.label}",
+                                    onClick = { openKebab(secret.id) },
+                                ),
+                        )
+                    },
                 onTap = { toggleReveal(secret.id) },
                 body = secret.notes,
             )
