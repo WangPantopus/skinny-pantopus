@@ -585,7 +585,11 @@ private fun NextSteps(steps: List<Pair<String, String>>) {
         steps.forEachIndexed { index, (title, line) ->
             PlanOptionRow(first = index == 0, modifier = Modifier.semantics(mergeDescendants = true) {}) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(text = title, style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold), color = PantopusColors.appText)
+                    Text(
+                        text = title,
+                        style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
+                        color = PantopusColors.appText,
+                    )
                     Text(text = line, style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
                 }
             }
