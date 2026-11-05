@@ -1,4 +1,5 @@
 @file:Suppress("LongMethod", "TooManyFunctions", "MatchingDeclarationName")
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 
 package app.pantopus.android.ui.screens.crewday.route
 
@@ -6,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -193,6 +195,8 @@ private fun RouteContent(
     val homes = order ?: route.homes
     val next = route.homes.firstOrNull { it.isWaiting() && it.cantGetInAt == null }
     val zone = CrewDayFormat.zone(route.timezone)
+    // The route opens at 6 PM the evening before; On my way and Running late work from the date itself.
+    val onTheDay = CrewDayFormat.date(route.date)?.let { !it.isAfter(java.time.LocalDate.now(zone)) } ?: true
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
         if (route.dates.size > 1) {
             PlanChoiceGroup(
@@ -224,6 +228,13 @@ private fun RouteContent(
                 color = PantopusColors.appTextSecondary,
                 modifier = Modifier.testTag("crewDayRouteDone"),
             )
+            if (!onTheDay) {
+                Text(
+                    text = "On my way and Running late work on ${CrewDayFormat.shortDate(route.date).orEmpty()}.",
+                    style = PantopusTextStyle.small,
+                    color = PantopusColors.appTextSecondary,
+                )
+            }
         }
         PlanFormCard(modifier = Modifier.testTag("crewDayRouteHomes")) {
             homes.forEachIndexed { index, home ->
@@ -236,7 +247,7 @@ private fun RouteContent(
                     onOpen = { events.onOpen(home) },
                     onMove = { delta -> events.onMove(index, delta) },
                 )
-                if (order == null && home.id == next?.id) {
+                if (order == null && onTheDay && home.id == next?.id) {
                     NextButtons(
                         onMyWay = { events.onMyWay(home) },
                         onLate = events.onLate,
@@ -342,7 +353,8 @@ private fun RouteRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            // The chips wrap to a new line rather than squeeze (200% text: one chip fills the width).
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 CrewDayToneChip(
                     text = routeStatus(home, zone),
                     tone = tone,

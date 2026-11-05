@@ -402,6 +402,77 @@ private fun WindowRow(
 private fun CrewDayHomeDto.answer(proposalId: String): String? =
     newDateChoice?.takeIf { it["proposal_id"] == proposalId }?.get("date") as? String
 
+/** The open proposal's homes (as the web counts them): who picked a date, who cancelled, who hasn't answered. */
+private class RainAnswers(
+    view: CrewDayCrewViewDto,
+    val proposalId: String,
+) {
+    val homes = (view.bookings + view.ended).filter { it.status == "new_dates" || it.newDateChoice?.get("proposal_id") == proposalId }
+    val picked = homes.filter { it.answer(proposalId).let { a -> a != null && a != "cancel" } }
+    val cancelled = homes.filter { it.answer(proposalId) == "cancel" }
+    val waiting = homes.filter { it.answer(proposalId) == null }
+}
+
+/** "Waiting for answers", "Rain moved Tue, Nov 17", when answers are due and the counts so far. */
+@Composable
+private fun RainSummary(
+    view: CrewDayCrewViewDto,
+    answers: RainAnswers,
+) {
+    val zone = CrewDayFormat.zone(view.timezone)
+    val deadline = CrewDayFormat.instant(view.proposal?.deadlineAt)
+    Column(
+        modifier = Modifier.fillMaxWidth().planCard().padding(Spacing.s4).semantics(mergeDescendants = true) {},
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        CrewDayToneChip(
+            text = if (answers.waiting.isEmpty()) "Everyone answered" else "Waiting for answers",
+            tone = if (answers.waiting.isEmpty()) CrewDayTone.Ok else CrewDayTone.Warn,
+        )
+        Text(
+            text = "Rain moved ${CrewDayFormat.shortDate(view.serviceDate).orEmpty()}",
+            style = PantopusTextStyle.h3.copy(fontWeight = FontWeight.SemiBold),
+            color = PantopusColors.appText,
+            modifier = Modifier.semantics { heading() },
+        )
+        deadline?.let {
+            Text(
+                text = "Answers due ${CrewDayFormat.shortDate(it, zone)}, ${CrewDayFormat.clock(it, zone)}",
+                style = PantopusTextStyle.small,
+                color = PantopusColors.appTextSecondary,
+            )
+        }
+        Text(
+            text = "${answers.picked.size} picked a date · ${answers.cancelled.size} cancelled · ${answers.waiting.size} no answer yet",
+            style = PantopusTextStyle.small.copy(fontWeight = FontWeight.SemiBold),
+            color = PantopusColors.appTextStrong,
+            modifier = Modifier.testTag("crewDayDatesAnswersCounts"),
+        )
+    }
+}
+
+/**
+ * Before the day while a rain proposal is open (as the web's "New dates"): the answers so far, and a way to each home's
+ * answer and each date's route.
+ */
+@Composable
+fun CrewDayRainCard(
+    view: CrewDayCrewViewDto,
+    onOpen: () -> Unit,
+) {
+    val proposal = view.proposal ?: return
+    Column(modifier = Modifier.testTag("crewDayPrepNewDates"), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        PlanOverline("New dates")
+        RainSummary(view, RainAnswers(view, proposal.id))
+        PlanTonalButton(
+            title = "See the answers and routes",
+            onClick = onOpen,
+            height = 44.dp,
+            modifier = Modifier.fillMaxWidth().testTag("crewDayPrepDatesAnswers"),
+        )
+    }
+}
+
 /**
  * The answers (board `DatesAnswers`): "Rain moved Tue, Nov 17", the deadline, the counts, each home's answer, the
  * route for each date, and what happens to homes that don't answer.
@@ -413,37 +484,13 @@ private fun Answers(
 ) {
     val proposal = view.proposal ?: return
     val zone = CrewDayFormat.zone(view.timezone)
-    val homes = (view.bookings + view.ended).filter { it.newDateChoice != null || it.status == "new_dates" }
-    val picked = homes.filter { it.answer(proposal.id).let { a -> a != null && a != "cancel" } }
-    val cancelled = homes.filter { it.answer(proposal.id) == "cancel" }
-    val waiting = homes.filter { it.answer(proposal.id) == null }
+    val answers = RainAnswers(view, proposal.id)
+    val homes = answers.homes
+    val picked = answers.picked
+    val waiting = answers.waiting
     val deadline = CrewDayFormat.instant(proposal.deadlineAt)
-    val deadlineWords = deadline?.let { "${CrewDayFormat.shortDate(it, zone)}, ${CrewDayFormat.clock(it, zone)}" }
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s5)) {
-        Column(
-            modifier = Modifier.fillMaxWidth().planCard().padding(Spacing.s4).semantics(mergeDescendants = true) {},
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            CrewDayToneChip(
-                text = if (waiting.isEmpty()) "Everyone answered" else "Waiting for answers",
-                tone = if (waiting.isEmpty()) CrewDayTone.Ok else CrewDayTone.Warn,
-            )
-            Text(
-                text = "Rain moved ${CrewDayFormat.shortDate(view.serviceDate).orEmpty()}",
-                style = PantopusTextStyle.h3.copy(fontWeight = FontWeight.SemiBold),
-                color = PantopusColors.appText,
-                modifier = Modifier.semantics { heading() },
-            )
-            deadlineWords?.let {
-                Text(text = "Answers due $it", style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
-            }
-            Text(
-                text = "${picked.size} picked a date · ${cancelled.size} cancelled · ${waiting.size} no answer yet",
-                style = PantopusTextStyle.small.copy(fontWeight = FontWeight.SemiBold),
-                color = PantopusColors.appTextStrong,
-                modifier = Modifier.testTag("crewDayDatesAnswersCounts"),
-            )
-        }
+        RainSummary(view, answers)
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             PlanOverline("Answers")
             PlanFormCard {
