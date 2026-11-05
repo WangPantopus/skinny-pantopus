@@ -1,10 +1,11 @@
 // Server component: a tab page's first content (lib/firstContent.ts).
 //
 // The screen renders from its first reads (lib/server/firstContentReads.ts, once
-// per request). The app layout's first-content slot waits for the same reads
-// (FirstContentHold), so the first bytes carry the frame and the finished screen
-// together. There is no Suspense boundary of its own here: the page hydrates in
-// the same pass as the shell, so the shell's own reads find the content (FirstContentBoundary).
+// per request, with a short deadline). No Suspense boundary sits between it and the
+// document (PrerenderSuspense leaves the shell's out of these tabs), so the first
+// bytes wait for the reads and carry the frame and the finished screen together,
+// and the page hydrates in the same pass as the shell, so the shell's own reads find
+// the content (FirstContentBoundary).
 // Without a session to read for (a client navigation, a prefetch, an expired
 // session being recovered, first content off), or when the reads fail, the
 // screen renders as before and loads in the browser.

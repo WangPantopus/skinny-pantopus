@@ -10,7 +10,7 @@ import { FIRST_CONTENT_ENABLED, FIRST_CONTENT_HEADER, firstContentTag } from '@/
 
 // The API the web's rewrites forward to (next.config.js), read directly from here.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-// A document's reads hold its first bytes (components/first-content/FirstContentHold.tsx),
+// A document's reads hold its first bytes (components/first-content/FirstContent.tsx),
 // so they share a short deadline: normally they answer in tens of milliseconds. A read
 // still unanswered then (PlaceIntelligence's providers may take 3.5 s by design) is
 // left to the browser, so a slow API never holds up the frame.

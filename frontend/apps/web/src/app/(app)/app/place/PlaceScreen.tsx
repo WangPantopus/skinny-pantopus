@@ -11,7 +11,6 @@
 // queries, and drops the resident onto the now T4-verified dashboard.
 // ============================================================
 
-import { Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
@@ -20,6 +19,7 @@ import PlaceDashboardSkeleton from '@/components/place/PlaceDashboardSkeleton';
 import VerifiedSuccess from '@/components/place/VerifiedSuccess';
 import { PlaceHomeContext, placeHomeParam } from '@/components/archetypes/place';
 import { refreshMe } from '@/lib/me';
+import PrerenderSuspense from '@/components/first-content/PrerenderSuspense';
 
 // Only a ?preview= or ?savedPlace= link shows a saved address, and it brings the address
 // preview from the start funnel with it: loaded on demand, so the dashboard's first scripts
@@ -63,8 +63,8 @@ function PlaceRoute() {
 
 export default function PlaceScreen() {
   return (
-    <Suspense fallback={<div className="mx-auto w-full max-w-[640px] px-4 sm:px-5 py-5 sm:py-6"><PlaceDashboardSkeleton /></div>}>
+    <PrerenderSuspense fallback={<div className="mx-auto w-full max-w-[640px] px-4 sm:px-5 py-5 sm:py-6"><PlaceDashboardSkeleton /></div>}>
       <PlaceRoute />
-    </Suspense>
+    </PrerenderSuspense>
   );
 }

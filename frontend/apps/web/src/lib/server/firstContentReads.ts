@@ -129,8 +129,8 @@ const TAB_READS: Record<string, (session: FirstContentSession) => Promise<Dehydr
 
 /**
  * A tab document's first content, read once per request (React cache): the tab's page
- * renders its screen from it, and the app layout's first-content slot waits for it
- * so the screen goes out with the frame (components/first-content/FirstContentHold.tsx).
+ * renders its screen from it, outside every Suspense boundary, so the screen goes out
+ * with the frame (components/first-content/FirstContent.tsx).
  */
 export const tabFirstContent = cache(async (route: string): Promise<{ state: DehydratedState | null; tag: string } | null> => {
   const session = await firstContentSession();
