@@ -31,6 +31,8 @@ data class PaymentMethodDto(
     @Json(name = "bank_last4") val bankLast4: String? = null,
     @Json(name = "bank_account_type") val bankAccountType: String? = null,
     @Json(name = "is_default") val isDefault: Boolean = false,
+    /** The card's Stripe id (`pm_…`): what a Crew Day booking stores. */
+    @Json(name = "stripe_payment_method_id") val stripePaymentMethodId: String? = null,
 )
 
 /**

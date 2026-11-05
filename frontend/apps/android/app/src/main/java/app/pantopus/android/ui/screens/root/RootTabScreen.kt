@@ -3124,6 +3124,9 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             share = { message, title -> appContext.shareText(message, title) },
                             // A pantopus.com page would come straight back to the app: open it in the browser.
                             openWeb = { url -> ExternalLinks.webUri(url)?.let { WebLinkFallback.open(appContext, it) } },
+                            openWebPath = { path ->
+                                ExternalLinks.webUri(InviteLinks.publicPageUrl(path))?.let { WebLinkFallback.open(appContext, it) }
+                            },
                         ),
                 )
                 plansRoutes(

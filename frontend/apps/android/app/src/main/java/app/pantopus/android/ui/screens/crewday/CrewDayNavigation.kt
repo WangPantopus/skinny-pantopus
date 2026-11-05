@@ -7,9 +7,13 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import app.pantopus.android.ui.screens.crewday.book.CrewDayBookActions
+import app.pantopus.android.ui.screens.crewday.book.CrewDayBookScreen
 import app.pantopus.android.ui.screens.crewday.create.NewCrewDayScreen
 import app.pantopus.android.ui.screens.crewday.crew.CrewDaysCrewActions
 import app.pantopus.android.ui.screens.crewday.crew.CrewDaysCrewScreen
+import app.pantopus.android.ui.screens.crewday.invite.CrewDayInvitationActions
+import app.pantopus.android.ui.screens.crewday.invite.CrewDayInvitationScreen
 import app.pantopus.android.ui.screens.crewday.prep.CrewDayPrepActions
 import app.pantopus.android.ui.screens.crewday.prep.CrewDayPrepScreen
 import app.pantopus.android.ui.screens.root.NotYetAvailableView
@@ -30,6 +34,9 @@ object CrewDayRoutes {
 
     /** 1 Invitation, by its share code. */
     const val INVITATION = "crew-day/{$CODE_KEY}"
+
+    /** 2 to 4: Your price, Review and book, You're on the route, for an invitation's day. */
+    const val BOOK = "crew-day/{$CODE_KEY}/book"
 
     /** 5 Your Crew Day: one booking. */
     const val BOOKING = "crew-days/bookings/{$BOOKING_ID_KEY}"
@@ -53,6 +60,8 @@ object CrewDayRoutes {
     const val PROPOSE_DATES = "crew-days/day/{$CREW_DAY_ID_KEY}/propose-dates"
 
     fun invitation(code: String): String = "crew-day/${Uri.encode(code)}"
+
+    fun book(code: String): String = "crew-day/${Uri.encode(code)}/book"
 
     fun booking(id: String): String = "crew-days/bookings/${Uri.encode(id)}"
 
@@ -83,6 +92,8 @@ data class CrewDayExternalRoutes(
     val share: (message: String, title: String) -> Unit,
     /** A web page in the browser (the printable flyer, the explainers). */
     val openWeb: (url: String) -> Unit,
+    /** A path on the web app (`/crew-day/how-it-works`), in the browser. */
+    val openWebPath: (path: String) -> Unit,
 )
 
 /** Registers every Crew Day page. Call inside the root `NavHost`. */
@@ -95,7 +106,35 @@ fun NavGraphBuilder.crewDayRoutes(
         route = CrewDayRoutes.INVITATION,
         arguments = listOf(navArgument(CrewDayRoutes.CODE_KEY) { type = NavType.StringType }),
     ) {
-        CrewDayPlaceholder("Crew Day", back)
+        CrewDayInvitationScreen(
+            actions =
+                CrewDayInvitationActions(
+                    onBack = back,
+                    onSeePrice = { code -> nav.navigate(CrewDayRoutes.book(code)) },
+                    onOpenBooking = { id -> nav.navigate(CrewDayRoutes.booking(id)) },
+                    onOpenCrewDay = { id, businessId -> nav.navigate(CrewDayRoutes.crewDay(id, businessId)) },
+                    onAsk = { nav.navigate(CrewDayRoutes.ASK) },
+                    onOpenWeb = external.openWebPath,
+                ),
+        )
+    }
+    composable(
+        route = CrewDayRoutes.BOOK,
+        arguments = listOf(navArgument(CrewDayRoutes.CODE_KEY) { type = NavType.StringType }),
+    ) {
+        CrewDayBookScreen(
+            actions =
+                CrewDayBookActions(
+                    onClose = back,
+                    // The booking's page replaces the flow, so Back from it lands on the invitation.
+                    onOpenBooking = { id ->
+                        nav.navigate(CrewDayRoutes.booking(id)) {
+                            popUpTo(CrewDayRoutes.BOOK) { inclusive = true }
+                        }
+                    },
+                    onAsk = { nav.navigate(CrewDayRoutes.ASK) },
+                ),
+        )
     }
     composable(
         route = CrewDayRoutes.BOOKING,
