@@ -520,8 +520,10 @@ private fun StateCard(
                     body = null,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // After a declined charge the household paid in Pantopus, maybe with another card (as the web says).
+                    val paidInApp = booking.events.any { it.kind == "paid_by_household" }
                     Text(
-                        text = booking.cardWords ?: "Paid in Pantopus",
+                        text = booking.cardWords?.takeUnless { paidInApp } ?: "Paid in Pantopus",
                         style = PantopusTextStyle.body,
                         color = PantopusColors.appTextStrong,
                         modifier = Modifier.weight(1f),
