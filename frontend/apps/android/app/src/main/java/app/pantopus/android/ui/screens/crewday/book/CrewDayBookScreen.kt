@@ -370,7 +370,7 @@ private fun ReviewStep(
                 onCheckedChange = viewModel::setApproved,
                 label =
                     total?.let { "I approve the scope, the ${CrewDayFormat.price(it)} total and these terms." }
-                        ?: "I approve the scope and these terms. I approve the price when the crew sends it.",
+                        ?: "I approve the scope and these terms. I'll see the price before anything is booked.",
                 modifier = Modifier.testTag("crewDayReviewApprove"),
             )
             state.bookError?.let {
@@ -491,7 +491,7 @@ private fun ReviewStep(
                         "Saved now. Charged ${CrewDayFormat.price(it)} the day after the crew finishes your home, " +
                             "unless you tell us something's wrong."
                     }
-                        ?: "Saved now. Nothing is charged until you approve the crew's price and the work is done.",
+                        ?: "Saved now. Nothing is charged until you approve your price and the crew finishes your home.",
                 style = PantopusTextStyle.small,
                 color = PantopusColors.appTextSecondary,
             )
@@ -504,8 +504,8 @@ private fun ReviewStep(
                         "Free cancellation until ${CrewDayFormat.shortDate(it, zone)}, ${CrewDayFormat.clock(it, zone)}.",
                     )
                 }
-                PlansChangeLine(PantopusIcon.CloudRain, "Rain: you pick a new date or cancel free. Your price stays the same.")
-                PlansChangeLine(PantopusIcon.LifeBuoy, "A problem: Pantopus support owns it until it's fixed.")
+                PlansChangeLine(PantopusIcon.CloudRain, "Rain? You pick a new date or cancel at no charge. Same price.")
+                PlansChangeLine(PantopusIcon.LifeBuoy, "A problem? Pantopus support owns it until it's fixed.")
             }
         }
     }
@@ -574,6 +574,25 @@ internal fun cardLabel(
 
 // MARK: - 4. You're on the route
 
+/** "Monday evening": the evening before the day. */
+private fun eveningBefore(day: CrewDayPublicDto): String =
+    CrewDayFormat.date(day.serviceDate)?.minusDays(1)?.let { "${CrewDayFormat.weekday(it)} evening" } ?: "The evening before"
+
+/** The board's "What happens next": each step's title over its line. */
+@Composable
+private fun NextSteps(steps: List<Pair<String, String>>) {
+    PlanFormCard(modifier = Modifier.testTag("crewDayBookedNext")) {
+        steps.forEachIndexed { index, (title, line) ->
+            PlanOptionRow(first = index == 0, modifier = Modifier.semantics(mergeDescendants = true) {}) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(text = title, style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold), color = PantopusColors.appText)
+                    Text(text = line, style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun BookedStep(
     day: CrewDayPublicDto,
@@ -633,23 +652,39 @@ private fun BookedStep(
                 textAlign = TextAlign.Center,
             )
         }
-        if (!asked) {
+        if (asked) {
+            PlanField("What happens next") {
+                NextSteps(
+                    listOf(
+                        "The crew looks at your home" to "From outside, before ${closes ?: "booking closes"}. You don't need to be home.",
+                        "You approve your price" to "We tell you as soon as it's set. Declining is free.",
+                        "Then you're on the route" to "Nothing is charged until the work is done.",
+                    ),
+                )
+            }
+        } else {
             day.prepNote?.takeIf { it.isNotBlank() }?.let { note ->
                 PlanField("One thing to do") {
-                    Text(
-                        text = note,
-                        style = PantopusTextStyle.body,
-                        color = PantopusColors.appText,
-                        modifier = Modifier.fillMaxWidth().planCard().padding(Spacing.s4),
-                    )
+                    Column(
+                        modifier = Modifier.fillMaxWidth().planCard().padding(Spacing.s4).semantics(mergeDescendants = true) {},
+                        verticalArrangement = Arrangement.spacedBy(Spacing.s1),
+                    ) {
+                        Text(text = note, style = PantopusTextStyle.body, color = PantopusColors.appText)
+                        Text(text = "From $crew", style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary)
+                    }
                 }
             }
+            val price = booking?.priceCents?.let(CrewDayFormat::price)
             PlanField("What happens next") {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                    PlansChangeLine(PantopusIcon.Bell, "We remind you the evening before.")
-                    PlansChangeLine(PantopusIcon.Truck, "The crew tells you when it's on the way.")
-                    PlansChangeLine(PantopusIcon.Camera, "You get photos when your home is done, then the charge the next day.")
-                }
+                NextSteps(
+                    listOf(
+                        eveningBefore(day) to "A reminder with your arrival window and the crew's note.",
+                        "On the day" to "The crew tells you when it's on the way. Tap when your gate is ready.",
+                        "When it's done" to
+                            "Photos of the work. We charge ${price ?: "your price"} the next day, unless you tell us something needs " +
+                            "attention.",
+                    ),
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PlanTonalButton(
