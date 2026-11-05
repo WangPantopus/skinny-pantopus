@@ -119,6 +119,7 @@ export * as mailCompose from './endpoints/mailCompose';            // Mail Compo
 export * as linkPreview from './endpoints/linkPreview';            // Link preview (OG metadata)
 export * as supportTrains from './endpoints/supportTrains';        // Support Train (activities)
 export * as crewDays from './endpoints/crewDays';                  // Crew Day (launch cut #13)
+export * as adminCrewDays from './endpoints/adminCrewDays';        // Crew Day operator pages (launch cut #13)
 export * as scheduling from './endpoints/scheduling';              // Calendarly scheduling (host)
 export * as publicBooking from './endpoints/publicBooking';        // Calendarly public booking flow
 export type { BookingListParams } from './endpoints/scheduling';
