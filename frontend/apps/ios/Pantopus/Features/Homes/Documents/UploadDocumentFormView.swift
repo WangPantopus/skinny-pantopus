@@ -363,8 +363,12 @@ private struct CategoryChip: View {
         Button(action: onTap) {
             HStack(spacing: Spacing.s1) {
                 Icon(category.palette.icon, size: 12, color: foreground)
+                // Whole words: in a narrow column (the iPhone Duo closed, an SE) a long label shrinks a little
+                // instead of breaking mid-word ("Insuranc / e").
                 Text(category.label)
                     .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                     .foregroundStyle(foreground)
             }
             .padding(.horizontal, Spacing.s3)

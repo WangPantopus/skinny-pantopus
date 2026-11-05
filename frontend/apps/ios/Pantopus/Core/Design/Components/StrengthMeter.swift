@@ -92,15 +92,32 @@ public struct StrengthMeter: View {
         }
     }
 
+    /// One row of pills where they fit; where they don't (the iPhone Duo closed, an SE), two rows of whole pills
+    /// rather than a pill whose label wraps inside it.
     private var ruleRow: some View {
-        HStack(spacing: Spacing.s2) {
-            if strength.breached {
-                breachPill
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: Spacing.s2) {
+                if strength.breached {
+                    breachPill
+                }
+                rulePill("12+ characters", met: strength.hasMinLength)
+                rulePill("Mixed case", met: strength.hasMixedCase)
+                rulePill("Number", met: strength.hasNumber)
+                rulePill("Symbol", met: strength.hasSymbol)
             }
-            rulePill("12+ characters", met: strength.hasMinLength)
-            rulePill("Mixed case", met: strength.hasMixedCase)
-            rulePill("Number", met: strength.hasNumber)
-            rulePill("Symbol", met: strength.hasSymbol)
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                if strength.breached {
+                    breachPill
+                }
+                HStack(spacing: Spacing.s2) {
+                    rulePill("12+ characters", met: strength.hasMinLength)
+                    rulePill("Mixed case", met: strength.hasMixedCase)
+                }
+                HStack(spacing: Spacing.s2) {
+                    rulePill("Number", met: strength.hasNumber)
+                    rulePill("Symbol", met: strength.hasSymbol)
+                }
+            }
         }
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
