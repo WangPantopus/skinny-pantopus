@@ -78,6 +78,7 @@ struct CrewDayAddressField: View {
                     .textContentType(.fullStreetAddress)
                     .autocorrectionDisabled()
                     .focused($focused)
+                    .accessibilityLabel(placeholder)
                     .accessibilityIdentifier(identifier)
                 if search.isResolving { ProgressView() }
                 if picked != nil {
