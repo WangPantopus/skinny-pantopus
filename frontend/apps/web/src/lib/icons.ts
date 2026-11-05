@@ -42,6 +42,7 @@ import {
   Palette,
   Clock,
   CalendarClock,
+  CalendarCheck,
   Plane,
   MailOpen,
   Archive,
@@ -107,6 +108,8 @@ export const NavIcons = {
   myGigs: ClipboardList,
   myListings: Tag,
   myPulse: Newspaper,
+  // Crew Day (launch cut #13): the household's Crew Days, in the sidebar's account section.
+  crewDays: CalendarCheck,
   savedListings: Bookmark,
   professional: Wrench,
   profile: User,
