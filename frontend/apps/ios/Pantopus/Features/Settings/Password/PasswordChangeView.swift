@@ -45,8 +45,11 @@ public struct PasswordChangeView: View {
                     }
                 }
                 .padding(.horizontal, Spacing.s4)
-                .padding(.vertical, Spacing.s4)
+                .padding(.top, Spacing.s4)
             }
+            // As in FormShell: a margin, not padding, so a field taking focus keeps its whole box and a helper line
+            // above the keyboard, not just its bare text line.
+            .contentMargins(.bottom, Spacing.s8, for: .scrollContent)
             .background(Theme.Color.appBg)
         }
         .background(Theme.Color.appBg)
