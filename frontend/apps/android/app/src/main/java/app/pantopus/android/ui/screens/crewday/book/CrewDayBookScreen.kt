@@ -1,4 +1,4 @@
-@file:Suppress("LongMethod", "TooManyFunctions")
+@file:Suppress("LongMethod", "TooManyFunctions", "MatchingDeclarationName", "MagicNumber")
 
 package app.pantopus.android.ui.screens.crewday.book
 
@@ -502,7 +502,11 @@ private fun ReviewStep(
                 cutoff?.let {
                     PlansChangeLine(
                         PantopusIcon.CalendarX,
-                        "Free cancellation until ${CrewDayFormat.shortDate(it, zone)}, ${CrewDayFormat.clock(it, zone)}.",
+                        if (it.isAfter(java.time.Instant.now())) {
+                            "Free cancellation until ${CrewDayFormat.shortDate(it, zone)}, ${CrewDayFormat.clock(it, zone)}."
+                        } else {
+                            "It's less than 48 hours to go: to cancel, ask the crew. They can release your home at no charge."
+                        },
                     )
                 }
                 PlansChangeLine(PantopusIcon.CloudRain, "Rain? You pick a new date or cancel at no charge. Same price.")
@@ -668,7 +672,7 @@ private fun BookedStep(
                 )
             }
         } else {
-            day.prepNote?.takeIf { it.isNotBlank() }?.let { note ->
+            (booking?.prepNote ?: day.prepNote)?.takeIf { it.isNotBlank() }?.let { note ->
                 PlanField("One thing to do") {
                     Column(
                         modifier = Modifier.fillMaxWidth().planCard().padding(Spacing.s4).semantics(mergeDescendants = true) {},

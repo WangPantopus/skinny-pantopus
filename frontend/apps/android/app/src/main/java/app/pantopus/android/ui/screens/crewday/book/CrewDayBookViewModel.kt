@@ -1,4 +1,4 @@
-@file:Suppress("TooManyFunctions")
+@file:Suppress("TooManyFunctions", "ReturnCount")
 
 package app.pantopus.android.ui.screens.crewday.book
 
@@ -254,7 +254,7 @@ class CrewDayBookViewModel
         private fun requote() {
             val s = _state.value
             val home = s.home ?: return
-            val optionId = s.optionId ?: return
+            val optionId = s.optionId ?: s.day?.priceOptions?.firstOrNull()?.id ?: return
             quoteJob?.cancel()
             _state.update { it.copy(quoting = true, quoteError = null) }
             quoteJob =
