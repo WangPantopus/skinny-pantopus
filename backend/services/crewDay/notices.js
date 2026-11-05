@@ -3,13 +3,19 @@
 /**
  * Crew Day notices (docs/product/crew-day-build/02-contract.md §6): who gets each one, its copy and its link. Every
  * notice is a personal notification with metadata { crew_day_id, booking_id }; the launch-cut type map drops them while
- * `crew_day` is unlisted. Links are web paths; the apps map them to native screens by type.
+ * `crew_day` is unlisted. Links are web paths; the apps map them to native screens by type. The notices marked Email
+ * in §6 also go out by email (emailService, Mailpit locally) to each person a notice was just made for, and the
+ * operator's go to ADMIN_ALERT_EMAIL and the admin accounts.
  */
 
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const logger = require('../../utils/logger');
+const { isLaunchFeatureEnabled } = require('../../utils/featureFlags');
 const notificationService = require('../notificationService');
+const emailService = require('../emailService');
+const adminAlerts = require('../adminAlerts');
 const { getBusinessPrimaryOwnerId, getActiveMembership } = require('../../utils/businessPermissions');
+const store = require('./store');
 const rules = require('./rules');
 
 const links = {
@@ -45,9 +51,14 @@ async function adminRecipients() {
   return (data || []).map((u) => String(u.id));
 }
 
-async function send(userIds, notice, { day, booking = null, link, push = true, idempotencyKey = null }) {
+/**
+ * Stores the notice for each person (and pushes it unless `push` is false). With `email` (true, the email's words, or
+ * a function answering them) it is emailed too, only to the people a notice was just made for: nobody while
+ * `crew_day` is off, and never twice for an idempotent notice that already went out.
+ */
+async function send(userIds, notice, { day, booking = null, link, push = true, idempotencyKey = null, email = null }) {
   const metadata = { crew_day_id: day.id, ...(booking ? { booking_id: booking.id } : {}) };
-  await Promise.all(userIds.map((userId) => notificationService.createNotification({
+  const made = await Promise.all(userIds.map((userId) => notificationService.createNotification({
     userId,
     type: notice.type,
     title: notice.title,
@@ -60,7 +71,98 @@ async function send(userIds, notice, { day, booking = null, link, push = true, i
     ...(idempotencyKey ? { idempotencyKey: `${idempotencyKey}:${userId}` } : {}),
   }).catch((err) => {
     logger.warn('crewDay.notices.send_failed', { type: notice.type, crewDayId: day.id, error: err.message });
+    return null;
   })));
+  const told = userIds.filter((_, i) => made[i]);
+  if (email && told.length && isLaunchFeatureEnabled('crew_day')) {
+    queueEmail(() => emailNotice(told, notice, { day, booking, link, email }));
+  }
+}
+
+// ── Emails ────────────────────────────────────────────────────
+
+// Emails leave one at a time after the notice is stored: the person who tapped never waits on the mail server, and a
+// day cancelled with 60 homes never opens 60 connections at once. An email that fails is logged; the notice stays.
+let emailQueue = Promise.resolve();
+function queueEmail(job) {
+  emailQueue = emailQueue.then(job).catch((err) => {
+    logger.warn('crewDay.notices.email_failed', { error: err.message });
+  });
+  return emailQueue;
+}
+
+// The people's addresses, leaving out anyone who turned off Email Notifications (web Settings), as the monthly summary
+// does. A preference that couldn't be read is not a yes.
+async function emailRecipients(userIds) {
+  if (!userIds.length) return [];
+  const [users, prefs] = await Promise.all([
+    supabaseAdmin.from('User').select('id, email').in('id', userIds),
+    supabaseAdmin.from('MailPreferences').select('user_id, email_notifications').in('user_id', userIds),
+  ]);
+  if (users.error || prefs.error) {
+    logger.warn('crewDay.notices.email_recipients_unavailable', { error: (users.error || prefs.error).message });
+    return [];
+  }
+  const off = new Set((prefs.data || []).filter((p) => p.email_notifications === false).map((p) => String(p.user_id)));
+  return (users.data || []).filter((u) => u.email && !off.has(String(u.id)));
+}
+
+const FOOTERS = {
+  household: 'You got this email about your Crew Day on Pantopus.',
+  crew: 'You got this email about a Crew Day your business runs on Pantopus.',
+  request: 'You got this email because you asked for a Crew Day on your street on Pantopus.',
+  operator: 'You got this email because you run Crew Day approvals and support on Pantopus.',
+};
+
+function dayFacts(day, booking) {
+  return day.kind === 'request' ? [day.title] : [day.title, dayWhen(day, booking)];
+}
+
+async function emailNotice(userIds, notice, { day, booking, link, email }) {
+  const words = typeof email === 'function' ? await email() : email === true ? {} : email;
+  const people = await emailRecipients(userIds);
+  for (const person of people) {
+    const result = await emailService.sendCrewDayEmail({
+      toEmail: person.email,
+      subject: words.subject || notice.title,
+      lead: words.lead === undefined ? notice.body : words.lead,
+      facts: words.facts || dayFacts(day, booking),
+      rows: words.rows || [],
+      button: words.button || 'Open Pantopus',
+      link: rules.webUrl(words.link || link),
+      footer: words.footer || FOOTERS.household,
+      settingsLink: rules.webUrl('/app/profile/settings'),
+    });
+    if (!result?.success) {
+      logger.warn('crewDay.notices.email_not_sent', { type: notice.type, crewDayId: day.id, error: result?.error });
+    }
+  }
+}
+
+/**
+ * An operator alert by email (02-contract.md §6), like services/adminAlerts.js: to ADMIN_ALERT_EMAIL and every admin
+ * account, the city in the subject (never an address), ids and a link to the admin page, never a household's name,
+ * address or note. Nothing while `crew_day` is off.
+ */
+function alertOperators(adminIds, { subject, lead, facts, button, link, place }) {
+  if (!isLaunchFeatureEnabled('crew_day')) return;
+  queueEmail(async () => {
+    const admins = await emailRecipients(adminIds);
+    const to = [...new Set([...adminAlerts.recipients(), ...admins.map((u) => u.email)].map((e) => e.toLowerCase()))];
+    const where = [place?.city, place?.state].filter(Boolean).join(', ') || 'unknown area';
+    for (const toEmail of to) {
+      const result = await emailService.sendCrewDayEmail({
+        toEmail,
+        subject: `[Pantopus] ${subject} · ${where}`,
+        lead,
+        facts,
+        button,
+        link: rules.webUrl(link),
+        footer: FOOTERS.operator,
+      });
+      if (!result?.success) logger.warn('crewDay.notices.alert_not_sent', { subject, error: result?.error });
+    }
+  });
 }
 
 // ── Crew ───────────────────────────────────────────────────────
@@ -71,7 +173,11 @@ async function dayApproved(day, { bookedCount = 0 } = {}) {
     type: 'crew_day_approved',
     title: 'Your Crew Day is open',
     body: `Share the link: ${bookedCount} of ${day.capacity} booked.`,
-  }, { day, link: links.crewDay(day.business_user_id, day.id) });
+  }, { day, link: links.crewDay(day.business_user_id, day.id), email: {
+    facts: [day.title, dayWhen(day), rules.webUrl(`/crew-day/${day.share_code}`)],
+    button: 'Open your Crew Day',
+    footer: FOOTERS.crew,
+  } });
 }
 
 async function dayDeclined(day) {
@@ -80,7 +186,10 @@ async function dayDeclined(day) {
     type: 'crew_day_declined',
     title: `Pantopus didn't approve ${day.title}`,
     body: day.review_note || null,
-  }, { day, link: links.crewDay(day.business_user_id, day.id) });
+  }, { day, link: links.crewDay(day.business_user_id, day.id), email: {
+    button: 'Open your Crew Day',
+    footer: FOOTERS.crew,
+  } });
 }
 
 function dayWhen(day, booking) {
@@ -97,12 +206,20 @@ function businessName(crew) {
 
 // ── Household ─────────────────────────────────────────────────
 
+// What the household booked, line by line, and its total (whole dollars; the receipt has cents).
+function bookedRows(booking) {
+  return [
+    ...(booking.line_items || []).map((item) => ({ label: item.label, value: rules.formatMoney(item.price_cents) })),
+    { label: 'Total', value: rules.formatMoney(booking.price_cents), strong: true },
+  ];
+}
+
 async function booked(day, booking) {
   await send([booking.household_user_id], {
     type: 'crew_day_booked',
     title: "You're on the route",
     body: `${day.title}, ${dayWhen(day, booking)}. Total ${rules.formatMoney(booking.price_cents)}. We'll remind you the evening before.`,
-  }, { day, booking, link: links.booking(booking.id) });
+  }, { day, booking, link: links.booking(booking.id), email: { rows: bookedRows(booking), button: 'See your Crew Day' } });
 }
 
 async function priceOffered(day, booking, crew) {
@@ -110,7 +227,7 @@ async function priceOffered(day, booking, crew) {
     type: 'crew_day_price_offered',
     title: `Your price is ready: ${rules.formatMoney(booking.price_cents)}`,
     body: `${businessName(crew)} looked at your home. Approve it to book.`,
-  }, { day, booking, link: links.booking(booking.id) });
+  }, { day, booking, link: links.booking(booking.id), email: { rows: bookedRows(booking), button: 'See your price' } });
 }
 
 // Who cancelled, in words: the crew released the home, couldn't take it, or cancelled the day; the operator; the
@@ -128,7 +245,7 @@ async function bookingCancelled(day, booking, crew, reason) {
     type: 'crew_day_cancelled',
     title: `Your ${serviceDayName(day)} was cancelled`,
     body: `${lines[reason] || 'This booking was cancelled.'} Nothing was charged.`,
-  }, { day, booking, link: links.booking(booking.id) });
+  }, { day, booking, link: links.booking(booking.id), email: { button: 'See your Crew Day' } });
 }
 
 async function onTheWay(day, booking) {
@@ -176,16 +293,51 @@ async function workDone(day, booking) {
     body: `${DONE_LINES[day.service] || DONE_LINES.other} See the photos. We'll charge ${rules.formatMoney(booking.price_cents)} `
       + `${rules.formatDayRelative(booking.charge_due_at, day.timezone)} at ${rules.formatTime(booking.charge_due_at, day.timezone)} `
       + 'unless something needs attention.',
-  }, { day, booking, link: links.booking(booking.id) });
+  }, { day, booking, link: links.booking(booking.id), email: { button: 'See the photos' } });
 }
 
-async function charged(day, booking, crew) {
+// "Visa ending 4242": the card that paid (the household may have paid with another one after a failed charge).
+async function cardLabel(userId, paymentMethodId) {
+  const card = await store.savedCard(userId, paymentMethodId).catch(() => null);
+  return card?.card_last4
+    ? `${String(card.card_brand || 'card').replace(/^\w/, (c) => c.toUpperCase())} ending ${card.card_last4}`
+    : 'Your card';
+}
+
+// The receipt (02-contract.md §6): the amount with cents, the crew, what was done, the card, the date and the invoice.
+async function receipt(day, booking, crew, invoice, amount) {
+  const invoiceId = invoice?.id || booking.invoice_id;
+  const paymentId = invoice?.payment_id || null;
+  const { data: payment } = paymentId
+    ? await supabaseAdmin.from('Payment').select('stripe_payment_method_id, payment_succeeded_at').eq('id', paymentId)
+      .maybeSingle()
+    : { data: null };
+  const card = await cardLabel(booking.household_user_id, payment?.stripe_payment_method_id || booking.payment_method_id);
+  const localDay = (at) => rules.formatDay(rules.todayIn(day.timezone, new Date(at)));
+  const paidOn = localDay(booking.paid_at || payment?.payment_succeeded_at || Date.now());
+  const doneOn = booking.done_at ? localDay(booking.done_at) : rules.formatDay(booking.service_date || day.service_date);
+  return {
+    lead: `${businessName(crew)} finished your home on ${doneOn}. Here's your receipt.`,
+    facts: [day.title, `${card} · ${paidOn}`],
+    rows: [
+      ...(booking.line_items || []).map((item) => ({ label: item.label, value: rules.formatReceipt(item.price_cents) })),
+      ...(booking.refunded_cents
+        ? [{ label: 'Taken off by Pantopus support', value: `−${rules.formatReceipt(booking.refunded_cents)}` }] : []),
+      { label: 'Total paid', value: rules.formatReceipt(amount), strong: true },
+    ],
+    button: 'See the receipt',
+    link: invoiceId ? `/app/invoice/${invoiceId}` : links.booking(booking.id),
+  };
+}
+
+async function charged(day, booking, crew, invoice = null) {
   const amount = (booking.price_cents || 0) - (booking.refunded_cents || 0);
   await send([booking.household_user_id], {
     type: 'crew_day_charged',
     title: `Paid: ${rules.formatReceipt(amount)} to ${businessName(crew)}`,
     body: null,
-  }, { day, booking, link: links.booking(booking.id), push: false });
+  }, { day, booking, link: links.booking(booking.id), push: false,
+    email: () => receipt(day, booking, crew, invoice, amount) });
 }
 
 async function chargeFailed(day, booking, crew) {
@@ -193,7 +345,7 @@ async function chargeFailed(day, booking, crew) {
     type: 'crew_day_charge_failed',
     title: "Your card didn't go through",
     body: `Pay ${rules.formatMoney((booking.price_cents || 0) - (booking.refunded_cents || 0))} to ${businessName(crew)} in Pantopus.`,
-  }, { day, booking, link: links.booking(booking.id) });
+  }, { day, booking, link: links.booking(booking.id), email: { button: 'Pay in Pantopus' } });
 }
 
 async function problemUpdate(day, booking, body) {
@@ -201,7 +353,7 @@ async function problemUpdate(day, booking, body) {
     type: 'crew_day_problem_update',
     title: 'Update on your Crew Day',
     body,
-  }, { day, booking, link: links.booking(booking.id) });
+  }, { day, booking, link: links.booking(booking.id), email: { button: 'See your Crew Day' } });
 }
 
 async function newDates(day, booking, crew, proposal) {
@@ -212,7 +364,7 @@ async function newDates(day, booking, crew, proposal) {
     title: 'Rain changed the plan',
     body: `${businessName(crew)} can come ${list} at the same price. No payment has been taken. If you don't answer by `
       + `${rules.formatDayRelative(proposal.deadline_at, day.timezone).replace(/^on /, '')} ${rules.formatTime(proposal.deadline_at, day.timezone)}, we won't book a new date.`,
-  }, { day, booking, link: links.booking(booking.id) });
+  }, { day, booking, link: links.booking(booking.id), email: { facts: [day.title], button: 'Pick a date' } });
 }
 
 async function reminder(day, booking) {
@@ -221,7 +373,8 @@ async function reminder(day, booking) {
     title: `${serviceDayName(day)} is tomorrow`,
     body: `${rules.formatWindow(booking.window_start, booking.window_end)}.${day.prep_note ? ` ${day.prep_note}` : ''}`
       + `${day.outside_only ? " You don't need to be home." : ''}`,
-  }, { day, booking, link: links.booking(booking.id), idempotencyKey: `crew-day-reminder:${booking.id}:${booking.service_date}` });
+  }, { day, booking, link: links.booking(booking.id), idempotencyKey: `crew-day-reminder:${booking.id}:${booking.service_date}`,
+    email: { button: 'See your Crew Day' } });
 }
 
 async function invite(day, userId, crew, priceCents) {
@@ -229,7 +382,10 @@ async function invite(day, userId, crew, priceCents) {
     type: 'crew_day_invite',
     title: `${businessName(crew)} is back on ${day.street_label}`,
     body: `${rules.formatDay(day.service_date)}. Book again: ${priceCents ? `your price is ${rules.formatMoney(priceCents)}` : 'see your price'}.`,
-  }, { day, link: `/crew-day/${day.share_code}`, idempotencyKey: `crew-day-invite:${day.id}` });
+  }, { day, link: `/crew-day/${day.share_code}`, idempotencyKey: `crew-day-invite:${day.id}`, email: {
+    button: 'Book again',
+    footer: `You got this email because you booked ${businessName(crew)} on Pantopus before.`,
+  } });
 }
 
 async function requestAnswered(request, offerDay) {
@@ -241,7 +397,9 @@ async function requestAnswered(request, offerDay) {
     type: 'crew_day_request_answered',
     title: `No crew yet for ${request.street_label}`,
     body: request.review_note || null,
-  }, { day: request, link: offerDay ? `/crew-day/${offerDay.share_code}` : links.mine() });
+  }, { day: request, link: offerDay ? `/crew-day/${offerDay.share_code}` : links.mine(), email: offerDay
+    ? { facts: [offerDay.title, dayWhen(offerDay)], button: 'See your price', footer: FOOTERS.request }
+    : { button: 'See your Crew Days', footer: FOOTERS.request } });
 }
 
 // ── Crew (about one home) ─────────────────────────────────────
@@ -259,7 +417,10 @@ async function dayCancelledForCrew(day, byOperator) {
     type: 'crew_day_cancelled',
     title: byOperator ? `Pantopus cancelled ${day.title}` : `${day.title} was cancelled`,
     body: `${day.cancel_reason ? `${day.cancel_reason} ` : ''}Nobody was charged.`,
-  }, { day, link: links.crewDay(day.business_user_id, day.id) });
+  }, { day, link: links.crewDay(day.business_user_id, day.id), email: {
+    button: 'Open your Crew Day',
+    footer: FOOTERS.crew,
+  } });
 }
 
 async function problemReported(day, booking) {
@@ -267,7 +428,10 @@ async function problemReported(day, booking) {
     type: 'crew_day_problem',
     title: 'A household reported a problem',
     body: 'Pantopus support has it. Their charge waits.',
-  }, { day, booking, link: links.crewDay(day.business_user_id, day.id) });
+  }, { day, booking, link: links.crewDay(day.business_user_id, day.id), email: {
+    button: 'Open your Crew Day',
+    footer: FOOTERS.crew,
+  } });
 }
 
 async function gateReady(day, booking) {
@@ -292,7 +456,11 @@ async function priceNeeded(day, booking) {
     type: 'crew_day_price_needed',
     title: 'A home needs your price',
     body: `${option?.label || 'A home'} on ${day.street_label}.`,
-  }, { day, booking, link: links.crewDay(day.business_user_id, day.id) });
+  }, { day, booking, link: links.crewDay(day.business_user_id, day.id), email: {
+    facts: [day.title, dayWhen(day)],
+    button: 'Set your price',
+    footer: FOOTERS.crew,
+  } });
 }
 
 async function homeCancelled(day, booking, bookedCount) {
@@ -313,21 +481,56 @@ async function releaseAsked(day, booking) {
 
 // ── Operator ───────────────────────────────────────────────────
 
+// "December 2026", "December 2026 or January 2027", "any month"
+function requestMonths(months) {
+  const names = (months || []).map((m) => (m === 'any' ? 'any month' : rules.formatMonth(m))).filter(Boolean);
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}` : names[0] || 'any month';
+}
+
 async function requestNew(request) {
-  await send(await adminRecipients(), {
+  const recipients = await adminRecipients();
+  await send(recipients, {
     type: 'crew_day_request_new',
     title: 'A street asked for a Crew Day',
     body: `${request.title}.`,
   }, { day: request, link: links.admin(request.id), push: false });
+  alertOperators(recipients, {
+    subject: 'Crew Day request to answer',
+    lead: `A household asked for a Crew Day: ${request.title}, ${requestMonths(request.request_months)}. Answer with an open `
+      + 'Crew Day or "No crew yet".',
+    facts: [request.title, `Request ${request.id}`],
+    button: 'Answer the request',
+    link: links.admin(request.id),
+    place: request,
+  });
 }
+
+const PROBLEM_KINDS = {
+  missed: 'the crew missed something',
+  damage: 'something was damaged',
+  no_show: "the crew didn't come",
+  charge: 'a question about the charge',
+  other: 'something else',
+};
 
 async function problemOpened(day, booking) {
   const due = rules.formatDayRelative(booking.problem_due_at, day.timezone);
-  await send(await adminRecipients(), {
+  const by = `${due} by ${rules.formatTime(booking.problem_due_at, day.timezone)}`;
+  const recipients = await adminRecipients();
+  await send(recipients, {
     type: 'crew_day_problem_opened',
     title: 'A Crew Day problem needs a reply',
-    body: `${day.title}: reply ${due} by ${rules.formatTime(booking.problem_due_at, day.timezone)}.`,
+    body: `${day.title}: reply ${by}.`,
   }, { day, booking, link: links.admin(day.id), push: false });
+  alertOperators(recipients, {
+    subject: 'Crew Day problem to answer',
+    lead: `A household reported a problem on ${day.title}: ${PROBLEM_KINDS[booking.problem_kind] || 'something else'}. `
+      + `Its charge is paused. Reply ${by}.`,
+    facts: [day.title, dayWhen(day, booking), `Booking ${booking.id}`],
+    button: 'Open the problem',
+    link: links.admin(day.id),
+    place: day,
+  });
 }
 
 async function reviewNeeded(day, { businessName }) {
@@ -337,6 +540,14 @@ async function reviewNeeded(day, { businessName }) {
     title: 'A Crew Day is waiting for approval',
     body: `${businessName || 'A crew'}: ${day.title}.`,
   }, { day, link: links.admin(day.id), push: false });
+  alertOperators(recipients, {
+    subject: 'Crew Day to approve',
+    lead: `${businessName || 'A crew'} sent ${day.title} for approval. Its invitation works once you approve it.`,
+    facts: [day.title, dayWhen(day), `${day.capacity} homes · Crew Day ${day.id}`],
+    button: 'Review it',
+    link: links.admin(day.id),
+    place: day,
+  });
 }
 
 module.exports = {

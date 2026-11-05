@@ -273,8 +273,20 @@ resolved natively by type).
 ## 6. Notifications and emails
 
 `notificationService.createNotification` with `context: 'personal'`, metadata `{ crew_day_id, booking_id }`. Push where
-marked; email through the existing `emailService` (Mailpit locally). Crew notices go to the business's primary owner
-and the member who created the day.
+marked. Crew notices go to the business's primary owner and the member who created the day.
+
+**Emails** (SRV-7, `notices.send()` with `email`, through the existing `emailService`; Mailpit locally) go to the
+account's address of each person a notice was just made for, so nobody gets one while `crew_day` is off and an
+idempotent notice (the reminder, the invite) is never emailed twice. Anyone who turned off Email Notifications (web
+Settings, `MailPreferences.email_notifications`) gets the notice without the email, as with the monthly summary. Each
+email is the notice's title (the subject) and body, a card with the day's title and date, a button to the notice's
+link on the web (`APP_URL`), and a footer saying why it came with an "Email settings" link. They leave one at a time
+after the notice is stored, so no request waits on the mail server. The receipt (`crew_day_charged`) adds what was
+done, line by line with cents, any amount Pantopus support took off, the total paid, the card that paid ("Visa ending
+4242"), the date, and "See the receipt" (`/app/invoice/<invoice_id>`). Operator alerts go to each `ADMIN_ALERT_EMAIL`
+address and each admin account: the subject is "[Pantopus] Crew Day to approve · Camas, WA" (also "Crew Day problem
+to answer", "Crew Day request to answer"; the city only, never an address), the body has the day or request, the ids
+and a link to its admin page, never a household's name, address or note.
 
 | Type | To | Push | Email | Title · body |
 |---|---|---|---|---|
@@ -285,10 +297,10 @@ and the member who created the day.
 | `crew_day_eta_changed` | household | yes | no | "New arrival time" · "Example Gutter Co. now expects 11 AM–12 PM." |
 | `crew_day_cant_get_in` | household | yes | no | "The crew can't get in" · the crew's note |
 | `crew_day_done` | household | yes | yes | "One thing off your list" · "Gutters cleaned and flushed. See the photos. We'll charge $180 tomorrow at 11:42 AM unless something needs attention." |
-| `crew_day_charged` | household | no | yes (receipt) | "Paid: $180 to Example Gutter Co." |
+| `crew_day_charged` | household | no | yes (receipt) | "Paid: $180.00 to Example Gutter Co." |
 | `crew_day_charge_failed` | household | yes | yes | "Your card didn't go through" · "Pay $180 to Example Gutter Co. in Pantopus." |
 | `crew_day_new_dates` | household | yes | yes | "Rain changed the plan" · "Example Gutter Co. can come Thu, Nov 19 or Sat, Nov 21 at the same price. No payment has been taken. If you don't answer by Wed 9 AM, we won't book a new date." |
-| `crew_day_cancelled` | household | yes | yes | "Your Gutter Day was cancelled" · who cancelled; "Nothing was charged." |
+| `crew_day_cancelled` | household; the crew too when the operator cancels its day | yes | yes | "Your Gutter Day was cancelled" · who cancelled; "Nothing was charged." (the crew: "Pantopus cancelled Gutter Day on Maple Lane" · the reason; "Nobody was charged.") |
 | `crew_day_problem_update` | household | yes | yes | "Update on your Crew Day" · the operator's note or the outcome |
 | `crew_day_request_answered` | household | yes | yes | "A crew can come to Maple Lane" / "No crew yet for Maple Lane" |
 | `crew_day_invite` | household (past customers) | yes | yes | "Example Gutter Co. is back on Maple Lane" · "Tue, Nov 17. Book again: your price is $180." |
