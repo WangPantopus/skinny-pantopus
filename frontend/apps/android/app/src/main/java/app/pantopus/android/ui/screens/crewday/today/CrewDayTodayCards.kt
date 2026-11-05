@@ -41,6 +41,8 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
+import java.time.LocalDate
+import java.time.ZoneId
 
 /** What Today's Crew Day cards open. */
 data class CrewDayTodayActions(
@@ -48,6 +50,8 @@ data class CrewDayTodayActions(
     val onOpenBooking: (bookingId: String) -> Unit,
     /** An open day's invitation (screen 1), by its share code. */
     val onOpenInvitation: (code: String) -> Unit,
+    /** The conversation with the crew's business. */
+    val onMessageCrew: (userId: String, name: String) -> Unit,
 )
 
 /**
@@ -78,6 +82,10 @@ fun CrewDayTodayCards(
                 working = card.key in ui.working,
                 gateTold = card.key in ui.gateTold,
                 onOpen = { card.bookingId?.let(actions.onOpenBooking) },
+                onMessageCrew =
+                    card.crew?.let { crew ->
+                        crew.businessUserId?.let { id -> { actions.onMessageCrew(id, crew.name ?: "The crew") } }
+                    },
                 onGateReady = { viewModel.gateReady(card) },
                 onLooksGood = { viewModel.looksGood(card) },
             )
@@ -124,70 +132,118 @@ private fun CardHeader(
     }
 }
 
-/** "Your booking": the overline and the buttons follow the booking's state. */
+/** "Your booking" (board `Today`): the overline, the line and the buttons follow what the booking needs now. */
 @Composable
 private fun BookingTodayCard(
     card: CrewDayCardDto,
     working: Boolean,
     gateTold: Boolean,
     onOpen: () -> Unit,
+    onMessageCrew: (() -> Unit)?,
     onGateReady: () -> Unit,
     onLooksGood: () -> Unit,
 ) {
-    val line =
-        listOfNotNull(
-            CrewDayFormat.shortDate(card.serviceDate),
-            CrewDayFormat.window(card.windowStart, card.windowEnd),
-            statusWord(card.status),
-        ).joinToString(" · ")
+    val state = card.todayState.takeIf { card.problemStatus != "open" }
     Column(
         modifier = Modifier.fillMaxWidth().crewDayCard().padding(Spacing.s4).testTag("crewDayTodayBooking"),
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
-        CardHeader(overline = bookingOverline(card), title = card.title, line = line, onOpen = onOpen)
-        when (card.todayState.takeIf { card.problemStatus != "open" }) {
+        CardHeader(overline = bookingOverline(card), title = card.title, line = bookingLine(card, state), onOpen = onOpen)
+        when (state) {
+            "price_ready" -> CardButton("See your price", onOpen, tag = "crewDayTodayOpen")
+            "new_dates" -> CardButton("Pick a date", onOpen, tag = "crewDayTodayOpen")
             "on_the_way" ->
                 if (gateTold || card.gateReadyAt != null) {
-                    Text(
-                        text = "We told the crew the gate is ready.",
-                        style = PantopusTextStyle.small,
-                        color = PantopusColors.appText,
-                    )
-                    PlanTonalButton(title = "Open", onClick = onOpen, height = 44.dp, modifier = Modifier.testTag("crewDayTodayOpen"))
+                    Text(text = "We told the crew the gate is ready.", style = PantopusTextStyle.small, color = PantopusColors.appText)
+                    CardButton("Open", onOpen, tonal = true, tag = "crewDayTodayOpen")
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        PlanTonalButton(
-                            title = "Open",
-                            onClick = onOpen,
-                            height = 44.dp,
-                            modifier = Modifier.weight(1f).testTag("crewDayTodayOpen"),
-                        )
-                        PrimaryButton(
-                            title = "Gate is ready",
-                            onClick = onGateReady,
-                            isLoading = working,
-                            modifier = Modifier.weight(1f).testTag("crewDayTodayGateReady"),
+                        if (onMessageCrew != null) {
+                            CardButton(
+                                "Message the crew",
+                                onMessageCrew,
+                                tonal = true,
+                                tag = "crewDayTodayMessage",
+                                modifier = Modifier.weight(1f),
+                            )
+                        } else {
+                            CardButton("Open", onOpen, tonal = true, tag = "crewDayTodayOpen", modifier = Modifier.weight(1f))
+                        }
+                        CardButton(
+                            "Gate is ready",
+                            onGateReady,
+                            loading = working,
+                            tag = "crewDayTodayGateReady",
+                            modifier = Modifier.weight(1f),
                         )
                     }
                 }
-            "done" ->
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PlanTonalButton(
-                        title = "Open",
-                        onClick = onOpen,
-                        height = 44.dp,
-                        modifier = Modifier.weight(1f).testTag("crewDayTodayOpen"),
-                    )
-                    PrimaryButton(
-                        title = "Everything looks good",
-                        onClick = onLooksGood,
-                        isLoading = working,
-                        modifier = Modifier.weight(1f).testTag("crewDayTodayLooksGood"),
-                    )
-                }
-            else -> PrimaryButton(title = "Open", onClick = onOpen, modifier = Modifier.fillMaxWidth().testTag("crewDayTodayOpen"))
+            "done" -> CardButton("Everything looks good", onLooksGood, loading = working, tag = "crewDayTodayLooksGood")
+            else -> CardButton("Open", onOpen, tag = "crewDayTodayOpen")
         }
     }
+}
+
+/** The board's small card buttons (44 dp, the app's touch-target floor): the primary blue one or the sunken tonal one. */
+@Composable
+private fun CardButton(
+    title: String,
+    onClick: () -> Unit,
+    tag: String,
+    modifier: Modifier = Modifier.fillMaxWidth(),
+    tonal: Boolean = false,
+    loading: Boolean = false,
+) {
+    if (tonal) {
+        PlanTonalButton(title = title, onClick = onClick, height = 44.dp, loading = loading, modifier = modifier.testTag(tag))
+    } else {
+        PrimaryButton(title = title, onClick = onClick, isLoading = loading, modifier = modifier.testTag(tag))
+    }
+}
+
+/**
+ * The card's line (board `Today`): "Tue, Nov 17 · $260 · approve to book", "Today · expected 10–11 AM", "Charges $180
+ * tomorrow at 11:42 AM", "Rain moved it · pick a new date", else "Tue, Nov 17 · 9 AM–1 PM · Booked".
+ */
+private fun bookingLine(
+    card: CrewDayCardDto,
+    state: String?,
+): String {
+    val zone = CrewDayFormat.zone(card.timezone)
+    return when (state) {
+        "price_ready" ->
+            listOfNotNull(CrewDayFormat.shortDate(card.serviceDate), card.priceCents?.let(CrewDayFormat::price), "approve to book")
+                .joinToString(" · ")
+        "on_the_way" -> "Today · " + (CrewDayFormat.eta(card.eta?.start, card.eta?.end, zone)?.let { "expected $it" } ?: "on the way")
+        "new_dates" -> "Rain moved it · pick a new date"
+        "done" -> chargeLine(card, zone) ?: defaultLine(card)
+        else -> defaultLine(card)
+    }
+}
+
+private fun defaultLine(card: CrewDayCardDto): String =
+    listOfNotNull(
+        CrewDayFormat.shortDate(card.serviceDate),
+        CrewDayFormat.window(card.windowStart, card.windowEnd),
+        statusWord(card.status),
+    ).joinToString(" · ")
+
+/** "Charges $180 tomorrow at 11:42 AM" while the charge waits for its time. */
+private fun chargeLine(
+    card: CrewDayCardDto,
+    zone: ZoneId,
+): String? {
+    val charge = card.charge?.takeIf { it.state == "scheduled" } ?: return null
+    val due = CrewDayFormat.instant(charge.dueAt) ?: return null
+    val day = due.atZone(zone).toLocalDate()
+    val today = LocalDate.now(zone)
+    val whenWord =
+        when (day) {
+            today -> "today"
+            today.plusDays(1) -> "tomorrow"
+            else -> CrewDayFormat.shortDate(day).orEmpty()
+        }
+    return "Charges ${CrewDayFormat.price(charge.amountCents ?: card.priceCents)} $whenWord at ${CrewDayFormat.clock(due, zone)}"
 }
 
 /** "Coming to your street": an open day near the person's home. */
@@ -208,13 +264,8 @@ private fun NearbyTodayCard(
     ) {
         CardHeader(overline = "Coming to your street", title = card.title, line = line, onOpen = onSeePrice)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            PlanTonalButton(
-                title = "Not for me",
-                onClick = onNotForMe,
-                height = 44.dp,
-                modifier = Modifier.weight(1f).testTag("crewDayTodayNotForMe"),
-            )
-            PrimaryButton(title = "See my price", onClick = onSeePrice, modifier = Modifier.weight(1f).testTag("crewDayTodaySeePrice"))
+            CardButton("Not for me", onNotForMe, tonal = true, tag = "crewDayTodayNotForMe", modifier = Modifier.weight(1f))
+            CardButton("See my price", onSeePrice, tag = "crewDayTodaySeePrice", modifier = Modifier.weight(1f))
         }
     }
 }
