@@ -10,7 +10,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { Metadata } from 'next';
-import { IBM_Plex_Mono, Newsreader } from 'next/font/google';
+import { IBM_Plex_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import { IOS_APP_STORE_APP_ID } from '@pantopus/utils';
 import HomeHero from './_components/HomeHero';
 import UnderstandSection from './_components/UnderstandSection';
@@ -27,7 +28,22 @@ import HomeFooter from './_components/HomeFooter';
 import { HERO_ID, skyPhaseScript } from './_components/skyScene';
 import styles from './_components/home.module.css';
 
-const serif = Newsreader({ subsets: ['latin'], style: ['normal', 'italic'], axes: ['opsz'], variable: '--home-serif', display: 'swap' });
+// Newsreader with every weight, optical size and both styles. The page preloads a cut of Google's Latin file holding
+// every English letter and digit and the punctuation headings use, with all its axes, kerning and figure styles, so
+// those glyphs draw exactly as from the whole file at about half the bytes. Every other character still draws in
+// Newsreader, from Google's own files in home.module.css, fetched only when a text uses one; its fallback while
+// loading is there too. Files and ranges come from scripts/newsreader-subset.py.
+const serif = localFont({
+  src: [
+    { path: './_components/fonts/newsreader-core.woff2', weight: '200 800', style: 'normal' },
+    { path: './_components/fonts/newsreader-italic-core.woff2', weight: '200 800', style: 'italic' },
+  ],
+  // next/font/local would otherwise name the family after this constant ("serif").
+  declarations: [{ prop: 'font-family', value: 'Newsreader' }],
+  variable: '--home-serif',
+  display: 'swap',
+  adjustFontFallback: false,
+});
 // Plex Mono's fallbacks are in home.module.css (adjustFontFallback is off): next/font's Arial-based one has wider
 // capitals than Plex Mono, so when the page painted before Plex Mono arrived, the hero's eyebrow wrapped
 // differently and the hero moved when the font landed. A Courier New face with Plex Mono's advance stands in.

@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import ChatRoomView from '@/components/chat/ChatRoomView';
 import ConversationView from '@/components/chat/ConversationView';
-import ChatListPage from '@/app/(app)/app/chat/page';
+import ChatListPage from '@/app/(app)/app/chat/ChatListScreen';
 import { safeRedirectPath } from '@/lib/auth-utils';
 import { getAuthToken, onTokenChange } from '@pantopus/api';
 

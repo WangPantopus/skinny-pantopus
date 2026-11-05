@@ -194,7 +194,8 @@ export async function getHub(): Promise<HubPayload> {
   return get<HubPayload>('/api/hub');
 }
 
-function isHubTodayPayload(payload: unknown): payload is HubToday {
+/** A briefing (rather than `{ today: null }` or a failure's `{ today: null, error }`). */
+export function isHubTodayPayload(payload: unknown): payload is HubToday {
   return Boolean(
     payload
       && typeof payload === 'object'
