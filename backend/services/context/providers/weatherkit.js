@@ -416,8 +416,10 @@ async function fetchAlerts(latitude, longitude) {
 
   const geohash = ngeohash.encode(latitude, longitude, GEOHASH_PRECISION);
 
-  // Check cache
-  const cached = await getContextCache(PROVIDER, 'weather_alerts', geohash);
+  // Check cache. ContextCache's context_type check allows 'alerts'; the
+  // 'weather_alerts' this used before was refused on every write, so no alert
+  // list was ever cached and every read asked WeatherKit again.
+  const cached = await getContextCache(PROVIDER, 'alerts', geohash);
   if (cached) {
     logger.debug('WeatherKit alerts: cache hit', { geohash });
     return {
@@ -451,7 +453,7 @@ async function fetchAlerts(latitude, longitude) {
     const wkAlerts = (raw.weatherAlerts && raw.weatherAlerts.alerts) || [];
     const normalized = wkAlerts.map(normaliseWkAlert);
 
-    await setContextCache(PROVIDER, 'weather_alerts', geohash, normalized, TTL_ALERTS);
+    await setContextCache(PROVIDER, 'alerts', geohash, normalized, TTL_ALERTS);
 
     return {
       alerts: normalized,

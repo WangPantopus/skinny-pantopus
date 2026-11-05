@@ -212,6 +212,18 @@ function clearHubTodayCache(userId) {
   }
 }
 
+// Settles with the provider's answer, or rejects once `ms` has passed (no
+// limit without one). The provider's request itself keeps running.
+function withinProviderBudget(promise, ms) {
+  if (!(ms > 0)) return promise;
+  let timer = null;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('provider over budget')), ms);
+    if (typeof timer.unref === 'function') timer.unref();
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 /**
  * Get the Hub Today card payload for a user.
  *
@@ -231,6 +243,11 @@ function clearHubTodayCache(userId) {
  *   Portland's. Invalid coordinates fall back to the user's location.
  * @param {Map} [options.countyReads]  A caller's per-request county-rules
  *   read (addressCalendarService.composeForHome), shared with the calendar here.
+ * @param {number} [options.providerBudgetMs]  How long weather, air quality and
+ *   alerts may each take (Place's share of its section budget). One that runs
+ *   past it counts as a failed provider in this payload (meta.partial_failures),
+ *   and its request keeps running to fill the provider cache for the next read.
+ *   Omitted: each waits for its provider's own timeout.
  * @returns {Promise<Object>} HubTodayResult
  */
 // The address calendar for the location's home (Wedge Phase 2, D6) — null
@@ -286,10 +303,11 @@ async function getHubToday(userId, options = {}) {
 
   // 2. Fetch all data in parallel with per-provider timing
   const fetchStartMs = Date.now();
+  const providerMs = options.providerBudgetMs;
   const [weatherResult, aqiResult, alertsResult, internalResult, addressCalendarResult] = await Promise.allSettled([
-    fetchWeather(latitude, longitude),
-    fetchAQI(latitude, longitude),
-    fetchAlerts(latitude, longitude),
+    withinProviderBudget(fetchWeather(latitude, longitude), providerMs),
+    withinProviderBudget(fetchAQI(latitude, longitude), providerMs),
+    withinProviderBudget(fetchAlerts(latitude, longitude), providerMs),
     collectInternalContext(userId, location.homeId, location.timezone),
     fetchAddressCalendar(location, userId, countyReads),
   ]);
