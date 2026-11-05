@@ -62,11 +62,7 @@ public struct CreateBusinessWizardView: View {
     private var stepContent: some View {
         switch viewModel.currentStep {
         case .pickCategory:
-            if viewModel.isSearchActive {
-                PickCategorySearchStep(viewModel: viewModel)
-            } else {
-                PickCategoryStep(viewModel: viewModel)
-            }
+            PickCategoryStep(viewModel: viewModel)
         case .legalInfo:
             LegalInfoStep(viewModel: viewModel)
         case .profile:

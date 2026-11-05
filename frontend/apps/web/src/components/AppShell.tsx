@@ -57,6 +57,7 @@ import { FEED_COMPOSER_OPEN_EVENT, MAGIC_TASK_OPEN_EVENT, notifyFeedPostCreated 
 import { launchFeatures, webFeatureFlags } from '@/lib/featureFlags';
 import { useFeatureFlagState } from '@/hooks/useFeatureFlag';
 import { useShellReadsReleased } from '@/lib/shellReads';
+import { hubTodayQuery } from '@/lib/hubToday';
 import type { CSSProperties } from 'react';
 import { Search, MessageCircle, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, UserRound, type LucideIcon } from 'lucide-react';
 import { useOnlineStatus } from '@/components/map/OfflineIndicator';
@@ -179,6 +180,40 @@ const INITIAL_APP_STATE: AppShellState = {
   feedComposerOpen: false,
   feedPosting: false,
 };
+
+// ── First frame ────────────────────────────────────────────────
+// The top bar and the sidebar's empty frame at the full shell's width (64 px on
+// tablets, 240 px on desktops, 64 px if collapsed there), so nothing moves when
+// the full shell replaces it. A plain function, not a component: AppShellInner
+// returns it while hydrating and its own full shell afterwards, and both keep the
+// page in the same keyed <main>, so the page mounts once.
+function shellFrame(content: React.ReactNode) {
+  return (
+    // The script sets --desktop-sidebar on this element before React loads.
+    <div className="min-h-screen bg-app text-app" suppressHydrationWarning>
+      <script dangerouslySetInnerHTML={{ __html: COLLAPSED_SIDEBAR_SCRIPT }} />
+      <header className="fixed top-0 left-0 right-0 md:left-[64px] lg:left-[var(--desktop-sidebar,240px)] h-14 bg-surface border-b border-app z-50" />
+      <aside className="hidden md:block fixed top-0 left-0 bottom-0 md:w-[64px] lg:w-[var(--desktop-sidebar,240px)] bg-surface border-r border-app z-40">
+        <div className="h-14 border-b border-app" />
+      </aside>
+      <main key="content" className="pt-14 md:ml-[64px] lg:ml-[var(--desktop-sidebar,240px)]">
+        {content}
+      </main>
+    </div>
+  );
+}
+
+// The app's pages are prerendered once for everyone, and AppShellInner reads the
+// address's query, which a prerender cannot know, so the prerendered HTML holds
+// this boundary's fallback and the browser renders the shell and page itself
+// once the scripts arrive. Drawing the frame (with the app's usual loading
+// spinner where the page goes) as that fallback gives the first paint the app's
+// own frame instead of a blank screen while the scripts download.
+const SHELL_FALLBACK = shellFrame(
+  <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center" aria-hidden="true">
+    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600" />
+  </div>,
+);
 
 // ────────────────────────────────────────────────────────────────
 // AppShellInner
@@ -421,22 +456,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       <span>You&apos;re offline. Pantopus will refresh when you reconnect.</span>
     </div>
   );
-  if (!mounted) {
-    return (
-      // The script sets --desktop-sidebar on this element before React loads.
-      <div className="min-h-screen bg-app text-app" suppressHydrationWarning>
-        <script dangerouslySetInnerHTML={{ __html: COLLAPSED_SIDEBAR_SCRIPT }} />
-        <header className="fixed top-0 left-0 right-0 md:left-[64px] lg:left-[var(--desktop-sidebar,240px)] h-14 bg-surface border-b border-app z-50" />
-        <aside className="hidden md:block fixed top-0 left-0 bottom-0 md:w-[64px] lg:w-[var(--desktop-sidebar,240px)] bg-surface border-r border-app z-40">
-          <div className="h-14 border-b border-app" />
-        </aside>
-        <main key="content" className="pt-14 md:ml-[64px] lg:ml-[var(--desktop-sidebar,240px)]">
-          {offlineNotice}
-          {children}
-        </main>
-      </div>
-    );
-  }
+  if (!mounted) return shellFrame(<>{offlineNotice}{children}</>);
 
   return (
     // `--fab-lift` raises every fixed bottom-anchored control (FABs, the
@@ -457,8 +477,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
               {mobileOpen ? <X className="w-[20px] h-[20px] text-app-muted" /> : <Menu className="w-[20px] h-[20px] text-app-muted" />}
             </button>
             {/* min-w-0 lets the wordmark truncate before the buttons move; mr-auto, not flex-1, keeps its tap
-             *  target to the logo and name, so a tap on the empty bar does not open the Hub. */}
-            <button onClick={() => router.push('/app/hub')} className="mr-auto flex min-w-0 items-center gap-[8px]" aria-label="Pantopus Hub">
+             *  target to the logo and name, so a tap on the empty bar does not open Place. */}
+            <button onClick={() => router.push('/app/place')} className="mr-auto flex min-w-0 items-center gap-[8px]" aria-label="Pantopus, go to Place">
               <PantopusMark size={24} className="shrink-0" />
               <span className="truncate text-[18px] leading-[28px] font-semibold text-app">Pantopus</span>
             </button>
@@ -525,12 +545,12 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           {/* ── Brand ── */}
           <div className="h-14 flex items-center gap-3 flex-shrink-0 border-b border-app overflow-hidden" style={sidebarHeaderPadStyle}>
             {showLabels ? (
-              <button onClick={() => router.push('/app/hub')} className="flex items-center gap-3 hover-bg-app rounded-lg px-1 py-1 transition">
+              <button onClick={() => router.push('/app/place')} className="flex items-center gap-3 hover-bg-app rounded-lg px-1 py-1 transition">
                 <PantopusMark size={28} className="flex-shrink-0" />
                 <span className="text-lg font-bold text-app whitespace-nowrap">Pantopus</span>
               </button>
             ) : (
-              <button onClick={() => router.push('/app/hub')} className="w-full h-full flex items-center justify-center hover-bg-app transition" title="Pantopus Hub" aria-label="Pantopus Hub">
+              <button onClick={() => router.push('/app/place')} className="w-full h-full flex items-center justify-center hover-bg-app transition" title="Pantopus" aria-label="Pantopus, go to Place">
                 <PantopusMark size={28} />
               </button>
             )}
@@ -692,7 +712,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         onOpenChange={setNamePromptOpen}
         onSaved={(saved) => {
           setMe(saved);
-          // The Hub greeting and public profile pages read the name from their own queries.
+          // Place's hub payload and public profile pages read the name from their own queries.
           queryClient.invalidateQueries({ queryKey: queryKeys.hub() });
           queryClient.invalidateQueries({ queryKey: ['profile'] });
         }}
@@ -738,7 +758,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <SocketProvider>
       <BadgeProvider>
-        <Suspense>
+        <Suspense fallback={SHELL_FALLBACK}>
           <AppShellInner>{children}</AppShellInner>
         </Suspense>
       </BadgeProvider>
@@ -764,7 +784,10 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, ma
   //  1. router.prefetch() → warms the Next.js route bundle + RSC payload
   //  2. queryClient.prefetchQuery() → warms the React Query cache (where
   //     the destination page's query key is known ahead of time)
-  // staleTime 5s means rapid re-hovers within 5s are no-ops (RQ dedupes).
+  // Place, Today and Messages warm their screen's own query definition, so
+  // revisiting a navigation item cannot re-fetch data that the destination
+  // still considers fresh. PREFETCH_STALE covers queries defined only here
+  // (rapid re-hovers within 5s are no-ops).
   const PREFETCH_STALE = 5_000;
 
   // Place — warm the route bundle + the primary-home query (the
@@ -777,11 +800,7 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, ma
   // Today — the briefing tab; the query key is known ahead of time.
   const prefetchToday = useCallback(() => {
     router.prefetch('/app/today');
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.hubToday(),
-      queryFn: () => api.hub.getHubToday({ retries: 1, retryDelayMs: 800 }),
-      staleTime: PREFETCH_STALE,
-    });
+    queryClient.prefetchQuery(hubTodayQuery());
   }, [router, queryClient]);
 
   const prefetchNearby = useCallback(() => {
@@ -824,9 +843,9 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, ma
           social discovery at /app/nearby (Pulse / Beacons / Marketplace /
           Tasks open behind its meter); Messages is the conversation list at
           /app/chat. Launch cut #10: while Mailbox is on, Mail is its own entry
-          before Messages (founder, 2026-10-26). Hub and the my-x screens keep
-          their routes (deep links resolve) but leave the nav. */}
-      <SidebarItem icon={NavIcons.place} label="Place" active={startsWith('/app/place') || isActive('/app/hub')} onClick={() => go('/app/place')} onPrefetch={prefetchPlace} showLabel={showLabels} accent="home" testId="sidebar-place" />
+          before Messages (founder, 2026-10-26). The my-x screens keep their
+          routes (deep links resolve) but leave the nav; /app/hub opens Place. */}
+      <SidebarItem icon={NavIcons.place} label="Place" active={startsWith('/app/place')} onClick={() => go('/app/place')} onPrefetch={prefetchPlace} showLabel={showLabels} accent="home" testId="sidebar-place" />
       <SidebarItem icon={NavIcons.today} label="Today" active={startsWith('/app/today') || startsWith('/app/hub/today')} onClick={() => go('/app/today')} onPrefetch={prefetchToday} showLabel={showLabels} testId="sidebar-today" />
       {/* Nearby opens on its Pulse segment (/app/feed); Neighborhood is /app/nearby (founder decision 2026-10-20). */}
       <SidebarItem icon={NavIcons.nearby} label="Nearby" active={startsWith('/app/nearby') || startsWith('/app/neighborhood') || startsWith('/app/feed') || startsWith('/app/beacons') || startsWith('/app/gigs') || startsWith('/app/marketplace')} onClick={() => go('/app/feed')} onPrefetch={prefetchNearby} showLabel={showLabels} testId="sidebar-nearby" />
@@ -943,9 +962,9 @@ function HomeSidebarNavigation({ homeId, currentTab, showLabels, onNavigate }: H
       />}
       <SidebarItem
         icon={HomeIcons.back}
-        label="Pantopus Hub"
+        label="Back to Pantopus"
         onClick={() => {
-          router.push('/app/hub');
+          router.push('/app/place');
           onNavigate();
         }}
         showLabel={showLabels}
@@ -999,7 +1018,7 @@ function BusinessSidebarContent({ businessId, currentTab, showLabels, onNavigate
       <SidebarDivider showLabel={showLabels} />
 
       {can('profile.edit') && <SidebarItem icon={BusinessIcons.settings} label="Settings" active={isTabActive('settings')} onClick={() => goTab('settings')} showLabel={showLabels} />}
-      <SidebarItem icon={BusinessIcons.back} label="Pantopus Hub" onClick={() => goPath('/app/hub')} showLabel={showLabels} />
+      <SidebarItem icon={BusinessIcons.back} label="Back to Pantopus" onClick={() => goPath('/app/place')} showLabel={showLabels} />
     </div>
   );
 }

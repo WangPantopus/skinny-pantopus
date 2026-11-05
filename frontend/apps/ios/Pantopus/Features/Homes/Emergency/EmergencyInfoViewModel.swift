@@ -106,7 +106,8 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
     var homeSubtitle: String?
 
     var topBarAction: TopBarAction? {
-        TopBarAction(
+        guard emergencies?.isEmpty == false else { return nil }
+        return TopBarAction(
             icon: .share,
             accessibilityLabel: "Share emergency info"
         ) { [weak self] in
@@ -191,7 +192,8 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
     }
 
     var fab: FABAction? {
-        FABAction(
+        guard canManage else { return nil }
+        return FABAction(
             icon: .plus,
             accessibilityLabel: "Add emergency info",
             variant: .secondaryCreate,
@@ -222,6 +224,8 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
     }
 
     private(set) var state: ListOfRowsState = .loading
+    private(set) var canManage = false
+    private var isVisible = true
 
     /// Last successful payload — held so a chip filter change can
     /// re-project without re-fetching.
@@ -282,12 +286,24 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
     }
 
     func load() async {
+        isVisible = true
         if case .loading = state {} else { state = .loading }
         await fetch()
     }
 
     func refresh() async {
+        guard isVisible else { return }
         await fetch()
+    }
+
+    func suspend() {
+        isVisible = false
+        fetchGeneration &+= 1
+        emergencies = nil
+        canManage = false
+        shareRequested = false
+        printRequested = false
+        state = .loading
     }
 
     /// Backend has no pagination on emergencies today.
@@ -296,15 +312,17 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
     private func fetch() async {
         fetchGeneration &+= 1
         let generation = fetchGeneration
+        canManage = false
         do {
             let response: GetHomeEmergenciesResponse = try await api.request(
                 HomesEndpoints.emergencies(homeId: homeId)
             )
-            guard generation == fetchGeneration else { return }
+            guard generation == fetchGeneration, !Task.isCancelled else { return }
             emergencies = response.emergencies
+            canManage = response.canManage == true
             rebuildState()
         } catch {
-            guard generation == fetchGeneration else { return }
+            guard generation == fetchGeneration, !Task.isCancelled else { return }
             emergencies = nil
             state = .error(
                 message: (error as? APIError)?.errorDescription
@@ -322,8 +340,9 @@ final class EmergencyInfoViewModel: ListOfRowsDataSource {
                     headline: "No emergency info set up",
                     subcopy: "Set up shutoffs, key contacts, evac spots, and medical info for this home. " +
                         "Easier to do now than during a 2 AM water leak.",
-                    ctaTitle: "Add info"
-                ) { [onAdd] in onAdd() }
+                    ctaTitle: canManage ? "Add info" : nil,
+                    onCTA: canManage ? onAdd : nil
+                )
             )
             return
         }

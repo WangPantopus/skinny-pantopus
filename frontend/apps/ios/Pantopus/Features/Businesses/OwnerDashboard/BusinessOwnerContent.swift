@@ -252,6 +252,27 @@ public struct BusinessOwnerContent: Sendable, Hashable {
         )
     }
 
+    /// Add a completed optional section without replacing other live state.
+    func withAdditionalContent(
+        insights: [OwnerInsightTile]? = nil,
+        reviews: [OwnerReviewItem]? = nil
+    ) -> BusinessOwnerContent {
+        BusinessOwnerContent(
+            businessId: businessId,
+            isLive: isLive,
+            editedMeta: editedMeta,
+            insights: insights ?? self.insights,
+            profileStrength: profileStrength,
+            reviewsToReplyLabel: reviews.map { recomputeReplyLabel(after: $0) } ?? reviewsToReplyLabel,
+            reviews: reviews ?? self.reviews,
+            publicProfile: publicProfile,
+            canPostAsBusiness: canPostAsBusiness,
+            foundingOffer: foundingOffer,
+            isVerified: isVerified,
+            access: access
+        )
+    }
+
     private func recomputeReplyLabel(after updated: [OwnerReviewItem]) -> String? {
         let pending = updated.filter { $0.reply == nil }.count
         return pending > 0 ? "\(pending) to reply" : nil

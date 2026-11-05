@@ -179,9 +179,38 @@ extension ChatListViewModel {
         guard let date = parseISO(timestamp) else {
             return timestamp
         }
+        return relative(date: date)
+    }
+
+    static func relative(date: Date) -> String {
         // A message can be a hair ahead of the phone's clock; "in 0 sec." reads as a bug.
         if Date().timeIntervalSince(date) < 60 { return "Just now" }
         return relativeFormatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    /// The rows' "5 min. ago" as of now, for a list shown again without a read.
+    static func relabelingTimes(_ rows: [ConversationRowContent], activity: [String: Date]) -> [ConversationRowContent] {
+        rows.map { row in
+            guard let date = activity[row.id], date != .distantPast else { return row }
+            return ConversationRowContent(
+                id: row.id,
+                variant: row.variant,
+                displayName: row.displayName,
+                initials: row.initials,
+                avatarURL: row.avatarURL,
+                identityChip: row.identityChip,
+                verified: row.verified,
+                preview: row.preview,
+                timeLabel: relative(date: date),
+                unread: row.unread,
+                pinned: row.pinned,
+                topicKinds: row.topicKinds,
+                topics: row.topics,
+                gigId: row.gigId,
+                storageKey: row.storageKey,
+                isMuted: row.isMuted
+            )
+        }
     }
 }
 

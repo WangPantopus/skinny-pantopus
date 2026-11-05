@@ -197,7 +197,7 @@ export async function createHomeEvent(homeId: string, data: {
 // ---- HomeDocument ----
 
 export async function getHomeDocuments(homeId: string) {
-  return get<{ documents: any[] }>(`/api/homes/${homeId}/documents`);
+  return get<{ documents: any[]; permissions?: string[] }>(`/api/homes/${homeId}/documents`);
 }
 
 export async function deleteHomeDocument(homeId: string, documentId: string) {
@@ -321,8 +321,8 @@ export async function deleteHomeEmergency(homeId: string, emergencyId: string) {
 
 // ---- HomeAccessSecret ----
 
-export async function getHomeAccessSecrets(homeId: string) {
-  return get<{ secrets: any[] }>(`/api/homes/${homeId}/access`);
+export async function getHomeAccessSecrets(homeId: string, signal?: AbortSignal) {
+  return get<{ secrets: any[] }>(`/api/homes/${homeId}/access`, undefined, { signal });
 }
 
 export async function createHomeAccessSecret(

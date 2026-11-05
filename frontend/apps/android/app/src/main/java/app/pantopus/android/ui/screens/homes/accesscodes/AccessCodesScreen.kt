@@ -23,11 +23,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.security.SecureScreenEffect
 import app.pantopus.android.core.security.SensitiveClipboard
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabAction
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabTint
 import app.pantopus.android.ui.screens.shared.list_of_rows.FabVariant
@@ -62,7 +61,7 @@ fun AccessCodesScreen(
 
     val context = LocalContext.current
 
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshIfLoaded() }
+    HomeCopyLifecycle(load = viewModel::resume, pause = viewModel::pause)
 
     LaunchedEffect(Unit) {
         viewModel.bindClipboard { value -> SensitiveClipboard.copy(context, "Access code", value) }
@@ -73,7 +72,6 @@ fun AccessCodesScreen(
                 is AccessCodesTarget.Search -> onSearch()
             }
         }
-        viewModel.load()
     }
 
     val topBarAction =

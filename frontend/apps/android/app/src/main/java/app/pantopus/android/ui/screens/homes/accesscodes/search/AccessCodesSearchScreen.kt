@@ -3,8 +3,11 @@
 package app.pantopus.android.ui.screens.homes.accesscodes.search
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -14,6 +17,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.core.security.SecureScreenEffect
 import app.pantopus.android.data.api.models.homes.HomeAccessSecretDto
+import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.shared.list_of_rows.RowView
 import app.pantopus.android.ui.screens.shared.search_list.EmptyStateContent
 import app.pantopus.android.ui.screens.shared.search_list.SearchListShell
@@ -39,10 +43,12 @@ fun AccessCodesSearchScreen(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
+
+    HomeCopyLifecycle(load = viewModel::resume, pause = viewModel::pause)
 
     LaunchedEffect(Unit) {
         viewModel.onOpenCode = onOpenCode
-        viewModel.load()
     }
 
     SecureScreenEffect()
@@ -71,6 +77,15 @@ fun AccessCodesSearchScreen(
                 }
             },
             onCancel = onCancel,
+            errorContent =
+                error?.let { message ->
+                    {
+                        Column(Modifier.padding(Spacing.s4)) {
+                            Text(message)
+                            TextButton(onClick = viewModel::retry) { Text("Try again") }
+                        }
+                    }
+                },
         )
     }
 }

@@ -68,9 +68,12 @@ public struct PublicProfileView: View {
     /// Opened from the `monthly_receipt` push: your whole month opens at once.
     let expandMonthlyReceipt: Bool
 
+    /// `viewModel`: the profile's model when the stack keeps it (Messages and Pulse, through a fold or a turn); a new
+    /// one otherwise.
     public init(
         userId: String,
         currentUserId: String? = nil,
+        viewModel: PublicProfileViewModel? = nil,
         onBack: @escaping @MainActor () -> Void,
         onOpenMessages: @escaping @MainActor (PublicProfile) -> Void = { _ in },
         onEditPersona: @escaping @MainActor () -> Void = {},
@@ -89,7 +92,8 @@ public struct PublicProfileView: View {
         // (and the whole persona-owner chrome) is permanently false.
         let viewer = currentUserId ?? PublicProfileViewModel.signedInUserId()
         _viewModel = State(
-            initialValue: PublicProfileViewModel(userId: userId, currentUserId: viewer, previewAudience: previewAudience)
+            initialValue: viewModel
+                ?? PublicProfileViewModel(userId: userId, currentUserId: viewer, previewAudience: previewAudience)
         )
         _owner = State(initialValue: previewAudience == nil ? viewer.map { OwnerPageModel(userId: $0) } : nil)
         self.onClose = onClose
@@ -528,6 +532,7 @@ public struct PublicProfileView: View {
                     localTabContent(payload, neighbor: neighbor, tab: selected)
                 }
                 .padding(.bottom, Spacing.s10)
+                .keepsScrollPlace(viewModel.scrollPlace)
             }
             // Its own task: SwiftUI cancels a refresh's task once the content it
             // reloads changes, which would cut off the relationship read after the posts.
@@ -671,6 +676,7 @@ public struct PublicProfileView: View {
             ) {
                 Task { @MainActor in viewModel.showOverflow = true }
             },
+            scrollPlace: viewModel.scrollPlace,
             header: {
                 VStack(spacing: Spacing.s0) {
                     PublicProfileBanner(kind: payload.kind)

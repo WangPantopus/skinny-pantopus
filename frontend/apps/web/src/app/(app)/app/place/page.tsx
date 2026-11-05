@@ -11,14 +11,22 @@
 // ============================================================
 
 import { Suspense } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import PlaceDashboard from '@/components/place/PlaceDashboard';
-import SavedPlaceContext from '@/components/place/SavedPlaceContext';
 import PlaceDashboardSkeleton from '@/components/place/PlaceDashboardSkeleton';
 import VerifiedSuccess from '@/components/place/VerifiedSuccess';
 import { PlaceHomeContext, placeHomeParam } from '@/components/archetypes/place';
 import { refreshMe } from '@/lib/me';
+
+// Only a ?preview= or ?savedPlace= link shows a saved address, and it brings the address
+// preview from the start funnel with it: loaded on demand, so the dashboard's first scripts
+// leave both out.
+const SavedPlaceContext = dynamic(() => import('@/components/place/SavedPlaceContext'), {
+  ssr: false,
+  loading: () => <p role="status">Loading your places…</p>,
+});
 
 function PlaceRoute() {
   const router = useRouter();

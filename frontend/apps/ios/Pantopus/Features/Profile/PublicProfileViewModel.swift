@@ -301,6 +301,10 @@ public final class PublicProfileViewModel {
     /// Render state.
     public private(set) var state: PublicProfileState = .loading
 
+    /// Where the reader was down the profile. Messages and Pulse keep this model through a fold, which rebuilds the
+    /// screen.
+    public let scrollPlace = ScrollPlace()
+
     /// Currently visible tab. Switching this is local; no refetch.
     public var selectedTab: ProfileTab = .about
 

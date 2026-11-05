@@ -105,12 +105,12 @@ export default function BusinessDashboardPage() {
       {/* Header banner */}
       <div className="bg-surface border-b border-app">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-1 items-center gap-3 min-w-0">
               <div className="w-12 h-12 rounded-xl bg-violet-100 flex items-center justify-center flex-shrink-0">
                 <Building2 className="w-6 h-6 text-violet-600" />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <h1 className="text-lg font-semibold text-app truncate">
                     {business?.name || 'Business'}
@@ -131,8 +131,8 @@ export default function BusinessDashboardPage() {
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2 text-sm text-app-secondary">
-                  <span>@{business?.username}</span>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-app-secondary">
+                  <span className="max-w-full truncate">@{business?.username}</span>
                   {profile?.is_published ? (
                     <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-semibold text-green-700 border border-green-200">
                       Published
@@ -145,12 +145,12 @@ export default function BusinessDashboardPage() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               {profile?.is_published && (
                 <Link
                   href={`/b/${business?.username}`}
                   target="_blank"
-                  className="px-3 py-1.5 rounded-lg border border-app-strong text-sm font-medium text-app-strong hover:bg-surface-raised transition"
+                  className="whitespace-nowrap px-3 py-1.5 rounded-lg border border-app-strong text-sm font-medium text-app-strong hover:bg-surface-raised transition"
                 >
                   View public page
                 </Link>
