@@ -78,7 +78,7 @@ async function bookingPage(bookingId, userId) {
     store.eventsFor(day.id, 'household', { bookingId: booking.id }),
   ]);
   const stats = views.dayStats(rows.get(String(day.id)));
-  const cutoff = rules.cancelCutoffAt(booking.service_date, booking.window_start, day.timezone);
+  const cutoff = bookingsService.cancelCutoff(booking, day);
   const beforeCutoff = !cutoff || new Date() < new Date(cutoff);
   const changeable = bookingsService.CHANGEABLE.includes(booking.status);
   const option = (booking.line_items || []).find((i) => i.kind === 'option') || { id: booking.option_id };
