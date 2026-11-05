@@ -86,3 +86,20 @@ export function confirmDone(bookingId: string): BookingReply {
 export function answerNewDate(bookingId: string, proposalId: string, choice: string): BookingReply {
   return post(`${booking(bookingId)}/new-date`, { proposal_id: proposalId, choice });
 }
+
+/** "Something needs attention": opens the case (the charge pauses); a second call adds a note or photos. */
+export function reportProblem(
+  bookingId: string,
+  data: { kind?: 'missed' | 'damage' | 'no_show' | 'charge' | 'other'; note: string; photo_paths: string[] },
+): BookingReply {
+  return post(`${booking(bookingId)}/problem`, data);
+}
+
+/** A photo for a problem (household) or a finished home (crew): JPEG, PNG or HEIC up to 10 MB → its stored path. */
+export function uploadPhoto(bookingId: string, purpose: 'problem' | 'done', photo: File) {
+  const form = new FormData();
+  form.append('photo', photo);
+  form.append('booking_id', bookingId);
+  form.append('purpose', purpose);
+  return post<{ path: string }>(`${BASE}/uploads`, form);
+}
