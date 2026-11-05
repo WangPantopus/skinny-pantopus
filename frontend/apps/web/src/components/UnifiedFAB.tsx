@@ -36,10 +36,16 @@ const ROUTES_WITH_PAGE_FAB = ['/app/homes/'];
  * letter, and the button sat on Shred. No quick-actions button there at all.
  */
 const ROUTES_WITHOUT_FAB = ['/app/chat', '/app/mailbox'];
+// Crew Day's form screens end in their own pinned button ("Send request", "Send to Pantopus support"), which the
+// floating button would cover on a phone.
+const FORM_ROUTES_WITHOUT_FAB = [/^\/app\/crew-days\/ask$/, /^\/app\/crew-days\/bookings\/[^/]+\/problem$/];
 
 /** Whether a quick-actions button (global or page-level) floats over this route. */
 export function routeHasFab(pathname: string): boolean {
-  return !ROUTES_WITHOUT_FAB.some((r) => pathname === r || pathname.startsWith(`${r}/`));
+  return (
+    !ROUTES_WITHOUT_FAB.some((r) => pathname === r || pathname.startsWith(`${r}/`)) &&
+    !FORM_ROUTES_WITHOUT_FAB.some((route) => route.test(pathname))
+  );
 }
 
 interface UnifiedFABProps {

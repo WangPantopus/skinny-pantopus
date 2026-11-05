@@ -124,7 +124,7 @@ async function onInvoicePaid(invoice) {
   await store.addEvent({ day, booking: paid, actorRole: byHousehold ? 'household' : 'system',
     actorUserId: byHousehold ? paid.household_user_id : null, kind: byHousehold ? 'paid_by_household' : 'charged',
     data: { invoice_id: invoice.id, amount_cents: invoice.total_cents }, visibleTo: 'both' });
-  await notices.charged(day, paid, await require('./bookings').crewFor(day)).catch(() => {});
+  await notices.charged(day, paid, await require('./bookings').crewFor(day), invoice).catch(() => {});
   return paid;
 }
 

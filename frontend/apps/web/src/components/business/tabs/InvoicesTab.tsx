@@ -29,6 +29,7 @@ const RELATION_LABELS: Record<InvoiceRecipient['relation'], string> = {
   hired: 'Hired you',
   messaged: 'Messaged you',
   connection: 'Your connection',
+  crew_day: 'Booked a Crew Day',
 };
 
 function RecipientAvatar({ person }: { person: InvoiceRecipient }) {

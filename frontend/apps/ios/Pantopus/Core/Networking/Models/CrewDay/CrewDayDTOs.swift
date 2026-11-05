@@ -231,24 +231,62 @@ public struct CrewDayCardDTO: Decodable, Sendable, Hashable, Identifiable {
     public let code: String?
     public let title: String?
     public let service: String?
+    public let serviceLabel: String?
     public let streetLabel: String?
     public let city: String?
     public let timezone: String?
     public let serviceDate: String?
     public let windowStart: String?
     public let windowEnd: String?
+    public let windowStartsAt: String?
     /// The booking's status, or a request's (`requested`, `offer_ready`, `no_crew`).
     public let status: String?
+    /// Today only: what the booking needs from me, or what is coming (`price_ready`, `new_dates`,
+    /// `payment_failed`, `done`, `on_the_way`, `today`, `tomorrow`, or the status).
+    public let todayState: String?
     public let priceCents: Int?
     public let priceFromCents: Int?
+    public let charge: CrewDayBookingDTO.Charge?
+    public let eta: CrewDayBookingDTO.Eta?
+    public let gateReadyAt: String?
     public let photoCount: Int?
+    public let problemStatus: String?
+    public let bookingClosesAt: String?
     public let crewName: String?
-    /// A request answered by an offer: that day's invitation code.
-    public let offerCode: String?
-    /// The same crew opened a new day nearby ("Book again").
-    public let bookAgainCode: String?
+    /// The crew's business account, to open a conversation with it.
+    public let crewUserId: String?
+    /// A request answered by an offer: that open day.
+    public let offer: Link?
+    /// A past booking whose crew opened a new day reaching this home ("Book again").
+    public let bookAgain: Link?
     public let months: [String]?
     public let note: String?
+    /// The operator's answer to a request ("No crew yet" and why).
+    public let answerNote: String?
+    public let createdAt: String?
+
+    /// An open Crew Day a card points to.
+    public struct Link: Decodable, Sendable, Hashable {
+        public let crewDayId: String?
+        public let code: String
+        public let serviceDate: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case code
+            case crewDayId = "crew_day_id"
+            case serviceDate = "service_date"
+        }
+    }
+
+    /// The offer's invitation code.
+    public var offerCode: String? {
+        offer?.code
+    }
+
+    /// The new day's invitation code.
+    public var bookAgainCode: String? {
+        bookAgain?.code
+    }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -258,38 +296,55 @@ public struct CrewDayCardDTO: Decodable, Sendable, Hashable, Identifiable {
         code = try c.decodeIfPresent(String.self, forKey: .code)
         title = try c.decodeIfPresent(String.self, forKey: .title)
         service = try c.decodeIfPresent(String.self, forKey: .service)
+        serviceLabel = try c.decodeIfPresent(String.self, forKey: .serviceLabel)
         streetLabel = try c.decodeIfPresent(String.self, forKey: .streetLabel)
         city = try c.decodeIfPresent(String.self, forKey: .city)
         timezone = try c.decodeIfPresent(String.self, forKey: .timezone)
         serviceDate = try c.decodeIfPresent(String.self, forKey: .serviceDate)
         windowStart = try c.decodeIfPresent(String.self, forKey: .windowStart)
         windowEnd = try c.decodeIfPresent(String.self, forKey: .windowEnd)
+        windowStartsAt = try c.decodeIfPresent(String.self, forKey: .windowStartsAt)
         status = try c.decodeIfPresent(String.self, forKey: .status)
+        todayState = try c.decodeIfPresent(String.self, forKey: .todayState)
         priceCents = try c.decodeIfPresent(Int.self, forKey: .priceCents)
         priceFromCents = try c.decodeIfPresent(Int.self, forKey: .priceFromCents)
+        charge = try? c.decodeIfPresent(CrewDayBookingDTO.Charge.self, forKey: .charge)
+        eta = try? c.decodeIfPresent(CrewDayBookingDTO.Eta.self, forKey: .eta)
+        gateReadyAt = try c.decodeIfPresent(String.self, forKey: .gateReadyAt)
         photoCount = try c.decodeIfPresent(Int.self, forKey: .photoCount)
-        crewName = try c.decodeIfPresent(CrewDayCrewDTO.self, forKey: .crew)?.name
-            ?? c.decodeIfPresent(String.self, forKey: .crewName)
-        offerCode = try c.decodeIfPresent(String.self, forKey: .offerCode)
-        bookAgainCode = try c.decodeIfPresent(String.self, forKey: .bookAgainCode)
+        problemStatus = try c.decodeIfPresent(String.self, forKey: .problemStatus)
+        bookingClosesAt = try c.decodeIfPresent(String.self, forKey: .bookingClosesAt)
+        let crew = try? c.decodeIfPresent(CrewDayCrewDTO.self, forKey: .crew)
+        crewName = crew?.name
+        crewUserId = crew?.businessUserId
+        offer = try? c.decodeIfPresent(Link.self, forKey: .offer)
+        bookAgain = try? c.decodeIfPresent(Link.self, forKey: .bookAgain)
         months = try c.decodeIfPresent([String].self, forKey: .months)
         note = try c.decodeIfPresent(String.self, forKey: .note)
+        answerNote = try c.decodeIfPresent(String.self, forKey: .answerNote)
+        createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, code, title, service, city, timezone, status, crew, months, note
+        case id, code, title, service, city, timezone, status, charge, eta, crew, offer, months, note
         case bookingId = "booking_id"
         case crewDayId = "crew_day_id"
+        case serviceLabel = "service_label"
         case streetLabel = "street_label"
         case serviceDate = "service_date"
         case windowStart = "window_start"
         case windowEnd = "window_end"
+        case windowStartsAt = "window_starts_at"
+        case todayState = "today_state"
         case priceCents = "price_cents"
         case priceFromCents = "price_from_cents"
+        case gateReadyAt = "gate_ready_at"
         case photoCount = "photo_count"
-        case crewName = "crew_name"
-        case offerCode = "offer_code"
-        case bookAgainCode = "book_again_code"
+        case problemStatus = "problem_status"
+        case bookingClosesAt = "booking_closes_at"
+        case bookAgain = "book_again"
+        case answerNote = "answer_note"
+        case createdAt = "created_at"
     }
 }
 
@@ -329,125 +384,5 @@ public struct CrewDayMineResponse: Decodable, Sendable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case upcoming, requests, past
-    }
-}
-
-// MARK: - Crew list (screen 13)
-
-/// One street day in the crew's list.
-public struct CrewDaySummaryDTO: Decodable, Sendable, Hashable, Identifiable {
-    public let id: String
-    public let code: String?
-    public let title: String
-    public let service: String?
-    public let streetLabel: String?
-    public let timezone: String?
-    public let serviceDate: String?
-    public let windowStart: String?
-    public let windowEnd: String?
-    /// `draft`, `pending_review`, `declined`, `open`, `in_progress`, `done` or `cancelled`.
-    public let status: String
-    public let capacity: Int
-    public let bookedCount: Int
-    public let isFull: Bool
-    /// Look-first homes waiting for the crew's price.
-    public let priceChecks: Int
-    /// The operator's note on a declined day.
-    public let reviewNote: String?
-    public let chargedCents: Int?
-    public let homesDone: Int?
-    /// Every transfer to the crew is done.
-    public let paidOut: Bool
-
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try c.decode(String.self, forKey: .id)
-        code = try c.decodeIfPresent(String.self, forKey: .code)
-        title = try c.decodeIfPresent(String.self, forKey: .title) ?? "Crew Day"
-        service = try c.decodeIfPresent(String.self, forKey: .service)
-        streetLabel = try c.decodeIfPresent(String.self, forKey: .streetLabel)
-        timezone = try c.decodeIfPresent(String.self, forKey: .timezone)
-        serviceDate = try c.decodeIfPresent(String.self, forKey: .serviceDate)
-        windowStart = try c.decodeIfPresent(String.self, forKey: .windowStart)
-        windowEnd = try c.decodeIfPresent(String.self, forKey: .windowEnd)
-        status = try c.decodeIfPresent(String.self, forKey: .status) ?? "draft"
-        capacity = try c.decodeIfPresent(Int.self, forKey: .capacity) ?? 0
-        bookedCount = try c.decodeIfPresent(Int.self, forKey: .bookedCount) ?? 0
-        isFull = try c.decodeIfPresent(Bool.self, forKey: .isFull) ?? false
-        priceChecks = try c.decodeIfPresent(Int.self, forKey: .priceChecks) ?? 0
-        reviewNote = try c.decodeIfPresent(String.self, forKey: .reviewNote)
-        chargedCents = try c.decodeIfPresent(Int.self, forKey: .chargedCents)
-        homesDone = try c.decodeIfPresent(Int.self, forKey: .homesDone)
-        paidOut = try c.decodeIfPresent(Bool.self, forKey: .paidOut) ?? false
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case id, code, title, service, timezone, status, capacity
-        case streetLabel = "street_label"
-        case serviceDate = "service_date"
-        case windowStart = "window_start"
-        case windowEnd = "window_end"
-        case bookedCount = "booked_count"
-        case isFull = "is_full"
-        case priceChecks = "price_checks"
-        case reviewNote = "review_note"
-        case chargedCents = "charged_cents"
-        case homesDone = "homes_done"
-        case paidOut = "paid_out"
-    }
-}
-
-/// What a business still needs before it can run a Crew Day.
-public struct CrewDayReadinessDTO: Decodable, Sendable, Hashable {
-    public let published: Bool
-    public let payoutsEnabled: Bool
-    public let documentsVerified: Bool
-    /// `publish_page`, `payouts`, `documents` (the last only for the badge).
-    public let missing: [String]
-
-    public var isReady: Bool {
-        published && payoutsEnabled
-    }
-
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        published = try c.decodeIfPresent(Bool.self, forKey: .published) ?? false
-        payoutsEnabled = try c.decodeIfPresent(Bool.self, forKey: .payoutsEnabled) ?? false
-        documentsVerified = try c.decodeIfPresent(Bool.self, forKey: .documentsVerified) ?? false
-        missing = try c.decodeIfPresent([String].self, forKey: .missing) ?? []
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case published, missing
-        case payoutsEnabled = "payouts_enabled"
-        case documentsVerified = "documents_verified"
-    }
-}
-
-/// `GET /api/crew-days/business/:businessId`.
-public struct CrewDayBusinessResponse: Decodable, Sendable, Hashable {
-    public let readiness: CrewDayReadinessDTO?
-    public let today: [CrewDaySummaryDTO]
-    public let upcoming: [CrewDaySummaryDTO]
-    public let pending: [CrewDaySummaryDTO]
-    public let drafts: [CrewDaySummaryDTO]
-    public let past: [CrewDaySummaryDTO]
-
-    public var isEmpty: Bool {
-        today.isEmpty && upcoming.isEmpty && pending.isEmpty && drafts.isEmpty && past.isEmpty
-    }
-
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        readiness = try c.decodeIfPresent(CrewDayReadinessDTO.self, forKey: .readiness)
-        today = try c.decodeIfPresent([CrewDaySummaryDTO].self, forKey: .today) ?? []
-        upcoming = try c.decodeIfPresent([CrewDaySummaryDTO].self, forKey: .upcoming) ?? []
-        pending = try c.decodeIfPresent([CrewDaySummaryDTO].self, forKey: .pending) ?? []
-        drafts = try c.decodeIfPresent([CrewDaySummaryDTO].self, forKey: .drafts) ?? []
-        past = try c.decodeIfPresent([CrewDaySummaryDTO].self, forKey: .past) ?? []
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case readiness, today, upcoming, pending, drafts, past
     }
 }

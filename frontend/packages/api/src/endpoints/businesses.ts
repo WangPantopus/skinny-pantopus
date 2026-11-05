@@ -1281,7 +1281,7 @@ export interface InvoiceRecipient {
   name: string;
   username: string;
   profile_picture_url: string | null;
-  relation: 'invoiced' | 'booked' | 'hired' | 'messaged' | 'connection';
+  relation: 'invoiced' | 'booked' | 'hired' | 'messaged' | 'connection' | 'crew_day';
 }
 
 /**
