@@ -289,13 +289,19 @@ public struct PulseComposeContent: View {
                 visibilitySection
             }
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") { isBodyFieldFocused = false }
-                    .font(.system(size: 16, weight: .semibold))
-                    .accessibilityIdentifier("composePulseBodyKeyboardDone")
-            }
+        // The Done bar above the keyboard belongs to a view behind the form, not to the form: declared on the form,
+        // its bar item is measured with the form's layout, and once the iPhone Duo folds or turns, any accessibility
+        // client (VoiceOver) measuring it loops forever.
+        .background {
+            Color.clear
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") { isBodyFieldFocused = false }
+                            .font(.system(size: 16, weight: .semibold))
+                            .accessibilityIdentifier("composePulseBodyKeyboardDone")
+                    }
+                }
         }
         .onChange(of: keyboardField) { _, field in actions.onKeyboardFieldChange(field) }
         .task { await returnToField() }
