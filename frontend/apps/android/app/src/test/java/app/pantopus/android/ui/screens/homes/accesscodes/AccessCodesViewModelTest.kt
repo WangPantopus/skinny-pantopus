@@ -91,7 +91,13 @@ class AccessCodesViewModelTest {
     @Test fun empty_response_renders_empty_state() =
         runTest {
             coEvery { repo.getHomeAccessSecrets(any()) } returns
-                NetworkResult.Success(HomeAccessSecretsResponse(secrets = emptyList()))
+                NetworkResult.Success(
+                    HomeAccessSecretsResponse(
+                        secrets = emptyList(),
+                        canManage = true,
+                        allowedVisibilities = listOf("public", "members", "managers", "sensitive"),
+                    ),
+                )
             val vm = makeVm()
             vm.load()
             val state = vm.state.value
@@ -114,7 +120,13 @@ class AccessCodesViewModelTest {
     @Test fun loaded_response_groups_by_category_in_display_order() =
         runTest {
             coEvery { repo.getHomeAccessSecrets(any()) } returns
-                NetworkResult.Success(HomeAccessSecretsResponse(secrets = mixedSecrets))
+                NetworkResult.Success(
+                    HomeAccessSecretsResponse(
+                        secrets = mixedSecrets,
+                        canManage = true,
+                        allowedVisibilities = listOf("public", "members", "managers", "sensitive"),
+                    ),
+                )
             val vm = makeVm()
             vm.load()
             val state = vm.state.value
@@ -134,7 +146,13 @@ class AccessCodesViewModelTest {
     @Test fun chip_strip_includes_all_six_categories_plus_all() =
         runTest {
             coEvery { repo.getHomeAccessSecrets(any()) } returns
-                NetworkResult.Success(HomeAccessSecretsResponse(secrets = mixedSecrets))
+                NetworkResult.Success(
+                    HomeAccessSecretsResponse(
+                        secrets = mixedSecrets,
+                        canManage = true,
+                        allowedVisibilities = listOf("public", "members", "managers", "sensitive"),
+                    ),
+                )
             val vm = makeVm()
             vm.load()
             val chips = vm.chipStrip.value?.chips ?: emptyList()
@@ -146,7 +164,13 @@ class AccessCodesViewModelTest {
     @Test fun selecting_chip_filters_to_one_section() =
         runTest {
             coEvery { repo.getHomeAccessSecrets(any()) } returns
-                NetworkResult.Success(HomeAccessSecretsResponse(secrets = mixedSecrets))
+                NetworkResult.Success(
+                    HomeAccessSecretsResponse(
+                        secrets = mixedSecrets,
+                        canManage = true,
+                        allowedVisibilities = listOf("public", "members", "managers", "sensitive"),
+                    ),
+                )
             val vm = makeVm()
             vm.load()
             vm.selectChip("alarm")
@@ -158,7 +182,13 @@ class AccessCodesViewModelTest {
     @Test fun selecting_chip_with_no_matches_renders_filtered_empty() =
         runTest {
             coEvery { repo.getHomeAccessSecrets(any()) } returns
-                NetworkResult.Success(HomeAccessSecretsResponse(secrets = mixedSecrets))
+                NetworkResult.Success(
+                    HomeAccessSecretsResponse(
+                        secrets = mixedSecrets,
+                        canManage = true,
+                        allowedVisibilities = listOf("public", "members", "managers", "sensitive"),
+                    ),
+                )
             val vm = makeVm()
             vm.load()
             vm.selectChip("garage")
@@ -174,7 +204,13 @@ class AccessCodesViewModelTest {
     @Test fun toggle_reveal_flips_subtitle_between_mask_and_value() =
         runTest {
             coEvery { repo.getHomeAccessSecrets(any()) } returns
-                NetworkResult.Success(HomeAccessSecretsResponse(secrets = mixedSecrets))
+                NetworkResult.Success(
+                    HomeAccessSecretsResponse(
+                        secrets = mixedSecrets,
+                        canManage = true,
+                        allowedVisibilities = listOf("public", "members", "managers", "sensitive"),
+                    ),
+                )
             val vm = makeVm()
             vm.load()
 
@@ -196,7 +232,13 @@ class AccessCodesViewModelTest {
     @Test fun copy_writes_to_bound_clipboard_and_shows_toast() =
         runTest {
             coEvery { repo.getHomeAccessSecrets(any()) } returns
-                NetworkResult.Success(HomeAccessSecretsResponse(secrets = mixedSecrets))
+                NetworkResult.Success(
+                    HomeAccessSecretsResponse(
+                        secrets = mixedSecrets,
+                        canManage = true,
+                        allowedVisibilities = listOf("public", "members", "managers", "sensitive"),
+                    ),
+                )
             val vm = makeVm()
             vm.load()
 
@@ -211,7 +253,13 @@ class AccessCodesViewModelTest {
     @Test fun copy_for_unknown_id_is_a_noop() =
         runTest {
             coEvery { repo.getHomeAccessSecrets(any()) } returns
-                NetworkResult.Success(HomeAccessSecretsResponse(secrets = mixedSecrets))
+                NetworkResult.Success(
+                    HomeAccessSecretsResponse(
+                        secrets = mixedSecrets,
+                        canManage = true,
+                        allowedVisibilities = listOf("public", "members", "managers", "sensitive"),
+                    ),
+                )
             val vm = makeVm()
             vm.load()
             var copied: String? = null
@@ -228,7 +276,13 @@ class AccessCodesViewModelTest {
     @Test fun row_trailing_is_icon_actions_pair_with_copy_and_kebab() =
         runTest {
             coEvery { repo.getHomeAccessSecrets(any()) } returns
-                NetworkResult.Success(HomeAccessSecretsResponse(secrets = mixedSecrets))
+                NetworkResult.Success(
+                    HomeAccessSecretsResponse(
+                        secrets = mixedSecrets,
+                        canManage = true,
+                        allowedVisibilities = listOf("public", "members", "managers", "sensitive"),
+                    ),
+                )
             val vm = makeVm()
             vm.load()
             val row = vm.rowFor(mixedSecrets[0])

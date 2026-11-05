@@ -74,7 +74,11 @@ fun HomeIssuesListScreen(
     if (reporting) {
         ReportIssueSheet(
             submit = { title, description -> viewModel.createIssue(title, description) },
-            onClose = { reporting = false },
+            onClose = {
+                // The report sheet already showed this attempt's failure inline.
+                viewModel.acknowledgeToast()
+                reporting = false
+            },
         )
         return
     }

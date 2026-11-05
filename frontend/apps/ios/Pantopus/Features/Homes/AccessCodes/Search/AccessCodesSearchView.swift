@@ -13,6 +13,9 @@ import SwiftUI
 
 struct AccessCodesSearchView: View {
     @State private var viewModel: AccessCodesSearchViewModel
+    @State private var isVisible = false
+    @State private var needsForegroundRead = false
+    @Environment(\.scenePhase) private var scenePhase
 
     init(viewModel: AccessCodesSearchViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -25,11 +28,18 @@ struct AccessCodesSearchView: View {
             query: $viewModel.query,
             results: viewModel.results,
             isLoading: viewModel.isLoading,
-            emptyState: EmptyStateContent(
-                icon: .search,
-                headline: "No matching codes",
-                subcopy: "Try a different label or category, or check the spelling."
-            ),
+            // A failed read is not "no matches": say so above the Try again bar.
+            emptyState: viewModel.errorMessage == nil
+                ? EmptyStateContent(
+                    icon: .search,
+                    headline: "No matching codes",
+                    subcopy: "Try a different label or category, or check the spelling."
+                )
+                : EmptyStateContent(
+                    icon: .alertCircle,
+                    headline: "Couldn't load access codes",
+                    subcopy: "Your search is kept. Try again to check current codes."
+                ),
             row: { secret in
                 ListRowCard(row: viewModel.rowModel(for: secret))
                     .padding(.horizontal, Spacing.s4)
@@ -41,6 +51,36 @@ struct AccessCodesSearchView: View {
         .accessibilityIdentifier("accessCodesSearch")
         .sensitiveScreen()
         .task { await viewModel.load() }
+        .onAppear {
+            isVisible = true
+            needsForegroundRead = false
+        }
+        .onDisappear {
+            isVisible = false
+            viewModel.suspend()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard isVisible else { return }
+            if phase == .background {
+                needsForegroundRead = true
+                viewModel.suspend()
+            } else if phase == .active, needsForegroundRead {
+                needsForegroundRead = false
+                Task { await viewModel.load() }
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if let message = viewModel.errorMessage {
+                VStack(spacing: Spacing.s2) {
+                    Text(message)
+                        .pantopusTextStyle(.small)
+                    Button("Try again") { Task { await viewModel.load() } }
+                }
+                .padding(Spacing.s4)
+                .frame(maxWidth: .infinity)
+                .background(Theme.Color.appBg)
+            }
+        }
     }
 }
 

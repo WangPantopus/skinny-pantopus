@@ -8,6 +8,13 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
+ * How long automatic feed and map loads wait for a device fix when the person's Home (or, on the map, a saved place)
+ * can stand in, so they don't wait for a full GPS acquisition. With nothing to fall back to, the device location is
+ * the only area there is, and they keep the usual window.
+ */
+const val PASSIVE_LOCATION_TIMEOUT_MILLIS = 400L
+
+/**
  * Best-known coordinate hint. `accuracyMeters` lets callers decide
  * whether to render a "you are here" disc or just a neighborhood-level
  * halo on the map.

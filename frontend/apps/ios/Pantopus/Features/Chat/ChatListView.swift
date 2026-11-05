@@ -58,7 +58,10 @@ public struct ChatListView: View {
             affects: { $0.names(topic: ScreenTopic.chats, kind: .messagesList) },
             perform: { viewModel.refreshAfterChange() }
         )
-        .onDisappear { viewModel.teardown() }
+        // The Inbox tab keeps the list through a fold or a turn: it stops
+        // listening only once no screen shows it.
+        .onAppear { viewModel.presentationDidAppear() }
+        .onDisappear { viewModel.presentationDidDisappear() }
         .onChange(of: viewModel.state.isEmpty, initial: true) { _, isEmpty in onEmptyChange(isEmpty) }
         .accessibilityIdentifier("chatList")
     }

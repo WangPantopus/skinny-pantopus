@@ -18,6 +18,7 @@ import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.homes.HomeOfflineContent
 import app.pantopus.android.ui.screens.homes.showsContent
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
+import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsUiState
 
 /**
  * Per-home Maintenance list (T6.3b / P10). Wired to
@@ -34,6 +35,9 @@ fun MaintenanceListScreen(
 ) {
     HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val canEdit by viewModel.canEdit.collectAsStateWithLifecycle()
+    val contentState =
+        (state as? ListOfRowsUiState.Empty)?.takeUnless { canEdit }?.copy(ctaTitle = null, onCta = null) ?: state
     ReportContentShown("home_maintenance", state.showsContent())
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val tabs by viewModel.tabs.collectAsStateWithLifecycle()
@@ -56,14 +60,14 @@ fun MaintenanceListScreen(
     HomeOfflineContent(modifier = Modifier.fillMaxSize().testTag("maintenanceList")) {
         ListOfRowsScreen(
             title = "Maintenance",
-            state = state,
+            state = contentState,
             onRefresh = { viewModel.refresh() },
             onEndReached = { },
             tabs = tabs,
             selectedTab = selectedTab,
             onSelectTab = viewModel::selectTab,
             topBarAction = viewModel.topBarAction,
-            fab = viewModel.fab(),
+            fab = viewModel.fab().takeIf { canEdit },
             onBack = onBack,
             banner = banner,
             refreshing = refreshing,

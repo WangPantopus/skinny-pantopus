@@ -140,7 +140,8 @@ const createNextConfig = (phase) => ({
       // Old /app addresses also redirect here: their redirect() pages render inside the
       // app shell's Suspense, so Next redirects on the client, which crashed with
       // "Rendered more hooks than during the previous render" (Next's Router).
-      { source: '/app/control-center', destination: '/app/hub', permanent: false },
+      { source: '/app/hub', destination: '/app/place', permanent: false },
+      { source: '/app/control-center', destination: '/app/place', permanent: false },
       { source: '/app/neighborhood', destination: '/app/nearby', permanent: false },
       { source: '/app/businesses/new', destination: '/app/business/new', permanent: false },
       { source: '/app/chat/new', destination: '/app/chat', permanent: false },

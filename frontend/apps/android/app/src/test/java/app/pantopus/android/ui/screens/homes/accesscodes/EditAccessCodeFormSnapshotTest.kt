@@ -220,10 +220,10 @@ class EditAccessCodeFormSnapshotTest {
 
     private fun sampleRosterSummary(scope: AccessVisibility): String =
         when (scope) {
-            AccessVisibility.Everyone -> "Everyone (3 members + guests)"
-            AccessVisibility.Members -> "All household members (3)"
-            AccessVisibility.Managers -> "Owners & managers (2)"
-            AccessVisibility.Sensitive -> "Owners only (1)"
+            AccessVisibility.Everyone -> "Everyone with access"
+            AccessVisibility.Members -> "Household access"
+            AccessVisibility.Managers -> "Owners & managers"
+            AccessVisibility.Sensitive -> "Sensitive access"
         }
 
     private fun sampleSharedNames(scope: AccessVisibility): List<String> =
@@ -260,6 +260,9 @@ class EditAccessCodeFormSnapshotTest {
         )
         return EditAccessCodeUiState(
             isEditing = isEditing,
+            isLoaded = true,
+            canManage = true,
+            allowedVisibilities = AccessVisibility.entries.toSet(),
             category = category,
             visibility = visibility,
             isRevealed = revealed,

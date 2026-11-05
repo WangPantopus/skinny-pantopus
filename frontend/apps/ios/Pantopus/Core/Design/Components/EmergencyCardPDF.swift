@@ -62,7 +62,7 @@ public enum EmergencyCardPDF {
         homeLabel: String,
         now: Date = Date()
     ) -> EmergencyCardContent {
-        let order: [EmergencyCategory] = [.shutoff, .contact, .evac, .medical]
+        let order: [EmergencyCategory] = [.shutoff, .contact, .evac, .medical, .other]
 
         func item(for dto: HomeEmergencyDTO) -> EmergencyCardContent.Item {
             let projection = EmergencyInfoViewModel.project(dto: dto, pinned: false)
