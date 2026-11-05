@@ -62,6 +62,7 @@ import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Spacing
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 
 /** Where the crew's day hands off. */
@@ -373,6 +374,11 @@ private fun NeedsYou(
                         style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
                         color = PantopusColors.appText,
                     )
+                    Text(
+                        text = "Look at the home, then set its price. The household approves it before anything is booked.",
+                        style = PantopusTextStyle.small,
+                        color = PantopusColors.appTextSecondary,
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         PlanTonalButton(
                             title = "Can't take it",
@@ -399,8 +405,13 @@ private fun NeedsYou(
                         style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
                         color = PantopusColors.appText,
                     )
+                    listOfNotNull(home.details?.takeIf { it.isNotBlank() }, askedAt(home.releaseAskedAt, zone))
+                        .takeIf { it.isNotEmpty() }
+                        ?.let { Text(text = it.joinToString(" · "), style = PantopusTextStyle.small, color = PantopusColors.appTextStrong) }
                     Text(
-                        text = "It's less than 48 hours to go, so only you can release it. They aren't charged.",
+                        text =
+                            "It's less than 48 hours to go, so they can't cancel in the app. Releasing the home costs " +
+                                "them nothing.",
                         style = PantopusTextStyle.small,
                         color = PantopusColors.appTextSecondary,
                     )
@@ -508,6 +519,11 @@ private fun BringInMore(
                             1 -> "1 home you served near here."
                             else -> "${view.pastCustomers} homes you served near here."
                         },
+                    style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
+                    color = PantopusColors.appText,
+                )
+                Text(
+                    text = "Each gets one invitation with their price. We never send it twice.",
                     style = PantopusTextStyle.small,
                     color = PantopusColors.appTextSecondary,
                 )
@@ -524,22 +540,41 @@ private fun BringInMore(
     }
 }
 
-/** "If all 6 are done: $1,020 charged · you receive $918 after the 10% founding fee." */
+/** Money (board `CrewDayPrep`): "If all 6 are done", "$1,020 charged", "You receive $918 after the 10% founding fee." */
 @Composable
 private fun MoneyPreview(view: CrewDayCrewViewDto) {
     val money = view.money
     if (money.grossCents <= 0) return
-    // `fee_rate` is in percent (10 for a founding business).
-    val percent = money.feeRate?.let { p -> "${if (p % 1.0 == 0.0) p.toInt().toString() else "%.1f".format(p)}%" }
-    Text(
-        text =
-            "If all ${view.bookedCount} are done: ${CrewDayFormat.price(money.grossCents)} charged · you receive " +
-                "${CrewDayFormat.price(money.netCents)}${percent?.let { " after the $it fee" }.orEmpty()}.",
-        style = PantopusTextStyle.small,
-        color = PantopusColors.appTextSecondary,
-        modifier = Modifier.testTag("crewDayPrepMoney"),
-    )
+    // `fee_rate` is in percent: 10 for a founding business, 15 otherwise.
+    val fee =
+        money.feeRate?.let { p ->
+            val percent = if (p % 1.0 == 0.0) p.toInt().toString() else "%.1f".format(p)
+            if (p == FOUNDING_RATE) "the $percent% founding fee" else "the $percent% fee"
+        }
+    CrewDaySection("Money", modifier = Modifier.testTag("crewDayPrepMoney")) {
+        PlanOptionRow(first = true, modifier = Modifier.semantics(mergeDescendants = true) {}) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = "If all ${view.bookedCount} are done",
+                    style = PantopusTextStyle.small,
+                    color = PantopusColors.appTextSecondary,
+                )
+                Text(
+                    text = "${CrewDayFormat.price(money.grossCents)} charged",
+                    style = PantopusTextStyle.h3.copy(fontWeight = FontWeight.Bold),
+                    color = PantopusColors.appText,
+                )
+                Text(
+                    text = "You receive ${CrewDayFormat.price(money.netCents)}${fee?.let { " after $it" }.orEmpty()}.",
+                    style = PantopusTextStyle.small,
+                    color = PantopusColors.appTextStrong,
+                )
+            }
+        }
+    }
 }
+
+private const val FOUNDING_RATE = 10.0
 
 @Composable
 private fun SetPriceDialog(
@@ -660,6 +695,17 @@ private fun QrDialog(
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
     )
+}
+
+/** "asked today at 8:10 AM", "asked Nov 10 at 8:10 AM". */
+private fun askedAt(
+    raw: String?,
+    zone: ZoneId,
+): String? {
+    val at = CrewDayFormat.instant(raw) ?: return null
+    val day = at.atZone(zone).toLocalDate()
+    val whenWord = if (day == LocalDate.now(zone)) "today" else CrewDayFormat.shortDate(day)?.substringAfter(", ")
+    return "asked $whenWord at ${CrewDayFormat.clock(at, zone)}"
 }
 
 /** "asked Nov 10". */
