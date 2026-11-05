@@ -103,8 +103,20 @@ private struct FoldClearCentering: Layout {
     let bottomClearance: CGFloat
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
-        let natural = subviews.first?.sizeThatFits(proposal) ?? .zero
-        return CGSize(width: proposal.width ?? natural.width, height: max(proposal.height ?? natural.height, minHeight))
+        guard let content = subviews.first else { return .zero }
+        let natural = content.sizeThatFits(proposal)
+        let width = proposal.width ?? natural.width
+        var height = max(proposal.height ?? natural.height, minHeight)
+        // Offered no height (in a scroll view), it grows to the content's height beside a fold that runs down through
+        // it, where the content wraps narrower, so it can sit there.
+        if proposal.height == nil, let fold, fold.height > fold.width, fold.minX > 0, fold.maxX < width {
+            let side = max(fold.minX, width - fold.maxX)
+            let beside = content.sizeThatFits(ProposedViewSize(width: side, height: nil))
+            if beside.width <= side + 0.5 {
+                height = max(height, beside.height + bottomClearance)
+            }
+        }
+        return CGSize(width: width, height: height)
     }
 
     func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
