@@ -142,7 +142,8 @@ fun CrewDayDayRow(
     PlanRow(
         title = item.title,
         subtitle = subtitle.filter { it.isNotBlank() }.joinToString(" · "),
-        end = PlanRowEnd.Status(crewDayStatusWord(item)),
+        // Today's rows carry the route button instead (board `CrewList`); the section already says Today.
+        end = if (onOpenRoute != null) PlanRowEnd.None else PlanRowEnd.Status(crewDayStatusWord(item)),
         first = first,
         leading = { CrewDayTile(crew = true) },
         onClick = onClick,

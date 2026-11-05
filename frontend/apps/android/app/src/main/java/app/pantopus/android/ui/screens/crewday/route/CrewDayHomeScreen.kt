@@ -1,4 +1,4 @@
-@file:Suppress("LongMethod")
+@file:Suppress("LongMethod", "MagicNumber", "CyclomaticComplexMethod")
 
 package app.pantopus.android.ui.screens.crewday.route
 
