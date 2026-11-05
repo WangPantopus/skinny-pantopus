@@ -105,6 +105,101 @@ function PhotoRow({ title, photos }: { title: string; photos: CrewDayPhoto[] }) 
   );
 }
 
+/**
+ * Refund all or part (boards `AdminDay`, `AdminProblems`) through the existing refund machinery: a charged Crew Day is
+ * refunded in full; before the charge, all of it stops the charge and part off charges the rest now. A booking with
+ * no open problem can be refunded too (a household that called support).
+ */
+export function RefundForm({
+  booking,
+  onDone,
+  onCancel,
+}: {
+  booking: Pick<AdminCrewDayBooking, 'id' | 'status' | 'price_cents'>;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const [part, setPart] = useState(true);
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const price = booking.price_cents ?? 0;
+  const charged = booking.status === 'paid';
+  const refundCents = part && !charged ? Math.round(Number(amount.replace(/[$,\s]/g, '')) * 100) : price;
+
+  const refund = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api.adminCrewDays.problemAction(booking.id, { action: 'refund', amount_cents: refundCents, ...(note.trim() ? { note: note.trim() } : {}) });
+      toast.success('Refunded.');
+      onDone();
+    } catch (err) {
+      const e = err as { message?: string };
+      toast.error(e?.message && !/^[A-Z_]+$/.test(e.message) ? e.message : "That didn't go through. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void refund();
+      }}
+      className="flex flex-col gap-3 rounded-xl border border-app-border bg-app-surface-sunken p-3.5"
+    >
+      <fieldset className="min-w-0">
+        <legend className="mb-2 text-sm font-semibold text-app-text">Refund</legend>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2.5">
+          {!charged ? (
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-app-text">
+              <input type="radio" name={`refund-${booking.id}`} checked={part} onChange={() => setPart(true)} className="h-4 w-4 accent-violet-600" />
+              Part:
+              <span className="flex h-9 w-24 items-center overflow-hidden rounded-lg border border-app-border-strong bg-app-surface">
+                <span aria-hidden="true" className="pl-2.5 pr-1 text-app-text-secondary">
+                  $
+                </span>
+                <input
+                  aria-label="Refund amount"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  onFocus={() => setPart(true)}
+                  className="h-full min-w-0 flex-1 bg-transparent pr-2 text-sm text-app-text focus:outline-none"
+                />
+              </span>
+              of {moneyText(price)}
+            </label>
+          ) : null}
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-app-text">
+            <input type="radio" name={`refund-${booking.id}`} checked={!part || charged} onChange={() => setPart(false)} className="h-4 w-4 accent-violet-600" />
+            All {moneyText(price)}
+          </label>
+        </div>
+      </fieldset>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={`refund-note-${booking.id}`} className="text-[0.8125rem] font-medium text-app-text-strong">
+          Note to the household and the crew
+        </label>
+        <textarea id={`refund-note-${booking.id}`} rows={2} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} className={ADMIN_FIELD} />
+        <span className="text-xs text-app-text-secondary">
+          {charged ? 'A charged Crew Day is refunded in full. The crew can invoice the rest.' : 'Before a charge runs, a refund stops it instead. Part off charges the rest now.'}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button type="submit" disabled={busy || !(refundCents > 0 && refundCents <= price)} className={ADMIN_PRIMARY}>
+          {busy ? 'Sending…' : `Refund ${moneyText(refundCents > 0 ? refundCents : price)}`}
+        </button>
+        <button type="button" onClick={onCancel} className={ADMIN_QUIET}>
+          Not now
+        </button>
+      </div>
+    </form>
+  );
+}
+
 const KIND_LABEL: Record<string, string> = {
   missed: 'The crew missed something',
   damage: 'Something was damaged',
@@ -126,14 +221,11 @@ export function ProblemCard({ booking, onChanged, id }: { booking: AdminCrewDayB
   });
   const detail = day.data && day.data.kind === 'offer' ? day.data.bookings.find((b) => b.id === booking.id) : undefined;
   const [mode, setMode] = useState<'refund' | 'resolve' | 'note' | null>(null);
-  const [part, setPart] = useState(true);
-  const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
-  const price = booking.price_cents ?? 0;
   const charged = booking.status === 'paid';
 
-  const act = async (body: { action: 'note' | 'release' | 'refund' | 'resolve'; amount_cents?: number; note?: string }, done: string) => {
+  const act = async (body: { action: 'note' | 'release' | 'resolve'; note?: string }, done: string) => {
     if (busy) return;
     setBusy(true);
     try {
@@ -149,7 +241,6 @@ export function ProblemCard({ booking, onChanged, id }: { booking: AdminCrewDayB
       setBusy(false);
     }
   };
-  const refundCents = part && !charged ? Math.round(Number(amount.replace(/[$,\s]/g, '')) * 100) : price;
 
   return (
     <li id={id} className={ADMIN_CARD}>
@@ -220,67 +311,33 @@ export function ProblemCard({ booking, onChanged, id }: { booking: AdminCrewDayB
           Add a note
         </button>
       </div>
-      {mode ? (
+      {mode === 'refund' ? (
+        <RefundForm
+          booking={booking}
+          onDone={() => {
+            setMode(null);
+            onChanged();
+          }}
+          onCancel={() => setMode(null)}
+        />
+      ) : mode ? (
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (mode === 'refund') void act({ action: 'refund', amount_cents: refundCents, ...(note.trim() ? { note: note.trim() } : {}) }, 'Refunded.');
-            else if (mode === 'resolve') void act({ action: 'resolve', note: note.trim() }, 'Marked resolved.');
+            if (mode === 'resolve') void act({ action: 'resolve', note: note.trim() }, 'Marked resolved.');
             else void act({ action: 'note', note: note.trim() }, 'Note sent to the household.');
           }}
           className="flex flex-col gap-3 rounded-xl border border-app-border bg-app-surface-sunken p-3.5"
         >
-          {mode === 'refund' ? (
-            <fieldset className="min-w-0">
-              <legend className="mb-2 text-sm font-semibold text-app-text">Refund</legend>
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-2.5">
-                {!charged ? (
-                  <label className="flex cursor-pointer items-center gap-2 text-sm text-app-text">
-                    <input type="radio" name={`refund-${booking.id}`} checked={part} onChange={() => setPart(true)} className="h-4 w-4 accent-violet-600" />
-                    Part:
-                    <span className="flex h-9 w-24 items-center overflow-hidden rounded-lg border border-app-border-strong bg-app-surface">
-                      <span aria-hidden="true" className="pl-2.5 pr-1 text-app-text-secondary">
-                        $
-                      </span>
-                      <input
-                        aria-label="Refund amount"
-                        inputMode="decimal"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        onFocus={() => setPart(true)}
-                        className="h-full min-w-0 flex-1 bg-transparent pr-2 text-sm text-app-text focus:outline-none"
-                      />
-                    </span>
-                    of {moneyText(price)}
-                  </label>
-                ) : null}
-                <label className="flex cursor-pointer items-center gap-2 text-sm text-app-text">
-                  <input type="radio" name={`refund-${booking.id}`} checked={!part || charged} onChange={() => setPart(false)} className="h-4 w-4 accent-violet-600" />
-                  All {moneyText(price)}
-                </label>
-              </div>
-            </fieldset>
-          ) : null}
           <div className="flex flex-col gap-1.5">
             <label htmlFor={`note-${booking.id}`} className="text-[0.8125rem] font-medium text-app-text-strong">
-              {mode === 'note' ? 'Note to the household' : mode === 'resolve' ? 'Note to the household and the crew (required)' : 'Note to the household and the crew'}
+              {mode === 'note' ? 'Note to the household' : 'Note to the household and the crew (required)'}
             </label>
             <textarea id={`note-${booking.id}`} rows={2} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} className={ADMIN_FIELD} />
-            {mode === 'refund' ? (
-              <span className="text-xs text-app-text-secondary">
-                {charged
-                  ? 'A charged Crew Day is refunded in full. The crew can invoice the rest.'
-                  : 'Before a charge runs, a refund stops it instead. Part off charges the rest now.'}
-              </span>
-            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="submit"
-              disabled={busy || (mode !== 'refund' && !note.trim()) || (mode === 'refund' && !(refundCents > 0 && refundCents <= price))}
-              className={ADMIN_PRIMARY}
-            >
-              {busy ? 'Sending…' : mode === 'refund' ? `Refund ${moneyText(refundCents > 0 ? refundCents : price)}` : mode === 'resolve' ? 'Mark resolved' : 'Send note'}
+            <button type="submit" disabled={busy || !note.trim()} className={ADMIN_PRIMARY}>
+              {busy ? 'Sending…' : mode === 'resolve' ? 'Mark resolved' : 'Send note'}
             </button>
             <button type="button" onClick={() => setMode(null)} className={ADMIN_QUIET}>
               Not now

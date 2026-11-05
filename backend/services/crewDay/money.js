@@ -40,6 +40,24 @@ async function release(booking, fields = {}) {
     .eq('id', booking.id);
 }
 
+/**
+ * Holds a done home's charge while Pantopus support refunds it without an open problem, so neither the charge job nor
+ * "Everything looks good" charges it meanwhile. CHANGED when a charge is going through right now.
+ */
+async function holdCharge(booking) {
+  const held = await claim(booking);
+  if (!held) {
+    throw new CrewDayError(409, 'CHANGED', 'A charge may be going through right now. Refresh in a minute and try again.');
+  }
+  return held;
+}
+
+/** Lets the charge job take the home again after a hold that didn't end in a refund. */
+async function releaseHold(held) {
+  await supabaseAdmin.from('CrewDayBooking').update({ charge_claimed_at: null }).eq('id', held.id)
+    .eq('charge_claimed_at', held.charge_claimed_at);
+}
+
 function cardFailure(err) {
   if (!err) return null;
   if (err.code === 'authentication_required' || err.raw?.code === 'authentication_required') return 'authentication_required';
@@ -190,4 +208,6 @@ function newRequestId() {
   return crypto.randomUUID();
 }
 
-module.exports = { chargeBooking, onInvoicePaid, confirm, runCharges, reinvoiceRemainder, cardFailure, newRequestId };
+module.exports = {
+  chargeBooking, onInvoicePaid, confirm, runCharges, reinvoiceRemainder, holdCharge, releaseHold, cardFailure, newRequestId,
+};

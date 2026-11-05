@@ -61,10 +61,11 @@ struct CrewDayInvitationView: View {
     let onOpenCrewDay: (String) -> Void
     let onAsk: () -> Void
     @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(spacing: 0) {
-            PlanNavBar(title: "Crew Day", onLeading: onBack)
+            PlanNavBar.crewDay(title: "Crew Day", onLeading: onBack)
             content
         }
         .background(Theme.Color.appBg)
@@ -156,23 +157,23 @@ struct CrewDayInvitationView: View {
                     .planFont(.bodyStrong)
                     .foregroundStyle(Theme.Color.appText)
                 Button("Open the dashboard") { onOpenCrewDay(invitation.id) }
-                    .planButton(.primary)
+                    .crewDayButton(.primary)
                     .accessibilityIdentifier("crewDayInvitationDashboard")
             } else if let bookingId = invitation.viewer?.bookingId {
                 Button("Open my Crew Day") { onOpenBooking(bookingId) }
-                    .planButton(.primary)
+                    .crewDayButton(.primary)
                     .accessibilityIdentifier("crewDayInvitationOpenBooking")
             } else {
                 switch invitation.dayState {
                 case "open":
                     Button("See my price") { onSeePrice(invitation.code) }
-                        .planButton(.primary)
+                        .crewDayButton(.primary)
                         .accessibilityIdentifier("crewDayInvitationSeePrice")
                     caption("Booking closes \(CrewDayInvitationCopy.closes(invitation)).")
                 case "full":
                     stateLine("All \(invitation.capacity) spots are taken.")
                     Button("Ask for the next one", action: onAsk)
-                        .planButton(.secondary)
+                        .crewDayButton(.secondary)
                         .accessibilityIdentifier("crewDayInvitationAsk")
                 case "closed":
                     stateLine("Booking closed on \(CrewDayInvitationCopy.closes(invitation)).")
@@ -181,7 +182,7 @@ struct CrewDayInvitationView: View {
                 default:
                     stateLine("This Crew Day is done.")
                     Button("Ask for one on your street", action: onAsk)
-                        .planButton(.secondary)
+                        .crewDayButton(.secondary)
                         .accessibilityIdentifier("crewDayInvitationAsk")
                 }
             }
@@ -259,13 +260,13 @@ struct CrewDayInvitationView: View {
                 .planFont(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .multilineTextAlignment(.center)
-            HStack(spacing: Spacing.s2) {
+            CrewDayButtonRow(spacing: Spacing.s2) {
                 Button("How Crew Day works") { open("/crew-day/how-it-works") }
-                    .planButton(.text, size: .extraSmall)
+                    .crewDayButton(.text, size: .extraSmall)
                     .accessibilityIdentifier("crewDayInvitationHowItWorks")
-                Text("·").foregroundStyle(Theme.Color.appTextSecondary)
+                if !typeSize.isAccessibilitySize { Text("·").foregroundStyle(Theme.Color.appTextSecondary).accessibilityHidden(true) }
                 Button("Who sees what") { open("/crew-day/who-sees-what") }
-                    .planButton(.text, size: .extraSmall)
+                    .crewDayButton(.text, size: .extraSmall)
                     .accessibilityIdentifier("crewDayInvitationWhoSees")
             }
         }

@@ -69,8 +69,7 @@ struct CrewDayChangeSheet: View {
             .padding(.horizontal, Spacing.s4)
             .padding(.bottom, Spacing.s5)
         }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        .crewDaySheetDetents([.medium, .large])
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("crewDayCancel")
     }
@@ -171,7 +170,7 @@ struct CrewDayDetailsSheet: View {
                 case let .failed(message):
                     CrewDayErrorText(text: message, identifier: "crewDayDetailsError")
                     Button("Try again") { Task { await viewModel.loadPriceList() } }
-                        .planButton(.secondary)
+                        .crewDayButton(.secondary)
                 case .loading, nil:
                     CrewDayLoadingView()
                 }
@@ -179,8 +178,7 @@ struct CrewDayDetailsSheet: View {
             .padding(.horizontal, Spacing.s4)
             .padding(.bottom, Spacing.s5)
         }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
+        .crewDaySheetDetents([.large])
         .task {
             optionId = booking.option?.id
             addOnIds = Set(booking.addOns.map(\.id))
@@ -245,11 +243,11 @@ struct CrewDayDetailsSheet: View {
                     isLoading: viewModel.working == .details
                 )
             }
-            .planButton(.primary)
+            .crewDayButton(.primary)
             .disabled(!changed || viewModel.working != nil)
             .accessibilityIdentifier("crewDayCancelSaveDetails")
             Button("Back", action: onBack)
-                .planButton(.secondary)
+                .crewDayButton(.secondary)
                 .accessibilityIdentifier("crewDayDetailsBack")
         }
         if let error = viewModel.actionError { CrewDayErrorText(text: error, identifier: "crewDayDetailsSaveError") }
