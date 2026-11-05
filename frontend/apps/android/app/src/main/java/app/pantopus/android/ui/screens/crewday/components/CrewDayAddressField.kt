@@ -1,3 +1,5 @@
+@file:Suppress("LongParameterList")
+
 package app.pantopus.android.ui.screens.crewday.components
 
 import androidx.compose.foundation.layout.Arrangement
