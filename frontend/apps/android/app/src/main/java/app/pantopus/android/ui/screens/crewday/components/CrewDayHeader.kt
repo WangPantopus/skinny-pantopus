@@ -1,4 +1,5 @@
 @file:Suppress("MagicNumber")
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 
 package app.pantopus.android.ui.screens.crewday.components
 
@@ -7,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -182,15 +184,19 @@ fun CrewDayCrewRow(
             )
         }
         Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            // The badge goes under the name when they don't fit side by side (200% text squeezed the name to a letter).
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 Text(
                     text = name,
                     style = PantopusTextStyle.small.copy(fontWeight = FontWeight.SemiBold),
                     color = PantopusColors.appText,
-                    modifier = Modifier.weight(1f, fill = false),
                 )
                 if (crew?.verified == true) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
                         PantopusIconImage(
                             icon = PantopusIcon.ShieldCheck,
                             contentDescription = null,
