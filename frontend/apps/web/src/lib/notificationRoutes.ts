@@ -81,6 +81,10 @@ export function resolveWebNotificationPath(link: string | null | undefined, noti
     return `/app/mailbox/home/${letterMatch[1].toLowerCase()}`;
   }
 
+  // The apps' Pulse is /app/pulse; the web's is the Nearby tab's feed.
+  const pulse = path.match(/^\/app\/pulse(?=$|[?#])/i);
+  if (pulse) return `/app/feed${path.slice(pulse[0].length)}`;
+
   if (path.startsWith('/app/')) return path;
 
   const postMatch = path.match(/^\/posts?\/([^/?#]+)/i);
@@ -121,6 +125,9 @@ export function resolveWebNotificationPath(link: string | null | undefined, noti
     const section = path.match(/[?&]section=([a-z-]+)/i);
     return section ? `/app/place/${section[1]}` : '/app/place';
   }
+  // ...and the apps' section paths, e.g. Today's '/place/today'.
+  const placeSection = path.match(/^\/place\/([a-z-]+)(?=$|[?#])/i);
+  if (placeSection) return `/app/place/${placeSection[1]}${path.slice(placeSection[0].length)}`;
 
   return path;
 }

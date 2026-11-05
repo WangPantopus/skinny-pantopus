@@ -32,6 +32,7 @@ import { getAuthToken } from '@pantopus/api';
 import { queryKeys } from '@/lib/query-keys';
 import { hubTodayQuery } from '@/lib/hubToday';
 import { withoutLaunchCutTodayRows } from '@/lib/featureFlags';
+import { resolveWebNotificationPath } from '@/lib/notificationRoutes';
 import type { HubToday } from '@pantopus/types';
 import BallotTodaySection, { useBallotToday } from '@/components/ballot/BallotTodaySection';
 import { claimInReviewNote, claimsInReview, myClaimsQuery } from '@/lib/myHomes';
@@ -121,6 +122,11 @@ const ALERTS_MAX_SHOWN_MS = 30 * 60 * 1000;
 
 export default function HubTodayPage() {
   const router = useRouter();
+  // The briefing's routes are the apps' (e.g. '/place/today', '/app/pulse'): open the web's page for each.
+  const openRoute = (route: string) => {
+    const to = resolveWebNotificationPath(route);
+    if (to) router.push(to);
+  };
   // /app/today is a tab (bottom bar, sidebar): nothing to go back to. The Back
   // arrow stays on /app/hub/today, which a card or the morning push opens.
   const isTab = usePathname() === '/app/today';
@@ -374,7 +380,7 @@ export default function HubTodayPage() {
                           if (isChangeLocation) {
                             setShowLocationPicker(true);
                           } else {
-                            router.push(action.route);
+                            openRoute(action.route);
                           }
                         }}
                         className="text-sm font-semibold px-3.5 py-2 rounded-lg border border-app text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition"
@@ -471,7 +477,7 @@ export default function HubTodayPage() {
                     return signal.action ? (
                       <button
                         key={i}
-                        onClick={() => router.push(signal.action!.route)}
+                        onClick={() => openRoute(signal.action!.route)}
                         className={`${baseCls} hover:opacity-80 transition`}
                       >
                         {body}
