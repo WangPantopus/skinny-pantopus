@@ -108,7 +108,13 @@ fun CrewDayAfterDay(
                 modifier = Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(PantopusColors.success),
                 contentAlignment = Alignment.Center,
             ) {
-                PantopusIconImage(PantopusIcon.Check, contentDescription = null, size = 28.dp, strokeWidth = 2.6f, tint = PantopusColors.appTextInverse)
+                PantopusIconImage(
+                    PantopusIcon.Check,
+                    contentDescription = null,
+                    size = 28.dp,
+                    strokeWidth = 2.6f,
+                    tint = PantopusColors.appTextInverse,
+                )
             }
             Text(
                 text = if (done == served.size) "All ${homes(done)} done" else "$done of ${homes(served.size)} done",

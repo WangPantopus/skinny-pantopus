@@ -259,7 +259,12 @@ private fun HomeContent(
                 }
                 home.priceCents?.let {
                     PlanOptionRow(modifier = Modifier.semantics(mergeDescendants = true) {}) {
-                        Text(text = "Price", style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary, modifier = Modifier.weight(1f))
+                        Text(
+                            text = "Price",
+                            style = PantopusTextStyle.small,
+                            color = PantopusColors.appTextSecondary,
+                            modifier = Modifier.weight(1f),
+                        )
                         Text(
                             text = "${CrewDayFormat.price(it)} · ${if (home.status == "price_pending") "after a look" else "confirmed"}",
                             style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),

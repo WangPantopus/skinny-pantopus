@@ -158,7 +158,11 @@ class CrewDayProposeDatesViewModel
             if (!s.canSend) return
             _state.update { it.copy(sending = true, error = null) }
             viewModelScope.launch {
-                val dates = s.dates.map { CrewDayProposedDateDto(it.toString(), s.picks.getValue(it).start.toString(), s.picks.getValue(it).end.toString()) }
+                val dates =
+                    s.dates.map { date ->
+                        val window = s.picks.getValue(date)
+                        CrewDayProposedDateDto(date.toString(), window.start.toString(), window.end.toString())
+                    }
                 when (val result = repository.proposeDates(crewDayId, dates, null)) {
                     is NetworkResult.Success -> {
                         _state.update { it.copy(sending = false, picks = emptyMap()) }
@@ -502,7 +506,8 @@ private fun Answers(
         if (waiting.isNotEmpty() && deadline != null) {
             Text(
                 text =
-                    "If ${waiting.joinToString(", ") { it.label ?: "a home" }} ${if (waiting.size == 1) "doesn't" else "don't"} answer by " +
+                    "If ${waiting.joinToString(", ") { it.label ?: "a home" }} " +
+                        "${if (waiting.size == 1) "doesn't" else "don't"} answer by " +
                         "${CrewDayFormat.shortDate(deadline, zone)} at ${CrewDayFormat.clock(deadline, zone)}, " +
                         "${if (waiting.size == 1) "its booking is" else "their bookings are"} cancelled at no charge.",
                 style = PantopusTextStyle.small,

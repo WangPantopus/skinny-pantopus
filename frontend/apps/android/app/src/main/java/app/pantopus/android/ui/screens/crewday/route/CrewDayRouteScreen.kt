@@ -346,7 +346,9 @@ private fun RouteRow(
                 )
                 if (home.gateReadyAt != null && !home.isDone()) {
                     CrewDayToneChip(
-                        text = listOfNotNull("Gate is ready", CrewDayFormat.clock(CrewDayFormat.instant(home.gateReadyAt), zone)).joinToString(" · "),
+                        text =
+                            listOfNotNull("Gate is ready", CrewDayFormat.clock(CrewDayFormat.instant(home.gateReadyAt), zone))
+                                .joinToString(" · "),
                         tone = CrewDayTone.Home,
                         modifier = Modifier.testTag("crewDayRouteGate_${home.id}"),
                     )
@@ -448,13 +450,20 @@ private fun OnMyWaySheet(
                 modifier = Modifier.semantics { heading() },
             )
             Text(
-                text = "${home.who().replaceFirstChar { it.uppercase() }} gets a push with this window and can tell you when the gate is ready.",
+                text =
+                    "${home.who().replaceFirstChar { it.uppercase() }} gets a push with this window and can tell you when " +
+                        "the gate is ready.",
                 style = PantopusTextStyle.body,
                 color = PantopusColors.appTextSecondary,
             )
             PlanFormCard {
                 PlanOptionRow(first = true, onClick = { picking = true }, modifier = Modifier.testTag("crewDayRouteOnMyWayTime")) {
-                    Text(text = "Expected", style = PantopusTextStyle.body, color = PantopusColors.appTextSecondary, modifier = Modifier.weight(1f))
+                    Text(
+                        text = "Expected",
+                        style = PantopusTextStyle.body,
+                        color = PantopusColors.appTextSecondary,
+                        modifier = Modifier.weight(1f),
+                    )
                     Text(
                         text = CrewDayFormat.window(start, endAt.toLocalTime()).orEmpty(),
                         style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
