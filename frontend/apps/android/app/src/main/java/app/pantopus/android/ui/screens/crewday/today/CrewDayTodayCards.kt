@@ -105,7 +105,10 @@ fun CrewDayTodayCards(
 private fun Modifier.crewDayCard(): Modifier =
     this
         .planCard()
-        .border(1.dp, lerp(PantopusColors.appBorder, PantopusColors.home, 0.4f), RoundedCornerShape(Radii.xl2))
+        .border(1.dp, lerp(PantopusColors.appBorder, PantopusColors.home, BORDER_TINT), RoundedCornerShape(Radii.xl2))
+
+/** How far the card border leans from the hairline toward home green. */
+private const val BORDER_TINT = 0.4f
 
 @Composable
 private fun CardHeader(
