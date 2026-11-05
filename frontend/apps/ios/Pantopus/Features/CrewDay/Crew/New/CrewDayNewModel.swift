@@ -87,6 +87,8 @@ final class CrewDayNewModel: WizardModel {
     private(set) var founding = false
     /// The server's included items per service, when it sends them.
     private(set) var presets: [CrewDayServicePresetDTO] = []
+    /// "Offer a Crew Day here again": the day this one repeats.
+    private(set) var repeatOf: String?
 
     // MARK: Step 1: the service and what's included
 
@@ -276,7 +278,7 @@ final class CrewDayNewModel: WizardModel {
                 return CrewDayAddOn(id: row.id, label: label, priceCents: cents)
             },
             submit: submit,
-            repeatOf: nil
+            repeatOf: repeatOf
         )
         do {
             let response: CrewDayWriteResponse = try await APIClient.shared.request(CrewDayEndpoints.create(body))
@@ -285,6 +287,39 @@ final class CrewDayNewModel: WizardModel {
         } catch {
             self.error = CrewDayErrors.sentence(for: error)
         }
+    }
+
+    /// Every step from a day the crew ran before (the date is still the crew's to pick).
+    func prefill(from page: CrewDayCrewPageDTO) {
+        let day = page.day
+        repeatOf = day.id
+        if let service = CrewDayService(rawValue: day.card.service ?? "") { self.service = service }
+        if !day.included.isEmpty { included = Array(day.included.prefix(6)) }
+        outsideOnly = day.outsideOnly
+        streetLabel = day.card.streetLabel ?? streetLabel
+        if let point = day.center {
+            center = NormalizedAddress(
+                address: "Near \(streetLabel)",
+                city: day.card.city,
+                state: day.card.state,
+                zipcode: nil,
+                latitude: point.latitude,
+                longitude: point.longitude,
+                placeId: nil,
+                verified: nil,
+                source: nil
+            )
+            centerQuery = "The same area as \(day.card.title)"
+        }
+        if let radius = day.radiusM, let match = CrewDayReach(rawValue: radius) { reach = match }
+        capacity = max(1, day.card.capacity)
+        if !day.priceOptions.isEmpty {
+            options = day.priceOptions.map {
+                CrewDayNewOption(id: $0.id, label: $0.label, price: $0.priceCents.map { String($0 / 100) } ?? "", needsLook: $0.needsLook)
+            }
+        }
+        addOns = day.addOns.map { CrewDayNewAddOn(id: $0.id, label: $0.label, price: String($0.priceCents / 100)) }
+        prepNote = day.prepNote ?? ""
     }
 
     private func prefill(for service: CrewDayService) {
