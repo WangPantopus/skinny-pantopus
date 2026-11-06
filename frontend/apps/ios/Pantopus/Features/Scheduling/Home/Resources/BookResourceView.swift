@@ -218,6 +218,7 @@ struct BookResourceView: View {
                 .foregroundStyle(Theme.Color.appText)
                 .lineLimit(3...6)
                 .padding(Spacing.s2)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .overlay(
                     RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

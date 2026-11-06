@@ -272,6 +272,7 @@ private struct PkgMultilineField: View {
                         .foregroundStyle(Theme.Color.appTextMuted)
                         .padding(.horizontal, 11)
                         .padding(.vertical, 9)
+                        .allowsHitTesting(false)
                 }
                 TextField("", text: $text, axis: .vertical)
                     .font(.system(size: 13))
@@ -281,6 +282,7 @@ private struct PkgMultilineField: View {
                     .padding(.vertical, 9)
             }
             .frame(minHeight: 48, alignment: .topLeading)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurface)
             .overlay(
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

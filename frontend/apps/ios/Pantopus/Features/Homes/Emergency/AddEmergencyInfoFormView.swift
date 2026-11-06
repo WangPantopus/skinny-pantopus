@@ -193,6 +193,7 @@ public struct AddEmergencyInfoFormView: View {
                 ))
                 .frame(minHeight: 120)
                 .padding(Spacing.s2)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 .overlay(

@@ -258,7 +258,8 @@ private struct SuggestedTitleField: View {
         SuggestedFieldShell(
             label: "Title",
             hint: viewModel.aiDraftApplied ? "Snap-and-sell pulled this from the photos" : nil,
-            showsAIBadge: viewModel.aiDraftApplied
+            showsAIBadge: viewModel.aiDraftApplied,
+            holdsTextField: true
         ) {
             TextField(
                 "What are you listing?",
@@ -267,6 +268,7 @@ private struct SuggestedTitleField: View {
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(Theme.Color.appText)
             Icon(.pencil, size: 14, color: Theme.Color.appTextMuted)
+                .allowsHitTesting(false)
         }
         .accessibilityIdentifier("listingComposeSnapTitle")
     }
@@ -327,6 +329,7 @@ private struct SuggestedPriceField: View {
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.s1) {
                     Text("$")
                         .font(.system(size: 22, weight: .bold))
+                        .allowsHitTesting(false)
                     TextField(
                         "0",
                         text: Binding(get: { viewModel.form.priceAmount }, set: { viewModel.setPriceAmount($0) })
@@ -337,15 +340,18 @@ private struct SuggestedPriceField: View {
                     Text("USD")
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.Color.appTextSecondary)
+                        .allowsHitTesting(false)
                 }
                 if let suggestion = viewModel.form.priceSuggestion {
                     PriceCompRangeTrack(
                         suggestion: suggestion,
                         currentPrice: viewModel.parsedPrice
                     )
+                    .allowsHitTesting(false)
                 }
             }
             .padding(Spacing.s3)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             .overlay(
@@ -622,16 +628,28 @@ private struct SuggestedFieldShell<Content: View>: View {
     let label: String
     var hint: String?
     var showsAIBadge: Bool = true
+    /// A tap anywhere in a box that holds a text field types there; the category chips' box has none.
+    var holdsTextField = false
     @ViewBuilder let content: Content
+
+    private var box: some View {
+        HStack(spacing: Spacing.s2) {
+            content
+        }
+        .padding(.horizontal, Spacing.s3)
+        .frame(minHeight: 44)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             SuggestedLabel(label: label, showsAIBadge: showsAIBadge)
-            HStack(spacing: Spacing.s2) {
-                content
+            Group {
+                if holdsTextField {
+                    box.typesInFieldOnTap()
+                } else {
+                    box
+                }
             }
-            .padding(.horizontal, Spacing.s3)
-            .frame(minHeight: 44)
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             .overlay(

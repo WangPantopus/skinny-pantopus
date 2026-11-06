@@ -282,6 +282,7 @@ private struct EquityCalculator: View {
                 .font(.system(size: 16, weight: .medium))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurfaceSunken)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }

@@ -3,6 +3,7 @@ import { uploadChatMedia } from '@pantopus/api/endpoints/upload';
 import type { ChatMessage, ChatRoomWithDetails } from '@pantopus/types';
 import { activateChatStorage, assertChatOutboxCapacity, consumeChatDraft, deleteChatRecords, isChatStorageActiveFor, isChatStorageCurrent, listChatRecordKeys, readChatBytes,
   readChatRecord, suspendChatStorage, writeChatRecords, type ChatDraftCommit, type ChatStorageScope } from './chatStorage';
+import { onChatSessionSuspended } from './chatSession';
 
 interface PendingFile { key: string; name: string; type: string; lastModified: number }
 type UploadedFile = { id: string; mime_type?: string; original_filename?: string; file_url?: string };
@@ -110,6 +111,9 @@ export function suspendChatOutbox(keepStorageFor?: string): void {
   if (!keepStorageFor || !isChatStorageActiveFor(keepStorageFor)) suspendChatStorage();
   publish();
 }
+// A sign-out or an account switch (chatSession.ts) stops the outbox at once, in
+// whichever tab and on whichever page it was started.
+onChatSessionSuspended(() => suspendChatOutbox());
 function wake() { void resumeChatOutbox(); }
 
 async function withOutboxLock<T>(saved: ChatStorageScope, work: () => Promise<T>): Promise<T> {

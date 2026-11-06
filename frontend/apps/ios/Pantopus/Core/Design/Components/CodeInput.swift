@@ -42,16 +42,17 @@ public struct CodeInput: View {
         ZStack {
             boxes
                 .opacity(isDisabled ? 0.5 : 1)
+                .allowsHitTesting(false)
             hiddenInput
             if isDisabled {
                 lockOverlay
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture { if !isDisabled { isFocused = true } }
+        .typesInFieldOnTap($isFocused)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Verification code")
         .accessibilityValue(accessibilityValue)
+        .accessibilityAction { if !isDisabled { isFocused = true } }
     }
 
     private var boxes: some View {

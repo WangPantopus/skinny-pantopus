@@ -193,6 +193,7 @@ struct MailVaultShelf: View {
     private var searchField: some View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 18, color: Theme.Color.appTextSecondary)
+                .allowsHitTesting(false)
             TextField("Search everything you have filed", text: $viewModel.vaultQuery)
                 .font(.system(size: 15))
                 .focused($searchFocused)
@@ -201,10 +202,12 @@ struct MailVaultShelf: View {
                 .accessibilityIdentifier("mailVaultSearch")
             if viewModel.vaultSearching {
                 ProgressView()
+                    .allowsHitTesting(false)
             } else if !viewModel.vaultQuery.isEmpty {
                 Button { viewModel.clearVaultSearch() } label: {
                     Icon(.x, size: 16, color: Theme.Color.appTextSecondary)
                         .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
@@ -212,10 +215,10 @@ struct MailVaultShelf: View {
         }
         .padding(.leading, Spacing.s3)
         .frame(minHeight: 44)
+        // Clearing the box keeps typing.
+        .typesInFieldOnTap($searchFocused)
         .background(Theme.Color.appSurface, in: RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).strokeBorder(Theme.Color.appBorder, lineWidth: 1))
-        // Clearing the box keeps typing.
-        .keepsKeyboardOnTap()
     }
 
     @ViewBuilder

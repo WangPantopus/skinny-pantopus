@@ -174,6 +174,7 @@ private struct TerminalCodeInput: View {
                     .onSubmit(onSubmit)
                     .frame(height: 42)
                     .padding(.horizontal, Spacing.s3)
+                    .typesInFieldOnTap()
                     .background(Theme.Color.appSurface)
                     .overlay(
                         RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
