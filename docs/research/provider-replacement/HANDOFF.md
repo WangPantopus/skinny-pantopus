@@ -1,66 +1,46 @@
 # Handoff: replacing ATTOM, Smarty and Lob
 
-Updated November 5, 2026 (late evening, Pacific).
+Updated November 6, 2026 (UTC). Live status is on the coordinator's board, outside Git.
 
 ## State
 
-- Branch `claude/replace-attom-lob-smarty-73fcb9`, PR WangPantopus/skinny-pantopus#3418, merged on the founder's OK of
-  November 5 (based on master
-  `1c5ddb658c`; code references re-checked on master `ffd28e60a1`). Documentation and research scripts only: no app
-  code, no migration, no purchase, no hosted change.
-- **Ready:** one merged package in `docs/research/provider-replacement/` ([README.md](README.md)): decisions,
-  current system, sourcing (with the county survey, the 46-field test and the unit-facts note), architecture,
-  experience and gates, parity and acceptance, the build plan (WP0-WP16), cost and rights. Everything good from PR #3433
-  (its documents, evidence CSVs, `verify.py` and studies) is in it, merged with #3418's work; its 2-line link in
-  `docs/provider-data-persistence-2026-11-01.md` is applied. All seven accepted corrections are applied, and superseded
-  statements are removed or listed in [decisions.md](decisions.md#superseded-statements).
-- **Reproducible:** `python3 -I docs/research/provider-replacement/evidence/verify.py` passes; the survey's
-  `county-survey/tools/estimate.py` gives 55.7% (51.5-60.5%) and 23.2% (21.1-26.7%) after the Dallas correction.
+- **ATTOM's free trial ended November 4.** Its key comes out of production and staging, every copy is purged and the
+  founder signs the affidavit by about November 18 (WP0; [cost-and-rights.md](cost-and-rights.md#5-attom-free-trial)).
+  Until a county goes live on the record, its screens show labeled partial results and household entries.
+- **This package** is PR WangPantopus/skinny-pantopus#3418, squash-merged on the founder's OK. It holds everything from
+  PR #3433, which is closed as superseded. No app code, no migration, no purchase, no hosted change.
+- **Decisions:** the founder answered "all recommended" on November 6 ([decisions.md](decisions.md)).
+- **Private storage (P1) exists:** bucket `pantopus-property-index` in us-west-2, public access blocked; GitHub Actions
+  writes through the `master`-only environment `property-index`; the reader key can read only under `index/`.
+- **WP1 is done:** #3439, #3445, #3446 and #3447 merged.
+- **Running:** a build coordinator session holds the board; WP2, WP3 with WP4, WP5 and WP13 have builder sessions, at most
+  three building at once. Each sends the founder a plain-words plan first.
 
 ## Verified, and not
 
-- Verified by reading master `ffd28e60a1`: every vendor call site and consumer in [current-system.md](current-system.md),
-  including the app-side `source` allowlists, the `D`/`N1` and blank-DPV path to OK, the Google adapter's dropped and
-  misnamed fields, ignored returned postcards and the Block Founders retry gap.
-- Verified at the source on November 5: Google's `validateAddress` field reference and its non-EEA service terms
-  (modified October 28, 2026: 30-day caching, coordinates deleted after 30 days, no made-up addresses); ATTOM's
-  published trial terms (internal evaluation, no database, 24 hours, 90 days, purge and affidavit).
-- Not verified: hosted contents (how many vendor copies production keeps), which keys exist where, the ATTOM trial's
-  start date, any Smarty agreement, live vendor answers, license terms for each free county source, physical phones,
-  live mail.
+- Verified by reading master `ffd28e60a1`: every vendor call site and consumer in [current-system.md](current-system.md).
+- Verified at the source on November 5: Google's `validateAddress` field reference and its non-EEA service terms;
+  ATTOM's published trial terms.
+- Verified November 6: the bucket refuses anonymous reads, and the reader key can list but not write.
+- Not verified: hosted contents beyond production's copy counts, live vendor answers, license terms for each free county
+  source, physical phones, live mail.
 
 ## Waiting on the founder
 
-In the order the build needs them ([decisions.md](decisions.md#open-decisions)):
-1. **D3 and the trial dates:** stop the operator prefill; ask ATTOM in writing whether today's use is allowed (or
-   shorten copies to 24 hours); the trial's end date, which starts the purge-and-affidavit clock.
-2. **D1 with D1a, D1b, D1c:** the postal adapter (Smarty out) and its three rule choices.
-3. **P1:** a private storage account for index releases and truth sets.
-4. **D2:** how to fill counties without free data (recommended: households and labeled estimates; price records
-   requests for the 20 largest uncovered counties, research only).
-5. **D5:** Lob kept per piece with a second printer, or retired after a real-mail pilot.
-6. Founder-only facts: Smarty account or agreement; Google's CASS billing SKU and the production key; Lob's live key and
-   return address.
-
-## Running elsewhere
-
-- Session `make-attom-lookups-non-b` (started by the founder): ATTOM lookups that never hold a screen. Server #3439
-  merged and released November 5 (master `ec131e91f8`); Add Home on web (#3445) and iOS (#3446) merged; Android
-  (#3447) open. It is WP1 in the build plan; its patterns carry into the replacement.
-- PR #3433 (Codex) is still open. Everything in it is in this package; closing it is the founder's call.
+1. ATTOM: take the key out of the servers, run the purge, confirm the end date, sign the affidavit.
+2. The plans each builder sends, and D6-D12 and P2-P5 as packages reach them.
+3. Google's CASS billing SKU and the production key; Lob's live key and return address.
 
 ## Next steps for whoever continues
 
-1. Check #3418's state and CI, `git fetch`, and the founder's answers to the decisions above.
-2. Before any build: send the founder a plain-words plan for the chosen work package (what people see on web, iOS and
-   Android; what stays the same; the decisions it needs) and wait for the OK.
-3. Start where nothing blocks: WP0 (with the founder), WP2 (app readiness, no decision needed) and WP4 (truth sets);
-   WP3 once D1 is decided; WP5 once P1 exists. Follow [build-plan.md](build-plan.md)'s rules and verification recipe.
-4. Research still open (no founder action): license terms per free source before each connector; Cobb GA's FTP file;
-   Medina OH's file; a per-state inventory of statewide files; pricing public-records requests if D2 says so.
+1. Read the coordinator's board in the shared notes folder and check PR, CI and queue state.
+2. Follow [build-plan.md](build-plan.md)'s rules and verification recipe. Wave 2 (WP5 first; then WP6-WP9) and wave 3 (WP10,
+   WP11, WP12) follow; the retirements run with the founder after their gates pass.
+3. Research still open (no founder action): license terms per free source before each connector; one-home lookups on
+   county sites (terms and bot blocks by platform); a per-state inventory of statewide files.
 
 ## Note on personal data
 
-Earlier commits on this branch contain two Chicago unit addresses, a Cook County parcel number, a Clark County parcel
-number and listing-site links to those units; the current files don't. A squash merge keeps them off master; the
-branch's own history on GitHub still shows them. Rewriting that history is the founder's call.
+Earlier commits on this package's branch contained two Chicago unit addresses, a Cook County parcel number, a Clark County
+parcel number and listing-site links to those units; the merged files don't. The squash merge keeps them off master. The
+branch is deleted; the PR's Commits tab still shows them unless GitHub support purges it, which is the founder's call.

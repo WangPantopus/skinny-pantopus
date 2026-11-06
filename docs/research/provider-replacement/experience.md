@@ -77,8 +77,8 @@ Web `app/(site)/(app)/app/homes/[id]/property-details/page.tsx`; iOS `Features/H
 | It publishes basics only (year built, size, value, sales) | 32.5% | County basics; bedrooms and baths confirmed by the household | Behind on bedrooms and baths until residents confirm them |
 | Lookup sites only, sold files, one city only, or unconfirmed | 44.3% | Labeled estimates and household entries until county files are requested or bought (D2) | Clearly behind |
 
-Where Pantopus can beat ATTOM: accuracy at the source (in the Clark County sample home the county's file has 2 full
-baths where ATTOM shows 1, Camas where ATTOM shows "Clark", and a composition roof where ATTOM shows "Concrete");
+Where Pantopus can beat ATTOM: accuracy at the source (in one Clark County sample home the county's file differed
+from ATTOM on baths, city and roof material, and the county is the source of record);
 weekly freshness where counties publish weekly; facts confirmed by verified residents; condo and apartment units from
 floor-plan sheets; no wait on a vendor; no retention limit on public records. Where it trails at first: the counties
 without free files, bedrooms and baths in basics-only places, the value estimate until measured, and the work of mapping
@@ -149,8 +149,8 @@ measured results. Methods and sample sizes: [parity-and-acceptance.md](parity-an
 
 | # | Gate | Measured as | Passes when |
 |---|---|---|---|
-| G1 | Property details stay useful | Field fill per county and property type on the record, against ATTOM's fill on the same addresses (live trial calls for internal evaluation only, kept at most 24 hours, counts kept) | Every field ATTOM filled is filled at least as often, or the gap is covered by G2's one-tap questions and the founder accepts it |
-| G2 | Add Home asks nothing new | For each county and type, the facts a person must enter that ATTOM prefilled at comparable addresses | Zero new typed facts; a one-tap confirmation of a looked-up value doesn't count as typing |
+| G1 | Property details stay useful | Field fill per county and property type on the record, checked against each county's own lookup page (T3). ATTOM's trial ended November 4, so there are no live comparison calls | Every field in today's Property details contract is filled where the county publishes it, or the gap is covered by G2's one-tap questions and the founder accepts it |
+| G2 | Add Home asks nothing new | For each county and type, the facts a person must enter among those Add Home prefilled from ATTOM (the fields, not ATTOM's values) | Zero new typed facts; a one-tap confirmation of a looked-up value doesn't count as typing |
 | G3 | Exact units | Precision of automatic unit links; wrong-unit rate on adjudicated invalid units | Precision ≥ 99.5% (with its interval); wrong-unit < 0.1% on about 3,000 invalid cases; no unit shows building figures |
 | G4 | Measured speed | p95 for address resolve, property read and Add Home's details step on web and real devices | Within the service objectives and never slower than today's measured p95 |
 | G5 | Dependable verification | Postal decisions against the adjudicated postal truth set | No `D`/`N1`, `S` or blank DPV reaches OK; every UNDELIVERABLE, PO_BOX, CMRA and business case in the set refused; agreement shown per category |

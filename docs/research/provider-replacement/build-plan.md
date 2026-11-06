@@ -1,6 +1,6 @@
 # Build plan
 
-November 5, 2026. Proposed; nothing here is approved or started. Each work package (WP) can be picked up by one
+November 5, 2026; updated November 6 after ATTOM's trial ended (see WP0 and [decisions.md](decisions.md)). Wave 1 is running. Each work package (WP) can be picked up by one
 builder, human or agent session, from this page and the documents it links. Founder direction governs the order:
 **build everything behind flags, prove it, replace nothing until it is proven, then switch one vendor at a time.**
 
@@ -37,8 +37,8 @@ builder, human or agent session, from this page and the documents it links. Foun
 ## Order and dependencies
 
 ```
-WP0 rights + ATTOM trial ──► decisions D3, D4
-WP1 non-blocking ATTOM (server #3439 merged; Android #3447 open)
+WP0 rights + ATTOM's end ──► key out, purge, affidavit
+WP1 non-blocking ATTOM (done)
 WP2 app readiness ──────────────────────────────────────────────┐
 WP4 truth sets ──► WP3 postal adapter ──► WP14 retire Smarty      │
 P1 storage ──► WP5 index + first slice ──► WP6 address registry ──┼──► WP8 router + switching ──► WP15 retire ATTOM
@@ -56,7 +56,7 @@ WP2, WP3 (with WP4) and WP13 touch different files and can run at the same time.
 | WP | Name | Replaces | Size |
 |---|---|---|---|
 | WP0 | Rights register and ATTOM trial compliance | — | S |
-| WP1 | Non-blocking ATTOM lookups (in flight) | — | (owned by its session) |
+| WP1 | Non-blocking ATTOM lookups (done) | — | — |
 | WP2 | App readiness: real source labels, new vocabulary | — | M |
 | WP3 | Postal adapter: Smarty no longer needed | Smarty | M |
 | WP4 | Truth sets and evaluation tools | — | M-L |
@@ -79,35 +79,30 @@ Sizes for one builder: S up to 3 days, M 1-2 weeks, L 3-5 weeks, XL 6 weeks or m
 
 ## WP0. Rights register and ATTOM trial compliance
 
-- **Goal:** know what Pantopus may keep and show from every source; stop making copies the ATTOM trial forbids; prepare
-  the purge.
-- **What people see:** nothing, unless decision D3 chooses 24-hour copies (screens fetch more often) or ATTOM off
-  (labeled partial results).
+- **Goal:** know what Pantopus may keep and show from every source; stop using ATTOM now that its trial has ended; carry
+  out the purge and the affidavit by about November 18.
+- **What people see:** labeled partial results and household entries instead of ATTOM's facts, until each county goes
+  live on the record.
 - **Files:** [cost-and-rights.md](cost-and-rights.md) (the register); `backend/scripts/prefill-provider-cache.js` (not
-  run again); if D3 chooses 24 hours: `backend/services/ai/propertyIntelligenceService.js` (65: `maxAgeMs: Infinity`;
-  30: the 30-day TTL), `backend/services/external/cacheHelper.js` (178: `expires_at: 'infinity'`), `routes/home.js`
-  (1122, 1167: the `niche_data` copy).
-- **Switches:** none new; a retention setting only if D3 chooses it.
-- **Data:** a read-only count of ATTOM copies per table on the hosted databases (the founder runs it or authorizes it);
-  the purge itself is a hosted delete only the founder runs.
-- **Depends on:** the founder: trial dates, any other agreement, D3.
-- **Done when:** D3 is decided and recorded; the trial's end date is known; the copy counts are recorded; the prefill is
-  stopped; the purge and affidavit steps are written for the trial's end.
-- **Verify:** if code changes, Add Home, Place and Property details on all three apps against a local backend with a
-  stand-in ATTOM, through a 24-hour expiry (clock moved locally).
-- **Roll out:** no screen change unless D3 chooses one; then with the founder's OK.
-- **Roll back:** the retention setting.
-- **Risks:** the trial ending before the replacement covers Pantopus's homes (see WP5's county choice).
+  run again).
+- **Switches:** none new. Taking `ATTOM_API_KEY` out of the server's env file turns every ATTOM call off.
+- **Data:** production's copy counts are recorded in [cost-and-rights.md](cost-and-rights.md#5-attom-free-trial); the
+  purge itself is a hosted delete only the founder runs, on every hosted database and on local machines.
+- **Depends on:** the founder: the key's removal, the purge, the affidavit.
+- **Done when:** the key is out of every server; every hosted and local copy is gone and counted; the affidavit is signed.
+- **Verify:** Add Home, Place and Property details on all three apps against a local backend with no ATTOM key; the
+  counts after the purge.
+- **Roll out:** founder only.
+- **Roll back:** none: the trial is over.
 - **Size:** S, plus the founder's time.
 
-## WP1. Non-blocking ATTOM lookups (in flight)
+## WP1. Non-blocking ATTOM lookups (done)
 
-- **Owner:** session `make-attom-lookups-non-b`. Server #3439 merged and released November 5; Add Home on web (#3445)
-  and iOS (#3446) merged; Android (#3447) open. WP2 starts after #3447 lands (same Add Home files).
+- **Done:** server #3439, web #3445, iOS #3446 and Android #3447 merged, November 5-6.
 - **What it gives this plan:** the request pattern every later package reuses: answer at once from stored data;
   look up in the background; fill in through `sync:changed`; `?lookup=background` and `?lookup=check` on property
   suggestions; `status: stale` with `as_of`; "no record" remembered; old store builds unchanged.
-- **Note:** #3439 keeps storing ATTOM copies as today; D3 governs how long.
+- **Note:** with no ATTOM key its lookups don't start, so screens answer from what Pantopus holds.
 
 ## WP2. App readiness: real source labels and a new vocabulary
 
@@ -153,8 +148,8 @@ Sizes for one builder: S up to 3 days, M 1-2 weeks, L 3-5 weeks, XL 6 weeks or m
     the non-existent `carrierRouteType` and `postOfficeCityStateInfo`.
   - A mapping from Google's answer to the engine's postal input (the shape `smartyProvider.js` returns, 147-171, plus
     `unconfirmed_secondary`, `record_type`, `no_stat`), per [architecture.md](architecture.md#12-the-postal-adapter).
-  - `pipelineService.js` (397-437): the postal source chosen by configuration; a shadow mode that runs the Google
-    mapping beside Smarty and logs counts per category.
+  - `pipelineService.js` (397-437): the postal source chosen by configuration; a shadow mode that logs Google's own
+    counts per category (never scored against Smarty; see [decisions.md](decisions.md)).
   - `addressDecisionEngine.js`: rule 1 (205-220, 478-481) depends on the chosen postal source; `_isUndeliverable`
     (490-508) stops treating `D` as a confirmed default; `_evaluateMissingUnit` (580-) uses `D`, `N1`, `C1` for "unit
     required" and `S`/`CC` for "unit not confirmed" (D1c); `_computeConfidence` (1025-1048) gives no credit for `D` and
@@ -229,7 +224,8 @@ Sizes for one builder: S up to 3 days, M 1-2 weeks, L 3-5 weeks, XL 6 weeks or m
 - **Verify:** on all three apps: Add Home for a house, a condo with its unit, a rental tower (building only), an address
   with no record; Property details as owner and as member; Place as owner and as renter; the value card; reload and
   relaunch; the store build against the same server.
-- **Roll out:** shadow (counts) → founder's OK per county → live → two weeks watched.
+- **Roll out:** shadow (counts) → founder's OK per county → live → two weeks watched. With ATTOM gone, a county going
+  live replaces partial results, not a working vendor.
 - **Roll back:** remove the county from the live list; stored Home copies keep serving.
 - **Risks:** release size and read latency; per-source terms; a public repository's job logs.
 - **Size:** L-XL.
@@ -405,11 +401,10 @@ Sizes for one builder: S up to 3 days, M 1-2 weeks, L 3-5 weeks, XL 6 weeks or m
 
 ## WP15. Retire ATTOM
 
-- **Goal:** zero ATTOM calls and no ATTOM content anywhere.
-- **When:** D4's bar is met: every county with Pantopus homes live on the record or accepted with partial results.
-- **Steps:** all jurisdictions live; ATTOM calls zero for 30 days, including background and operator paths; the purge
-  of every ATTOM copy and the affidavit (founder, under the trial terms); remove the key; the "ATTOM ID" row and ATTOM
-  copy gone (WP2 done); the old vocabulary served to old builds is no longer needed (D11).
+- **Goal:** zero ATTOM calls and no ATTOM content anywhere. Its trial ended November 4, so the calls, the key and the
+  purge are WP0's and can't wait.
+- **What is left here:** remove the ATTOM code paths once WP5, WP7 and WP2 have replaced what reads them; the "ATTOM ID"
+  row and ATTOM copy gone (WP2); the old vocabulary served to old builds no longer needed (D11).
 - **Size:** M.
 
 ## WP16. Lob: keep per piece or retire

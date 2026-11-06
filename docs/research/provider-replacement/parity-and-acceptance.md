@@ -87,9 +87,8 @@ independently confirmed residential premises in a jurisdiction resolve to the ri
   lookup page by a person: codes mapped to the right words, units of measure right, no field lost, nothing of another
   subject's scope. A connector ships when every displayed field is right on the sample or is withheld.
 - **Against ATTOM's fill, not its values:** on a stratified sample of addresses per county and type (about 200), count
-  which fields ATTOM fills and which the record fills. ATTOM answers are fetched live for this internal evaluation only
-  while the trial is in force, kept at most 24 hours and reduced to counts. If the trial has ended or the founder
-  decides this falls outside evaluation use, G1 uses T3's adjudicated sample alone.
+  which fields ATTOM fills and which the record fills. **The trial ended November 4, 2026, so this comparison doesn't
+  run:** G1 uses T3's adjudicated sample alone, and no ATTOM call or stored ATTOM copy enters any evaluation.
 - **Freshness:** each release's age by source and county; a source past its expected cadence is flagged.
 
 ### T4. Values (only if an estimate ships, decision D9)
@@ -145,7 +144,7 @@ Switching back: the Smarty adapter stays in the code until WP14; with a key it c
 |---|---|---|---|
 | Add Home prefill | The record; one-tap questions for what it lacks | G1, G2 (T3) | No vendor wait; residents confirm |
 | Place "Your home" | Stored record copy; value facts | G1, G7 | Source and date on each fact |
-| Property details | The record in the same groups | T3's 50-home check; G1 | Fixes ATTOM errors where the county is right (the Clark sample: 2 full baths, not 1; Camas, not "Clark"; composition roof, not "Concrete"); weekly freshness where counties publish weekly |
+| Property details | The record in the same groups | T3's 50-home check; G1 | Fixes ATTOM errors where the county is right (a Clark County sample home differed on baths, city and roof material); weekly freshness where counties publish weekly |
 | Value estimate and range | Official values, sales, the FHFA index; an estimate only where T4 passes | T4 | Explains each number |
 | ZIP sales trend | FHFA index, labeled; county sale medians where public | T4's trend check | Public and explainable; never "flat" by default |
 | Exemption check | County exemption fields | Sample of homes with known exemptions | Straight from the county |

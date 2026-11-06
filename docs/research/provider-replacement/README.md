@@ -1,7 +1,8 @@
 # Replacing ATTOM, Smarty and Lob: research, design and build plan
 
-November 5, 2026. PR #3418, merged on the founder's OK. Research and design only: nothing here is built, and nothing is decided beyond what
-[decisions.md](decisions.md) marks as the founder's. This package merges PR #3418 (national coverage, sources, prices,
+November 5, 2026; updated November 6. **ATTOM's free trial ended November 4,** so ATTOM is off and its replacement is the
+critical path. PR #3418, merged on the founder's OK. The package is research and design: nothing here is built yet, and
+nothing is decided beyond what [decisions.md](decisions.md) marks as the founder's. This package merges PR #3418 (national coverage, sources, prices,
 the ATTOM flow, unit floor plans) and PR #3433 (code audit, the 46-field test by property type, identity contract,
 rights, costs, service objectives) into one plan. Code re-checked on master `ffd28e60a1`.
 
@@ -17,7 +18,7 @@ at a time. No paid ATTOM plan.
 | Vendor | Today | What Pantopus builds | What stays rented | Switches when | Work |
 |---|---|---|---|---|---|
 | **Smarty** | A mandatory second postal check after Google (up to 2.5 s more); no production key since Oct 9 | Reads the USPS answer Google already returns, completely and correctly | Google's per-request USPS answer (a USPS license later, if volume justifies it) | The postal truth set passes (gate G5) | WP3, WP14 |
-| **ATTOM** | The free trial: three endpoints, five stored copies the trial terms don't allow | A national address registry and property index from public records, household facts, floor-plan sheets, values from official records | Nothing | Per county and property type, when gates G1-G4, G6 and G7 pass | WP5-WP12, WP15 |
+| **ATTOM** | The free trial, ended November 4: three endpoints, five stored copies to purge | A national address registry and property index from public records, household facts, floor-plan sheets, values from official records | Nothing | Per county and property type, when gates G1-G4, G6 and G7 pass; other counties show labeled partial results | WP5-WP12, WP15 |
 | **Lob** | Prints and mails verification and invitation postcards, per piece | One mail interface: no double mailing, returned cards handled, a second printer | Printing and postage, per piece | The real-mail pilot passes; keeping Lob per piece is the founder's choice | WP13, WP16 |
 
 USPS's delivery database can only be licensed, and printing and postage are always bought per piece; everything else
@@ -45,10 +46,9 @@ can be Pantopus's own. Details: [architecture.md](architecture.md).
 
 ## Decisions
 
-The founder decided the goal, nationwide scope, no paid ATTOM plan, replace nothing until proven, and the seven
-corrections from the #3433 review. Open, with recommendations: D1 (Smarty out, with three rule choices), D2 (counties
-without free data), D3 (today's ATTOM copies against the trial terms), D4 (when ATTOM goes off), D5 (Lob), and D6-D12;
-proposals P1-P5 (private storage first). All in [decisions.md](decisions.md).
+The founder decided the goal, nationwide scope, no paid ATTOM plan, replace nothing until proven (for Smarty and Lob; ATTOM's
+trial ended first), the seven corrections from the #3433 review, and on November 6 D1, D2, D5 and P1 and the bar: really
+exceed these three services. Open, with recommendations: D6-D12 and proposals P2-P5. All in [decisions.md](decisions.md).
 
 ## How to read this package
 

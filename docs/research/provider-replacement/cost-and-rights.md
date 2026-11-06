@@ -7,8 +7,8 @@ contacted, no paid lookup was made. Merges #3433's cost model and rights review 
 
 | Vendor | What Pantopus has | Monthly cost |
 |---|---|---|
-| ATTOM | The free trial (founder, November 5); its terms are below | $0; the founder's direction is that it stays $0 (no paid plan) |
-| Smarty | Unknown whether any account or agreement exists (founder-only fact); production has had no key since Oct 9 | Unknown |
+| ATTOM | The free trial, which **ended November 4, 2026** (founder, November 5); its terms are below | $0; no paid plan |
+| Smarty | No paid agreement (founder, November 5); a key exists on the founder's machine; production has had no key since Oct 9 | $0 |
 | Google Address Validation | Already called with USPS CASS; billed per request (the SKU is a founder-only fact); no production key since Oct 9 | Per request |
 | Lob | Developer plan, no monthly fee; about $0.87-0.91 per 4x6 postcard with postage (first pass); no production key since Oct 9 | Per piece |
 
@@ -70,7 +70,7 @@ Every source passes this before production use. "Checked" means the terms were r
 |---|---|---|---|
 | ATTOM free trial | Internal evaluation, to decide whether to license | A database built from it; storing anything past 24 hours; disclosing it to anyone (including showing it in a product); see section 5 | Checked November 5 (published trial terms) |
 | Google Address Validation | Keeping the address, USPS data and components 30 days for later transactions, then delete or replace with what the person confirmed; confirmation flags 30 days for correction requests; coordinates 30 days, then delete; place IDs indefinitely | No artificially-created US or Puerto Rico addresses (Google stops USPS checks and reports the account to USPS); attribution when Google content is shown | Checked November 5 (non-EEA service terms, modified October 28, 2026); section 6 |
-| Smarty | As the account's agreement says | The published agreement restricts competitive development, benchmarking and compiling databases (sections 6-7) and has duties after termination; never build a registry from Smarty answers | Founder to confirm whether an agreement exists |
+| Smarty | As the published terms say; the founder signed no paid agreement | The published agreement restricts competitive development, benchmarking and compiling databases (sections 6-7) and has duties after termination; never build a registry from Smarty answers, and don't score Google against Smarty | Founder confirmed no paid agreement, November 5 |
 | Lob | Printing and mailing | Terms on using and keeping address results, proofs and tracking; competitive-use limits | To check before the mail work package |
 | USPS (AMS, DPV, CASS) | A licensed local engine with periodic updates | Field of use, display, retention, replicas and exit in writing | Later, if AMS is chosen |
 | County and state files | Per source | King County: no redistribution without permission (and Washington's commercial-use acknowledgement before download); SanGIS: its own license; DuPage: written permission; Will County: no redistribution without written permission; Stanislaus and KGIS: own use only; Los Angeles County: its terms of use; Arizona: commercial-purpose declaration for records requests; Washington (RCW 42.56.070): no commercial use of lists of individuals | Per connector, before its first release |
@@ -85,6 +85,10 @@ proves only that the file can be read.
 
 ## 5. ATTOM free trial
 
+**The trial ended November 4, 2026** (founder, November 5), which makes the deadline for the purge and signed affidavit
+about November 18 (10 business days; the founder confirms the date from ATTOM's notice). ATTOM's key stops being used,
+and no ATTOM copy may keep serving screens.
+
 **The terms** (ATTOM's published API terms at api.developer.attomdata.com/legal, re-read November 5, paraphrased): the
 products may be used only to test and evaluate them before deciding on a license, for internal evaluation, with no
 commercial use. Among the prohibited uses: building or enhancing a database of any kind from them, disclosing or
@@ -96,20 +100,20 @@ destruction within 10 business days.
 detail kept forever, values for 30 days, shown in the apps; the November 1-2 prefill saved 195 trial responses. All of
 that sits outside the trial terms.
 
-**Phase 0 steps** (founder decision D3; hosted deletes and contacts with ATTOM are founder-only):
-1. Find the trial's effective date (and so its end) and whether any other ATTOM agreement exists.
-2. Stop the operator prefill: no new copies from it.
-3. Choose how to handle today's live use until the replacement is ready: ask ATTOM in writing whether the current use is
-   allowed; or shorten every ATTOM copy to 24 hours in code (more calls, slower screens, a quota that may run out); or
-   turn ATTOM off and show labeled partial results.
-4. At the trial's end: purge `Home.niche_data.attom_property_detail`, `AttomPropertyCache`, the per-address
-   `PlaceSectionCache` sections, ATTOM rows in `ExternalFeedCache` and ATTOM-sourced `PropertyIntelligenceCache` rows,
-   handle backups as the affidavit requires, then sign it.
-5. In every case: no ATTOM content in the new index, its mappings or its evaluation sets.
+**What happens now** (hosted deletes and contacts with ATTOM are founder-only):
+1. Confirm the end date from ATTOM's notice.
+2. Nobody runs the operator prefill again.
+3. Take `ATTOM_API_KEY` out of every server's env file and restart, so no screen asks ATTOM or keeps saying "Looking up".
+4. Purge `Home.niche_data.attom_property_detail`, `AttomPropertyCache`, the per-address `PlaceSectionCache` sections, ATTOM
+   rows in `ExternalFeedCache` and `PropertyIntelligenceCache`, on every hosted database and on local machines (including
+   the operator prefill's saved responses), handle backups as the affidavit requires, then sign it.
+5. No ATTOM content in the new index, its mappings or its evaluation sets.
 
-**The timing risk.** The founder's direction is to replace nothing until the replacement is built. If the trial ends
-first, the screens that rely on ATTOM lose those facts at the purge. That is why the build plan's first property slice
-targets the counties where Pantopus homes already are ([build-plan.md](build-plan.md#wp5-property-index-foundation-and-the-first-vertical-slice)).
+**The timing risk happened.** The trial ended before the replacement was built, so screens lose ATTOM's facts at the
+purge. Measured on production, November 5: 1 Home snapshot, 2 per-home copies, 0 per-address copies, 195 shared answers
+(the prefill), 2 built profiles. Few homes depend on them. Until a county qualifies, its screens use the "trial ended"
+routing in section 7; the build plan's first property slice targets the counties where Pantopus homes already are
+([build-plan.md](build-plan.md#wp5-property-index-foundation-and-the-first-vertical-slice)).
 
 ## 6. Google Address Validation: retention
 
@@ -128,17 +132,14 @@ Testing follows the "no made-up addresses" rule: synthetic cases run offline thr
 
 ## 7. The ATTOM transition, county by county
 
-With no paid plan, there is no long-term ATTOM bridge. Routing per county:
+With no paid plan and the trial over, there is no ATTOM bridge. Routing per county:
 
 | County state | Routing |
 |---|---|
 | Qualified (its gates passed, founder's OK) | The record; zero ATTOM calls there, including background and operator paths |
-| Not qualified, trial in force | Today's ATTOM path, as decision D3 allows, until the replacement covers it (founder: replace nothing until built) |
-| Not qualified, trial ended | Labeled partial results and household entries; ATTOM calls zero |
+| Not qualified (the trial ended November 4, so every other county) | Labeled partial results and household entries; ATTOM calls zero |
 
-Tracked per county and property type: the 30-day share of distinct Home opens still served by ATTOM, latency, errors.
-#3433's example bar for the national switch: under 1% for two consecutive 30-day windows, with the gates passed; the
-founder sets the bar (D4).
+Tracked per county and property type: latency, errors, and ATTOM calls, which must stay zero.
 
 ## 8. Smarty and Lob exits
 

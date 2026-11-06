@@ -16,6 +16,18 @@ package is approved beyond the rows marked as the founder's.
 | Nov 5, late | Merge #3433 into #3418 as one package with the build plan; take everything good from #3433 | This package |
 | Nov 5, late | Accept seven corrections from the #3433 review (below) | Applied everywhere |
 
+### Decisions of November 6 (dates in UTC; the founder answered "all recommended")
+
+| Item | Decision |
+|---|---|
+| The bar | "Really exceed what those 3 services can do for us": cost, experience, availability and reliability, above all authentic and much more available property data. G1-G7 are the minimum, not the goal |
+| ATTOM trial | It **ended November 4**. ATTOM's key comes out of production and staging, nobody runs the prefill again, every copy is purged, and the founder signs the affidavit by about November 18 ([cost-and-rights.md](cost-and-rights.md#5-attom-free-trial)). This replaces the open D3 and makes D4 moot |
+| Smarty | No paid agreement. Its published terms are respected anyway: no scoring of Google against Smarty, even in shadow |
+| D1, D1a, D1b, D1c | As recommended below: the postal adapter ships off; Add Home finishes unverified when Google is down; an unset home-or-business is decided by place types and the parcel's use; an unconfirmed unit continues with a warning and is confirmed by mail, never auto-verified |
+| P1 | Done. Private S3 bucket in us-west-2; GitHub Actions can write through a `master`-only environment; the reader key can only read releases under `index/` |
+| D2 | Stronger than this package recommended: one-tap questions and labeled estimates are the floor, not the goal. Real public-records requests start with the 41 large counties without a free file. Buy a county's file when it is a one-time fee of $500 or less; anything higher is a separate ask. Research only, no build without a yes: reading one property's page on a county's own lookup site when someone adds a home there (35.5% of Americans live where only those sites exist). Still no national license, reseller files or listing sites |
+| D5 | Pantopus's own mail layer (nothing mailed twice, returned cards handled, printers swappable); Lob stays per piece; a second printer is qualified for outages and can become the main one if it beats Lob on price in the real-mail pilot |
+
 ### The seven accepted corrections
 
 1. Success means what people keep: asking at Add Home for a fact ATTOM used to prefill is a regression
@@ -49,6 +61,9 @@ These appeared in earlier versions of #3418 or #3433 and no longer hold:
 | "Same verdict as today on ≥ 99% of a replayed set" (Phase 1) | Adjudicated postal truth (T1) |
 | "County records rarely hold condo interiors" | Varies by county: Dallas 92.1%, Boston 95.6%, Cook 14.2% |
 | "FHFA ZIP index as the value" | An area price-change index, labeled |
+| "Replace nothing until built", for ATTOM | The trial ended first. Every county that hasn't qualified shows labeled partial results and household entries; a county going live improves it at once. Still true for Smarty and Lob |
+| "Shadow runs the Google mapping beside Smarty" (WP3) | Shadow logs Google's categories only |
+| "Ask ATTOM in writing; if no, shorten copies to 24 hours" (D3) | The trial is over, and 24-hour copies never allowed showing ATTOM facts to users |
 | "Lob plus a backup printer behind the existing mail-provider switch" | There is no multi-printer switch today (Lob or a mock); WP13 builds one |
 | "22% of Americans have free bedrooms or baths" | 23.2% (21-27%) after the Dallas correction |
 
@@ -58,14 +73,6 @@ Recommendations are this package's; the founder decides. Each is asked in plain 
 
 | # | Decision | Recommendation | Blocks |
 |---|---|---|---|
-| D1 | Go ahead with the postal adapter (Smarty no longer needed; backend only, no new screens beyond accurate messages) | Yes | WP3 |
-| D1a | When Google is down, let the person finish Add Home with the home unverified, no postcard and nothing unlocked until a background re-check passes (today: refused unless a recent check exists) | Yes | WP3's outage path |
-| D1b | When Google leaves home-or-business unset, decide by map place types and parcel type, as the engine already does for Smarty's "unknown" (a business with no other business signal could be added as a home; mail proof still required) | Yes | WP3 |
-| D1c | When USPS doesn't confirm a unit the person typed (`S`), let them continue with a warning and confirm the unit by mail, or require a correction | Continue with a warning; no auto-verify | WP3 |
-| D2 | How to fill counties with no free building files | Households plus labeled estimates as the national floor; price public-records requests for the 20 largest uncovered counties (research only); no reseller files or national license | WP7, WP9 |
-| D3 | Bring today's ATTOM copies within the trial terms: ask ATTOM in writing, shorten copies to 24 hours in code, or turn ATTOM off; plan the purge and affidavit at the trial's end | Stop the prefill now; ask ATTOM in writing; if no, shorten to 24 hours | WP0 |
-| D4 | The bar for switching ATTOM off nationally | Every county with Pantopus homes qualified, or accepted with partial results; under 1% of Home opens on ATTOM for two 30-day windows | WP15 |
-| D5 | Mail: keep Lob per piece as the main printer and qualify a second one, or retire Lob after a second route passes the real-mail pilot | Keep Lob per piece; qualify a second printer for outages | WP13, WP16 |
 | D6 | License USPS's Address Management System (about $7,570 a year) once checks pass about 40,000 a month | Not now; revisit on measured volume | Later |
 | D7 | MLS or rental listing feeds for unit facts | Not now | — |
 | D8 | Accept Washington's commercial-use attestation to open Spokane's free parcel files (owner names never used) | Founder's call | Spokane connector |
@@ -80,7 +87,6 @@ New tables, hosted storage and hosted configuration are the founder's to approve
 
 | # | Proposal | Why | Alternative |
 |---|---|---|---|
-| P1 | A private object-storage account and bucket for national index releases and truth sets, with credentials added to GitHub Actions and the backend by the founder | Supabase Free can't hold national data; releases must be private | None found that keeps the data private and range-readable |
 | P2 | A household-correction history table | Only if review needs per-field history beyond `niche_data.household_facts` | Start without it |
 | P3 | A `mail_provider` column on the existing mail rows | A piece always finishes with the provider that accepted it | Additive migration through normal review; listed for visibility |
 | P4 | Private storage for uploaded floor-plan sheets | Keep originals only with permission | Can share P1's account |
@@ -88,7 +94,6 @@ New tables, hosted storage and hosted configuration are the founder's to approve
 
 ## Founder-only facts and actions
 
-Smarty: whether an account or agreement exists, and its terms. ATTOM: the trial's effective date and any other
-agreement. Google: the billing SKU for CASS requests; the production key when Add Home should go live. Lob: the live key
-and the real return address. Storage: the P1 account. Every production flag change, every hosted delete (the ATTOM
-purge), every real-mail send and every contact with a vendor.
+ATTOM: the exact end date from its notice, and the signed affidavit. Google: the billing SKU for CASS requests; the
+production key when Add Home should go live. Lob: the live key and the real return address. Every production flag
+change, every hosted delete (the ATTOM purge), every real-mail send and every contact with a vendor.

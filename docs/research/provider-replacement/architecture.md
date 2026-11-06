@@ -17,8 +17,9 @@ then switch, one vendor at a time.
   response, or later a USPS license; it can't own it.
 - Printing and postage are bought per piece.
 - Supabase Free (500 MB) can't hold national address or property data; it stays in files outside the database.
-- ATTOM's free trial allows internal evaluation only: no database, nothing kept past 24 hours, no showing it to others
-  ([cost-and-rights.md](cost-and-rights.md#5-attom-free-trial)). Nothing in this design depends on ATTOM copies.
+- ATTOM's free trial ended November 4, 2026, and its terms allowed internal evaluation only: no database, nothing kept
+  past 24 hours, no showing it to others ([cost-and-rights.md](cost-and-rights.md#5-attom-free-trial)). Nothing in this
+  design depends on ATTOM copies.
 - Google's terms: its address, USPS and confirmation results may be kept 30 days (then deleted or replaced by what the
   person confirmed), its coordinates 30 days (then deleted); place IDs indefinitely; never send made-up US or Puerto
   Rico addresses ([cost-and-rights.md](cost-and-rights.md#6-google-address-validation-retention)).
@@ -203,9 +204,8 @@ and allowed values (section 15).
 - The property lookup never reads `Home.niche_data.attom_property_detail`, `AttomPropertyCache`, the per-address copy,
   ATTOM rows in `ExternalFeedCache` or `PropertyIntelligenceCache`.
 - No field mapping, code table, ID or evaluation answer comes from ATTOM, Smarty or Google output.
-- "Same or better than ATTOM" is measured with live trial calls used only for internal evaluation, kept at most 24
-  hours and reported as counts, and only while the trial is in force; otherwise against adjudicated truth
-  ([parity-and-acceptance.md](parity-and-acceptance.md)).
+- "Same or better than ATTOM" is measured against adjudicated truth ([parity-and-acceptance.md](parity-and-acceptance.md));
+  the trial has ended, so there are no live comparison calls.
 - As each county switches, the router stops reading ATTOM copies there; the copies are then purged as the terms require
   (a hosted delete only the founder runs).
 
