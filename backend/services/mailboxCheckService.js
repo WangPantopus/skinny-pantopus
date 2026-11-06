@@ -25,6 +25,8 @@ const { usesGooglePostal } = require('./addressValidation/postalAdapter');
 
 // A failed re-check waits this long before an open screen tries again.
 const RECHECK_RETRY_MS = 10 * 60 * 1000;
+// Google usually answers in under 200 ms, so a screen can open on the new answer.
+const RECHECK_WAIT_MS = 1500;
 const recheckTriedAt = new Map();
 
 // severity: ok < info < attention < problem
@@ -68,37 +70,40 @@ function checkedOnSentence(iso) {
 }
 
 /**
- * Asks USPS again, without holding the screen. The screen fills in by itself: a change to the Home
- * row sends the sync signal.
+ * Asks USPS again. A slow answer doesn't hold the screen: the check finishes in the background, and
+ * screens that listen for the Home row changing refresh themselves.
+ *
+ * @returns {Promise<boolean>} true when the stored answer changed in time for this response
  */
-function recheckInBackground(addressId, homeId) {
+function recheckBriefly(addressId, homeId) {
   const triedAt = recheckTriedAt.get(addressId);
-  if (triedAt && Date.now() - triedAt < RECHECK_RETRY_MS) return;
+  if (triedAt && Date.now() - triedAt < RECHECK_RETRY_MS) return Promise.resolve(false);
   recheckTriedAt.set(addressId, Date.now());
 
-  (async () => {
+  const recheck = (async () => {
     const { data: address, error } = await supabaseAdmin
       .from('HomeAddress')
       .select('*')
       .eq('id', addressId)
       .maybeSingle();
-    if (error || !address) return;
+    if (error || !address) return false;
     const { recheckAddress } = require('./addressValidation/postalRecheckService');
     const outcome = await recheckAddress(address, [{ id: homeId, created_by_user_id: null }]);
-    if (outcome !== 'unavailable') {
-      await supabaseAdmin.from('Home').update({ updated_at: new Date().toISOString() }).eq('id', homeId);
-    }
+    if (outcome === 'unavailable') return false;
+    await supabaseAdmin.from('Home').update({ updated_at: new Date().toISOString() }).eq('id', homeId);
+    return true;
   })().catch((err) => {
     logger.warn('mailboxCheck: background re-check failed', { addressId, error: err.message });
+    return false;
   });
+
+  const waited = new Promise((resolve) => {
+    setTimeout(resolve, RECHECK_WAIT_MS, false).unref();
+  });
+  return Promise.race([recheck, waited]);
 }
 
-/**
- * Compose the diagnostic for a home from its stored HomeAddress
- * validation + the caller's recorded postcard (the physical leg).
- * @returns {Promise<object|null>} null when the home doesn't exist.
- */
-async function getMailboxCheck({ homeId, userId }) {
+async function loadHomeAndAddress(homeId) {
   const { data: home, error: homeErr } = await supabaseAdmin
     .from('Home')
     .select('id, address, address2, city, state, zipcode, country, address_id, address_hash')
@@ -124,16 +129,32 @@ async function getMailboxCheck({ homeId, userId }) {
     addr = data || null;
   }
 
+  return { home, addr };
+}
+
+/**
+ * Compose the diagnostic for a home from its stored HomeAddress
+ * validation + the caller's recorded postcard (the physical leg).
+ * @returns {Promise<object|null>} null when the home doesn't exist.
+ */
+async function getMailboxCheck({ homeId, userId }) {
+  let loaded = await loadHomeAndAddress(homeId);
+  if (!loaded) return null;
+
+  const googlePostal = usesGooglePostal();
+  // An address still pending belongs to the re-check job, which tells the person what it found.
+  const uspsAnswerIsOld = (row) => googlePostal && row && row.validation_raw_response?.postal_state !== 'pending'
+    && (uspsDataIsOld(row) || !!row.validation_raw_response?.postal_cleared_at);
+
+  if (uspsAnswerIsOld(loaded.addr) && await recheckBriefly(loaded.addr.id, homeId)) {
+    loaded = (await loadHomeAndAddress(homeId)) || loaded;
+  }
+  const { home, addr } = loaded;
+
   const findings = [];
 
   const dpv = addr ? addr.dpv_match_code : null;
-  const googlePostal = usesGooglePostal();
   const postalState = addr?.validation_raw_response?.postal_state;
-  // An address still pending belongs to the re-check job, which tells the person what it found.
-  const uspsAskedAgain = googlePostal && addr && postalState !== 'pending'
-    && (uspsDataIsOld(addr) || !!addr.validation_raw_response?.postal_cleared_at);
-
-  if (uspsAskedAgain) recheckInBackground(addr.id, homeId);
 
   if (googlePostal && postalState === 'failed') {
     findings.push(finding('attention', 'Please check this address',
@@ -141,9 +162,9 @@ async function getMailboxCheck({ homeId, userId }) {
   } else if (googlePostal && postalState === 'pending') {
     findings.push(finding('info', 'We couldn’t check this address with USPS yet',
       'We’ll try again shortly. Your postcard can go out after that.'));
-  } else if (uspsAskedAgain && !dpv) {
+  } else if (uspsAnswerIsOld(addr) && !dpv) {
     findings.push(finding('info', 'Checking this address with USPS again',
-      'USPS answers are kept for 30 days, so a new check is running now. This fills in by itself.'));
+      'USPS answers are kept for 30 days, so a new check is running now. Check back soon.'));
   } else {
     findings.push(dpvFinding(dpv));
   }
