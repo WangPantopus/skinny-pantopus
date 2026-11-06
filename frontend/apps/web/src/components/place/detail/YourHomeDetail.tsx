@@ -419,7 +419,7 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
             {data ? (
               <FactsCard data={data} />
             ) : (
-              <SectionCard icon={House} title="Property facts" state={home ? statusToState(home.status) : 'unavailable'} caption={home?.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
+              <SectionCard icon={House} title="Property facts" state={home ? statusToState(home.status) : 'unavailable'} caption={home?.unavailable_reason ?? undefined} unavailableTitle={home?.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
             )}
             {home?.provenance ? <SourceNote name={home.provenance.label} /> : null}
 
@@ -432,7 +432,7 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
                     <AssessmentCard data={data} />
                   </div>
                 ) : (
-                  <SectionCard icon={Landmark} title="Estimated value" state={home ? statusToState(home.status) : 'unavailable'} caption={home?.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
+                  <SectionCard icon={Landmark} title="Estimated value" state={home ? statusToState(home.status) : 'unavailable'} caption={home?.unavailable_reason ?? undefined} unavailableTitle={home?.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
                 )}
               </>
             ) : valueAccess === 'pending' ? (
@@ -443,9 +443,9 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
             ) : null}
             {home?.provenance ? (
               valueAccess === 'shown' && data?.value_source ? <SourceNote name={data.value_source} /> : null
-            ) : home?.source ? <SourceNote name={home.source} asOf={fmtMonthYear(home.as_of) ? `as of ${fmtMonthYear(home.as_of)}` : undefined} /> : null}
+            ) : data && home?.source ? <SourceNote name={home.source} asOf={fmtMonthYear(home.as_of) ? `as of ${fmtMonthYear(home.as_of)}` : undefined} /> : null}
 
-            {homeId ? (
+            {homeId && home?.status !== 'unavailable' ? (
               <>
                 <DetailSectionLabel>Public records</DetailSectionLabel>
                 <PropertyRecordEntry homeId={homeId} />

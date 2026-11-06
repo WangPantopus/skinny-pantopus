@@ -284,6 +284,9 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     if (res?.provenance) {
       return res.provenance.scope === 'building' && res.lookup_message ? `${res.lookup_message} ${res.provenance.label}` : res.provenance.label;
     }
+    // No record behind the prefill: the server's words, not "public records".
+    const lookup = res?.record_lookup ?? res?.attom_lookup;
+    if ((lookup === 'unavailable' || lookup === 'none') && res?.lookup_message) return res.lookup_message;
     return res?.tiers_used?.filter(Boolean).length ? 'Prefilled using public records and address hints where available — please verify.' : '';
   };
   // Under a field once the record names its source: the record's tag, or that this is the person's own entry.
@@ -293,7 +296,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     const tag = recorded != null && String(recorded) === value ? namedRecord.field_tags?.[field] : 'Your entry';
     return tag ? <p className="mt-1 text-xs text-app-text-muted">{tag}</p> : null;
   };
-  const RECORDS_UNAVAILABLE = 'Public records could not be loaded right now. You can continue and fetch them later from Property Details.';
+  const RECORDS_UNAVAILABLE = 'Public property records are unavailable right now. Confirm the details below.';
 
   // Add Home's one follow-up while the county record is looked up: the server answers when it lands.
   const finishPropertyLookup = async (request: Parameters<typeof api.homes.getPropertySuggestions>[0], current: () => boolean) => {

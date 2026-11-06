@@ -187,13 +187,17 @@ export default function HomePropertyDetailsPage() {
 
   // A first lookup runs on the server meanwhile; the record's arrival re-reads this page (sync signal).
   const lookingUp = unavailableReason === 'LOOKUP_PENDING';
+  // No source of county records yet: trying again wouldn't change the answer.
+  const noRecordsYet = unavailableReason === 'ATTOM_NOT_CONFIGURED';
+  // With no record to wait for, an owner's page shows what the household entered, as everyone else's does.
+  const ownFactsOnly = !hasRecord && (noRecordsYet || unavailableReason === 'NO_PROPERTY_FOUND') && stats.length > 0;
   const emptyDescription =
     lookingUp
       ? "Pantopus is reading this home's county record. It shows here by itself, usually within a few seconds."
       : unavailableReason === 'ATTOM_UNAVAILABLE'
       ? 'Public records could not be loaded right now. Try again in a moment.'
-      : unavailableReason === 'ATTOM_NOT_CONFIGURED'
-        ? 'Property records are not configured in this environment yet.'
+      : noRecordsYet
+        ? "We can't read county property records yet, so exact details and value aren't shown here."
         : 'Property details from public records will appear here once available for this address.';
 
   if (loading) {
@@ -243,7 +247,7 @@ export default function HomePropertyDetailsPage() {
           </div>
         </div>
 
-        {!hasRecord && !ownerOnly ? (
+        {!hasRecord && !ownerOnly && !ownFactsOnly ? (
           <div className="rounded-[28px] border border-app-border bg-app-surface px-8 py-16 text-center shadow-sm">
             <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
               <Home className="h-10 w-10" />
@@ -252,7 +256,7 @@ export default function HomePropertyDetailsPage() {
             <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-app-text-secondary">
               {emptyDescription}
             </p>
-            {lookingUp ? null : (
+            {lookingUp || noRecordsYet ? null : (
               <button type="button" onClick={() => void load()} className="mt-5 rounded-lg border border-app-border px-4 py-2 text-sm font-semibold">Retry property records</button>
             )}
           </div>
@@ -315,6 +319,12 @@ export default function HomePropertyDetailsPage() {
                   );
                 })}
               </section>
+            ) : null}
+
+            {ownFactsOnly ? (
+              <p className="mx-auto max-w-lg text-center text-sm leading-6 text-app-text-secondary">
+                Details you entered. {emptyDescription}
+              </p>
             ) : null}
 
             {hasRecord ? (
