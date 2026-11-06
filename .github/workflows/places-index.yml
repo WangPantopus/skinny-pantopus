@@ -1,9 +1,10 @@
 name: Places Index
 
-# The public places index the Plans place picker reads (backend/services/plans/placesIndex.js): every US
-# OpenStreetMap extract from Geofabrik, filtered to the picker's places and published as two files on the
-# `places-index` release. Monthly, and by hand. A pull request that changes the build checks it on two small
-# extracts and publishes nothing.
+# The public places indexes the Plans place picker (backend/services/plans/placesIndex.js) and the post
+# place-tag picker (backend/services/geo/venues.js) read: every US OpenStreetMap extract from Geofabrik, filtered
+# to each picker's places and published as a manifest and a data file each on the `places-index` release.
+# Monthly, and by hand. A pull request that changes the build checks it on two small extracts and publishes
+# nothing.
 
 on:
   schedule:
