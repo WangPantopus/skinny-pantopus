@@ -4,8 +4,10 @@
 // readers over, so a failed or refused import leaves the previous release serving. Run by
 // .github/workflows/property-index.yml with the AWS key of its master-only environment.
 //
-//   node scripts/property-index/publish.cjs --out <dir> --bucket <name> [--prefix index] [--bulk] [--min-retention 0.995]
+//   node scripts/property-index/publish.cjs --out <dir> --bucket <name> [--prefix index] [--bulk] [--min-retention 0.995] [--republish]
 //     --bulk  uploads every county's release at once, which a whole state of them needs; a refused county's files just go unused
+//     --republish  someone decided: a file that was rolled back may serve again, and a new build of the file serving
+//                  replaces it (a scheduled run never passes this)
 //   node scripts/property-index/publish.cjs --rollback <fips> --state <ST> --bucket <name> [--prefix index]
 'use strict';
 
@@ -34,6 +36,7 @@ function parseArgs(argv) {
     else if (argv[i] === '--prefix') opts.prefix = argv[++i];
     else if (argv[i] === '--rollback') opts.rollback = argv[++i];
     else if (argv[i] === '--state') opts.state = argv[++i];
+    else if (argv[i] === '--republish') opts.republish = true;
     else if (argv[i] === '--bulk') opts.bulk = true;
     else if (argv[i] === '--min-retention') opts.minRetention = Number(argv[++i]);
     else throw new Error('Unknown argument');
@@ -120,7 +123,7 @@ function readState(store, state) {
   return bytes ? JSON.parse(bytes.toString('utf8')) : emptyState(state);
 }
 
-function publish(store, out, { bulk = false, minRetention } = {}) {
+function publish(store, { out, republish, bulk = false, minRetention }) {
   if (bulk) store.putDir(path.join(out, 'releases'), 'releases');
   const dir = path.join(out, 'counties');
   const entries = fs.readdirSync(dir).filter((name) => name.endsWith('.json')).map((name) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')));
@@ -136,8 +139,14 @@ function publish(store, out, { bulk = false, minRetention } = {}) {
     for (const entry of built) {
       const serving = stateFile.jurisdictions[entry.fips];
       // The source hasn't published anything new since the release serving.
-      if (serving && serving.as_of === entry.as_of && serving.status === 'active') {
+      // A run someone starts by hand publishes anyway: a new build of the same file can hold new address keys.
+      if (serving && serving.as_of === entry.as_of && serving.status === 'active' && !republish) {
         log(`${entry.fips}: unchanged since ${entry.as_of}`);
+        continue;
+      }
+      // The file someone rolled back stays back until the source publishes a newer one or someone says otherwise.
+      if (serving?.rolled_back_as_of === entry.as_of && !republish) {
+        log(`${entry.fips}: ${entry.as_of} was rolled back, not publishing it again`);
         continue;
       }
       const found = problems(store, entry, serving, out, minRetention);
@@ -171,6 +180,7 @@ function rollback(store, fips, state) {
     previous: null,
     previous_as_of: null,
     rolled_back_from: county.release,
+    rolled_back_as_of: county.as_of,
     rolled_back_at: new Date().toISOString(),
   };
   store.putJson(statePath(state), { ...stateFile, updated_at: new Date().toISOString() });
@@ -181,7 +191,7 @@ const opts = parseArgs(process.argv.slice(2));
 const store = createStore(opts);
 try {
   if (opts.rollback) rollback(store, opts.rollback, opts.state);
-  else publish(store, opts.out, opts);
+  else publish(store, opts);
 } catch (err) {
   console.error(`Publishing failed: ${err.constructor === Error ? err.message : err.name}`);
   process.exit(1);

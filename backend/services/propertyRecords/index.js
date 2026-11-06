@@ -69,9 +69,24 @@ async function lookup(address, { serves = (fips) => config.modeFor(fips) === 'li
   return answers[0];
 }
 
+// One answer per address an hour is all watching needs: screens read a Home's profile far more often than that.
+const SHADOW_EVERY_MS = 60 * 60 * 1000;
+const SHADOW_REMEMBERED = 5000;
+const shadowed = new Map();
+
+function shadowDue(address) {
+  const key = crypto.createHash('sha256').update(JSON.stringify([address.line1, address.unit, address.zip])).digest('hex');
+  const now = Date.now();
+  if (now - (shadowed.get(key) || 0) < SHADOW_EVERY_MS) return false;
+  shadowed.delete(key);
+  shadowed.set(key, now);
+  if (shadowed.size > SHADOW_REMEMBERED) shadowed.delete(shadowed.keys().next().value);
+  return true;
+}
+
 /** Watches a county: what the record would have answered. No facts leave this function. */
 async function shadow(address) {
-  if (!config.anyShadow()) return;
+  if (!config.anyShadow() || !shadowDue(address)) return;
   const started = Date.now();
   try {
     const result = await lookup(address, { serves: (fips) => config.modeFor(fips) === 'shadow' });
