@@ -12,13 +12,15 @@ const VISIBILITY_OPTIONS: { value: PostVisibility; label: string; icon: ReactNod
 
 interface VisibilityPickerProps {
   visibility: PostVisibility;
+  /** Who "Neighborhood" reaches when the post is tagged with a place. */
+  neighborhoodCaption?: string;
   showVisibility: boolean;
   onVisibilityChange: (v: PostVisibility) => void;
   onToggle: () => void;
 }
 
 export default function VisibilityPicker({
-  visibility, showVisibility, onVisibilityChange, onToggle,
+  visibility, neighborhoodCaption, showVisibility, onVisibilityChange, onToggle,
 }: VisibilityPickerProps) {
   const normalized =
     visibility === 'public' ? 'connections' : visibility;
@@ -56,7 +58,7 @@ export default function VisibilityPicker({
               <span>{opt.icon}</span>
               <div>
                 <div className="text-xs font-medium text-app">{opt.label}</div>
-                <div className="text-[10px] text-app-muted">{opt.desc}</div>
+                <div className="text-[10px] text-app-muted">{(opt.value === 'neighborhood' && neighborhoodCaption) || opt.desc}</div>
               </div>
             </button>
           ))}
