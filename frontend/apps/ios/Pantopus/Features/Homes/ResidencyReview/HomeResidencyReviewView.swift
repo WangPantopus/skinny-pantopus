@@ -121,7 +121,10 @@ struct HomeResidencyReviewView: View {
                     : "Rejecting declines this request. It doesn’t change anyone’s current access.").font(.caption)
                 Text("Reason for rejection (optional)").font(.caption)
                 TextField("Reason for rejection (optional)", text: $model.reason, axis: .vertical)
-                    .lineLimit(3...8).focused($reasonFocused).accessibilityIdentifier("homeResidencyReview.reason")
+                    .lineLimit(3...8)
+                    .focused($reasonFocused)
+                    .accessibilityIdentifier("homeResidencyReview.reason")
+                    .typesInFieldOnTap(reach: Spacing.s2)
                 Text("\(model.reason.utf16.count)/2000").font(.caption)
             }
             Toggle("I’ve checked this request and my decision.", isOn: $model.reviewed)

@@ -84,6 +84,7 @@ public struct NewMessageView: View {
         let hasText = !viewModel.searchText.isEmpty
         return HStack(spacing: Spacing.s2) {
             Icon(.search, size: 16, color: searchFocused ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
+                .allowsHitTesting(false)
             TextField(
                 "Search by name, username or area",
                 text: Binding(
@@ -101,10 +102,12 @@ public struct NewMessageView: View {
             if viewModel.isSearching {
                 ProgressView().controlSize(.small)
                     .accessibilityLabel("Searching")
+                    .allowsHitTesting(false)
             }
             if hasText {
                 Button { viewModel.clearSearch() } label: {
                     Icon(.x, size: 14, color: Theme.Color.appTextMuted)
+                        .hitArea(horizontal: 8, vertical: 8)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
@@ -113,6 +116,7 @@ public struct NewMessageView: View {
         }
         .padding(.horizontal, Spacing.s3)
         .padding(.vertical, 9)
+        .typesInFieldOnTap($searchFocused)
         .background(Theme.Color.appSurfaceSunken)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

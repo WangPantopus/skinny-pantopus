@@ -88,6 +88,7 @@ public struct ReportIssueFormView: View {
                 )
                 .frame(minHeight: 96)
                 .padding(Spacing.s2)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 .overlay(

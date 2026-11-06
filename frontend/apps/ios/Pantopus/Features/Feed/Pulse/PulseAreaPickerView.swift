@@ -16,6 +16,7 @@ struct PulseAreaPickerView: View {
                             .textInputAutocapitalization(.words)
                             .submitLabel(.search)
                             .padding(Spacing.s3)
+                            .typesInFieldOnTap()
                             .background(Theme.Color.appSurface, in: RoundedRectangle(cornerRadius: Radii.md))
                             .accessibilityIdentifier("pulseAreaSearch")
                         Text("Browsing another place doesn't change your home or who can read your posts.")

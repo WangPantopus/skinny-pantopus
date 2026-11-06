@@ -83,6 +83,7 @@ struct BookingFilterSheet: View {
         @Bindable var viewModel = viewModel
         return HStack(spacing: Spacing.s2 + 1) {
             Icon(.search, size: 16, color: Theme.Color.appTextMuted)
+                .allowsHitTesting(false)
             TextField("Search invitee or intake text", text: $viewModel.searchText)
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.Color.appText)
@@ -90,6 +91,7 @@ struct BookingFilterSheet: View {
         }
         .padding(.horizontal, Spacing.s3)
         .frame(height: 42)
+        .typesInFieldOnTap()
         .background(Theme.Color.appSurfaceSunken)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
