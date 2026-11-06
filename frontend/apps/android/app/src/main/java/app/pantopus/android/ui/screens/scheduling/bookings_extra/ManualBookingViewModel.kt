@@ -25,6 +25,7 @@ import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingRoutes
 import app.pantopus.android.ui.screens.scheduling._shared.pillar
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -59,7 +60,7 @@ data class ManualBookingUiState(
     val selectedDay: LocalDate? = null,
     val daySlots: List<SlotDto> = emptyList(),
     val selectedSlotStart: String? = null,
-    val tzLabel: String = "",
+    val zone: ZoneId = ZoneId.systemDefault(),
     val inviteeName: String = "",
     val contactMode: ContactMode = ContactMode.Phone,
     val inviteeEmail: String = "",
@@ -73,11 +74,15 @@ data class ManualBookingUiState(
     val doubleBook: DoubleBookConflict? = null,
     val slotConflict: SchedulingError.Conflict? = null,
 ) {
+    val zoneName: String get() = zone.id.substringAfterLast('/').replace('_', ' ')
+    val tzLabel: String get() = "Times in $zoneName · tap to change"
+
     val canContinue: Boolean
         get() =
             when (step) {
                 ManualStep.EventType -> selectedEventTypeId != null
-                ManualStep.Time -> selectedSlotStart != null
+                // Not until the times have reloaded: the picked time may no longer be offered.
+                ManualStep.Time -> selectedSlotStart != null && !loadingSlots && slotsError == null
                 ManualStep.Details -> inviteeName.isNotBlank()
                 ManualStep.Review -> !creating
                 ManualStep.Created -> true
@@ -112,10 +117,11 @@ class ManualBookingViewModel
 
         private val _state = MutableStateFlow(ManualBookingUiState(pillar = owner.pillar()))
         val state: StateFlow<ManualBookingUiState> = _state.asStateFlow()
-        private val zone: ZoneId = ZoneId.systemDefault()
+        private val zone: ZoneId get() = _state.value.zone
         private var pageSlug: String? = null
         private var eventTypesById: Map<String, EventTypeDto> = emptyMap()
         private var allSlots: List<SlotDto> = emptyList()
+        private var slotsJob: Job? = null
         private var started = false
 
         fun start() {
@@ -126,7 +132,7 @@ class ManualBookingViewModel
 
         private fun loadEventTypes() {
             viewModelScope.launch {
-                _state.update { it.copy(loadingEventTypes = true, loadError = null, tzLabel = tzLabel()) }
+                _state.update { it.copy(loadingEventTypes = true, loadError = null) }
                 pageSlug = repo.getBookingPage(owner).dataOrNull()?.page?.slug
                 when (val r = repo.getEventTypes(owner)) {
                     is NetworkResult.Success -> {
@@ -178,6 +184,15 @@ class ManualBookingViewModel
             _state.update { it.copy(selectedSlotStart = start) }
         }
 
+        /** The times reload in this zone, and the booking carries it as the invitee's zone. */
+        fun selectTimezone(id: String) {
+            val current = _state.value
+            // Picking the same zone again only helps as a retry after a failed load.
+            if (id == current.zone.id && current.slotsError == null) return
+            _state.update { it.copy(zone = ZoneId.of(id)) }
+            loadSlots()
+        }
+
         fun next() {
             val current = _state.value
             if (!current.canContinue) return
@@ -214,27 +229,36 @@ class ManualBookingViewModel
                 _state.update { it.copy(slotsError = "Set up your booking link first.") }
                 return
             }
-            viewModelScope.launch {
-                _state.update { it.copy(loadingSlots = true, slotsError = null) }
-                val from = java.time.Instant.now().toString()
-                val to = java.time.Instant.now().plusSeconds(WINDOW_DAYS * SECONDS_PER_DAY).toString()
-                when (val r = repo.publicGetSlots(slug, eventTypeSlug, from, to, zone.id)) {
-                    is NetworkResult.Success -> {
-                        allSlots = r.data.slots
-                        val days = allSlots.mapNotNull { dayOf(it) }.distinct().sorted()
-                        val firstDay = days.firstOrNull()
-                        _state.update {
-                            it.copy(
-                                loadingSlots = false,
-                                days = days,
-                                selectedDay = firstDay,
-                                daySlots = firstDay?.let { d -> slotsForDay(d) } ?: emptyList(),
-                            )
+            // A newer load replaces one still running, so an older zone's times can't land last.
+            slotsJob?.cancel()
+            slotsJob =
+                viewModelScope.launch {
+                    _state.update { it.copy(loadingSlots = true, slotsError = null) }
+                    val from = java.time.Instant.now().toString()
+                    val to = java.time.Instant.now().plusSeconds(WINDOW_DAYS * SECONDS_PER_DAY).toString()
+                    when (val r = repo.publicGetSlots(slug, eventTypeSlug, from, to, zone.id)) {
+                        is NetworkResult.Success -> {
+                            allSlots = r.data.slots
+                            val days = allSlots.mapNotNull { dayOf(it) }.distinct().sorted()
+                            // Keep the picked time if it's still offered: in another zone it can fall on another day.
+                            val kept = allSlots.firstOrNull { it.start == _state.value.selectedSlotStart }
+                            val day =
+                                kept?.let { dayOf(it) }
+                                    ?: _state.value.selectedDay?.takeIf { it in days }
+                                    ?: days.firstOrNull()
+                            _state.update {
+                                it.copy(
+                                    loadingSlots = false,
+                                    days = days,
+                                    selectedDay = day,
+                                    daySlots = day?.let { d -> slotsForDay(d) } ?: emptyList(),
+                                    selectedSlotStart = kept?.start,
+                                )
+                            }
                         }
+                        is NetworkResult.Failure -> _state.update { it.copy(loadingSlots = false, slotsError = "Couldn't load times.") }
                     }
-                    is NetworkResult.Failure -> _state.update { it.copy(loadingSlots = false, slotsError = "Couldn't load times.") }
                 }
-            }
         }
 
         // ─── Create + conflict handling ──────────────────────────────────────
@@ -307,7 +331,6 @@ class ManualBookingViewModel
             _state.value =
                 ManualBookingUiState(
                     loadingEventTypes = false,
-                    tzLabel = tzLabel(),
                     eventTypes = _state.value.eventTypes,
                     pillar = _state.value.pillar,
                 )
@@ -333,7 +356,7 @@ class ManualBookingViewModel
                 linkedEvent =
                     DoubleBookLinkedEvent(
                         title = clash.inviteeName ?: "Existing booking",
-                        detail = BookingsExtrasFormatting.dayAndTime(clash.startAt),
+                        detail = BookingsExtrasFormatting.dayAndTime(clash.startAt, zone),
                     ),
             )
         }
@@ -345,8 +368,6 @@ class ManualBookingViewModel
         private fun slotsForDay(day: LocalDate): List<SlotDto> = allSlots.filter { dayOf(it) == day }
 
         private fun dayOf(slot: SlotDto): LocalDate? = BookingsExtrasFormatting.instantOrNull(slot.start)?.atZone(zone)?.toLocalDate()
-
-        private fun tzLabel(): String = "Times in ${zone.id.substringAfterLast('/').replace('_', ' ')} · tap to change"
 
         private fun EventTypeDto.toOption(): ManualEventTypeOption {
             val mins = defaultDuration ?: durations.firstOrNull()
