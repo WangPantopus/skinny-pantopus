@@ -204,7 +204,7 @@ async function notifyHomes(homes, outcome, address) {
         title: copy.title,
         body: copy.body,
         icon: '📬',
-        link: `/homes/${home.id}/dashboard`,
+        link: `/app/homes/${home.id}/verify-postcard`,
         metadata: { home_id: home.id, outcome },
         idempotencyKey: `home_address_checked:${home.id}:${address.id}:${outcome}`,
       });
