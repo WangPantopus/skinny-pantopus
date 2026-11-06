@@ -49,6 +49,8 @@
 
 **Correction (Nov 5, late evening): Pantopus's ATTOM access is the free trial ($0).** The published trial terms (read for `docs/provider-data-persistence-2026-11-01.md` and PR #3433, not re-read today) restrict keeping ATTOM data past 24 hours and building a database from it. So the fallback above can't serve live users from stored copies without a paid plan, the copies the code keeps forever today conflict with those terms, and the default becomes PR #3433's $0 path: uncovered counties show labeled partial results and household entries. Open founder decisions: drop the ATTOM fallback (stay at $0) or price a paid plan for the transition; and how to bring today's stored ATTOM copies within the trial terms.
 
+**Founder direction (Nov 5, late evening): build our own so Pantopus never pays ATTOM.** No paid ATTOM plan; the free trial is for testing only, within its terms; uncovered counties get labeled partial results, household entries and requested or bought county files. Next: merge #3433 and #3418 into one plan and write the Phase 1 build plan (with #3433's address-check fix) for the founder's OK.
+
 ## Running elsewhere
 
 - Session `make-attom-lookups-non-b` (started by the founder Nov 5, its own worktree): makes ATTOM lookups
