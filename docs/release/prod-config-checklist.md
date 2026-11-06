@@ -1341,8 +1341,9 @@ This section supersedes the historical signing/upload instructions below. Both s
 |---|---|
 | iOS record / main bundle | `6760512315` / `com.pantopus.app` |
 | iOS widget bundle | `com.pantopus.app.widgets` |
+| iOS notification extension bundle | `com.pantopus.app.notifications` |
 | iOS signing team | `6UYZBA546R` (same as published 1.5.0) |
-| App Group | Reuse `group.app.pantopus.ios`; both original app and renamed widget need membership and matching profiles |
+| App Group | Reuse `group.app.pantopus.ios`; the original app, the renamed widget and the notification extension need membership and matching profiles |
 | Android record / application ID | `4974977490173375457` / `com.pantopus.app` |
 | Android Kotlin namespace | Keep `app.pantopus.android`; this is source packaging, not the store identity |
 | Android debug application ID | `com.pantopus.app.debug` |

@@ -22,11 +22,12 @@ def appstore_api_key
   )
 end
 
-# Every target in the App Store archive and its bundle id. The widget
-# extension ships inside the app, so it needs its own App Store profile.
+# Every target in the App Store archive and its bundle id. The extensions
+# ship inside the app, so each needs its own App Store profile.
 APP_STORE_TARGETS = {
   "Pantopus" => "com.pantopus.app",
-  "PantopusWidgets" => "com.pantopus.app.widgets"
+  "PantopusWidgets" => "com.pantopus.app.widgets",
+  "PantopusNotificationService" => "com.pantopus.app.notifications"
 }.freeze
 
 def app_store_profile_name(identifier)
@@ -132,7 +133,7 @@ platform :ios do
       configuration: "Release",
       export_method: "app-store",
       export_options: app_store_export_options,
-      # Sets CFBundleShortVersionString for the app and its widget extension.
+      # Sets CFBundleShortVersionString for the app and its extensions.
       xcargs: ("MARKETING_VERSION=#{version}" if version),
       clean: true
     )
@@ -211,7 +212,7 @@ platform :ios do
     )
   end
 
-  # App Store signing for every target. match fetches both profiles (run it
+  # App Store signing for every target. match fetches every profile (run it
   # once locally without readonly to create them), then each target switches
   # from the project's automatic signing, which can't provision on a CI runner
   # without an Apple account, to its match profile.
