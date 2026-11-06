@@ -222,8 +222,11 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait' } 
     }
   }
 
-  // Tier 2 — heuristics from Places / HomeAddress (fill gaps only)
-  const heuristic = buildHeuristicSuggestions({
+  // Tier 2 — heuristics from Places / HomeAddress (fill gaps only). While the
+  // county record is still being looked up they wait for it, as the model's
+  // guesses do: shown first, a guessed kind of home would change when the
+  // record lands.
+  const heuristic = attomLookup === 'pending' ? {} : buildHeuristicSuggestions({
     classification: classification || {},
     homeAddressRow,
     unit_number: unitNumber,
