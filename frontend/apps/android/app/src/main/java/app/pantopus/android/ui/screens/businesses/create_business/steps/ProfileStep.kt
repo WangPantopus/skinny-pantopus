@@ -47,7 +47,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import app.pantopus.android.ui.components.AddressSuggestionList
 import app.pantopus.android.ui.components.PantopusTextField
+import app.pantopus.android.ui.components.rememberAddressSuggestions
 import app.pantopus.android.ui.screens.businesses.create_business.BusinessHoursDay
 import app.pantopus.android.ui.screens.businesses.create_business.CreateBusinessLogoPick
 import app.pantopus.android.ui.screens.businesses.create_business.CreateBusinessUiState
@@ -265,14 +267,24 @@ private fun LocationSection(
         )
         return
     }
+    val addressSuggestions = rememberAddressSuggestions()
     FormFieldsBlock {
         PantopusTextField(
             label = "Address",
             value = state.address,
-            onValueChange = callbacks.onAddressChange,
+            onValueChange = {
+                callbacks.onAddressChange(it)
+                addressSuggestions?.onTextChanged(it)
+            },
             placeholder = "123 Main St",
             fieldTestTag = "createBusiness_address",
         )
+        AddressSuggestionList(addressSuggestions, testTagPrefix = "createBusiness_addressSuggestion") { picked ->
+            picked.address?.takeIf { it.isNotBlank() }?.let(callbacks.onAddressChange)
+            picked.city?.takeIf { it.isNotBlank() }?.let(callbacks.onCityChange)
+            picked.state?.takeIf { it.isNotBlank() }?.let(callbacks.onStateChange)
+            picked.zipcode?.takeIf { it.isNotBlank() }?.let(callbacks.onZipChange)
+        }
         PantopusTextField(
             label = "City",
             value = state.city,

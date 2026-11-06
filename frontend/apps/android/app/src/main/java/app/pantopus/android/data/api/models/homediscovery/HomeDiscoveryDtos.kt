@@ -29,6 +29,8 @@ data class DiscoveredHomeDto(
     val owner: DiscoveredHomeOwnerDto? = null,
     @Json(name = "is_member") val isMember: Boolean = false,
     @Json(name = "claim_status") val claimStatus: String? = null,
+    /** True when the house number and unit are hidden from this searcher (they didn't type the number). */
+    @Json(name = "address_redacted") val addressRedacted: Boolean? = null,
 )
 
 @JsonClass(generateAdapter = true)
