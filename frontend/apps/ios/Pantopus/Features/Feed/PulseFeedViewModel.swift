@@ -231,8 +231,11 @@ public final class PulseFeedViewModel {
 
     private var resolvedLatitude: Double?
     private var resolvedLongitude: Double?
-    /// Reads the area chosen in the Nearby context bar (`GET /api/location`).
-    private let chosenArea: @MainActor () async throws -> ViewingLocationDTO?
+    /// How long "Set an area" keeps looking for a slow first fix, in the background, once a read has given up on it.
+    private static let lateFixSeconds: TimeInterval = 30
+    @ObservationIgnored private var lateFix: Task<Void, Never>?
+    /// Reads the area chosen in the Nearby context bar and the viewer's homes (`GET /api/location`).
+    private let areaRead: @MainActor () async throws -> ViewingLocationPayload
     /// The screen store (Instant Screens): reopening Pulse shows the stored
     /// first page for the area at once; it is re-read once out of date.
     private let store: ScreenStore
@@ -296,7 +299,7 @@ public final class PulseFeedViewModel {
         viewerId: String? = nil,
         locationProvider: any LocationProviding = DeviceLocationProvider.shared,
         moderation: FeedModerationStore = .shared,
-        chosenArea: (@MainActor () async throws -> ViewingLocationDTO?)? = nil
+        areaRead: (@MainActor () async throws -> ViewingLocationPayload)? = nil
     ) {
         self.api = api
         self.surface = surface
@@ -307,14 +310,14 @@ public final class PulseFeedViewModel {
         self.moderation = moderation
         let store = ScreenStore.store(for: api)
         self.store = store
-        readsAreaFromStore = chosenArea == nil
-        self.chosenArea = chosenArea ?? {
+        readsAreaFromStore = areaRead == nil
+        self.areaRead = areaRead ?? {
             try await store.load(
                 ViewingLocationEndpoints.current(),
                 as: ViewingLocationPayload.self,
                 kind: .you,
                 topics: [ScreenTopic.profileMe]
-            ).value.viewingLocation
+            ).value
         }
     }
 
@@ -964,6 +967,7 @@ public final class PulseFeedViewModel {
         seedPostDetails(response.posts)
         postsLoaded = true
         needsArea = response.requiresViewingLocation == true
+        if needsArea { keepLookingForFix() } else { stopLookingForFix() }
         // With no area chosen the server names the place it fell back to; when the feed looked around the
         // device instead (location already allowed), say so rather than "Set an area".
         let aroundDevice = surface == .pulse && viewingLocation == nil && latitude == nil && area.latitude != nil
@@ -1127,8 +1131,13 @@ public final class PulseFeedViewModel {
         if let latitude, let longitude {
             return (FeedArea(latitude: latitude, longitude: longitude), nil)
         }
-        if surface == .pulse, let chosen = try await chosenArea() {
-            return (FeedArea(latitude: chosen.latitude, longitude: chosen.longitude, radiusMiles: chosen.radiusMiles), chosen)
+        var fixIsTheOnlyArea = false
+        if surface == .pulse {
+            let read = try await areaRead()
+            if let chosen = read.viewingLocation {
+                return (FeedArea(latitude: chosen.latitude, longitude: chosen.longitude, radiusMiles: chosen.radiusMiles), chosen)
+            }
+            fixIsTheOnlyArea = !read.homes.contains { $0.latitude != nil && $0.longitude != nil }
         }
         if let resolvedLatitude, let resolvedLongitude {
             return (FeedArea(latitude: resolvedLatitude, longitude: resolvedLongitude), nil)
@@ -1138,16 +1147,43 @@ public final class PulseFeedViewModel {
             resolvedLongitude = cached.longitude
             return (FeedArea(latitude: cached.latitude, longitude: cached.longitude), nil)
         }
-        // Asking for location is "Use my location"'s job. Opening Pulse uses a fresh fix only
-        // when it needs no prompt. Keep that passive wait brief: a slow GPS fix must not
-        // hold up the feed when the server can fall back to the person's own place.
+        // Asking for location is "Use my location"'s job. Opening Pulse uses a fresh fix only when it needs no prompt.
+        // While the server can fall back to the person's Home that wait is brief: a slow GPS fix must not hold up the
+        // feed. With no Home, the fix is the only area there is, so it keeps the usual window.
         if locationProvider.canLocateWithoutAsking,
-           let fresh = await locationProvider.requestCurrent(timeoutSeconds: passiveLocationTimeoutSeconds) {
+           let fresh = await locationProvider.requestCurrent(timeoutSeconds: fixIsTheOnlyArea ? 4 : passiveLocationTimeoutSeconds) {
             resolvedLatitude = fresh.latitude
             resolvedLongitude = fresh.longitude
             return (FeedArea(latitude: fresh.latitude, longitude: fresh.longitude), nil)
         }
         return (FeedArea(latitude: nil, longitude: nil), nil)
+    }
+
+    /// With location allowed, "Set an area" isn't the last word: a first fix can take longer than a read waits (GPS
+    /// alone, or indoors), and the prompt has nothing that reads again. Keeps looking, and reads again if the prompt is
+    /// still up when the fix comes. Without permission this ends at once.
+    private func keepLookingForFix() {
+        guard lateFix == nil, locationProvider.canLocateWithoutAsking else { return }
+        lateFix = Task { [weak self, locationProvider] in
+            let deadline = Date.now.addingTimeInterval(Self.lateFixSeconds)
+            var fix: UserCoordinate?
+            // Core Location gives up on a request by itself (after 10 s on the simulator), so this asks again.
+            while fix == nil, deadline.timeIntervalSinceNow > 0, !Task.isCancelled, locationProvider.canLocateWithoutAsking {
+                fix = await locationProvider.requestCurrent(timeoutSeconds: deadline.timeIntervalSinceNow)
+                if fix == nil { try? await Task.sleep(for: .seconds(1)) }
+            }
+            guard let self, !Task.isCancelled else { return }
+            lateFix = nil
+            guard let fix else { return }
+            resolvedLatitude = fix.latitude
+            resolvedLongitude = fix.longitude
+            if needsArea { await fetch() }
+        }
+    }
+
+    private func stopLookingForFix() {
+        lateFix?.cancel()
+        lateFix = nil
     }
 
     // MARK: - Optimistic accessors
