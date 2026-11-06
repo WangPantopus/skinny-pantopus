@@ -49,7 +49,7 @@ All five are read before ATTOM is asked (database first, the founder's Nov 1 dir
 
 The operator prefill script ([`prefill-provider-cache.js`][prefill]) is a sixth call path (dry run by default). Its
 November 1-2 run saved 195 trial responses from 200 attempts (#3433's review, page 11). The published trial terms
-allow none of these copies to live past 24 hours (see [cost-and-rights.md](cost-and-rights.md#attom-free-trial)).
+allow none of these copies to live past 24 hours (see [cost-and-rights.md](cost-and-rights.md#5-attom-free-trial)).
 
 ### Who reads it
 
@@ -57,7 +57,7 @@ allow none of these copies to live past 24 hours (see [cost-and-rights.md](cost-
 |---|---|---|---|
 | Add Home prefill | `POST /api/homes/property-suggestions` ([`home.js`][home] 581) → [`propertySuggestionsService.js`][suggest] 161-206: ATTOM tier first, then address heuristics (218), then an optional LLM (238) | Type, bedrooms, baths, size, lot, year built; `tiers_used` and per-field `sources` (`attom`, `heuristic`, `llm`; 130, 182-206, 271-275) | Editable, sourced fields; typed values never overwritten; a blank or a prompt when the dwelling can't be matched |
 | Home create | `POST /api/homes` ([`home.js`][home] 1299); copies the server's own per-address record into `niche_data` (1122, 1167). A client-sent `attom_property_detail` is accepted and ignored (148-154) | The whole detail bundle | Never trust a client-sent record; store the server's own copy with its source |
-| Property details (verified owners) | `GET /api/homes/:id/property-details` ([`home.js`][home] 1972) → [`homeDetailService.js`][detail] 196-215: non-owners get `OWNER_ONLY` and the Home's own facts (199-203); owners get `county_record` from [`countyRecordSerializer.js`][serializer] plus the legacy ATTOM payload | Every curated path ([evidence/attom-display-contract.csv](evidence/attom-display-contract.csv), 124 entries) in sections (serializer 30) | The owner gate, the section groups, the older client shape; the real source label |
+| Property details (verified owners) | `GET /api/homes/:id/property-details` ([`home.js`][home] 1972) → [`homeDetailService.js`][detail] 196-215: non-owners get `OWNER_ONLY` and the Home's own facts (200-203); owners get `county_record` from [`countyRecordSerializer.js`][serializer] plus the legacy ATTOM payload | Every curated path ([evidence/attom-display-contract.csv](evidence/attom-display-contract.csv), 124 entries) in sections (serializer 30) | The owner gate, the section groups, the older client shape; the real source label |
 | Place "Your home" | [`placeIntelligenceService.js`][place] 969-1016, under the 3.5 s section budget (619-624, 1394) | Facts, value, trend, household-filled gaps (`household_fields`), the house outline | Role filtering (owners see value; renters don't), household gap-filling, honest empty states |
 | Exemption check (owners) | [`exemptionCheckService.js`][exempt] 178, from Place (1339) | Exemption fields and assessed figures | Present, explicitly empty and unknown stay different; uncertainty kept in over-assessment hints |
 | Today sky house | [`houseShape.js`][shape] 4-9, 210, via the profile | Building size, stories, roof, parking | The plain-house fallback |
@@ -79,7 +79,7 @@ In `buildProfileFromAttomResponses` ([`pis`][pis] 425-499):
 
 Two confidence paths disagree: the profile reads `avm.confidence` (488); the county-record serializer shows
 `avm.amount.scr` (serializer 179). The replacement keeps official values, sales, trends and estimates as separately
-labeled facts ([architecture.md](architecture.md#fact-precedence-field-by-field)).
+labeled facts ([architecture.md](architecture.md#7-fact-precedence-field-by-field)).
 
 ### How long people wait
 
@@ -94,7 +94,7 @@ Draft PR #3439 (session `make-attom-lookups-non-b`, started by the founder) chan
 the database, a missing record is looked up in the background and fills in through the existing `sync:changed` signal,
 an empty or failed refresh keeps the last value with its date (`status: stale`), "no record" is remembered for 30 days,
 and Add Home gets `?lookup=background` / `?lookup=check` (old store builds keep today's behavior). The replacement
-keeps that request pattern ([architecture.md](architecture.md#request-path-and-latency)).
+keeps that request pattern ([architecture.md](architecture.md#4-request-path-and-latency)).
 
 ### What the apps assume
 
@@ -113,13 +113,13 @@ These are compatibility traps for any change of source:
 - **Vendor IDs.** The serializer shows "ATTOM ID" (145-147).
 
 Rule for the switch: never label a county source "ATTOM" to suit old builds; ship readers that accept new values first,
-and answer old builds in the vocabulary they accept ([architecture.md](architecture.md#compatibility-with-the-apps-in-the-stores)).
+and answer old builds in the vocabulary they accept ([architecture.md](architecture.md#15-compatibility-with-the-apps-in-the-stores)).
 
 ### Beyond today's three calls
 
 ATTOM sells more (deeds and mortgages, foreclosures, permits, schools, hazards, rental AVMs). Pantopus does not call
 them. Record Watch's deed half was never built. A future feature that needs one of those needs its own source, rights
-and accuracy check (#3433's table, kept in [sourcing.md](sourcing.md#beyond-todays-scope)).
+and accuracy check (#3433's table, kept in [sourcing.md](sourcing.md#9-beyond-todays-scope)).
 
 ## Smarty and the address check
 
@@ -180,13 +180,13 @@ Google's published `validateAddress` reference (read November 5, 2026):
 | `result.metadata.residential`, `business`, `poBox` (booleans; unset = unknown) | **Dropped**; only `metadata.placeId` is read (146) | No home-or-business answer without Smarty |
 
 `uspsData` comes only for the US and Puerto Rico. Google's terms forbid sending made-up addresses for those places
-(see [cost-and-rights.md](cost-and-rights.md#google-address-validation)), which shapes how Phase 1 is tested.
+(see [cost-and-rights.md](cost-and-rights.md#6-google-address-validation-retention)), which shapes how Phase 1 is tested.
 
 ### Where postal answers are stored and reused
 
 - `HomeAddress` keeps the normalized address, coordinates, DPV, RDI, flags and decision inputs with no expiry; Smarty's
   raw candidate is reused for 90 days ([`smartyProvider.js`][smarty] 183-256). Google's terms cap most of this at 30
-  days ([cost-and-rights.md](cost-and-rights.md#google-address-validation)).
+  days ([cost-and-rights.md](cost-and-rights.md#6-google-address-validation-retention)).
 - **Home create during an outage** ([`home.js`][home] 855-1000): with `ENABLE_SAFE_ADDRESS_OUTAGE_FALLBACK` on
   ([config][avcfg] 126) it re-runs the engine on the stored inputs of a recent validation and allows only an OK at the
   minimum confidence; otherwise it answers 503 `ADDRESS_VALIDATION_UNAVAILABLE` (371-378).
@@ -233,7 +233,7 @@ returned card leaves the person waiting until the code expires. The older addres
 | Screens that fill in by themselves | [`syncChangedService.js`][syncchanged] (`sync:changed` for `home:<id>`, `place:<id>`), already re-read on web, iOS and Android (#3439's notes) |
 | Stored per-section answers with freshness | [`placeSectionCache.js`][psc], `ExternalFeedCache` |
 | Capability switches read in one place | [`config/addressVerification.js`][avcfg] (env flags with defaults) |
-| Household values beside the record | `Home.year_built`, `sq_ft`, `bedrooms`, `bathrooms`, `lot_sq_ft`, `home_type`, already merged as `household_fields` ([`pis`][pis] 462-470) |
+| Household values beside the record | `Home.year_built`, `sq_ft`, `bedrooms`, `bathrooms`, `lot_sq_ft`, `home_type`, already merged as `household_fields` ([`pis`][pis] 462-471) |
 | Mail provider shape | `sendPostcard` / `getJobStatus` in [`mailVendorService.js`][mailvendor] |
 
 ## Not checked

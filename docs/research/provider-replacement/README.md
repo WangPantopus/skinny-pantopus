@@ -1,55 +1,95 @@
-# Replacing ATTOM, Smarty and Lob nationwide
+# Replacing ATTOM, Smarty and Lob: research, design and build plan
 
-**Recommendation, November 5, 2026.** Build the address and property lookup inside the Pantopus backend. Give nationwide imports a separate worker and a versioned index. Keep ATTOM spending at $0. Qualify a permitted postal check and physical mail fulfillment separately. Those two capabilities have different costs and evidence requirements from a property lookup.
+November 5, 2026. Draft PR #3418. Research and design only: nothing here is built, and nothing is decided beyond what
+[decisions.md](decisions.md) marks as the founder's. This package merges PR #3418 (national coverage, sources, prices,
+the ATTOM flow, unit floor plans) and PR #3433 (code audit, the 46-field test by property type, identity contract,
+rights, costs, service objectives) into one plan. Code re-checked on master `ffd28e60a1`.
 
-This is a design, code audit and measured sourcing study. The field experiment ran on existing equipment. No application cutover, vendor cancellation, schema migration or production rights approval was performed. The code baseline for this edition is [master at e49cb33a6a](https://github.com/WangPantopus/skinny-pantopus/tree/e49cb33a6a9281bf19aa9e1dfd5c0dec10a02c25).
+## The goal
 
-All three named subscriptions can in principle be retired independently once their exit gates pass. Universal 46-field parity across every U.S. property has no defensible source guarantee. Actual postcards still require production and postage, and authoritative postal evidence still requires approved access.
+The founder's direction (November 5): Pantopus runs its own address, property and mail systems, so it never pays
+ATTOM, Smarty or Lob subscriptions, **nationwide from day one**, with a better experience, availability and reliability
+than today. **Replace nothing until the replacement is fully built behind flags and proven;** then switch, one vendor
+at a time. No paid ATTOM plan.
 
-## The decision by service
+## The answer, vendor by vendor
 
-| Service | What Pantopus needs | What we can own | What still needs supply or independent proof |
-| --- | --- | --- | --- |
-| ATTOM | Property and parcel characteristics, owner-visible county records, property valuation and ZIP sales trends. Other flows consume selected fields and optional ownership evidence. | Nationwide lookup, local-ID mapping, public-source ingestion, provenance, household corrections, cached reads, coverage reporting. | Field availability varies by jurisdiction and property type. Exact vendor IDs and model outputs belong to the vendor. Unit inventories, sales, ownership evidence and validated valuations can require separate rights or a different product decision. |
-| Smarty | Postal deliverability and secondary-address signals in Add Home, claims and Mailbox Check. Some extra unit lookup is gated. | Address normalization, candidate ranking, exact unit matching, decisions, correction and recovery UX, independent unit evidence. | Current authoritative postal evidence requires an approved source for that use. A county address or geocoder match cannot attest to mail delivery. |
-| Lob | Physical production and mailing of verification cards and Block Founders invitations, plus tracking callbacks. | Templates, admission, codes, retries, suppression, recipient opt-outs, dispatch reconciliation and permissions. | A printer/mail house or an operated print-and-post process, postage, and a way to reconcile production and delivery outcomes. Real pieces have a per-piece cost. |
+| Vendor | Today | What Pantopus builds | What stays rented | Switches when | Work |
+|---|---|---|---|---|---|
+| **Smarty** | A mandatory second postal check after Google (up to 2.5 s more); no production key since Oct 9 | Reads the USPS answer Google already returns, completely and correctly | Google's per-request USPS answer (a USPS license later, if volume justifies it) | The postal truth set passes (gate G5) | WP3, WP14 |
+| **ATTOM** | The free trial: three endpoints, five stored copies the trial terms don't allow | A national address registry and property index from public records, household facts, floor-plan sheets, values from official records | Nothing | Per county and property type, when gates G1-G4, G6 and G7 pass | WP5-WP12, WP15 |
+| **Lob** | Prints and mails verification and invitation postcards, per piece | One mail interface: no double mailing, returned cards handled, a second printer | Printing and postage, per piece | The real-mail pilot passes; keeping Lob per piece is the founder's choice | WP13, WP16 |
 
-**Nationwide** covers the 50 states and D.C. with separately tracked Puerto Rico, Guam, the U.S. Virgin Islands, American Samoa and the Northern Mariana Islands. Military, rural-route, PO-box and general-delivery destinations need their own behavior. Every location gets a lookup or recovery path. A location earns a coverage claim only after its source, field, property type and display rights pass review.
+USPS's delivery database can only be licensed, and printing and postage are always bought per piece; everything else
+can be Pantopus's own. Details: [architecture.md](architecture.md).
 
-## ATTOM during the transition
+## What the research found
 
-Two directions matter together. The founder reported $0 current ATTOM subscription spend and wants to avoid starting one. A [later handoff in the parallel research PR](https://github.com/WangPantopus/skinny-pantopus/blob/5d514f94d45c46575ec978ccd43d1213685bc71d/docs/research/HANDOFF-replace-attom-lob-smarty.md) records a preference to keep ATTOM available during migration **only for counties Pantopus has not yet covered**. Preserve that conditional routing option. Default to independent records and $0 new spend. Enable the bridge only under an existing, confirmed authorization covering the exact use. Without it, return a labeled partial result. Stop calls county by county as sources qualify. ATTOM commercial cancellation, if applicable, is national and requires a separate founder decision. [Bridge, budget and exit gates](delivery-and-cost.md#county-by-county-attom-transition)
+- **Coverage.** 55.7% of Americans (range 52-61%) live where a county or state publishes building facts free in bulk;
+  23.2% (21-27%) where those include bedrooms or baths. 35.5% live where only per-property lookup sites exist, 6.5%
+  where the county sells its file ([sourcing.md](sourcing.md), [county-survey.md](county-survey.md)).
+- **Fields.** Across 14,660,226 assessment records in eight states, public records filled 41 of Property details' 46
+  fields somewhere (16.3 per record on average); the five never found are the ATTOM ID and the four value-estimate
+  fields. Condo interiors depend on the county: bedrooms, baths and area together on 92.1% of Dallas condos, 95.6% in
+  Boston, 14.2% in Cook ([property-fields.md](property-fields.md)).
+- **Code** ([current-system.md](current-system.md)): a building without its unit (`D`/`N1`) or a never-checked address
+  passes the address check and can auto-verify a claim; Google's adapter drops USPS footnotes and the home-or-business
+  flags and reads two field names Google never sends; the iOS and Android apps in the stores reject unknown `source`
+  values and say "ATTOM" in copy; returned postcards are ignored in the Home flow; Block Founders cards can be mailed
+  twice after a timeout; the value card can show an assessed total as an estimate and a missing trend as "flat".
+- **Terms** ([cost-and-rights.md](cost-and-rights.md)): ATTOM's trial allows internal evaluation only, no database and
+  nothing kept past 24 hours, for 90 days, then a purge and a signed affidavit. Google allows keeping its results 30
+  days, deleting its coordinates after 30 days, and forbids sending made-up addresses.
+- **Money.** The public-records route was modeled at $47,500 to build and $30,480 a year including labor, or about
+  $5,400 of cash in year one if the founder supplies the labor, with no data fees.
 
-## What the free test established
+## Decisions
 
-Across eight states and 39 property-type/source groups, **14,660,226 distinct assessment accounts, tax lots or parcels** qualified. **41 of the 46** screenshot fields had a usable direct, derived or explicitly qualified result somewhere. The mean was **16.3 fields per record**. The missing five were the ATTOM ID and the four automated valuation fields. Florida supplied all 67 county rolls. Massachusetts supplied 350 municipal extracts plus Boston’s separate assessment layer. The other tests covered Los Angeles, Cook, Dallas, King, New York City and Philadelphia.
+The founder decided the goal, nationwide scope, no paid ATTOM plan, replace nothing until proven, and the seven
+corrections from the #3433 review. Open, with recommendations: D1 (Smarty out, with three rule choices), D2 (counties
+without free data), D3 (today's ATTOM copies against the trial terms), D4 (when ATTOM goes off), D5 (Lob), and D6-D12;
+proposals P1-P5 (private storage first). All in [decisions.md](decisions.md).
 
-| Subject | Distinct records | Mean fields of 46 |
-| --- | ---: | ---: |
-| House | 11,245,408 | 17.0 |
-| Townhouse or rowhouse | 460,040 | 20.2 |
-| Residential condo | 2,685,854 | 12.9 |
-| Apartment building or complex | 166,891 | 14.9 |
-| Office property | 102,033 | 15.5 |
+## How to read this package
 
-This deliberately selected sample measures field presence under documented rules. A single apartment property may contain hundreds of homes. Source presence alone establishes neither correctness nor nationwide availability. [Field results and scoring rules](property-fields.md) · [Nationwide sourcing and experiments](nationwide-sourcing.md)
+| Document | What it holds | Read it if you are |
+|---|---|---|
+| [decisions.md](decisions.md) | Founder decisions with dates, superseded statements, open decisions and proposals | Anyone, first |
+| [current-system.md](current-system.md) | Every ATTOM, Smarty and Lob call site and consumer, file:line on master | Building any package |
+| [sourcing.md](sourcing.md) | National coverage, uncovered counties and prices, field fill by property type, the data source catalog | Choosing sources |
+| [county-survey.md](county-survey.md) | All 150 largest counties and the 100-county national sample | Checking a county |
+| [property-fields.md](property-fields.md) | The 46 Property details fields, measured by property type | Mapping fields |
+| [unit-facts.md](unit-facts.md) | Condo and apartment units: how listing sites get them, the floor-plan sheet design | Building unit facts |
+| [architecture.md](architecture.md) | The pieces, data flow, identity contract, fact precedence, postal adapter, mail, reliability, privacy, app compatibility | Designing or reviewing |
+| [experience.md](experience.md) | What each screen shows on web, iOS and Android, and the "same or better" gates G1-G7 | Building any screen change |
+| [parity-and-acceptance.md](parity-and-acceptance.md) | Truth sets, exact-unit precision, service objectives, sample design, how a switch is made | Proving a package |
+| [build-plan.md](build-plan.md) | Work packages WP0-WP16 with files, switches, gates, checks, rollout and rollback | Building |
+| [cost-and-rights.md](cost-and-rights.md) | Costs, prices, the rights register, the ATTOM trial and Google retention plans | Anything that costs money or keeps data |
+| [HANDOFF.md](HANDOFF.md) | Where the work stands and the next steps | Continuing this work |
 
-## Which original design wins?
+Evidence and tools: [evidence/](evidence/README.md) (every CSV, with `verify.py`), [county-survey/](county-survey/README.md)
+(the survey's scripts and inputs), [studies/](studies/README.md) (#3433's PDFs and workbooks).
 
-Use the **infrastructure PDF** as the engineering base. It handles different property subjects, jurisdiction connectors, time, rights, partial answers and evaluation. Its mail scope omits the printing and delivery that Pantopus actually buys. Use the **Word memo** for physical fulfillment, protected addresses, contract exit, independent source families, competing-dataset concerns, clean provenance and operating cost. Its baseline assumes Lob address checks and Smarty typeahead. The application uses other providers for those jobs. Both proposed local ramp-ups yield to the nationwide requirement. Representative counties are test fixtures, not a geographic launch boundary.
+## Reproducing the numbers
 
-The combined design adds three things neither proposal proved: a field-by-field audit against the actual application, a no-fee multistate experiment, and a clear boundary between app authorization, postal evidence and shared property facts. Primary documents are titled *Pantopus Address & Property Infrastructure Research* and *Replacing Lob, Smarty and ATTOM*. Their recommendations are inputs to this design. [Original comparison and code review](studies/provider-replacement-review.pdf)
+```bash
+python3 -I docs/research/provider-replacement/evidence/verify.py
+```
 
-## Use the package
+```bash
+python3 -I docs/research/provider-replacement/county-survey/tools/estimate.py docs/research/provider-replacement/county-survey/data
+```
 
-| Reader or decision | Document |
-| --- | --- |
-| What each vendor supplies, which route/feature uses it, and what can replace it | [Application and vendor contracts](application-contracts.md) |
-| Public versus licensed inputs, nationwide acquisition order, how exact-unit lookup works, and how to interpret the trial | [Nationwide sourcing](nationwide-sourcing.md) |
-| Every screenshot row, its ATTOM field and the measured fill by property type | [46-field matrix](property-fields.md) |
-| Backend placement, request/response contract, data model, rights, imports, serving, privacy and failure behavior | [Architecture](architecture.md) |
-| Postal and printer migration, guarded rollout, costs and acceptance criteria before any subscription exit | [Delivery and economics](delivery-and-cost.md) |
-| Audit or reproduce the counts, find a jurisdiction, inspect the wider ATTOM display fields | [Evidence file guide](evidence/README.md) |
-| Presentation copies and editable planning models | [Study files](studies/README.md) |
+The first reconciles the field test (14,660,226 records, 39 cohorts, 46 fields, 417 files, 3,235 county-equivalents);
+the second prints the national coverage estimate. Neither needs a network, a key or a database.
 
-A separate [county-source survey in PR #3418](https://github.com/WangPantopus/skinny-pantopus/pull/3418) classifies acquisition routes and estimates the share of people living in areas with a source. Its population estimates use a different denominator from the assessment-record counts here. This package stands on its own and leaves that branch under its author’s control.
+## The founder's two design documents
+
+Both were reviewed by both studies (kept outside the repository). The infrastructure PDF ("Pantopus Address & Property
+Infrastructure Research") is the engineering base: national search with stated limits, connectors, property subjects,
+partial answers, field-level rights and evaluation. The Word memo ("Replacing Lob, Smarty and ATTOM") supplies the
+guardrails: printing and postage, contract exits (Smarty's no-competing-dataset clause, Lob's terms), clean provenance,
+protected addresses and cost discipline. Neither read the app: the memo assumes Lob address checks and Smarty
+autocomplete (the app uses Mapbox and Lob only for mail), the PDF leaves out the printing Lob actually does, and both
+start with a local pilot, which the founder's nationwide direction replaces (representative counties are test fixtures,
+not a launch boundary).

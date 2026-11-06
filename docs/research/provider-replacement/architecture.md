@@ -18,10 +18,10 @@ then switch, one vendor at a time.
 - Printing and postage are bought per piece.
 - Supabase Free (500 MB) can't hold national address or property data; it stays in files outside the database.
 - ATTOM's free trial allows internal evaluation only: no database, nothing kept past 24 hours, no showing it to others
-  ([cost-and-rights.md](cost-and-rights.md#attom-free-trial)). Nothing in this design depends on ATTOM copies.
+  ([cost-and-rights.md](cost-and-rights.md#5-attom-free-trial)). Nothing in this design depends on ATTOM copies.
 - Google's terms: its address, USPS and confirmation results may be kept 30 days (then deleted or replaced by what the
   person confirmed), its coordinates 30 days (then deleted); place IDs indefinitely; never send made-up US or Puerto
-  Rico addresses ([cost-and-rights.md](cost-and-rights.md#google-address-validation)).
+  Rico addresses ([cost-and-rights.md](cost-and-rights.md#6-google-address-validation-retention)).
 
 **Repository rules that shape it.** Never seed Pantopus's record from ATTOM, Smarty or Google output. Owner names never
 enter the record. Every fact carries its source, date and license scope. Migrations are additive; new tables, hosted
@@ -174,10 +174,9 @@ The card always shows what is known, in this order, each with its label and date
 1. **The county's values:** market value and assessed value with the tax year (in Washington, assessed at 100% of
    market).
 2. **The last recorded sale:** date and price where sales are public; "Sale prices aren't public in <state>" otherwise.
-3. **The area's price trend:** from the FHFA House Price Index for the ZIP or tract ("Prices in this ZIP rose 4.1% in
-   2025 (FHFA index)"). It is a price-change index: never a home's value and never a ZIP median sale price.
+3. **The area's price trend:** from the FHFA House Price Index for the ZIP or tract (for example "Prices in this ZIP rose <x>% last year (FHFA index)"). It is a price-change index: never a home's value and never a ZIP median sale price.
 4. **A Pantopus estimate:** only in markets where its error on held-out sales meets the bar
-   ([parity-and-acceptance.md](parity-and-acceptance.md#values)), with a range and its method. Elsewhere there is no
+   ([parity-and-acceptance.md](parity-and-acceptance.md#t4-values-only-if-an-estimate-ships-decision-d9)), with a range and its method. Elsewhere there is no
    estimate, and nothing pretends to be one.
 
 Today's mapping bugs (assessed total shown as an estimate and as a ZIP median; a missing trend shown as flat; two
@@ -296,7 +295,7 @@ needs `source` in `cache`, `cache_stale`, `attom`, `fallback`, `unavailable`; th
 
 - Owner names are dropped when a file is read; they never reach releases, logs or chat. Claim evidence, mail codes and
   private corrections stay out of the shared index.
-- Each source's license is checked before use ([cost-and-rights.md](cost-and-rights.md#rights-register)); sources that
+- Each source's license is checked before use ([cost-and-rights.md](cost-and-rights.md#4-rights-register)); sources that
   forbid redistribution are used only as their terms allow, or not at all. Share-alike (ODbL) data stays out of the
   property index.
 - Protected people: a takedown path (New Jersey's Daniel's Law and similar), suppression applied to search, detail,

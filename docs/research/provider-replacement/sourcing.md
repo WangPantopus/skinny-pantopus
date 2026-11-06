@@ -13,7 +13,7 @@ test's sample was chosen on purpose and can't be projected onto the country; the
 for exactly that.
 
 A field being present is not proof it is right, and a free download is not a right to show it to users: every source
-passes a rights check before use ([cost-and-rights.md](cost-and-rights.md#rights-register)).
+passes a rights check before use ([cost-and-rights.md](cost-and-rights.md#4-rights-register)).
 
 ## 1. Nationwide coverage of free building facts
 
@@ -121,7 +121,7 @@ accounts.
 - **Lookups are fast.** Across 5,000 existing-record probes and 500 misses, the warm local lookup's p95 was 0.011 ms.
   That excludes network, ranking, authorization and rendering; production latency still has to be measured.
 
-These findings set the identity contract in [architecture.md](architecture.md#identity-contract).
+These findings set the identity contract in [architecture.md](architecture.md#5-identity-contract).
 
 ## 6. How coverage gets built
 
@@ -188,7 +188,7 @@ ATTOM, Smarty or Google output; owner names are dropped when any file is read.
 | USACE National Structure Inventory | **Modeled** size, stories, year built and value per structure | Nationwide | Planned; shown only as a labeled estimate, never in a record field, until measured against county records |
 | FEMA USA Structures | Footprints with height and use, for the Today house outline | Nationwide | Planned; terms to verify |
 | Census ACS (block groups) | Median year built, rooms, bedroom mix | Nationwide | Planned; neighborhood statistics only, never a home's fact |
-| Verified households | Their own home's facts and corrections | Every verified household | Planned ([architecture.md](architecture.md#fact-precedence-field-by-field)) |
+| Verified households | Their own home's facts and corrections | Every verified household | Planned ([architecture.md](architecture.md#7-fact-precedence-field-by-field)) |
 | Building floor-plan sheets | Unit number to plan (bedrooms, baths, size) | Buildings whose managers share them | Planned ([unit-facts.md](unit-facts.md)) |
 | County files bought or requested | Full assessor files where nothing is free (section 2) | 41.9M people in the largest counties alone | Founder decision |
 

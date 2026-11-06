@@ -1,5 +1,7 @@
 # The 46 Property Details fields
 
+From PR #3433's field test. Which source wins for each field, and how household entries sit beside the record, is in [architecture.md](architecture.md#7-fact-precedence-field-by-field); the people-weighted national coverage is in [sourcing.md](sourcing.md).
+
 Counts and percentages come from the eight-state study on November 5, 2026. The all-record denominator is 14,660,226. Each type column uses every selected account of that type. A zero may mean the field was inapplicable, unscored, unreturned or too rare to survive rounding. The [cohort file](evidence/cohort-fields.csv) separates those states. Sample availability cannot be extrapolated to the U.S. population.
 
 The [field dictionary](evidence/field-dictionary.csv) gives the current ATTOM path(s), sourcing tier, qualification/scoring rule, a documented example source, fallback, and exact counts by type for every row. The [scope matrix](evidence/subject-scopes.csv) distinguishes a rental unit from its complex and an office suite from its parent building. The [full display contract](evidence/attom-display-contract.csv) includes curated paths beyond the screenshot.
@@ -94,4 +96,4 @@ The [field dictionary](evidence/field-dictionary.csv) gives the current ATTOM pa
 - County/FIPS, some classifications, tax-group codes and acres/square feet can be deterministic derivations. Distinct screen rows can share one source observation. Use the source’s precise definition.
 - Across tested cohorts the only five rows without a recovered equivalent were ATTOM ID, estimated value, estimate range, confidence score and estimate date. Use a Pantopus ID; a separately qualified model is necessary for model output. Tax assessments, appraisals, effective area, sales aggregates and assessed dates are separately labeled facts.
 
-[Study methods and scope](nationwide-sourcing.md) · [Fields and counts workbook](studies/public-records-field-test.xlsx)
+[Study methods and scope](sourcing.md#3-field-fill-by-property-type) · [Fields and counts workbook](studies/public-records-field-test.xlsx)

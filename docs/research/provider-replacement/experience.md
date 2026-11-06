@@ -69,6 +69,21 @@ Web `app/(site)/(app)/app/homes/[id]/property-details/page.tsx`; iOS `Features/H
 - Rows the record doesn't hold are left out, as today; the owner can add the household's own values.
 - The Pantopus ID replaces the "ATTOM ID" row.
 
+**Across the country** (the survey's shares of Americans, [sourcing.md](sourcing.md)):
+
+| Where people live | Share | Property details after the switch | Against ATTOM |
+|---|---:|---|---|
+| The county or state publishes building facts with bedrooms or baths | 23.2% | Mostly the same fields, straight from the county | Same or better |
+| It publishes basics only (year built, size, value, sales) | 32.5% | County basics; bedrooms and baths confirmed by the household | Behind on bedrooms and baths until residents confirm them |
+| Lookup sites only, sold files, one city only, or unconfirmed | 44.3% | Labeled estimates and household entries until county files are requested or bought (D2) | Clearly behind |
+
+Where Pantopus can beat ATTOM: accuracy at the source (in the Clark County sample home the county's file has 2 full
+baths where ATTOM shows 1, Camas where ATTOM shows "Clark", and a composition roof where ATTOM shows "Concrete");
+weekly freshness where counties publish weekly; facts confirmed by verified residents; condo and apartment units from
+floor-plan sheets; no wait on a vendor; no retention limit on public records. Where it trails at first: the counties
+without free files, bedrooms and baths in basics-only places, the value estimate until measured, and the work of mapping
+each county's codes to plain words.
+
 ### Home value card
 
 Web `components/home/PropertyValueCard.tsx`; iOS `Features/Homes/HomeDashboardView.swift`; Android

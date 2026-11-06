@@ -74,7 +74,7 @@ level: "This building has one-bedroom plans of 650-780 sq ft", labeled as the bu
 Averages and building totals never fill a unit's fields.
 
 **Checks.**
-- A unit's facts from a sheet show only on an exact-unit match ([architecture.md](architecture.md#identity-contract)).
+- A unit's facts from a sheet show only on an exact-unit match ([architecture.md](architecture.md#5-identity-contract)).
 - A resident in a mapped unit sees "Is this your layout?"; a "no" sends the mapping to review and the household's
   answer shows for that home meanwhile.
 - A redeemed postcard proves the unit number exists; it says nothing about the layout.
