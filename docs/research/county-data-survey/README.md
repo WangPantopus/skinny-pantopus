@@ -24,6 +24,15 @@ Public data only; no keys. Run every script with `python3 -I`.
 - `tools/estimate.py <data dir>`: national estimate with 95% Wilson ranges.
 - `tools/tables.py <data dir> <out dir>`: rebuild both survey CSVs and the two markdown tables from the classes files
   (copy the CSVs to `docs/research/`, paste the tables into the survey file).
+- `tools/agolurls.py "<query>" [n]`: ArcGIS Online search printing each item's owner, type and service URL.
+- `tools/fields.py <layer url> [where ...]`: a layer's columns and record counts per filter (fill rates).
+- `tools/socdomain.py <socrata domain> [query]`: one Socrata portal's datasets that carry building-fact columns.
+- `tools/fetch.sh <name> <url> [dir]` + `tools/pagetext.py <file> [link regex] [max chars]`: save a page outside the repo
+  and print its visible text and matching links.
+- `tools/pdftext.swift`: build with `swiftc -O -o pdftext pdftext.swift`; prints a PDF's text (data layouts, price
+  lists) instead of reading page images.
+- `tools/apply.py <classes.txt> <update files...>`: replace rank-keyed rows of a classes file (how the second pass was
+  applied).
 
 Second pass (November 5, evening): the 23 unchecked counties, the unopened sample files and every re-published or
 known-dataset row were checked at the county or state source; `classes.txt` rows carry the result and evidence. No

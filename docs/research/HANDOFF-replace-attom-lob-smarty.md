@@ -5,7 +5,9 @@
 - Branch `claude/replace-attom-lob-smarty-73fcb9`, draft PR WangPantopus/skinny-pantopus#3418, based on master
   `1c5ddb658c`. Docs and research scripts only; no app code changed, nothing built, no migration, no hosted service
   touched.
-- Records in `docs/research/`:
+- Records in `docs/research/` (index: `README.md`):
+  - `replacement-architecture-2026-11-05.md`, `data-source-catalog-2026-11-05.md`, `parity-plan-2026-11-05.md`: the
+    proposed architecture, every planned data source, and how each vendor service is proven matched or beaten.
   - `replace-attom-lob-smarty-2026-11-05.md`: what the code uses each vendor for (file:line), the verdict on the two
     founder design documents, the combined nationwide design, phases, and open decisions.
   - `county-property-data-2026-11-05.md` + `.csv`: the 150 largest counties classified one by one (all 150 now), plus
@@ -44,6 +46,11 @@
 - Nov 5, evening: the founder's intended ATTOM flow is database first, then ATTOM, save, and answer without making
   people wait. Checked on master: database first and saving are done; people still wait on a first lookup, and
   "no record" answers are not remembered (design record, section 8, with the proposed fix awaiting OK).
+
+## Running elsewhere
+
+- Session `make-attom-lookups-non-b` (started by the founder Nov 5, its own worktree): makes ATTOM lookups
+  non-blocking and remembers "no record" answers; it confirms its plan with the founder first. Not part of #3418.
 
 ## Waiting on the founder
 

@@ -72,6 +72,10 @@ exists, nationally), its CSVs, and [county-data-survey/](county-data-survey/) (t
 
 ## 3. Combined nationwide design
 
+Full architecture: [replacement-architecture-2026-11-05.md](replacement-architecture-2026-11-05.md); data sources:
+[data-source-catalog-2026-11-05.md](data-source-catalog-2026-11-05.md); parity proof per vendor service:
+[parity-plan-2026-11-05.md](parity-plan-2026-11-05.md).
+
 | Piece | Replacement | Owned? |
 |---|---|---|
 | USPS "can mail arrive" check | Google's USPS (CASS) answer already requested; a USPS AMS license ($7,570/yr, runs on our server) once checks pass ~40k/month | Rented from USPS; can't be owned |
