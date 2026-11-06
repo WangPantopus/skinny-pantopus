@@ -3,11 +3,12 @@ package app.pantopus.android.ui.screens.place.messaging
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import app.pantopus.android.data.api.models.homediscovery.DiscoveredHomeDto
+import app.pantopus.android.data.api.models.geo.NormalizedAddress
+import app.pantopus.android.data.api.models.place.NeighborAddressCheckRequest
 import app.pantopus.android.data.api.models.place.NeighborMessageTemplate
+import app.pantopus.android.data.api.models.place.NeighborRecipientAddress
 import app.pantopus.android.data.api.models.place.SendNeighborMessageRequest
 import app.pantopus.android.data.api.net.NetworkResult
-import app.pantopus.android.data.homediscovery.HomeDiscoveryRepository
 import app.pantopus.android.data.place.PlaceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,9 +23,11 @@ const val NEIGHBOR_COMPOSE_ADDRESS_KEY = "address"
 /**
  * D1 — composing a verified-neighbor heads-up. Loads the server template
  * catalog (the only thing you can send — no free text), tracks the
- * selection, and sends a template-only note to a recipient home on your
- * block. The verified-only (T4) gate is enforced upstream (the dashboard
- * only surfaces the composer for verified residents; the backend re-checks).
+ * selection, and sends a template-only note to an address on your block.
+ * The note reaches a verified household if one lives there; nothing here says
+ * whether one does. The verified-only (T4) gate is enforced upstream (the
+ * dashboard only surfaces the composer for verified residents; the backend
+ * re-checks).
  * Mirrors the iOS `NeighborMessageComposeViewModel`.
  */
 @HiltViewModel
@@ -32,7 +35,6 @@ class NeighborMessageComposeViewModel
     @Inject
     constructor(
         private val repo: PlaceRepository,
-        private val discovery: HomeDiscoveryRepository,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         /** The sender's Home; address suggestions favor addresses near it. */
@@ -49,9 +51,13 @@ class NeighborMessageComposeViewModel
         private val _recipientQuery = MutableStateFlow("")
         val recipientQuery: StateFlow<String> = _recipientQuery.asStateFlow()
 
-        private val _recipientSearch = MutableStateFlow<RecipientSearchState>(RecipientSearchState.Idle)
-        val recipientSearch: StateFlow<RecipientSearchState> = _recipientSearch.asStateFlow()
-        private var searchGeneration = 0
+        /** The chosen address's apartment or unit, if it has one. */
+        private val _recipientUnit = MutableStateFlow("")
+        val recipientUnit: StateFlow<String> = _recipientUnit.asStateFlow()
+
+        private val _addressCheck = MutableStateFlow<AddressCheckState>(AddressCheckState.Idle)
+        val addressCheck: StateFlow<AddressCheckState> = _addressCheck.asStateFlow()
+        private var checkGeneration = 0
 
         private val _state = MutableStateFlow<NeighborComposeUiState>(NeighborComposeUiState.Loading)
         val state: StateFlow<NeighborComposeUiState> = _state.asStateFlow()
@@ -85,56 +91,70 @@ class NeighborMessageComposeViewModel
 
         fun updateRecipientQuery(text: String) {
             _recipientQuery.value = text
-            searchGeneration++
-            _recipientSearch.value = RecipientSearchState.Idle
+            checkGeneration++
+            _addressCheck.value = AddressCheckState.Idle
+        }
+
+        fun updateRecipientUnit(text: String) {
+            _recipientUnit.value = text
         }
 
         /** A house number and a street: at least four characters with a digit and a letter. */
-        fun canSearch(text: String = _recipientQuery.value): Boolean {
+        fun canUseTyped(text: String = _recipientQuery.value): Boolean {
             val query = text.trim()
             return query.length >= MIN_RECIPIENT_QUERY && query.any(Char::isDigit) && query.any(Char::isLetter) &&
-                _recipientSearch.value !is RecipientSearchState.Loading
+                _addressCheck.value !is AddressCheckState.Checking
         }
 
-        /** Looks the typed (or picked) address up among discoverable homes. */
-        fun searchRecipients(text: String = _recipientQuery.value) {
-            if (!canSearch(text)) return
-            if (text != _recipientQuery.value) _recipientQuery.value = text
-            val generation = ++searchGeneration
-            val query = text.trim()
-            _recipientSearch.value = RecipientSearchState.Loading
+        /** Checks what was typed; the server looks it up in your town. */
+        fun useTypedAddress() {
+            if (!canUseTyped()) return
+            checkAddress(NeighborAddressCheckRequest(senderHomeId = homeId, address = _recipientQuery.value.trim()))
+        }
+
+        /** A picked address suggestion is the exact address: check it at once. */
+        fun choosePicked(picked: NormalizedAddress) {
+            val street = picked.address?.takeIf { it.isNotBlank() } ?: return
+            _recipientQuery.value = street
+            checkAddress(
+                NeighborAddressCheckRequest(
+                    senderHomeId = homeId,
+                    address = street,
+                    city = picked.city,
+                    state = picked.state,
+                    zipcode = picked.zipcode,
+                ),
+            )
+        }
+
+        /** Asks the server whether the address is on your block, and chooses it if so. */
+        private fun checkAddress(request: NeighborAddressCheckRequest) {
+            if (_sending.value) return
+            val generation = ++checkGeneration
+            _addressCheck.value = AddressCheckState.Checking
             viewModelScope.launch {
-                val result = discovery.discover(query)
-                if (generation != searchGeneration) return@launch
-                _recipientSearch.value =
+                val result = repo.checkNeighborAddress(request)
+                if (generation != checkGeneration) return@launch
+                _addressCheck.value =
                     when (result) {
-                        // Discovery's privacy contract: never a redacted or ambiguous address, never your own
-                        // household, never a resident's name.
-                        is NetworkResult.Success ->
-                            RecipientSearchState.Loaded(
-                                result.data.homes.filter {
-                                    it.id != homeId && !it.isMember && it.addressRedacted == false &&
-                                        it.visibility == "public_preview" && !it.address.isNullOrBlank()
-                                },
-                            )
+                        is NetworkResult.Success -> {
+                            val street = result.data.address
+                            if (result.data.status == "on_block" && !street.isNullOrBlank()) {
+                                _recipient.value =
+                                    ComposeRecipient(street, result.data.city, result.data.state, result.data.zipcode)
+                                _recipientUnit.value = ""
+                                _sendError.value = null
+                                AddressCheckState.Idle
+                            } else {
+                                AddressCheckState.Refused(
+                                    result.data.message ?: "Couldn't use that address. Check the number and street.",
+                                )
+                            }
+                        }
                         is NetworkResult.Failure ->
-                            RecipientSearchState.Error("Couldn't search homes. Check your connection and try again.")
+                            AddressCheckState.Refused("Couldn't check that address. Check your connection and try again.")
                     }
             }
-        }
-
-        fun selectRecipient(home: DiscoveredHomeDto) {
-            if (_sending.value) return
-            val homes = (_recipientSearch.value as? RecipientSearchState.Loaded)?.homes ?: return
-            val street = home.address
-            if (homes.none { it.id == home.id } || street.isNullOrBlank()) return
-            _recipient.value =
-                ComposeRecipient(
-                    homeId = home.id,
-                    address = street,
-                    relativeLabel = listOfNotNull(home.city, home.state).joinToString(", "),
-                )
-            _sendError.value = null
         }
 
         fun changeRecipient() {
@@ -153,7 +173,7 @@ class NeighborMessageComposeViewModel
         }
 
         fun send() {
-            val recipientHome = _recipient.value ?: return
+            val recipient = _recipient.value ?: return
             val template = selectedTemplate() ?: return
             if (_sending.value) return
             _sending.value = true
@@ -163,7 +183,14 @@ class NeighborMessageComposeViewModel
                     repo.sendNeighborMessage(
                         SendNeighborMessageRequest(
                             senderHomeId = homeId,
-                            recipientHomeId = recipientHome.homeId,
+                            recipientAddress =
+                                NeighborRecipientAddress(
+                                    address = recipient.address,
+                                    unit = _recipientUnit.value.trim().ifEmpty { null },
+                                    city = recipient.city,
+                                    state = recipient.state,
+                                    zipcode = recipient.zipcode,
+                                ),
                             templateId = template.id,
                         ),
                     )
@@ -179,15 +206,13 @@ class NeighborMessageComposeViewModel
 
 private const val MIN_RECIPIENT_QUERY = 4
 
-/** The Choose a home search. */
-sealed interface RecipientSearchState {
-    data object Idle : RecipientSearchState
+/** The Choose a home address check. */
+sealed interface AddressCheckState {
+    data object Idle : AddressCheckState
 
-    data object Loading : RecipientSearchState
+    data object Checking : AddressCheckState
 
-    data class Loaded(val homes: List<DiscoveredHomeDto>) : RecipientSearchState
-
-    data class Error(val message: String) : RecipientSearchState
+    data class Refused(val message: String) : AddressCheckState
 }
 
 sealed interface NeighborComposeUiState {
