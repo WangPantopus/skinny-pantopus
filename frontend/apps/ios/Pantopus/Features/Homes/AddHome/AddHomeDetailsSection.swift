@@ -395,6 +395,7 @@ struct AddHomeTextField: View {
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, isMultiline ? Spacing.s2 : Spacing.s3)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .overlay {

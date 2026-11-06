@@ -385,14 +385,18 @@ public struct WalletView: View {
                     Text("$")
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(Theme.Color.appTextSecondary)
+                        .allowsHitTesting(false)
                     TextField("Amount", text: $withdrawAmount)
                         .keyboardType(.decimalPad)
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(Theme.Color.appText)
                         .onChange(of: withdrawAmount) { _, _ in viewModel.clearWithdrawError() }
                         .accessibilityIdentifier("wallet.withdrawAmountField")
-                    Button("Max") {
+                    Button {
                         withdrawAmount = currentRecovery.map { WalletViewModel.centsToPlain($0.amountCents) } ?? currentAvailable
+                    } label: {
+                        Text("Max")
+                            .hitArea(horizontal: 8, vertical: 8)
                     }
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(Theme.Color.primaryInk)
@@ -401,6 +405,7 @@ public struct WalletView: View {
                 }
                 .padding(.horizontal, Spacing.s3)
                 .frame(height: 48)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurfaceSunken)
                 .overlay(
                     RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

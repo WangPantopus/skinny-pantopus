@@ -118,6 +118,7 @@ struct IntakeQuestionEditGroup: View {
                     .font(Theme.Font.body)
                     .foregroundStyle(Theme.Color.appText)
                     .accessibilityIdentifier("scheduling.intake.labelField")
+                    .typesInFieldOnTap(reach: Spacing.s2)
             }
             field(label: "Answer type") {
                 IntakeTypeSelector(
@@ -155,18 +156,21 @@ struct IntakeQuestionEditGroup: View {
             ForEach(question.options.indices, id: \.self) { index in
                 HStack(spacing: 9) {
                     Icon(.gripVertical, size: 14, color: Theme.Color.appTextMuted)
+                        .allowsHitTesting(false)
                     TextField("Option \(index + 1)", text: $question.options[index])
                         .font(Theme.Font.body)
                         .foregroundStyle(Theme.Color.appText)
                     Button { onRemoveOption(index) } label: {
                         Icon(.x, size: 14, color: Theme.Color.appTextMuted)
                             .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Remove option \(index + 1)")
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .overlay(
                     RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

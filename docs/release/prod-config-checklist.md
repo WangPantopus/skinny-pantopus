@@ -1001,6 +1001,10 @@ the approved launch groups above on, payment and launch-cut jobs paused. A plain
 `sam deploy --config-env prod` keeps that state; changing activation is an
 explicit parameter change, recorded here and in `samconfig.toml` together.
 
+**November 6, founder-authorized Mailbox activation:** production API and worker now read `LAUNCH_FEATURES=mailbox`; their existing image was recreated and both containers and public API health passed. The first restart used the wrong proxy listen binding and rolled back; the original `127.0.0.1:8000` binding was restored, and the corrected transaction completed. No other environment value changed. Vercel production has `NEXT_PUBLIC_LAUNCH_FEATURES=mailbox`; its subsequent automatic master deployment includes the flag, and the production Mail route renders while another launch-cut route still redirects. The existing seeder stack reached `UPDATE_COMPLETE` with only `MailEnabled` changing from false to true. Its Lambda is Active; actual physical-phone delivery remains unverified. The checked-in SAM configuration also preserves the capacity monitoring and backend instance already active in production.
+
+The [iOS TestFlight upload](https://github.com/WangPantopus/skinny-pantopus/actions/runs/42195135097) is version **2.0.9 (89)**, processed by Apple, from `ios-v2.0.9` / master snapshot `4d18a20703`. `ios-release/PANTOPUS_LAUNCH_FEATURES=mailbox` remains set for future iOS builds. Public App Store release and an Android build were not part of this request; older binaries have no Mail tab. `mail_extras` and `holiday_cards` remain off. Rollback is to remove only `mailbox` from the server/web/build settings, redeploy/recreate the affected services, and change only `MailEnabled` back to false while preserving every other live stack parameter.
+
 **Independent activation controls (deployed October 21):** keep
 `SchedulesEnabled=false` and enable only the groups the founder has reviewed.
 All new controls default to false, preserving existing deployments. The older
@@ -1619,7 +1623,7 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 | `HOME_DOCUMENTS_BUCKET`, `GIG_COMPLETION_BUCKET` | `home-documents`, `gig-completion` | same | S2 / P2A buckets |
 | `LAMBDA_BACKED_CRON_ENABLED` | `false` | `false` | S8 |
 | `SLACK_ALERTS_WEBHOOK_URL` | optional | optional | D7 |
-| `LAUNCH_FEATURES` | empty | empty | launch cuts stay off |
+| `LAUNCH_FEATURES` | empty | `mailbox` | Production receiving enabled November 6; other launch cuts stay off. |
 | `HOUSEHOLD_CLAIM_V2_READ_PATHS`, `HOUSEHOLD_CLAIM_PARALLEL_SUBMISSION`, `HOUSEHOLD_CLAIM_CHALLENGE_FLOW`, `HOUSEHOLD_CLAIM_ADMIN_COMPARE` | `true` | `true` | the ownership-claim behaviour the apps were verified against locally (a second claimant on a Home gets a parallel claim, not a refusal); unset, all four default to `false`, the older claim path |
 
 Startup still requires `CSRF_SECRET` and `STEP_UP_SECRET`. By default it also

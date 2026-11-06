@@ -20,6 +20,7 @@ const router = express.Router();
 const verifyToken = require('../middleware/verifyToken');
 const { checkHomePermission } = require('../utils/homePermissions');
 const placeIntelligenceService = require('../services/placeIntelligenceService');
+const { wantsRecordVocabulary } = require('../services/recordVocabulary');
 const featureFlagService = require('../services/featureFlagService');
 const { recordSystem, SYSTEM_KEYS } = require('../services/homeSystemsService');
 const { PLACE_SECTION_IDS } = require('../serializers/placeIntelligenceSerializer');
@@ -57,7 +58,7 @@ async function ballotOptIn(req) {
   return featureFlagService.isFeatureEnabled('ballot_p0', req.user);
 }
 
-// GET /api/homes/:id/intelligence[?sections=a,b,c][&ballot=1]
+// GET /api/homes/:id/intelligence[?sections=a,b,c][&ballot=1][&vocabulary=2]
 router.get('/:id/intelligence', verifyToken, async (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
@@ -84,6 +85,7 @@ router.get('/:id/intelligence', verifyToken, async (req, res) => {
       access,
       sectionIds,
       ballot: await ballotOptIn(req),
+      wantsRecordVocabulary: wantsRecordVocabulary(req),
       homeRead,
       claimant,
     });

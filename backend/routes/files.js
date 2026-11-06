@@ -12,7 +12,7 @@ const { checkHomePermission } = require('../utils/homePermissions');
 const s3 = require('../services/s3Service');
 const businessVerificationStorage = require('../services/businessVerificationStorage');
 // Photos are stored without their metadata (location, camera, time taken), or refused.
-const { removeUploadedPhotoMetadata } = require('../services/photoMetadata');
+const { removeUploadedMediaMetadata } = require('../services/photoMetadata');
 
 // Try to load sharp for image processing
 let sharp;
@@ -263,7 +263,7 @@ const deleteFromSupabase = async (bucketName, filePath) => {
  * POST /api/files/profile-picture
  * Upload user profile picture
  */
-router.post('/profile-picture', verifyToken, upload.single('file'), removeUploadedPhotoMetadata, async (req, res) => {
+router.post('/profile-picture', verifyToken, upload.single('file'), removeUploadedMediaMetadata, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file provided' });
@@ -374,7 +374,7 @@ router.post('/profile-picture', verifyToken, upload.single('file'), removeUpload
  * POST /api/files/portfolio
  * Upload portfolio/skills showcase file
  */
-router.post('/portfolio', verifyToken, upload.single('file'), validate(uploadPortfolioSchema), removeUploadedPhotoMetadata, async (req, res) => {
+router.post('/portfolio', verifyToken, upload.single('file'), validate(uploadPortfolioSchema), removeUploadedMediaMetadata, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file provided' });
@@ -625,7 +625,7 @@ router.get('/portfolio/:userId', async (req, res) => {
  * POST /api/files/home/:homeId
  * Upload file to home profile
  */
-router.post('/home/:homeId', verifyToken, upload.single('file'), validate(uploadHomeFileSchema), removeUploadedPhotoMetadata, async (req, res) => {
+router.post('/home/:homeId', verifyToken, upload.single('file'), validate(uploadHomeFileSchema), removeUploadedMediaMetadata, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file provided' });
@@ -851,7 +851,7 @@ router.get('/home/:homeId', verifyToken, async (req, res) => {
  * Generic file upload — used for voice postscripts and other standalone uploads.
  * Returns { message, file: { id, url } }
  */
-router.post('/upload', verifyToken, upload.single('file'), removeUploadedPhotoMetadata, async (req, res) => {
+router.post('/upload', verifyToken, upload.single('file'), removeUploadedMediaMetadata, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file provided' });

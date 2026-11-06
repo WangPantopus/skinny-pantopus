@@ -55,12 +55,23 @@ function logResponse(startTime, fields) {
   return responseTimeMs;
 }
 
-// ── GET /geo/autocomplete?q=... ──────────────────────────────
+// ── GET /geo/autocomplete?q=...[&lat=..&lng=..][&kind=address] ──
+// lat/lng (optional) favor suggestions near a point, e.g. the caller's own
+// home when they type a neighbor's address. They are rounded to about a
+// kilometer before they reach the cache key or the provider: a bias needs no
+// more, and the exact point stays here. kind=address (optional) keeps street
+// addresses only, for fields that hold a house number and street.
 
 router.get('/autocomplete', optionalAuth, geocodeLimiter, async (req, res) => {
   const startTime = process.hrtime.bigint();
   const ipHash = hashIp(req);
   const q = (req.query.q || '').toString().trim();
+  const lat = parseFloat(req.query.lat);
+  const lng = parseFloat(req.query.lng ?? req.query.lon);
+  const near = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
+    ? { lat: Number(lat.toFixed(2)), lng: Number(lng.toFixed(2)) }
+    : null;
+  const addressOnly = req.query.kind === 'address';
 
   logger.info('geo_request', {
     endpoint: '/geo/autocomplete',
@@ -82,7 +93,9 @@ router.get('/autocomplete', optionalAuth, geocodeLimiter, async (req, res) => {
     }
 
     // Check route-level cache
-    const cacheKey = 'ac:' + q.toLowerCase();
+    const cacheKey = 'ac:' + q.toLowerCase()
+      + (addressOnly ? ':address' : '')
+      + (near ? `:${near.lat.toFixed(2)},${near.lng.toFixed(2)}` : '');
     const cached = geoCache.get(cacheKey);
     if (cached) {
       logResponse(startTime, {
@@ -106,7 +119,12 @@ router.get('/autocomplete', optionalAuth, geocodeLimiter, async (req, res) => {
       return signedOutBudget.refuse(res, 'Address suggestions are busy right now. Please try again in a few minutes.');
     }
 
-    const result = await geoProvider.autocomplete(q, { limit: 6, country: 'us' });
+    const result = await geoProvider.autocomplete(q, {
+      limit: 6,
+      country: 'us',
+      ...(near ? { proximity: near } : {}),
+      ...(addressOnly ? { types: 'address' } : {}),
+    });
 
     // Back-compat: map NormalizedSuggestion → legacy shape so existing
     // clients that expect { place_id, label, center: [lng,lat], context, ... }

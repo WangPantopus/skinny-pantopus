@@ -305,6 +305,7 @@ private struct ValueField: View {
                         color: Theme.Color.appTextSecondary
                     )
                     .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(isRevealed ? "Hide code" : "Show code")
@@ -312,6 +313,7 @@ private struct ValueField: View {
                 Button(action: onCopy) {
                     Icon(.copy, size: 18, color: Theme.Color.appTextSecondary)
                         .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Copy code")
@@ -319,6 +321,7 @@ private struct ValueField: View {
             }
             .padding(.horizontal, Spacing.s3)
             .frame(minHeight: 44)
+            .typesInFieldOnTap($isFocused)
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .overlay(
@@ -375,6 +378,7 @@ private struct NotesField: View {
             TextEditor(text: $text)
                 .frame(minHeight: 88)
                 .padding(Spacing.s2)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 .overlay(

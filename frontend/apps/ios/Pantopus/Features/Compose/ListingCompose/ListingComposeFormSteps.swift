@@ -149,6 +149,7 @@ struct ListingComposeConditionDescriptionStep: View {
             TextEditor(text: bodyBinding)
                 .frame(minHeight: 128)
                 .padding(Spacing.s2)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 .overlay(

@@ -549,6 +549,7 @@ private struct IntakeField: View {
                     Text(leading)
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.Color.appTextMuted)
+                        .allowsHitTesting(false)
                 }
                 TextField(placeholder, text: $value)
                     .font(.system(size: 13.5))
@@ -559,12 +560,15 @@ private struct IntakeField: View {
                     .textInputAutocapitalization(keyboard == .emailAddress ? .never : .sentences)
                 if showValid {
                     Icon(.checkCircle, size: 17, color: Theme.Color.success)
+                        .allowsHitTesting(false)
                 } else if error != nil {
                     Icon(.alertCircle, size: 17, color: Theme.Color.error)
+                        .allowsHitTesting(false)
                 }
             }
             .padding(.horizontal, 14)
             .frame(height: 44)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurface)
             .overlay(
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
@@ -602,6 +606,7 @@ private struct IntakeTextArea: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 11)
                 .frame(minHeight: 78, alignment: .topLeading)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .overlay(
                     RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

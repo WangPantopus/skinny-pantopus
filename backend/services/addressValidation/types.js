@@ -24,6 +24,10 @@ const AddressVerdictStatus = Object.freeze({
   LOW_CONFIDENCE: 'LOW_CONFIDENCE',
   SERVICE_ERROR: 'SERVICE_ERROR',
   CONFLICT: 'CONFLICT',
+  // Google postal source only. Apps that haven't asked for these (`?postal=2`) get MIXED_USE,
+  // the status they already let through, so an old build never strands.
+  UNIT_NOT_CONFIRMED: 'UNIT_NOT_CONFIRMED',
+  POSTAL_PENDING: 'POSTAL_PENDING',
 });
 
 // ── Typedefs ─────────────────────────────────────────────────
@@ -179,6 +183,34 @@ const AddressVerdictStatus = Object.freeze({
  * @property {object}   [raw]             — raw Smarty response candidate (omitted for cache hits)
  */
 
+/**
+ * The postal input read from Google's own answer (postalAdapter.js): the Smarty shape, where a
+ * field Google left out is null (unknown), never false.
+ *
+ * @typedef {object} GooglePostalInput
+ * @property {'google'} source
+ * @property {boolean}  from_cache
+ * @property {boolean}  inconclusive      — always false: no USPS answer is pending, not an error
+ * @property {string}   dpv_match_code    — Y/N/S/D, or '' when USPS gave no answer
+ * @property {string}   rdi_type          — 'residential' | 'commercial' | 'unknown'
+ * @property {boolean}  home_and_business — Google says both
+ * @property {boolean}  missing_secondary — D, N1 or C1: USPS requires a unit
+ * @property {boolean}  unconfirmed_secondary — S or CC: a unit USPS can't confirm
+ * @property {?boolean} commercial_mailbox
+ * @property {?boolean} vacant_flag
+ * @property {?boolean} no_stat           — USPS doesn't deliver here (recorded; no refusal yet)
+ * @property {?number}  no_stat_reason
+ * @property {string[]} footnotes
+ * @property {?string}  record_type       — F, G, H, P, R, S
+ * @property {?string}  carrier_route_type — C, R, H, B, G
+ * @property {?boolean} po_box_flag
+ * @property {boolean}  po_box_only_zip
+ * @property {boolean}  coming_soon       — USPS says this address will be in its file soon
+ * @property {?boolean} cass_processed
+ * @property {boolean}  usps_suspended    — Google stopped USPS checks for this account
+ * @property {string}   checked_at
+ */
+
 // ── Google-specific types ────────────────────────────────────
 
 /**
@@ -191,6 +223,8 @@ const AddressVerdictStatus = Object.freeze({
  * @property {object}            verdict          — raw Google verdict object
  * @property {object}            [usps_data]      — USPS data if available
  * @property {string}            [place_id]
+ * @property {string[]}          [place_types]    — map place types from the same answer
+ * @property {{residential: ?boolean, business: ?boolean, po_box: ?boolean}} [metadata] — unset is null
  */
 
 module.exports = {
