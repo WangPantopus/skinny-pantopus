@@ -691,8 +691,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
        *  MAIN CONTENT
        * ═══════════════════════════════════════════════════════ */}
       {/* Phones: pb-20 clears the tab bar; where the quick-actions button floats
-          above it (its top edge 144 px up), pb-40 lets the last row scroll clear. */}
-      <main key="content" className={`pt-14 min-h-screen${offsetSlides ? ' transition-[margin-left] duration-200 ease-in-out' : ''} relative z-0${showMobileTabs ? (routeHasFab(pathname) ? ' pb-40' : ' pb-20') : ''}`} style={contentStyle}>
+          above it (its top edge 144 px up), pb-40 lets the last row scroll clear.
+          z-0 makes this a stacking context, so nothing inside rises above the header, tab bar or floating
+          buttons. A dialog that stays in here sets data-covers-shell, which suspends that while it's open. */}
+      <main key="content" className={`pt-14 min-h-screen${offsetSlides ? ' transition-[margin-left] duration-200 ease-in-out' : ''} relative z-0 has-[[data-covers-shell]]:z-auto${showMobileTabs ? (routeHasFab(pathname) ? ' pb-40' : ' pb-20') : ''}`} style={contentStyle}>
         {offlineNotice}
         {children}
       </main>
