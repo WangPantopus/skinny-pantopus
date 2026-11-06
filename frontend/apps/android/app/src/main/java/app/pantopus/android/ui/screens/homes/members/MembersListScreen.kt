@@ -50,6 +50,8 @@ fun MembersListScreen(
     onBack: () -> Unit,
     onAddGuest: () -> Unit = {},
     onReviewResidency: () -> Unit = {},
+    /** A member's or requester's row: their profile. */
+    onOpenProfile: (String) -> Unit = {},
     viewModel: MembersListViewModel = hiltViewModel(),
 ) {
     HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
@@ -113,6 +115,10 @@ fun MembersListScreen(
             is MembersListEvent.ConfirmDeclineRequest -> {
                 declineTarget = Triple(event.requestId, event.name, event.identity)
                 viewModel.acknowledgeEvent()
+            }
+            is MembersListEvent.OpenProfile -> {
+                viewModel.acknowledgeEvent()
+                onOpenProfile(event.userId)
             }
         }
     }
