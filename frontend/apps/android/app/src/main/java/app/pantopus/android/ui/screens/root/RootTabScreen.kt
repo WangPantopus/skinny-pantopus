@@ -1532,6 +1532,13 @@ private object ChildRoutes {
     /** Build the concrete path for a public profile. */
     fun publicProfile(id: String): String = "users/$id"
 
+    /** A Pulse card's author: a person's profile, or a business's page (`/business/:key`, as the post page opens it). */
+    fun pulseAuthor(link: PulseAuthorLink): String =
+        when (link) {
+            is PulseAuthorLink.Person -> publicProfile(link.userId)
+            is PulseAuthorLink.Business -> businessProfile(link.businessId)
+        }
+
     /** Build the concrete path for a Pulse post detail. */
     fun pulsePost(id: String): String = "posts/$id"
 
@@ -2130,13 +2137,6 @@ private fun EmailFallbackDialog(
 }
 
 private fun NavHostController.isOnBackStack(route: String): Boolean = runCatching { getBackStackEntry(route) }.isSuccess
-
-/** A Pulse card's author: a person's profile, or a business's page (`/business/:key`, as the post page opens it). */
-private fun pulseAuthorRoute(link: PulseAuthorLink): String =
-    when (link) {
-        is PulseAuthorLink.Person -> ChildRoutes.publicProfile(link.userId)
-        is PulseAuthorLink.Business -> ChildRoutes.businessProfile(link.businessId)
-    }
 
 private fun NavHostController.navigateToRootTab(
     route: PantopusRoute,
@@ -3058,7 +3058,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 FeedScreen(
                                     header = segmentRow,
                                     onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
-                                    onOpenAuthor = { link -> navController.navigate(pulseAuthorRoute(link)) },
+                                    onOpenAuthor = { link -> navController.navigate(ChildRoutes.pulseAuthor(link)) },
                                     onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
                                     onComposeStarter = { starter ->
                                         navController.navigate(
@@ -3170,7 +3170,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         )
                     FeedScreen(
                         onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
-                        onOpenAuthor = { link -> navController.navigate(pulseAuthorRoute(link)) },
+                        onOpenAuthor = { link -> navController.navigate(ChildRoutes.pulseAuthor(link)) },
                         onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
                         onComposeStarter = { starter ->
                             navController.navigate(
@@ -5498,7 +5498,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(ChildRoutes.PULSE_FEED) {
                     FeedScreen(
                         onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
-                        onOpenAuthor = { link -> navController.navigate(pulseAuthorRoute(link)) },
+                        onOpenAuthor = { link -> navController.navigate(ChildRoutes.pulseAuthor(link)) },
                         onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
                         onBack = { navController.popBackStack() },
                         onComposeStarter = { starter ->

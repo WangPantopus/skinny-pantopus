@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import app.pantopus.android.data.api.models.plans.PlanDto
+import app.pantopus.android.data.api.models.plans.PlanPersonDto
 import app.pantopus.android.data.plans.PlanFormat
 import app.pantopus.android.data.plans.isPlaydate
 import app.pantopus.android.data.plans.planKind
@@ -208,17 +209,7 @@ private fun PeopleLine(
     Row(
         modifier =
             Modifier.semantics(mergeDescendants = true) {
-                if (openProfile != null) {
-                    customActions =
-                        shownPeople.mapNotNull { person ->
-                            person.userId?.let { id ->
-                                CustomAccessibilityAction("Open ${person.displayName ?: "their"}'s profile") {
-                                    openProfile(id)
-                                    true
-                                }
-                            }
-                        }
-                }
+                if (openProfile != null) customActions = profileActions(shownPeople, openProfile)
             },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
@@ -227,6 +218,20 @@ private fun PeopleLine(
         Text(text = line, style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary, modifier = Modifier.weight(1f))
     }
 }
+
+/** TalkBack's "Open Sam's profile" actions for the people on a line, one for each person with an account. */
+private fun profileActions(
+    people: List<PlanPersonDto>,
+    open: (String) -> Unit,
+): List<CustomAccessibilityAction> =
+    people.mapNotNull { person ->
+        person.userId?.let { id ->
+            CustomAccessibilityAction("Open ${person.displayName ?: "their"}'s profile") {
+                open(id)
+                true
+            }
+        }
+    }
 
 /** "Sam moved the watch party. Still coming?" with its two answers (the in-app side of the H11 push, in its words). */
 @Composable

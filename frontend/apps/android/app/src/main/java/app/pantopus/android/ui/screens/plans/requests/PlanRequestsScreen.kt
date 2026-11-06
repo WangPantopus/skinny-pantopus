@@ -2,7 +2,6 @@
 
 package app.pantopus.android.ui.screens.plans.requests
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,6 +57,7 @@ import app.pantopus.android.ui.screens.plans.components.planCard
 import app.pantopus.android.ui.screens.plans.detail.PlanInfoLine
 import app.pantopus.android.ui.screens.plans.detail.PlanPlainScaffold
 import app.pantopus.android.ui.screens.plans.map.PlanRowsSkeleton
+import app.pantopus.android.ui.screens.plans.opensPlanProfile
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusTextStyle
@@ -235,9 +235,8 @@ private fun RequestCard(
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
         // Who is asking: their photo and name open their profile, to see them before deciding.
-        val openProfile = user?.userId?.let { id -> LocalPlanOpenProfile.current?.let { open -> { open(id) } } }
         Row(
-            modifier = openProfile?.let { Modifier.clickable(onClickLabel = "Open profile", role = Role.Button, onClick = it) } ?: Modifier,
+            modifier = Modifier.opensPlanProfile(user?.userId, LocalPlanOpenProfile.current),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
         ) {
