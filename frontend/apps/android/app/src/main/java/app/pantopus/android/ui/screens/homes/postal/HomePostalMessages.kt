@@ -103,6 +103,11 @@ object HomePostalMessages {
 
     private fun availability(code: String): String =
         when (code) {
+            "POSTCARD_ADDRESS_PENDING" ->
+                "We couldn't check this address with USPS yet. We'll try again shortly, and your postcard can go out after that."
+            "POSTCARD_ADDRESS_NOT_CONFIRMED" ->
+                "Please check this address. USPS couldn't confirm it, so we can't mail a postcard there. " +
+                    "You can verify another way, or add your home again with the right details."
             "POSTCARD_COUNTRY_UNAVAILABLE" -> "Mail verification is currently available for US addresses."
             "POSTCARD_ADDRESS_LIMIT" -> "Too many postcards have been requested for this address. Try again later."
             "POSTCARD_USER_LIMIT" -> "You've asked for too many postcards in the last hour. Try again later."
