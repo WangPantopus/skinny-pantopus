@@ -642,7 +642,7 @@ test.describe('Pulse', () => {
         body: JSON.stringify({
           eligible: false,
           readOnly: true,
-          reason: 'You need to be physically present (fresh GPS) or be a verified resident/business to post to the Place feed.',
+          reason: 'You can post to this place when you\'re there, live or work there, or attach a photo or video you took there.',
           trustLevel: 'remote_viewer',
         }),
       });
@@ -681,11 +681,11 @@ test.describe('Pulse', () => {
     await page.goto('/app/feed', { waitUntil: 'domcontentloaded' });
 
     await expect(page.getByText('Read-only users can still browse this place')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('You need to be physically present (fresh GPS) or be a verified resident/business to post to the Place feed.')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('You can post to this place when you\'re there, live or work there, or attach a photo or video you took there.')).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Share something with your neighborhood…')).toHaveCount(0);
 
     await page.getByRole('main').getByRole('button', { name: 'Map' }).click();
-    await expect(page.getByText('You need to be physically present (fresh GPS) or be a verified resident/business to post to the Place feed.')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('You can post to this place when you\'re there, live or work there, or attach a photo or video you took there.')).toBeVisible({ timeout: 10000 });
     await expect(page.getByRole('button', { name: 'New post' })).toHaveCount(0);
   });
 });

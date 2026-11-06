@@ -1,5 +1,7 @@
 const supabaseAdmin = require('../config/supabaseAdmin');
 const { generatePostcardCode, hashPostcardCode, dispatchPostcardCode } = require('../utils/postcardDispatch');
+const mailVendorService = require('./addressValidation/mailVendorService');
+const { outcomeFor } = require('./addressValidation/mailEvents');
 
 const SAFE_COLUMNS = 'id, requested_at, expires_at, status, dispatch_status, vendor_job_id';
 const unknown = card => !card.vendor_job_id && card.dispatch_status !== 'rejected';
@@ -30,7 +32,16 @@ async function status(homeId, userId) {
   return { status: 200, body: envelope(card, true) };
 }
 
+/** Two cards back from one Home within 90 days: the next proof isn't another card. */
+async function returnedTooOften(homeId) {
+  const { count, error } = await supabaseAdmin.from('HomePostcardCode').select('id', { count: 'exact', head: true })
+    .eq('home_id', homeId).in('mail_outcome', ['returned', 'rerouted'])
+    .gte('requested_at', new Date(Date.now() - 90 * 86400000).toISOString());
+  return !error && count >= 2;
+}
+
 async function request(homeId, userId) {
+  if (await returnedTooOften(homeId)) return fail(409, 'Two postcards to this address came back, so we won\'t send a third. Check the address, or verify another way.', 'POSTCARD_RETURNED_LIMIT');
   const code = generatePostcardCode();
   const { data: admission, error } = await supabaseAdmin.rpc('admit_home_postcard', {
     p_home_id: homeId, p_user_id: userId, p_code_hash: hashPostcardCode(code),
@@ -74,20 +85,32 @@ async function request(homeId, userId) {
   return { status: sent.success ? 201 : 202, body: envelope(saved) };
 }
 
-// Called only after the Lob route verifies the signature. Correlation lives in
+// Called only after the mail route verifies the signature. Correlation lives in
 // a distinct namespace so a native receipt cannot bind a modern mail job.
+// A returned, re-routed or failed card ends a waiting attempt. A delivery scan
+// never redeems anything, and a late event never undoes a code already used.
 async function processWebhookEvent(vendorJobId, eventType, event) {
   const id = event?.body?.metadata?.pantopus_home_postcard_id;
   if (typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id)
     || event?.body?.id !== vendorJobId || event?.body?.object !== 'postcard') return { success: false };
   const { data: card, error } = await supabaseAdmin.from('HomePostcardCode')
-    .select('id, vendor_job_id, dispatch_status').eq('id', id).maybeSingle();
+    .select('id, status, vendor_job_id, dispatch_status, mail_provider').eq('id', id).maybeSingle();
   if (error) return { success: false, retryable: true };
   if (!card || (card.vendor_job_id && card.vendor_job_id !== vendorJobId)
+    || (card.mail_provider && card.mail_provider !== (event.provider || 'lob'))
     || !['dispatching', 'delivery_unknown', 'accepted'].includes(card.dispatch_status)) return { success: false };
+  const now = new Date().toISOString();
+  const outcome = mailVendorService.returnsEndAttempts() ? outcomeFor(eventType) : null;
+  if (outcome && card.status !== 'pending') {
+    // Over already: only the count remembers it.
+    const { error: noteError } = await supabaseAdmin.from('HomePostcardCode')
+      .update({ mail_outcome: outcome, mail_outcome_at: now }).eq('id', id).is('mail_outcome', null);
+    return { success: !noteError, retryable: !!noteError };
+  }
   const { data: saved, error: saveError } = await supabaseAdmin.from('HomePostcardCode')
-    .update({ vendor_job_id: vendorJobId, dispatch_status: 'accepted', updated_at: new Date().toISOString() })
-    .eq('id', id).eq('dispatch_status', card.dispatch_status)
+    .update({ vendor_job_id: vendorJobId, dispatch_status: 'accepted', updated_at: now,
+      ...(outcome && { status: 'cancelled', mail_outcome: outcome, mail_outcome_at: now }) })
+    .eq('id', id).eq('dispatch_status', card.dispatch_status).eq('status', card.status)
     .filter('vendor_job_id', card.vendor_job_id ? 'eq' : 'is', card.vendor_job_id || null).select('id');
   return { success: !saveError && !!saved?.length, retryable: !!saveError || !saved?.length };
 }

@@ -114,7 +114,10 @@ and the tap still does its job; a drag that starts on a text box or a field's bo
 moves under the finger. Each sheet or dialog that has a text field runs in its own window, so it passes
 the same modifier as its `modifier` (or on its content root), including a sheet wrapper whose content comes from
 its caller. A text box drawn by a container around a `BasicTextField` marks that container `keepsKeyboard()`; a tap
-on the container's own space then types in the field inside it, so the whole box is the text box. Composer controls
+on the container's own space then types in the field inside it, so the whole box is the text box. A field that draws
+its box in its own `modifier` puts `keepsKeyboard()` first in it, because padding there sits outside the field's own
+taps; a field whose `decorationBox` draws the box needs nothing. Mark only text boxes: a wrapper shared with a date row
+or chips marks just its text uses, so a tap on those still closes the keyboard. Composer controls
 (Send) are marked the same way; a thread that moves the keyboard itself is `keepsKeyboardWhileScrolling()`. The results under
 a search box are marked `firstTapClosesKeyboard()`. The keyboard's own action key puts it away unless the screen
 moves on or keeps typing on purpose (chat's Send): a Search key with nothing to submit uses

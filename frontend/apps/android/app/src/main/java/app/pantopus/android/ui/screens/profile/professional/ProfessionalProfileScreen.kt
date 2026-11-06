@@ -56,6 +56,7 @@ import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.profile.PillarStrip
 import app.pantopus.android.ui.screens.shared.form.FormShell
@@ -776,6 +777,7 @@ internal fun ProTextInput(
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 44.dp)
                     .clip(RoundedCornerShape(Radii.md))

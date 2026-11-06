@@ -14,7 +14,7 @@ module.exports = function mailMetadata(name, p, table) {
     job.vendor_status = 'dispatching';
     job.metadata = { ...metadata, destination: p.p_destination, dispatch_started_at: timestamp };
   } else {
-    if (job.vendor !== 'lob' || job.vendor_job_id !== p.p_vendor_job_id) return { data: false, error: null };
+    if (job.vendor !== p.p_vendor || job.vendor_job_id !== p.p_vendor_job_id) return { data: false, error: null };
     job.vendor_status = p.p_vendor_status;
     job.metadata = { ...job.metadata, last_webhook_event: p.p_event_type, last_webhook_at: timestamp };
   }

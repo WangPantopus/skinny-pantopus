@@ -597,7 +597,9 @@ class ExploreMapViewModel
                         minutes < 60L * 24L -> "${minutes / 60L}h ago"
                         else -> "${minutes / (60L * 24L)}d ago"
                     }
-                return "$kind · $ago"
+                // A post its author's photo placed sits where the photo was taken.
+                val photo = if (marker.locationBasis == "photo") " · Photo taken here" else ""
+                return "$kind · $ago$photo"
             }
 
             fun distanceMiles(

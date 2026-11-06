@@ -53,6 +53,7 @@ import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.shared.form.FormFieldGroup
 import app.pantopus.android.ui.screens.shared.form.FormFieldState
 import app.pantopus.android.ui.screens.shared.form.FormShell
@@ -778,6 +779,7 @@ private fun NotesField(
             cursorBrush = SolidColor(PantopusColors.primary600),
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 96.dp)
                     .clip(RoundedCornerShape(Radii.md))

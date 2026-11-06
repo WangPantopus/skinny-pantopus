@@ -65,6 +65,10 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
     public let isSeeded: Bool
     /// The poster's homes are all far from where they posted (`feedService.js:234`); the card says Visitor.
     public let isVisitorPost: Bool
+    /// `photo` when the author's own photo or video placed the post (`feedService.js:244`).
+    public let locationBasis: String?
+    /// When that photo or video was taken (ISO 8601), when its metadata said.
+    public let photoTakenAt: String?
     /// Set when the post was authored as a business (`feedService.js:115`).
     public let businessAuthorId: String?
     public let locationName: String?
@@ -109,6 +113,8 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         case postMetadata = "post_metadata"
         case isSeeded = "is_seeded"
         case isVisitorPost = "is_visitor_post"
+        case locationBasis = "location_basis"
+        case photoTakenAt = "photo_taken_at"
         case businessAuthorId = "business_author_id"
         case locationName = "location_name"
         case eventDate = "event_date"
@@ -157,6 +163,8 @@ public struct FeedPostDTO: Decodable, Sendable, Hashable, Identifiable {
         isPlanPost = metadata?.plan == true
         isSeeded = c.lenient(Bool.self, forKey: .isSeeded) ?? false
         isVisitorPost = c.lenient(Bool.self, forKey: .isVisitorPost) ?? false
+        locationBasis = c.lenient(String.self, forKey: .locationBasis)
+        photoTakenAt = c.lenient(String.self, forKey: .photoTakenAt)
         businessAuthorId = c.lenient(String.self, forKey: .businessAuthorId)
         locationName = c.lenient(String.self, forKey: .locationName)
         eventDate = c.lenient(String.self, forKey: .eventDate)
@@ -273,4 +281,24 @@ public struct FeedResponse: Decodable, Sendable, Hashable {
 public struct FeedFallbackArea: Decodable, Sendable, Hashable {
     public let label: String
     public let source: String?
+}
+
+public extension FeedPostDTO {
+    /// "Photo taken here" for a post its author's own photo or video placed
+    /// (it stands in for "Visitor"), with the day it was taken once that's
+    /// more than a week ago. Nil for every other post.
+    func photoProvenanceLabel(now: Date = Date()) -> String? {
+        guard locationBasis == "photo" else { return nil }
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let raw = photoTakenAt,
+              let taken = parser.date(from: raw) ?? ISO8601DateFormatter().date(from: raw),
+              now.timeIntervalSince(taken) > 7 * 86400
+        else { return "Photo taken here" }
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        let sameYear = Calendar.current.isDate(taken, equalTo: now, toGranularity: .year)
+        formatter.setLocalizedDateFormatFromTemplate(sameYear ? "MMMd" : "MMMyyyy")
+        return "Photo taken here \(sameYear ? "on" : "in") \(formatter.string(from: taken))"
+    }
 }

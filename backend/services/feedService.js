@@ -239,6 +239,9 @@ function normalizeFeedPostRow(row, likedPostIds = new Set(), savedPostIds = new 
     show_on_profile: row.show_on_profile !== false,
     profile_visibility_scope: row.profile_visibility_scope || 'public',
     is_visitor_post: row.is_visitor_post || false,
+    // The author's own photo or video placed the post (POST /api/posts): the apps say "Photo taken here".
+    location_basis: row.post_metadata?.location_basis === 'photo' ? 'photo' : null,
+    photo_taken_at: row.post_metadata?.location_basis === 'photo' ? (row.post_metadata.photo_taken_at || null) : null,
     state: row.state || 'open',
     solved_at: row.solved_at || null,
     not_helpful_count: row.not_helpful_count || 0,
@@ -274,13 +277,22 @@ function placeLabelForOthers(post) {
   return STREET_LINE_LABEL.test(post.location_name) ? null : post.location_name;
 }
 
+// A post its author's own photo or video placed (post_metadata.location_basis, set only by POST /api/posts) shows
+// everyone the exact spot when it was stored as exact: a tagged venue, or where the photo was taken when the tag was a
+// town. Every other post has a floor of approx_area for everyone but its author (docs/location-privacy-matrix.md).
+function postPrecisionForOthers(post) {
+  const stored = post.location_precision || 'approx_area';
+  if (stored === 'exact_place' && post.post_metadata?.location_basis === 'photo') return 'exact_place';
+  return leastPrecise(stored, 'approx_area');
+}
+
 function applyPostLocationPrivacy(post, viewerUserId) {
   if (!post) return post;
 
   const isAuthor = post.user_id === viewerUserId;
   const effectivePrecision = isAuthor
     ? (post.location_precision || 'approx_area')
-    : leastPrecise(post.location_precision || 'approx_area', 'approx_area');
+    : postPrecisionForOthers(post);
 
   applyLocationPrecision(post, effectivePrecision, isAuthor);
 
@@ -291,7 +303,7 @@ function applyPostLocationPrivacy(post, viewerUserId) {
       latField: 'effective_latitude', lngField: 'effective_longitude', setUnlockedFlag: false, stripAddress: false,
     });
     delete post.location;
-    post.locationUnlocked = false;
+    post.locationUnlocked = effectivePrecision === 'exact_place';
     if (post.location_name) post.location_name = placeLabelForOthers(post);
     if (post.home) {
       post.home = {
@@ -361,6 +373,7 @@ function displayedPoint(post, viewerUserId, { orEffective = false } = {}) {
   const shown = applyPostLocationPrivacy({
     user_id: post.user_id,
     location_precision: post.location_precision,
+    post_metadata: post.post_metadata,
     latitude: post.latitude,
     longitude: post.longitude,
     effective_latitude: post.effective_latitude,

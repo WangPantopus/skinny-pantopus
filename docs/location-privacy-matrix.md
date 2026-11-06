@@ -110,16 +110,33 @@ and `locationUnlocked: true`. Authors can list grants (`GET`) and revoke them
 | Viewer Relationship | Coordinates Returned                       | `locationUnlocked` |
 |---------------------|--------------------------------------------|---------------------|
 | Author              | exact (always)                              | `true`             |
-| Other viewers       | **Minimum `approx_area`** (permanent blur)  | `false` (always)   |
+| Other viewers, photo-placed post stored `exact_place` | exact | `true` |
+| Other viewers, any other post | **Minimum `approx_area`** (permanent blur)  | `false`   |
 
 Default `location_precision`: **`approx_area`**
 Home-place posts forced to: **`approx_area`** (enforced at creation time)
 
 **Permanent blur:** Non-authors never see exact post locations, even if the
-author set `location_precision = exact_place` and `reveal_policy = public`.
-The feed service and post detail endpoint enforce a floor of `approx_area`
-via `leastPrecise()`. Posts always return `locationUnlocked: false` for
-non-authors.
+author set `location_precision = exact_place` and `reveal_policy = public`,
+except for a photo-placed post (below). The feed service and post detail
+endpoint enforce a floor of `approx_area` via `postPrecisionForOthers()`
+(`services/feedService.js`).
+
+**Photo-placed posts (decided 2026-11-05):** the founder asked that a post whose
+photo or video was taken at the place show on the map exactly where it was
+taken. The apps read each attachment's capture point from its own metadata and
+send it with the post (`mediaLocations`); the points are evidence, never
+stored. When one was taken within 5 km of the tagged place
+(`trustState.mediaCaptureNear`), `POST /api/posts` stores
+`post_metadata.location_basis = 'photo'` (and `photo_taken_at`) and stores
+`exact_place`: at the tagged venue or address, or at the capture point when the
+tag is a town or an area or there is no tag. The founder chose an exact pin
+everywhere, the author's own home included, over a home guard (2026-11-05).
+It stays `approx_area` only for an alert (alerts never take `exact_place`) and
+when the author asked for less.
+Only `POST /api/posts` sets the basis (it drops a client's copy of either key);
+an edit that moves the post or leaves it no photo or video clears the basis and
+any exact pin, and an edit can't raise a post to `exact_place`.
 
 A post made with the composer's "current location" target stores the device's
 GPS fix, which differs by a few metres from post to post. Non-authors see the

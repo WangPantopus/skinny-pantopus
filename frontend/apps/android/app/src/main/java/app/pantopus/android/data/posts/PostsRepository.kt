@@ -20,6 +20,7 @@ import app.pantopus.android.data.api.models.posts.PostDetailDto
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
 import app.pantopus.android.data.api.models.posts.PostLikeResponse
 import app.pantopus.android.data.api.models.posts.PostLikeStateRequest
+import app.pantopus.android.data.api.models.posts.PostMediaLocation
 import app.pantopus.android.data.api.models.posts.PostReportRequest
 import app.pantopus.android.data.api.models.posts.PostSaveResponse
 import app.pantopus.android.data.api.models.posts.PostSaveStateRequest
@@ -343,6 +344,8 @@ class PostsRepository
             gpsTimestamp: String? = null,
             gpsLatitude: Double? = null,
             gpsLongitude: Double? = null,
+            media: PostMediaLocation? = null,
+            postType: String? = null,
         ): NetworkResult<PlaceEligibilityResponse> =
             safeApiCall {
                 api.placeEligibility(
@@ -351,6 +354,10 @@ class PostsRepository
                     gpsTimestamp = gpsTimestamp,
                     gpsLatitude = gpsLatitude,
                     gpsLongitude = gpsLongitude,
+                    mediaLatitude = media?.latitude,
+                    mediaLongitude = media?.longitude,
+                    mediaCapturedAt = media?.capturedAt,
+                    postType = postType,
                 )
             }
 
