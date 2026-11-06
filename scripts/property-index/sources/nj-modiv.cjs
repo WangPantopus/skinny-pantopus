@@ -28,6 +28,14 @@ const USE_WORDS = { 1: 'Vacant land', 2: 'Residential, one to four families', '3
 // "CALDWELL BORO TWP": a town's type isn't part of what people write on an envelope.
 const townName = (name) => String(name ?? '').trim().toUpperCase().replace(/\s+(BORO|BOROUGH|TWP|TOWNSHIP|CITY|TOWN|VILLAGE|VILL)(\s+(TWP|BORO))?$/, '').trim();
 
+// The tax list writes deed dates as YYMMDD.
+function deedDate(text) {
+  const match = /^(\d{2})(\d{2})(\d{2})$/.exec(String(text ?? '').trim());
+  if (!match) return null;
+  const twoDigits = new Date().getFullYear() % 100;
+  return isoDate(`${Number(match[1]) > twoDigits ? 19 : 20}${match[1]}-${match[2]}-${match[3]}`);
+}
+
 function fromRow(row, fips, county) {
   const klass = String(row.PROP_CLASS ?? '').trim().toUpperCase();
   const description = `${row.BLDG_DESC || ''} ${row.LAND_DESC || ''}`.toUpperCase();
@@ -56,7 +64,7 @@ function fromRow(row, fips, county) {
   put(facts, 'assessed_value', positive(row.NET_VALUE));
   put(facts, 'assessed_land_value', positive(row.LAND_VAL));
   put(facts, 'assessed_building_value', positive(row.IMPRVT_VAL));
-  const sold = isoDate(row.DEED_DATE);
+  const sold = deedDate(row.DEED_DATE);
   if (positive(row.SALE_PRICE) > 100 && sold) {
     facts.sale_price = positive(row.SALE_PRICE);
     facts.sale_date = sold;

@@ -55,11 +55,14 @@ function inZip(query, records) {
   return records.filter(({ address }) => !address.zip || address.zip === query.zip);
 }
 
-/** Sources with no property ZIP name a town instead: the same street line in two towns of a county is told apart by it. */
+/**
+ * Sources with no property ZIP name a town instead: the same street line in two towns of a county is told apart by it,
+ * only when the person's town picks out exactly one record. A postal city that matches none stays ambiguous.
+ */
 function inTown(query, records) {
-  if (!query.city || records.length < 2) return records;
+  if (!query.city || records.length < 2 || records.some(({ address }) => address.zip)) return records;
   const named = records.filter(({ address }) => address.city === query.city);
-  return named.length ? named : records;
+  return named.length === 1 ? named : records;
 }
 
 function unitMatches(query, address) {
