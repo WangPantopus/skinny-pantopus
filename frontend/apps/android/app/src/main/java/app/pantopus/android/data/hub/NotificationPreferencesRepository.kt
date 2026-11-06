@@ -11,6 +11,9 @@ import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
 import app.pantopus.android.data.store.Stored
+import app.pantopus.android.data.store.asResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,9 +29,17 @@ class NotificationPreferencesRepository
         private val api: NotificationPreferencesApi,
         private val store: ScreenStore,
     ) {
-        /** `GET /api/hub/preferences`. */
+        /**
+         * `GET /api/hub/preferences`: the server's answer, never an older copy. The launch notices each ask for it as
+         * the tabs open, at once or moments apart: the store's one request per key joins them, and an answer from the
+         * last few seconds is still the server's. Off the main thread: opening the entry reads its saved copy.
+         */
         suspend fun preferences(): NetworkResult<NotificationPreferences> =
-            safeApiCall { NotificationPreferences.from(api.preferences().preferences) }
+            withContext(Dispatchers.IO) {
+                val copy = store.peek(StoreKeys.notificationPreferences)
+                val justRead = copy.failure == null && System.currentTimeMillis() - copy.fetchedAt in 0 until JUST_READ_MS
+                preferencesStored(force = !justRead).asResult()
+            }
 
         /** The preferences through the screens' store (fresh for 10 minutes). [force] reads now. */
         suspend fun preferencesStored(force: Boolean = false): Stored<NotificationPreferences> =
@@ -44,5 +55,9 @@ class NotificationPreferencesRepository
             val remember = store.writer(StoreKeys.notificationPreferences)
             return safeApiCall { NotificationPreferences.from(api.updatePreferences(patch, dispatchGuard).preferences) }
                 .also { if (it is NetworkResult.Success) remember(it.data) }
+        }
+
+        private companion object {
+            const val JUST_READ_MS = 5_000L
         }
     }
