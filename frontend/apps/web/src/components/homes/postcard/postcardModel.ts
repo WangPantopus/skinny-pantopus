@@ -73,6 +73,8 @@ export const postalMessage = (code?: string) => ({
   POSTCARD_WRONG_CODE: 'That code didn’t match this postcard. Check it and try again.',
   POSTCARD_ADDRESS_CHANGED: "This address doesn't match the one saved for this Home. Check the street, apartment and ZIP.",
   POSTCARD_EXPIRED: 'This postcard’s code has expired. Request a new postcard.',
+  POSTCARD_ADDRESS_PENDING: 'We couldn’t check this address with USPS yet. We’ll try again shortly, and your postcard can go out after that.',
+  POSTCARD_ADDRESS_NOT_CONFIRMED: 'Please check this address. USPS couldn’t confirm it, so we can’t mail a postcard there. You can verify another way, or add your home again with the right details.',
   POSTCARD_LOCKED: 'No tries left for this postcard. Request a new one.',
   POSTCARD_ACCESS_REVIEW_REQUIRED: 'A mail code can’t restore access that was removed or has ended. Ask someone in the household to invite you again.',
   POSTCARD_DISPUTE_RECORDED: 'Your code is right. Because someone in the household said you don’t live here, Pantopus will review your proof. Your access stays off until then.',
