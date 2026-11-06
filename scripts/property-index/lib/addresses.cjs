@@ -49,4 +49,18 @@ function zipCode(value) {
   return /^\d{4}$/.test(text) ? `0${text}` : '';
 }
 
-module.exports = { houseNumbers, readAddresses, year, isoDate, zipCode };
+/** A unit column's value, or '': towns fill the column with zeros to mean there's no unit. */
+function realUnit(value) {
+  const text = String(value ?? '').trim();
+  return !text || /^0+$/.test(text) || /^(NONE|NULL|N\/A)$/i.test(text) ? '' : text;
+}
+
+/** The address as a record states it, with a bare unit marked so it still reads as a unit. */
+function onRecord(line, unit) {
+  const street = String(line ?? '').replace(/\s+/g, ' ').trim();
+  const secondary = realUnit(unit);
+  if (!secondary || street.toUpperCase().endsWith(secondary.toUpperCase())) return street;
+  return /^[A-Z0-9-]{1,8}$/i.test(secondary) ? `${street} UNIT ${secondary}` : `${street} ${secondary}`;
+}
+
+module.exports = { houseNumbers, readAddresses, year, isoDate, zipCode, realUnit, onRecord };

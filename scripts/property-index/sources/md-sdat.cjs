@@ -7,7 +7,7 @@
 const path = require('node:path');
 const { parts } = require('../../../backend/services/propertyRecords/addressKey');
 const { getJson, socrataRows, cached } = require('../lib/services.cjs');
-const { year, isoDate, zipCode } = require('../lib/addresses.cjs');
+const { year, isoDate, zipCode, realUnit } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
@@ -61,7 +61,7 @@ function fromRow(row, fips, county) {
   } else if (code === 'U') [kind, homeType] = ['unit', 'condo'];
   else if (code === 'M') [kind, homeType] = ['building', 'apartment'];
 
-  const address = parts({ number: pick('number'), numberSuffix: pick('numberSuffix'), pre: pick('direction'), name: pick('street'), suffix: pick('streetType'), unit: pick('unit') });
+  const address = parts({ number: pick('number'), numberSuffix: pick('numberSuffix'), pre: pick('direction'), name: pick('street'), suffix: pick('streetType'), unit: realUnit(pick('unit')) });
   if (!address || !word(pick('account')) || Number(pick('number')) === 0) return null;
   const facts = { parcel_number: word(pick('account')), county, fips };
   const on = kind === 'property' || kind === 'unit' || kind === 'building';

@@ -10,7 +10,7 @@ const { execFileSync } = require('node:child_process');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
 const { download, USER_AGENT } = require('../lib/tables.cjs');
 const { dbfRows } = require('../lib/dbf.cjs');
-const { year, isoDate, zipCode } = require('../lib/addresses.cjs');
+const { year, isoDate, zipCode, realUnit, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
@@ -30,14 +30,14 @@ function useOf(text, unit) {
 }
 
 function fromRow(row, fips, county) {
-  const unit = word(row.SUNIT);
-  const parsed = parse(row.SITEADD, unit || '');
+  const unit = realUnit(row.SUNIT);
+  const parsed = parse(row.SITEADD, unit);
   const parcel = word(row.PARNO);
   if (!parsed || !parcel) return null;
   const [kind, homeType] = useOf(row.PARUSEDESC, parsed.unit);
   const facts = { parcel_number: parcel, county, fips };
   const on = kind === 'property' || kind === 'unit' || kind === 'building';
-  put(facts, 'address_on_record', [word(row.SITEADD), unit].filter(Boolean).join(' '));
+  put(facts, 'address_on_record', onRecord(row.SITEADD, unit));
   put(facts, 'year_built', on ? year(row.STRUCTYEAR) : null);
   if (kind !== 'unit') put(facts, 'lot_acres', positive(row.GISACRES));
   put(facts, 'subdivision', word(row.SUBDIVISIO));

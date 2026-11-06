@@ -9,7 +9,7 @@
 const path = require('node:path');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
 const { getJson, layerRows, socrataRows, cached } = require('../lib/services.cjs');
-const { year, isoDate, zipCode } = require('../lib/addresses.cjs');
+const { year, isoDate, zipCode, realUnit } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
@@ -44,11 +44,11 @@ const said = (text) => {
 
 function fromRoll(row, fips, county) {
   const klass = String(row.PROP_CLASS ?? '').trim().slice(0, 3);
-  const unit = word(row.LOC_UNIT);
+  const unit = realUnit(row.LOC_UNIT);
   let [kind, homeType, useWord] = CLASSES[klass] || ['other', null, null];
   // Each tax parcel with its own unit number is a home owned on its own, whatever its class: a condominium's unit.
   if (unit && (kind === 'property' || (kind === 'building' && klass === '411'))) [kind, homeType] = ['unit', 'condo'];
-  const parsed = parse(`${String(row.LOC_ST_NBR ?? '').trim()} ${String(row.LOC_STREET ?? '').trim()}`, unit || '');
+  const parsed = parse(`${String(row.LOC_ST_NBR ?? '').trim()} ${String(row.LOC_STREET ?? '').trim()}`, unit);
   if (!parsed) return null;
   const facts = { parcel_number: word(row.PRINT_KEY) || row.SWIS_PRINT_KEY_ID, county, fips };
   const on = kind === 'property' || kind === 'unit' || kind === 'building';

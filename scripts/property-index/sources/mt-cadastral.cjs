@@ -7,7 +7,7 @@
 const path = require('node:path');
 const { parse, zip5 } = require('../../../backend/services/propertyRecords/addressKey');
 const { getJson, layerRows, cached } = require('../lib/services.cjs');
-const { isoDate } = require('../lib/addresses.cjs');
+const { isoDate, realUnit, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
@@ -32,12 +32,12 @@ function useOf(row, unit) {
 }
 
 function fromRow(row, fips, county) {
-  const parsed = parse(row.AddressLine1, word(row.AddressLine2) || '');
+  const parsed = parse(row.AddressLine1, realUnit(row.AddressLine2));
   const parcel = word(row.PARCELID);
   if (!parsed || !parcel) return null;
   const [kind, homeType] = useOf(row, parsed.unit);
   const facts = { parcel_number: parcel, county, fips };
-  put(facts, 'address_on_record', [word(row.AddressLine1), word(row.AddressLine2)].filter(Boolean).join(' '));
+  put(facts, 'address_on_record', onRecord(row.AddressLine1, row.AddressLine2));
   if (kind !== 'unit') put(facts, 'lot_acres', positive(row.TotalAcres));
   put(facts, 'subdivision', word(row.Subdivision));
   put(facts, 'legal_description', word(row.LegalDescriptionShort)?.slice(0, 300));

@@ -9,7 +9,7 @@
 const path = require('node:path');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
 const { getJson, socrataRows, cached } = require('../lib/services.cjs');
-const { year, isoDate, zipCode } = require('../lib/addresses.cjs');
+const { year, isoDate, zipCode, realUnit, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
@@ -100,12 +100,12 @@ function townOf(row) {
 function fromRow(row, fips, county, town) {
   const [kind, homeType] = useOf(row);
   const facts = { parcel_number: word(row.pid), county, fips, municipality: town.toLowerCase().replace(/(^|\s)\S/g, (first) => first.toUpperCase()) };
-  const unit = word(row.unit);
-  const parsed = parse(row.location, unit || '') || parse(`${String(row.address_number ?? '').trim()} ${String(row.street_name ?? '').trim()}`, unit || '');
+  const unit = realUnit(row.unit);
+  const parsed = parse(row.location, unit) || parse(`${String(row.address_number ?? '').trim()} ${String(row.street_name ?? '').trim()}`, unit);
   if (!parsed || !facts.parcel_number) return null;
   const on = kind === 'property' || kind === 'unit' || kind === 'building';
   const home = kind === 'property' || kind === 'unit';
-  put(facts, 'address_on_record', [word(row.location), unit].filter(Boolean).join(' '));
+  put(facts, 'address_on_record', onRecord(row.location, unit));
   put(facts, 'year_built', on ? year(row.ayb) : null);
   put(facts, 'effective_year_built', on ? year(row.eyb) : null);
   put(facts, 'living_sqft', home ? number(row.living_area) : null);

@@ -6,7 +6,7 @@
 const path = require('node:path');
 const { parts } = require('../../../backend/services/propertyRecords/addressKey');
 const { getJson, layerRows, cached } = require('../lib/services.cjs');
-const { year, isoDate, zipCode } = require('../lib/addresses.cjs');
+const { year, isoDate, zipCode, realUnit } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
@@ -42,7 +42,7 @@ function storiesFrom(style) {
 }
 
 function fromRow(row, fips, county) {
-  const unit = [row.sub_type1, row.sub_id1].map((part) => String(part ?? '').trim()).filter(Boolean).join(' ');
+  const unit = realUnit(row.sub_id1) ? [row.sub_type1, row.sub_id1].map((part) => String(part ?? '').trim()).filter(Boolean).join(' ') : '';
   const parsed = parts({ number: `${row.anumberpre || ''}${row.anumber || ''}`, numberSuffix: row.anumbersuf || '', pre: row.st_pre_dir || '', name: [row.st_pre_typ, row.st_name].filter(Boolean).join(' '), suffix: row.st_pos_typ || '', post: row.st_pos_dir || '', unit });
   const parcel = word(row.county_pin) || word(row.state_pin);
   if (!parsed || !parcel) return null;

@@ -12,7 +12,7 @@ const { parse } = require('../../../backend/services/propertyRecords/addressKey'
 const { download } = require('../lib/tables.cjs');
 const { getJson, layerRows, cached } = require('../lib/services.cjs');
 const { csvRows } = require('../lib/csv.cjs');
-const { houseNumbers, readAddresses, year, isoDate, zipCode } = require('../lib/addresses.cjs');
+const { houseNumbers, readAddresses, year, isoDate, zipCode, realUnit, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
@@ -115,7 +115,8 @@ function fromMassGis(row, fips, county, town) {
   const [kind, homeType, useWord] = USES[code] || ['other', null, null];
   const facts = { parcel_number: row.PROP_ID, county, fips, municipality: town };
   const on = kind !== 'parcel' && kind !== 'other';
-  put(facts, 'address_on_record', [word(row.SITE_ADDR), word(row.LOCATION)].filter(Boolean).join(' '));
+  const unit = realUnit(row.LOCATION);
+  put(facts, 'address_on_record', onRecord(row.SITE_ADDR, unit));
   put(facts, 'year_built', on ? year(row.YEAR_BUILT) : null);
   // Several houses on one parcel: the area is theirs together, not this home's.
   put(facts, 'living_sqft', on && code !== '109' ? positive(row.RES_AREA) : null);
@@ -144,8 +145,8 @@ function fromMassGis(row, fips, county, town) {
     if (word(row.LS_BOOK) && word(row.LS_PAGE)) facts.sale_document = `Book ${word(row.LS_BOOK)}, Page ${word(row.LS_PAGE)}`;
   }
   const street = String(row.FULL_STR ?? '').trim();
-  let addresses = readAddresses(houseNumbers(row.ADDR_NUM), street, row.LOCATION);
-  if (!addresses.length) addresses = [parse(row.SITE_ADDR, row.LOCATION)].filter(Boolean);
+  let addresses = readAddresses(houseNumbers(row.ADDR_NUM), street, unit);
+  if (!addresses.length) addresses = [parse(row.SITE_ADDR, unit)].filter(Boolean);
   if (!kind || !addresses.length) return [];
   const id = `pp:${kind}:${fips}:${row.TOWN_ID}-${row.PROP_ID}`;
   const city = word(row.CITY)?.toUpperCase() || town.toUpperCase();
@@ -181,7 +182,7 @@ function fromBoston(row, fips, county) {
   const street = String(row.ST_NAME ?? '').trim();
   const first = `${String(row.ST_NUM ?? '').trim()}${String(row.ST_ALPHA ?? '').trim()}`;
   const last = Number(row.ST_NUM2) > Number(row.ST_NUM) ? String(Number(row.ST_NUM2)) : null;
-  put(facts, 'address_on_record', [first, last && `- ${last}`, street, word(row.UNIT_NUM)].filter(Boolean).join(' '));
+  put(facts, 'address_on_record', onRecord(`${first} ${street}`, row.UNIT_NUM));
   put(facts, 'year_built', kind !== 'parcel' && kind !== 'other' ? year(row.YR_BUILT) : null);
   put(facts, 'living_sqft', home ? positive(row.LIVING_AREA) : null);
   put(facts, 'gross_sqft', kind !== 'parcel' && kind !== 'other' ? positive(row.GROSS_AREA) : null);
@@ -218,7 +219,7 @@ function fromBoston(row, fips, county) {
   put(facts, 'assessed_building_value', money(row.BLDG_VALUE));
   put(facts, 'tax_amount', money(row.GROSS_TAX));
 
-  const addresses = readAddresses(last ? [first, last] : [first], street, row.UNIT_NUM);
+  const addresses = readAddresses(last ? [first, last] : [first], street, realUnit(row.UNIT_NUM));
   if (!addresses.length) return [];
   const id = kind === 'building' && code === 'CM' ? `pp:building:${fips}:${row.PID}` : `pp:${kind}:${fips}:${row.PID}`;
   const parent = code === 'CD' && word(row.CM_ID) ? `pp:building:${fips}:${row.CM_ID}` : null;

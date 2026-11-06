@@ -6,7 +6,7 @@
 const path = require('node:path');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
 const { layerRows, cached, getJson } = require('../lib/services.cjs');
-const { year, isoDate, zipCode } = require('../lib/addresses.cjs');
+const { year, isoDate, zipCode, realUnit } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
@@ -33,7 +33,7 @@ const said = (text) => {
 function fromRow(row, fips, county) {
   const number = [row.ADDRNUM, row.ADDRNUMSUF].map((part) => String(part ?? '').trim()).join('');
   const street = String(row.FULLNAME ?? '').trim();
-  const parsed = number && street ? parse(`${number} ${street}`, word(row.UNITID) || '') : parse(row.FullPhysicalAddress);
+  const parsed = number && street ? parse(`${number} ${street}`, realUnit(row.UNITID)) : parse(row.FullPhysicalAddress);
   const parcel = word(row.CleanParcelID);
   if (!parsed || !parcel) return null;
   const [kind, homeType] = useOf(row);
