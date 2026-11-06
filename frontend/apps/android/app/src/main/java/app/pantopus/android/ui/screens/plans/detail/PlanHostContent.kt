@@ -48,6 +48,7 @@ import app.pantopus.android.ui.components.DestructiveButton
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.screens.plans.LocalPlanOpenProfile
 import app.pantopus.android.ui.screens.plans.components.PlanAvatar
 import app.pantopus.android.ui.screens.plans.components.PlanBanner
 import app.pantopus.android.ui.screens.plans.components.PlanBannerTone
@@ -61,6 +62,7 @@ import app.pantopus.android.ui.screens.plans.components.PlanWell
 import app.pantopus.android.ui.screens.plans.components.planCard
 import app.pantopus.android.ui.screens.plans.map.planH2
 import app.pantopus.android.ui.screens.plans.map.planH3
+import app.pantopus.android.ui.screens.plans.opensPlanProfile
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -367,14 +369,21 @@ private fun GuestRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
         ) {
-            PlanAvatar(name = name, seed = person.userId, avatarUrl = person.avatarUrl)
-            Column(modifier = Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
-                Text(
-                    text = title,
-                    style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
-                    color = PantopusColors.appText,
-                )
-                Text(text = subtitle, style = PantopusTextStyle.small.copy(fontSize = 13.sp), color = PantopusColors.appTextSecondary)
+            // The guest's photo and name open their profile; the options stay on the button beside them.
+            Row(
+                modifier = Modifier.weight(1f).opensPlanProfile(person.userId, LocalPlanOpenProfile.current),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+            ) {
+                PlanAvatar(name = name, seed = person.userId, avatarUrl = person.avatarUrl)
+                Column(modifier = Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
+                    Text(
+                        text = title,
+                        style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
+                        color = PantopusColors.appText,
+                    )
+                    Text(text = subtitle, style = PantopusTextStyle.small.copy(fontSize = 13.sp), color = PantopusColors.appTextSecondary)
+                }
             }
             if (person.requestId != null && onRemove != null) {
                 Box {

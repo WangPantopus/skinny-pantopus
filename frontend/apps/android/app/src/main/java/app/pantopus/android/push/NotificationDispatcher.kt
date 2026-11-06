@@ -273,6 +273,12 @@ class NotificationDispatcher
                     .setSmallIcon(R.mipmap.ic_launcher)
                     .setContentTitle(routing.title ?: appContext.getString(R.string.app_name))
                     .apply { routing.body?.let(::setContentText) }
+                    // A long message or notice reads in full when the notification is expanded.
+                    .apply { routing.body?.takeIf { it.isNotBlank() }?.let { setStyle(NotificationCompat.BigTextStyle().bigText(it)) } }
+                    // The content shows wherever the phone shows notification content, as for other apps; a locked
+                    // phone set to hide sensitive content shows the public version instead (app name, kind of notice).
+                    .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                    .setPublicVersion(publicVersion(routing.channel))
                     .setAutoCancel(true)
                     .setOnlyAlertOnce(stableTag != null)
                     .setContentIntent(contentIntent)
@@ -302,6 +308,16 @@ class NotificationDispatcher
                 if (stableTag == null) nm.notify(notificationId, notification) else nm.notify(stableTag, notificationId, notification)
             }.onFailure { Timber.w(it, "Failed to post FCM notification") }
         }
+
+        /** The lock-screen stand-in for a notification whose content the phone hides: no sender, title or text. */
+        private fun publicVersion(channel: Channel) =
+            NotificationCompat
+                .Builder(appContext, channel.id)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(appContext.getString(R.string.app_name))
+                .setContentText(
+                    appContext.getString(if (channel == Channel.CHAT) R.string.notif_public_chat else R.string.notif_public_other),
+                ).build()
 
         private fun chatRecipientMatches(routing: Routing): Boolean {
             val recipient = routing.recipientUserId?.takeIf { it.isNotBlank() } ?: return false

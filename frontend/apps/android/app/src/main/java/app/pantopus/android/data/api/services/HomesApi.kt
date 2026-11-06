@@ -152,14 +152,17 @@ interface HomesApi {
     ): CreateHomeResponse
 
     /**
-     * `POST /api/homes/property-suggestions` — route `backend/routes/home.js:540`.
+     * `POST /api/homes/property-suggestions` — route `backend/routes/home.js:587`.
      * Tiered property hints (ATTOM → heuristics → optional LLM) that
      * pre-fill the Add-Home wizard's Details block. The county record
-     * itself stays on the server.
+     * itself stays on the server. `lookup = "background"` answers at once and looks a missing county
+     * record up meanwhile (`attom_lookup: pending`); `"check"` is the one follow-up, answered when that
+     * lookup ends. Without it the server waits for ATTOM, as it does for older builds.
      */
     @POST("api/homes/property-suggestions")
     suspend fun propertySuggestions(
         @Body body: PropertySuggestionsRequest,
+        @Query("lookup") lookup: String? = null,
     ): PropertySuggestionsResponse
 
     @POST("api/v1/address/validate")

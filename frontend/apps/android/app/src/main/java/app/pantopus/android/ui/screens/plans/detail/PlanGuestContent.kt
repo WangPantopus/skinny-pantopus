@@ -32,6 +32,7 @@ import app.pantopus.android.data.plans.planKind
 import app.pantopus.android.data.plans.planState
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.screens.plans.LocalPlanOpenProfile
 import app.pantopus.android.ui.screens.plans.components.PlanBanner
 import app.pantopus.android.ui.screens.plans.components.PlanBannerTone
 import app.pantopus.android.ui.screens.plans.components.PlanHostRow
@@ -47,6 +48,7 @@ import app.pantopus.android.ui.screens.plans.map.PlanListRow
 import app.pantopus.android.ui.screens.plans.map.hostCaption
 import app.pantopus.android.ui.screens.plans.map.planH2
 import app.pantopus.android.ui.screens.plans.map.planH4
+import app.pantopus.android.ui.screens.plans.opensPlanProfile
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -151,13 +153,14 @@ internal fun PlanHostCard(
     ruleCaption: String? = null,
 ) {
     val host = plan.host ?: return
+    // The host's card opens their profile, as on iOS.
     PlanHostRow(
         name = host.displayName ?: "Neighbor",
         verified = host.verifiedAddress && ruleCaption == null,
         caption = ruleCaption ?: hostCaption(plan),
         seed = host.userId,
         avatarUrl = host.avatarUrl,
-        modifier = Modifier.planCard().padding(14.dp),
+        modifier = Modifier.planCard().opensPlanProfile(host.userId, LocalPlanOpenProfile.current).padding(14.dp),
     )
 }
 

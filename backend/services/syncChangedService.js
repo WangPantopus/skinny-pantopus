@@ -422,6 +422,22 @@ function publishChatSignal(change) {
 
 function publishChatTyping(change) { return publishChatSignal(change); }
 
+/**
+ * A Home's derived data changed without a write to its row (a background ATTOM lookup that saved only caches, or
+ * found nothing): the same signal as a Home row change, so the household's open Place and Property details read
+ * again. Every API process hears it through the database; without the listener, this process's sockets only.
+ */
+function publishHomeChange(homeId) {
+  if (!UUID_RE.test(String(homeId || ''))) return Promise.resolve();
+  const payload = JSON.stringify({ t: 'Home', h: String(homeId).toLowerCase() });
+  if (!live || !client) {
+    handleNotification(payload);
+    return Promise.resolve();
+  }
+  return client.query({ text: 'SELECT pg_notify($1, $2)', values: [CHANNEL, payload], query_timeout: 2000 })
+    .catch(() => handleNotification(payload));
+}
+
 /** True while the LISTEN connection is up, so every committed change is being heard. */
 function isLive() {
   return live;
@@ -432,4 +448,5 @@ function currentEpoch() {
   return epoch;
 }
 
-module.exports = { init, start, stop, onChange, isLive, currentEpoch, handleNotification, flush, RULES, publishChatTyping, publishChatSignal };
+module.exports = { init, start, stop, onChange, isLive, currentEpoch, handleNotification, flush, RULES, publishChatTyping, publishChatSignal,
+  publishHomeChange };

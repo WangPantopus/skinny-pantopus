@@ -10,6 +10,9 @@
     <string name="notif_channel_gig_bid">Gig bids</string>
     <string name="notif_channel_system">System</string>
     <string name="notif_channel_plans">Plans</string>
+    <!-- What a locked phone that hides sensitive notification content shows in place of a notification's text. -->
+    <string name="notif_public_chat">New message</string>
+    <string name="notif_public_other">New notification</string>
     <!-- P6b — ongoing active-task status mirror (silent, low importance). -->
     <string name="notif_channel_active_task">Active task</string>
 

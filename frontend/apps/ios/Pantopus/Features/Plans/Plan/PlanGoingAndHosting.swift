@@ -19,6 +19,8 @@ struct PlanGoingSection: View {
     let card: PlanCardDTO
     let onOpenChat: () -> Void
     let onConfirm: (PlanConfirmation) -> Void
+    /// A person's profile, from their photo in who's going.
+    let onOpenProfile: (String) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var bannerShift: CGFloat = 0
@@ -83,7 +85,7 @@ struct PlanGoingSection: View {
                 .accessibilityIdentifier("planGroupChat")
         }
         if let people = viewModel.plan?.people, !people.isEmpty {
-            PlanPeopleLine(people: people, myPartySize: viewModel.plan?.myRequest?.partySize ?? 1)
+            PlanPeopleLine(people: people, myPartySize: viewModel.plan?.myRequest?.partySize ?? 1, onOpenPerson: onOpenProfile)
         }
         Color.clear.frame(height: 1)
             .sheet(isPresented: $showsCalendar) {
@@ -173,48 +175,6 @@ struct PlanGoingSection: View {
     }
 }
 
-/// "Sam (host), you + 1, Alex, Jordan and 2 more", with overlapping avatars.
-struct PlanPeopleLine: View {
-    let people: [PlanPersonDTO]
-    let myPartySize: Int
-
-    var body: some View {
-        HStack(spacing: Spacing.s3) {
-            HStack(spacing: -8) {
-                ForEach(people.prefix(4)) { person in
-                    PlanAvatar(name: person.displayName, url: person.avatarUrl, size: 30)
-                        .overlay(Circle().stroke(Theme.Color.appSurface, lineWidth: 2))
-                }
-            }
-            Text(summary)
-                .planFont(.small)
-                .foregroundStyle(Theme.Color.appTextSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    private var summary: String {
-        let me = PlansStoreReads.viewerId
-        var names: [String] = []
-        for person in people {
-            if person.userId == me {
-                names.append(myPartySize > 1 ? "you + \(myPartySize - 1)" : "you")
-            } else {
-                let first = PlanCardLines.firstName(person.displayName)
-                let name = person.isHost ? "\(first) (host)" : person.partySize > 1 ? "\(first) + \(person.partySize - 1)" : first
-                names.append(name)
-            }
-        }
-        let shown = names.prefix(4)
-        let more = names.count - shown.count
-        if more > 0 { return shown.joined(separator: ", ") + " and \(more) more" }
-        guard shown.count > 1 else { return shown.first ?? "" }
-        return shown.dropLast().joined(separator: ", ") + " and " + (shown.last ?? "")
-    }
-}
-
 /// Adds the plan to the calendar with the system editor (no calendar access needed).
 struct PlanCalendarEditor: UIViewControllerRepresentable {
     let card: PlanCardDTO
@@ -268,6 +228,8 @@ struct PlanHostingSection: View {
     let onChange: () -> Void
     let onCancel: () -> Void
     let onConfirm: (PlanConfirmation) -> Void
+    /// A guest's profile, from their row.
+    let onOpenProfile: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -429,18 +391,28 @@ struct PlanHostingSection: View {
         VStack(spacing: 0) {
             if divider { Divider().overlay(Theme.Color.appBorder) }
             HStack(spacing: Spacing.s3) {
-                PlanAvatar(name: person.displayName, url: person.avatarUrl)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(person.partySize > 1 ? "\(person.displayName) + \(person.partySize - 1)" : person.displayName)
-                        .planFont(.rowTitle)
-                        .foregroundStyle(Theme.Color.appText)
-                        .lineLimit(1)
-                    Text(guestFacts(person))
-                        .planFont(.footnote)
-                        .foregroundStyle(Theme.Color.appTextSecondary)
-                        .lineLimit(1)
+                // The guest's photo and name open their profile; the options stay on the menu beside them.
+                Button { onOpenProfile(person.userId) } label: {
+                    HStack(spacing: Spacing.s3) {
+                        PlanAvatar(name: person.displayName, url: person.avatarUrl)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(person.partySize > 1 ? "\(person.displayName) + \(person.partySize - 1)" : person.displayName)
+                                .planFont(.rowTitle)
+                                .foregroundStyle(Theme.Color.appText)
+                                .lineLimit(1)
+                            Text(guestFacts(person))
+                                .planFont(.footnote)
+                                .foregroundStyle(Theme.Color.appTextSecondary)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .contentShape(Rectangle())
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityHint("Opens their profile")
+                .accessibilityIdentifier("planGuest_\(person.userId)")
                 Menu {
                     if let requestId = viewModel.requestId(for: person) {
                         Button("Remove from plan", role: .destructive) {

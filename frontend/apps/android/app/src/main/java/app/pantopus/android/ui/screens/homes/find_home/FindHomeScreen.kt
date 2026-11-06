@@ -228,7 +228,13 @@ private fun FindHomeSearchHeader(
                     textStyle = PantopusTextStyle.body.copy(color = PantopusColors.appText),
                     cursorBrush = SolidColor(PantopusColors.primary600),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
+                    keyboardActions =
+                        KeyboardActions(
+                            onSearch = {
+                                defaultKeyboardAction(ImeAction.Done)
+                                onSubmit()
+                            },
+                        ),
                     modifier = Modifier.fillMaxWidth().testTag("findHomeSearchField"),
                 )
             }
@@ -599,7 +605,13 @@ private fun FindHomeInviteSection(
                         textStyle = PantopusTextStyle.body.copy(color = PantopusColors.appText),
                         cursorBrush = SolidColor(PantopusColors.primary600),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                        keyboardActions = KeyboardActions(onGo = { onSubmit() }),
+                        keyboardActions =
+                            KeyboardActions(
+                                onGo = {
+                                    defaultKeyboardAction(ImeAction.Done)
+                                    onSubmit()
+                                },
+                            ),
                         modifier = Modifier.fillMaxWidth().testTag("findHomeInviteField"),
                     )
                 }

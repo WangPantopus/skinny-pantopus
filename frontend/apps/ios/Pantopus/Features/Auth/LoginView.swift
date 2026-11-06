@@ -612,6 +612,8 @@ struct PasswordField: View {
     /// `"Forgot password?"`.
     let trailingLink: (label: String, action: () -> Void)?
 
+    @FocusState private var isFocused: Bool
+
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s1) {
             HStack {
@@ -645,6 +647,7 @@ struct PasswordField: View {
                 }
                 .accessibilityLabel("Password")
                 .accessibilityIdentifier(identifier)
+                .focused($isFocused)
                 .onChange(of: value) { _, _ in onChange() }
 
                 Button {
@@ -657,14 +660,19 @@ struct PasswordField: View {
                 .accessibilityLabel(isVisible ? "Hide password" : "Show password")
                 .accessibilityIdentifier("loginPasswordVisibilityToggle")
 
-                if case .error = state {
-                    Icon(.alertCircle, size: 18, color: Theme.Color.error)
-                } else if case .valid = state {
-                    Icon(.check, size: 18, color: Theme.Color.success)
+                Group {
+                    if case .error = state {
+                        Icon(.alertCircle, size: 18, color: Theme.Color.error)
+                    } else if case .valid = state {
+                        Icon(.check, size: 18, color: Theme.Color.success)
+                    }
                 }
+                .allowsHitTesting(false)
             }
             .padding(.horizontal, Spacing.s3)
             .frame(minHeight: 44)
+            // A tap anywhere in the box types in the password, not only on its line of text.
+            .typesInFieldOnTap($isFocused)
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .overlay(

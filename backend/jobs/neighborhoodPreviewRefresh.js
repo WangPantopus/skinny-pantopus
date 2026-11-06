@@ -33,12 +33,15 @@ function milestones() {
   return [...new Set([...BASE_MILESTONES, unlock])].sort((a, b) => b - a);
 }
 
-/** The notification copy: the unlock is a door opening, not a round number. */
+/**
+ * The notification copy: the unlock is a door opening, not a round number. It names no feature as unlocked: the
+ * meter gates status, never access (decision of September 16), and the marketplace and local tasks are launch cuts.
+ */
 function milestoneCopy(milestone, unlock) {
   if (milestone === unlock) {
     return {
       title: 'Your neighborhood is open',
-      body: `${milestone} households have verified their address nearby. Pulse, the marketplace, and local tasks are unlocked for everyone here.`,
+      body: `${milestone} households have verified their address nearby. See your neighborhood on the map.`,
       icon: '🔓',
       link: '/app/nearby',
     };
