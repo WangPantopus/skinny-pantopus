@@ -211,7 +211,8 @@ const GIG_TYPES = new Set([
   'gig_offer',
   // Gig lifecycle
   'gig_started', 'gig_completed', 'gig_confirmed',
-  'gig_cancelled', 'gig_auto_cancelled', 'gig_reminder',
+  'gig_cancelled', 'gig_auto_cancelled', 'gig_reminder', 'gig_start_reminder',
+  'task_accepted', 'worker_starting', 'worker_running_late', 'review_received',
   'gig_question', 'gig_question_answered',
   'no_show_reported', 'urgent_status_update',
   // P6 — saved-search alerts ("new task matches your saved search").
@@ -223,9 +224,9 @@ const GIG_TYPES = new Set([
   // Payments
   'payment_auth_failed', 'payment_captured', 'payment_released',
   'payment_action_required', 'payment_setup_failed',
-  'payout_sent', 'payout_onboarding_nudge', 'payment_completed',
+  'payout_sent', 'payout_onboarding_nudge', 'payment_completed', 'payout_failed', 'payout_reversed',
   // Disputes
-  'dispute_created', 'dispute_resolved',
+  'dispute_created', 'dispute_resolved', 'dispute_evidence_failed',
   // Worker coordination
   'worker_cant_make_it',
   // Retention nudges
@@ -245,7 +246,7 @@ const HOME_TYPES = new Set([
   'ownership_verification_needed', 'ownership_claim_approved',
   'ownership_claim_rejected', 'ownership_claim_needs_more_info',
   'new_ownership_claim', 'ownership_dispute',
-  'challenge_window_opened', 'ownership_transfer_received',
+  'challenge_window_opened', 'challenge_window_passed', 'claim_window_expiring', 'ownership_transfer_received',
   'tenant_request',
   // A proof beats a claim (home claims PR 3): someone proved the address, someone should confirm a claim, confirmed.
   'home_claim_set_aside', 'home_claim_to_review', 'home_claim_confirmed',
@@ -421,7 +422,9 @@ async function createNotification({ id, userId, type, title, body, icon, link, m
         return pushService.sendToUser(userId, {
           title: alert.title,
           body: alert.body || '',
-          data: { notificationId: data.id, type, link: link || null, ...(metadata || {}) },
+          // recipient_user_id: the apps show and route a push only for the account it was sent to (Android's
+          // chat channel, which every *_message type uses, drops one without it).
+          data: { notificationId: data.id, type, link: link || null, ...(metadata || {}), recipient_user_id: userId },
         });
       })
       .catch((err) => {
@@ -504,7 +507,8 @@ async function createBulkNotifications(notifications, { sendPush = true } = {}) 
             return pushService.sendToUser(notif.user_id, {
               title: notif.title,
               body: notif.body || '',
-              data: { notificationId: notif.id, type: notif.type, link: notif.link || null, ...(notif.metadata || {}) },
+              data: { notificationId: notif.id, type: notif.type, link: notif.link || null, ...(notif.metadata || {}),
+                recipient_user_id: notif.user_id },
             });
           })
           .catch((err) => {
@@ -1421,12 +1425,14 @@ async function notifyDensityMilestone({ userId, milestone, geohash }) {
 /**
  * Someone asked verified owner(s) to add them to the household (claim flow).
  */
-async function notifyHouseholdAccessRequestRejected({ requesterUserId, homeLabel, resolverName }) {
+async function notifyHouseholdAccessRequestRejected({ requesterUserId, homeLabel }) {
+  // Someone outside the home sees neither who lives there nor the name the household gave it, so the notice names
+  // neither: the address they asked about (homeLabel), or none.
   return createNotification({
     userId: requesterUserId,
     type: 'home_access_request_rejected',
     title: 'Request not approved',
-    body: `${resolverName} declined your request to join ${homeLabel}.`,
+    body: homeLabel ? `Your request to join the home at ${homeLabel} wasn't approved.` : "Your request to join a home wasn't approved.",
     icon: '🏠',
     metadata: {},
   });
@@ -1497,7 +1503,7 @@ async function deliverStoredGigNotification(notification, { pushAllowedAtCapture
     : await pushService.sendToUserWithReceipt(userId, {
       title: notification.title, body: notification.body || '',
       data: { ...(notification.metadata || {}), notificationId: notification.id,
-        type: notification.type, link: notification.link || null },
+        type: notification.type, link: notification.link || null, recipient_user_id: userId },
     });
   badgeService.emitBadgeUpdate(userId);
   if (_io && _connectedUsers) {
@@ -1544,7 +1550,7 @@ async function deliverStoredHomeTaskNotification(notification, { pushAllowedAtAs
     : await pushService.sendToUserWithReceipt(userId, {
       title: alert.title, body: alert.body || '',
       data: { ...notification.metadata, notificationId: notification.id,
-        type: notification.type, link: notification.link || null },
+        type: notification.type, link: notification.link || null, recipient_user_id: userId },
     });
   badgeService.emitBadgeUpdate(userId);
   if (_io && _connectedUsers) {

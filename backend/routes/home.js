@@ -1950,9 +1950,10 @@ router.post('/:id/household-access-requests/:requestId/reject', verifyToken, asy
       action: 'reject_request', payload: { request_id: req.params.requestId } });
     if (!result.replayed) {
       try {
+        // The address they asked to join; not the household's own name for it, nor who declined.
+        const { data: home } = await supabaseAdmin.from('Home').select('address').eq('id', req.params.id).maybeSingle();
         await require('../services/notificationService').notifyHouseholdAccessRequestRejected({
-          requesterUserId: result.target_id, homeLabel: result.home_label,
-          resolverName: await homeInvitationService.personName(req.user.id, 'A home manager'),
+          requesterUserId: result.target_id, homeLabel: home?.address || null,
         });
       } catch (err) { logger.error('Household rejection notification failed after commit', { errorCode: err.code }); }
     }
