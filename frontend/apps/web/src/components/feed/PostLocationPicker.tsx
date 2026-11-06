@@ -55,6 +55,10 @@ const FIX_WAIT_MS = 4000;
 const FINDING_POLL_MS = 3000;
 const MAX_FINDING_POLLS = 8;
 
+// The popover's width (w-72) and the gap it keeps from the edge of the screen.
+const POPOVER_WIDTH = 288;
+const SCREEN_GUTTER = 16;
+
 // Row icons by the server's venue `icon` key, as the apps draw them; a pin for a town or anything unknown.
 const PLACE_ICONS: Record<string, LucideIcon> = {
   restaurant: Utensils,
@@ -152,6 +156,7 @@ export default function PostLocationPicker({
   const [anchorSettled, setAnchorSettled] = useState(false);
   const [nearby, setNearby] = useState<NearbyList>(NO_NEARBY_LIST);
   const [nearbyAttempt, setNearbyAttempt] = useState(0);
+  const [popoverLeft, setPopoverLeft] = useState(0);
   const [loading, setLoading] = useState(false);
   const [searchFailed, setSearchFailed] = useState(false);
   const [searchAttempt, setSearchAttempt] = useState(0);
@@ -312,6 +317,13 @@ export default function PostLocationPicker({
 
     return () => controller.abort();
   }, [debouncedQuery, mode, searchAttempt, anchor]);
+
+  // On a narrow screen the button can sit far enough right to push the popover off the edge.
+  const handleOpen = () => {
+    const buttonLeft = containerRef.current?.getBoundingClientRect().left ?? 0;
+    setPopoverLeft(Math.min(0, window.innerWidth - SCREEN_GUTTER - POPOVER_WIDTH - buttonLeft));
+    setMode('search');
+  };
 
   // Pick a venue or town from the list or the search. Like a searched address it has to pass the place check (it may
   // be far from the person), and the device's fix counts there.
@@ -480,7 +492,7 @@ export default function PostLocationPicker({
       {/* ─── Trigger button ─────────────────────── */}
       {mode === 'closed' && (
         <button
-          onClick={() => setMode('search')}
+          onClick={handleOpen}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-app-muted hover-bg-app transition"
           title="Add location"
         >
@@ -494,7 +506,10 @@ export default function PostLocationPicker({
 
       {/* ─── Search mode ────────────────────────── */}
       {mode === 'search' && (
-        <div className="absolute bottom-full left-0 mb-1 w-72 bg-surface rounded-xl shadow-xl border border-app z-20 animate-[fadeIn_0.15s_ease-out]">
+        <div
+          className="absolute bottom-full mb-1 w-72 bg-surface rounded-xl shadow-xl border border-app z-40 animate-[fadeIn_0.15s_ease-out]"
+          style={{ left: popoverLeft }}
+        >
           {/* Search input */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-app">
             <svg className="w-3.5 h-3.5 text-app-muted flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
