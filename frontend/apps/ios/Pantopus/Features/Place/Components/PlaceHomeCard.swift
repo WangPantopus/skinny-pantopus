@@ -157,7 +157,8 @@ struct PlaceHomeCard: View {
                 }
             }
             // "County public records · Record Oct 2026": where the facts came from, and when.
-            Text([env.source, PlacePresentation.fmtMonthYear(env.asOf).map { "Record \($0)" }].compactMap { $0 }.joined(separator: " · "))
+            Text(env.provenance?.label
+                ?? [env.source, PlacePresentation.fmtMonthYear(env.asOf).map { "Record \($0)" }].compactMap { $0 }.joined(separator: " · "))
                 .font(Theme.Font.caption)
                 .foregroundStyle(Theme.Color.appTextMuted)
                 .fixedSize(horizontal: false, vertical: true)

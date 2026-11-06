@@ -40,10 +40,14 @@ struct PlaceHomeDetailContent: View {
                     FactsCard(data: data)
                     // The server names where the facts came from: county records,
                     // or the details the household entered.
-                    PlaceSourceNote(
-                        name: factsSource(env),
-                        asOf: PlacePresentation.fmtMonthYear(env.asOf)
-                    )
+                    if let label = env.provenance?.label {
+                        PlaceSourceNote(name: label)
+                    } else {
+                        PlaceSourceNote(
+                            name: factsSource(env),
+                            asOf: PlacePresentation.fmtMonthYear(env.asOf)
+                        )
+                    }
 
                     switch intel.valueAccess {
                     case .shown:
@@ -52,7 +56,9 @@ struct PlaceHomeDetailContent: View {
                         if let assessed = data.assessedValue {
                             AssessmentCard(assessed: assessed)
                         }
-                        if data.estimatedValue != nil || data.assessedValue != nil {
+                        if let valueSource = data.valueSource {
+                            PlaceSourceNote(name: valueSource)
+                        } else if data.estimatedValue != nil || data.assessedValue != nil {
                             PlaceSourceNote(
                                 name: "County public records · estimate model",
                                 asOf: PlacePresentation.fmtMonthYear(env.asOf)
@@ -80,7 +86,7 @@ struct PlaceHomeDetailContent: View {
                 }
             }
 
-            // `your_home` is Band B and needs an ATTOM key, so it is
+            // `your_home` is Band B and needs a county record, so it is
             // unavailable on plenty of installs. The Systems Ledger is
             // Band C — the household's own record — and renders either way.
             if let systemsEnv = vm.section(.homeSystems, in: intel) {
