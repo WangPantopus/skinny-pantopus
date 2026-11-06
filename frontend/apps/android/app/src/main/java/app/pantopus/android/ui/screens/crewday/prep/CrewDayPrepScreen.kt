@@ -46,6 +46,7 @@ import app.pantopus.android.ui.components.ToastHost
 import app.pantopus.android.ui.screens.crewday.components.CrewDayListPlaceholder
 import app.pantopus.android.ui.screens.crewday.components.CrewDaySection
 import app.pantopus.android.ui.screens.crewday.create.NewCrewDayState
+import app.pantopus.android.ui.screens.crewday.dates.CrewDayRainCard
 import app.pantopus.android.ui.screens.plans.components.PlanBanner
 import app.pantopus.android.ui.screens.plans.components.PlanBannerTone
 import app.pantopus.android.ui.screens.plans.components.PlanOptionRow
@@ -72,8 +73,14 @@ data class CrewDayPrepActions(
     val onShare: (url: String, message: String) -> Unit,
     /** "Printable flyer": the web flyer in the browser. */
     val onOpenFlyer: (url: String) -> Unit,
-    /** "Propose new dates" (screen 18). */
+    /** "Propose new dates" (screen 18), and its answers once sent. */
     val onProposeDates: (crewDayId: String) -> Unit,
+    /** "Open the route" (screen 16), from 6 PM the evening before. */
+    val onOpenRoute: (crewDayId: String) -> Unit,
+    /** "See invoices": the business's existing invoices. */
+    val onSeeInvoices: (businessId: String) -> Unit,
+    /** "Offer a Crew Day here again": New Crew Day prefilled from this one. */
+    val onRepeat: (businessId: String, crewDayId: String) -> Unit,
 )
 
 /**
@@ -98,10 +105,21 @@ fun CrewDayPrepScreen(
         }
     }
     val loaded = state as? CrewDayPrepUiState.Loaded
+    val after = loaded?.view?.isAfterTheDay() == true
     PlanPlainScaffold(
         onBack = actions.onBack,
         title = loaded?.view?.title ?: "Crew Day",
         modifier = Modifier.testTag("crewDayPrep"),
+        footer =
+            loaded?.view?.takeIf { after && it.canEdit && it.businessUserId != null }?.let { view ->
+                {
+                    PrimaryButton(
+                        title = "Offer a Crew Day here again",
+                        onClick = { actions.onRepeat(view.businessUserId.orEmpty(), view.id) },
+                        modifier = Modifier.fillMaxWidth().testTag("crewDayAfterRepeat"),
+                    )
+                }
+            },
     ) {
         when (val current = state) {
             CrewDayPrepUiState.Loading -> CrewDayListPlaceholder(modifier = Modifier.testTag("crewDayLoading"))
@@ -112,7 +130,12 @@ fun CrewDayPrepScreen(
                     onRetry = viewModel::retry,
                     modifier = Modifier.heightIn(min = 360.dp).testTag("crewDayLoadError"),
                 )
-            is CrewDayPrepUiState.Loaded -> PrepContent(current.view, working, actions, viewModel, onCopied = { toast.info("Link copied") })
+            is CrewDayPrepUiState.Loaded ->
+                if (after) {
+                    CrewDayAfterDay(view = current.view, onSeeInvoices = { current.view.businessUserId?.let(actions.onSeeInvoices) })
+                } else {
+                    PrepContent(current.view, working, actions, viewModel, onCopied = { toast.info("Link copied") })
+                }
         }
     }
     ToastHost(controller = toast)
@@ -136,7 +159,12 @@ private fun PrepContent(
     val clipboard = LocalClipboardManager.current
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         PrepHeader(view, zone)
+        if (view.routeIsOpen()) {
+            CrewDayRouteCard(view = view, onOpenRoute = { actions.onOpenRoute(day.id) })
+        }
         StatusBanner(view, working, viewModel)
+        // Rain: while households answer the new dates, their answers and each date's route (as the web).
+        CrewDayRainCard(view, onOpen = { actions.onProposeDates(day.id) })
         NeedsYou(view, working, onPrice = { pricing = it }, onDecline = { declining = it }, onRelease = { releasing = it })
         HomesBooked(view)
         BringInMore(
@@ -538,14 +566,18 @@ private fun IfPlansChange(
 ) {
     if (!view.canEdit || view.status !in setOf("open", "in_progress")) return
     CrewDaySection("If plans change") {
-        PlanOptionRow(first = true) {
-            PlanTonalButton(
-                title = "Propose new dates",
-                onClick = onProposeDates,
-                modifier = Modifier.testTag("crewDayPrepProposeDates"),
-            )
+        // One proposal at a time, and only for homes that are booked (as the web).
+        val canPropose = view.proposal == null && view.bookings.any { it.status == "booked" }
+        if (canPropose) {
+            PlanOptionRow(first = true) {
+                PlanTonalButton(
+                    title = "Propose new dates",
+                    onClick = onProposeDates,
+                    modifier = Modifier.testTag("crewDayPrepProposeDates"),
+                )
+            }
         }
-        PlanOptionRow {
+        PlanOptionRow(first = !canPropose) {
             PlanTextButton(
                 title = "Cancel this Crew Day",
                 onClick = onCancel,

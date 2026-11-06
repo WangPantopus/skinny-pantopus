@@ -624,6 +624,8 @@ data class CrewDayHomeDto(
     @Json(name = "address_visible") val addressVisible: Boolean = false,
     @Json(name = "address") val address: CrewDayAddressDto? = null,
     @Json(name = "first_name") val firstName: String? = null,
+    /** The household, for Can't get in's conversation; null outside the job window (like the first name). */
+    @Json(name = "household_user_id") val householdUserId: String? = null,
     @Json(name = "access_note") val accessNote: String? = null,
     @Json(name = "route_position") val routePosition: Int? = null,
     @Json(name = "eta") val eta: CrewDayEtaDto? = null,
@@ -699,9 +701,13 @@ data class CrewDayCrewViewDto(
     @Json(name = "cancelled_by") val cancelledBy: String? = null,
     @Json(name = "can_edit") val canEdit: Boolean = false,
     @Json(name = "editable_fields") val editableFields: List<String> = emptyList(),
+    /** The crew's own business, as households see it. */
+    @Json(name = "crew") val crew: CrewDayCrewDto? = null,
     @Json(name = "money") val money: CrewDayMoneyDto = CrewDayMoneyDto(),
     @Json(name = "needs_you") val needsYou: CrewDayNeedsYouDto = CrewDayNeedsYouDto(),
     @Json(name = "bookings") val bookings: List<CrewDayHomeDto> = emptyList(),
+    /** Homes that ended (cancelled or declined). */
+    @Json(name = "ended") val ended: List<CrewDayHomeDto> = emptyList(),
     @Json(name = "past_customers") val pastCustomers: Int = 0,
     @Json(name = "events") val events: List<CrewDayEventDto> = emptyList(),
 )

@@ -16,6 +16,7 @@ import app.pantopus.android.ui.screens.crewday.booking.CrewDayBookingScreen
 import app.pantopus.android.ui.screens.crewday.create.NewCrewDayScreen
 import app.pantopus.android.ui.screens.crewday.crew.CrewDaysCrewActions
 import app.pantopus.android.ui.screens.crewday.crew.CrewDaysCrewScreen
+import app.pantopus.android.ui.screens.crewday.dates.CrewDayProposeDatesScreen
 import app.pantopus.android.ui.screens.crewday.invite.CrewDayInvitationActions
 import app.pantopus.android.ui.screens.crewday.invite.CrewDayInvitationScreen
 import app.pantopus.android.ui.screens.crewday.mine.MyCrewDaysActions
@@ -23,6 +24,9 @@ import app.pantopus.android.ui.screens.crewday.mine.MyCrewDaysScreen
 import app.pantopus.android.ui.screens.crewday.prep.CrewDayPrepActions
 import app.pantopus.android.ui.screens.crewday.prep.CrewDayPrepScreen
 import app.pantopus.android.ui.screens.crewday.problem.CrewDayProblemScreen
+import app.pantopus.android.ui.screens.crewday.route.CrewDayHomeScreen
+import app.pantopus.android.ui.screens.crewday.route.CrewDayRouteActions
+import app.pantopus.android.ui.screens.crewday.route.CrewDayRouteScreen
 import app.pantopus.android.ui.screens.root.NotYetAvailableView
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -38,6 +42,7 @@ object CrewDayRoutes {
     const val CREW_DAY_ID_KEY = "crewDayId"
     const val BUSINESS_ID_KEY = "businessId"
     const val REPEAT_OF_KEY = "repeatOf"
+    const val DATE_KEY = "date"
 
     /** 1 Invitation, by its share code. */
     const val INVITATION = "crew-day/{$CODE_KEY}"
@@ -66,8 +71,14 @@ object CrewDayRoutes {
     /** 14 New Crew Day for a business; `repeatOf` prefills it from a finished day. */
     const val NEW = "crew-days/new?$BUSINESS_ID_KEY={$BUSINESS_ID_KEY}&$REPEAT_OF_KEY={$REPEAT_OF_KEY}"
 
-    /** 18 Propose new dates for a day. */
+    /** 18 Propose new dates for a day, then the answers. */
     const val PROPOSE_DATES = "crew-days/day/{$CREW_DAY_ID_KEY}/propose-dates"
+
+    /** 16 The route for one date of a day (the first open date when there is none). */
+    const val ROUTE = "crew-days/day/{$CREW_DAY_ID_KEY}/route?$DATE_KEY={$DATE_KEY}"
+
+    /** 17 One home on the route. */
+    const val ROUTE_HOME = "crew-days/day/{$CREW_DAY_ID_KEY}/route/{$BOOKING_ID_KEY}?$DATE_KEY={$DATE_KEY}"
 
     fun invitation(code: String): String = "crew-day/${Uri.encode(code)}"
 
@@ -90,6 +101,17 @@ object CrewDayRoutes {
     ): String = "crew-days/new?$BUSINESS_ID_KEY=${Uri.encode(businessId)}&$REPEAT_OF_KEY=${Uri.encode(repeatOf.orEmpty())}"
 
     fun proposeDates(id: String): String = "crew-days/day/${Uri.encode(id)}/propose-dates"
+
+    fun route(
+        id: String,
+        date: String? = null,
+    ): String = "crew-days/day/${Uri.encode(id)}/route?$DATE_KEY=${Uri.encode(date.orEmpty())}"
+
+    fun routeHome(
+        id: String,
+        bookingId: String,
+        date: String? = null,
+    ): String = "crew-days/day/${Uri.encode(id)}/route/${Uri.encode(bookingId)}?$DATE_KEY=${Uri.encode(date.orEmpty())}"
 }
 
 /** Where Crew Day hands off to the rest of the app (routes `RootTabScreen` owns). */
@@ -110,6 +132,8 @@ data class CrewDayExternalRoutes(
     val openChat: (userId: String, name: String) -> Unit,
     /** The existing invoice page: the receipt, and paying it. */
     val openInvoice: (invoiceId: String) -> Unit,
+    /** A business's own invoices (the existing invoices list). */
+    val openInvoices: (businessId: String) -> Unit,
 )
 
 /** Registers every Crew Day page. Call inside the root `NavHost`. */
@@ -204,6 +228,7 @@ fun NavGraphBuilder.crewDayRoutes(
                 CrewDaysCrewActions(
                     onBack = back,
                     onOpenDay = { id, businessId -> nav.navigate(CrewDayRoutes.crewDay(id, businessId)) },
+                    onOpenRoute = { id -> nav.navigate(CrewDayRoutes.route(id)) },
                     onNewDay = { businessId -> nav.navigate(CrewDayRoutes.newDay(businessId)) },
                     onOpenBusiness = external.openBusiness,
                     onOpenPayouts = external.openPayouts,
@@ -232,7 +257,35 @@ fun NavGraphBuilder.crewDayRoutes(
         route = CrewDayRoutes.PROPOSE_DATES,
         arguments = listOf(navArgument(CrewDayRoutes.CREW_DAY_ID_KEY) { type = NavType.StringType }),
     ) {
-        CrewDayPlaceholder("Propose new dates", back, crew = true)
+        CrewDayProposeDatesScreen(onBack = back, onOpenRoute = { id, date -> nav.navigate(CrewDayRoutes.route(id, date)) })
+    }
+    val dateArgument =
+        navArgument(CrewDayRoutes.DATE_KEY) {
+            type = NavType.StringType
+            defaultValue = ""
+        }
+    composable(
+        route = CrewDayRoutes.ROUTE,
+        arguments = listOf(navArgument(CrewDayRoutes.CREW_DAY_ID_KEY) { type = NavType.StringType }, dateArgument),
+    ) {
+        CrewDayRouteScreen(
+            actions =
+                CrewDayRouteActions(
+                    onBack = back,
+                    onOpenHome = { id, bookingId, date -> nav.navigate(CrewDayRoutes.routeHome(id, bookingId, date)) },
+                ),
+        )
+    }
+    composable(
+        route = CrewDayRoutes.ROUTE_HOME,
+        arguments =
+            listOf(
+                navArgument(CrewDayRoutes.CREW_DAY_ID_KEY) { type = NavType.StringType },
+                navArgument(CrewDayRoutes.BOOKING_ID_KEY) { type = NavType.StringType },
+                dateArgument,
+            ),
+    ) {
+        CrewDayHomeScreen(onBack = back, onOpenChat = external.openChat)
     }
     composable(
         route = CrewDayRoutes.CREW_DAY,
@@ -252,6 +305,9 @@ fun NavGraphBuilder.crewDayRoutes(
                     onShare = { _, message -> external.share(message, "Share the Crew Day") },
                     onOpenFlyer = external.openWeb,
                     onProposeDates = { id -> nav.navigate(CrewDayRoutes.proposeDates(id)) },
+                    onOpenRoute = { id -> nav.navigate(CrewDayRoutes.route(id)) },
+                    onSeeInvoices = external.openInvoices,
+                    onRepeat = { businessId, id -> nav.navigate(CrewDayRoutes.newDay(businessId, repeatOf = id)) },
                 ),
         )
     }

@@ -16,6 +16,10 @@
     <cache-path
         name="reading_camera"
         path="reading-camera/" />
+    <!-- Photos the camera app takes for a Crew Day home the crew finished (CrewDayCameraPhotos). -->
+    <cache-path
+        name="crew_day_camera"
+        path="crew-day-camera/" />
     <!-- Files opened from a chat in another app. -->
     <cache-path
         name="chat_files"
