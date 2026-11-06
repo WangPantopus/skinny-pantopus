@@ -18,7 +18,7 @@ const { writeRelease } = require('./lib/release.cjs');
 const { log } = require('./lib/log.cjs');
 
 const RECORD_KEYS = new Set(['id', 'kind', 'home_type', 'address', 'facts', 'parent', 'roster', 'restricted', 'key']);
-const ADDRESS_KEYS = new Set(['number', 'pre', 'name', 'suffix', 'post', 'unit', 'building', 'city', 'zip']);
+const ADDRESS_KEYS = new Set(['number', 'pre', 'name', 'suffix', 'post', 'unit', 'building', 'urbanization', 'city', 'zip']);
 
 function parseArgs(argv) {
   const opts = {};
