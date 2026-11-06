@@ -131,6 +131,12 @@ final class PlaceDashboardViewModel {
         self.onOpenHubHome = onOpenHubHome
         self.onOpenHomeShortcut = onOpenHomeShortcut
         self.onOpenNotifications = onOpenNotifications
+        // An owner's or household member's last copy is the first frame, as a
+        // Home's is; `load()` re-checks it when the screen activates.
+        if let copy = PlaceStoreReads.peek(homeId: homeId) {
+            apply(copy.value)
+            showKeptShortcuts()
+        }
     }
 
     /// Showing the dashboard: the store's copy at once (another screen may
@@ -265,19 +271,40 @@ final class PlaceDashboardViewModel {
 
     /// The shortcuts follow the person's access at this Home, read the way
     /// Home tools reads it (`GET /api/homes/:id/dashboard-access`) and gated
-    /// on the same permissions. The access copy Home tools keeps for an owner
-    /// or household member shows them at once. A refusal leaves none; a
-    /// failed read keeps what shows.
+    /// on the same permissions. The access copy kept for an owner or household
+    /// member shows them at once. A refusal leaves none; a failed read keeps
+    /// what shows.
     private func refreshHomeShortcuts() async {
-        if homeShortcuts.isEmpty, let copy = ScreenStore.store(for: api).peek(
-            HomeDashboardAccess.endpoint(homeId: homeId),
-            as: HomeAccessDTO.self
-        ) {
-            homeShortcuts = PlaceHomeShortcut.allowed(by: copy.value)
-        }
+        showKeptShortcuts()
         guard let snapshot = try? await HomeDashboardAccess(homeId: homeId, api: api).read(),
               !Task.isCancelled else { return }
         homeShortcuts = PlaceHomeShortcut.allowed(by: snapshot.access)
+        keepAccess(snapshot)
+    }
+
+    private func showKeptShortcuts() {
+        guard homeShortcuts.isEmpty, let copy = ScreenStore.store(for: api).peek(
+            HomeDashboardAccess.endpoint(homeId: homeId),
+            as: HomeAccessDTO.self
+        ) else { return }
+        homeShortcuts = PlaceHomeShortcut.allowed(by: copy.value)
+    }
+
+    /// The access copy Home tools keeps, kept from here too so the next launch
+    /// draws the shortcuts in its first frame. Only for the people Home tools
+    /// keeps it for; anyone else's copy goes, with the dashboard's copies that
+    /// show by it, as when Home tools finds the same.
+    private func keepAccess(_ snapshot: HomeDashboardAuthoritySnapshot) {
+        let store = ScreenStore.store(for: api)
+        let endpoint = HomeDashboardAccess.endpoint(homeId: homeId)
+        guard let access = snapshot.access, HomeDashboardViewModel.isHousehold(access, expiresAt: snapshot.expiresAt) else {
+            if store.peek(endpoint, as: HomeAccessDTO.self) != nil {
+                HomeDashboardViewModel.dropCopy(homeId: homeId, store: store)
+            }
+            return
+        }
+        guard store.peek(endpoint, as: HomeAccessDTO.self)?.value != access else { return }
+        store.put(endpoint, data: snapshot.body, kind: .homes, topics: [ScreenTopic.home(homeId)], showsBeforeRecheck: true)
     }
 
     /// Re-read the bell's count whenever the dashboard shows again (for
