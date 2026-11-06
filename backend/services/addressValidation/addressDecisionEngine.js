@@ -117,10 +117,10 @@ const PROVIDER_RESIDENTIAL_SAFE_PLACE_TYPES = new Set([
   'residential_building',
   'townhouse',
 ]);
-// Places USPS serves whose addresses often have no street number ("Carr 176 Km 3"): without a USPS
-// answer they are pending, not "missing a street number".
+// Places USPS serves whose addresses often have no street number ("Carr 176 Km 3", "PSC 808 Box 39"):
+// without a USPS answer they are pending, not "missing a street number". AA, AE and AP are military mail.
 const TERRITORY_STATES = new Set([
-  'PR', 'VI', 'GU', 'AS', 'MP',
+  'PR', 'VI', 'GU', 'AS', 'MP', 'AA', 'AE', 'AP',
   'PUERTO RICO', 'VIRGIN ISLANDS', 'U.S. VIRGIN ISLANDS', 'GUAM', 'AMERICAN SAMOA', 'NORTHERN MARIANA ISLANDS',
 ]);
 
@@ -636,15 +636,13 @@ class AddressDecisionEngine {
     if (!google) return false;
 
     if (postal && this._isTerritoryWithoutAnswer(google, postal)) return false;
+    // USPS confirmed it: a rural route or a military "PSC 808 Box 39" has no street number to find.
+    if (postal && (postal.dpv_match_code === 'Y' || postal.record_type === 'R')) return false;
 
     // Explicit signal from Google
     if (google.missing_component_types?.includes('street_number')) return true;
 
-    if (postal) {
-      if ((postal.footnotes || []).includes('M1')) return true;
-      // USPS confirmed the number: a rural route's line 1 starts with no digit.
-      if (postal.dpv_match_code === 'Y' || postal.record_type === 'R') return false;
-    }
+    if (postal && (postal.footnotes || []).includes('M1')) return true;
 
     // Fallback: normalized line1 exists but has no leading street number.
     // Skip when line2 is populated — building-name addresses like
