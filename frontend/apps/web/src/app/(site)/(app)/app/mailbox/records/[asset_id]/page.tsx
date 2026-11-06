@@ -2,6 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useState, useCallback, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useRouter } from 'next/navigation';
 import type { MailItemV2 } from '@/types/mailbox';
 import {
@@ -12,6 +13,7 @@ import {
 } from '@/lib/mailbox-queries';
 import { useHomeAccess } from '@/hooks/useHomeAccess';
 import { launchFeatures } from '@/lib/featureFlags';
+import { useDialogFocusTrap } from '@/lib/useDialogFocusTrap';
 
 // ── Category icons ───────────────────────────────────────────
 const categoryIcons: Record<string, string> = {
@@ -41,6 +43,10 @@ function LinkMailDrawer({
   const [search, setSearch] = useState('');
   const { data } = useDrawerItems('home', { page: 1, limit: 50 });
   const linkMail = useLinkMailToAsset();
+  // Read during this first render: the search field takes the focus as it mounts.
+  const opener = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  // On document.body the drawer comes last in the Tab order, so Tab stays inside.
+  const drawerRef = useDialogFocusTrap<HTMLDivElement>(onClose, opener);
 
   const filteredItems = useMemo(() => {
     if (!data?.items) return [];
@@ -60,9 +66,11 @@ function LinkMailDrawer({
     );
   }, [assetId, linkMail, onClose]);
 
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
-      <div className="w-full max-w-sm bg-app-surface h-full flex flex-col border-l border-app-border">
+  // Rendered into document.body: inside the app's <main> (its own stacking context) the header hid the drawer's
+  // title and Close button, and the phone tab bar covered the last rows.
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex justify-end bg-black/40">
+      <div ref={drawerRef} className="w-full max-w-sm bg-app-surface h-full flex flex-col border-l border-app-border">
         {/* Header */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-app-border-subtle flex-shrink-0">
           <h3 className="text-sm font-semibold text-app-text flex-1">
@@ -123,7 +131,8 @@ function LinkMailDrawer({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
