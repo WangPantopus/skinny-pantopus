@@ -121,7 +121,7 @@ Verified:
    - `GET /api/posts/place-eligibility` takes an optional `homeId`, so the iOS and Android composers' inline note matches what Post does. Older app versions get the refusal when they tap Post.
    - Moving a Home post follows the same limit, which closes a direct API path.
    - Not verified: hosted services and physical phones.
-3. **Android gallery photos: the post composer asks for `ACCESS_MEDIA_LOCATION`, only when it helps. Built in PR_LINK.**
+3. **Android gallery photos: the post composer asks for `ACCESS_MEDIA_LOCATION`, only when it helps. Built in [#3560](https://github.com/WangPantopus/skinny-pantopus/pull/3560).**
    - The founder's decision, November 6: "Build it now". Before that, the Android 17 image showed the problem and the prompt's wording made it the founder's call.
    - Measured on emulators with synthetic files. The Android post composer uses the document picker (`OpenMultipleDocuments`), not the system photo picker, and "Android 10 and later" was too broad.
      - On the Android 11, 12, 13 and 16 images, the location of a gallery photo or video comes through with no permission.
@@ -133,7 +133,7 @@ Verified:
      - A video's hidden location leaves no mark, so a video alone doesn't ask. Once a photo's ask is allowed, videos already in the draft count too, and later ones read normally.
      - Allowing makes what's already attached count, with no need to attach it again. Declining changes nothing, and a far tag gets the existing inline note.
    - Uploads: the composer uploads Android's copy without the location (`MediaStore.getRedactedUri`) from Android 12 on. Measured in the real app, the file a client sent had no coordinates on Android 13, 16 and 17, photo and video. Where Android can't give that copy (Android 10 and 11, the picker's Downloads root, other document providers), it falls back to the file as picked, so the coordinates can be in the upload on the way to the server, which removes them before storing (#3484).
-   - Checked in the real app against a local backend, with synthetic media: see PR_LINK. The Android map can't draw without a Maps key locally, so the marker was checked in `/api/posts/map`, not on screen.
+   - Checked in the real app against a local backend, with synthetic media: see [#3560](https://github.com/WangPantopus/skinny-pantopus/pull/3560). The Android map can't draw without a Maps key locally, so the marker was checked in `/api/posts/map`, not on screen.
    - Not verified: physical phones and current Google Play system updates (they replace the media module, and these images carry old ones, so a real phone may hide the location on older Android versions too), Android 10, 14 and 15, real camera files, and Play review. The founder's Play Console steps and the real-phone check are a row in `NEXT_STEPS.md`.
 4. **The web composer's place picker. Done: [#3479](https://github.com/WangPantopus/skinny-pantopus/pull/3479) and [#3493](https://github.com/WangPantopus/skinny-pantopus/pull/3493).**
    - Update, November 6: it now lists nearby venues and searches them by name, like iOS and Android, and a post records the venue as OpenStreetMap's. With no device fix, the list comes from the saved viewing area.
