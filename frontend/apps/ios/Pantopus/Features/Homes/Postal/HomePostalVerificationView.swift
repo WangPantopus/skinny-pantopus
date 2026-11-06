@@ -132,20 +132,7 @@ struct HomePostalVerificationView: View {
     @ViewBuilder
     private func currentStatus(_ status: HomePostalStatus) -> some View {
         if let postcard = status.postcard {
-            Text(HomePostalMessages.postcardHeadline(
-                postcard["status"]?.stringValue,
-                delivery: postcard["delivery"]?.stringValue,
-                attemptsRemaining: postcard["attempts_remaining"]?.numberValue.map { Int($0) }
-            ))
-            .scaledFont(20, weight: .semibold)
-            .accessibilityIdentifier("homePostalDelivery")
-            if !HomePostalMessages.postcardEnded(postcard["status"]?.stringValue) {
-                Text(HomePostalMessages.postcardStatus(postcard["status"]?.stringValue)).scaledFont(16)
-            }
-            if postcard["status"]?.stringValue == "pending", let count = postcard["attempts_remaining"]?.numberValue {
-                Text(HomePostalMessages.triesLeft(Int(count))).scaledFont(12)
-                    .accessibilityIdentifier("homePostalAttemptsRemaining")
-            }
+            postcardSummary(postcard)
         } else {
             Text("You haven't requested a postcard yet.").scaledFont(16)
         }
@@ -159,6 +146,7 @@ struct HomePostalVerificationView: View {
             Button("Send the postcard") { Task { await viewModel.resumeMail() } }
                 .frame(minHeight: 44).disabled(!viewModel.canResumeMail).accessibilityIdentifier("homePostalResume")
         }
+        mailNextSteps
         if status.canRequest { mailingForm }
         if status.canVerify { codeForm }
         if let progress = viewModel.progress {
@@ -172,6 +160,36 @@ struct HomePostalVerificationView: View {
         Button("Refresh") { Task { await viewModel.refresh() } }
             .frame(minHeight: 44)
             .accessibilityIdentifier("homePostalRefresh")
+    }
+
+    /// The ways on when mail can't prove the address. Each opens a screen that already exists.
+    @ViewBuilder
+    private var mailNextSteps: some View {
+        if viewModel.permits(.document) { navigation("Verify another way", .document) }
+        if viewModel.permits(.addressWrong) { navigation("This address is wrong", .addressWrong) }
+    }
+
+    @ViewBuilder
+    private func postcardSummary(_ postcard: [String: JSONValue]) -> some View {
+        let mail = HomePostalMessages.mailCopy(postcard["mail_state"]?.stringValue)
+        Text(mail?.headline ?? HomePostalMessages.postcardHeadline(
+            postcard["status"]?.stringValue,
+            delivery: postcard["delivery"]?.stringValue,
+            attemptsRemaining: postcard["attempts_remaining"]?.numberValue.map { Int($0) }
+        ))
+        .scaledFont(20, weight: .semibold)
+        .accessibilityIdentifier("homePostalDelivery")
+        if let mail {
+            if viewModel.status?.restriction != "POSTCARD_RETURNED_LIMIT" {
+                Text(mail.body).scaledFont(16).accessibilityIdentifier("homePostalMailState")
+            }
+        } else if !HomePostalMessages.postcardEnded(postcard["status"]?.stringValue) {
+            Text(HomePostalMessages.postcardStatus(postcard["status"]?.stringValue)).scaledFont(16)
+        }
+        if postcard["status"]?.stringValue == "pending", let count = postcard["attempts_remaining"]?.numberValue {
+            Text(HomePostalMessages.triesLeft(Int(count))).scaledFont(12)
+                .accessibilityIdentifier("homePostalAttemptsRemaining")
+        }
     }
 
     private var mailingForm: some View {
@@ -219,7 +237,10 @@ struct HomePostalVerificationView: View {
                 identifier: "homePostalCountry"
             )
             Text("Include your apartment or unit. The complete address is checked before mailing.").scaledFont(12)
-            PrimaryButton(title: "Request postcard", isEnabled: viewModel.canRequestMail) { confirmsMail = true }
+            PrimaryButton(
+                title: viewModel.mailEnded ? "Send another postcard" : "Request postcard",
+                isEnabled: viewModel.canRequestMail
+            ) { confirmsMail = true }
                 .accessibilityIdentifier("homePostalRequestMail")
         }
         .autocorrectionDisabled()

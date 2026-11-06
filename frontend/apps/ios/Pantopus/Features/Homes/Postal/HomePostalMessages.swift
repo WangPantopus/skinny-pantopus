@@ -1,6 +1,45 @@
 import Foundation
 
+/// What the screen says when the mail itself is the news.
+struct HomePostalMailCopy: Equatable {
+    let headline: String
+    let body: String
+}
+
 enum HomePostalMessages {
+    private static let nextStep = "Check the address and send another, or verify another way."
+
+    /// `delivery` keeps its old words for apps in the stores; `mail_state` is newer and says more.
+    static func mailCopy(_ state: String?) -> HomePostalMailCopy? {
+        switch state {
+        case "sending":
+            HomePostalMailCopy(
+                headline: "Sending your postcard…",
+                body: "We're confirming with the printer. We won't mail a second one. If a card arrives, its code works."
+            )
+        case "delayed":
+            HomePostalMailCopy(
+                headline: "We'll mail your card as soon as we can",
+                body: "The printer isn't answering right now. Your request is saved, so there's nothing you need to do."
+            )
+        case "returned":
+            HomePostalMailCopy(headline: "Your postcard came back", body: "Your postcard came back undeliverable. \(nextStep)")
+        case "rerouted":
+            HomePostalMailCopy(
+                headline: "Your postcard was re-routed",
+                body: "USPS re-routed your postcard, so its code won't work. \(nextStep)"
+            )
+        case "failed":
+            HomePostalMailCopy(headline: "We couldn't mail your postcard", body: "We couldn't print or mail your postcard. \(nextStep)")
+        default: nil
+        }
+    }
+
+    /// The card is over because of the mail, so the address may be the problem.
+    static func mailEnded(_ state: String?) -> Bool {
+        ["returned", "rerouted", "failed"].contains(state ?? "")
+    }
+
     static func headline(kind: PendingHomePostalCommand.Kind, outcome: HomePostalOutcome?) -> String {
         switch outcome?.state {
         case "completed": kind == .code ? "Code accepted" : "Postcard requested"
@@ -91,6 +130,8 @@ enum HomePostalMessages {
         case "POSTCARD_COUNTRY_UNAVAILABLE": "Mail verification is currently available for US addresses."
         case "POSTCARD_ADDRESS_LIMIT": "Too many postcards have been requested for this address. Try again later."
         case "POSTCARD_USER_LIMIT": "You've asked for too many postcards in the last hour. Try again later."
+        case "POSTCARD_RETURNED_LIMIT":
+            "Two postcards to this address came back, so we won't send a third. Check the address, or verify another way."
         case "POSTCARD_NOT_DISPATCHED": "Your postcard hasn't been sent yet. Send it first."
         case "OWNERSHIP_FLOW_REQUIRED": "Mail verification isn't available to this Home's owners, admins or managers."
         case "HOME_NOT_FOUND": "This Home is no longer available. Check your residency status."

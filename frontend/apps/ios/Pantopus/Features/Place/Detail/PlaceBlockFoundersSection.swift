@@ -103,7 +103,7 @@ final class PlaceBlockFoundersViewModel {
             recipientCity = ""
             recipientState = ""
             recipientZip = ""
-            inviteSent = "Card on its way — it should land in about a week."
+            inviteSent = result.pending == true ? result.message : "Card on its way — it should land in about a week."
             if case let .loaded(status) = state {
                 state = .loaded(status.withInvitesRemaining(result.invitesRemaining))
             }
