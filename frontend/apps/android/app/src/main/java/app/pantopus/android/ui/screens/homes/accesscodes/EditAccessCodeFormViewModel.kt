@@ -14,6 +14,7 @@ import app.pantopus.android.data.api.models.homes.UpdateAccessSecretRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.refusesStoredCopy
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import app.pantopus.android.data.homes.HomeMembersRepository
 import app.pantopus.android.data.homes.HomesRepository
 import app.pantopus.android.ui.components.toastDurationMillis
@@ -222,6 +223,13 @@ class EditAccessCodeFormViewModel
         private val session = sessionScopes.create(viewModelScope)
         private var pendingCreate: PendingAccessCreate? = null
 
+        /** Every network attempt of a write, follow-ups included, must carry the session that opened this form. */
+        private val dispatchGuard =
+            AuthenticatedDispatchGuard { credentials ->
+                session.requireCurrent()
+                session.requireDispatchCredentials(credentials)
+            }
+
         init {
             seedDefaultFields()
             viewModelScope.launch {
@@ -341,7 +349,7 @@ class EditAccessCodeFormViewModel
                 return
             }
             if (secret != null) hydrate(secret) else seedDefaultFields()
-            val draft = retainedDraft?.takeIf { canManage && it.visibility in scopes }
+            val draft = retainedDraft.takeIf { canManage }
             retainedDraft = draft
             if (pendingCreate?.request?.visibility !in response.allowedVisibilities) pendingCreate = null
             _state.update { current ->
@@ -492,6 +500,7 @@ class EditAccessCodeFormViewModel
                                         notes = notes,
                                         visibility = visibilityWire,
                                     ),
+                                dispatchGuard = dispatchGuard,
                             )
                         } else {
                             createOrReconcile(
@@ -566,7 +575,7 @@ class EditAccessCodeFormViewModel
             }
             val intent = previous ?: PendingAccessCreate(actorId, request, response.secrets.map { it.id }.toSet())
             pendingCreate = intent
-            val result = homes.createHomeAccessSecret(homeId = homeId, request = intent.request)
+            val result = homes.createHomeAccessSecret(homeId = homeId, request = intent.request, dispatchGuard = dispatchGuard)
             if (result is NetworkResult.Failure && !result.error.creationMayHaveSucceeded()) pendingCreate = null
             return result
         }
@@ -579,7 +588,7 @@ class EditAccessCodeFormViewModel
             mutationJob =
                 viewModelScope.launch {
                     if (!session.confirmCurrent()) return@launch invalidateSession()
-                    val result = homes.deleteHomeAccessSecret(homeId = homeId, secretId = id)
+                    val result = homes.deleteHomeAccessSecret(homeId = homeId, secretId = id, dispatchGuard = dispatchGuard)
                     if (!session.confirmCurrent()) return@launch invalidateSession()
                     when (result) {
                         is NetworkResult.Success -> {

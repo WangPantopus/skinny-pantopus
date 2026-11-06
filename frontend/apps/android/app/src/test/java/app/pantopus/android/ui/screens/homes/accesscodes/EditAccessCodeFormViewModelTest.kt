@@ -329,7 +329,7 @@ class EditAccessCodeFormViewModelTest {
             coEvery { members.listOccupants("home_1") } returns NetworkResult.Success(roster())
             val captured = slot<CreateAccessSecretRequest>()
             coEvery {
-                homes.createHomeAccessSecret(homeId = "home_1", request = capture(captured))
+                homes.createHomeAccessSecret(homeId = "home_1", request = capture(captured), dispatchGuard = any())
             } returns
                 NetworkResult.Success(
                     HomeAccessSecretResponse(
@@ -360,7 +360,7 @@ class EditAccessCodeFormViewModelTest {
             advanceTimeBy(900)
             runCurrent()
             assertTrue(vm.state.value.shouldDismiss)
-            coVerify { homes.createHomeAccessSecret(any(), any()) }
+            coVerify { homes.createHomeAccessSecret(any(), any(), any()) }
         }
 
     @Test fun submit_put_happy_path_sets_updated_toast() =
@@ -380,6 +380,7 @@ class EditAccessCodeFormViewModelTest {
                     homeId = "home_1",
                     secretId = "s1",
                     request = capture(captured),
+                    dispatchGuard = any(),
                 )
             } returns
                 NetworkResult.Success(
@@ -400,7 +401,7 @@ class EditAccessCodeFormViewModelTest {
     @Test fun submit_failure_surfaces_error_toast() =
         runTest {
             coEvery { members.listOccupants("home_1") } returns NetworkResult.Success(roster())
-            coEvery { homes.createHomeAccessSecret(any(), any()) } returns
+            coEvery { homes.createHomeAccessSecret(any(), any(), any()) } returns
                 NetworkResult.Failure(NetworkError.Server(500, body = null))
             val vm = makeVm()
             vm.load()

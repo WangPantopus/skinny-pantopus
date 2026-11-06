@@ -71,6 +71,7 @@ import app.pantopus.android.data.api.net.safeApiCall
 import app.pantopus.android.data.api.services.FilesApi
 import app.pantopus.android.data.api.services.HomeTasksApi
 import app.pantopus.android.data.api.services.HomesApi
+import app.pantopus.android.data.auth.AuthenticatedDispatchGuard
 import app.pantopus.android.data.store.HomeStoreKeys
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreKeys
@@ -496,20 +497,23 @@ open class HomesRepository
         open suspend fun createHomeAccessSecret(
             homeId: String,
             request: CreateAccessSecretRequest,
-        ): NetworkResult<HomeAccessSecretResponse> = safeApiCall { api.createHomeAccessSecret(homeId, request) }
+            dispatchGuard: AuthenticatedDispatchGuard? = null,
+        ): NetworkResult<HomeAccessSecretResponse> = safeApiCall { api.createHomeAccessSecret(homeId, request, dispatchGuard) }
 
         /** `PUT /api/homes/:id/access/:secretId`. */
         open suspend fun updateHomeAccessSecret(
             homeId: String,
             secretId: String,
             request: UpdateAccessSecretRequest,
-        ): NetworkResult<HomeAccessSecretResponse> = safeApiCall { api.updateHomeAccessSecret(homeId, secretId, request) }
+            dispatchGuard: AuthenticatedDispatchGuard? = null,
+        ): NetworkResult<HomeAccessSecretResponse> = safeApiCall { api.updateHomeAccessSecret(homeId, secretId, request, dispatchGuard) }
 
         /** `DELETE /api/homes/:id/access/:secretId`. */
         open suspend fun deleteHomeAccessSecret(
             homeId: String,
             secretId: String,
-        ): NetworkResult<Unit> = safeApiCall { api.deleteHomeAccessSecret(homeId, secretId) }
+            dispatchGuard: AuthenticatedDispatchGuard? = null,
+        ): NetworkResult<Unit> = safeApiCall { api.deleteHomeAccessSecret(homeId, secretId, dispatchGuard) }
 
         // ─── Maintenance (T6.3b / P10) ─────────────────────────
 
