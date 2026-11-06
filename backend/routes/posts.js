@@ -3279,6 +3279,8 @@ router.post('/:id/like', verifyToken, async (req, res) => {
           icon,
           link,
           metadata: { post_id: id, user_id: userId, ...extraMeta },
+          // Once per person per post: unliking and liking again doesn't notify the owner again.
+          idempotencyKey: `post-liked:${id}:${userId}`,
         });
       }).catch(err => {
         logger.warn('Like notification failed (non-blocking)', { error: err.message, postId: id });
@@ -3506,6 +3508,8 @@ function notifyRepost(post, postId, userId) {
       icon: '🔁',
       link,
       metadata: { post_id: postId, user_id: userId, ...extraMeta },
+      // Once per person per post: undoing a share and sharing again doesn't notify the owner again.
+      idempotencyKey: `post-reposted:${postId}:${userId}`,
     });
   }).catch(err => {
     logger.warn('Repost notification failed (non-blocking)', { error: err.message, postId });

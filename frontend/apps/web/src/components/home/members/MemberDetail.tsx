@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { removalLink } from '../member-removals/removalModel';
 import * as api from '@pantopus/api';
 import SlidePanel from '../SlidePanel';
+import UserAvatarLink from '@/components/user/UserAvatarLink';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import ErrorState from '@/components/ui/ErrorState';
 import { failureMessage } from '../share/shareFailure';
@@ -293,13 +294,16 @@ export default function MemberDetail({
           <>
             {/* Profile Header */}
             <div className="flex items-center gap-4">
-              {profilePic ? (
-                <Image src={profilePic} alt={memberName} width={64} height={64} sizes="64px" quality={75} className="w-16 h-16 rounded-full object-cover" />
-              ) : (
-                <div className="w-16 h-16 rounded-full bg-app-surface-sunken flex items-center justify-center text-xl font-bold text-app-text-secondary">
-                  {memberName[0]?.toUpperCase() || '?'}
-                </div>
-              )}
+              {/* The photo opens the profile the name links to. */}
+              <UserAvatarLink href={memberUsername ? `/${memberUsername}` : null}>
+                {profilePic ? (
+                  <Image src={profilePic} alt={memberName} width={64} height={64} sizes="64px" quality={75} className="w-16 h-16 rounded-full object-cover" />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-app-surface-sunken flex items-center justify-center text-xl font-bold text-app-text-secondary">
+                    {memberName[0]?.toUpperCase() || '?'}
+                  </div>
+                )}
+              </UserAvatarLink>
               <div>
                 <UserIdentityLink
                   userId={member?.user_id || member?.user?.id}

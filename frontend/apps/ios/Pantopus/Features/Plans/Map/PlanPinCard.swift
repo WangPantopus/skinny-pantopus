@@ -58,15 +58,17 @@ struct PlanPinCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .plansSheetPeek(.card(planId))
-                PlanHostRow(host: card.host, kind: card.kind)
+                PlanHostRow(host: card.host, kind: card.kind).hiddenUnderPlansTabBar()
                 // Someone already in (or hosting) doesn't need to hear how to get in.
                 PlanSpotsBlock(
                     card: card,
                     trailing: card.viewer?.isIn == true || card.viewer?.isHost == true
                         ? nil : PlanCardLines.approval(card)
                 )
+                .hiddenUnderPlansTabBar()
                 buttons(card)
                     .padding(.top, 2)
+                    .hiddenUnderPlansTabBar()
             }
             .padding(.bottom, Spacing.s4)
             // The card's sheet takes its height in the middle, up to a little over half (board F3).

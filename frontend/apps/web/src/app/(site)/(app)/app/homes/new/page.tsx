@@ -8,6 +8,7 @@ import { getAuthToken } from '@pantopus/api';
 import type {
   AddressCheckResult,
   NormalizedAddress as VerifiedNormalizedAddress,
+  PropertySuggestionsResponse,
   ValidateAddressResponse,
 } from '@pantopus/api';
 import AddressAutocomplete from '@/components/AddressAutocomplete';
@@ -157,6 +158,18 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
   const [description, setDescription] = useState('');
   const [amenities, setAmenities] = useState<Record<string, boolean>>({});
   const [propertySuggestionNote, setPropertySuggestionNote] = useState('');
+  // The county record is looked up while the person is already on this step ('pending': the fields say
+  // "Looking up…"); it fills only what is still empty. Details that land after the person moved on say
+  // so on the later steps, with a way back to check them.
+  const [propertyLookup, setPropertyLookup] = useState<'idle' | 'pending' | 'done'>('idle');
+  const lookingUpPlaceholder = propertyLookup === 'pending' ? 'Looking up…' : '—';
+  const [lateDetails, setLateDetails] = useState(false);
+  const homeTypeChosen = useRef(false);
+  const stepNow = useRef(step);
+  stepNow.current = step;
+  const detailsNow = useRef({ bedrooms, bathrooms, sqft, lotSqft, yearBuilt, description });
+  detailsNow.current = { bedrooms, bathrooms, sqft, lotSqft, yearBuilt, description };
+  useEffect(() => { if (step === 2) setLateDetails(false); }, [step]);
 
   // Step 3 — Your Setup
   const [isOwner, setIsOwner] = useState(true);
@@ -237,6 +250,50 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     setIsClaimingExistingHome(false);
     setAddressStepUpRequirement(null);
     setLotSqft('');
+    setPropertyLookup('idle');
+    setLateDetails(false);
+  };
+
+  // The first answer fills the new step's fields; a county record that lands later fills only what is
+  // still empty (and keeps a home type the person picked). True when it filled something.
+  const applySuggestions = (s: PropertySuggestionsResponse['suggestions'] | undefined, onlyEmpty: boolean) => {
+    if (!s) return false;
+    const current = detailsNow.current;
+    let filled = false;
+    const fill = (key: keyof typeof current, value: number | string | null | undefined, set: (value: string) => void) => {
+      if (value == null || value === '' || (onlyEmpty && current[key])) return;
+      set(String(value));
+      filled = true;
+    };
+    if (s.home_type && !(onlyEmpty && homeTypeChosen.current)) {
+      setHomeType(s.home_type as NonNullable<Parameters<typeof api.homes.createHome>[0]['home_type']>);
+    }
+    fill('bedrooms', s.bedrooms, setBedrooms);
+    fill('bathrooms', s.bathrooms, setBathrooms);
+    fill('sqft', s.sq_ft, setSqft);
+    fill('lotSqft', s.lot_sq_ft, setLotSqft);
+    fill('yearBuilt', s.year_built, setYearBuilt);
+    fill('description', s.description, setDescription);
+    return filled;
+  };
+  const suggestionNote = (res: PropertySuggestionsResponse | undefined) => (res?.tiers_used?.filter(Boolean).length
+    ? 'Prefilled using public records and address hints where available — please verify.' : '');
+  const RECORDS_UNAVAILABLE = 'Public records could not be loaded right now. You can continue and fetch them later from Property Details.';
+
+  // Add Home's one follow-up while the county record is looked up: the server answers when it lands.
+  const finishPropertyLookup = async (request: Parameters<typeof api.homes.getPropertySuggestions>[0], current: () => boolean) => {
+    try {
+      const res = await api.homes.getPropertySuggestions(request, { lookup: 'check' });
+      if (!current()) return;
+      const filled = applySuggestions(res?.suggestions, true);
+      setPropertyLookup('done');
+      setPropertySuggestionNote(res?.attom_lookup === 'found' || res?.attom_lookup === 'none' ? suggestionNote(res) : RECORDS_UNAVAILABLE);
+      if (filled && stepNow.current > 2) setLateDetails(true);
+    } catch {
+      if (!current()) return;
+      setPropertyLookup('done');
+      setPropertySuggestionNote(RECORDS_UNAVAILABLE);
+    }
   };
 
   // Geolocation
@@ -454,6 +511,13 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     }
   };
 
+  // County details that landed after the person left the details step, with a way back to check them.
+  const lateDetailsLine = lateDetails && !isClaimingExistingHome ? (
+    <p className="text-xs text-emerald-700 mt-2">
+      We added your home&apos;s details from public records.{' '}
+      <button type="button" onClick={() => setStep(2)} className="font-semibold underline underline-offset-2">Review</button>
+    </p>
+  ) : null;
   const canProceedStep1 = !!normalized;
   const visibleSteps = isClaimingExistingHome ? STEPS.filter((s) => s.id !== 2) : STEPS;
   const totalSteps = visibleSteps.length;
@@ -976,11 +1040,13 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                     } else if (ok && typeof ok === 'object' && ok.type === 'new') {
                       setError('');
                       setPropertySuggestionNote('');
+                      setPropertyLookup('idle');
+                      setLateDetails(false);
                       try {
                         const v = ok.validation;
                         const verdict = v?.verdict;
                         const rn = verdict?.normalized;
-                        const res = await api.homes.getPropertySuggestions({
+                        const request = {
 	                          address: rn?.line1 || selectedAddress.address,
 	                          unit_number: (rn?.line2 || unit).trim() || undefined,
 	                          city: rn?.city || selectedAddress.city,
@@ -988,29 +1054,23 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
 	                          zip_code: rn?.zip || selectedAddress.zipcode,
                           address_id: v?.address_id || null,
                           classification: verdict?.classification,
-                        });
+                        };
+                        // Answered at once from what Pantopus has; a county record it doesn't have yet is
+                        // looked up meanwhile and fills the fields in when it lands.
+                        const res = await api.homes.getPropertySuggestions(request, { lookup: 'background' });
                         if (!ok.current()) return;
-                        const s = res?.suggestions;
-                        if (s?.home_type) {
-                          setHomeType(s.home_type as NonNullable<Parameters<typeof api.homes.createHome>[0]['home_type']>);
-                        }
-                        if (s?.bedrooms != null) setBedrooms(String(s.bedrooms));
-                        if (s?.bathrooms != null) setBathrooms(String(s.bathrooms));
-                        if (s?.sq_ft != null) setSqft(String(s.sq_ft));
-                        if (s?.lot_sq_ft != null) setLotSqft(String(s.lot_sq_ft));
-                        if (s?.year_built != null) setYearBuilt(String(s.year_built));
-                        if (s?.description) setDescription(s.description);
-                        const tiers = res?.tiers_used?.filter(Boolean) || [];
-                        if (tiers.length) {
-                          setPropertySuggestionNote(
-                            'Prefilled using public records and address hints where available — please verify.',
-                          );
+                        applySuggestions(res?.suggestions, false);
+                        if (res?.attom_lookup === 'pending') {
+                          setPropertyLookup('pending');
+                          setPropertySuggestionNote('Looking up public records for this address. The details below fill in by themselves.');
+                          void finishPropertyLookup(request, ok.current);
+                        } else {
+                          setPropertyLookup('done');
+                          setPropertySuggestionNote(suggestionNote(res));
                         }
                       } catch {
                         if (!ok.current()) return;
-                        setPropertySuggestionNote(
-                          'Public records could not be loaded right now. You can continue and fetch them later from Property Details.',
-                        );
+                        setPropertySuggestionNote(RECORDS_UNAVAILABLE);
                       }
                       if (ok.current()) setStep(2);
                     }
@@ -1057,7 +1117,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                     <button
                       key={t.value}
                       type="button"
-                      onClick={() => setHomeType(t.value as typeof homeType)}
+                      onClick={() => { homeTypeChosen.current = true; setHomeType(t.value as typeof homeType); }}
                       className={`flex flex-col items-center gap-1 p-3 rounded-lg border-2 text-sm transition-colors ${
                         homeType === t.value
                           ? 'border-black bg-app-surface-raised font-semibold'
@@ -1075,28 +1135,28 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Bedrooms</label>
-                  <input type="number" min="0" value={bedrooms} onChange={e => setBedrooms(e.target.value)} placeholder="—"
+                  <input type="number" min="0" value={bedrooms} onChange={e => setBedrooms(e.target.value)} placeholder={lookingUpPlaceholder}
                     className={inputClass('bedrooms')}
                   {...fieldA11y('bedrooms')} />
                   {fieldErrors.bedrooms ? <p id="err-bedrooms" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.bedrooms}</p> : null}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Bathrooms</label>
-                  <input type="number" min="0" step="0.5" value={bathrooms} onChange={e => setBathrooms(e.target.value)} placeholder="—"
+                  <input type="number" min="0" step="0.5" value={bathrooms} onChange={e => setBathrooms(e.target.value)} placeholder={lookingUpPlaceholder}
                     className={inputClass('bathrooms')}
                   {...fieldA11y('bathrooms')} />
                   {fieldErrors.bathrooms ? <p id="err-bathrooms" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.bathrooms}</p> : null}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Sq ft</label>
-                  <input type="number" min="0" value={sqft} onChange={e => setSqft(e.target.value)} placeholder="—"
+                  <input type="number" min="0" value={sqft} onChange={e => setSqft(e.target.value)} placeholder={lookingUpPlaceholder}
                     className={inputClass('sq_ft')}
                   {...fieldA11y('sq_ft')} />
                   {fieldErrors.sq_ft ? <p id="err-sq_ft" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.sq_ft}</p> : null}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Year built</label>
-                  <input type="number" min="1600" max="2100" value={yearBuilt} onChange={e => setYearBuilt(e.target.value)} placeholder="—"
+                  <input type="number" min="1600" max="2100" value={yearBuilt} onChange={e => setYearBuilt(e.target.value)} placeholder={lookingUpPlaceholder}
                     className={inputClass('year_built')}
                   {...fieldA11y('year_built')} />
                   {fieldErrors.year_built ? <p id="err-year_built" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.year_built}</p> : null}
@@ -1110,7 +1170,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                   min="0"
                   value={lotSqft}
                   onChange={e => setLotSqft(e.target.value)}
-                  placeholder="—"
+                  placeholder={lookingUpPlaceholder}
                   className={inputClass('lot_sq_ft')}
                   {...fieldA11y('lot_sq_ft')}
                 />
@@ -1184,6 +1244,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                     ? 'This address already has a home on Pantopus. Choose how you relate to it and we will submit a claim instead of creating a duplicate.'
                     : 'Quick-start info for your household. Everything is optional and private.'}
                 </p>
+                {lateDetailsLine}
               </div>
 
               {isClaimingExistingHome ? (
@@ -1343,6 +1404,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                     ? 'You are about to submit a claim for the existing home at this address.'
                     : 'This saves your Home and optional setup together. Ownership and residency still need verification.'}
                 </p>
+                {lateDetailsLine}
               </div>
 
               {/* The privacy promise, again, on the last screen before the

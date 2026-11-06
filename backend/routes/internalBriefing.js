@@ -42,6 +42,8 @@ function verifyInternalApiKey(req, res, next) {
 // ── Helpers ─────────────────────────────────────────────────────────
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// People per read in /alert-push: 100 ids keep each `in` filter well inside URL limits.
+const ALERT_PUSH_BATCH = 100;
 
 // ── Push routing ────────────────────────────────────────────────────
 //
@@ -551,62 +553,43 @@ router.post('/alert-push', verifyInternalApiKey, async (req, res) => {
     return res.status(400).json({ error: 'title and body required' });
   }
 
-  // Cap at 100 users per call
-  const targetIds = userIds.slice(0, 100);
+  // The checker sends everyone in an alert's area in one call and then marks the alert sent, so every id is
+  // handled here (in batches: one read per batch for each check, one shared push per batch).
+  const targetIds = [...new Set(userIds.filter((id) => typeof id === 'string' && UUID_RE.test(id)))];
+  const prefField = alertType === 'aqi' ? 'aqi_alerts_enabled' : 'weather_alerts_enabled';
+  // Weather and air-quality alerts are Today-group content, so they open the Place Today detail rather than the
+  // Hub: that Home's when the checker names one, else the Place root's Home (`/place?section=today`, the way the
+  // rate-watch push opens money). Set after the checker's data, whose `route: '/hub'` neither app reads.
+  const link = typeof data?.homeId === 'string' && data.homeId.trim() ? placeRoute(data.homeId, 'today') : '/place?section=today';
+  const message = { title, body, data: { ...data, type: `${alertType}_alert`, link, route: link } };
   let sent = 0;
   let skipped = 0;
   let failed = 0;
 
-  for (const userId of targetIds) {
+  for (let start = 0; start < targetIds.length; start += ALERT_PUSH_BATCH) {
+    const batch = targetIds.slice(start, start + ALERT_PUSH_BATCH);
     try {
-      // Check user preference
-      const prefField = alertType === 'aqi' ? 'aqi_alerts_enabled' : 'weather_alerts_enabled';
-      const { data: prefs } = await supabaseAdmin
-        .from('UserNotificationPreferences')
-        .select(prefField)
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      // Default to enabled if no prefs row exists
-      const isEnabled = prefs ? prefs[prefField] !== false : true;
-      if (!isEnabled) {
-        skipped++;
-        continue;
-      }
-
-      // The account's Push Notifications switch (Settings) turns these off too.
-      if (!(await isPushEnabled(userId))) {
-        skipped++;
-        continue;
-      }
-
-      // Check push tokens
-      const { data: tokens } = await supabaseAdmin
-        .from('PushToken')
-        .select('token')
-        .eq('user_id', userId);
-
-      if (!tokens || tokens.length === 0) {
-        skipped++;
-        continue;
-      }
-
-      await pushService.sendToUser(userId, {
-        title,
-        body,
-        // Weather and air-quality alerts are Today-group content, so they
-        // open the Place Today detail rather than the Hub.
-        data: {
-          type: `${alertType}_alert`,
-          link: placeRoute(data?.homeId, 'today'),
-          route: placeRoute(data?.homeId, 'today'),
-          ...data,
-        },
-      });
-      sent++;
+      const [prefs, accountPush, tokens] = await Promise.all([
+        supabaseAdmin.from('UserNotificationPreferences').select(`user_id, ${prefField}`).in('user_id', batch),
+        supabaseAdmin.from('MailPreferences').select('user_id, push_notifications').in('user_id', batch),
+        supabaseAdmin.from('PushToken').select('user_id').in('user_id', batch),
+      ]);
+      // A preference that can't be read can't establish an opt-in.
+      const readError = prefs.error || accountPush.error || tokens.error;
+      if (readError) throw new Error(readError.message);
+      // No preferences row: the alert switch's default (on). The account's Push Notifications switch (Settings)
+      // turns these off too; no row is on.
+      const alertOff = new Set((prefs.data || []).filter((row) => row[prefField] === false).map((row) => String(row.user_id)));
+      const pushOff = new Set((accountPush.data || []).filter((row) => row.push_notifications === false).map((row) => String(row.user_id)));
+      const reachable = new Set((tokens.data || []).map((row) => String(row.user_id)));
+      const eligible = batch.filter((id) => !alertOff.has(id) && !pushOff.has(id) && reachable.has(id));
+      skipped += batch.length - eligible.length;
+      if (eligible.length === 0) continue;
+      await pushService.sendToUsers(eligible, message);
+      sent += eligible.length;
     } catch (err) {
-      logger.error('Alert push failed', { userId, alertType, error: err.message });
-      failed++;
+      logger.error('Alert push failed', { alertType, batch: batch.length, error: err.message });
+      failed += batch.length;
     }
   }
 

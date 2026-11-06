@@ -77,6 +77,7 @@ class PlansFeature
         val viewer: UserDto? get() = user
 
         /** Starts following sign-in and sign-out. Safe to call more than once. */
+        @Synchronized
         fun start() {
             if (started) return
             started = true
@@ -111,6 +112,19 @@ class PlansFeature
             val id = userId ?: (auth.state.value as? AuthRepository.State.SignedIn)?.user?.id ?: return false
             if (prefs.contains(id)) return if (id == userId) isOn else remembered(id).plans
             return read(FLAG_PLANS) ?: isOn
+        }
+
+        /**
+         * A Plans push can start the app: FCM wakes the process with no screen, so [start] (MainActivity) hasn't run
+         * and nothing has read who is signed in. The router then still answers its default "Plans off" and the push's
+         * notification is dropped. Until [start] binds the live answer, answer with the one kept on this device for
+         * [signedInUserId], the account the saved session belongs to: the answer a relaunch opens on.
+         */
+        @Synchronized
+        fun bindKeptAnswerForPush(signedInUserId: String?) {
+            if (started) return
+            val kept = signedInUserId?.takeIf { it.isNotBlank() }?.let { remembered(it).plans } ?: false
+            DeepLinkRouter.bindPlansEnabledProvider { kept }
         }
 
         /** The app came to the foreground: re-check both flags. */

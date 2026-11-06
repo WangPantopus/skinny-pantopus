@@ -4,9 +4,11 @@ package app.pantopus.android.push
 
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.DeviceIdentity
+import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.mailbox.MailboxRepository
 import app.pantopus.android.data.notifications.NotificationsRepository
 import app.pantopus.android.data.plans.PlansEvents
+import app.pantopus.android.data.plans.PlansFeature
 import app.pantopus.android.data.plans.PlansRepository
 import app.pantopus.android.data.store.ScreenStore
 import app.pantopus.android.data.store.StoreTopics
@@ -18,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -51,6 +54,10 @@ class PantopusMessagingService : FirebaseMessagingService() {
     @Inject lateinit var plansRepository: dagger.Lazy<PlansRepository>
 
     @Inject lateinit var plansEvents: dagger.Lazy<PlansEvents>
+
+    @Inject lateinit var plansFeature: dagger.Lazy<PlansFeature>
+
+    @Inject lateinit var tokens: dagger.Lazy<TokenStorage>
 
     @Inject lateinit var screenStore: dagger.Lazy<ScreenStore>
 
@@ -103,6 +110,9 @@ class PantopusMessagingService : FirebaseMessagingService() {
         // Nearby Plans: a plan push means the map, the lists, Today and an open plan page are out of date
         // (a "You're in" plays the reveal on the open page).
         if (type.startsWith("plan_")) {
+            // A plan push that starts the app comes before anything reads who is signed in, while the router's
+            // Plans flag still reads off and would drop the notification: answer it from the saved session's account.
+            plansFeature.get().bindKeptAnswerForPush(runCatching { runBlocking { tokens.get().userId() } }.getOrNull())
             plansRepository.get().changed(message.data["plan_id"])
             plansRepository.get().changed()
             // That plan's page is on screen and shows the news itself: no system post for news without buttons.
