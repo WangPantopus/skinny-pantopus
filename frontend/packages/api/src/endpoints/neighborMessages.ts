@@ -5,8 +5,9 @@
 // baked into the API, so these wrappers stay deliberately small:
 //   * the template catalog is the single source of truth (server-served) —
 //     there is no free-text field anywhere;
-//   * sending requires a verified resident (T4) and a recipient home on the
-//     same block; the server enforces both;
+//   * sending requires a verified resident (T4) and an address on their
+//     block; the server enforces both, and its answer never says whether
+//     anyone lives there;
 //   * the recipient never learns the sender — responses are anonymized
 //     ("a verified neighbor nearby");
 //   * reply is templated; report / not-helpful / block are all available
@@ -76,9 +77,24 @@ export interface SentNeighborMessage {
   recipient: { label: string; block_label: string };
 }
 
+export interface NeighborAddress {
+  address: string;
+  city?: string | null;
+  state?: string | null;
+  zipcode?: string | null;
+}
+
+/** Whether an address can get a note. Nothing here says who lives there. */
+export type NeighborAddressCheck =
+  | { status: 'on_block'; address: string; city: string; state: string; zipcode: string }
+  | { status: 'off_block' | 'not_found' | 'own_home'; message: string };
+
 export interface SendNeighborMessageInput {
   senderHomeId: string;
-  recipientHomeId: string;
+  /** Any address on the sender's block. */
+  recipientAddress?: NeighborAddress & { unit?: string | null };
+  /** A home opened by a link to it, instead of an address. */
+  recipientHomeId?: string;
   templateId: string;
 }
 
@@ -98,13 +114,26 @@ export async function getNeighborMessage(id: string): Promise<ReceivedNeighborMe
   return get<ReceivedNeighborMessage>(`/api/neighbor-messages/${id}`);
 }
 
-/** Send a template-only note to a verified home on your block. */
+/** Check an address before a note is written: is it on the sender's block? */
+export async function checkNeighborAddress(
+  senderHomeId: string,
+  address: NeighborAddress
+): Promise<NeighborAddressCheck> {
+  return post<NeighborAddressCheck>('/api/neighbor-messages/address-check', {
+    sender_home_id: senderHomeId,
+    ...address,
+  });
+}
+
+/** Send a template-only note to an address on your block. It reaches a verified household if one lives there. */
 export async function sendNeighborMessage(
   input: SendNeighborMessageInput
 ): Promise<SentNeighborMessage> {
   return post<SentNeighborMessage>('/api/neighbor-messages', {
     sender_home_id: input.senderHomeId,
-    recipient_home_id: input.recipientHomeId,
+    ...(input.recipientAddress
+      ? { recipient_address: input.recipientAddress }
+      : { recipient_home_id: input.recipientHomeId }),
     template_id: input.templateId,
   });
 }
