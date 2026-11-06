@@ -87,10 +87,20 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             intentIdentifiers: [],
             options: []
         )
+        // Chat and business-inbox pushes show the sender and the message (backend
+        // chatPushDelivery). While the phone hides previews (Settings › Notifications ›
+        // Show Previews, When Unlocked by default) iOS shows this placeholder instead.
+        let chat = UNNotificationCategory(
+            identifier: "CHAT_MESSAGE",
+            actions: [],
+            intentIdentifiers: [],
+            hiddenPreviewsBodyPlaceholder: "New message",
+            options: []
+        )
         // Nearby Plans: PLAN_REQUEST, PLAN_REMINDER and PLAN_CHANGED with their buttons; the
         // assistant's five (Mark done, Mark solved, Fewer like this; AI phase 3 §9).
         UNUserNotificationCenter.current().setNotificationCategories(
-            Set([pickup, task, taskDoneOnly] + PlanPushActions.categories + AssistantPushActions.categories)
+            Set([pickup, task, taskDoneOnly, chat] + PlanPushActions.categories + AssistantPushActions.categories)
         )
     }
 
