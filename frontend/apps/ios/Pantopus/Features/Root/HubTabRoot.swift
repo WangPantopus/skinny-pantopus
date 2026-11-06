@@ -1471,6 +1471,16 @@ public struct HubTabRoot: View {
         case let .businessOwner(businessId):
             path.append(.businessOwner(businessId: businessId))
             _ = router.consume()
+        case let .businessOwnerSection(businessId, section):
+            // A payment, invoice or verification notice: the owner view underneath, so Back lands on the
+            // business, then the section the notice is about (the web opens that dashboard tab).
+            path.append(.businessOwner(businessId: businessId))
+            switch section {
+            case .payments: path.append(.businessPaymentsOwner(businessId: businessId))
+            case .invoices: path.append(.businessInvoicesOwner(businessId: businessId))
+            case .legal: path.append(.businessLegal(businessId: businessId))
+            }
+            _ = router.consume()
         case let .businessConversation(businessId, roomId):
             // A business inbox notice: the owner view underneath, so Back
             // lands on the business, then the thread acting as the business.

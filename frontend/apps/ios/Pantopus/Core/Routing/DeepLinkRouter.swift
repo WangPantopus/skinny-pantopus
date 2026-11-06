@@ -19,6 +19,11 @@ import Logging
 @Observable
 @MainActor
 final class DeepLinkRouter {
+    /// A business owner view's section a link can name (`?tab=` on `/app/businesses/:id/dashboard`).
+    enum BusinessOwnerSection: String, Equatable {
+        case payments, invoices, legal
+    }
+
     /// Full routing table from `docs/07-frontend-mobile-app.md §9`.
     /// `home` (singular) keeps the legacy "go to Hub" semantics;
     /// `homeDetail` / `homeDashboard` / `homeMemberRequests` are
@@ -197,6 +202,9 @@ final class DeepLinkRouter {
         /// the owner view, then the thread acting as the business; never the
         /// person's own Messages.
         case businessConversation(businessId: String, roomId: String)
+        /// `/app/businesses/:id/dashboard?tab=payments|invoices|legal` — a business's payment, invoice or
+        /// verification notice. Opens the owner view, then that section, as the web opens that tab.
+        case businessOwnerSection(businessId: String, section: BusinessOwnerSection)
         /// `pantopus://identity/preview` — A18.5 "View as" identity preview.
         case viewAs
         /// `pantopus://homes/:id/waiting-room` — A18.4 persistent waiting room.
@@ -929,6 +937,13 @@ final class DeepLinkRouter {
         if trailing.first == "chat", trailing.count == 2, let roomId = trailing.last,
            UUID(uuidString: roomId) != nil {
             return .businessConversation(businessId: id, roomId: roomId.lowercased())
+        }
+        // The server's payment, invoice and verification notices name the dashboard tab they're about.
+        if trailing.isEmpty || trailing == ["dashboard"],
+           let tab = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+           .queryItems?.first(where: { $0.name == "tab" })?.value,
+           let section = BusinessOwnerSection(rawValue: tab.lowercased()) {
+            return .businessOwnerSection(businessId: id, section: section)
         }
         return .businessOwner(businessId: id)
     }
