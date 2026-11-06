@@ -9,7 +9,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const {
-  computeTrustState, getPostingIdentities, canPostToAudience, canPostToPlace, mediaCaptureNear, isNearOwnHome,
+  computeTrustState, getPostingIdentities, canPostToAudience, canPostToPlace, mediaCaptureNear,
 } = require('../utils/trustState');
 const { canPostWithIdentityToAudience } = require('../utils/identityPolicy');
 const {
@@ -1398,21 +1398,20 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
 
     // ── A photo or video taken at the place ──
     // A post the person's own attachment places (mediaCaptureNear) shows on the map exactly where it was: at the
-    // tagged venue, or where the photo was taken when the tag is a town or an area. An address tag (often someone's
-    // home), an alert (it's about an area) and a pin within 150 m of one of the person's own homes keep the
-    // approximate area. Readers see "Photo taken here" (post_metadata.location_basis, photo_taken_at).
+    // venue or address they tagged, or where the photo was taken when the tag is a town or an area or there is no tag.
+    // The founder chose an exact pin everywhere, the author's own home included (2026-11-05). Only an alert (it's about
+    // an area; alerts never take exact_place) and a draft that asked for less keep the approximate area. Readers see
+    // "Photo taken here" (post_metadata.location_basis, photo_taken_at).
     let photoPlace = null;
     if (!isCurator && !pulse && isPlacePost && postAs === 'personal'
       && effectiveLatitude != null && effectiveLongitude != null) {
       const tagKind = taggedPlaceKind(geocodePlaceId, geocodeAccuracy);
       const nearest = mediaCaptureNear(mediaLocations, effectiveLatitude, effectiveLongitude, postType);
       if (nearest && (tagKind || placeBasis === 'photo')) {
-        const pin = tagKind === 'area'
-          ? { latitude: nearest.latitude, longitude: nearest.longitude }
-          : { latitude: Number(effectiveLatitude), longitude: Number(effectiveLongitude) };
-        const exact = (tagKind === 'venue' || tagKind === 'area') && postType !== 'alert'
-          && !['neighborhood_only', 'none'].includes(locationPrecision)
-          && !(await isNearOwnHome(userId, pin.latitude, pin.longitude));
+        const pin = tagKind === 'venue' || tagKind === 'address'
+          ? { latitude: Number(effectiveLatitude), longitude: Number(effectiveLongitude) }
+          : { latitude: nearest.latitude, longitude: nearest.longitude };
+        const exact = postType !== 'alert' && !['neighborhood_only', 'none'].includes(locationPrecision);
         photoPlace = { pin, exact, takenAt: nearest.capturedAt };
         if (exact) {
           effectiveLatitude = pin.latitude;
@@ -1575,7 +1574,8 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
 
     // Geocode provenance (when coordinates are provided)
     if (effectiveLatitude != null && effectiveLongitude != null) {
-      postData.geocode_provider = geocodeProvider || 'mapbox';
+      // A venue from the picker's OpenStreetMap index is OpenStreetMap's, whichever provider the app names.
+      postData.geocode_provider = String(geocodePlaceId || '').startsWith('osm:') ? 'osm' : (geocodeProvider || 'mapbox');
       postData.geocode_mode = 'temporary';
       postData.geocode_accuracy = geocodeAccuracy || null;
       postData.geocode_place_id = geocodePlaceId || null;

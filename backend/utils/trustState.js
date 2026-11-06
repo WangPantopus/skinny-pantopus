@@ -479,8 +479,6 @@ const TIME_SENSITIVE_POST_TYPES = ['alert', 'lost_found'];
 // before 2000 is a clock that was never set: either way the attachment has no usable time, though its place counts.
 const CAPTURE_CLOCK_SKEW_MS = 26 * 60 * 60 * 1000;
 const EARLIEST_CAPTURE_MS = Date.UTC(2000, 0, 1);
-// A pin this close to one of the person's own homes shows anyone looking at the map where they live.
-const OWN_HOME_GUARD_METERS = 150;
 
 /** The attachment's capture time as an ISO string, or null when it has none it can be trusted with. */
 function mediaCaptureTime(capturedAt) {
@@ -519,34 +517,6 @@ function mediaCaptureNear(mediaLocations, targetLatitude, targetLongitude, postT
     }
   }
   return nearest;
-}
-
-/**
- * True when a point is within OWN_HOME_GUARD_METERS of a home the person lives in, belongs to or has claimed. A
- * failed read answers true: the caller then shows the approximate area, which can't give a home away.
- */
-async function isNearOwnHome(userId, latitude, longitude) {
-  if (!userId || latitude == null || longitude == null) return true;
-  try {
-    const [occupancies, claims] = await Promise.all([
-      supabaseAdmin.from('HomeOccupancy').select('home_id').eq('user_id', userId).eq('is_active', true),
-      supabaseAdmin.from('HomeOwnershipClaim').select('home_id').eq('claimant_user_id', userId)
-        .in('state', ['submitted', 'needs_more_info', 'pending_review', 'pending_challenge_window', 'approved', 'disputed']),
-    ]);
-    if (occupancies.error || claims.error) throw occupancies.error || claims.error;
-    const homeIds = [...new Set([...(occupancies.data || []), ...(claims.data || [])]
-      .map((row) => row.home_id).filter(Boolean))];
-    if (homeIds.length === 0) return false;
-    const { data: homes, error } = await supabaseAdmin.from('Home').select('id, location').in('id', homeIds);
-    if (error) throw error;
-    return (homes || []).some((home) => {
-      const point = parsePostGISPoint(home.location);
-      return point && haversineMeters(latitude, longitude, point.latitude, point.longitude) <= OWN_HOME_GUARD_METERS;
-    });
-  } catch (err) {
-    logger.warn('Own-home check failed; showing the approximate area', { error: err.message, userId });
-    return true;
-  }
 }
 
 const PLACE_WAYS_IN = 'You can post to this place when you\'re there, live or work there, '
@@ -662,7 +632,6 @@ module.exports = {
   canPostToPlace,
   canCommentOnPost,
   mediaCaptureNear,
-  isNearOwnHome,
   haversineMeters,
   NEARBY_RADIUS_METERS,
 };

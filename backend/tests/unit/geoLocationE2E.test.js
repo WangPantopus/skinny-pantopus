@@ -120,7 +120,6 @@ jest.mock('../../utils/trustState', () => ({
   canPostToAudience: jest.fn().mockReturnValue({ allowed: true }),
   canPostToPlace: jest.fn().mockReturnValue({ eligible: true }),
   mediaCaptureNear: jest.fn().mockReturnValue(null),
-  isNearOwnHome: jest.fn().mockResolvedValue(false),
   haversineMeters: jest.fn().mockReturnValue(100),
 }));
 

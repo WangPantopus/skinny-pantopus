@@ -128,12 +128,12 @@ taken. The apps read each attachment's capture point from its own metadata and
 send it with the post (`mediaLocations`); the points are evidence, never
 stored. When one was taken within 5 km of the tagged place
 (`trustState.mediaCaptureNear`), `POST /api/posts` stores
-`post_metadata.location_basis = 'photo'` (and `photo_taken_at`) and, for a
-venue tag, stores `exact_place` at the venue; for a town or area tag it stores
-`exact_place` at the capture point. It stays `approx_area` for an address tag
-(often someone's home), for an alert, when the author asked for less, and when
-the pin is within 150 m of a home the author lives in, belongs to or has claimed
-(`trustState.isNearOwnHome`, which answers "near" when it can't read the homes).
+`post_metadata.location_basis = 'photo'` (and `photo_taken_at`) and stores
+`exact_place`: at the tagged venue or address, or at the capture point when the
+tag is a town or an area or there is no tag. The founder chose an exact pin
+everywhere, the author's own home included, over a home guard (2026-11-05).
+It stays `approx_area` only for an alert (alerts never take `exact_place`) and
+when the author asked for less.
 Only `POST /api/posts` sets the basis (it drops a client's copy of either key);
 an edit that moves the post or leaves it no photo or video clears the basis and
 any exact pin, and an edit can't raise a post to `exact_place`.
