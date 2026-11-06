@@ -40,6 +40,8 @@ final class Observability {
             options.tracesSampleRate = environment.target == .production ? 0.1 : 1.0
             options.enableUserInteractionTracing = true
             options.enableNetworkTracking = true
+            // The app has no Core Data: this tracing would only swizzle its classes on the main thread at launch.
+            options.enableCoreDataTracing = false
             // The SDK adds sentry-trace and baggage (trace id, release,
             // environment, Sentry key) to every URLSession request whose URL
             // matches a target, and its default target matches all of them:
