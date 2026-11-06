@@ -89,16 +89,10 @@ const CHECKS = {
     id: (row) => row.PID,
     map: [['year_built', 'YR_BUILT'], ['living_sqft', 'LIVING_AREA'], ['gross_sqft', 'GROSS_AREA'], ['bedrooms', 'BED_RMS'], ['full_baths', 'FULL_BTH'], ['half_baths', 'HLF_BTH'], ['rooms', 'TT_RMS'], ['assessed_value', 'TOTAL_VALUE', moneyNear], ['assessed_land_value', 'LAND_VALUE', moneyNear], ['lot_sqft', 'LAND_SF']],
   },
-  'ma-cambridge': {
-    county: '25017', rows: () => socrataRows('data.cambridgema.gov', 'eey2-rv59', ['pid', 'yearofassessment', 'condition_yearbuilt', 'interior_livingarea', 'assessedvalue', 'landarea'], { where: "yearofassessment='2026'" }),
-    id: (row) => row.pid,
-    prefix: true,
-    map: [['year_built', 'condition_yearbuilt'], ['living_sqft', 'interior_livingarea'], ['assessed_value', 'assessedvalue', moneyNear], ['lot_sqft', 'landarea', near(5)]],
-  },
   'ny-kings': {
-    county: '36047', rows: () => layerRows('https://gisservices.its.ny.gov/arcgis/rest/services/NYS_Tax_Parcels_Public/FeatureServer/1', ['SWIS_SBL_ID', 'SBL', 'YR_BLT', 'GFA', 'TOTAL_AV'], { where: "COUNTY_NAME = 'Kings'", pageSize: 5000 }),
+    county: '36047', rows: () => layerRows('https://gisservices.its.ny.gov/arcgis/rest/services/NYS_Tax_Parcels_Public/FeatureServer/1', ['SWIS_SBL_ID', 'SBL', 'YR_BLT', 'SQFT_LIVING', 'TOTAL_AV'], { where: "COUNTY_NAME = 'Kings'", pageSize: 5000 }),
     id: (row) => row.SBL,
-    map: [['year_built', 'YR_BLT'], ['gross_sqft', 'GFA'], ['assessed_value', 'TOTAL_AV', moneyNear]],
+    map: [['year_built', 'YR_BLT'], ['gross_sqft', 'SQFT_LIVING'], ['assessed_value', 'TOTAL_AV', moneyNear]],
   },
   'ct-2025': {
     rows: () => socrataRows('data.ct.gov', 'rny9-6ak2', ['pid', 'town_id', 'ayb', 'living_area', 'number_of_bedroom', 'number_of_baths', 'number_of_half_baths', 'land_acres', 'stories']),
