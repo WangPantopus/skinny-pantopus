@@ -282,7 +282,8 @@ interface PostsApi {
 
     /**
      * `GET /api/posts/place-eligibility` — can the signed-in user post to
-     * the Place feed at these coordinates? Route `backend/routes/posts.js:1941`.
+     * the Place feed at these coordinates? `media*` is the draft's
+     * attachment taken nearest the place. Route `backend/routes/posts.js:2276`.
      */
     @GET("api/posts/place-eligibility")
     suspend fun placeEligibility(
@@ -291,5 +292,9 @@ interface PostsApi {
         @Query("gpsTimestamp") gpsTimestamp: String? = null,
         @Query("gpsLatitude") gpsLatitude: Double? = null,
         @Query("gpsLongitude") gpsLongitude: Double? = null,
+        @Query("mediaLatitude") mediaLatitude: Double? = null,
+        @Query("mediaLongitude") mediaLongitude: Double? = null,
+        @Query("mediaCapturedAt") mediaCapturedAt: String? = null,
+        @Query("postType") postType: String? = null,
     ): PlaceEligibilityResponse
 }

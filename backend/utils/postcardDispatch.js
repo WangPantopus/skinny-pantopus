@@ -10,9 +10,10 @@
 
 const crypto = require('crypto');
 const logger = require('./logger');
+const supabaseAdmin = require('../config/supabaseAdmin');
 const mailVendorService = require('../services/addressValidation/mailVendorService');
+const { noMailToDestination } = require('../services/addressValidation/mailSuppression');
 const addressConfig = require('../config/addressVerification');
-const lobMailProvider = require('../services/addressValidation/lobMailProvider');
 
 /**
  * Generate a postcard verification code.
@@ -45,28 +46,44 @@ async function dispatchPostcardCode(home, code, homePostcardId, homeId) {
     return { success: false, deliveryUnknown: false, error: 'Home is missing a mailable address' };
   }
 
-  if ((process.env.NODE_ENV === 'production' || ['staging', 'production'].includes(process.env.APP_ENV))
-    && !lobMailProvider.isAvailable()) {
+  if (!mailVendorService.canSendPostcards()) {
     return { success: false, deliveryUnknown: false, error: 'Mail provider is not configured' };
   }
 
+  const destination = {
+    line1: home.address,
+    line2: home.address2 || undefined,
+    city: home.city,
+    state: home.state,
+    zip: home.zipcode,
+  };
+  // Suppression runs before every send. A refusal says nothing about why.
+  if (await noMailToDestination(destination)) {
+    return { success: false, deliveryUnknown: false, error: 'Mail could not be sent to this address' };
+  }
+
+  const provider = mailVendorService.getProvider('home_postcard');
+  // A piece finishes with the printer that accepted it, so the printer goes on
+  // the row before it is called. Without that record there is no send.
+  const { error: intentError } = await supabaseAdmin.from('HomePostcardCode')
+    .update({ mail_provider: provider.name }).eq('id', homePostcardId);
+  if (intentError) {
+    logger.error('dispatchPostcardCode: printer could not be recorded', { error: intentError.message });
+    return { success: false, deliveryUnknown: false, error: 'Mail could not be sent right now' };
+  }
+
   try {
-    const provider = mailVendorService.getProvider();
     const result = await provider.sendPostcard(
-      {
-        line1: home.address,
-        line2: home.address2 || undefined,
-        city: home.city,
-        state: home.state,
-        zip: home.zipcode,
-      },
+      destination,
       code,
       addressConfig.lob.postcardTemplateId || null,
       { homePostcardId, homeId },
     );
+    mailVendorService.noteSendResult(provider.name, true);
     if (!result?.vendorJobId) return { success: false, deliveryUnknown: true, error: 'Mail receipt is not confirmed' };
     return { success: true, vendorJobId: result.vendorJobId };
   } catch (err) {
+    mailVendorService.noteSendResult(provider.name, err.definitelyRejected === true);
     logger.error('dispatchPostcardCode: provider error', { definitelyRejected: err.definitelyRejected === true });
     return { success: false, deliveryUnknown: err.definitelyRejected !== true, error: 'Mail provider did not confirm delivery' };
   }

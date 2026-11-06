@@ -14,6 +14,7 @@ const processExpiredClaimWindows = require('../jobs/processClaimWindows');
 // ─── Tier 1 job imports (Lambda-triggered) ───
 const processPendingTransfers = require('../jobs/processPendingTransfers');
 const retryCaptureFailures = require('../jobs/retryCaptureFailures');
+const reconcileMailPieces = require('../jobs/reconcileMailPieces');
 const authorizeUpcomingGigs = require('../jobs/authorizeUpcomingGigs');
 const expireUncapturedAuthorizations = require('../jobs/expireUncapturedAuthorizations');
 const { checkAndAlertStuckPayments } = require('./paymentOps');
@@ -151,6 +152,9 @@ router.post('/jobs/retry-capture-failures', jobEndpoint('retryCaptureFailures', 
 router.post('/jobs/authorize-upcoming-gigs', jobEndpoint('authorizeUpcomingGigs', authorizeUpcomingGigs));
 router.post('/jobs/expire-uncaptured-authorizations', jobEndpoint('expireUncapturedAuthorizations', expireUncapturedAuthorizations));
 router.post('/jobs/check-stuck-payments', jobEndpoint('checkAndAlertStuckPayments', checkAndAlertStuckPayments));
+
+// ─── Mail ───
+router.post('/jobs/reconcile-mail-pieces', jobEndpoint('reconcileMailPieces', reconcileMailPieces));
 
 // ─── Data integrity / GDPR jobs ───
 router.post('/jobs/cleanup-ghost-businesses', jobEndpoint('cleanupGhostBusinesses', cleanupGhostBusinesses));

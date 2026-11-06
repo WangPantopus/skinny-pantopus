@@ -73,14 +73,17 @@ public enum PostsEndpoints {
     }
 
     /// `GET /api/posts/place-eligibility` — can the signed-in user post
-    /// to the Place feed at these coordinates? Route
-    /// `backend/routes/posts.js:1941`.
+    /// to the Place feed at these coordinates? `media` is the draft's
+    /// attachment taken nearest the place, when one is geotagged. Route
+    /// `backend/routes/posts.js:2276`.
     public static func placeEligibility(
         latitude: Double,
         longitude: Double,
         gpsTimestamp: String? = nil,
         gpsLatitude: Double? = nil,
-        gpsLongitude: Double? = nil
+        gpsLongitude: Double? = nil,
+        media: PostMediaLocation? = nil,
+        postType: String? = nil
     ) -> Endpoint {
         var query: [String: String] = [
             "latitude": String(latitude),
@@ -89,6 +92,12 @@ public enum PostsEndpoints {
         if let gpsTimestamp { query["gpsTimestamp"] = gpsTimestamp }
         if let gpsLatitude { query["gpsLatitude"] = String(gpsLatitude) }
         if let gpsLongitude { query["gpsLongitude"] = String(gpsLongitude) }
+        if let media {
+            query["mediaLatitude"] = String(media.latitude)
+            query["mediaLongitude"] = String(media.longitude)
+            if let capturedAt = media.capturedAt { query["mediaCapturedAt"] = capturedAt }
+        }
+        if let postType { query["postType"] = postType }
         return Endpoint(method: .get, path: "/api/posts/place-eligibility", query: query)
     }
 

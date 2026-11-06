@@ -1,13 +1,18 @@
 /**
  * Mail Vendor Service
  *
- * Orchestrator that selects the appropriate mail provider (Lob or Mock)
- * and manages the lifecycle of MailVerificationJob records.
+ * The one door to every printer. Selects the printer for a new piece, finishes
+ * each piece with the printer that accepted it, and manages the lifecycle of
+ * MailVerificationJob records.
  *
- * Provider selection:
- *   - LOB_API_KEY set → LobMailProvider
- *   - Otherwise in local development → MockMailProvider (logs code to console)
- *   - Otherwise in hosted environments → LobMailProvider, which refuses to send
+ * Printer selection for a new piece:
+ *   - MAIL_PROVIDER_<FLOW> names the printer for one flow (home_postcard,
+ *     address_verification, block_founders), else MAIL_PROVIDER for all of them
+ *   - Nothing set: Lob when configured, otherwise in local development the mock
+ *     (logs code to console), otherwise in hosted environments Lob, which refuses to send
+ *   - MAIL_FAILOVER_PROVIDER, when set, takes NEW pieces while the chosen printer keeps
+ *     failing. Off by default. A piece already handed to a printer never moves.
+ *   - BLOCK_FOUNDERS_MAIL_ENABLED=false stops invitations alone
  *
  * Usage:
  *   const mailVendorService = require('./mailVendorService');
@@ -17,34 +22,112 @@
 
 const logger = require('../../utils/logger');
 const { destinationFor, sameDestination } = require('./mailDestination');
+const { noMailToDestination } = require('./mailSuppression');
+const { vendorStatusFor, outcomeFor, RECONCILE_GRACE_MS, RECONCILE_BATCH } = require('./mailEvents');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const lobMailProvider = require('./lobMailProvider');
 const mockMailProvider = require('./mockMailProvider');
 const observability = require('./addressVerificationObservability');
 
+const PROVIDERS = { lob: lobMailProvider, mock: mockMailProvider };
+const FLOW_SETTINGS = {
+  home_postcard: 'MAIL_PROVIDER_HOME_POSTCARD',
+  address_verification: 'MAIL_PROVIDER_ADDRESS_VERIFICATION',
+  block_founders: 'MAIL_PROVIDER_BLOCK_FOUNDERS',
+};
+const FAILOVER_AFTER_FAILURES = 3;
+const FAILOVER_WINDOW_MS = 5 * 60 * 1000;
+
+const isHosted = () => process.env.NODE_ENV === 'production' || ['staging', 'production'].includes(process.env.APP_ENV);
+
 class MailVendorService {
-  /**
-   * Return the active provider based on environment configuration.
-   * @returns {object} provider with sendPostcard / getJobStatus methods
-   */
-  getProvider() {
-    if (lobMailProvider.isAvailable()
-      || process.env.NODE_ENV === 'production'
-      || ['staging', 'production'].includes(process.env.APP_ENV)) {
-      return lobMailProvider;
+  constructor() {
+    /** Consecutive unanswered sends per printer, in this process. */
+    this.sendFailures = new Map();
+  }
+
+  /** @returns {object} the printer used when nothing names one */
+  _defaultProvider() {
+    return lobMailProvider.isAvailable() || isHosted() ? lobMailProvider : mockMailProvider;
+  }
+
+  /** The mock prints codes to the log, so a hosted server never selects it. */
+  _namedProvider(name) {
+    const provider = PROVIDERS[name];
+    if (!provider || (provider === mockMailProvider && isHosted())) {
+      logger.error('MailVendorService: ignoring unusable printer setting', { name });
+      return this._defaultProvider();
     }
-    return mockMailProvider;
+    return provider;
+  }
+
+  _configuredProvider(flow) {
+    const name = (flow && process.env[FLOW_SETTINGS[flow]]) || process.env.MAIL_PROVIDER;
+    return name ? this._namedProvider(name) : this._defaultProvider();
   }
 
   /**
-   * Postcards can go out here: Lob is configured, or this is local development,
-   * whose mock prints the code. A hosted server without Lob (production while
+   * Return the printer for a new piece.
+   * @param {'home_postcard'|'address_verification'|'block_founders'} [flow]
+   * @returns {object} provider with sendPostcard / sendCustomPostcard / findPieces / getJobStatus methods
+   */
+  getProvider(flow) {
+    const chosen = this._configuredProvider(flow);
+    const fallback = PROVIDERS[process.env.MAIL_FAILOVER_PROVIDER];
+    return fallback && fallback !== chosen && fallback.isAvailable() && this._isFailing(chosen.name) ? fallback : chosen;
+  }
+
+  /**
+   * The printer a piece belongs to. A piece always finishes with the printer that
+   * accepted it; rows from before printers were recorded go by the receipt's prefix.
+   * @param {string|null} name - the row's stored printer
+   * @param {string|null} [vendorJobId]
+   * @returns {object}
+   */
+  providerForPiece(name, vendorJobId) {
+    if (name && PROVIDERS[name]) return PROVIDERS[name];
+    if (typeof vendorJobId === 'string' && vendorJobId.startsWith('mock_')) return mockMailProvider;
+    return typeof vendorJobId === 'string' && vendorJobId.startsWith('psc_') ? lobMailProvider : this._defaultProvider();
+  }
+
+  /** A send that got no answer counts toward failover. A refusal is an answer. */
+  noteSendResult(name, answered) {
+    if (answered) {
+      this.sendFailures.delete(name);
+      return;
+    }
+    const failures = this.sendFailures.get(name);
+    this.sendFailures.set(name, { count: (failures?.count || 0) + 1, at: Date.now() });
+  }
+
+  _isFailing(name) {
+    const failures = this.sendFailures.get(name);
+    return !!failures && failures.count >= FAILOVER_AFTER_FAILURES && Date.now() - failures.at < FAILOVER_WINDOW_MS;
+  }
+
+  /** The switch that stops invitations alone; verification cards keep going. */
+  blockFoundersMailEnabled() {
+    return String(process.env.BLOCK_FOUNDERS_MAIL_ENABLED).toLowerCase() !== 'false';
+  }
+
+  /** MAIL_RETURNS_END_ATTEMPTS=false puts a returned card back to waiting until its code expires. */
+  returnsEndAttempts() {
+    return String(process.env.MAIL_RETURNS_END_ATTEMPTS).toLowerCase() !== 'false';
+  }
+
+  /** MAIL_RECONCILE=off stops asking printers about unresolved pieces. */
+  reconcileEnabled() {
+    return String(process.env.MAIL_RECONCILE).toLowerCase() !== 'off';
+  }
+
+  /**
+   * Postcards can go out here: the printer is configured, or this is local development,
+   * whose mock prints the code. A hosted server without one (production while
    * DEFER_ADDRESS_PROVIDER_SETUP holds) refuses to send them.
    * @returns {boolean}
    */
   canSendPostcards() {
-    return lobMailProvider.isAvailable()
-      || !(process.env.NODE_ENV === 'production' || ['staging', 'production'].includes(process.env.APP_ENV));
+    return !isHosted() || this._configuredProvider().isAvailable();
   }
 
   /**
@@ -132,9 +215,14 @@ class MailVendorService {
       return { success: false, error: 'Verification code not supplied for dispatch' };
     }
 
+    // Suppression runs before every send. A refusal says nothing about why.
+    if (await noMailToDestination(destination)) {
+      return { success: false, deliveryUnknown: false, error: 'Mail could not be sent to this address' };
+    }
+
     // ── 4. Send via provider ────────────────────────────────
-    const provider = this.getProvider();
-    const providerName = lobMailProvider.isAvailable() ? 'lob' : 'mock';
+    const provider = this.getProvider('address_verification');
+    const providerName = provider.name;
 
     // Merge only dispatch fields into the current row. Replacing the metadata
     // read above could erase a concurrent confirmation's membership binding.
@@ -152,7 +240,9 @@ class MailVendorService {
     let result;
     try {
       result = await provider.sendPostcard(normalizedAddress, effectiveCode, job.template_id, { jobId });
+      this.noteSendResult(providerName, true);
     } catch (err) {
+      this.noteSendResult(providerName, err.definitelyRejected === true);
       logger.error('MailVendorService.dispatchPostcard: provider error', {
         jobId,
         provider: providerName,
@@ -221,8 +311,7 @@ class MailVendorService {
    * @returns {Promise<{status: string, metadata: object}>}
    */
   async pollJobStatus(vendorJobId) {
-    const provider = this.getProvider();
-    return provider.getJobStatus(vendorJobId);
+    return this.providerForPiece(null, vendorJobId).getJobStatus(vendorJobId);
   }
 
   /**
@@ -253,7 +342,7 @@ class MailVendorService {
       && eventData?.body?.id === vendorJobId && eventData?.body?.object === 'postcard') {
       const recovered = await supabaseAdmin.from('MailVerificationJob')
         .update({ vendor_job_id: vendorJobId, sent_at: new Date().toISOString() })
-        .eq('id', correlationId).eq('vendor', 'lob').is('vendor_job_id', null)
+        .eq('id', correlationId).eq('vendor', eventData?.provider || 'lob').is('vendor_job_id', null)
         .in('vendor_status', ['dispatching', 'delivery_unknown'])
         .select('*').maybeSingle();
       job = recovered.data;
@@ -269,23 +358,7 @@ class MailVendorService {
     }
 
     // ── 2. Map event type to vendor_status ──────────────────
-    const statusMap = {
-      'postcard.created': 'created',
-      'postcard.rendered_pdf': 'rendered',
-      'postcard.rendered_thumbnails': 'rendered',
-      'postcard.deleted': 'canceled',
-      'postcard.delivered': 'delivered',
-      'postcard.failed': 'failed',
-      'postcard.re-routed': 'rerouted',
-      'postcard.returned_to_sender': 'returned',
-      'postcard.mailed': 'mailed',
-      'postcard.in_transit': 'in_transit',
-      'postcard.in_local_area': 'in_local_area',
-      'postcard.international_exit': 'in_transit',
-      'postcard.processed_for_delivery': 'out_for_delivery',
-    };
-
-    const newStatus = statusMap[eventType] || 'unknown';
+    const newStatus = vendorStatusFor(eventType);
 
     // ── 3. Update job ───────────────────────────────────────
     // The RPC merges into the row while holding its update lock, preserving
@@ -295,6 +368,7 @@ class MailVendorService {
       p_vendor_job_id: vendorJobId,
       p_event_type: eventType,
       p_vendor_status: newStatus,
+      p_vendor: eventData?.provider || 'lob',
     });
     if (statusError || statusSaved !== true) return { success: false, retryable: true, error: 'Could not save mail status' };
 
@@ -307,7 +381,11 @@ class MailVendorService {
         .in('status', ['created', 'sent']);
     }
 
-    if (eventType === 'postcard.returned_to_sender') {
+    // A card that came back, was re-routed or failed ends the attempt. Only the
+    // newest card decides: a resend may already be on its way.
+    const outcome = outcomeFor(eventType);
+    if ((eventType === 'postcard.returned_to_sender' || (outcome && this.returnsEndAttempts()))
+      && await this._isNewestJob(job)) {
       await supabaseAdmin
         .from('AddressVerificationAttempt')
         .update({ status: 'expired', updated_at: new Date().toISOString() })
@@ -332,6 +410,59 @@ class MailVendorService {
     });
 
     return { success: true };
+  }
+
+  async _isNewestJob(job) {
+    const { data, error } = await supabaseAdmin.from('MailVerificationJob')
+      .select('id, created_at, metadata').eq('attempt_id', job.attempt_id);
+    if (error || !data?.length) return true;
+    const newest = [...data].sort((a, b) => (b.metadata?.resend_number || 0) - (a.metadata?.resend_number || 0)
+      || new Date(b.created_at) - new Date(a.created_at))[0];
+    return newest.id === job.id;
+  }
+
+  /**
+   * Settle verification cards whose send got no answer. The code isn't kept, so a
+   * card the printer never took can't go out again: its attempt ends and the person
+   * can request another right away. See jobs/reconcileMailPieces.js.
+   */
+  async reconcileJobs(now = Date.now()) {
+    const counts = { found: 0, ended: 0, unanswered: 0 };
+    const nowIso = new Date(now).toISOString();
+    const { data: jobs, error } = await supabaseAdmin.from('MailVerificationJob').select('*')
+      .in('vendor_status', ['dispatching', 'delivery_unknown']).is('vendor_job_id', null)
+      .lt('updated_at', new Date(now - RECONCILE_GRACE_MS).toISOString())
+      .order('updated_at', { ascending: true }).limit(RECONCILE_BATCH);
+    if (error) throw new Error('Unresolved verification mail queue is unavailable');
+    for (const job of jobs || []) {
+      let pieces;
+      try {
+        pieces = await this.providerForPiece(job.vendor).findPieces('pantopus_verification_job_id', job.id);
+      } catch (_) {
+        counts.unanswered += 1;
+        continue;
+      }
+      const piece = pieces[0];
+      const { data: saved } = await supabaseAdmin.from('MailVerificationJob')
+        .update(piece
+          ? { vendor_job_id: piece.vendorJobId, vendor_status: 'created', sent_at: nowIso, updated_at: nowIso }
+          : { vendor_status: 'rejected', updated_at: nowIso })
+        .eq('id', job.id).eq('vendor_status', job.vendor_status).is('vendor_job_id', null).select('id');
+      if (!saved?.length) continue;
+      if (piece) {
+        await supabaseAdmin.from('AddressVerificationAttempt')
+          .update({ status: 'sent', updated_at: nowIso }).eq('id', job.attempt_id).in('status', ['created']);
+        counts.found += 1;
+      } else {
+        if (await this._isNewestJob(job)) {
+          await supabaseAdmin.from('AddressVerificationAttempt')
+            .update({ status: 'expired', updated_at: nowIso }).eq('id', job.attempt_id).in('status', ['created', 'sent']);
+          await supabaseAdmin.from('AddressVerificationToken').update({ cooldown_until: nowIso }).eq('attempt_id', job.attempt_id);
+        }
+        counts.ended += 1;
+      }
+    }
+    return counts;
   }
 }
 

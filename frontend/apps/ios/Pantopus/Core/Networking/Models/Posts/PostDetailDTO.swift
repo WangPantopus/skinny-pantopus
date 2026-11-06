@@ -501,17 +501,28 @@ public struct PostActionAckResponse: Decodable, Sendable, Hashable {
     public let message: String?
 }
 
-/// `GET /api/posts/place-eligibility` response — `backend/routes/posts.js:1941`.
+/// `GET /api/posts/place-eligibility` response — `backend/routes/posts.js:2276`.
 public struct PlaceEligibilityResponse: Decodable, Sendable, Hashable {
     public let eligible: Bool
     public let readOnly: Bool?
     public let reason: String?
+    /// Which way in counted: `resident`, `business`, `gps` or `photo`.
+    public let basis: String?
     public let trustLevel: String?
+
+    public init(eligible: Bool, readOnly: Bool? = nil, reason: String? = nil, basis: String? = nil, trustLevel: String? = nil) {
+        self.eligible = eligible
+        self.readOnly = readOnly
+        self.reason = reason
+        self.basis = basis
+        self.trustLevel = trustLevel
+    }
 
     enum CodingKeys: String, CodingKey {
         case eligible
         case readOnly
         case reason
+        case basis
         case trustLevel
     }
 }

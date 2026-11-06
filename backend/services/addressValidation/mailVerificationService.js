@@ -54,6 +54,9 @@ const USER_ADDRESS_RATE_LIMIT = mv.userAddressRateLimit;
 /** Active attempt statuses (not terminal). */
 const ACTIVE_STATUSES = ['created', 'sent', 'delivered_unknown'];
 
+/** How a job's end reads to the person, when its code stopped because of the mail. */
+const MAIL_OUTCOMES = { returned: 'returned', rerouted: 'rerouted', failed: 'failed', rejected: 'failed' };
+
 class MailVerificationService {
   async _deleteAttemptArtifacts(attemptId) {
     if (!attemptId) return;
@@ -349,7 +352,8 @@ class MailVerificationService {
     }
 
     const { job: previousJob, error: jobsError } = await this._latestMailJob(attemptId);
-    if (jobsError || (previousJob && !previousJob.vendor_job_id)) {
+    // A job the printer confirmed it never took is settled, not unknown.
+    if (jobsError || (previousJob && !previousJob.vendor_job_id && previousJob.vendor_status !== 'rejected')) {
       return this._deliveryUnknown(attemptId, attempt.address_id);
     }
 
@@ -588,7 +592,7 @@ class MailVerificationService {
         .eq('id', attemptId);
     }
 
-    const { job, error: jobError } = ['pending', 'confirmed'].includes(status)
+    const { job, error: jobError } = ['pending', 'confirmed', 'expired'].includes(status)
       ? await this._latestMailJob(attempt.id) : {};
     if (status === 'confirmed') {
       if (jobError) return { success: false, statusCode: 503, error: 'Could not check Home membership. Please retry.' };
@@ -596,12 +600,14 @@ class MailVerificationService {
       if (!membership.success) return membership;
     }
     const deliveryUnknown = status === 'pending' && (jobError || !job?.vendor_job_id);
+    const mailOutcome = status === 'expired' && MAIL_OUTCOMES[job?.vendor_status];
     return {
       success: true,
       verification_id: attempt.id,
       address_id: attempt.address_id,
       status,
       ...(deliveryUnknown && { delivery_unknown: true }),
+      ...(mailOutcome && { mail_outcome: mailOutcome }),
       expires_at: attempt.expires_at,
       cooldown_until: token.cooldown_until,
       max_resends: MAX_RESENDS,

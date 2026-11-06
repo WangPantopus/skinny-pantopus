@@ -76,7 +76,7 @@ internal fun pulseCardContent(
         meta = metaString(post, topic),
         intent = intent,
         chipLabel = intent.chipLabelFor(post.lostFoundType),
-        isVisitor = post.isVisitorPost,
+        isVisitor = showsVisitorBadge(post),
         origin = post.origin,
         title = post.title,
         body = post.content.orEmpty(),
@@ -221,11 +221,33 @@ private fun metaString(
     listOfNotNull(
         relativeTimestamp(post.createdAt),
         // Ahead of the place so a long place name never truncates it; web draws the badge beside the time.
-        "Visitor".takeIf { post.isVisitorPost },
+        // A post the author's own photo placed says so instead of Visitor.
+        photoProvenanceLabel(post) ?: "Visitor".takeIf { post.isVisitorPost },
         // The topic too, before the place, as on iOS ("2h · Gardening · Camas").
         topic?.label,
         post.locationName?.takeIf { it.isNotEmpty() },
     ).joinToString(" · ")
+
+/** A post its author's own photo placed says "Photo taken here" instead of Visitor. */
+private fun showsVisitorBadge(post: FeedPost): Boolean = post.isVisitorPost && post.locationBasis != "photo"
+
+/**
+ * "Photo taken here" for a post its author's own photo or video placed, with the day it was taken once that's more
+ * than a week ago (mirrors iOS `FeedPostDTO.photoProvenanceLabel`). Null for every other post.
+ */
+internal fun photoProvenanceLabel(
+    post: FeedPost,
+    now: Instant = Instant.now(),
+): String? {
+    if (post.locationBasis != "photo") return null
+    val taken = post.photoTakenAt?.let { runCatching { Instant.parse(it) }.getOrNull() }
+    if (taken == null || java.time.Duration.between(taken, now).toDays() < 7) return "Photo taken here"
+    val zone = java.time.ZoneId.systemDefault()
+    val sameYear = taken.atZone(zone).year == now.atZone(zone).year
+    val pattern = if (sameYear) "MMM d" else "MMM yyyy"
+    val day = java.time.format.DateTimeFormatter.ofPattern(pattern, java.util.Locale.getDefault()).format(taken.atZone(zone))
+    return "Photo taken here ${if (sameYear) "on" else "in"} $day"
+}
 
 private fun relativeTimestamp(iso: String): String =
     runCatching {

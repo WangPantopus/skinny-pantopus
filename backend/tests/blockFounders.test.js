@@ -15,6 +15,8 @@
 jest.mock('../services/addressValidation', () => ({
   mailVendorService: {
     getProvider: jest.fn(),
+    blockFoundersMailEnabled: jest.fn(() => true),
+    noteSendResult: jest.fn(),
   },
 }));
 
@@ -84,7 +86,7 @@ const MEMBER_HASH = computeAddressHash('1425 SE Oak St', '', 'Portland', 'OR', '
 
 function mockProvider() {
   const send = jest.fn().mockResolvedValue({ vendorJobId: 'psc_1', status: 'created' });
-  mailVendorService.getProvider.mockReturnValue({ sendCustomPostcard: send });
+  mailVendorService.getProvider.mockReturnValue({ name: 'lob', sendCustomPostcard: send });
   return send;
 }
 

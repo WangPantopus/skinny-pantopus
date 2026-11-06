@@ -26,6 +26,7 @@ const MESSAGES = {
   POSTCARD_COUNTRY_UNAVAILABLE: 'Mail verification is not available for this country yet.',
   POSTCARD_ADDRESS_LIMIT: 'Too many postcards have been requested for this address. Try again later.',
   POSTCARD_USER_LIMIT: 'You’ve asked for too many postcards in the last hour. Try again later.',
+  POSTCARD_RETURNED_LIMIT: 'Two postcards to this address came back, so we won’t send a third. Check the address, or verify another way.',
   POSTCARD_NO_LONGER_AVAILABLE: 'This postcard can no longer be used. Check your current verification status.',
   POSTCARD_CODE_KEY_UNAVAILABLE: 'Mail verification is unavailable right now. Your saved request is preserved; retry later.',
   POSTCARD_EXPIRED: 'This code has expired. Confirm the address before requesting another postcard.',

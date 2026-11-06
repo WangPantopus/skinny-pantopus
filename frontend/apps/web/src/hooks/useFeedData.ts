@@ -376,9 +376,12 @@ export function useFeedData({
         if (postData.latitude == null && viewingLat != null) postData.latitude = viewingLat;
         if (postData.longitude == null && viewingLng != null) postData.longitude = viewingLng;
       }
-      if (gpsTimestamp) postData.gpsTimestamp = gpsTimestamp;
-      if (userLat != null) postData.gpsLatitude = userLat;
-      if (userLng != null) postData.gpsLongitude = userLng;
+      // The newest fix is the evidence: the place picker's can be fresher than this screen's.
+      if (gpsTimestamp && (!postData.gpsTimestamp || gpsTimestamp > postData.gpsTimestamp)) {
+        postData.gpsTimestamp = gpsTimestamp;
+        if (userLat != null) postData.gpsLatitude = userLat;
+        if (userLng != null) postData.gpsLongitude = userLng;
+      }
       const res = await api.posts.createPost(postData);
       const newPost = res.post;
       if (typeof newPost?.id !== 'string' || !newPost.id.trim()) {
