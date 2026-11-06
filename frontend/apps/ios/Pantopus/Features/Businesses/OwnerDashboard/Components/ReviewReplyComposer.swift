@@ -159,6 +159,7 @@ struct ReviewReplyComposer: View {
                 .focused($fieldFocused)
                 .padding(.horizontal, 11)
                 .padding(.vertical, 9)
+                .typesInFieldOnTap($fieldFocused)
                 .background(
                     Theme.Color.appSurfaceSunken,
                     in: RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

@@ -690,6 +690,7 @@ struct AutoTextField: View {
             .foregroundStyle(Theme.Color.appText)
             .padding(.horizontal, 12)
             .frame(height: 42)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Theme.Color.appBorder, lineWidth: 1))
@@ -720,6 +721,7 @@ struct AutoTextEditor: View {
                     .allowsHitTesting(false)
             }
         }
+        .typesInFieldOnTap()
         .background(Theme.Color.appSurface)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(

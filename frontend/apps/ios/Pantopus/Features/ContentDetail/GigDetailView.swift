@@ -641,6 +641,7 @@ public struct GigDetailView: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .accessibilityHidden(true)
+                        .allowsHitTesting(false)
                     TextField("0.00", text: $tipCustomAmountText)
                         .disabled(viewModel.hasTipOriginal || viewModel.tipBusy)
                         .keyboardType(.decimalPad)
@@ -651,6 +652,7 @@ public struct GigDetailView: View {
                 }
                 .padding(.horizontal, Spacing.s3)
                 .frame(height: 48)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurfaceSunken)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             }

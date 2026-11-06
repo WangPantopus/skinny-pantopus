@@ -425,13 +425,16 @@ private struct TagsEditor: View {
                     .accessibilityIdentifier("uploadDocumentTagField")
                 Button(action: onCommit) {
                     Icon(.plusCircle, size: 20, color: draft.isEmpty ? Theme.Color.appTextMuted : Theme.Color.primary600)
+                        .hitArea(horizontal: 8, vertical: 8)
                 }
+                .buttonStyle(.plain)
                 .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
                 .accessibilityIdentifier("uploadDocumentTagCommit")
                 .accessibilityLabel("Add tag")
             }
             .padding(.horizontal, Spacing.s3)
             .frame(minHeight: 44)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurfaceSunken)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md))
         }

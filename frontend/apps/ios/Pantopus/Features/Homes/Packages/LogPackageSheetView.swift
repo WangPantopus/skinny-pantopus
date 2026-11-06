@@ -196,6 +196,7 @@ struct LogPackageSheetView: View {
                 .textInputAutocapitalization(.sentences)
                 .autocorrectionDisabled(false)
                 .padding(Spacing.s3)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md))
                 .overlay(

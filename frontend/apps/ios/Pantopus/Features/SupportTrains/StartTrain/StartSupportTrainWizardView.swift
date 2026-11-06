@@ -205,6 +205,7 @@ private struct StartSupportTrainWhoAndWhyStep: View {
     private var searchField: some View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 14, color: Theme.Color.appTextSecondary)
+                .allowsHitTesting(false)
             TextField("Search by name or username", text: Binding(
                 get: { viewModel.beneficiaryQuery },
                 set: { viewModel.updateBeneficiaryQuery($0) }
@@ -214,11 +215,12 @@ private struct StartSupportTrainWhoAndWhyStep: View {
             .accessibilityLabel("Recipient")
             .accessibilityIdentifier("startSupportTrainBeneficiaryField")
             if viewModel.isSearchingBeneficiary {
-                ProgressView().scaleEffect(0.7)
+                ProgressView().scaleEffect(0.7).allowsHitTesting(false)
             }
         }
         .padding(.horizontal, Spacing.s3)
         .frame(height: 44)
+        .typesInFieldOnTap($isQueryFocused)
         .background(Theme.Color.appSurface)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
@@ -302,8 +304,10 @@ private struct StartSupportTrainWhoAndWhyStep: View {
                         .foregroundStyle(Theme.Color.appTextMuted)
                         .accessibilityIdentifier("startSupportTrainReasonRemaining")
                 }
+                .allowsHitTesting(false)
             }
             .padding(Spacing.s2)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurface)
             .overlay(
                 RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)

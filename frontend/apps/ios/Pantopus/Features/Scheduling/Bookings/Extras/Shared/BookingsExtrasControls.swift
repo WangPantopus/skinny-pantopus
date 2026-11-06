@@ -124,6 +124,7 @@ struct ExtrasMessageBox: View {
                     .foregroundStyle(Theme.Color.appTextMuted)
                     .padding(.horizontal, Spacing.s3 + 1)
                     .padding(.vertical, 11)
+                    .allowsHitTesting(false)
             }
             TextField("", text: $text, axis: .vertical)
                 .font(.system(size: 12.5))
@@ -133,6 +134,7 @@ struct ExtrasMessageBox: View {
                 .padding(.bottom, limit == nil ? 0 : Spacing.s3)
         }
         .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
+        .typesInFieldOnTap()
         .background(Theme.Color.appSurfaceSunken)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

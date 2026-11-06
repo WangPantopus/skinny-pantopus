@@ -92,6 +92,7 @@ public struct MarketplaceView: View {
     private var searchBar: some View {
         HStack(spacing: 10) {
             Icon(.search, size: 17, color: Theme.Color.appTextSecondary)
+                .allowsHitTesting(false)
             TextField("Search goods, rentals, free…", text: $viewModel.searchText)
                 .font(.system(size: 13.5, weight: .medium))
                 .foregroundStyle(Theme.Color.appText)
@@ -104,6 +105,7 @@ public struct MarketplaceView: View {
                     Task { await viewModel.submitSearch() }
                 } label: {
                     Icon(.x, size: 14, color: Theme.Color.appTextSecondary)
+                        .hitArea(horizontal: 8, vertical: 8)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
@@ -111,6 +113,7 @@ public struct MarketplaceView: View {
         }
         .padding(.horizontal, 14)
         .frame(height: 44)
+        .typesInFieldOnTap($searchFocused)
         .background(Theme.Color.appSurfaceSunken)
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         .padding(.horizontal, Spacing.s4)
