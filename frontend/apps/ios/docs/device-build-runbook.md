@@ -216,8 +216,9 @@ The first cold compile of the app plus the widget extension takes **5–15
 minutes**; incremental builds after that are seconds. Strict concurrency and
 whole-module settings make the first pass slow — that is expected, not a hang.
 
-Two bundles get installed: `Pantopus.app` and the embedded `PantopusWidgets`
-extension (Live Activity + Tasks-near-me widget).
+Three bundles get installed: `Pantopus.app` and the embedded `PantopusWidgets`
+(Live Activity + Tasks-near-me widget) and `PantopusNotificationService` (runs
+before a push is shown) extensions.
 
 If the build reports "(N failures)" with no visible error, that is a known
 transient Xcode frontend crash. Build again — don't start deleting things.
@@ -354,7 +355,7 @@ device type.
 | Requests fail instantly, no server log | Local Network permission was denied | Settings → Privacy & Security → Local Network → Pantopus |
 | App installed but won't launch | Certificate not trusted on the device | Settings → General → VPN & Device Management → Trust |
 | "Signing for 'Pantopus' requires a development team" | Something wiped the generated project, or you're in a tree without the team ID | Check `project.yml` has `6UYZBA546R`, re-run `make bootstrap` |
-| Only *PantopusWidgets* fails to sign | The extension has its own bundle ID and profile | Set the team on the PantopusWidgets target too |
+| Only *PantopusWidgets* or *PantopusNotificationService* fails to sign | Each extension has its own bundle ID and profile | Set the team on that target too |
 | Backend starts, but every data call errors | `backend/.env` points at a local Supabase that isn't running | Step 8 — Lane A or Lane B, not neither |
 | Device greyed out in the destination list | Phone locked, or debugger support still mounting | Unlock, replug USB, wait for "Preparing debugger support" |
 | Build reports "(N failures)" with no visible error | Transient Xcode frontend crash | Build again |
