@@ -1,0 +1,99 @@
+name: Property Index
+
+# Pantopus's own index of public county property records (backend/services/propertyRecords, scripts/property-index),
+# published to private storage. Weekly for Clark County's weekly file, monthly for the rest, and by hand. This
+# repository is public, so its logs and uploaded artifacts are too: a real county's run prints counts only and uploads
+# nothing here, and only master can reach the storage key. A pull request builds a made-up county and publishes nothing.
+
+on:
+  schedule:
+    # Clark County writes its file on Tuesdays.
+    - cron: "23 13 * * 3"
+    - cron: "41 14 9 * *"
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "build, or rollback one county to its previous release"
+        type: choice
+        options: [build, rollback]
+        default: build
+      sources:
+        description: "Connectors in scripts/property-index/sources, space separated (build)"
+        required: false
+        default: "wa-clark"
+      county:
+        description: "County FIPS (rollback)"
+        required: false
+        default: ""
+      state:
+        description: "Its state, two letters (rollback)"
+        required: false
+        default: ""
+  pull_request:
+    paths:
+      - scripts/property-index/**
+      - backend/services/propertyRecords/addressKey.js
+      - backend/services/propertyRecords/facts.js
+      - backend/services/propertyRecords/format.js
+      - backend/services/propertyRecords/identity.js
+      - .github/workflows/property-index.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: property-index-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check the build on a made-up county
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      # The build needs no packages (no pnpm install, so no package cache).
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Build and read back
+        run: |
+          node scripts/property-index/build.cjs --source synthetic --out "$RUNNER_TEMP/property-index"
+          node scripts/property-index/check-synthetic.cjs "$RUNNER_TEMP/property-index"
+
+  publish:
+    name: Build and publish
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    environment: property-index
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.PROPERTY_INDEX_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.PROPERTY_INDEX_AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ vars.PROPERTY_INDEX_REGION }}
+      PROPERTY_INDEX_BUCKET: ${{ vars.PROPERTY_INDEX_BUCKET }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Roll back
+        if: github.event_name == 'workflow_dispatch' && inputs.action == 'rollback'
+        env:
+          COUNTY: ${{ inputs.county }}
+          STATE_CODE: ${{ inputs.state }}
+        run: node scripts/property-index/publish.cjs --rollback "$COUNTY" --state "$STATE_CODE" --bucket "$PROPERTY_INDEX_BUCKET"
+      - name: Build and publish
+        if: github.event_name != 'workflow_dispatch' || inputs.action == 'build'
+        env:
+          SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || 'tx-dallas fl-roll' }}
+        run: |
+          for source in $SOURCES; do
+            out="$RUNNER_TEMP/property-index/$source"
+            node --max-old-space-size=12288 scripts/property-index/build.cjs --source "$source" --out "$out" --work "$RUNNER_TEMP/property-index-work"
+            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET"
+            rm -rf "$out" "$RUNNER_TEMP/property-index-work/$source"
+          done

@@ -91,6 +91,7 @@ struct BlockOffTimeView: View {
                     .foregroundStyle(Theme.Color.appText)
                     .disabled(viewModel.isSaving)
                     .accessibilityIdentifier("scheduling.blockOff.reasonField")
+                    .typesInFieldOnTap(reach: Spacing.s2)
                 Text("Optional · only you can see this.")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)

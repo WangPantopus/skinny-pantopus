@@ -206,6 +206,7 @@ struct BookingsInboxView: View {
     private func searchField(_ text: Binding<String>) -> some View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 15, color: Theme.Color.appTextMuted)
+                .allowsHitTesting(false)
             TextField("Search by name", text: text)
                 .font(Theme.Font.small)
                 .focused($searchFocused)
@@ -219,6 +220,7 @@ struct BookingsInboxView: View {
                     Task { await viewModel.submitSearch() }
                 } label: {
                     Icon(.x, size: 14, color: Theme.Color.appTextMuted)
+                        .hitArea(horizontal: 8, vertical: 8)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
@@ -226,6 +228,7 @@ struct BookingsInboxView: View {
         }
         .padding(.horizontal, Spacing.s3)
         .frame(height: 38)
+        .typesInFieldOnTap($searchFocused)
         .background(Theme.Color.appSurfaceSunken)
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         .padding(.horizontal, Spacing.s4)

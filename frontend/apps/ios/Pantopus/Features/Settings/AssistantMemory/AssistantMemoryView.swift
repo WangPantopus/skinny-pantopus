@@ -294,6 +294,7 @@ private struct AssistantMemoryEditor: View {
                         .font(Theme.Font.role(.body))
                         .foregroundStyle(Theme.Color.appText)
                         .padding(Spacing.s3)
+                        .typesInFieldOnTap($focused)
                         .background(Theme.Color.appSurface)
                         .overlay(
                             RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)

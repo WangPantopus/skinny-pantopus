@@ -703,6 +703,7 @@ private struct GigTagsSheet: View {
         }
         .padding(Spacing.s3 - 2)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .typesInFieldOnTap()
         .background(Theme.Color.appSurface)
         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
         .overlay(
