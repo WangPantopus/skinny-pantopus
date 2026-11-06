@@ -111,13 +111,14 @@ const CHECKS = {
     map: [['year_built', 'YR_CONSTR'], ['assessed_value', 'NET_VALUE', moneyNear], ['assessed_land_value', 'LAND_VAL', moneyNear], ['assessed_building_value', 'IMPRVT_VAL', moneyNear], ['sale_price', 'SALE_PRICE', moneyNear]],
   },
   'tx-collin': {
-    county: '48085', rows: () => socrataRows('data.texas.gov', 'vffy-snc6', ['propid', 'imprvyearbuilt', 'currvalmarket', 'currvalland', 'currvalimprv']),
+    // The district's own file is a year behind StratMap's, so only what doesn't change in a year is fair to compare.
+    county: '48085', rows: () => socrataRows('data.texas.gov', 'vffy-snc6', ['propid', 'imprvyearbuilt']),
     id: (row) => row.propid,
-    map: [['year_built', 'imprvyearbuilt'], ['market_value', 'currvalmarket', moneyNear], ['market_land_value', 'currvalland', moneyNear], ['market_building_value', 'currvalimprv', moneyNear]],
+    map: [['year_built', 'imprvyearbuilt']],
   },
   'mn-hennepin': {
-    county: '27053', rows: () => layerRows('https://gis.hennepin.us/arcgis/rest/services/HennepinData/LAND_PROPERTY/MapServer/1', ['PID_TEXT', 'BUILD_YR', 'MKT_VAL_TOT', 'SALE_PRICE', 'PARCEL_AREA']),
-    id: (row) => row.PID_TEXT,
+    county: '27053', rows: () => layerRows('https://gis.hennepin.us/arcgis/rest/services/HennepinData/LAND_PROPERTY/MapServer/1', ['PID', 'BUILD_YR', 'MKT_VAL_TOT', 'SALE_PRICE', 'PARCEL_AREA']),
+    id: (row) => row.PID,
     map: [['year_built', 'BUILD_YR'], ['market_value', 'MKT_VAL_TOT', moneyNear], ['sale_price', 'SALE_PRICE', moneyNear]],
   },
   'nc-wake': {
