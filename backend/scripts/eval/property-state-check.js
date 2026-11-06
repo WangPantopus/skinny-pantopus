@@ -40,9 +40,10 @@ function identity(fips, totals) {
     if (record.restricted) continue;
     if (record.kind === 'building') buildings.push(record);
     if (record.kind !== 'property' && record.kind !== 'unit') continue;
+    // A unit's own text often ends in a bare token no person would type; the units are asked for below.
     const line = record.facts.address_on_record;
     const query = line ? parse(line) : null;
-    if (query) {
+    if (query && (record.kind !== 'unit' || query.unit)) {
       const answer = ask({ ...query, zip: record.address.zip, city: record.address.city });
       const part = `Own address text: ${record.kind}`;
       if (answer.match !== 'exact') bump(part, label(answer));
@@ -63,14 +64,14 @@ function identity(fips, totals) {
   for (const building of buildings) {
     if (seen.has(building.id) || !(building.roster || []).length) continue;
     seen.add(building.id);
-    const answer = ask({ ...building.address, unit: 'ZZ9999', building: '' });
+    const answer = ask({ ...building.address, unit: 'ZZ9999', building: '', city: '' });
     bump('Units that do not exist', answer.match === 'exact' ? 'EXACT, WRONG UNIT' : label(answer));
   }
   for (const homes of homesAtKey.values()) {
     if (homes.length < 2) continue;
     const distinct = new Set(homes.map((home) => home.id));
     if (distinct.size < 2) continue;
-    const answer = ask({ ...homes[0].address, unit: '', building: '' });
+    const answer = ask({ ...homes[0].address, unit: '', building: '', city: '' });
     bump('Addresses with several homes', answer.match === 'exact' ? 'EXACT (PICKED ONE)' : label(answer));
   }
   return release;
