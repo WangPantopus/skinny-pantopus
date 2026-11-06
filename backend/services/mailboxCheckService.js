@@ -20,6 +20,12 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const addressConfig = require('../config/addressVerification');
+const { usesGooglePostal } = require('./addressValidation/postalAdapter');
+
+// A failed re-check waits this long before an open screen tries again.
+const RECHECK_RETRY_MS = 10 * 60 * 1000;
+const recheckTriedAt = new Map();
 
 // severity: ok < info < attention < problem
 const SEVERITY_RANK = { ok: 0, info: 1, attention: 2, problem: 3 };
@@ -46,6 +52,45 @@ function dpvFinding(dpv) {
     default:
       return finding('info', 'No postal check on file', 'This address hasn’t been run through a postal database check yet, so we can’t say how databases see it.');
   }
+}
+
+function uspsDataIsOld(addr) {
+  const checkedAt = Date.parse(addr.last_validated_at);
+  const maxAgeMs = (addressConfig.postal?.uspsDataDays || 30) * 24 * 60 * 60 * 1000;
+  return !Number.isFinite(checkedAt) || Date.now() - checkedAt > maxAgeMs;
+}
+
+function checkedOnSentence(iso) {
+  const when = new Date(iso);
+  if (Number.isNaN(when.getTime())) return '';
+  const date = when.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  return ` USPS was last checked on ${date}.`;
+}
+
+/**
+ * Asks USPS again, without holding the screen. The screen fills in by itself: a change to the Home
+ * row sends the sync signal.
+ */
+function recheckInBackground(addressId, homeId) {
+  const triedAt = recheckTriedAt.get(addressId);
+  if (triedAt && Date.now() - triedAt < RECHECK_RETRY_MS) return;
+  recheckTriedAt.set(addressId, Date.now());
+
+  (async () => {
+    const { data: address, error } = await supabaseAdmin
+      .from('HomeAddress')
+      .select('*')
+      .eq('id', addressId)
+      .maybeSingle();
+    if (error || !address) return;
+    const { recheckAddress } = require('./addressValidation/postalRecheckService');
+    const outcome = await recheckAddress(address, [{ id: homeId, created_by_user_id: null }]);
+    if (outcome !== 'unavailable') {
+      await supabaseAdmin.from('Home').update({ updated_at: new Date().toISOString() }).eq('id', homeId);
+    }
+  })().catch((err) => {
+    logger.warn('mailboxCheck: background re-check failed', { addressId, error: err.message });
+  });
 }
 
 /**
@@ -82,7 +127,24 @@ async function getMailboxCheck({ homeId, userId }) {
   const findings = [];
 
   const dpv = addr ? addr.dpv_match_code : null;
-  findings.push(dpvFinding(dpv));
+  const googlePostal = usesGooglePostal();
+  const postalState = addr?.validation_raw_response?.postal_state;
+  const uspsAskedAgain = googlePostal && addr && (uspsDataIsOld(addr) || !!addr.validation_raw_response?.postal_cleared_at);
+
+  if (uspsAskedAgain) recheckInBackground(addr.id, homeId);
+
+  if (googlePostal && postalState === 'failed') {
+    findings.push(finding('attention', 'Please check this address',
+      'USPS couldn’t confirm it. You can verify another way, or add your home again with the right details.'));
+  } else if (googlePostal && postalState === 'pending') {
+    findings.push(finding('info', 'We couldn’t check this address with USPS yet',
+      'We’ll try again shortly. Your postcard can go out after that.'));
+  } else if (uspsAskedAgain && !dpv) {
+    findings.push(finding('info', 'Checking this address with USPS again',
+      'USPS answers are kept for 30 days, so a new check is running now. This fills in by itself.'));
+  } else {
+    findings.push(dpvFinding(dpv));
+  }
 
   // vacant_flag lives inside the Smarty blob the pipeline stores as
   // validation_raw_response (migration 066) — there is no raw_response column.
@@ -95,7 +157,7 @@ async function getMailboxCheck({ homeId, userId }) {
     findings.push(finding('info', 'This is a commercial mail receiving agency',
       'USPS classifies this address as a CMRA (a mailbox service). Some banks and agencies refuse CMRA addresses as proof of residence.'));
   }
-  if (addr && addr.rdi_type === 'commercial') {
+  if (addr && (addr.rdi_type === 'commercial' || addr.rdi_type === 'business')) {
     findings.push(finding('info', 'USPS classifies this address as commercial',
       'Residential-only delivery services may surcharge or refuse it, and some forms treat it differently from a home address.'));
   }
@@ -156,6 +218,12 @@ async function getMailboxCheck({ homeId, userId }) {
         detail: 'Your postcard request is recorded, but delivery is not confirmed. You can enter its code if it arrives.',
       };
     }
+  }
+
+  // Apps show a finding's own words, so the date reaches every build this way.
+  if (googlePostal && dpv && addr?.last_validated_at) {
+    const checkedOn = checkedOnSentence(addr.last_validated_at);
+    for (const item of findings) item.detail += checkedOn;
   }
 
   const worst = findings.reduce((acc, f) => (SEVERITY_RANK[f.severity] > SEVERITY_RANK[acc] ? f.severity : acc), 'ok');
