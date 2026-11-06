@@ -51,6 +51,8 @@ class PantopusMessagingService : FirebaseMessagingService() {
 
     @Inject lateinit var deviceIdentity: DeviceIdentity
 
+    @Inject lateinit var pushTokenSyncer: dagger.Lazy<PushTokenSyncer>
+
     @Inject lateinit var plansRepository: dagger.Lazy<PlansRepository>
 
     @Inject lateinit var plansEvents: dagger.Lazy<PlansEvents>
@@ -93,6 +95,8 @@ class PantopusMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
         Timber.d("FCM message received: ${message.messageId}")
+        // A sign-out couldn't delete this token, and this push shows there's a network now.
+        if (ackStore.tokenDeletePending()) pushTokenSyncer.get().retryTokenDelete()
         if (message.data["type"] == TYPE_SESSION_REVOKED) {
             // Design §7.7: the push is a hint, never the authority — the
             // repository probes the server and signs out only on a 401.
