@@ -180,7 +180,10 @@ public struct TransactionalDetailShell: View {
                 topNav(trailing: glassTrailing(cover.glassActions), transparent: true)
                     .frame(maxHeight: .infinity, alignment: .top)
             }
-            stickyDock(content.dock)
+            // The dock would ride up on the keyboard and cover the text box being typed in (the Ask card).
+            if !TextEditingState.shared.isEditing {
+                stickyDock(content.dock)
+            }
         }
     }
 
