@@ -1255,8 +1255,9 @@ export default function PostComposer({
               </p>
             )}
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            {/* Wraps when it doesn't fit: on one line it can be wider than the card, which clips it (at phone width, Post was off the screen). */}
+            <div className="flex flex-wrap items-center justify-between gap-y-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {isEdit && (
                   <span className="text-xs text-app-muted">
                     {editPost && (editPost.media_urls?.length ?? 0) > 0
@@ -1292,7 +1293,7 @@ export default function PostComposer({
                 <span className="text-[10px] tabular-nums text-app-muted">{f.content.length}/5000</span>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="ml-auto flex items-center gap-2">
                 <button
                   onClick={isEdit ? onCancelEdit : resetComposer}
                   disabled={isEdit && savingEdit}
