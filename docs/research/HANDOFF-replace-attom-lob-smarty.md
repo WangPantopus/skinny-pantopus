@@ -35,6 +35,13 @@
   not opened); Cobb GA's FTP tabular file and Medina OH's CAMA file (certificate expired) unopened; Northampton PA and
   Madison VA rest on re-published copies; Google's billing SKU for CASS requests; prices for most paid counties.
 
+## Decided by the founder
+
+- Nov 5, evening: keep ATTOM as a fallback during the switch. County data wherever Pantopus has it, ATTOM only for
+  counties not yet covered; stop calling ATTOM county by county and cancel the (national) subscription once few
+  homes rely on it. Depends on ATTOM's plan terms (whether its records may be kept); details in the design record,
+  section 7. The cancel bar goes into the Phase 3 plan for the founder's OK.
+
 ## Waiting on the founder
 
 Asked in chat on Nov 5 (~22:00 UTC), no answer yet:

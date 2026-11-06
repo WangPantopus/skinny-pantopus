@@ -222,3 +222,12 @@ Add Home; request or buy county files for the largest gaps (prices in `uncovered
 the ATTOM plan allows storing its data, keep ATTOM only for counties not yet covered and cancel it county by county as
 coverage arrives.
 
+**Founder decision (Nov 5, evening): keep ATTOM as a fallback during the switch.** Property details come from the
+county wherever Pantopus has the county's data, and from ATTOM only for counties not yet covered. ATTOM's plan is
+national, so "county by county" means Pantopus stops calling ATTOM for each county as its data arrives, and the
+subscription is cancelled once the homes still relying on ATTOM are few enough. This depends on ATTOM's plan terms
+(still a founder-only fact): if the plan lets Pantopus keep ATTOM's records, the fallback works as today; if it only
+allows short-lived copies (the published trial terms say 24 hours), fallback pages have to call ATTOM again when the
+copy expires, which is slower, and the stored copies kept today must be cleared. The cutover bar (when to cancel) goes
+into the Phase 3 plan for the founder's OK.
+
