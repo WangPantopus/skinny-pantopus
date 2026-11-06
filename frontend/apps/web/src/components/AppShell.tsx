@@ -24,7 +24,7 @@ import { myHomesQuery } from '@/lib/myHomes';
 import { showsMyHomesCopy, useAfterRecheck } from '@/lib/householdCopy';
 import { HomePermissionsProvider, useHomePermissions } from '@/components/home/useHomePermissions';
 import { businessAccessQuery } from '@/components/business/useBusinessData';
-import { conversationsQuery, useConversationEvents } from '@/lib/conversations';
+import { useConversationEvents } from '@/lib/conversationEvents';
 import type { PostComposerSubmitData } from '@/components/feed/PostComposer';
 import { identityCopy } from '@/lib/identityLabels';
 import PrerenderSuspense from '@/components/first-content/PrerenderSuspense';
@@ -63,8 +63,7 @@ import type { CSSProperties } from 'react';
 import { Search, MessageCircle, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, UserRound, type LucideIcon } from 'lucide-react';
 import { useOnlineStatus } from '@/components/map/OfflineIndicator';
 import { chosenUsername } from '@pantopus/utils';
-import { startChatOutbox } from '@/components/chat/chatOutbox';
-import { establishVerifiedChatSession } from '@/components/chat/chatStorage';
+import { establishVerifiedChatSession, purgeOtherChatAccounts, retryChatOutboxStart, startChatOutboxAfterPaint } from '@/components/chat/chatSession';
 
 // ── Constants ──────────────────────────────────────────────────
 const SIDEBAR_EXPANDED = 240;
@@ -302,8 +301,15 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const user: User | null = me ?? null;
   useConversationEvents(user?.id);
   useEffect(() => {
-    if (user?.id && !establishVerifiedChatSession()) void startChatOutbox(user.id).catch(() => {});
+    if (!user?.id || establishVerifiedChatSession()) return;
+    // At once: this browser keeps only this account's chat (other accounts' keys
+    // and records, expired history). The outbox's code loads after first paint and
+    // sends what any tab queued, from any page (components/chat/chatSession.ts).
+    void purgeOtherChatAccounts(user.id).catch(() => {});
+    return startChatOutboxAfterPaint(user.id);
   }, [user?.id]);
+  // An outbox whose code failed to load tries again on the next navigation.
+  useEffect(() => { retryChatOutboxStart(); }, [pathname]);
 
   // ── Tile prefetch for home area ──────────────────────────────
   // A cold Messages inbox paints its rows first (lib/shellReads.ts).
@@ -818,7 +824,9 @@ export function PersonalSidebarContent({ currentPath, showLabels, chatUnread, ma
   // Messages — the conversation list.
   const prefetchMessages = useCallback(() => {
     router.prefetch('/app/chat');
-    queryClient.prefetchQuery(conversationsQuery());
+    // The list's reads and its encrypted copy load with Messages, so a first hover waits for them.
+    void import('@/lib/conversations')
+      .then(({ conversationsQuery }) => queryClient.prefetchQuery(conversationsQuery())).catch(() => {});
   }, [router, queryClient]);
 
   // Scheduling hub — the hub query key needs the active owner (resolved client-side

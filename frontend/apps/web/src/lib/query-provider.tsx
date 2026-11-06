@@ -7,9 +7,11 @@ import { subscribeConnectivity } from '@/lib/connectivity';
 import { clearCachedMapTiles } from '@/utils/tilePrefetch';
 import { AUTH_SESSION_CHANGE_KEY, getAuthToken, onTokenChange } from '@pantopus/api/client';
 import { setActiveQueryClient } from '@/lib/active-query-client';
-import { chatHistoryMessageIds, chatHistoryRooms, clearChatStorage, onChatHistoryRetired } from '@/components/chat/chatStorage';
-import { suspendChatOutbox } from '@/components/chat/chatOutbox';
-import { retainInboxAfterRetirement, type ConversationsReply } from '@/lib/conversation-storage';
+// Chat's session state only: the encrypted store and the outbox load with Messages,
+// or after first paint on other app pages (components/chat/chatSession.ts).
+import { chatHistoryMessageIds, chatHistoryRooms, clearChatDevice, deleteRetiredChatSnapshots, onChatHistoryRetired, suspendChatSession,
+  type HistoryRetirement } from '@/components/chat/chatSession';
+import type { ConversationsReply } from '@/lib/conversation-storage';
 import { queryKeys } from '@/lib/query-keys';
 
 // Queries pause while offline. React Query's own detection believes the
@@ -32,8 +34,18 @@ function clearAccountDeviceData(sessionEnded: boolean) {
       .forEach((key) => window.localStorage.removeItem(key));
   } catch { /* storage disabled: nothing was kept */ }
   clearCachedMapTiles();
-  suspendChatOutbox();
-  void clearChatStorage().catch(() => {});
+  // Ends the chat session at once, then clears the store.
+  void clearChatDevice().catch(() => {});
+}
+
+/** Saves the inbox already patched in memory (lib/conversation-storage.ts, loaded on
+ * demand). If that code can't load, the store's copies of the retired rooms and
+ * messages go anyway, so a failed download never leaves them on the device. */
+function retainInboxAfter(client: QueryClient, event: HistoryRetirement) {
+  void import('@/lib/conversation-storage').then(
+    ({ retainInboxAfterRetirement }) => retainInboxAfterRetirement(client, event).catch(() => {}),
+    () => deleteRetiredChatSnapshots(event).catch(() => {}),
+  );
 }
 
 // Instant Screens (contract §6): the web keeps what it loaded in memory only,
@@ -122,7 +134,7 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
         return { ...previous, conversations: previous.conversations.map(clearPreview),
           ...(previous.keptTail ? { keptTail: { ...previous.keptTail, rows: previous.keptTail.rows.map(clearPreview) } } : {}) };
       });
-      void retainInboxAfterRetirement(queryClient, event).catch(() => {});
+      retainInboxAfter(queryClient, event);
       void queryClient.invalidateQueries({ queryKey: queryKeys.conversations() });
       return;
     }
@@ -144,14 +156,14 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
       return { ...previous, conversations, refreshId,
         ...(previous.keptTail ? { keptTail: { ...previous.keptTail, rows: tail ?? [], generation: refreshId } } : {}) };
     });
-    void retainInboxAfterRetirement(queryClient, event).catch(() => {});
+    retainInboxAfter(queryClient, event);
     void queryClient.invalidateQueries({ queryKey: queryKeys.conversations() });
   }), [queryClient]);
 
   useEffect(() => {
     const retire = () => {
-      suspendChatOutbox();
-      if (getAuthToken() === null) void clearChatStorage().catch(() => {});
+      suspendChatSession();
+      if (getAuthToken() === null) void clearChatDevice().catch(() => {});
       try { window.sessionStorage.removeItem('pantopus_pending_withdrawal'); } catch {}
       // Retire both cached queries and component-local state belonging to the
       // previous account. A fresh client cannot accept an old pending result.
