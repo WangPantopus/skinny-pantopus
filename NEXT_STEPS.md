@@ -814,13 +814,19 @@ status), and the 42 screens are on the [Crew Day designs canvas](https://claude.
   - Each scenario's steps and notes are in [04-scenarios.md](docs/product/crew-day-build/04-scenarios.md) and
     [05-status.md](docs/product/crew-day-build/05-status.md).
 - [ ] Yours, to release:
-  1. Rename the migration so it sorts after master's newest (`20261105120000_pulse_user_home_area_context.sql` on
-     November 6), and check it with `MIGRATION_BASE_SHA=$(git rev-parse origin/master) node scripts/db/check-migrations.cjs`.
-  2. Merge `crew-day` into `master`. That deploys the server, runs the migration on the production database and
-     deploys the web to pantopus.com, with Crew Day still off. Bring `master` into `crew-day` first. On November 6
-     `master` was 98 commits ahead, and only the iOS and Android deep-link routers conflicted: both sides add link
-     cases, so keep both.
-  3. To turn it on, add `crew_day` to `LAUNCH_FEATURES` (server), `NEXT_PUBLIC_LAUNCH_FEATURES` (Vercel) and
+  1. Master was brought into `crew-day` on November 6 ([#3460](https://github.com/WangPantopus/skinny-pantopus/pull/3460)).
+     Only the iOS and Android deep-link routers conflicted (both sides add link cases, both kept), and Crew Day's web
+     pages moved into `(site)` with master's other pages. If master moves on before the release, bring it in again
+     the same way.
+  2. Release from the branch `claude/cd-release`: `crew-day` plus one commit that renames the migration to sort after
+     master's newest (`20261106054000_crew_day.sql`). CI's migration check refuses that rename on a PR into
+     `crew-day` and passes on a PR into `master`. Open the branch's PR into `master` and merge it. If master gains a
+     newer migration first, rename again. A local database that applied the old name needs
+     `supabase migration repair --status reverted 20261105100000` and
+     `supabase migration repair --status applied 20261106054000`, or a reset.
+  3. That merge deploys the server, runs the migration on the production database and deploys the web to
+     pantopus.com, with Crew Day still off.
+  4. To turn it on, add `crew_day` to `LAUNCH_FEATURES` (server), `NEXT_PUBLIC_LAUNCH_FEATURES` (Vercel) and
      `PANTOPUS_LAUNCH_FEATURES` (the iOS and Android release builds), then ship app builds.
 
   Storage, scheduled jobs, email and Stripe need nothing new. The jobs ride the existing worker and skip while the key
