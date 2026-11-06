@@ -31,8 +31,9 @@ import { DetailHeader, IconTile } from '@/components/archetypes/place';
 import { detailAddress } from '@/components/place/detail/sections';
 import VerifyPromptSheet from '@/components/place/VerifyPromptSheet';
 import NeighborMessageComposeView, { type ComposeRecipient } from './NeighborMessageComposeView';
+import ChooseHomeCard, { type ChosenHome } from './ChooseHomeCard';
 import { usePrimaryHome } from '@/lib/primaryHome';
-import { myHomesQuery as sharedMyHomesQuery } from '@/lib/myHomes';
+import { myHomesQuery as sharedMyHomesQuery, useHomeCenter } from '@/lib/myHomes';
 import { PLACE_FRESH_MS, gatedStaleTime, placeCopyGate, useAfterRecheck } from '@/lib/householdCopy';
 
 const REDIRECT_TO = encodeURIComponent('/app/place/neighbor-message');
@@ -62,6 +63,9 @@ export default function NeighborMessageCompose() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [sent, setSent] = useState(false);
+  // A home chosen on this screen (Choose a home). Kept in state, not the URL: a neighbor's address
+  // doesn't belong in the browser's history.
+  const [chosen, setChosen] = useState<ChosenHome | null>(null);
 
   useEffect(() => setMounted(true), []);
   useEffect(() => {
@@ -74,6 +78,7 @@ export default function NeighborMessageCompose() {
   const homeId = home?.id ?? null;
 
   const myHomesQuery = useQuery({ ...sharedMyHomesQuery(), enabled: authed && !!homeId });
+  const homeCenter = useHomeCenter(authed ? homeId : null);
   const showsCopy = placeCopyGate(myHomesQuery.data?.homes.find((home) => home.id === homeId));
   const intelQuery = useQuery({
     queryKey: homeId ? queryKeys.placeIntelligence(homeId) : ['place', 'intelligence', 'none'],
@@ -92,12 +97,13 @@ export default function NeighborMessageCompose() {
   });
 
   const recipient: ComposeRecipient | null = useMemo(() => {
+    if (chosen) return { address: chosen.address, relativeLabel: chosen.relativeLabel };
     const to = searchParams.get('to');
     const addr = searchParams.get('addr');
     if (!to || !addr) return null;
     return { address: addr, relativeLabel: searchParams.get('rel') || 'On your block' };
-  }, [searchParams]);
-  const recipientHomeId = searchParams.get('to');
+  }, [chosen, searchParams]);
+  const recipientHomeId = chosen?.homeId ?? searchParams.get('to');
 
   const homeAddress = home ? [home.address, home.city].filter(Boolean).join(' · ') : undefined;
   const address = intelligence ? detailAddress(intelligence.place) : homeAddress;
@@ -224,7 +230,25 @@ export default function NeighborMessageCompose() {
         selectedId={selectedId}
         onSelect={setSelectedId}
         onSend={() => sendMutation.mutate()}
-        onChangeRecipient={() => router.back()}
+        onChangeRecipient={() => {
+          if (sendMutation.isPending) return;
+          if (chosen) {
+            setChosen(null);
+            sendMutation.reset();
+          } else {
+            router.back();
+          }
+        }}
+        chooser={homeId ? (
+          <ChooseHomeCard
+            senderHomeId={homeId}
+            near={homeCenter}
+            onChoose={(home) => {
+              setChosen(home);
+              sendMutation.reset();
+            }}
+          />
+        ) : null}
         sending={sendMutation.isPending}
         errorMessage={
           sendMutation.isError

@@ -30,14 +30,16 @@ interface PostLocationPickerProps {
   textColor?: string;
   /** The chip's text in dark mode (defaults to `textColor`). */
   darkTextColor?: string;
+  /** Where the first located attachment was taken: the list opens around it, with a chip to switch to the device. */
+  photoLocation?: { latitude: number; longitude: number } | null;
 }
 
 type PickerMode = 'closed' | 'search';
 
 type GeoPlace = api.geo.GeoPlace;
 
-// Where the list and the name search look: the device's fix, or without one the saved viewing area. Only a fix
-// (gpsTimestamp) says the person is there.
+// Where the list and the name search look without a photo: the device's fix, or without one the saved viewing area.
+// Only a fix (gpsTimestamp) says the person is there.
 type PlaceAnchor = { latitude: number; longitude: number; gpsTimestamp?: string; label?: string };
 
 type NearbyList = {
@@ -58,6 +60,11 @@ const MAX_FINDING_POLLS = 8;
 // The popover's width (w-72) and the gap it keeps from the edge of the screen.
 const POPOVER_WIDTH = 288;
 const SCREEN_GUTTER = 16;
+
+const ANCHOR_CHIPS = [
+  { key: 'photo', label: 'Photo location' },
+  { key: 'device', label: 'Near me' },
+] as const;
 
 // Row icons by the server's venue `icon` key, as the apps draw them; a pin for a town or anything unknown.
 const PLACE_ICONS: Record<string, LucideIcon> = {
@@ -145,7 +152,7 @@ function useDebounced(value: string, ms: number) {
 }
 
 export default function PostLocationPicker({
-  value, onChange, accentColor = '#0284c7', textColor, darkTextColor,
+  value, onChange, accentColor = '#0284c7', textColor, darkTextColor, photoLocation = null,
 }: PostLocationPickerProps) {
   const [mode, setMode] = useState<PickerMode>('closed');
   const [query, setQuery] = useState('');
@@ -154,6 +161,7 @@ export default function PostLocationPicker({
   const [foundAttribution, setFoundAttribution] = useState<string | null>(null);
   const [anchor, setAnchor] = useState<PlaceAnchor | null>(null);
   const [anchorSettled, setAnchorSettled] = useState(false);
+  const [anchorChip, setAnchorChip] = useState<'photo' | 'device'>('photo');
   const [nearby, setNearby] = useState<NearbyList>(NO_NEARBY_LIST);
   const [nearbyAttempt, setNearbyAttempt] = useState(0);
   const [popoverLeft, setPopoverLeft] = useState(0);
@@ -173,6 +181,8 @@ export default function PostLocationPicker({
   const searchActive = trimmedQuery.length >= 2;
   const searching = searchActive && (loading || trimmedQuery !== debouncedQuery);
   const attribution = searchActive ? (searching ? null : foundAttribution) : nearby.attribution;
+  const photoAnchored = photoLocation != null && anchorChip === 'photo';
+  const listAnchor = photoAnchored ? photoLocation : anchor;
   // The device's fix goes with whatever is picked: it says where the person is, not where the place is.
   const deviceFix = anchor?.gpsTimestamp
     ? { gpsTimestamp: anchor.gpsTimestamp, gpsLatitude: anchor.latitude, gpsLongitude: anchor.longitude }
@@ -197,7 +207,8 @@ export default function PostLocationPicker({
   }, [mode]);
 
   // The list's anchor: the device's fix, or the saved viewing area if there's no fix (yet). A fix that comes late,
-  // such as after the browser's permission question, still takes over.
+  // such as after the browser's permission question, still takes over. A photo anchoring the list needs neither, so
+  // it asks the browser no question: only a fix already allowed comes along, for the pick to carry.
   useEffect(() => {
     if (mode !== 'search') return;
     let closed = false;
@@ -216,28 +227,35 @@ export default function PostLocationPicker({
       }
       if (!closed) setAnchorSettled(true);
     };
-    const fixWait = setTimeout(() => void fallBackToSavedArea(), FIX_WAIT_MS);
+    const fixWait = photoAnchored ? undefined : setTimeout(() => void fallBackToSavedArea(), FIX_WAIT_MS);
     const noFix = () => {
       clearTimeout(fixWait);
-      if (!closed) void fallBackToSavedArea();
+      if (!closed && !photoAnchored) void fallBackToSavedArea();
     };
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          clearTimeout(fixWait);
-          if (closed) return;
-          setAnchor({
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            gpsTimestamp: new Date(pos.timestamp || Date.now()).toISOString(),
-          });
-          setAnchorSettled(true);
-        },
-        noFix,
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
-      );
-    } else {
+    const askForFix = () => navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        clearTimeout(fixWait);
+        if (closed) return;
+        setAnchor({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          gpsTimestamp: new Date(pos.timestamp || Date.now()).toISOString(),
+        });
+        setAnchorSettled(true);
+      },
+      noFix,
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    );
+    if (!navigator.geolocation) {
       noFix();
+    } else if (photoAnchored) {
+      navigator.permissions?.query({ name: 'geolocation' })
+        .then((status) => {
+          if (!closed && status.state === 'granted') askForFix();
+        })
+        .catch(() => undefined);
+    } else {
+      askForFix();
     }
     return () => {
       closed = true;
@@ -245,17 +263,17 @@ export default function PostLocationPicker({
       setAnchor(null);
       setAnchorSettled(false);
     };
-  }, [mode]);
+  }, [mode, photoAnchored]);
 
   // The nearby list. A reply still `loading` is shown and asked for again until the venues arrive.
   useEffect(() => {
     setNearby(NO_NEARBY_LIST);
-    if (mode !== 'search' || !anchor) return;
+    if (mode !== 'search' || !listAnchor) return;
     const controller = new AbortController();
     let nextAsk: ReturnType<typeof setTimeout> | undefined;
     const ask = async (asked: number) => {
       try {
-        const reply = await api.geo.nearbyPlaces(anchor.latitude, anchor.longitude, controller.signal);
+        const reply = await api.geo.nearbyPlaces(listAnchor.latitude, listAnchor.longitude, controller.signal);
         if (controller.signal.aborted) return;
         const finding = reply.loading === true && asked < MAX_FINDING_POLLS;
         setNearby({
@@ -279,7 +297,7 @@ export default function PostLocationPicker({
       controller.abort();
       if (nextAsk) clearTimeout(nextAsk);
     };
-  }, [mode, anchor, nearbyAttempt]);
+  }, [mode, listAnchor, nearbyAttempt]);
 
   // The search: venues by name around the anchor, then what the address search finds. That search still answers for
   // addresses, towns and ZIP codes (the place search has no ZIP codes), so only venues are taken from the place search.
@@ -301,7 +319,7 @@ export default function PostLocationPicker({
       setLoading(true);
       // Same-origin shared client, so the web session cookie authenticates both.
       const [named, addresses] = await Promise.allSettled([
-        api.geo.searchPlaces(debouncedQuery, anchor, controller.signal),
+        api.geo.searchPlaces(debouncedQuery, listAnchor, controller.signal),
         debouncedQuery.length >= 3
           ? api.geo.autocompleteWithAbort(debouncedQuery, controller.signal)
           : { suggestions: [] },
@@ -318,13 +336,14 @@ export default function PostLocationPicker({
     })();
 
     return () => controller.abort();
-  }, [debouncedQuery, mode, searchAttempt, anchor]);
+  }, [debouncedQuery, mode, searchAttempt, listAnchor]);
 
   // On a narrow screen the button can sit far enough right to push the popover off the edge.
   const handleOpen = () => {
     const buttonLeft = containerRef.current?.getBoundingClientRect().left ?? 0;
     setPopoverLeft(Math.min(0, window.innerWidth - SCREEN_GUTTER - POPOVER_WIDTH - buttonLeft));
     setError('');
+    setAnchorChip('photo');
     setMode('search');
   };
 
@@ -354,6 +373,8 @@ export default function PostLocationPicker({
 
     const suggestionId = suggestion.suggestion_id as string;
     const pick = ++latestPick.current;
+    // What it names: a photo-placed post is pinned at an address, but where the photo was taken for a town or a ZIP code.
+    const geocodeAccuracy = (suggestion.kind as string) || undefined;
 
     try {
       const data = await api.geo.resolve(suggestionId);
@@ -367,6 +388,8 @@ export default function PostLocationPicker({
         locationName: shortLabel,
         locationAddress: n.address || (suggestion.label as string) || shortLabel,
         source: 'search',
+        geocodePlaceId: n.place_id || suggestionId || undefined,
+        geocodeAccuracy,
         ...deviceFix,
       });
     } catch {
@@ -378,6 +401,8 @@ export default function PostLocationPicker({
         locationName: (suggestion.primary_text as string) || 'Selected location',
         locationAddress: (suggestion.label as string) || 'Selected location',
         source: 'search',
+        geocodePlaceId: suggestionId || undefined,
+        geocodeAccuracy,
         ...deviceFix,
       });
     }
@@ -548,6 +573,27 @@ export default function PostLocationPicker({
             </button>
           </div>
 
+          {/* With a located attachment, the list and the search can look around it or around the device */}
+          {photoLocation && (
+            <div className="flex gap-2 px-3 py-2 border-b border-app">
+              {ANCHOR_CHIPS.map((chip) => (
+                <button
+                  key={chip.key}
+                  type="button"
+                  aria-pressed={anchorChip === chip.key}
+                  onClick={() => setAnchorChip(chip.key)}
+                  className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                    anchorChip === chip.key
+                      ? 'border-primary-600 bg-primary-600 text-white'
+                      : 'border-app bg-surface text-app-muted hover-bg-app'
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* The nearby list, or the results once a search is on */}
           <div className="max-h-64 overflow-y-auto">
             {error && (
@@ -569,7 +615,7 @@ export default function PostLocationPicker({
                     <div className="text-[10px] text-app-muted">Auto-detect via GPS</div>
                   </div>
                 </button>
-                {anchorSettled && !anchor ? (
+                {anchorSettled && !listAnchor ? (
                   <div className="px-3 py-4 text-center text-xs text-app-muted">
                     Turn on location access to see nearby places, or search above.
                   </div>
@@ -593,7 +639,7 @@ export default function PostLocationPicker({
                 ) : (
                   <>
                     <div className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-app-muted">
-                      {anchor?.label ? `Near ${anchor.label}` : 'Nearby'}
+                      {!photoAnchored && anchor?.label ? `Near ${anchor.label}` : 'Nearby'}
                     </div>
                     {nearby.places.map((place, idx) => (
                       <PlaceRow key={place.place_id || idx} place={place} onSelect={handleSelectPlace} />

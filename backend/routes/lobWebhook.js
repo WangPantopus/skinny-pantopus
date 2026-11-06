@@ -17,6 +17,7 @@
 const express = require('express');
 const logger = require('../utils/logger');
 const lobMailProvider = require('../services/addressValidation/lobMailProvider');
+const postgridMailProvider = require('../services/addressValidation/postgridMailProvider');
 const mailVendorService = require('../services/addressValidation/mailVendorService');
 const { vendorStatusFor } = require('../services/addressValidation/mailEvents');
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -194,4 +195,8 @@ function mailWebhookRouter(providerName, verifyRequest, toEvent) {
 }
 
 module.exports = mailWebhookRouter('lob', verifyLobRequest, (event) => event);
-module.exports.mailWebhookRouter = mailWebhookRouter;
+module.exports.postgridWebhookRouter = mailWebhookRouter(
+  'postgrid',
+  (bodyStr, headers) => postgridMailProvider.verifyWebhookRequest(bodyStr, headers),
+  (parsed) => postgridMailProvider.normalizeEvent(parsed),
+);

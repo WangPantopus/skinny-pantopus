@@ -1639,8 +1639,8 @@ public final class PulseComposeViewModel {
 
     /// Check whether the signed-in user can post to the selected place —
     /// the tagged place when there is one — counting where the draft's
-    /// attachments were taken. Surfaces a warning instead of letting the
-    /// submit 403.
+    /// attachments were taken, or for a Home target whether the place is
+    /// near that Home. Surfaces a warning instead of letting the submit 403.
     public func checkPlaceEligibility() async {
         guard let point = eligibilityPoint() else {
             eligibilityWarning = nil
@@ -1660,7 +1660,8 @@ public final class PulseComposeViewModel {
                     gpsLatitude: gps.latitude,
                     gpsLongitude: gps.longitude,
                     media: nearestMediaLocation(latitude: point.latitude, longitude: point.longitude),
-                    postType: effectivePostType
+                    postType: effectivePostType,
+                    homeId: postingTarget?.homeId
                 )
             )
             guard !Task.isCancelled else { return }

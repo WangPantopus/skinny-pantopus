@@ -124,9 +124,9 @@ endpoint enforce a floor of `approx_area` via `postPrecisionForOthers()`
 
 **Photo-placed posts (decided 2026-11-05):** the founder asked that a post whose
 photo or video was taken at the place show on the map exactly where it was
-taken. The apps read each attachment's capture point from its own metadata and
-send it with the post (`mediaLocations`); the points are evidence, never
-stored. When one was taken within 5 km of the tagged place
+taken. The apps and the web composer read each attachment's capture point from
+its own metadata and send it with the post (`mediaLocations`); the points are
+evidence, never stored. When one was taken within 5 km of the tagged place
 (`trustState.mediaCaptureNear`), `POST /api/posts` stores
 `post_metadata.location_basis = 'photo'` (and `photo_taken_at`) and stores
 `exact_place`: at the tagged venue or address, or at the capture point when the

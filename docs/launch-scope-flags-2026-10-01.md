@@ -30,6 +30,8 @@ feature on.
 
 A surface that belongs to two cut features shows only when **both** are on.
 
+**November 6, full Mailbox activation:** the founder enabled `mailbox`, `mail_extras` and `holiday_cards` together for production and the iOS release. These are the Mailbox’s three launch-cut keys. The [release checklist](release/prod-config-checklist.md) records the applied server settings, TestFlight build and web deployment status. Other launch-cut keys are unchanged.
+
 ## Switching a feature back on
 
 List its key (comma-separated, or `all`) in each place, then redeploy / rebuild:
