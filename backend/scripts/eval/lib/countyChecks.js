@@ -4,6 +4,7 @@
 // vintage is only fair for facts that rarely change. It proves the connector read, joined and scaled each column right.
 
 const path = require('path');
+const { download, zipTable, zipMembers } = require('../../../../scripts/property-index/lib/tables.cjs');
 const { layerRows, ckanRows, socrataRows, cached } = require('../../../../scripts/property-index/lib/services.cjs');
 
 const near = (tolerance) => (a, b) => Math.abs(Number(a) - Number(b)) <= tolerance;
@@ -44,7 +45,22 @@ async function* newestSale(rows, parcel, when, price) {
   yield* newest.values();
 }
 
+// Florida's Department of Revenue roll for one county: the same homes from the state's own publication. Owner columns aren't read.
+async function* floridaRoll(file) {
+  const zip = path.join(process.env.PROPERTY_CHECK_WORK || '.', 'state-check', path.basename(file));
+  download(`https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/${encodeURIComponent(file)}`, zip);
+  yield* zipTable(zip, zipMembers(zip)[0], ['PARCEL_ID', 'ACT_YR_BLT', 'TOT_LVG_AREA', 'LND_SQFOOT', 'JV']);
+}
+const floridaCheck = (county, file, extra = []) => ({
+  county,
+  rows: () => floridaRoll(file),
+  id: (row) => String(row.PARCEL_ID ?? '').replace(/^'|'$/g, '').trim(),
+  map: [['year_built', 'ACT_YR_BLT'], ['lot_sqft', 'LND_SQFOOT', (a, b) => Math.abs(a - b) <= Math.max(50, b * 0.05)], ...extra],
+});
+
 module.exports = {
+  'fl-miami-dade': floridaCheck('12086', 'Dade 23 Final NAL 2026.zip', [['living_sqft', 'TOT_LVG_AREA', near(1)]]),
+  'fl-broward': floridaCheck('12011', 'Broward 16 Final NAL 2026.zip', [['living_sqft', 'TOT_LVG_AREA', near(1)], ['market_value', 'JV', moneyNear]]),
   // The county's published 2023 sales: what rarely changes since.
   'co-adams': {
     county: '08001',
