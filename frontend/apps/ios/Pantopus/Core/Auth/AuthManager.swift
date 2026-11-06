@@ -255,6 +255,7 @@ final class AuthManager {
 
     func setState(_ newState: State) {
         state = newState
+        publishPushAccount(newState)
     }
 
     func setAccessToken(_ token: String?) {
