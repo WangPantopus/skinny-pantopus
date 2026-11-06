@@ -2,6 +2,7 @@ package app.pantopus.android.ui.components
 
 import android.view.View
 import android.view.inputmethod.InputMethodManager
+import androidx.compose.foundation.focusGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
@@ -54,7 +55,10 @@ fun Modifier.closesKeyboardOnTapOrScroll(): Modifier = this then KeyboardRulesEl
  * boxes. A tap on the box's own space types in the field inside it, so the whole box is the text box. A drag from here
  * puts the keyboard away only once the page holding the text box scrolls under it.
  */
-fun Modifier.keepsKeyboard(): Modifier = this then KeepsKeyboardElement(whileScrollingOnly = false)
+fun Modifier.keepsKeyboard(): Modifier =
+    // The focus group lets a tap on the box find the text field in it, past the buttons beside it (in touch mode a
+    // button can't take focus; a field can).
+    this then KeepsKeyboardElement(whileScrollingOnly = false) then Modifier.focusGroup()
 
 /** Scrolling here leaves the keyboard alone (a list that moves it itself, the chat thread); a tap still closes it. */
 fun Modifier.keepsKeyboardWhileScrolling(): Modifier = this then KeepsKeyboardElement(whileScrollingOnly = true)
@@ -258,7 +262,12 @@ private class KeepsKeyboardNode(
                 tapFinger = null
             } else if (change.changedToUp()) {
                 tapFinger = null
-                if (requestFocus()) currentValueOf(LocalSoftwareKeyboardController)?.show()
+                if (requestFocus()) {
+                    // The tap was the field's: a tap handler around the form (one that clears focus on the page)
+                    // mustn't take it back.
+                    change.consume()
+                    currentValueOf(LocalSoftwareKeyboardController)?.show()
+                }
             }
         }
     }
