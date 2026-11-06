@@ -31,14 +31,20 @@ async function getJson(url, label) {
  * A layer's rows in object ID order, so paging stays fast however large the layer is.
  * @param {string} url       The layer, ending in its number
  * @param {string[]} fields  The columns to ask for
- * @param {object} [options] { where, oid: the layer's object ID column, pageSize }
+ * @param {object} [options] { where, oid: the layer's object ID column, pageSize, optional: columns some layers don't have }
  */
-async function* layerRows(url, fields, { where = '1=1', oid = 'OBJECTID', pageSize = 2000 } = {}) {
+async function* layerRows(url, fields, { where = '1=1', oid = 'OBJECTID', pageSize = 2000, optional = [] } = {}) {
   let last = -1;
   let rows = 0;
+  let columns = fields;
+  if (optional.length) {
+    const info = await getJson(`${url}?f=json`, 'A map layer\'s description');
+    const names = new Set((info.fields || []).map((field) => field.name));
+    columns = fields.filter((name) => names.has(name) || !optional.includes(name));
+  }
   for (;;) {
     const query = new URLSearchParams({
-      where: `(${where}) AND ${oid} > ${last}`, outFields: [oid, ...fields].join(','), returnGeometry: 'false', orderByFields: oid,
+      where: `(${where}) AND ${oid} > ${last}`, outFields: [oid, ...columns].join(','), returnGeometry: 'false', orderByFields: oid,
       resultRecordCount: String(pageSize), f: 'json',
     });
     const page = await getJson(`${url}/query?${query}`, `A map layer at row ${rows}`);

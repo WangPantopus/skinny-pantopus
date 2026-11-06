@@ -72,7 +72,7 @@ async function* build({ work }) {
     const seen = new Set();
     let noAddress = 0;
     let asOf = null;
-    const rows = cached(path.join(work, 'ut-lir', `${fips}.jsonl.gz`), () => layerRows(`${BASE}/Parcels_${layer}_LIR/FeatureServer/0`, COLUMNS));
+    const rows = cached(path.join(work, 'ut-lir', `${fips}.jsonl.gz`), () => layerRows(`${BASE}/Parcels_${layer}_LIR/FeatureServer/0`, COLUMNS, { optional: ['PROP_TYPE'] }));
     for await (const row of rows) {
       const date = isoDate(row.CURRENT_ASOF);
       if (date && (!asOf || date > asOf)) asOf = date;
