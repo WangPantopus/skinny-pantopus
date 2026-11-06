@@ -2115,6 +2115,8 @@ extension ChatConversationView {
             rowWidth: rowWidth,
             incomingInitials: incomingInitials,
             aiStatus: viewModel.aiStatus,
+            // While messages are being picked, a tap picks the message instead.
+            onOpenSender: isSelecting ? nil : bubble.senderUserId.map { userId in { @MainActor in onOpenProfile(userId) } },
             canManage: viewModel.canManageMessage(bubble.id),
             canDiscard: viewModel.canDiscardMessage(bubble.id),
             onLockedAction: { upgradePromptPresented = true },
@@ -3433,6 +3435,8 @@ private struct ChatBubbleRow: View {
     let incomingInitials: String?
     /// What the assistant is doing while a reply is pending ("Drafting your post…").
     var aiStatus: String?
+    /// Opens the profile of the person who sent a room's message, from their name and photo.
+    var onOpenSender: (@MainActor () -> Void)?
     let canManage: Bool
     let canDiscard: Bool
     let onLockedAction: @MainActor () -> Void
@@ -3464,7 +3468,17 @@ private struct ChatBubbleRow: View {
                 bubbleStack
             } else {
                 if let initials = senderInitials ?? incomingInitials, showsIncomingAvatarSlot {
-                    ChatMiniAvatar(initials: initials, hidden: content.isContinuation)
+                    if let onOpenSender, !content.isContinuation {
+                        Button(action: onOpenSender) {
+                            ChatMiniAvatar(initials: initials)
+                                .hitArea(horizontal: 4, vertical: 11)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(openSenderLabel)
+                        .accessibilityIdentifier("chatSenderAvatar_\(content.id)")
+                    } else {
+                        ChatMiniAvatar(initials: initials, hidden: content.isContinuation)
+                    }
                 }
                 bubbleStack
                 Spacer(minLength: 44)
@@ -3542,14 +3556,28 @@ private struct ChatBubbleRow: View {
         return letters.isEmpty ? nil : letters.joined().uppercased()
     }
 
+    private var openSenderLabel: String {
+        "Open \(content.senderName ?? "the sender")'s profile"
+    }
+
     private var bubbleStack: some View {
         VStack(alignment: alignment, spacing: Spacing.s0) {
             if content.side == .incoming, !content.isContinuation, let name = content.senderName {
-                Text(name)
+                let label = Text(name)
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .lineLimit(1)
+                if let onOpenSender {
+                    Button(action: onOpenSender) {
+                        label.hitArea(vertical: 8)
+                    }
+                    .buttonStyle(.plain)
                     .padding(.bottom, 2)
+                    .accessibilityLabel(openSenderLabel)
+                    .accessibilityIdentifier("chatSenderName_\(content.id)")
+                } else {
+                    label.padding(.bottom, 2)
+                }
             }
             bubbleBody
                 // A15 `.reaction` — pills float over the bubble's bottom

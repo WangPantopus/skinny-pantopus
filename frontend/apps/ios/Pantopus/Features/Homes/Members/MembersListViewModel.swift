@@ -77,6 +77,8 @@ enum MembersListEvent: Equatable {
     case confirmApproveRequest(requestId: String, name: String)
     /// Requests tab — "Decline" rejects the access request.
     case confirmDeclineRequest(requestId: String, name: String, identity: String)
+    /// A member's (or requester's) row — their profile.
+    case openProfile(userId: String)
 }
 
 /// `@Observable` data source for the Members per-home screen.
@@ -674,7 +676,7 @@ public final class MembersListViewModel: ListOfRowsDataSource {
                 verified: occ.hasAddressVerification
             ),
             trailing: hasActions ? .kebab : .none,
-            onTap: { /* Future: open member detail. */ },
+            onTap: profileTap(occ.userId),
             onSecondary: hasActions
                 ? { @Sendable [weak self] in
                     Task { @MainActor in
@@ -687,6 +689,13 @@ public final class MembersListViewModel: ListOfRowsDataSource {
             bodyIcon: claimNote != nil ? .shieldAlert : (bodyText == nil ? nil : .clock),
             inlineChip: RowChip(text: role.label, icon: role.icon, tint: chipTint)
         )
+    }
+
+    /// A row's tap: that person's profile.
+    private func profileTap(_ userId: String) -> @Sendable () -> Void {
+        { @Sendable [weak self] in
+            Task { @MainActor in self?.pendingEvent = .openProfile(userId: userId) }
+        }
     }
 
     /// The line a viewer who proved the address sees on a claim member's row
@@ -789,6 +798,8 @@ public final class MembersListViewModel: ListOfRowsDataSource {
                     }
                 }
             ),
+            // The requester's profile, to see who is asking before deciding.
+            onTap: profileTap(request.requesterUserId),
             body: "Requested \(relative)",
             subtitleIcon: .userPlus,
             bodyIcon: .clock,

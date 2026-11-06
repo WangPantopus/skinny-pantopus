@@ -2557,7 +2557,9 @@ public struct YouTabRoot: View {
             ) { Task { @MainActor in pop() } }
         case let .homeMembers(homeId):
             // Guests tab "Add a guest": the guest-pass manager, which lists the new pass on return.
-            MembersListView(homeId: homeId) {
+            MembersListView(homeId: homeId) { userId in
+                Task { @MainActor in path.append(.publicProfile(userId: userId)) }
+            } onAddGuest: {
                 Task { @MainActor in path.append(.guestPasses(homeId: homeId)) }
             }
         case let .guestPasses(homeId):
