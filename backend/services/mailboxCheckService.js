@@ -129,7 +129,9 @@ async function getMailboxCheck({ homeId, userId }) {
   const dpv = addr ? addr.dpv_match_code : null;
   const googlePostal = usesGooglePostal();
   const postalState = addr?.validation_raw_response?.postal_state;
-  const uspsAskedAgain = googlePostal && addr && (uspsDataIsOld(addr) || !!addr.validation_raw_response?.postal_cleared_at);
+  // An address still pending belongs to the re-check job, which tells the person what it found.
+  const uspsAskedAgain = googlePostal && addr && postalState !== 'pending'
+    && (uspsDataIsOld(addr) || !!addr.validation_raw_response?.postal_cleared_at);
 
   if (uspsAskedAgain) recheckInBackground(addr.id, homeId);
 
