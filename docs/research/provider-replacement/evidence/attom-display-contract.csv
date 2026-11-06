@@ -1,0 +1,125 @@
+Section,UI label,Case-insensitive property[0] or AVM path(s),Presentation,Origin,In 46 screenshot fields
+Building,Year built,summary.yearbuilt,year,Declared display path,Yes
+Building,Effective year built,building.summary.yearbuilteffective,year,Declared display path,Yes
+Building,Living area,building.size.livingsize,sqft,Declared display path,Yes
+Building,Building area,building.size.bldgsize,sqft,Declared display path,No
+Building,Gross area,building.size.grosssize,sqft,Declared display path,Yes
+Building,Adjusted gross area,building.size.grosssizeadjusted,sqft,Declared display path,No
+Building,Standard area,building.size.universalsize,sqft,Declared display path,No
+Building,Ground floor area,building.size.groundfloorsize,sqft,Declared display path,Yes
+Building,Attic area,building.size.atticsize,sqft,Declared display path,No
+Building,Stories,building.summary.levels,count,Declared display path,Yes
+Building,Story type,building.summary.storydesc,text,Declared display path,No
+Building,Total rooms,building.rooms.roomstotal,count,Declared display path,No
+Building,Bedrooms,building.rooms.beds,count,Declared display path,Yes
+Building,Bathrooms,building.rooms.bathstotal,baths,Declared display path,Yes
+Building,Bathrooms (calculated),building.rooms.bathscalc,baths,Declared display path,No
+Building,Full baths,building.rooms.bathsfull,count,Declared display path,Yes
+Building,Three-quarter baths,building.rooms.baths3qtr,count,Declared display path,No
+Building,Half baths,building.rooms.bathshalf,count,Declared display path,No
+Building,Quarter baths,building.rooms.baths1qtr,count,Declared display path,No
+Building,Partial baths,building.rooms.bathspartial,count,Declared display path,Yes
+Building,Bath fixtures,building.rooms.bathfixtures,count,Declared display path,No
+Building,Basement,building.interior.bsmttype,text,Declared display path,No
+Building,Basement area,building.interior.bsmtsize,sqft,Declared display path,No
+Building,Basement finished,building.interior.bsmtfinishedpercent,percent,Declared display path,No
+Building,Fireplaces,building.interior.fplccount,count,Declared display path,Yes
+Building,Fireplaces,building.interior.fplcind,flag,Declared display path,Yes
+Building,Fireplace type,building.interior.fplctype,text,Declared display path,No
+Building,Architectural style,building.summary.archstyle,text,Declared display path,Yes
+Building,Architectural style,summary.archstyle,text,Declared display path,Yes
+Building,Building type,building.summary.bldgtype,text,Declared display path,No
+Building,Improvement type,building.summary.imprtype,text,Declared display path,No
+Building,Condition,building.construction.condition,text,Declared display path,Yes
+Building,Quality,building.summary.quality,text,Declared display path,Yes
+Building,Quality,building.construction.quality,text,Declared display path,Yes
+Building,View,building.summary.view,view,Declared display path,No
+Building,Location,area.loctype,view,Declared display path,No
+Building,Units,building.summary.unitscount,count,Declared display path,No
+Building,Buildings on the parcel,building.summary.bldgsnum,count,Declared display path,Yes
+Building,Mobile home,building.summary.mobilehome,flag,Declared display path,No
+Building,Mobile home,building.summary.mobilehomeind,flag,Declared display path,No
+Construction,Construction,building.construction.constructiontype,text,Declared display path,No
+Construction,Frame,building.construction.frametype,text,Declared display path,No
+Construction,Foundation,building.construction.foundationtype,text,Declared display path,No
+Construction,Exterior walls,building.construction.walltype,text,Declared display path,Yes
+Construction,Exterior walls,utilities.walltype,text,Declared display path,Yes
+Construction,Roof cover,building.construction.roofcover,text,Declared display path,Yes
+Construction,Roof shape,building.construction.roofshape,text,Declared display path,No
+"Heating, cooling & utilities",Heating,utilities.heatingtype,text,Declared display path,Yes
+"Heating, cooling & utilities",Heating fuel,utilities.heatingfuel,text,Declared display path,No
+"Heating, cooling & utilities",Cooling,utilities.coolingtype,text,Declared display path,Yes
+"Heating, cooling & utilities",Energy,utilities.energytype,text,Declared display path,No
+"Heating, cooling & utilities",Water,utilities.watertype,text,Declared display path,No
+"Heating, cooling & utilities",Sewer,utilities.sewertype,text,Declared display path,No
+Parking,Garage,building.parking.garagetype,text,Declared display path,Yes
+Parking,Parking type,building.parking.prkgtype,text,Declared display path,Yes
+Parking,Parking spaces,building.parking.prkgspaces,count,Declared display path,Yes
+Parking,Parking area,building.parking.prkgsize,sqft,Declared display path,Yes
+Lot,Lot size,lot.lotsize1,acres,Declared display path,Yes
+Lot,Lot area,lot.lotsize2,sqft,Declared display path,Yes
+Lot,Lot depth,lot.depth,feet,Declared display path,No
+Lot,Lot frontage,lot.frontage,feet,Declared display path,No
+Lot,Zoning,lot.zoningtype,text,Declared display path,No
+Lot,Zoning code,lot.sitezoningident,code,Declared display path,No
+Lot,Pool,lot.pooltype,text,Declared display path,No
+Lot,Pool,lot.poolind,flag,Declared display path,No
+Lot,Lot number,lot.lotnum,code,Declared display path,Yes
+Lot,Block,area.blocknum,code,Declared display path,No
+Parcel & records,Parcel number (APN),identifier.apn,code,Declared display path,Yes
+Parcel & records,Parcel number (county format),identifier.apnorig,code,Declared display path,No
+Parcel & records,County,area.countrysecsubd,name,Declared display path,Yes
+Parcel & records,County code (FIPS),identifier.fips,code,Declared display path,Yes
+Parcel & records,Municipality,area.munname,name,Declared display path,Yes
+Parcel & records,Subdivision,area.subdname,name,Declared display path,Yes
+Parcel & records,Tax code area,area.taxcodearea,code,Declared display path,Yes
+Parcel & records,Census tract,area.censustractident,code,Declared display path,No
+Parcel & records,Survey township,area.srvytownship,code,Declared display path,No
+Parcel & records,Survey range,area.srvyrange,code,Declared display path,No
+Parcel & records,Survey section,area.srvysection,code,Declared display path,No
+Parcel & records,Property type,summary.propertytype,text,Declared display path,Yes
+Parcel & records,Property type,summary.proptype,text,Declared display path,Yes
+Parcel & records,Property class,summary.propclass,text,Declared display path,Yes
+Parcel & records,Property subtype,summary.propsubtype,text,Declared display path,Yes
+Parcel & records,Land use,summary.proplanduse,text,Declared display path,Yes
+Parcel & records,County use code,area.countyuse1,code,Declared display path,Yes
+Parcel & records,Occupancy,summary.absenteeind,occupancy,Declared display path,Yes
+Parcel & records,Legal description,summary.legal1,raw,Declared display path,Yes
+Parcel & records,Bank-owned (REO),summary.reoflag,flag,Declared display path,No
+Parcel & records,Last transfer by quitclaim deed,summary.quitclaimflag,flag,Declared display path,No
+Parcel & records,ATTOM ID,identifier.attomid,code,Declared display path,Yes
+Parcel & records,ATTOM ID,identifier.id,code,Declared display path,Yes
+Parcel & records,ATTOM ID,identifier.obpropid,code,Declared display path,Yes
+Assessment & taxes,Assessed value,assessment.assessed.assdttlvalue,money,Declared display path,No
+Assessment & taxes,Assessed land value,assessment.assessed.assdlandvalue,money,Declared display path,No
+Assessment & taxes,Assessed improvement value,assessment.assessed.assdimprvalue,money,Declared display path,No
+Assessment & taxes,Assessed value per sq ft,assessment.assessed.assdttlpersizeunit,moneySqft,Declared display path,No
+Assessment & taxes,Assessed land value per sq ft,assessment.assessed.assdlandpersizeunit,moneySqft,Declared display path,No
+Assessment & taxes,Assessed improvement value per sq ft,assessment.assessed.assdimprpersizeunit,moneySqft,Declared display path,No
+Assessment & taxes,County market value,assessment.market.mktttlvalue,money,Declared display path,No
+Assessment & taxes,County market land value,assessment.market.mktlandvalue,money,Declared display path,No
+Assessment & taxes,County market improvement value,assessment.market.mktimprvalue,money,Declared display path,No
+Assessment & taxes,Appraised value,assessment.appraised.apprttlvalue,money,Declared display path,No
+Assessment & taxes,Appraised land value,assessment.appraised.apprlandvalue,money,Declared display path,No
+Assessment & taxes,Appraised improvement value,assessment.appraised.apprimprvalue,money,Declared display path,No
+Assessment & taxes,Property tax,assessment.tax.taxamt,money,Declared display path,No
+Assessment & taxes,Tax year,assessment.tax.taxyear,year,Declared display path,No
+Assessment & taxes,Tax per sq ft,assessment.tax.taxpersizeunit,moneySqft,Declared display path,No
+Last sale,Sale price,sale.amount.saleamt,money,Declared display path,No
+Last sale,Sale date,sale.saletransdate,date,Declared display path,No
+Last sale,Recorded,sale.amount.salerecdate,date,Declared display path,No
+Last sale,Sale type,sale.amount.saletranstype,text,Declared display path,No
+Last sale,Document number,sale.amount.saledocnum,code,Declared display path,No
+Last sale,Price per sq ft,sale.calculation.pricepersizeunit,moneySqft,Declared display path,No
+Last sale,Price per bedroom,sale.calculation.priceperbed,money,Declared display path,No
+Value,Estimated value,avm.amount.value,money,Declared display path,Yes
+Value,Confidence score,avm.amount.scr,score,Declared display path,Yes
+Value,Value per sq ft,avm.calculations.persizeunit,moneySqft,Declared display path,No
+Value,Value in poor condition,avm.condition.avmpoorvalue,money,Declared display path,No
+Value,Value in good condition,avm.condition.avmgoodvalue,money,Declared display path,No
+Value,Value in excellent condition,avm.condition.avmexcellentvalue,money,Declared display path,No
+Value,Estimate date,avm.eventdate,date,Declared display path,Yes
+Parcel & records,Address on record,address.oneline OR address.line1 + address.line2,text,Composed fallback,Yes
+Parcel & records,ZIP+4,address.postal1 + address.postal2,code,Both components,Yes
+Value,Estimate range,avm.amount.low + avm.amount.high,money,Both positive and ordered,Yes
+Value,Change in the last month,avm.calculations.monthlychgvalue + avm.calculations.monthlychgpct,money/percent,Optional monthly comparison,No
