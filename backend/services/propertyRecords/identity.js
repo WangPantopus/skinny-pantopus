@@ -49,12 +49,20 @@ function subjectOf(record) {
 }
 
 function exact(record, requested, here) {
+  // One protected unit restricts that unit, not its neighbors.
+  if (record.restricted) return answer('restricted', { requested_subject: requested });
   const building = record.parent ? here.find((other) => other.kind === 'building' && other.id === record.parent) : null;
   return answer('exact', { subject: subjectOf(record), record, requested_subject: requested, ...(building ? { building } : {}) });
 }
 
 function buildingOnly(record, requested, reason) {
+  if (record.restricted) return answer('restricted', { requested_subject: requested });
   return answer('building_only', { subject: subjectOf(record), record, requested_subject: requested, reason });
+}
+
+function parcelOnly(record, requested) {
+  if (record.restricted) return answer('restricted', { requested_subject: requested });
+  return answer('parcel_only', { subject: subjectOf(record), record, requested_subject: requested });
 }
 
 function ambiguous(candidates, requested, reason) {
@@ -69,7 +77,6 @@ function resolve(query, records) {
   const here = inZip(query, onStreet(query, records));
   const requested = query.unit ? 'unit' : 'property';
   if (!here.length) return answer('unsupported', { reason: 'no_record', requested_subject: requested });
-  if (here.some((record) => record.restricted)) return answer('restricted', { requested_subject: requested });
 
   const units = here.filter((record) => record.kind === 'unit');
   // A mobile home in a park is a property of its own with a space number.
@@ -92,7 +99,7 @@ function resolve(query, records) {
     // A house with an apartment in it: the record is the whole house, not this apartment.
     if (plain.length === 1 && !units.length) return buildingOnly(plain[0], requested, 'unit_not_recorded');
     if (units.length || plain.length) return ambiguous([...units, ...plain], requested, 'unit_not_found');
-    if (parcels.length === 1) return answer('parcel_only', { subject: subjectOf(parcels[0]), record: parcels[0], requested_subject: requested });
+    if (parcels.length === 1) return parcelOnly(parcels[0], requested);
     return ambiguous(parcels, requested, 'several_parcels');
   }
 
@@ -108,7 +115,7 @@ function resolve(query, records) {
     return ambiguous([...whole, ...others, ...withUnits], requested, 'several_homes');
   }
   if (withUnits.length) return ambiguous(withUnits, requested, 'unit_needed');
-  if (parcels.length === 1) return answer('parcel_only', { subject: subjectOf(parcels[0]), record: parcels[0], requested_subject: requested });
+  if (parcels.length === 1) return parcelOnly(parcels[0], requested);
   return ambiguous(parcels, requested, 'several_parcels');
 }
 
