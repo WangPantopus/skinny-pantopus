@@ -1261,7 +1261,7 @@ export default function PostComposer({
 
             {searchedPlaceRefused && (
               <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                You can post to a searched place only with a verified home or business near it. To post
+                You can post to this place only when you&apos;re near it or have a verified home or business near it. To post
                 where you are, remove this place and choose Location, then Use current location.
               </p>
             )}

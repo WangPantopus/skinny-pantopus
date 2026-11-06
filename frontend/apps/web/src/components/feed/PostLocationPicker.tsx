@@ -165,6 +165,8 @@ export default function PostLocationPicker({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // The newest pick wins: a slow lookup still running when another place is picked must not replace it.
+  const latestPick = useRef(0);
   const trimmedQuery = query.trim();
   const debouncedQuery = useDebounced(trimmedQuery, 250);
   // Two characters start a search, as in the apps; until then the nearby list stays.
@@ -322,12 +324,14 @@ export default function PostLocationPicker({
   const handleOpen = () => {
     const buttonLeft = containerRef.current?.getBoundingClientRect().left ?? 0;
     setPopoverLeft(Math.min(0, window.innerWidth - SCREEN_GUTTER - POPOVER_WIDTH - buttonLeft));
+    setError('');
     setMode('search');
   };
 
   // Pick a venue or town from the list or the search. Like a searched address it has to pass the place check (it may
   // be far from the person), and the device's fix counts there.
   const handleSelectPlace = (place: GeoPlace) => {
+    latestPick.current += 1;
     onChange({
       latitude: place.center.lat,
       longitude: place.center.lng,
@@ -349,9 +353,11 @@ export default function PostLocationPicker({
     if (!center) return;
 
     const suggestionId = suggestion.suggestion_id as string;
+    const pick = ++latestPick.current;
 
     try {
       const data = await api.geo.resolve(suggestionId);
+      if (pick !== latestPick.current) return;
       const n = data.normalized;
       const shortLabel = n.city || n.address?.split(',')[0] || (suggestion.primary_text as string) || 'Selected location';
 
@@ -364,6 +370,7 @@ export default function PostLocationPicker({
         ...deviceFix,
       });
     } catch {
+      if (pick !== latestPick.current) return;
       // Fall back to suggestion fields
       onChange({
         latitude: center.lat,
@@ -390,6 +397,7 @@ export default function PostLocationPicker({
 
     setGpsLoading(true);
     setError('');
+    const pick = ++latestPick.current;
 
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
@@ -401,6 +409,7 @@ export default function PostLocationPicker({
           } catch {
             n = undefined; // Keep the GPS point with a coordinate label, as before.
           }
+          if (pick !== latestPick.current) return;
 
           if (n?.address) {
             const city = n.city || '';
@@ -541,6 +550,9 @@ export default function PostLocationPicker({
 
           {/* The nearby list, or the results once a search is on */}
           <div className="max-h-64 overflow-y-auto">
+            {error && (
+              <div className="px-3 py-2 text-[10px] text-red-500">{error}</div>
+            )}
             {!searchActive && (
               <>
                 <button
@@ -557,9 +569,6 @@ export default function PostLocationPicker({
                     <div className="text-[10px] text-app-muted">Auto-detect via GPS</div>
                   </div>
                 </button>
-                {error && (
-                  <div className="px-3 py-2 text-[10px] text-red-500">{error}</div>
-                )}
                 {anchorSettled && !anchor ? (
                   <div className="px-3 py-4 text-center text-xs text-app-muted">
                     Turn on location access to see nearby places, or search above.
