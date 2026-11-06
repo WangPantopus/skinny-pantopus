@@ -34,6 +34,7 @@
 const logger = require('../utils/logger');
 const propertyIntelligenceService = require('./ai/propertyIntelligenceService');
 const { programForState } = require('../data/homesteadPrograms');
+const homeRecords = require('./propertyRecords/homeRecord');
 
 const HOMESTEAD_RE = /homestead|hmstd|hstd|principal residence|owner[- ]?occ/i;
 
@@ -171,6 +172,24 @@ function notChecked(home, unavailableReason) {
  *   was read, or 'error'.
  */
 async function getExemptionCheck(home) {
+  // From the county's own fields when the Home has its record: an exact match's own account, nothing about a building.
+  const record = await homeRecords.forHome(home);
+  if (record) {
+    if (record.copy?.match !== 'exact') return notChecked(home, record.lookup === 'pending' ? 'LOOKUP_PENDING' : 'NO_PARCEL_MATCH');
+    const { facts } = record.copy;
+    const labels = Array.isArray(facts.exemptions) ? facts.exemptions : null;
+    return {
+      status: 'ready',
+      provenance: homeRecords.provenanceOf(record.copy),
+      data: {
+        filing_status: !labels ? 'unknown' : (labels.length ? 'on_file' : 'none_on_file'),
+        exemptions: labels || [],
+        homestead_on_file: (labels || []).some((label) => HOMESTEAD_RE.test(label)),
+        assessment_signal: assessmentSignal({ assessed: { assdTtlValue: facts.assessed_value }, market: { mktTtlValue: facts.market_value } }),
+        state_program: stateProgramPayload(home),
+      },
+    };
+  }
   if (!process.env.ATTOM_API_KEY) return notChecked(home, 'ATTOM_NOT_CONFIGURED');
 
   let result;

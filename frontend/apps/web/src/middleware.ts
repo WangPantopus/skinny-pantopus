@@ -103,8 +103,44 @@ function renderAppPage(req: NextRequest, pathname: string): NextResponse {
   return NextResponse.next({ request: { headers } });
 }
 
+const MAIL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// The Mailbox addresses that only send you elsewhere, for old links and the ones
+// the API hands out. They answer here, because a redirect() page inside the app
+// shell can only redirect from the browser, which can crash Next's Router (see
+// next.config.js). That file's list can't do these: it runs before this one, so it
+// would skip the launch cuts and the sign-in redirect, and it can't check the query.
+function mailboxRedirect(pathname: string, query: URLSearchParams): string | null {
+  switch (pathname) {
+    // The Mailbox's own address opens the drawer pages, Me by default, and the
+    // Home drawer for Home links (`?scope=home&homeId=…` from the Home sidebar,
+    // Hub cards and Home records), keeping the Home's id.
+    case '/app/mailbox': {
+      if (query.get('scope') !== 'home') return '/app/mailbox/personal';
+      const homeId = query.get('homeId');
+      return homeId && MAIL_UUID.test(homeId)
+        ? `/app/mailbox/home?homeId=${homeId.toLowerCase()}`
+        : '/app/mailbox/home';
+    }
+    // Legacy Travel Mode page: the one the mailbox menu opens.
+    case '/app/mailbox/vacation':
+      return '/app/mailbox/travel';
+    // Older certified-mail links use the mailbox's reader and receipt controls.
+    // The reader moves Home letters into their own drawer.
+    case '/app/mailbox/certified': {
+      const id = query.get('id');
+      return id && MAIL_UUID.test(id) ? `/app/mailbox/personal/${id}` : '/app/mailbox/personal';
+    }
+    // Legacy Earn wallet: the wallet is in Settings → Payments.
+    case '/app/mailbox/earn/wallet':
+      return '/app/settings/payments';
+    default:
+      return null;
+  }
+}
+
 // Where signed-in traffic to an /app path goes: hidden features and the
-// Mailbox entry redirect, everything else renders.
+// Mailbox's redirect-only addresses redirect, everything else renders.
 function appRoute(req: NextRequest, pathname: string): NextResponse {
   // Launch cut #10 (Mailbox): the mailbox itself, with any scope or drawer in
   // its query, opens Messages, which took its tab. Its other pages land on Place.
@@ -115,6 +151,8 @@ function appRoute(req: NextRequest, pathname: string): NextResponse {
   if (isLaunchCutPath(pathname)) {
     return NextResponse.redirect(new URL('/app/place', req.url));
   }
+  const mailboxPage = mailboxRedirect(pathname, req.nextUrl.searchParams);
+  if (mailboxPage) return NextResponse.redirect(new URL(mailboxPage, req.url));
   return renderAppPage(req, pathname);
 }
 

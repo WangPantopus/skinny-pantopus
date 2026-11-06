@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Home as HomeIcon, Briefcase, Clock, MapPin, Pin, PinOff, Check } from 'lucide-react';
 import * as api from '@pantopus/api';
+import { useDialogFocusTrap } from '@/lib/useDialogFocusTrap';
 import AddressAutocomplete from '../AddressAutocomplete';
 
 type LocationPayload = Awaited<ReturnType<typeof api.location.getLocation>>;
@@ -89,14 +91,8 @@ export default function ChangeLocationModal({ onClose, onLocationChanged }: Chan
     };
   }, [loadAttempt]);
 
-  // Close on Escape
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  // Close on Escape, and Tab stays inside: on document.body the dialog comes last in the Tab order.
+  const dialogRef = useDialogFocusTrap<HTMLDivElement>(onClose);
 
   const current = payload?.viewingLocation ?? null;
 
@@ -165,12 +161,16 @@ export default function ChangeLocationModal({ onClose, onLocationChanged }: Chan
     return `label:${current.label}`;
   })();
 
-  return (
+  // Rendered into document.body: inside the app's <main> (its own stacking context) the + button sat on the
+  // lower rows, and the header and phone tab bar stayed on top of the backdrop.
+  if (typeof document === 'undefined') return null;
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         className="w-full max-w-md bg-app-surface border border-app rounded-2xl shadow-xl max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
@@ -394,6 +394,7 @@ export default function ChangeLocationModal({ onClose, onLocationChanged }: Chan
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

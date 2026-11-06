@@ -9,6 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const { execFileSync } = require('child_process');
 const { openRelease, dallasRoll } = require('./lib/propertyRelease');
 const { zipTable } = require('../../../scripts/property-index/lib/tables.cjs');
 const { parts } = require('../../services/propertyRecords/addressKey');
@@ -116,11 +117,38 @@ async function dallas(release) {
   console.log(`Accounts the roll marks private: ${JSON.stringify(marked)}`);
 }
 
+// Florida: the Department of Revenue's sales file, published apart from its tax roll. The Department's other columns have
+// no free second publication (Miami-Dade sells its files; Lee, Polk and others forbid or block scripts), so they are for
+// the person's check. --sales <zip> is the county's SDF file.
+async function florida(release) {
+  const byParcel = new Map();
+  for (const record of release.records()) {
+    if (record.kind !== 'building') byParcel.set(record.facts.parcel_number, record);
+  }
+  const latest = new Map();
+  const zip = opt('--sales');
+  const member = execFileSync('unzip', ['-Z1', zip], { encoding: 'latin1' }).trim().split('\n')[0];
+  for await (const row of zipTable(zip, member, ['PARCEL_ID', 'SALE_YR', 'SALE_MO', 'SALE_PRC', 'DOR_UC'])) {
+    if (!byParcel.has(row.PARCEL_ID)) continue;
+    const when = Number(row.SALE_YR) * 100 + Number(row.SALE_MO);
+    const held = latest.get(row.PARCEL_ID);
+    // The latest sale with a price, as the roll's first sale columns are.
+    if (Number(row.SALE_PRC) > 100 && (!held || when > held.when)) latest.set(row.PARCEL_ID, { when, price: Number(row.SALE_PRC), year: row.SALE_YR, month: Number(row.SALE_MO) });
+  }
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  for (const [parcel, record] of byParcel) {
+    const sale = latest.get(parcel);
+    compare('sale_price', record.facts.sale_price, sale?.price);
+    compare('sale_month', record.facts.sale_month, sale ? `${MONTHS[sale.month - 1]} ${sale.year}` : null, (a, b) => a === b);
+  }
+}
+
 const CHECKS = { 53011: clark, 48113: dallas };
+const checkFor = (fips) => CHECKS[fips] || (String(fips).startsWith('12') ? florida : null);
 
 (async () => {
-  if (!out || !county || !CHECKS[county]) throw new Error(`usage: --county ${Object.keys(CHECKS).join('|')} --out <build dir> --work <downloads>`);
-  await CHECKS[county](openRelease(out, county));
+  if (!out || !checkFor(county)) throw new Error('usage: --county <fips of Clark, Dallas or a Florida county> --out <build dir> [--work <downloads>] [--sales <Florida SDF zip>]');
+  await checkFor(county)(openRelease(out, county));
   print();
 })().catch((err) => {
   console.error(err.constructor === Error ? err.message : err.name);

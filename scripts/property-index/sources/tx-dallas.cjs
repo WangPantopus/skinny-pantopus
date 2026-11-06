@@ -95,7 +95,8 @@ async function build({ work, today = new Date() }) {
     const { facts } = record;
     put(facts, 'year_built', positive(row.YR_BUILT));
     put(facts, 'effective_year_built', positive(row.EFF_YR_BUILT));
-    put(facts, 'condition', word(row.CDU_RATING_DESC));
+    // One of the district's ratings is a note to its own appraisers.
+    if (row.CDU_RATING_DESC !== 'MANUALLY ENTER DEPRECIATION') put(facts, 'condition', word(row.CDU_RATING_DESC));
     put(facts, 'ground_floor_sqft', positive(row.TOT_MAIN_SF));
     put(facts, 'living_sqft', positive(row.TOT_LIVING_AREA_SF));
     const percent = positive(row.PCT_COMPLETE);
@@ -153,7 +154,7 @@ async function build({ work, today = new Date() }) {
     const record = usable(row.ACCOUNT_NUM);
     if (!record) continue;
     const { facts } = record;
-    if (!facts.land_use) put(facts, 'land_use', word(row.SPTD_DESC));
+    if (!facts.land_use) put(facts, 'land_use', word(row.SPTD_DESC)?.replace(/^SFR - /, 'SINGLE FAMILY: ').replace(/^MFR - /, 'MULTI-FAMILY: '));
     if (!facts.zoning) put(facts, 'zoning', word(row.ZONING));
     const area = positive(row.AREA_SIZE);
     const unit = String(row.AREA_UOM_DESC).trim();

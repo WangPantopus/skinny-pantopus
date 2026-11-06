@@ -909,10 +909,11 @@ export default function PostDetailPage() {
         entityType="post"
       />
 
-      {/* ─── Toast (the live region stays mounted so screen readers announce each message) ─── */}
+      {/* ─── Toast (the live region stays mounted so screen readers announce each message). --fab-lift lifts it above
+          the phone tab bar: inside <main>'s stacking context, z-index can't. ─── */}
       <div role="status" aria-live="polite">
         {toast && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white text-sm font-medium px-5 py-2.5 rounded-xl shadow-2xl">
+          <div className="fixed bottom-[calc(1.5rem+var(--fab-lift,0px))] left-1/2 -translate-x-1/2 z-[100] bg-gray-900 text-white text-sm font-medium px-5 py-2.5 rounded-xl shadow-2xl">
             {toast}
           </div>
         )}

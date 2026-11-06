@@ -57,10 +57,9 @@ platform :android do
       package_name: PACKAGE_NAME,
       aab: "app/build/outputs/bundle/release/app-release.aab",
       json_key: JSON_KEY_PATH,
+      # A draft, still rolled out by hand. No review hold: Play refuses one here ("Changes are sent for review
+      # automatically"), and on November 6 the founder chose to upload without it.
       release_status: "draft",
-      changes_not_sent_for_review: true,
-      # Stop if Play rejects the review hold; never retry without it.
-      rescue_changes_not_sent_for_review: false,
       skip_upload_metadata: true,
       skip_upload_images: true,
       skip_upload_screenshots: true,

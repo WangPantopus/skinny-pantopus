@@ -175,7 +175,7 @@ Plain words, inside the existing design language. Final wording goes to the foun
 | No record | "We couldn't find public records for this address. Tell us the basics; you can change them anytime." |
 | Estimate slot | "Estimate for similar homes nearby" (never in a record field) |
 | Sales not public | "Sale prices aren't public in <state>." |
-| Area trend | "Prices in this ZIP rose <x>% last year (FHFA House Price Index)." |
+| Area trend | "Prices in this ZIP rose <x>% in <year> (FHFA House Price Index)." with "An area's price change, not your home's value." The file changes once a year, so "last year" would go wrong in January. |
 | Unit required | "This building needs a unit number. Which one is yours?" |
 | Unit not confirmed | "We couldn't confirm unit <unit> with USPS. Check the number, or continue and we'll confirm it by mail." |
 | Postal pending | "We couldn't check this address with USPS yet. We'll try again shortly." |

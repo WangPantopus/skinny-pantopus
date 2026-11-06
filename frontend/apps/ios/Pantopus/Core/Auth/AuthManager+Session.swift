@@ -81,6 +81,16 @@ extension AuthManager {
         if apiClient === APIClient.shared { ChatOutbox.shared.start(account: user.id) }
     }
 
+    /// Tells `PantopusNotificationService` who is signed in. `.resumable` leaves
+    /// it as it was: the account is still on this phone, one gesture away.
+    func publishPushAccount(_ state: State) {
+        switch state {
+        case let .signedIn(user): PushAccountMarker.write(userId: user.id)
+        case .signedOut: PushAccountMarker.write(userId: nil)
+        case .unknown, .resumable: break
+        }
+    }
+
     // MARK: - Session restore (cold start)
 
     /// Cold-start decision tree (design §3):

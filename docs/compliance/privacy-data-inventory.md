@@ -85,6 +85,12 @@ track across apps/sites owned by other companies (always *No* here).
 |-------|----------|---------|
 | Coarse / precise location | Maps + "near you" surfaces (Nearby, Explore, Gigs/Tasks map, Mailbox map). iOS purpose strings `NSLocationWhenInUseUsageDescription` / `…AlwaysAndWhenInUse…` in `project.yml`. Android `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` in `AndroidManifest.xml`. | Backend (lat/lng query params on nearby/gig reads) |
 
+> **2026-11-06:** The apps and the web read where an attached photo or video was taken, on the device, and send it
+> with a post to a place as `mediaLocations` (the capture point and time). The backend uses it for the place check and
+> the post's pin, keeps `post_metadata.location_basis` and `photo_taken_at`, and keeps no other copy of the points.
+> Android's post composer holds `ACCESS_MEDIA_LOCATION` only if the person allows it, and asks only after they attach
+> a photo whose location Android hides. It gives the app no other photos, despite the wording of Android's prompt.
+>
 > **2026-10-06:** iOS device location is wired (`Core/Location/DeviceLocationProvider.swift`
 > requests when-in-use authorization for address lookup and nearby surfaces), so the
 > location entries describe the shipped binary. The app never requests "always" access.
@@ -93,7 +99,7 @@ track across apps/sites owned by other companies (always *No* here).
 
 | Field | Evidence | Apple type |
 |-------|----------|-----------|
-| Photos / videos | Camera + photo library (profile photos, listing images, mail capture). iOS `NSCameraUsageDescription` / `NSPhotoLibraryUsageDescription`; Android `CAMERA`; photos and videos come from the system pickers, which need no media permission (the manifest removes `READ_MEDIA_IMAGES` and `READ_MEDIA_VIDEO`). Upload via `MultipartUploader`. | Photos or Videos |
+| Photos / videos | Camera + photo library (profile photos, listing images, mail capture). iOS `NSCameraUsageDescription` / `NSPhotoLibraryUsageDescription`; Android `CAMERA`; photos and videos come from the system pickers, which need no media permission (the manifest removes `READ_MEDIA_IMAGES` and `READ_MEDIA_VIDEO`). `ACCESS_MEDIA_LOCATION` reads only where a picked file was taken (§2.4). Upload via `MultipartUploader`. | Photos or Videos |
 | Audio (voice messages) | Chat voice messages. iOS `NSMicrophoneUsageDescription`; Android — recorded in-chat. | Audio Data |
 | Messages (direct / chat) | `Features/Chat`, Socket.IO realtime + `ChatEndpoints` | Emails or Text Messages |
 | Other user content (posts, gigs, listings, reviews, documents, profile bio, polls, home records) | Compose flows (`Features/Compose/**`), Homes documents (`UploadDocumentFormViewModel`), posts/listings/gigs/reviews endpoints | Other User Content |
@@ -225,7 +231,7 @@ manifests and are **out of scope** for this file.
 
 | Apple category | Used by app code? | Evidence | Reason code in manifest |
 |----------------|-------------------|----------|-------------------------|
-| **UserDefaults** (`NSPrivacyAccessedAPICategoryUserDefaults`) | **Yes** | Hub banner-dismissed flag (`Features/Hub/HubViewModel.swift`); per-surface search recents (`Features/Shared/SearchList/SearchListState.swift`, `RecentQueriesStore`); the widget snapshot in the `group.app.pantopus.ios` App Group (`Core/Widgets/GigWidgetSnapshot.swift`, read by the `PantopusWidgets` extension) | **`CA92.1`** (app only) and **`1C8F.1`** (App Group); the widget extension's own manifest declares `1C8F.1` |
+| **UserDefaults** (`NSPrivacyAccessedAPICategoryUserDefaults`) | **Yes** | Hub banner-dismissed flag (`Features/Hub/HubViewModel.swift`); per-surface search recents (`Features/Shared/SearchList/SearchListState.swift`, `RecentQueriesStore`); the widget snapshot in the `group.app.pantopus.ios` App Group (`Core/Widgets/GigWidgetSnapshot.swift`, read by the `PantopusWidgets` extension); which account is signed in, in the same App Group (`Core/Auth/PushAccountMarker.swift`, read by the `PantopusNotificationService` extension) | **`CA92.1`** (app only) and **`1C8F.1`** (App Group); each extension's own manifest declares `1C8F.1` |
 | File timestamp (`…FileTimestamp`) | **No** | The only `FileManager.attributesOfItem(atPath:)` call (`Features/Homes/Documents/UploadDocumentFormViewModel.swift:286`) reads **`.size` only** — no `.modificationDate`/`.creationDate`/`stat` timestamp symbol is referenced. Not triggered. | — |
 | System boot time (`…SystemBootTime`) | **Yes** (since 2026-10) | `ProcessInfo.processInfo.systemUptime` in `Core/Analytics/PilotEvents.swift` measures time between foreground and background for pilot session events. | **`35F9.1`** — time elapsed between in-app events |
 | Disk space (`…DiskSpace`) | **No** | No `volumeAvailableCapacity` / `systemFreeSize` / `statfs`. (`.size` of a single picked file is not the disk-space category.) | — |

@@ -642,6 +642,11 @@ final class HomeDashboardViewModel {
     /// The access was refused, changed or couldn't be confirmed: the copy goes.
     private func dropCopy() {
         showingCopy = false
+        Self.dropCopy(homeId: homeId, store: store)
+    }
+
+    /// The access copy, and the dashboard's copies that show by it.
+    static func dropCopy(homeId: String, store: ScreenStore) {
         for endpoint in [
             HomeDashboardAccess.endpoint(homeId: homeId),
             HomesEndpoints.detail(homeId: homeId),

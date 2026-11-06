@@ -387,7 +387,7 @@ async function compose({ homeId, userId, viewerIsOwner = false }) {
   // 8. Build sources list
   const sources = [];
   if (propertyProfile && propertyProfile.source !== 'fallback') {
-    sources.push({ provider: 'ATTOM', updated_at: propertyProfile.cached_at });
+    sources.push({ provider: propertyProfile.provenance?.publisher || 'ATTOM', updated_at: propertyProfile.cached_at });
   }
   if (aqiData && aqiData.fetchedAt && aqiData.source !== 'error') {
     sources.push({ provider: 'AIRNOW_AQI', updated_at: aqiData.fetchedAt });

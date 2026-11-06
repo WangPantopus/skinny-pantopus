@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, type CSSProperties } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, type CSSProperties } from 'react';
 import {
   Activity, Building2, Bus, Camera, Coffee, GraduationCap, Landmark, MapPin, Palette, PawPrint, Plane, ShoppingBag,
   Stethoscope, Ticket, Trees, UsersRound, Utensils, Waves, type LucideIcon,
@@ -57,7 +57,7 @@ const FIX_WAIT_MS = 4000;
 const FINDING_POLL_MS = 3000;
 const MAX_FINDING_POLLS = 8;
 
-// The popover's width (w-72) and the gap it keeps from the edge of the screen.
+// The popover's width where it fits, and the gap it keeps from the edge of the screen.
 const POPOVER_WIDTH = 288;
 const SCREEN_GUTTER = 16;
 
@@ -92,6 +92,21 @@ const PLACE_ICONS: Record<string, LucideIcon> = {
   community: UsersRound,
   water: Waves,
 };
+
+/** Keeps the popover on screen and inside the card that clips it, at its button if there's room. */
+function placePopover(popover: HTMLElement, container: HTMLElement) {
+  let clip = container;
+  do {
+    clip = clip.parentElement ?? document.documentElement;
+  } while (clip !== document.documentElement && getComputedStyle(clip).overflowX === 'visible');
+  // Inside its border: that's where it clips.
+  const clipLeft = clip.getBoundingClientRect().left + clip.clientLeft;
+  const leftLimit = Math.max(SCREEN_GUTTER, clipLeft);
+  const rightLimit = Math.min(window.innerWidth - SCREEN_GUTTER, clipLeft + clip.clientWidth);
+  const width = Math.min(POPOVER_WIDTH, rightLimit - leftLimit);
+  popover.style.width = `${width}px`;
+  popover.style.left = `${Math.min(0, rightLimit - width - container.getBoundingClientRect().left)}px`;
+}
 
 /** A venue: its kind and address ("Barbecue restaurant · 123 Elm St"). Otherwise whichever line the row has. */
 function placeDetail(place: GeoPlace): string {
@@ -164,13 +179,13 @@ export default function PostLocationPicker({
   const [anchorChip, setAnchorChip] = useState<'photo' | 'device'>('photo');
   const [nearby, setNearby] = useState<NearbyList>(NO_NEARBY_LIST);
   const [nearbyAttempt, setNearbyAttempt] = useState(0);
-  const [popoverLeft, setPopoverLeft] = useState(0);
   const [loading, setLoading] = useState(false);
   const [searchFailed, setSearchFailed] = useState(false);
   const [searchAttempt, setSearchAttempt] = useState(0);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [error, setError] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   // The newest pick wins: a slow lookup still running when another place is picked must not replace it.
@@ -198,6 +213,13 @@ export default function PostLocationPicker({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [mode]);
+
+  // On a narrow screen the button can sit far enough right to push the popover out of the card. It's placed after every
+  // render because the button moves while the popover is open: its row rewraps without the button, and loses a control
+  // when the posting identities arrive.
+  useLayoutEffect(() => {
+    if (popoverRef.current && containerRef.current) placePopover(popoverRef.current, containerRef.current);
+  });
 
   // Focus input when opening, except on a touch screen, where the keyboard would cover the nearby list
   useEffect(() => {
@@ -338,10 +360,7 @@ export default function PostLocationPicker({
     return () => controller.abort();
   }, [debouncedQuery, mode, searchAttempt, listAnchor]);
 
-  // On a narrow screen the button can sit far enough right to push the popover off the edge.
   const handleOpen = () => {
-    const buttonLeft = containerRef.current?.getBoundingClientRect().left ?? 0;
-    setPopoverLeft(Math.min(0, window.innerWidth - SCREEN_GUTTER - POPOVER_WIDTH - buttonLeft));
     setError('');
     setAnchorChip('photo');
     setMode('search');
@@ -541,8 +560,8 @@ export default function PostLocationPicker({
       {/* ─── Search mode ────────────────────────── */}
       {mode === 'search' && (
         <div
-          className="absolute bottom-full mb-1 w-72 bg-surface rounded-xl shadow-xl border border-app z-40 animate-[fadeIn_0.15s_ease-out]"
-          style={{ left: popoverLeft }}
+          ref={popoverRef}
+          className="absolute bottom-full mb-1 bg-surface rounded-xl shadow-xl border border-app z-40 animate-[fadeIn_0.15s_ease-out]"
         >
           {/* Search input */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-app">

@@ -385,6 +385,7 @@ import app.pantopus.android.ui.screens.plans.today.PlansTodayActions
 import app.pantopus.android.ui.screens.posts.PULSE_POST_DETAIL_ID_KEY
 import app.pantopus.android.ui.screens.posts.PulsePostDetailScreen
 import app.pantopus.android.ui.screens.profile.EditProfileScreen
+import app.pantopus.android.ui.screens.profile.NamePromptViewModel
 import app.pantopus.android.ui.screens.profile.OwnerNavigation
 import app.pantopus.android.ui.screens.profile.PUBLIC_PROFILE_USER_ID_KEY
 import app.pantopus.android.ui.screens.profile.PublicProfileScreen
@@ -2397,9 +2398,17 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     // The briefings notice, then (AI assistant phase 2) the one about Suggestions from Pantopus, wait until nothing
     // else is asking: Place or Today on top, not the "Keep this address handy" step nor a plan or post opened by a
     // link. As on iPhone. The Place root draws that step itself, so its host says whether the step is open.
+    // "What should we call you?" goes first, as on web, once it's known whether it will ask.
     val topRoute = backStackEntry?.destination?.route
     val placeArrivalOpen = placeHost?.arrivalOpen?.collectAsStateWithLifecycle()?.value == true
-    val noticesMayShow = topRoute in NOTICE_ROUTES && !(topRoute == PantopusRoute.Place.path && placeArrivalOpen)
+    val namePrompt: NamePromptViewModel = hiltViewModel()
+    val namePromptDeciding by namePrompt.deciding.collectAsStateWithLifecycle()
+    val namePromptForm by namePrompt.form.collectAsStateWithLifecycle()
+    val noticesMayShow =
+        topRoute in NOTICE_ROUTES &&
+            !(topRoute == PantopusRoute.Place.path && placeArrivalOpen) &&
+            !namePromptDeciding &&
+            namePromptForm == null
     val briefingNotice: BriefingNoticeViewModel = hiltViewModel()
     BriefingNotice(
         onManage = { navController.navigate(ChildRoutes.SETTINGS_NOTIFICATIONS) },
