@@ -255,11 +255,7 @@ final class AuthManager {
 
     func setState(_ newState: State) {
         state = newState
-        switch newState {
-        case let .signedIn(user): PushAccountMarker.write(userId: user.id)
-        case .signedOut: PushAccountMarker.write(userId: nil)
-        case .unknown, .resumable: break
-        }
+        publishPushAccount(newState)
     }
 
     func setAccessToken(_ token: String?) {
