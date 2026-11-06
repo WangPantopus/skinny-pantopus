@@ -5,6 +5,7 @@ package app.pantopus.android.data.api.models.homedashboard
 import app.pantopus.android.data.api.models.homes.BillDto
 import app.pantopus.android.data.api.models.homes.CalendarEventDto
 import app.pantopus.android.data.api.models.homes.HomeTaskDto
+import app.pantopus.android.data.api.models.homes.RecordProvenanceDto
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
@@ -262,8 +263,12 @@ data class HomePropertyValueDto(
     @Json(name = "year_built") val yearBuilt: Int? = null,
     val sqft: Int? = null,
     @Json(name = "last_updated") val lastUpdated: String? = null,
-    /** `cache` / `unavailable` / `error` / null. */
+    /** `cache` / `unavailable` / `error` / null; a record that names its source sends its own words with [provenance]. */
     val source: String? = null,
+    /** Where the value came from, once the record names its source. */
+    val provenance: RecordProvenanceDto? = null,
+    /** The card's title when the record says what the number is ("County market value"). */
+    @Json(name = "value_title") val valueTitle: String? = null,
 )
 
 // ── Bill trends ─────────────────────────────────────────────────────

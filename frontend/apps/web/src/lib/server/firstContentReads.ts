@@ -57,7 +57,7 @@ export async function placeFirstContent(session: FirstContentSession): Promise<D
     const home = homes?.find((candidate) => candidate.id === homeId);
     // Only a household's copy may show before its re-check (lib/householdCopyRules.ts).
     if (home && showsHomeCopy(home)) {
-      const intelligence = await settled(readAsVisitor<PlaceIntelligence>(session, `/api/homes/${encodeURIComponent(homeId)}/intelligence`, { ballot: 1 }));
+      const intelligence = await settled(readAsVisitor<PlaceIntelligence>(session, `/api/homes/${encodeURIComponent(homeId)}/intelligence`, { ballot: 1, vocabulary: '2' }));
       if (intelligence && placeCopyGate(home)(intelligence)) entries.set(queryKeys.placeIntelligence(homeId), intelligence);
     }
   }

@@ -20,6 +20,8 @@
 // ============================================================
 
 // ─── Trust ladder — the user model (§3) ──────────────────────
+import type { RecordProvenance } from './homeIntelligence';
+
 export type PlaceTier = 'T0' | 'T1' | 'T2' | 'T3' | 'T4';
 
 // ─── Sensitivity bands — the gating axis (§9.1) ──────────────
@@ -1027,6 +1029,10 @@ export interface PlaceYourHomeData {
   assessed_value: number | null;
   /** The home's outline for the Today sky. Absent from older servers. */
   house?: PlaceHouseShape | null;
+  /** Where the value came from, when the record names its source; the confirmed owner's, like the value. */
+  value_source?: string | null;
+  /** What the value is when the record says ("County market value"). */
+  value_title?: string | null;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1166,7 +1172,7 @@ export const PLACE_SECTION_META: Record<PlaceSectionId, PlaceSectionMeta> = {
   sunrise_sunset: { group: 'today', band: 'A', source: 'Open-Meteo', layer: null },
   good_day_to: { group: 'today', band: 'A', source: 'Pantopus · derived from today\'s conditions', layer: null },
   address_calendar: { group: 'today', band: 'A', source: 'Pantopus registry · city and state sources', layer: null },
-  your_home: { group: 'your_home', band: 'B', source: 'County records · ATTOM', layer: null },
+  your_home: { group: 'your_home', band: 'B', source: 'County records', layer: null },
   home_systems: { group: 'your_home', band: 'C', source: 'Your household record', layer: null },
   flood: { group: 'risk_readiness', band: 'A', source: 'FEMA National Flood Hazard Layer', layer: 3 },
   heat_cold: { group: 'risk_readiness', band: 'A', source: 'NWS HeatRisk · National Weather Service', layer: null },
@@ -1181,7 +1187,7 @@ export const PLACE_SECTION_META: Record<PlaceSectionId, PlaceSectionMeta> = {
   incentives: { group: 'money_signals', band: 'A', source: 'DSIRE', layer: 10 },
   rent_band: { group: 'money_signals', band: 'A', source: 'HUD Fair Market Rents', layer: 9 },
   real_rent: { group: 'money_signals', band: 'D', source: 'Pantopus · verified neighbors on your block', layer: null },
-  exemption_check: { group: 'money_signals', band: 'B', source: 'County records · ATTOM', layer: null },
+  exemption_check: { group: 'money_signals', band: 'B', source: 'County records', layer: null },
   civic_districts: { group: 'civic', band: 'A', source: 'Google Civic Information', layer: 8 },
   civic_election: { group: 'civic', band: 'A', source: 'Official county elections', layer: 8 },
 };
@@ -1211,6 +1217,8 @@ export interface PlaceSectionEnvelope<Id extends PlaceSectionId = PlaceSectionId
   scope?: PlaceSectionScope;
   /** Risk & environment sections with a reading: what kind of evidence it is. */
   evidence?: PlaceSectionEvidence;
+  /** Where a Home's record came from, once it names its source. */
+  provenance?: RecordProvenance;
 }
 
 /** The area a risk or environment reading covers, worded by the server. */

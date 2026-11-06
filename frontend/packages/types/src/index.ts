@@ -163,6 +163,7 @@ export type {
   BillBenchmarkInsufficient,
   BillTrendData,
   PropertyValueData,
+  RecordProvenance,
   HomeTimelineItem,
 } from './homeIntelligence';
 

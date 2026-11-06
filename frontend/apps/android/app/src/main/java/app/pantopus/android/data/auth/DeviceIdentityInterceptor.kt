@@ -1,5 +1,6 @@
 package app.pantopus.android.data.auth
 
+import app.pantopus.android.BuildConfig
 import app.pantopus.android.data.api.net.ApiOrigin
 import okhttp3.Interceptor
 import okhttp3.Response
@@ -10,8 +11,9 @@ import javax.inject.Singleton
  * Stamps the client-identity headers on every API request of BOTH OkHttp
  * clients (main + `@Named("authRefresh")`):
  *
- *  - `X-Client-Platform: android` (unchanged, moved here from
- *    [AuthInterceptor] so the refresh / resume / logout calls carry it too);
+ *  - `X-Client-Platform: android-<version>` (moved here from
+ *    [AuthInterceptor] so the refresh / resume / logout calls carry it too;
+ *    the version lets the server count old builds, as iOS's always has);
  *  - `X-Device-Id: <deviceId uuid>` — CONTRACT §"Headers": sent by native
  *    clients on every request once a device identity exists. Nothing secret:
  *    the id is the public half of the trusted-device registry row; the
@@ -37,7 +39,7 @@ class DeviceIdentityInterceptor
                 chain
                     .request()
                     .newBuilder()
-                    .header(HEADER_PLATFORM, PLATFORM_ANDROID)
+                    .header(HEADER_PLATFORM, CLIENT_PLATFORM)
                     .apply {
                         val id = runCatching { deviceIdentity.deviceId() }.getOrNull()
                         if (!id.isNullOrBlank()) header(HEADER_DEVICE_ID, id)
@@ -48,6 +50,6 @@ class DeviceIdentityInterceptor
         companion object {
             const val HEADER_PLATFORM = "X-Client-Platform"
             const val HEADER_DEVICE_ID = "X-Device-Id"
-            const val PLATFORM_ANDROID = "android"
+            const val CLIENT_PLATFORM = "android-" + BuildConfig.VERSION_NAME
         }
     }

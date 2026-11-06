@@ -7,6 +7,8 @@ const googleProvider = require('./googleProvider');
 const smartyProvider = require('./smartyProvider');
 const placeClassificationProvider = require('./placeClassificationProvider');
 const secondaryAddressProvider = require('./secondaryAddressProvider');
+const registryUnits = require('../propertyRecords/registryUnits');
+const addressRegistry = require('../propertyRecords/registry');
 const parcelIntelProvider = require('./parcelIntelProvider');
 const { comparePlaceClassifications } = require('./placeShadowComparison');
 const { compareParcelIntelligence } = require('./parcelShadowComparison');
@@ -641,7 +643,26 @@ async function runValidationPipeline(input, options = {}) {
   }
 
   let unitIntelligence = null;
-  const shouldRunSecondaryLookup = secondaryAddressProvider.shouldRunLookup({
+  const registryInput = googleResult?.normalized || null;
+  if (registryInput) {
+    // States being watched: counts in the log, and this path doesn't wait for them.
+    addressRegistry.shadow({ line1: registryInput.line1, unit: registryInput.line2 || input?.line2, city: registryInput.city, state: registryInput.state, zip: registryInput.zip });
+  }
+  const usesRegistryUnits = registryUnits.usesRegistry(registryInput);
+  if (usesRegistryUnits) {
+    const registryStartedAt = Date.now();
+    unitIntelligence = await registryUnits.lookup({
+      normalizedAddress: registryInput,
+      submittedUnit: registryInput.line2 || input?.line2 || null,
+    });
+    pushProviderCall({
+      provider: 'address_registry',
+      status: unitIntelligence ? 'ok' : 'empty_or_failed',
+      startedAt: registryStartedAt,
+      selectively_invoked: false,
+    });
+  }
+  const shouldRunSecondaryLookup = !usesRegistryUnits && secondaryAddressProvider.shouldRunLookup({
     input,
     normalizedAddress: googleResult?.normalized || null,
     submittedUnit: googleResult?.normalized?.line2 || input?.line2 || null,
@@ -687,7 +708,7 @@ async function runValidationPipeline(input, options = {}) {
         selectively_invoked: true,
       });
     }
-  } else if (getRolloutFlag('enableSecondaryProvider')) {
+  } else if (!usesRegistryUnits && getRolloutFlag('enableSecondaryProvider')) {
     pushProviderCall({
       provider: 'secondary_address',
       status: 'not_invoked',
@@ -811,7 +832,7 @@ async function runValidationPipeline(input, options = {}) {
     provider_place: providerPlace,
     use_provider_place_for_business: getRolloutFlag('enforcePlaceProviderBusiness'),
     unit_intelligence: unitIntelligence,
-    use_provider_unit_intelligence: getRolloutFlag('enableSecondaryProvider'),
+    use_provider_unit_intelligence: registryUnits.usesProviderUnits(registryInput),
     parcel_intel: parcelIntel,
     use_provider_parcel_for_classification: getRolloutFlag('enforceParcelProviderClassification'),
     provider_parcel_max_age_days: addressConfig.parcelIntel.cacheDays,

@@ -161,6 +161,8 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
   const [description, setDescription] = useState('');
   const [amenities, setAmenities] = useState<Record<string, boolean>>({});
   const [propertySuggestionNote, setPropertySuggestionNote] = useState('');
+  // Once the record names its source: what it said and how to tag it, for the tag under each field.
+  const [namedRecord, setNamedRecord] = useState<PropertySuggestionsResponse | null>(null);
   // The county record is looked up while the person is already on this step ('pending': the fields say
   // "Looking up…"); it fills only what is still empty. Details that land after the person moved on say
   // so on the later steps, with a way back to check them.
@@ -256,6 +258,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     setLotSqft('');
     setPropertyLookup('idle');
     setLateDetails(false);
+    setNamedRecord(null);
   };
 
   // The first answer fills the new step's fields; a county record that lands later fills only what is
@@ -280,9 +283,24 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     fill('description', s.description, setDescription);
     return filled;
   };
-  const suggestionNote = (res: PropertySuggestionsResponse | undefined) => (res?.tiers_used?.filter(Boolean).length
-    ? 'Prefilled using public records and address hints where available — please verify.' : '');
-  const RECORDS_UNAVAILABLE = 'Public records could not be loaded right now. You can continue and fetch them later from Property Details.';
+  const suggestionNote = (res: PropertySuggestionsResponse | undefined) => {
+    setNamedRecord(res?.provenance ? res : null);
+    if (res?.provenance) {
+      return res.provenance.scope === 'building' && res.lookup_message ? `${res.lookup_message} ${res.provenance.label}` : res.provenance.label;
+    }
+    // No record behind the prefill: the server's words, not "public records".
+    const lookup = res?.record_lookup ?? res?.attom_lookup;
+    if ((lookup === 'unavailable' || lookup === 'none') && res?.lookup_message) return res.lookup_message;
+    return res?.tiers_used?.filter(Boolean).length ? 'Prefilled using public records and address hints where available — please verify.' : '';
+  };
+  // Under a field once the record names its source: the record's tag, or that this is the person's own entry.
+  const sourceTag = (field: 'bedrooms' | 'bathrooms' | 'sq_ft' | 'lot_sq_ft' | 'year_built', value: string) => {
+    if (!namedRecord || !value) return null;
+    const recorded = namedRecord.suggestions?.[field];
+    const tag = recorded != null && String(recorded) === value ? namedRecord.field_tags?.[field] : 'Your entry';
+    return tag ? <p className="mt-1 text-xs text-app-text-muted">{tag}</p> : null;
+  };
+  const RECORDS_UNAVAILABLE = 'Public property records are unavailable right now. Confirm the details below.';
 
   // Add Home's one follow-up while the county record is looked up: the server answers when it lands.
   const finishPropertyLookup = async (request: Parameters<typeof api.homes.getPropertySuggestions>[0], current: () => boolean) => {
@@ -291,7 +309,8 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
       if (!current()) return;
       const filled = applySuggestions(res?.suggestions, true);
       setPropertyLookup('done');
-      setPropertySuggestionNote(res?.attom_lookup === 'found' || res?.attom_lookup === 'none' ? suggestionNote(res) : RECORDS_UNAVAILABLE);
+      const lookup = res?.record_lookup ?? res?.attom_lookup;
+      setPropertySuggestionNote(lookup === 'found' || lookup === 'none' ? suggestionNote(res) : RECORDS_UNAVAILABLE);
       if (filled && stepNow.current > 2) setLateDetails(true);
     } catch {
       if (!current()) return;
@@ -1086,7 +1105,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                         const res = await api.homes.getPropertySuggestions(request, { lookup: 'background' });
                         if (!ok.current()) return;
                         applySuggestions(res?.suggestions, false);
-                        if (res?.attom_lookup === 'pending') {
+                        if ((res?.record_lookup ?? res?.attom_lookup) === 'pending') {
                           setPropertyLookup('pending');
                           setPropertySuggestionNote('Looking up public records for this address. The details below fill in by themselves.');
                           void finishPropertyLookup(request, ok.current);
@@ -1165,6 +1184,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                     className={inputClass('bedrooms')}
                   {...fieldA11y('bedrooms')} />
                   {fieldErrors.bedrooms ? <p id="err-bedrooms" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.bedrooms}</p> : null}
+                  {sourceTag('bedrooms', bedrooms)}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Bathrooms</label>
@@ -1172,6 +1192,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                     className={inputClass('bathrooms')}
                   {...fieldA11y('bathrooms')} />
                   {fieldErrors.bathrooms ? <p id="err-bathrooms" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.bathrooms}</p> : null}
+                  {sourceTag('bathrooms', bathrooms)}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Sq ft</label>
@@ -1179,6 +1200,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                     className={inputClass('sq_ft')}
                   {...fieldA11y('sq_ft')} />
                   {fieldErrors.sq_ft ? <p id="err-sq_ft" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.sq_ft}</p> : null}
+                  {sourceTag('sq_ft', sqft)}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-app-text-strong mb-2">Year built</label>
@@ -1186,6 +1208,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                     className={inputClass('year_built')}
                   {...fieldA11y('year_built')} />
                   {fieldErrors.year_built ? <p id="err-year_built" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.year_built}</p> : null}
+                  {sourceTag('year_built', yearBuilt)}
                 </div>
               </div>
 
@@ -1201,6 +1224,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                   {...fieldA11y('lot_sq_ft')}
                 />
                 {fieldErrors.lot_sq_ft ? <p id="err-lot_sq_ft" role="alert" className="mt-1 text-xs text-red-600">{fieldErrors.lot_sq_ft}</p> : null}
+                {sourceTag('lot_sq_ft', lotSqft)}
               </div>
 
               {/* Description */}
