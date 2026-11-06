@@ -1,6 +1,6 @@
 # Replacing ATTOM, Smarty and Lob: research, design and build plan
 
-November 5, 2026. Draft PR #3418. Research and design only: nothing here is built, and nothing is decided beyond what
+November 5, 2026. PR #3418, merged on the founder's OK. Research and design only: nothing here is built, and nothing is decided beyond what
 [decisions.md](decisions.md) marks as the founder's. This package merges PR #3418 (national coverage, sources, prices,
 the ATTOM flow, unit floor plans) and PR #3433 (code audit, the 46-field test by property type, identity contract,
 rights, costs, service objectives) into one plan. Code re-checked on master `ffd28e60a1`.

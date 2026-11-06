@@ -38,7 +38,7 @@ builder, human or agent session, from this page and the documents it links. Foun
 
 ```
 WP0 rights + ATTOM trial ──► decisions D3, D4
-WP1 non-blocking ATTOM (in flight, #3439)
+WP1 non-blocking ATTOM (server #3439 merged; Android #3447 open)
 WP2 app readiness ──────────────────────────────────────────────┐
 WP4 truth sets ──► WP3 postal adapter ──► WP14 retire Smarty      │
 P1 storage ──► WP5 index + first slice ──► WP6 address registry ──┼──► WP8 router + switching ──► WP15 retire ATTOM
@@ -102,7 +102,8 @@ Sizes for one builder: S up to 3 days, M 1-2 weeks, L 3-5 weeks, XL 6 weeks or m
 
 ## WP1. Non-blocking ATTOM lookups (in flight)
 
-- **Owner:** session `make-attom-lookups-non-b`; server PR #3439 (draft), then web, iOS and Android Add Home PRs.
+- **Owner:** session `make-attom-lookups-non-b`. Server #3439 merged and released November 5; Add Home on web (#3445)
+  and iOS (#3446) merged; Android (#3447) open. WP2 starts after #3447 lands (same Add Home files).
 - **What it gives this plan:** the request pattern every later package reuses: answer at once from stored data;
   look up in the background; fill in through `sync:changed`; `?lookup=background` and `?lookup=check` on property
   suggestions; `status: stale` with `as_of`; "no record" remembered; old store builds unchanged.

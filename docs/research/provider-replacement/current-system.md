@@ -90,7 +90,8 @@ before the page answers. "No record" answers are never saved ([`cacheHelper.js`]
 [`placeSectionCache.js`][psc] 28-29), so an unknown address is asked, and counted against the trial, on every visit.
 Duplicate lookups merge only inside one server process (`responseFlights`, [`cacheHelper.js`][cache] 104).
 
-Draft PR #3439 (session `make-attom-lookups-non-b`, started by the founder) changes this: screens answer at once from
+PR #3439 (session `make-attom-lookups-non-b`, started by the founder; merged and released after this re-check, master
+`ec131e91f8`, with Add Home on web #3445 and iOS #3446 merged and Android #3447 open) changes this: screens answer at once from
 the database, a missing record is looked up in the background and fills in through the existing `sync:changed` signal,
 an empty or failed refresh keeps the last value with its date (`status: stale`), "no record" is remembered for 30 days,
 and Add Home gets `?lookup=background` / `?lookup=check` (old store builds keep today's behavior). The replacement

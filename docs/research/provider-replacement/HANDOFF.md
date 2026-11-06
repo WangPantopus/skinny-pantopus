@@ -4,7 +4,8 @@ Updated November 5, 2026 (late evening, Pacific).
 
 ## State
 
-- Branch `claude/replace-attom-lob-smarty-73fcb9`, draft PR WangPantopus/skinny-pantopus#3418 (based on master
+- Branch `claude/replace-attom-lob-smarty-73fcb9`, PR WangPantopus/skinny-pantopus#3418, merged on the founder's OK of
+  November 5 (based on master
   `1c5ddb658c`; code references re-checked on master `ffd28e60a1`). Documentation and research scripts only: no app
   code, no migration, no purchase, no hosted change.
 - **Ready:** one merged package in `docs/research/provider-replacement/` ([README.md](README.md)): decisions,
@@ -43,8 +44,9 @@ In the order the build needs them ([decisions.md](decisions.md#open-decisions)):
 
 ## Running elsewhere
 
-- Session `make-attom-lookups-non-b` (started by the founder): draft PR #3439, ATTOM lookups that never hold a screen,
-  then the Add Home PRs on web, iOS and Android. It is WP1 in the build plan; its patterns carry into the replacement.
+- Session `make-attom-lookups-non-b` (started by the founder): ATTOM lookups that never hold a screen. Server #3439
+  merged and released November 5 (master `ec131e91f8`); Add Home on web (#3445) and iOS (#3446) merged; Android
+  (#3447) open. It is WP1 in the build plan; its patterns carry into the replacement.
 - PR #3433 (Codex) is still open. Everything in it is in this package; closing it is the founder's call.
 
 ## Next steps for whoever continues

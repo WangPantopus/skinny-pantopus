@@ -8,7 +8,7 @@ package is approved beyond the rows marked as the founder's.
 | Date | Decision | Where it shows |
 |---|---|---|
 | Nov 5 | Replace the ATTOM, Smarty and Lob subscriptions with Pantopus's own systems, **nationwide from day one** (not one county first), with a great experience, low latency and high reliability | The whole package; local pilots are test fixtures, not a launch boundary |
-| Nov 5 | The intended ATTOM flow: database first, then ATTOM, save, and answer **without making people wait** | Being built in draft PR #3439 (session `make-attom-lookups-non-b`, started by the founder); WP1 |
+| Nov 5 | The intended ATTOM flow: database first, then ATTOM, save, and answer **without making people wait** | Server #3439 merged and released Nov 5; web #3445 and iOS #3446 merged; Android #3447 open (session `make-attom-lookups-non-b`, started by the founder); WP1 |
 | Nov 5 | People should have facts **looked up and confirm them**, not type them; a refresh **keeps what we have** if the new answer is empty ("better to show something than nothing") | [experience.md](experience.md), [architecture.md](architecture.md#9-background-results-never-overwrite-a-persons-edit) |
 | Nov 5, late | Pantopus's ATTOM access is the **free trial** ($0) | [cost-and-rights.md](cost-and-rights.md#5-attom-free-trial) |
 | Nov 5, late | **Build our own** so Pantopus never pays ATTOM; **no paid ATTOM plan** | The ATTOM fallback below is withdrawn |
