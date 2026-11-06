@@ -752,6 +752,79 @@ Decided November 1 (section 0). Four sessions built it in parallel on November 1
   - At Android's font scale 2.0, the two-letter initials on Pulse cards overflow their circle in every feed.
 - [ ] Not checked: physical phones, production with real accounts, store builds, and screen readers speaking aloud (their reading order and labels were checked instead).
 
+## Crew Day in the apps (added November 5)
+
+Decided November 5 (questions 3–9, "All recommended"): build the whole Crew Day of the
+[Street Organizer design](docs/product/street-organizer-design-2026-09-27.md) in the server, web, iPhone and Android
+apps. It lives on the feature branch `crew-day` (cut from master `96451b75e2`), behind the launch-cut key `crew_day`
+(cut 13 in the [launch-scope flags](docs/launch-scope-flags-2026-10-01.md)). Nothing is on master or in production. The
+build kit is in [docs/product/crew-day-build/](docs/product/crew-day-build/README.md) (spec, contract, slices, scenarios,
+status), and the 42 screens are on the [Crew Day designs canvas](https://claude.ai/artifact/WbwmCoReKrDHGN2mGNg9oP).
+
+- **Setting up a day.** A crew sets up one street: the service and what's included, the reach, the date and arrival
+  window, how many homes, each home's price (options, add-ons, "I confirm this one after a look") and a note. The crew
+  is a published business page with payouts on. Pantopus approves each day before its invitation link works.
+- **Booking.** Households open the link and see their own price without an account. To book, they save a card,
+  approve and book. A look-first home is priced by the crew after a look, and the household approves the price.
+- **Privacy.** Neighbors see counts only. The crew sees "Home 3 · Two stories" until 6 PM the evening before, then
+  addresses, first names and access notes.
+- **The day.** The crew taps On my way (with a window) and can say it's running late, which tells every home. The
+  household taps Gate is ready. Done takes photos and a note and makes the existing business invoice.
+- **Charging.** The card is charged 24 hours after Done, or at once on "Everything looks good". A failed card is paid
+  on the invoice in the app. The crew's payout follows the existing 48-hour hold and fee (10% founding).
+- **Problems.** A problem pauses the charge. Pantopus releases, refunds all or part, or resolves it on the web operator
+  pages. A booking can also be refunded with no problem open.
+- **Rain.** The crew offers two or three new dates. Each household picks one or cancels free; no answer by the deadline
+  cancels free.
+- **Cancelling.** Free until 48 hours before; after that the household asks the crew, which can release the home at no
+  charge. A crew or Pantopus can cancel a whole day, and nobody pays.
+- **Also built.** Evening-before reminders, an email for every notice, street requests answered by Pantopus, and repeat
+  days that invite past customers.
+
+- [x] Server ([#3377](https://github.com/WangPantopus/skinny-pantopus/pull/3377), [#3379](https://github.com/WangPantopus/skinny-pantopus/pull/3379), [#3381](https://github.com/WangPantopus/skinny-pantopus/pull/3381), [#3383](https://github.com/WangPantopus/skinny-pantopus/pull/3383), [#3384](https://github.com/WangPantopus/skinny-pantopus/pull/3384), [#3386](https://github.com/WangPantopus/skinny-pantopus/pull/3386), [#3392](https://github.com/WangPantopus/skinny-pantopus/pull/3392), [#3394](https://github.com/WangPantopus/skinny-pantopus/pull/3394), [#3395](https://github.com/WangPantopus/skinny-pantopus/pull/3395), [#3407](https://github.com/WangPantopus/skinny-pantopus/pull/3407), [#3411](https://github.com/WangPantopus/skinny-pantopus/pull/3411), [#3415](https://github.com/WangPantopus/skinny-pantopus/pull/3415)). One additive migration, `supabase/migrations/20261105100000_crew_day.sql`: the three tables you approved, created empty.
+- [x] Web ([#3378](https://github.com/WangPantopus/skinny-pantopus/pull/3378), [#3387](https://github.com/WangPantopus/skinny-pantopus/pull/3387), [#3390](https://github.com/WangPantopus/skinny-pantopus/pull/3390), [#3399](https://github.com/WangPantopus/skinny-pantopus/pull/3399), [#3400](https://github.com/WangPantopus/skinny-pantopus/pull/3400)).
+- [x] iPhone ([#3380](https://github.com/WangPantopus/skinny-pantopus/pull/3380), [#3385](https://github.com/WangPantopus/skinny-pantopus/pull/3385), [#3391](https://github.com/WangPantopus/skinny-pantopus/pull/3391), [#3401](https://github.com/WangPantopus/skinny-pantopus/pull/3401), [#3402](https://github.com/WangPantopus/skinny-pantopus/pull/3402), [#3405](https://github.com/WangPantopus/skinny-pantopus/pull/3405), [#3413](https://github.com/WangPantopus/skinny-pantopus/pull/3413), [#3414](https://github.com/WangPantopus/skinny-pantopus/pull/3414)).
+- [x] Android ([#3393](https://github.com/WangPantopus/skinny-pantopus/pull/3393), [#3397](https://github.com/WangPantopus/skinny-pantopus/pull/3397), [#3403](https://github.com/WangPantopus/skinny-pantopus/pull/3403), [#3408](https://github.com/WangPantopus/skinny-pantopus/pull/3408), [#3409](https://github.com/WangPantopus/skinny-pantopus/pull/3409), [#3410](https://github.com/WangPantopus/skinny-pantopus/pull/3410)), and a CI fix for the larger Android build ([#3426](https://github.com/WangPantopus/skinny-pantopus/pull/3426)).
+- [x] The final check across the three apps (November 5), on the merged `crew-day` branch:
+  - Setup: the web, the iPhone simulator and the Android emulator, against one shared local backend and database,
+    with Stripe test mode and made-up households and crew.
+  - One street day went from setup to payout. Dana set it up on the web and Pantopus approved it. Alex booked on a
+    phone-width web page, Drew on iPhone, Blair on Android, and Casey's three-story home was priced after a look.
+  - Luis, a crew seat, worked the day on Android. Alex tapped Gate is ready on the web and approved on iPhone. Alex's
+    card was charged at once, and Dana was paid out after the hold.
+  - Drew's card failed, and Drew paid in the app. Blair's problem got $60 off, and Alex's booking was refunded with no
+    problem open.
+  - Repeat day: it went to past customers, and Alex booked from the notice.
+  - A second day took rain dates and was then cancelled by the crew. Fran, outside the area, asked for a Crew Day on
+    Oak Street, and Pantopus answered.
+  - Privacy held throughout. With the key off, every route answered "not available".
+  - Four fixes came out of it and are merged (rain answers, same-day reminder words, the iPhone's out-of-area notice,
+    refund words). The iPhone was rebuilt from the final branch for a last check, and Android's code is the build
+    that was checked.
+  - Each scenario's steps and notes are in [04-scenarios.md](docs/product/crew-day-build/04-scenarios.md) and
+    [05-status.md](docs/product/crew-day-build/05-status.md).
+- [ ] Yours, to release:
+  1. Rename the migration so it sorts after master's newest (`20261105120000_pulse_user_home_area_context.sql` on
+     November 6), and check it with `MIGRATION_BASE_SHA=$(git rev-parse origin/master) node scripts/db/check-migrations.cjs`.
+  2. Merge `crew-day` into `master`. That deploys the server, runs the migration on the production database and
+     deploys the web to pantopus.com, with Crew Day still off. On November 6 `master` was 82 commits ahead, and the
+     two merged without conflicts.
+  3. To turn it on, add `crew_day` to `LAUNCH_FEATURES` (server), `NEXT_PUBLIC_LAUNCH_FEATURES` (Vercel) and
+     `PANTOPUS_LAUNCH_FEATURES` (the iOS and Android release builds), then ship app builds.
+
+  Storage, scheduled jobs, email and Stripe need nothing new. The jobs ride the existing worker and skip while the key
+  is off, and charges are ordinary invoice payments.
+- [ ] Follow-ups, none blocking:
+  - On a repeat day, Your price opens on One story, though the invite says "your price is $180".
+  - The crew's Gate is ready push goes to the owner and the day's creator, not to the seat on the route.
+  - Android's route doesn't refresh on its own.
+  - A refund after the crew's payout isn't taken back from the crew; the existing invoice refunds work this way.
+  - The Android app is light-only (app-wide, from before Crew Day).
+- [ ] Not checked: live card payments and bank payouts, physical phones, push delivery through Apple and Google,
+  hosted services (production database, Vercel, the AWS worker), real email delivery, and store review.
+- [ ] Open with you: what the by-hand street days taught, and sharing the private Crew Day Kit document, so the app's
+  rules can match what crews signed up to.
+
 ## Background backlog
 
 The September acceptance backlog ([REMAINING_WORK](docs/REMAINING_WORK_2026-09-11.md)) is background; its row IDs are handy names, not a process. The launch streams verify their areas end to end, and L4 runs the final release-candidate sweep on iOS, Android and the web before the pilot.
