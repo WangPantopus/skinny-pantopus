@@ -30,7 +30,9 @@
  *
  * @method autocomplete
  * @param {string} query - User-typed search text.
- * @param {{ sessionToken?: string, limit?: number, country?: string }} [options]
+ * @param {{ sessionToken?: string, limit?: number, country?: string,
+ *   proximity?: { lat: number, lng: number }, types?: string }} [options]
+ *   proximity favors results near a point; types narrows the feature types (e.g. "address").
  * @returns {Promise<{ suggestions: NormalizedSuggestion[] }>}
  *
  * @method resolve
