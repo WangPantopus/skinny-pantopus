@@ -2,11 +2,11 @@
 // Mecklenburg County, North Carolina: the county's own CAMA parcel service, with the bedrooms and baths the statewide parcels lack. No
 // terms are stated on the service. Owner, mailing, grantor and exemption columns are in the layer and never asked for; the layer's zipcode
 // sits with the mailing columns, so a home's ZIP isn't read from it and the county's ZIPs come from the Census list. totmarkval is the
-// county's market value at its last revaluation.
+// county's market value at its last revaluation. Its address column runs on into the town and is only read for a condo's unit.
 
 const path = require('node:path');
 const { layerRows, cached } = require('../lib/services.cjs');
-const { year, isoDate, streetParts, onRecord } = require('../lib/addresses.cjs');
+const { year, isoDate, realUnit, streetParts, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { zipsByCounty } = require('../lib/zcta.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
@@ -15,7 +15,7 @@ const { log } = require('../lib/log.cjs');
 const FIPS = '37119';
 const COUNTY = 'Mecklenburg County';
 const LAYER = 'https://meckgis.mecklenburgcountync.gov/server/rest/services/TaxParcel_camadata/FeatureServer/0';
-const COLUMNS = ['pid', 'nc_pin', 'gisacres', 'totalac', 'yearid', 'lusecode', 'landuse_description', 'neighbordesc', 'saleprice', 'saledate', 'streetname', 'streetnumber', 'totlandval', 'totalbldgval', 'totmarkval', 'legaldesc', 'deed_book', 'deed_page', 'heatedarea', 'extwall', 'storyheight', 'bldgtype', 'foundation', 'roofcover', 'heat', 'heatfuel', 'frame', 'yearbuilt', 'effyearblt', 'fullbath', 'halfbath', 'threequabath', 'fireplaces', 'percntac', 'resunits', 'bedrooms', 'grade', 'totgararea', 'totcrpoarea'];
+const COLUMNS = ['parcelid', 'pid', 'nc_pin', 'gisacres', 'address', 'yearid', 'lusecode', 'landuse_description', 'neighbordesc', 'saleprice', 'saledate', 'streetname', 'streetnumber', 'totlandval', 'totalbldgval', 'totmarkval', 'legaldesc', 'deed_book', 'deed_page', 'heatedarea', 'extwall', 'storyheight', 'bldgtype', 'foundation', 'roofcover', 'heat', 'heatfuel', 'frame', 'yearbuilt', 'effyearblt', 'fullbath', 'halfbath', 'threequabath', 'fireplaces', 'percntac', 'resunits', 'bedrooms', 'grade', 'totgararea', 'totcrpoarea'];
 
 function useOf(row, unit) {
   const use = String(row.landuse_description || '').toUpperCase().trim();
@@ -39,14 +39,19 @@ const said = (text) => {
   return value && !/^(NONE|UNKNOWN)$/i.test(value) ? value : null;
 };
 
+// The address column ends in the town; a condo's reads "123 MAIN ST, 4B CHARLOTTE". Only the unit is taken from it.
+const unitOf = (text) => /,\s*(\S+)\s/.exec(String(text ?? ''))?.[1] || '';
+
 function fromRow(row) {
-  const address = streetParts({ number: row.streetnumber, name: word(row.streetname) || '' });
-  const parcel = word(row.pid);
+  const unit = realUnit(unitOf(row.address));
+  const address = streetParts({ number: row.streetnumber, name: word(row.streetname) || '', unit });
+  // A condo complex's units share a pid; parcelid is each unit's own.
+  const parcel = word(row.parcelid) || word(row.pid);
   if (!address || !parcel) return null;
   const [kind, homeType] = useOf(row, address.unit);
   const facts = { parcel_number: parcel, county: COUNTY, fips: FIPS };
   const home = kind === 'property' || kind === 'unit';
-  put(facts, 'address_on_record', onRecord([row.streetnumber, row.streetname].map(word).filter(Boolean).join(' '), ''));
+  put(facts, 'address_on_record', onRecord([row.streetnumber, row.streetname].map(word).filter(Boolean).join(' '), unit));
   put(facts, 'land_use', word(row.landuse_description));
   put(facts, 'county_use_code', word(row.lusecode));
   put(facts, 'neighborhood', word(row.neighbordesc));
@@ -80,7 +85,7 @@ function fromRow(row) {
     put(facts, 'carport_sqft', positive(row.totcrpoarea));
   }
   if (kind === 'building') put(facts, 'units', positive(row.resunits));
-  if (kind !== 'unit') put(facts, 'lot_acres', positive(row.totalac) || positive(row.gisacres));
+  if (kind !== 'unit') put(facts, 'lot_acres', positive(row.gisacres));
   put(facts, 'value_year', positive(row.yearid));
   put(facts, 'market_value', positive(row.totmarkval));
   put(facts, 'market_land_value', positive(row.totlandval));
@@ -116,6 +121,6 @@ module.exports = {
   build,
   dictionary: {
     layer: LAYER,
-    facts: { year_built: 'yearbuilt', effective_year_built: 'effyearblt', living_sqft: 'heatedarea', bedrooms: 'bedrooms', full_baths: 'fullbath', half_baths: 'halfbath', fireplaces: 'fireplaces', garage_sqft: 'totgararea', units: 'resunits', lot_acres: 'totalac', market_value: 'totmarkval', market_land_value: 'totlandval', market_building_value: 'totalbldgval', sale_price: 'saleprice', sale_date: 'saledate' },
+    facts: { year_built: 'yearbuilt', effective_year_built: 'effyearblt', living_sqft: 'heatedarea', bedrooms: 'bedrooms', full_baths: 'fullbath', half_baths: 'halfbath', fireplaces: 'fireplaces', garage_sqft: 'totgararea', units: 'resunits', lot_acres: 'gisacres', market_value: 'totmarkval', market_land_value: 'totlandval', market_building_value: 'totalbldgval', sale_price: 'saleprice', sale_date: 'saledate' },
   },
 };

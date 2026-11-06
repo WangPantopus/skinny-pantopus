@@ -105,7 +105,7 @@ module.exports = {
   // The City's copy of the same table on its map server.
   'pa-philadelphia': {
     county: '42101',
-    rows: () => layerRows('https://services.arcgis.com/fLeGjb7u4uXqeF9q/arcgis/rest/services/OPA_PROPERTIES_PUBLIC/FeatureServer/0', ['parcel_number', 'year_built', 'total_livable_area', 'number_of_bedrooms', 'number_of_bathrooms', 'number_stories', 'total_area', 'market_value', 'sale_price'], { oid: 'OBJECTID' }),
+    rows: () => layerRows('https://services.arcgis.com/fLeGjb7u4uXqeF9q/arcgis/rest/services/OPA_PROPERTIES_PUBLIC/FeatureServer/0', ['parcel_number', 'year_built', 'total_livable_area', 'number_of_bedrooms', 'number_of_bathrooms', 'number_stories', 'total_area', 'market_value', 'sale_price'], { oid: 'objectid' }),
     id: (row) => row.parcel_number,
     map: [['year_built', 'year_built'], ['living_sqft', 'total_livable_area', near(1)], ['bedrooms', 'number_of_bedrooms'], ['bathrooms', 'number_of_bathrooms'], ['stories', 'number_stories'], ['lot_sqft', 'total_area', near(1)], ['market_value', 'market_value', moneyNear], ['sale_price', 'sale_price', moneyNear]],
   },
