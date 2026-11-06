@@ -29,6 +29,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -149,6 +150,11 @@ fun PlacePickerSheet(
             hasLocationPermission(context) -> viewModel.load()
             else -> permissionLauncher.launch(LOCATION_PERMISSIONS)
         }
+    }
+
+    // The VM outlives the sheet: stop asking again for a list still loading once it closes.
+    DisposableEffect(Unit) {
+        onDispose { viewModel.stopFinding() }
     }
 
     ModalBottomSheet(
@@ -622,31 +628,37 @@ internal fun placeSecondaryLine(place: GeoPlace): String? {
         ?: place.fullAddress?.takeIf { it.isNotBlank() && it != place.name }
 }
 
-/**
- * The row's icon for a venue's kind (the server's `icon` key, as iOS
- * `icon(for:)`); a pin for localities, addresses and anything unknown.
- */
-internal fun placeIcon(place: GeoPlace): PantopusIcon =
-    when (place.icon) {
-        "restaurant", "bar" -> PantopusIcon.Utensils
-        "cafe" -> PantopusIcon.Coffee
-        "school" -> PantopusIcon.GraduationCap
-        "worship", "museum", "government", "library" -> PantopusIcon.Landmark
-        "park" -> PantopusIcon.Trees
-        "stadium", "venue" -> PantopusIcon.Ticket
-        "arts" -> PantopusIcon.Palette
-        "sports" -> PantopusIcon.Activity
-        "attraction" -> PantopusIcon.Camera
-        "zoo", "pet" -> PantopusIcon.PawPrint
-        "shop" -> PantopusIcon.ShoppingBag
-        "hotel" -> PantopusIcon.Building2
-        "transit" -> PantopusIcon.Bus
-        "airport" -> PantopusIcon.Plane
-        "health" -> PantopusIcon.Stethoscope
-        "community" -> PantopusIcon.UsersRound
-        "water" -> PantopusIcon.Waves
-        else -> PantopusIcon.MapPin
-    }
+/** Row icons by the server's venue `icon` key (as iOS `icons`): a house for a street address. */
+private val PLACE_ICONS: Map<String, PantopusIcon> =
+    mapOf(
+        "restaurant" to PantopusIcon.Utensils,
+        "bar" to PantopusIcon.Utensils,
+        "cafe" to PantopusIcon.Coffee,
+        "school" to PantopusIcon.GraduationCap,
+        "worship" to PantopusIcon.Landmark,
+        "museum" to PantopusIcon.Landmark,
+        "government" to PantopusIcon.Landmark,
+        "library" to PantopusIcon.Landmark,
+        "park" to PantopusIcon.Trees,
+        "stadium" to PantopusIcon.Ticket,
+        "venue" to PantopusIcon.Ticket,
+        "arts" to PantopusIcon.Palette,
+        "sports" to PantopusIcon.Activity,
+        "attraction" to PantopusIcon.Camera,
+        "zoo" to PantopusIcon.PawPrint,
+        "pet" to PantopusIcon.PawPrint,
+        "shop" to PantopusIcon.ShoppingBag,
+        "hotel" to PantopusIcon.Building2,
+        "transit" to PantopusIcon.Bus,
+        "airport" to PantopusIcon.Plane,
+        "health" to PantopusIcon.Stethoscope,
+        "community" to PantopusIcon.UsersRound,
+        "water" to PantopusIcon.Waves,
+        "address" to PantopusIcon.Home,
+    )
+
+/** The row's icon for a venue's kind; a pin for localities and anything unknown (as iOS `icon(for:)`). */
+internal fun placeIcon(place: GeoPlace): PantopusIcon = place.icon?.let(PLACE_ICONS::get) ?: PantopusIcon.MapPin
 
 @Composable
 private fun SkeletonRows() {

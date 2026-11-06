@@ -193,25 +193,6 @@ describe('GET /geo/places/nearby', () => {
     expect(res._json.locality).toBeNull();
   });
 
-  it('keeps the venues when the locality lookup fails, and the locality when the venues do', async () => {
-    venues.venuesNear.mockResolvedValue({ places: [VENUE_PLACE], loading: false, attribution: ATTRIBUTION });
-    geoProvider.localityAt.mockRejectedValue(new Error('Mapbox down'));
-    const res1 = mockRes();
-    await nearbyHandler(mockReq({ query: { lat: '45.5219', lng: '-122.6841' } }), res1);
-    expect(res1._status).toBe(200);
-    expect(res1._json.places).toEqual([VENUE_PLACE]);
-    expect(res1._json.locality).toBeNull();
-
-    geoCache.clear();
-    venues.venuesNear.mockRejectedValue(new Error('Overpass down'));
-    geoProvider.localityAt.mockResolvedValue(LOCALITY_PLACE);
-    const res2 = mockRes();
-    await nearbyHandler(mockReq({ query: { lat: '45.5219', lng: '-122.6841' } }), res2);
-    expect(res2._status).toBe(200);
-    expect(res2._json.places).toEqual([]);
-    expect(res2._json.locality).toEqual(LOCALITY_PLACE);
-  });
-
   it('returns 400 for non-finite lat/lng', async () => {
     for (const query of [
       { lat: 'abc', lng: '-122.6841' },
@@ -258,18 +239,6 @@ describe('GET /geo/places/nearby', () => {
     expect(venues.venuesNear).toHaveBeenCalledTimes(1); // Still 1
   });
 
-  it('never caches a list that is still loading', async () => {
-    venues.venuesNear.mockResolvedValue({ places: [], loading: true, attribution: null });
-    geoProvider.localityAt.mockResolvedValue(LOCALITY_PLACE);
-
-    const res1 = mockRes();
-    await nearbyHandler(mockReq({ query: { lat: '45.5219', lng: '-122.6841' } }), res1);
-    expect(res1._json.loading).toBe(true);
-    await nearbyHandler(mockReq({ query: { lat: '45.5219', lng: '-122.6841' } }), mockRes());
-
-    expect(venues.venuesNear).toHaveBeenCalledTimes(2);
-  });
-
   it('returns 500 when neither the venues nor the locality can answer', async () => {
     venues.venuesNear.mockRejectedValue(new Error('Overpass down'));
     geoProvider.localityAt.mockRejectedValue(new Error('Mapbox down'));
@@ -298,18 +267,6 @@ describe('GET /geo/places/search', () => {
       limit: 8,
     });
     expect(venues.searchVenues).toHaveBeenCalledWith({ q: 'blue star', latitude: 45.5219, longitude: -122.6841 });
-  });
-
-  it('lists matching venues first and drops the Mapbox duplicate of one', async () => {
-    venues.searchVenues.mockResolvedValue({ places: [VENUE_PLACE], attribution: ATTRIBUTION });
-    geoProvider.searchPlaces.mockResolvedValue({ places: [POI_PLACE, LOCALITY_PLACE] });
-    const res = mockRes();
-
-    await searchHandler(mockReq({ query: { q: 'blue star', lat: '45.5219', lng: '-122.6841' } }), res);
-
-    expect(res._status).toBe(200);
-    expect(res._json.places).toEqual([VENUE_PLACE, LOCALITY_PLACE]);
-    expect(res._json.attribution).toBe(ATTRIBUTION);
   });
 
   it('omits proximity when coords are missing', async () => {

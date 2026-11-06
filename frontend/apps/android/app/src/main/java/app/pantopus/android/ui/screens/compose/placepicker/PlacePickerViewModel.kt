@@ -110,6 +110,9 @@ class PlacePickerViewModel
         private var lastNearby: NearbyPayload? = null
         private var searchJob: Job? = null
 
+        /** The running nearby load, which asks again while the server is still gathering (see [load]). */
+        private var loadJob: Job? = null
+
         /**
          * Monotonic load stamp — an anchor switch starts a NEW load, and
          * a stale in-flight load (the GPS fix can take seconds) must not
@@ -169,56 +172,58 @@ class PlacePickerViewModel
          */
         fun load() {
             val generation = ++loadGeneration
+            loadJob?.cancel()
             _findingPlaces.value = false
             if (!hasActiveQuery()) {
                 searchJob?.cancel()
                 _state.value = PlacePickerUiState.Loading
             }
-            viewModelScope.launch {
-                val coordinate = resolveAnchorCoordinate()
-                // An anchor switch mid-fix started a newer load — stand down.
-                if (generation != loadGeneration) return@launch
-                if (coordinate == null) {
-                    enterSearchOnlyMode()
-                    return@launch
-                }
-                _searchOnly.value = false
-                var asked = 0
-                while (true) {
-                    when (val result = repo.geoNearbyPlaces(coordinate.latitude, coordinate.longitude)) {
-                        is NetworkResult.Success -> {
-                            if (generation != loadGeneration) return@launch
-                            val reply = result.data
-                            lastNearby = NearbyPayload(reply.places, reply.locality, reply.attribution)
-                            val stillFinding = reply.loading && asked < MAX_FINDING_POLLS
-                            _findingPlaces.value = stillFinding
-                            if (!hasActiveQuery()) showNearby()
-                            if (!stillFinding) return@launch
-                            asked += 1
-                            delay(FINDING_POLL_MS)
-                            if (generation != loadGeneration) return@launch
-                        }
-                        is NetworkResult.Failure -> {
-                            if (generation != loadGeneration) return@launch
-                            _findingPlaces.value = false
-                            if (!hasActiveQuery()) {
-                                _state.value =
-                                    PlacePickerUiState.Error(
-                                        result.error.message.ifBlank { "Couldn't load nearby places." },
-                                    )
-                            } else {
-                                // A failed reload behind a live search must not
-                                // leave the PREVIOUS anchor's payload restorable
-                                // under the newly active chip — drop the cache so
-                                // clearing the query can't resurrect a mislabeled
-                                // nearby list (mirrors iOS).
-                                lastNearby = null
+            loadJob =
+                viewModelScope.launch {
+                    val coordinate = resolveAnchorCoordinate()
+                    // An anchor switch mid-fix started a newer load — stand down.
+                    if (generation != loadGeneration) return@launch
+                    if (coordinate == null) {
+                        enterSearchOnlyMode()
+                        return@launch
+                    }
+                    _searchOnly.value = false
+                    var asked = 0
+                    while (true) {
+                        when (val result = repo.geoNearbyPlaces(coordinate.latitude, coordinate.longitude)) {
+                            is NetworkResult.Success -> {
+                                if (generation != loadGeneration) return@launch
+                                val reply = result.data
+                                lastNearby = NearbyPayload(reply.places, reply.locality, reply.attribution)
+                                val stillFinding = reply.loading && asked < MAX_FINDING_POLLS
+                                _findingPlaces.value = stillFinding
+                                if (!hasActiveQuery()) showNearby()
+                                if (!stillFinding) return@launch
+                                asked += 1
+                                delay(FINDING_POLL_MS)
+                                if (generation != loadGeneration) return@launch
                             }
-                            return@launch
+                            is NetworkResult.Failure -> {
+                                if (generation != loadGeneration) return@launch
+                                _findingPlaces.value = false
+                                if (!hasActiveQuery()) {
+                                    _state.value =
+                                        PlacePickerUiState.Error(
+                                            result.error.message.ifBlank { "Couldn't load nearby places." },
+                                        )
+                                } else {
+                                    // A failed reload behind a live search must not
+                                    // leave the PREVIOUS anchor's payload restorable
+                                    // under the newly active chip — drop the cache so
+                                    // clearing the query can't resurrect a mislabeled
+                                    // nearby list (mirrors iOS).
+                                    lastNearby = null
+                                }
+                                return@launch
+                            }
                         }
                     }
                 }
-            }
         }
 
         /**
@@ -279,6 +284,16 @@ class PlacePickerViewModel
             } else {
                 load()
             }
+        }
+
+        /**
+         * The sheet closed: stop asking again for a list still loading. The
+         * Hilt VM outlives the sheet, so its load would otherwise keep going.
+         */
+        fun stopFinding() {
+            if (!_findingPlaces.value) return
+            loadJob?.cancel()
+            _findingPlaces.value = false
         }
 
         /** True while the query is long enough to own the list area. */

@@ -416,30 +416,39 @@ public struct PlacePickerSheet: View {
         return nil
     }
 
-    /// The row's icon for a venue's kind (the server's `icon` key, as on
-    /// Android's `placeIcon`); a pin for localities, addresses and
+    /// Row icons by the server's venue `icon` key (as Android's
+    /// `PLACE_ICONS`): a house for a street address.
+    private static let icons: [String: PantopusIcon] = [
+        "restaurant": .utensils,
+        "bar": .utensils,
+        "cafe": .coffee,
+        "school": .graduationCap,
+        "worship": .landmark,
+        "museum": .landmark,
+        "government": .landmark,
+        "library": .landmark,
+        "park": .trees,
+        "stadium": .ticket,
+        "venue": .ticket,
+        "arts": .palette,
+        "sports": .activity,
+        "attraction": .camera,
+        "zoo": .pawPrint,
+        "pet": .pawPrint,
+        "shop": .shoppingBag,
+        "hotel": .building2,
+        "transit": .bus,
+        "airport": .plane,
+        "health": .stethoscope,
+        "community": .usersRound,
+        "water": .waves,
+        "address": .home
+    ]
+
+    /// The row's icon for a venue's kind; a pin for localities and
     /// anything unknown.
     static func icon(for place: GeoPlace) -> PantopusIcon {
-        switch place.icon {
-        case "restaurant", "bar": .utensils
-        case "cafe": .coffee
-        case "school": .graduationCap
-        case "worship", "museum", "government", "library": .landmark
-        case "park": .trees
-        case "stadium", "venue": .ticket
-        case "arts": .palette
-        case "sports": .activity
-        case "attraction": .camera
-        case "zoo", "pet": .pawPrint
-        case "shop": .shoppingBag
-        case "hotel": .building2
-        case "transit": .bus
-        case "airport": .plane
-        case "health": .stethoscope
-        case "community": .usersRound
-        case "water": .waves
-        default: .mapPin
-        }
+        place.icon.flatMap { icons[$0] } ?? .mapPin
     }
 
     /// "450 ft" under a tenth of a mile, "0.3 mi" beyond.

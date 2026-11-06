@@ -36,6 +36,13 @@ public final class PlacePickerViewModel {
 
     public private(set) var state: State = .loading
 
+    /// A nearby reply kept for restoring the list when a search clears.
+    private struct NearbyPayload {
+        let places: [GeoPlace]
+        let locality: GeoPlace?
+        let attribution: String?
+    }
+
     /// True when the ACTIVE anchor has no coordinate (current-location
     /// anchor with no device fix) — the sheet hides the NEARBY section
     /// and everything flows through search. Never true while the media
@@ -74,7 +81,7 @@ public final class PlacePickerViewModel {
     private var deviceCoordinate: UserCoordinate?
     /// Last successful nearby payload — restored when the search field
     /// is cleared so the NEARBY section reappears without a refetch.
-    private var lastNearby: (places: [GeoPlace], locality: GeoPlace?, attribution: String?)?
+    private var lastNearby: NearbyPayload?
     /// Debounced in-flight search. Internal so tests can await it.
     private(set) var searchTask: Task<Void, Never>?
     /// Monotonic load stamp — an anchor switch starts a NEW load, and a
@@ -85,6 +92,10 @@ public final class PlacePickerViewModel {
     /// can shorten it.
     var findingPollInterval: Duration = .seconds(3)
     var maxFindingPolls = 8
+    /// The pending ask-again for a list the server is still gathering. A
+    /// newer load cancels it; it holds the view-model weakly, so it stops
+    /// once the sheet is gone. Internal so tests can await it.
+    private(set) var findingTask: Task<Void, Never>?
 
     /// Live wiring. Split from the injecting init instead of default
     /// args — default-arg @MainActor VM initializers SIL-crash on
@@ -115,11 +126,13 @@ public final class PlacePickerViewModel {
     /// no permission prompt fires). Current anchor: resolve a device fix
     /// (lazy when-in-use prompt lives inside the provider); no fix →
     /// search-only mode, while a media anchor chip stays switchable. A
-    /// reply that's still `loading` is shown, then asked for again until
-    /// the venues arrive (or `maxFindingPolls` runs out).
+    /// reply that's still `loading` is shown, and asked for again in the
+    /// background until the venues arrive (or `maxFindingPolls` runs out).
     public func load() async {
         loadGeneration &+= 1
         let generation = loadGeneration
+        findingTask?.cancel()
+        findingTask = nil
         isFindingPlaces = false
         if !hasActiveQuery {
             state = .loading
@@ -138,7 +151,7 @@ public final class PlacePickerViewModel {
         // their live search results (or error) with the nearby state.
         guard let coordinate = anchor else {
             isSearchOnly = true
-            lastNearby = ([], nil, nil)
+            lastNearby = NearbyPayload(places: [], locality: nil, attribution: nil)
             if !hasActiveQuery {
                 state = .loaded(nearby: [], locality: nil)
                 attribution = nil
@@ -146,44 +159,58 @@ public final class PlacePickerViewModel {
             return
         }
         isSearchOnly = false
-        var asked = 0
-        while true {
-            do {
-                let response: GeoNearbyPlacesResponse = try await api.request(
-                    GeoEndpoints.nearbyPlaces(
-                        latitude: coordinate.latitude,
-                        longitude: coordinate.longitude
-                    )
+        await fetchNearby(
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+            generation: generation,
+            asked: 0
+        )
+    }
+
+    /// One nearby request. A reply still `loading` is shown, and asked for
+    /// again after `findingPollInterval` in `findingTask`.
+    private func fetchNearby(latitude: Double, longitude: Double, generation: Int, asked: Int) async {
+        do {
+            let response: GeoNearbyPlacesResponse = try await api.request(
+                GeoEndpoints.nearbyPlaces(latitude: latitude, longitude: longitude)
+            )
+            guard generation == loadGeneration else { return }
+            lastNearby = NearbyPayload(
+                places: response.places,
+                locality: response.locality,
+                attribution: response.attribution
+            )
+            let stillFinding = response.loading == true && asked < maxFindingPolls
+            isFindingPlaces = stillFinding
+            if !hasActiveQuery {
+                state = .loaded(nearby: response.places, locality: response.locality)
+                attribution = response.attribution
+            }
+            guard stillFinding else { return }
+            let interval = findingPollInterval
+            findingTask = Task { [weak self] in
+                try? await Task.sleep(for: interval)
+                guard !Task.isCancelled, let self, generation == loadGeneration else { return }
+                await fetchNearby(
+                    latitude: latitude,
+                    longitude: longitude,
+                    generation: generation,
+                    asked: asked + 1
                 )
-                guard generation == loadGeneration else { return }
-                lastNearby = (response.places, response.locality, response.attribution)
-                let stillFinding = response.loading == true && asked < maxFindingPolls
-                isFindingPlaces = stillFinding
-                if !hasActiveQuery {
-                    state = .loaded(nearby: response.places, locality: response.locality)
-                    attribution = response.attribution
-                }
-                guard stillFinding else { return }
-                asked += 1
-                try await Task.sleep(for: findingPollInterval)
-                guard generation == loadGeneration else { return }
-            } catch {
-                guard generation == loadGeneration else { return }
-                isFindingPlaces = false
-                // The sheet went away mid-wait: nothing to show.
-                if error is CancellationError { return }
-                let message = (error as? APIError)?.errorDescription
-                    ?? "Couldn't load nearby places. Try again."
-                if !hasActiveQuery {
-                    state = .error(message: message)
-                } else {
-                    // A failed reload behind a live search must not leave the
-                    // PREVIOUS anchor's payload restorable under the newly
-                    // active chip — drop the cache so clearing the query can't
-                    // resurrect a mislabeled nearby list.
-                    lastNearby = nil
-                }
-                return
+            }
+        } catch {
+            guard generation == loadGeneration else { return }
+            isFindingPlaces = false
+            let message = (error as? APIError)?.errorDescription
+                ?? "Couldn't load nearby places. Try again."
+            if !hasActiveQuery {
+                state = .error(message: message)
+            } else {
+                // A failed reload behind a live search must not leave the
+                // PREVIOUS anchor's payload restorable under the newly
+                // active chip — drop the cache so clearing the query can't
+                // resurrect a mislabeled nearby list.
+                lastNearby = nil
             }
         }
     }

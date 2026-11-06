@@ -468,10 +468,12 @@ router.get('/places/search', verifyToken, geocodeLimiter, async (req, res) => {
     if (mapbox.status === 'rejected' && (!hasProximity || named.status === 'rejected')) throw mapbox.reason;
 
     const venueRows = named.status === 'fulfilled' ? named.value.places : [];
-    // A Mapbox point of interest the venues already list (same name, a few doors away) is shown once.
+    // A Mapbox point of interest the venues already list (same name, a few doors away) is shown once, and a
+    // street address reads as one ("Address · Portland, Oregon 97205", a house icon), never like a venue.
     const mapboxRows = (mapbox.status === 'fulfilled' ? mapbox.value.places : []).filter((place) => !(
       place.kind === 'poi' && venueRows.some((venue) => venue.name.toLowerCase() === String(place.name).toLowerCase()
-        && metersApart(venue.center, place.center) < SAME_PLACE_M)));
+        && metersApart(venue.center, place.center) < SAME_PLACE_M)))
+      .map((place) => (place.kind === 'address' ? { ...place, category: 'Address', icon: 'address' } : place));
     const responseBody = { places: [...venueRows, ...mapboxRows] };
     if (venueRows.length > 0) responseBody.attribution = named.value.attribution;
     geoCache.set(cacheKey, responseBody, 60_000); // 60s TTL
