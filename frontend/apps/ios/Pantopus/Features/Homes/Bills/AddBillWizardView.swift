@@ -88,6 +88,7 @@ private struct DetailsStep: View {
                 .focused($focused, equals: .payee)
                 .font(Theme.Font.body)
                 .padding(Spacing.s3)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md))
                 .overlay(
@@ -99,6 +100,7 @@ private struct DetailsStep: View {
             FieldLabel("Amount")
             HStack(spacing: Spacing.s2) {
                 Icon(.dollarSign, size: 16, color: Theme.Color.appTextSecondary)
+                    .allowsHitTesting(false)
                 TextField("0.00", text: $viewModel.amount)
                     .keyboardType(.decimalPad)
                     .focused($focused, equals: .amount)
@@ -106,6 +108,7 @@ private struct DetailsStep: View {
                     .accessibilityIdentifier("addBill_amount")
             }
             .padding(Spacing.s3)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md))
             .overlay(

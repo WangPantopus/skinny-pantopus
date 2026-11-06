@@ -146,12 +146,15 @@ final class EditProfileViewModel {
     private let uploader: MultipartUploader
     /// Checks a typed username (see `UsernameAvailability.swift`).
     let usernameCheck: UsernameAvailabilityChecker
+    /// Address suggestions under the Street field (`fillAddress` takes a pick).
+    let addressSuggestions: AddressSuggestions
 
     init(api: APIClient = .shared, uploader: MultipartUploader = .shared) {
         self.api = api
         store = ScreenStore.store(for: api)
         self.uploader = uploader
         usernameCheck = UsernameAvailabilityChecker(api: api)
+        addressSuggestions = AddressSuggestions(api: api)
         neighbors = NeighborsSeeYouViewModel(api: api, uploader: uploader)
         for field in EditProfileField.allCases {
             fields[field] = FormFieldState(id: field.rawValue, originalValue: "")
@@ -214,6 +217,16 @@ final class EditProfileViewModel {
         snapshot.error = validator(for: field).validate(value)
         fields[field] = snapshot
         if field == .username { usernameCheck.check(value) }
+        if field == .address { addressSuggestions.textChanged(value) }
+    }
+
+    /// A picked address suggestion fills the street, city, state and ZIP.
+    func chooseAddressSuggestion(_ suggestion: GeoSuggestion) async {
+        guard let address = await addressSuggestions.choose(suggestion) else { return }
+        if let street = address.address, !street.isEmpty { update(.address, to: street) }
+        if let city = address.city, !city.isEmpty { update(.city, to: city) }
+        if let state = address.state, !state.isEmpty { update(.state, to: state) }
+        if let zip = address.zipcode, !zip.isEmpty { update(.zipcode, to: zip) }
     }
 
     /// Current aggregate dirty + validity.

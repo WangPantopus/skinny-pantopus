@@ -271,6 +271,7 @@ public struct PersonaDmThreadView: View {
                     .padding(.horizontal, Spacing.s3)
                     .padding(.vertical, Spacing.s2)
                     .frame(minHeight: 40)
+                    .typesInFieldOnTap()
                     .background(Theme.Color.appSurface)
                     .overlay(
                         RoundedRectangle(cornerRadius: Radii.xl, style: .continuous)

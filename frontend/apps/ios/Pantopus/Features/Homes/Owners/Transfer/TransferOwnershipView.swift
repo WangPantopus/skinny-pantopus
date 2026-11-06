@@ -434,10 +434,12 @@ private struct ConfirmationField: View {
                 .accessibilityLabel("Type \(viewModel.confirmationPhrase) to confirm")
                 if viewModel.confirmationMatches {
                     Icon(.check, size: 18, color: Theme.Color.success)
+                        .allowsHitTesting(false)
                 }
             }
             .padding(.horizontal, Spacing.s3)
             .frame(minHeight: 44)
+            .typesInFieldOnTap($isFocused)
             .background(Theme.Color.appSurface)
             .overlay(
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

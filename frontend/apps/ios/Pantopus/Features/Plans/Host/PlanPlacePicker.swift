@@ -116,6 +116,7 @@ struct PlanPlacePicker: View {
     private var searchField: some View {
         HStack(spacing: 10) {
             Icon(.search, size: 18, color: Theme.Color.appTextMuted)
+                .allowsHitTesting(false)
             TextField(model.kind == .studyGroup ? "Search libraries, cafés" : "Search parks, courts, cafés", text: $query)
                 .planFont(.body)
                 .submitLabel(.search)
@@ -124,6 +125,7 @@ struct PlanPlacePicker: View {
         }
         .padding(.horizontal, 14)
         .frame(minHeight: 48)
+        .typesInFieldOnTap()
         .background(RoundedRectangle(cornerRadius: Radii.md, style: .continuous).fill(Theme.Color.appSurface))
         .overlay(RoundedRectangle(cornerRadius: Radii.md, style: .continuous).stroke(Theme.Color.appBorderStrong, lineWidth: 1))
         .accessibilityElement(children: .combine)

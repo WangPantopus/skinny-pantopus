@@ -113,6 +113,7 @@ private struct AddHomeSearchField: View {
     var body: some View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 18, color: query.isEmpty ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
+                .allowsHitTesting(false)
             TextField(
                 "",
                 text: $query,
@@ -140,6 +141,7 @@ private struct AddHomeSearchField: View {
         }
         .padding(.horizontal, Spacing.s3)
         .frame(minHeight: 48)
+        .typesInFieldOnTap()
         .background(Theme.Color.appSurface)
         .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
         .overlay(

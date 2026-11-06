@@ -33,6 +33,7 @@ const realRentService = require('./realRentService');
 const foundingWindow = require('./place/foundingWindow');
 const { mailVendorService } = require('./addressValidation');
 const { UNIT_TOKEN_RE, suppressionHashFor } = require('./addressValidation/mailSuppression');
+const { outcomeFor, RECONCILE_GRACE_MS, AUTO_RESEND_WINDOW_MS, RECONCILE_BATCH } = require('./addressValidation/mailEvents');
 const { generateLetterCode } = require('./residencyLetterService');
 
 const WEEKLY_INVITE_CAP = 3;
@@ -363,6 +364,16 @@ function inviteBackHtml({ street, verifiedCount, optOutCode }) {
     </div></body></html>`;
 }
 
+function memberHashFor(address) {
+  return computeAddressHash(
+    address.line1.replace(/[.,]/g, '').replace(/\s+/g, ' ').trim(),
+    '',
+    address.city.replace(/[.,]/g, '').replace(/\s+/g, ' ').trim(),
+    address.state,
+    address.zip.replace(/\D/g, '').slice(0, 5),
+  );
+}
+
 /** The whole card, from what its row saved, so a repeat prints the identical card. */
 function inviteCard({ street, verified_count: verifiedCount }, optOutCode) {
   return {
@@ -412,13 +423,7 @@ async function sendInvite({ home, userId, recipient }) {
   // so the already-member gate must use it — but the RAW input is
   // normalized first, or a trailing period defeats the gate and mails a
   // recruitment card to an existing member.
-  const memberHash = computeAddressHash(
-    address.line1.replace(/[.,]/g, '').replace(/\s+/g, ' ').trim(),
-    '',
-    address.city.replace(/[.,]/g, '').replace(/\s+/g, ' ').trim(),
-    address.state,
-    address.zip.replace(/\D/g, '').slice(0, 5),
-  );
+  const memberHash = memberHashFor(address);
   const suppressionHash = suppressionHashFor(address);
 
   // Read the registry under BOTH hashes. A suppression must never
@@ -612,6 +617,106 @@ async function sendInvite({ home, userId, recipient }) {
 }
 
 /**
+ * A signed delivery update for an invitation. It settles an unresolved reservation.
+ * A card that came back or failed keeps its row, so the address stays suppressed for
+ * its 90 days and the outcome is counted; the sender is told nothing.
+ */
+async function processWebhookEvent(vendorJobId, eventType, event) {
+  const id = event?.body?.metadata?.pantopus_block_invite_id;
+  if (typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id)
+    || event?.body?.id !== vendorJobId || event?.body?.object !== 'postcard') return { success: false };
+  const { data: invite, error } = await supabaseAdmin
+    .from('BlockInvite')
+    .select('id, lob_id, mail_provider')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) return { success: false, retryable: true };
+  if (!invite || (invite.lob_id && invite.lob_id !== vendorJobId)
+    || (invite.mail_provider && invite.mail_provider !== (event.provider || 'lob'))) return { success: false };
+  const outcome = outcomeFor(eventType);
+  const { error: saveError } = await supabaseAdmin
+    .from('BlockInvite')
+    .update({
+      lob_id: vendorJobId,
+      dispatch_status: 'accepted',
+      ...(outcome && { status: 'failed', mail_outcome: outcome, mail_outcome_at: new Date().toISOString() }),
+    })
+    .eq('id', id);
+  return { success: !saveError, retryable: !!saveError };
+}
+
+/**
+ * The printer confirmed it holds no such piece, so nothing is in the mail. Suppression
+ * runs again first: the address may have opted out or joined since. A retry sends the
+ * identical card under the same key. An invitation that can't go is let go, which
+ * returns the sender's budget and lifts the 90 days from an address that got nothing.
+ */
+async function sendInviteAgainOrRelease(invite, now) {
+  const release = async () => {
+    await supabaseAdmin.from('BlockInvite').delete().eq('id', invite.id).is('lob_id', null);
+    return 'released';
+  };
+  const address = invite.recipient_address;
+  if (!invite.card_fields || now - Date.parse(invite.created_at) > AUTO_RESEND_WINDOW_MS) return release();
+  const memberHash = memberHashFor(address);
+  const [{ data: optedOut, error: optOutError }, { data: homes, error: memberError }] = await Promise.all([
+    supabaseAdmin.from('BlockInviteOptOut').select('address_hash').in('address_hash', [invite.recipient_address_hash, memberHash]),
+    supabaseAdmin.from('Home').select('id').eq('address_hash', memberHash).limit(1),
+  ]);
+  if (optOutError || memberError) return 'unanswered';
+  if (optedOut?.length || homes?.length) return release();
+  if (!mailVendorService.blockFoundersMailEnabled()) return 'paused';
+
+  const provider = mailVendorService.getProvider('block_founders');
+  const { data: claimed } = await supabaseAdmin.from('BlockInvite')
+    .update({ mail_provider: provider.name, dispatch_status: 'dispatching' })
+    .eq('id', invite.id).eq('dispatch_status', invite.dispatch_status).is('lob_id', null).select('id');
+  if (!claimed?.length) return 'moved';
+  try {
+    const lob = await provider.sendCustomPostcard(address, inviteCard(invite.card_fields, invite.opt_out_code), { inviteId: invite.id });
+    mailVendorService.noteSendResult(provider.name, true);
+    await supabaseAdmin.from('BlockInvite').update({ lob_id: lob.vendorJobId, dispatch_status: 'accepted' }).eq('id', invite.id);
+    return 'sent_again';
+  } catch (err) {
+    mailVendorService.noteSendResult(provider.name, err.definitelyRejected === true);
+    if (err.definitelyRejected === true) return release();
+    await supabaseAdmin.from('BlockInvite').update({ dispatch_status: 'delivery_unknown' }).eq('id', invite.id);
+    return 'unanswered';
+  }
+}
+
+/** Settle invitations whose send got no answer. See jobs/reconcileMailPieces.js. */
+async function reconcileInvites(now = Date.now()) {
+  const counts = { found: 0, sent_again: 0, released: 0, paused: 0, moved: 0, unanswered: 0 };
+  const { data: invites, error } = await supabaseAdmin
+    .from('BlockInvite')
+    .select('id, recipient_address, recipient_address_hash, opt_out_code, card_fields, mail_provider, dispatch_status, created_at')
+    .is('lob_id', null)
+    .in('dispatch_status', ['dispatching', 'delivery_unknown'])
+    .lt('created_at', new Date(now - RECONCILE_GRACE_MS).toISOString())
+    .order('created_at', { ascending: true })
+    .limit(RECONCILE_BATCH);
+  if (error) throw new Error('Unresolved invitation queue is unavailable');
+  for (const invite of invites || []) {
+    let pieces;
+    try {
+      pieces = await mailVendorService.providerForPiece(invite.mail_provider).findPieces('pantopus_block_invite_id', invite.id);
+    } catch (_) {
+      counts.unanswered += 1;
+      continue;
+    }
+    if (pieces.length) {
+      await supabaseAdmin.from('BlockInvite').update({ lob_id: pieces[0].vendorJobId, dispatch_status: 'accepted' })
+        .eq('id', invite.id).is('lob_id', null);
+      counts.found += 1;
+    } else {
+      counts[await sendInviteAgainOrRelease(invite, now)] += 1;
+    }
+  }
+  return counts;
+}
+
+/**
  * Redeem an opt-out code from a mailed card: permanently silences
  * invites to that recipient address from all senders. Idempotent;
  * unknown codes are a uniform { done: false } (no oracle).
@@ -648,6 +753,8 @@ async function redeemOptOut(code) {
 module.exports = {
   getBlockStatus,
   sendInvite,
+  processWebhookEvent,
+  reconcileInvites,
   redeemOptOut,
   BlockFoundersError,
   WEEKLY_INVITE_CAP,

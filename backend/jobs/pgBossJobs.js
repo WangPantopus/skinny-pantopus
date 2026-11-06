@@ -15,6 +15,7 @@ const deliverGigStop = require('./deliverGigStop');
 const reconcileGigStop = require('./reconcileGigStop');
 const reconcileGigAcceptance = require('./reconcileGigAcceptance');
 const reconcilePaymentRefunds = require('./reconcilePaymentRefunds');
+const reconcileMailPieces = require('./reconcileMailPieces');
 const computeReputation = require('./computeReputation');
 const earnRiskReview = require('./earnRiskReview');
 const processClaimWindows = require('./processClaimWindows');
@@ -44,6 +45,7 @@ const JOBS = [
   { name: 'deliver-gig-stop', cron: '* * * * *', fn: deliverGigStop },
   { name: 'reconcile-gig-stop', cron: '*/5 * * * *', fn: reconcileGigStop },
   { name: 'reconcile-payment-refunds', cron: '*/5 * * * *', fn: reconcilePaymentRefunds },
+  { name: 'reconcile-mail-pieces', cron: '*/5 * * * *', fn: reconcileMailPieces },
   { name: 'reconcile-gig-acceptance', cron: '*/2 * * * *', fn: reconcileGigAcceptance },
   { name: 'deliver-gig-acceptance', cron: '* * * * *', fn: deliverGigAcceptance },
   { name: 'deliver-wallet-settlement', cron: '* * * * *', fn: deliverWalletSettlement },

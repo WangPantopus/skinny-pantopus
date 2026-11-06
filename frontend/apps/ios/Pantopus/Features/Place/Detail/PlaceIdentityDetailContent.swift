@@ -493,6 +493,7 @@ private struct ResidencyLetterSection: View {
                     .font(.system(size: 15))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
+                    .typesInFieldOnTap()
                     .background(Theme.Color.appSurfaceSunken)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 PrimaryButton(

@@ -89,6 +89,7 @@ public struct UniversalSearchView: View {
     private var searchField: some View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 16, color: Theme.Color.appTextSecondary)
+                .allowsHitTesting(false)
             TextField(
                 Self.searchPrompt,
                 text: Binding(
@@ -115,6 +116,7 @@ public struct UniversalSearchView: View {
                 } label: {
                     Icon(.x, size: 16, color: Theme.Color.appTextSecondary)
                         .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
@@ -123,10 +125,10 @@ public struct UniversalSearchView: View {
         }
         .padding(.horizontal, Spacing.s3)
         .padding(.vertical, Spacing.s2)
+        // Clearing the field keeps typing.
+        .typesInFieldOnTap($fieldFocused)
         .background(Theme.Color.appSurfaceSunken)
         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
-        // Clearing the field keeps typing.
-        .keepsKeyboardOnTap()
     }
 
     // MARK: - Tabs

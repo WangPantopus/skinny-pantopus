@@ -1,0 +1,201 @@
+rank,fips,name,state,pop,cum_share
+1,06037,Los Angeles County,California,9757179,0.0287
+2,17031,Cook County,Illinois,5182617,0.0439
+3,48201,Harris County,Texas,5009302,0.0587
+4,04013,Maricopa County,Arizona,4673096,0.0724
+5,06073,San Diego County,California,3298799,0.0821
+6,06059,Orange County,California,3170435,0.0914
+7,12086,Miami-Dade County,Florida,2838461,0.0998
+8,48113,Dallas County,Texas,2656028,0.1076
+9,36047,Kings County,New York,2617631,0.1153
+10,06065,Riverside County,California,2529933,0.1227
+11,32003,Clark County,Nevada,2398871,0.1298
+12,53033,King County,Washington,2340211,0.1366
+13,36081,Queens County,New York,2316841,0.1435
+14,48439,Tarrant County,Texas,2230708,0.15
+15,06071,San Bernardino County,California,2214281,0.1565
+16,48029,Bexar County,Texas,2127737,0.1628
+17,12011,Broward County,Florida,2037472,0.1688
+18,06085,Santa Clara County,California,1926325,0.1744
+19,26163,Wayne County,Michigan,1771063,0.1796
+20,25017,Middlesex County,Massachusetts,1668956,0.1845
+21,36061,New York County,New York,1660664,0.1894
+22,06001,Alameda County,California,1649060,0.1943
+23,06067,Sacramento County,California,1611231,0.199
+24,12099,Palm Beach County,Florida,1582055,0.2037
+25,12057,Hillsborough County,Florida,1581426,0.2083
+26,42101,Philadelphia County,Pennsylvania,1573916,0.2129
+27,36103,Suffolk County,New York,1535909,0.2175
+28,12095,Orange County,Florida,1533646,0.222
+29,36059,Nassau County,New York,1392438,0.2261
+30,36005,Bronx County,New York,1384724,0.2301
+31,48453,Travis County,Texas,1363767,0.2341
+32,39049,Franklin County,Ohio,1356303,0.2381
+33,26125,Oakland County,Michigan,1296888,0.2419
+34,27053,Hennepin County,Minnesota,1273334,0.2457
+35,48085,Collin County,Texas,1254658,0.2494
+36,39035,Cuyahoga County,Ohio,1240594,0.253
+37,37183,Wake County,North Carolina,1232444,0.2566
+38,42003,Allegheny County,Pennsylvania,1231814,0.2603
+39,49035,Salt Lake County,Utah,1216274,0.2638
+40,37119,Mecklenburg County,North Carolina,1206285,0.2674
+41,06013,Contra Costa County,California,1172607,0.2708
+42,51059,Fairfax County,Virginia,1160925,0.2743
+43,13121,Fulton County,Georgia,1090354,0.2775
+44,24031,Montgomery County,Maryland,1082273,0.2806
+45,04019,Pima County,Arizona,1080149,0.2838
+46,12031,Duval County,Florida,1055159,0.2869
+47,48121,Denton County,Texas,1045120,0.29
+48,06019,Fresno County,California,1024125,0.293
+49,36119,Westchester County,New York,1006447,0.296
+50,13135,Gwinnett County,Georgia,1003869,0.2989
+51,15003,Honolulu County,Hawaii,998747,0.3019
+52,29189,St. Louis County,Missouri,992929,0.3048
+53,09110,Capitol Planning Region,Connecticut,991508,0.3077
+54,18097,Marion County,Indiana,981628,0.3106
+55,34003,Bergen County,New Jersey,978641,0.3135
+56,24033,Prince George's County,Maryland,966629,0.3163
+57,12103,Pinellas County,Florida,965870,0.3191
+58,48157,Fort Bend County,Texas,958434,0.322
+59,36029,Erie County,New York,950602,0.3247
+60,53053,Pierce County,Washington,941170,0.3275
+61,17043,DuPage County,Illinois,937142,0.3303
+62,55079,Milwaukee County,Wisconsin,924740,0.333
+63,06029,Kern County,California,922529,0.3357
+64,48215,Hidalgo County,Texas,914820,0.3384
+65,47157,Shelby County,Tennessee,910530,0.3411
+66,34023,Middlesex County,New Jersey,890119,0.3437
+67,26099,Macomb County,Michigan,886175,0.3463
+68,34013,Essex County,New Jersey,881527,0.3489
+69,25027,Worcester County,Massachusetts,881248,0.3515
+70,42091,Montgomery County,Pennsylvania,879190,0.3541
+71,48141,El Paso County,Texas,875784,0.3566
+72,53061,Snohomish County,Washington,864113,0.3592
+73,12071,Lee County,Florida,860959,0.3617
+74,12105,Polk County,Florida,852878,0.3642
+75,24005,Baltimore County,Maryland,852425,0.3667
+76,39061,Hamilton County,Ohio,837359,0.3692
+77,06111,Ventura County,California,835427,0.3716
+78,06075,San Francisco County,California,827526,0.3741
+79,25009,Essex County,Massachusetts,823938,0.3765
+80,40109,Oklahoma County,Oklahoma,816490,0.3789
+81,06077,San Joaquin County,California,816108,0.3813
+82,41051,Multnomah County,Oregon,795897,0.3836
+83,21111,Jefferson County,Kentucky,793881,0.386
+84,25025,Suffolk County,Massachusetts,793144,0.3883
+85,13067,Cobb County,Georgia,787538,0.3906
+86,13089,DeKalb County,Georgia,770307,0.3929
+87,08041,El Paso County,Colorado,752772,0.3951
+88,36055,Monroe County,New York,752202,0.3973
+89,48339,Montgomery County,Texas,749613,0.3995
+90,49049,Utah County,Utah,747234,0.4017
+91,06081,San Mateo County,California,742893,0.4039
+92,25021,Norfolk County,Massachusetts,740754,0.4061
+93,34017,Hudson County,New Jersey,736185,0.4082
+94,47037,Davidson County,Tennessee,729505,0.4104
+95,08031,Denver County,Colorado,729019,0.4125
+96,48491,Williamson County,Texas,727480,0.4147
+97,29095,Jackson County,Missouri,727362,0.4168
+98,17097,Lake County,Illinois,718604,0.4189
+99,17197,Will County,Illinois,708583,0.421
+100,11001,District of Columbia,District of Columbia,702250,0.4231
+101,40143,Tulsa County,Oklahoma,693514,0.4251
+102,44007,Providence County,Rhode Island,675912,0.4271
+103,26081,Kent County,Michigan,673002,0.4291
+104,35001,Bernalillo County,New Mexico,671747,0.431
+105,08005,Arapahoe County,Colorado,666918,0.433
+106,34029,Ocean County,New Jersey,666434,0.435
+107,01073,Jefferson County,Alabama,664744,0.4369
+108,12101,Pasco County,Florida,659114,0.4389
+109,12009,Brevard County,Florida,658447,0.4408
+110,42017,Bucks County,Pennsylvania,650131,0.4427
+111,34025,Monmouth County,New Jersey,647520,0.4446
+112,09190,Western Connecticut Planning Region,Connecticut,637013,0.4465
+113,20091,Johnson County,Kansas,632276,0.4483
+114,41067,Washington County,Oregon,611272,0.4501
+115,12127,Volusia County,Florida,602772,0.4519
+116,24003,Anne Arundel County,Maryland,602350,0.4537
+117,31055,Douglas County,Nebraska,601158,0.4554
+118,34039,Union County,New Jersey,594160,0.4572
+119,25005,Bristol County,Massachusetts,588593,0.4589
+120,55025,Dane County,Wisconsin,588347,0.4607
+121,10003,New Castle County,Delaware,588093,0.4624
+122,42045,Delaware County,Pennsylvania,584882,0.4641
+123,08059,Jefferson County,Colorado,578533,0.4658
+124,09170,South Central Connecticut Planning Region,Connecticut,576718,0.4675
+125,45045,Greenville County,South Carolina,570745,0.4692
+126,24510,Baltimore city,Maryland,568271,0.4708
+127,42071,Lancaster County,Pennsylvania,563293,0.4725
+128,42029,Chester County,Pennsylvania,560745,0.4741
+129,37081,Guilford County,North Carolina,558816,0.4758
+130,06099,Stanislaus County,California,556972,0.4774
+131,53063,Spokane County,Washington,555947,0.4791
+132,08001,Adams County,Colorado,542973,0.4807
+133,25023,Plymouth County,Massachusetts,542090,0.4823
+134,27123,Ramsey County,Minnesota,542015,0.4838
+135,39153,Summit County,Ohio,538370,0.4854
+136,39113,Montgomery County,Ohio,537443,0.487
+137,20173,Sedgwick County,Kansas,536081,0.4886
+138,16001,Ada County,Idaho,535799,0.4902
+139,34007,Camden County,New Jersey,533988,0.4917
+140,53011,Clark County,Washington,527269,0.4933
+141,34031,Passaic County,New Jersey,526597,0.4948
+142,34027,Morris County,New Jersey,523053,0.4964
+143,17089,Kane County,Illinois,520997,0.4979
+144,19153,Polk County,Iowa,516185,0.4994
+145,04021,Pinal County,Arizona,513862,0.5009
+146,32031,Washoe County,Nevada,507280,0.5024
+147,47093,Knox County,Tennessee,506748,0.5039
+148,18089,Lake County,Indiana,502955,0.5054
+149,36085,Richmond County,New York,498212,0.5069
+150,51153,Prince William County,Virginia,497003,0.5083
+151,12117,Seminole County,Florida,494605,0.5098
+152,06097,Sonoma County,California,485375,0.5112
+153,06107,Tulare County,California,483546,0.5126
+154,12115,Sarasota County,Florida,476604,0.514
+155,34005,Burlington County,New Jersey,475515,0.5154
+156,42133,York County,Pennsylvania,471240,0.5168
+157,36067,Onondaga County,New York,469812,0.5182
+158,12097,Osceola County,Florida,468058,0.5196
+159,25013,Hampden County,Massachusetts,464151,0.5209
+160,09140,Naugatuck Valley Planning Region,Connecticut,462220,0.5223
+161,12081,Manatee County,Florida,458352,0.5236
+162,06095,Solano County,California,455101,0.525
+163,51810,Virginia Beach city,Virginia,454808,0.5263
+164,27037,Dakota County,Minnesota,453156,0.5276
+165,22033,East Baton Rouge Parish,Louisiana,453022,0.529
+166,06083,Santa Barbara County,California,444500,0.5303
+167,12069,Lake County,Florida,444204,0.5316
+168,51107,Loudoun County,Virginia,443380,0.5329
+169,42011,Berks County,Pennsylvania,439117,0.5342
+170,06053,Monterey County,California,436251,0.5355
+171,06061,Placer County,California,433822,0.5367
+172,48061,Cameron County,Texas,431874,0.538
+173,45019,Charleston County,South Carolina,431001,0.5393
+174,45079,Richland County,South Carolina,430651,0.5405
+175,33011,Hillsborough County,New Hampshire,430462,0.5418
+176,12083,Marion County,Florida,428905,0.5431
+177,22051,Jefferson Parish,Louisiana,427253,0.5443
+178,39095,Lucas County,Ohio,426291,0.5456
+179,41005,Clackamas County,Oregon,425857,0.5468
+180,29183,St. Charles County,Missouri,423726,0.5481
+181,01089,Madison County,Alabama,423355,0.5493
+182,55133,Waukesha County,Wisconsin,417029,0.5505
+183,12021,Collier County,Florida,416233,0.5518
+184,45051,Horry County,South Carolina,413391,0.553
+185,48039,Brazoria County,Texas,413224,0.5542
+186,01097,Mobile County,Alabama,412339,0.5554
+187,36071,Orange County,New York,411767,0.5566
+188,26049,Genesee County,Michigan,402279,0.5578
+189,05119,Pulaski County,Arkansas,401209,0.559
+190,48027,Bell County,Texas,399578,0.5602
+191,39017,Butler County,Ohio,399542,0.5613
+192,18003,Allen County,Indiana,399295,0.5625
+193,37067,Forsyth County,North Carolina,398143,0.5637
+194,08035,Douglas County,Colorado,393995,0.5648
+195,34021,Mercer County,New Jersey,392138,0.566
+196,12111,St. Lucie County,Florida,390670,0.5671
+197,51041,Chesterfield County,Virginia,389793,0.5683
+198,47065,Hamilton County,Tennessee,386256,0.5694
+199,42077,Lehigh County,Pennsylvania,385655,0.5706
+200,41039,Lane County,Oregon,382396,0.5717

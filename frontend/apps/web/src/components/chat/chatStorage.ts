@@ -1,7 +1,7 @@
-import { authSessionMarker, getApiBaseUrl, getAuthToken } from '@pantopus/api/client';
+import { getApiBaseUrl, getAuthToken } from '@pantopus/api/client';
 import { readTaskRecoveryValue, taskRecoveryEncryptionKey } from '@/components/home/tasks/TaskRecoveryStorage';
 import { HISTORY_TTL, activeChatStorageScope, beginChatStorageScope, chatAccountKey, chatHistoryMessageIds, chatHistoryRooms,
-  chatRetirementsSeen, chatSessionMarker as sessionMarker, historyGenerations, isChatStorageCurrent,
+  chatSessionMarker as sessionMarker, historyGenerations, isChatStorageCurrent,
   isRetainedKind as isRetained, noteChatRetirement, openChatDatabase as open, publishHistoryRetirement, receivedHistoryGenerations,
   type ChatRecordKind as Kind, type ChatRecordMetadata as Metadata, type ChatStorageScope, type HistoryRetirement } from './chatSession';
 
@@ -26,28 +26,11 @@ export const consumeChatDraft = (draft?: ChatDraftCommit): ChatRecordMutation =>
 interface Envelope { iv: ArrayBuffer; ciphertext: ArrayBuffer }
 interface SessionBinding { account: string; sessionMarker: string; at: number }
 const HISTORY_FENCE = 'history-generation';
-type HistoryFence = { account: string; generation: number };
-// The fence as read while the app booted, for the first inbox request only.
-let bootFence: { marker: string; retirements: number; at: number; read: Promise<HistoryFence | null | undefined> } | undefined;
-const BOOT_FENCE_MS = 10_000;
+// `at`: when it last advanced, by this browser's clock (fences an older version wrote don't have it).
+export type HistoryFence = { account: string; generation: number; at?: number };
 
-async function readHistoryFence(): Promise<HistoryFence | null> {
+export async function readChatHistoryFence(): Promise<HistoryFence | null> {
   return await readTaskRecoveryValue<HistoryFence>(await open(), 'metadata', HISTORY_FENCE) ?? null;
-}
-
-/** Capture before an inbox request, even before its profile query completes.
- * The first request may take the read made while the app booted, if it is in
- * the same session, soon after, and no retirement was seen since. Within a
- * session the fence only advances, so an earlier read can stop a raced
- * response from being retained, never let one through. */
-export async function captureChatHistoryFence(marker: string): Promise<HistoryFence | null> {
-  const boot = bootFence;
-  bootFence = undefined;
-  if (boot && boot.marker === marker && boot.retirements === chatRetirementsSeen() && performance.now() - boot.at < BOOT_FENCE_MS) {
-    const fence = await boot.read;
-    if (fence !== undefined && boot.retirements === chatRetirementsSeen()) return fence;
-  }
-  return await readHistoryFence();
 }
 
 export function isChatHistoryGenerationCurrent(accountId: string, value: number): boolean {
@@ -76,13 +59,8 @@ export async function readCachedChatAccountId(): Promise<string | null> {
 
 // Start opening the store while the app loads. A browser's first open of it
 // takes tens of milliseconds, and saved conversations, the inbox, the outbox
-// and the inbox request's access fence all wait for it. With a session, read
-// that fence as soon as it opens, so a cold inbox request need not wait.
-if (typeof window !== 'undefined' && typeof indexedDB !== 'undefined') {
-  void open().catch(() => {});
-  if (getAuthToken()) bootFence = { marker: authSessionMarker(), retirements: chatRetirementsSeen(), at: performance.now(),
-    read: readHistoryFence().catch(() => undefined) };
-}
+// and the inbox request's access fence all wait for it.
+if (typeof window !== 'undefined' && typeof indexedDB !== 'undefined') void open().catch(() => {});
 
 function metadata(db: IDBDatabase): Promise<Metadata[]> {
   return new Promise((resolve, reject) => {
@@ -151,7 +129,7 @@ export async function clearChatStorage(historyOnly = false): Promise<void> {
       const fence = transaction.objectStore('metadata').get(HISTORY_FENCE);
       fence.onsuccess = () => {
         const next = (fence.result?.account === scope.account ? Number(fence.result.generation) || 0 : 0) + 1;
-        transaction.objectStore('metadata').put({ account: scope.account, generation: next }, HISTORY_FENCE);
+        transaction.objectStore('metadata').put({ account: scope.account, generation: next, at: Date.now() }, HISTORY_FENCE);
         retired = { account: scope.account, marker: sessionMarker(), generation: next, rooms: [], cleared: true };
       };
     }
@@ -230,7 +208,7 @@ export async function retireChatHistoryRooms(accountId: string, roomIds: string[
       if (!isChatStorageCurrent(scope)) { transaction.abort(); return; }
       const previousGeneration = fence.result?.account === scope.account ? Number(fence.result.generation) || 0 : 0;
       generation = previousGeneration + 1;
-      metas.put({ account: scope.account, generation }, HISTORY_FENCE);
+      metas.put({ account: scope.account, generation, at: Date.now() }, HISTORY_FENCE);
       for (const entry of request.result as Metadata[]) if (entry.account === scope.account && isRetained(entry.kind)) {
         const affectedMessage = !deletedMessages || entry.inbox || legacy.has(entry.id)
           || (entry.kind === 'received-media' && !entry.messageIds) || entry.messageIds?.some((id) => deletedMessages.has(id));

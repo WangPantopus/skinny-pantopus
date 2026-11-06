@@ -9,6 +9,8 @@
 // access that ends is read again on every visit (decision 3).
 // ============================================================
 
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { queryKeys } from '@/lib/query-keys';
 import { gatedStaleTime, showsMyHomesCopy } from '@/lib/householdCopy';
@@ -23,6 +25,24 @@ export function myHomesQuery() {
     queryFn: () => api.homes.getMyHomes(),
     staleTime: gatedStaleTime<MyHomesReply>(MY_HOMES_FRESH_MS, showsMyHomesCopy),
   };
+}
+
+/**
+ * One of your homes' map point, from your homes list, for favoring address
+ * suggestions near it (a neighbor's address on your block). The list answers
+ * `location` as { latitude, longitude }; null when the home or its point is unknown.
+ */
+export function useHomeCenter(homeId: string | null | undefined): { lat: number; lng: number } | null {
+  const { data } = useQuery({ ...myHomesQuery(), enabled: !!homeId });
+  return useMemo(() => {
+    const home = data?.homes?.find((h) => h.id === homeId);
+    const point = home?.location as unknown as { latitude?: unknown; longitude?: unknown } | null | undefined;
+    // Number(null) is 0: a home without a point has no place to favor, not 0,0.
+    if (point?.latitude == null || point?.longitude == null) return null;
+    const lat = Number(point.latitude);
+    const lng = Number(point.longitude);
+    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  }, [data, homeId]);
 }
 
 export type MyClaimsReply = Awaited<ReturnType<typeof api.homeOwnership.getMyOwnershipClaims>>;

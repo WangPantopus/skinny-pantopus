@@ -203,6 +203,7 @@ public struct FanInboxView: View {
                 .foregroundStyle(Theme.Color.appText)
                 .lineLimit(4...8)
                 .padding(Spacing.s3)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appBg)
                 .overlay(
                     RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

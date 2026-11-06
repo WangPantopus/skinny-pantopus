@@ -134,6 +134,7 @@ public struct SearchListShell<Result: Hashable & Sendable, Row: View>: View {
 
             HStack(spacing: Spacing.s2) {
                 Icon(.search, size: 16, color: Theme.Color.appTextSecondary)
+                    .allowsHitTesting(false)
                 TextField(placeholder, text: $query)
                     .font(Theme.Font.role(.body))
                     .foregroundStyle(Theme.Color.appText)
@@ -148,6 +149,7 @@ public struct SearchListShell<Result: Hashable & Sendable, Row: View>: View {
                     } label: {
                         Icon(.x, size: 16, color: Theme.Color.appTextSecondary)
                             .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Clear search")
@@ -156,10 +158,10 @@ public struct SearchListShell<Result: Hashable & Sendable, Row: View>: View {
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, Spacing.s2)
+            // Clearing the field keeps typing.
+            .typesInFieldOnTap($fieldFocused)
             .background(Theme.Color.appSurfaceSunken)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
-            // Clearing the field keeps typing.
-            .keepsKeyboardOnTap()
         }
         .padding(.horizontal, Spacing.s2)
         .padding(.vertical, Spacing.s2)

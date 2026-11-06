@@ -147,7 +147,10 @@ struct WizardHandleField: View {
 
     private var field: some View {
         HStack(spacing: Spacing.s0) {
-            Text("pantopus.com/book/").font(.system(size: 13, design: .monospaced)).foregroundStyle(Theme.Color.appTextSecondary)
+            Text("pantopus.com/book/")
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundStyle(Theme.Color.appTextSecondary)
+                .allowsHitTesting(false)
             TextField("handle", text: $slug)
                 .font(.system(size: 13, weight: .semibold, design: .monospaced))
                 .foregroundStyle(Theme.Color.appText)
@@ -157,16 +160,17 @@ struct WizardHandleField: View {
                 .accessibilityIdentifier("wizardHandleField")
             Spacer(minLength: Spacing.s2)
             Icon(isTaken ? .alertCircle : .pencil, size: 15, color: isTaken ? Theme.Color.error : Theme.Color.appTextMuted)
+                .allowsHitTesting(false)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, Spacing.s3)
+        .typesInFieldOnTap($focused)
         .background(Theme.Color.appSurface)
         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
                 .stroke(isTaken ? Theme.Color.errorLight : Theme.Color.appBorder, lineWidth: 1.5)
         )
-        .onTapGesture { focused = true }
     }
 
     @ViewBuilder

@@ -217,6 +217,22 @@ function buildCreateHomeEvent(outcome) {
   };
 }
 
+/**
+ * Shadow mode's count of Google's own postal categories. Categories only: no address, and
+ * nothing from another provider.
+ */
+async function recordPostalShadow({ addressId, categories, trigger = 'unknown' }) {
+  logger.info('addressValidation.postalShadow', { trigger, ...categories });
+  await insertEvents([normalizeEvent({
+    address_id: addressId || null,
+    event_type: 'postal_shadow',
+    provider: 'google',
+    status: categories.verdict,
+    reasons: [],
+    raw_response: { trigger, ...categories },
+  })]);
+}
+
 async function recordPipelineAudit({ addressId, providerCalls = [], shadowComparisons = [], verdict, trigger = 'unknown' }) {
   const events = [];
 
@@ -383,6 +399,7 @@ async function recordCreateHomeOutcome(outcome) {
 
 module.exports = {
   recordPipelineAudit,
+  recordPostalShadow,
   recordValidationOutcome,
   recordMailLifecycleEvent,
   recordCreateHomeOutcome,

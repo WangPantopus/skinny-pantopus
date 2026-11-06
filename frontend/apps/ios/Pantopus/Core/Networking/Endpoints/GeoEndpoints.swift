@@ -8,14 +8,27 @@
 import Foundation
 
 public enum GeoEndpoints {
-    /// `GET /api/geo/autocomplete?q=` — route `backend/routes/geo.js:39`.
-    /// Address typeahead (Mapbox-backed). Suggestions carry a center
-    /// lat/lng; resolve one via `resolve(suggestionId:)`.
-    public static func autocomplete(query: String) -> Endpoint {
-        Endpoint(
+    /// `GET /api/geo/autocomplete?q=[&lat=&lng=][&kind=address]` — route
+    /// `backend/routes/geo.js:65`. Address typeahead (Mapbox-backed).
+    /// Suggestions carry a center lat/lng; resolve one via
+    /// `resolve(suggestionId:)`. `near` favors suggestions close to a point
+    /// (sent rounded to about a kilometer); `streetOnly` keeps street
+    /// addresses only.
+    public static func autocomplete(
+        query: String,
+        near: (latitude: Double, longitude: Double)? = nil,
+        streetOnly: Bool = false
+    ) -> Endpoint {
+        var params = ["q": query]
+        if let near {
+            params["lat"] = String(format: "%.2f", near.latitude)
+            params["lng"] = String(format: "%.2f", near.longitude)
+        }
+        if streetOnly { params["kind"] = "address" }
+        return Endpoint(
             method: .get,
             path: "/api/geo/autocomplete",
-            query: ["q": query]
+            query: params
         )
     }
 
