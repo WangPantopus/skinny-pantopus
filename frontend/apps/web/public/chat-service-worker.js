@@ -10,9 +10,10 @@ const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const CHAT_PATH = new RegExp(`^/app/chat(?:/(?:conversation/)?${UUID})?/?$`, 'i');
 let preparing;
 
+// Parentheses: Next's route groups, as in chunks/app/(site)/chat-offline/page-<hash>.js.
 function publicAsset(url) {
   return url.origin === self.location.origin && !url.search
-    && /^\/_next\/static\/[a-zA-Z0-9_./%-]+\.(?:m?js|css|woff2?)$/.test(url.pathname);
+    && /^\/_next\/static\/[a-zA-Z0-9_./%()-]+\.(?:m?js|css|woff2?)$/.test(url.pathname);
 }
 
 async function retainAsset(cache, url, response) {
