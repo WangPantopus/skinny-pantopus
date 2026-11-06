@@ -26,15 +26,18 @@ RETURNS integer LANGUAGE sql IMMUTABLE SET search_path=public,pg_temp AS $$
     ELSE 0 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.record_mail_verification_webhook(
-  p_job_id uuid, p_vendor_job_id text, p_event_type text, p_vendor_status text
+-- A new overload with the printer named, so another printer's receipts are accepted. Server code
+-- from before this migration keeps calling the four-argument function, unchanged, during a release.
+CREATE FUNCTION public.record_mail_verification_webhook(
+  p_job_id uuid, p_vendor_job_id text, p_event_type text, p_vendor_status text, p_vendor text
 ) RETURNS boolean
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = public, pg_temp SET lock_timeout = '5s' AS $$
 BEGIN
   IF p_job_id IS NULL OR nullif(p_vendor_job_id, '') IS NULL
     OR nullif(p_event_type, '') IS NULL OR length(p_event_type) > 100
-    OR nullif(p_vendor_status, '') IS NULL OR length(p_vendor_status) > 50 THEN
+    OR nullif(p_vendor_status, '') IS NULL OR length(p_vendor_status) > 50
+    OR p_vendor IS NULL OR p_vendor !~ '^[a-z0-9_]{1,40}$' THEN
     RAISE EXCEPTION 'Invalid mail webhook status' USING ERRCODE = '22023';
   END IF;
 
@@ -44,15 +47,15 @@ BEGIN
     metadata = coalesce(metadata, '{}'::jsonb) || jsonb_build_object(
       'last_webhook_event', p_event_type, 'last_webhook_at', now()),
     updated_at = now()
-  WHERE id = p_job_id AND vendor_job_id = p_vendor_job_id;
+  WHERE id = p_job_id AND vendor = p_vendor AND vendor_job_id = p_vendor_job_id;
   RETURN FOUND;
 END;
 $$;
 
 REVOKE ALL ON FUNCTION public.mail_status_rank(text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.mail_status_rank(text) TO service_role;
-REVOKE ALL ON FUNCTION public.record_mail_verification_webhook(uuid, text, text, text) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.record_mail_verification_webhook(uuid, text, text, text) TO service_role;
+REVOKE ALL ON FUNCTION public.record_mail_verification_webhook(uuid, text, text, text, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.record_mail_verification_webhook(uuid, text, text, text, text) TO service_role;
 
 -- One address, by anyone in the Home. A card to an address since corrected doesn't count.
 CREATE FUNCTION public.home_postcard_returned_too_often(p_home_id uuid,p_destination jsonb,p_at timestamptz)

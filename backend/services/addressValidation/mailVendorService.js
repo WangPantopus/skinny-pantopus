@@ -368,6 +368,7 @@ class MailVendorService {
       p_vendor_job_id: vendorJobId,
       p_event_type: eventType,
       p_vendor_status: newStatus,
+      p_vendor: eventData?.provider || 'lob',
     });
     if (statusError || statusSaved !== true) return { success: false, retryable: true, error: 'Could not save mail status' };
 
