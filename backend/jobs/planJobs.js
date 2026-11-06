@@ -86,6 +86,10 @@ function isStale(row, plan, request, invite = null) {
     case 'plan_host_summary': return new Date(plan.post.event_date).getTime() <= Date.now();
     case 'plan_guest_auto_joined': return !request || request.status !== 'accepted' || ended;
     case 'plan_guest_left': return ended;
+    // "You're in" or "Sam will let you know soon": out of date once the request moved on (declined, left, answered).
+    case 'plan_spot_opened': return !request || ended || (row.metadata?.now_in === true
+      ? request.status !== 'accepted'
+      : row.metadata?.now_in === false ? request.status !== 'pending' : !['accepted', 'pending'].includes(request.status));
     // Answered, left, or asked about a later change since.
     case 'plan_still_coming_reminder': return !request || request.status !== 'accepted' || request.reconfirmed != null
       || ended || new Date(request.reconfirm_requested_at).toISOString() !== row.metadata?.asked_at;
@@ -135,7 +139,14 @@ async function releaseHeldPushes() {
     const stale = isStale(row, plan, request, invites.get(row.metadata?.invite_id));
     if (!(await claimNotice(row, { push_sent_at: now, ...(stale ? { push_skipped: true } : {}) }))) continue;
     if (!stale) {
-      await planNotify.sendPush(row);
+      // Held overnight, "tomorrow" is today: the push and its row say the day as of now.
+      const text = planNotify.heldPushText(row, plan);
+      if (text.title !== row.title || text.body !== row.body) {
+        const { error: textError } = await supabaseAdmin.from('Notification')
+          .update({ title: text.title, body: text.body }).eq('id', row.id);
+        if (textError) logger.warn('plans.jobs.held_text_update_failed', { id: row.id, error: textError.message });
+      }
+      await planNotify.sendPush({ ...row, ...text });
       sent += 1;
     }
   }
@@ -152,7 +163,8 @@ async function releaseHeldPushes() {
     const toSend = claimed.filter((row) => live.some((m) => m.row.id === row.id));
     if (!plan || toSend.length === 0) continue;
     const first = toSend[0];
-    const firstName = String(first.title).split(' ')[0];
+    // The asker's first name as the notice stored it ("A neighbor" stays whole), else the title's first word.
+    const firstName = first.metadata?.requester_name || String(first.title).split(' ')[0];
     const title = toSend.length === 1
       ? first.title
       : `${firstName} and ${toSend.length - 1} more asked to join your ${planNotify.noun(plan)}`;

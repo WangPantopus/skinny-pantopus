@@ -33,9 +33,15 @@ struct PlanScreenSections: View {
                 case .requested:
                     PlanRequestedSection(card: card, myRequest: viewModel.plan?.myRequest)
                 case .waitlisted:
-                    PlanWaitlistSection(card: card)
+                    PlanWaitlistSection(card: card, onOpenHost: onOpenHost)
                 case .going:
-                    PlanGoingSection(viewModel: viewModel, card: card, onOpenChat: onOpenChat, onConfirm: onConfirm)
+                    PlanGoingSection(
+                        viewModel: viewModel,
+                        card: card,
+                        onOpenChat: onOpenChat,
+                        onConfirm: onConfirm,
+                        onOpenProfile: onOpenHost
+                    )
                 case .hosting:
                     PlanHostingSection(
                         viewModel: viewModel,
@@ -45,7 +51,8 @@ struct PlanScreenSections: View {
                         onOpenChat: onOpenChat,
                         onChange: onChange,
                         onCancel: onCancel,
-                        onConfirm: onConfirm
+                        onConfirm: onConfirm,
+                        onOpenProfile: onOpenHost
                     )
                 case .closed:
                     PlanClosedSection(
@@ -356,6 +363,8 @@ struct PlanRequestedSection: View {
 
 struct PlanWaitlistSection: View {
     let card: PlanCardDTO
+    /// The host's profile, from their card.
+    let onOpenHost: (String) -> Void
 
     var body: some View {
         PlanBanner(
@@ -399,17 +408,26 @@ struct PlanWaitlistSection: View {
             PlanSpotsBlock(card: card, trailing: (card.waitlistCount ?? 0) > 0 ? "\(card.waitlistCount ?? 0) waiting" : nil)
         }
         PlanCardBox {
-            HStack(spacing: Spacing.s3) {
-                PlanAvatar(name: card.host.displayName, url: card.host.avatarUrl)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(card.host.displayName).planFont(.bodyStrong).foregroundStyle(Theme.Color.appText)
-                    // The rule that applies (anyone nearby, verified neighbors, people hosted before), never a guess.
-                    Text(PlanCardLines.approval(card))
-                        .planFont(.small)
-                        .foregroundStyle(Theme.Color.appTextSecondary)
+            Button {
+                if let id = card.host.userId { onOpenHost(id) }
+            } label: {
+                HStack(spacing: Spacing.s3) {
+                    PlanAvatar(name: card.host.displayName, url: card.host.avatarUrl)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(card.host.displayName).planFont(.bodyStrong).foregroundStyle(Theme.Color.appText)
+                        // The rule that applies (anyone nearby, verified neighbors, people hosted before), never a guess.
+                        Text(PlanCardLines.approval(card))
+                            .planFont(.small)
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .disabled(card.host.userId == nil)
             .accessibilityElement(children: .combine)
+            .accessibilityHint("Opens their profile")
         }
     }
 

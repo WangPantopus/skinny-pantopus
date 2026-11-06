@@ -164,6 +164,8 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
     public let status: PulsePostStatus?
     /// Connections: "Ben C. and 2 others reposted", the line above the author; nil when no connection reposted it.
     public let repostedBy: String?
+    /// What the author's photo and name open; nil when they open nothing.
+    public let authorLink: PulseAuthorLink?
     public var isCurator: Bool {
         origin == "curator"
     }
@@ -196,7 +198,8 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         origin: String? = nil,
         pulseTopic: PulseTopic? = nil,
         status: PulsePostStatus? = nil,
-        repostedBy: String? = nil
+        repostedBy: String? = nil,
+        authorLink: PulseAuthorLink? = nil
     ) {
         self.id = id
         self.authorName = authorName
@@ -220,7 +223,14 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
         self.pulseTopic = pulseTopic
         self.status = status
         self.repostedBy = repostedBy
+        self.authorLink = authorLink
     }
+}
+
+/// Where a post's author leads, as the post page's header: a person's profile or a business's page.
+public enum PulseAuthorLink: Sendable, Hashable {
+    case person(userId: String)
+    case business(String)
 }
 
 /// Event card attendee strip — stacked avatars, "N going" and the Going button.
@@ -253,6 +263,8 @@ public struct PulsePostCard: View {
     private let onToggleSave: (@MainActor () -> Void)?
     /// Repost toggle in the engagement strip. `nil` hides the affordance.
     private let onToggleRepost: (@MainActor () -> Void)?
+    /// Opens the author's profile or page from their photo and name. `nil` leaves them plain.
+    private let onOpenAuthor: (@MainActor () -> Void)?
 
     public init(
         content: PulsePostCardContent,
@@ -262,7 +274,8 @@ public struct PulsePostCard: View {
         onOverflow: (@MainActor () -> Void)? = nil,
         onDismissSeeded: (@MainActor () -> Void)? = nil,
         onToggleSave: (@MainActor () -> Void)? = nil,
-        onToggleRepost: (@MainActor () -> Void)? = nil
+        onToggleRepost: (@MainActor () -> Void)? = nil,
+        onOpenAuthor: (@MainActor () -> Void)? = nil
     ) {
         self.content = content
         self.onTap = onTap
@@ -272,6 +285,7 @@ public struct PulsePostCard: View {
         self.onDismissSeeded = onDismissSeeded
         self.onToggleSave = onToggleSave
         self.onToggleRepost = onToggleRepost
+        self.onOpenAuthor = onOpenAuthor
     }
 
     public var body: some View {
@@ -296,6 +310,16 @@ public struct PulsePostCard: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: 9) {
+            authorIdentity
+            Spacer(minLength: Spacing.s2)
+            PulseIntentChip(intent: content.intent, label: content.chipLabel)
+            headerTrailingControl
+        }
+    }
+
+    /// The author's photo and name, which open their profile (or page) when the card has somewhere to take them.
+    @ViewBuilder private var authorIdentity: some View {
+        let identity = HStack(alignment: .center, spacing: 9) {
             FeedAvatar(
                 initials: content.authorInitials,
                 tint: content.avatarTint,
@@ -310,10 +334,22 @@ public struct PulsePostCard: View {
                     .lineLimit(1)
                 headerMetadata
             }
-            Spacer(minLength: Spacing.s2)
-            PulseIntentChip(intent: content.intent, label: content.chipLabel)
-            headerTrailingControl
         }
+        if let onOpenAuthor {
+            Button(action: onOpenAuthor) {
+                identity.contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("pulsePostAuthor_\(content.id)")
+        } else {
+            identity
+        }
+    }
+
+    /// "Open Ben's profile" for a person, "Open Corner Bakery's page" for a business.
+    private var openAuthorLabel: String {
+        if case .business? = content.authorLink { return "Open \(content.authorName)'s page" }
+        return "Open \(content.authorName)'s profile"
     }
 
     /// Seeded facts get a dismiss "x"; every other card gets the overflow
@@ -610,6 +646,9 @@ private extension PulsePostCard {
         }
         if let onOverflow {
             Button("Post options", action: onOverflow)
+        }
+        if let onOpenAuthor {
+            Button(openAuthorLabel, action: onOpenAuthor)
         }
     }
 }

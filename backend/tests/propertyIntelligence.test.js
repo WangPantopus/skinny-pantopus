@@ -165,7 +165,8 @@ describe('PropertyIntelligenceService', () => {
         .mockResolvedValueOnce(new Response(JSON.stringify(MOCK_ATTOM_AVM)))
         .mockResolvedValueOnce(new Response(JSON.stringify(MOCK_ATTOM_TREND)));
 
-      const result = await getProfile(MOCK_HOME_ID);
+      // Screens never wait (a missing profile is looked up in the background); `wait` runs that lookup here.
+      const result = await getProfile(MOCK_HOME_ID, { wait: true });
 
       expect(result.source).toBe('attom');
       expect(result.profile).toBeDefined();
@@ -267,7 +268,7 @@ describe('PropertyIntelligenceService', () => {
       // All ATTOM calls return errors
       global.fetch.mockImplementation(() => Promise.resolve(new Response('Server error', { status: 500 })));
 
-      const result = await getProfile(MOCK_HOME_ID);
+      const result = await getProfile(MOCK_HOME_ID, { wait: true });
 
       // Should still return a profile (fallback) rather than failing
       expect(result.profile).toBeDefined();
@@ -318,7 +319,8 @@ describe('PropertyIntelligenceService', () => {
       global.fetch.mockImplementation(() => Promise.resolve(new Response(JSON.stringify(MOCK_ATTOM_DETAIL))));
 
       const home = { ...MOCK_HOME, niche_data: {} };
-      const result = await getHomeAttomPropertyDetail(home);
+      // Property details answers at once and looks the record up in the background; `wait` runs that lookup here.
+      const result = await getHomeAttomPropertyDetail(home, { wait: true });
 
       expect(result.source).toBe('attom');
       expect(result.unavailableReason).toBeNull();

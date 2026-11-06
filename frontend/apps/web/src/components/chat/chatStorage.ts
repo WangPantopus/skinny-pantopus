@@ -85,7 +85,13 @@ function receiveHistoryRetirement(event: HistoryRetirement) {
 function publishHistoryRetirement(event: HistoryRetirement) {
   receiveHistoryRetirement(event);
   try { historyChannel?.postMessage(event); } catch { /* Use the storage fallback. */ }
-  try { localStorage.setItem(HISTORY_RETIREMENT, JSON.stringify(event)); } catch { /* The encrypted fence still protects reloads and writes. */ }
+  // Only a signal: other tabs get the storage event with this value even though it
+  // is removed at once (they ignore the removal), so the account's and its rooms'
+  // IDs are not left behind on the device.
+  try {
+    localStorage.setItem(HISTORY_RETIREMENT, JSON.stringify(event));
+    localStorage.removeItem(HISTORY_RETIREMENT);
+  } catch { /* The encrypted fence still protects reloads and writes. */ }
 }
 
 export function onChatHistoryRetired(listener: (event: HistoryRetirement) => void): () => void {
@@ -232,7 +238,11 @@ export async function activateChatStorage(accountId: string): Promise<ChatStorag
 
 export async function clearChatStorage(historyOnly = false): Promise<void> {
   retirementsSeen++;
-  if (!historyOnly) { suspendChatStorage(); historyGenerations.clear(); receivedHistoryGenerations.clear(); }
+  if (!historyOnly) {
+    suspendChatStorage(); historyGenerations.clear(); receivedHistoryGenerations.clear();
+    // A signal an older version left in place (see publishHistoryRetirement).
+    try { localStorage.removeItem(HISTORY_RETIREMENT); } catch { /* storage disabled: nothing was kept */ }
+  }
   const db = await open();
   const scope = historyOnly ? active : null;
   let retired: HistoryRetirement | undefined;

@@ -166,6 +166,8 @@ public struct ContentDetailCounterparty: Sendable, Hashable {
     public let rating: Double?
     public let trailing: String?
     public let showsMessageButton: Bool
+    /// The person whose profile the card opens; nil opens nothing.
+    public let userId: String?
 
     public init(
         displayName: String,
@@ -175,8 +177,10 @@ public struct ContentDetailCounterparty: Sendable, Hashable {
         verified: Bool,
         rating: Double?,
         trailing: String?,
-        showsMessageButton: Bool = true
+        showsMessageButton: Bool = true,
+        userId: String? = nil
     ) {
+        self.userId = userId
         self.displayName = displayName
         self.initials = initials
         self.avatarUrl = avatarUrl

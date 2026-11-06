@@ -2451,7 +2451,8 @@ extension GigDetailViewModel {
             verified: creator?.resolvedVerified ?? false,
             rating: nil,
             trailing: handle,
-            showsMessageButton: showsButton
+            showsMessageButton: showsButton,
+            userId: posterId
         )
     }
 
