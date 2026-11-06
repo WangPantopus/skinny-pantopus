@@ -2822,6 +2822,9 @@ public struct HubTabRoot: View {
                     Task { @MainActor in
                         push(.chatConversation(destination))
                     }
+                },
+                onOpenProfile: { userId in
+                    Task { @MainActor in push(.publicProfile(userId: userId)) }
                 }
             )
         case let .composeGig(category, checklist):
@@ -3057,6 +3060,9 @@ public struct HubTabRoot: View {
                 },
                 onOpenChat: { destination in
                     Task { @MainActor in push(.chatConversation(destination)) }
+                },
+                onOpenProfile: { userId in
+                    Task { @MainActor in push(.publicProfile(userId: userId)) }
                 }
             )
         case let .reviewSignups(supportTrainId):
@@ -3740,7 +3746,7 @@ public struct HubTabRoot: View {
                 onOpenPost: { postId in Task { @MainActor in push(.pulsePost(postId: postId)) } }
             )
         case let .businessTeam(businessId):
-            BusinessTeamView(businessId: businessId)
+            BusinessTeamView(businessId: businessId) { push(.publicProfile(userId: $0)) }
         case let .businessPaymentsOwner(businessId):
             BusinessPaymentsView(businessId: businessId)
         case let .businessInvoicesOwner(businessId):

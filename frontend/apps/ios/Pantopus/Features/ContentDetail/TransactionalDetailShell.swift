@@ -49,6 +49,8 @@ public struct TransactionalDetailShell: View {
     private let onSecondaryAction: (@MainActor () -> Void)?
     private let onRetry: @MainActor () -> Void
     private let onMessageCounterparty: (@MainActor () -> Void)?
+    /// Opens the counterparty's profile from their photo and name.
+    private let onOpenCounterparty: (@MainActor (String) -> Void)?
     private let overflowItems: [ContentDetailOverflowItem]
     /// Optional trailing top-bar control rendered before the overflow
     /// menu (e.g. the gig-detail bookmark toggle).
@@ -70,6 +72,7 @@ public struct TransactionalDetailShell: View {
         onPrimaryAction: @escaping @MainActor () -> Void = {},
         onSecondaryAction: (@MainActor () -> Void)? = nil,
         onRetry: @escaping @MainActor () -> Void = {},
+        onOpenCounterparty: (@MainActor (String) -> Void)? = nil,
         onMessageCounterparty: (@MainActor () -> Void)? = nil,
         @ViewBuilder scrollFooter: () -> some View = { EmptyView() }
     ) {
@@ -79,6 +82,7 @@ public struct TransactionalDetailShell: View {
         self.onSecondaryAction = onSecondaryAction
         self.onRetry = onRetry
         self.onMessageCounterparty = onMessageCounterparty
+        self.onOpenCounterparty = onOpenCounterparty
         self.overflowItems = overflowItems
         self.topBarAccessory = topBarAccessory
         self.onGlassAction = onGlassAction
@@ -584,6 +588,34 @@ public struct TransactionalDetailShell: View {
 
     private func counterpartyCard(_ party: ContentDetailCounterparty) -> some View {
         HStack(spacing: Spacing.s3) {
+            counterpartyIdentity(party)
+            Spacer(minLength: Spacing.s0)
+            if party.showsMessageButton, let onMessage = onMessageCounterparty {
+                Button(action: onMessage) {
+                    Icon(.messageCircle, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryInk)
+                        .frame(width: 36, height: 36)
+                        .background(Theme.Color.primary50)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Message")
+                .accessibilityIdentifier("contentDetailCounterpartyMessage")
+            }
+        }
+        .padding(Spacing.s3)
+        .background(Theme.Color.appSurfaceSunken)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Theme.Color.appBorder, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityIdentifier("contentDetailCounterparty")
+    }
+
+    /// The counterparty's photo, name and trust line, which open their profile when there is one to open.
+    @ViewBuilder
+    private func counterpartyIdentity(_ party: ContentDetailCounterparty) -> some View {
+        let identity = HStack(spacing: Spacing.s3) {
             AvatarView(initials: party.initials, verified: party.verified, size: 44, imageUrl: party.avatarUrl)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -608,27 +640,18 @@ public struct TransactionalDetailShell: View {
                     }
                 }
             }
-            Spacer(minLength: Spacing.s0)
-            if party.showsMessageButton, let onMessage = onMessageCounterparty {
-                Button(action: onMessage) {
-                    Icon(.messageCircle, size: 16, strokeWidth: 2.2, color: Theme.Color.primaryInk)
-                        .frame(width: 36, height: 36)
-                        .background(Theme.Color.primary50)
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Message")
-                .accessibilityIdentifier("contentDetailCounterpartyMessage")
-            }
         }
-        .padding(Spacing.s3)
-        .background(Theme.Color.appSurfaceSunken)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Theme.Color.appBorder, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .accessibilityIdentifier("contentDetailCounterparty")
+        if let userId = party.userId, let onOpenCounterparty {
+            Button { onOpenCounterparty(userId) } label: {
+                identity.contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityHint("Opens \(party.displayName)'s profile")
+            .accessibilityIdentifier("contentDetailCounterpartyProfile")
+        } else {
+            identity
+        }
     }
 
     private func identityChip(_ kind: String) -> some View {

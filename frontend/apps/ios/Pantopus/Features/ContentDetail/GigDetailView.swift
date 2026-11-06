@@ -48,6 +48,8 @@ public struct GigDetailView: View {
     @State private var shareToFeedTarget: PulseTaskShare?
     private let onBack: @MainActor () -> Void
     private let onOpenChat: (@MainActor (InboxConversationDestination) -> Void)?
+    /// The poster's profile, from the Posted By card.
+    private let onOpenProfile: (@MainActor (String) -> Void)?
 
     /// Block 3D — preset tip amounts in cents.
     private let tipPresets = [500, 1000, 2000]
@@ -55,11 +57,13 @@ public struct GigDetailView: View {
     public init(
         viewModel: GigDetailViewModel,
         onBack: @escaping @MainActor () -> Void = {},
-        onOpenChat: (@MainActor (InboxConversationDestination) -> Void)? = nil
+        onOpenChat: (@MainActor (InboxConversationDestination) -> Void)? = nil,
+        onOpenProfile: (@MainActor (String) -> Void)? = nil
     ) {
         _viewModel = State(initialValue: viewModel)
         self.onBack = onBack
         self.onOpenChat = onOpenChat
+        self.onOpenProfile = onOpenProfile
     }
 
     public var body: some View {
@@ -71,6 +75,7 @@ public struct GigDetailView: View {
             onPrimaryAction: { presentPrimaryAction() },
             onSecondaryAction: { openChat() },
             onRetry: { Task { await viewModel.load() } },
+            onOpenCounterparty: onOpenProfile,
             onMessageCounterparty: { openChat() },
             scrollFooter: { lifecycleFooter }
         )
