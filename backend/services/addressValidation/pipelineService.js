@@ -19,7 +19,7 @@ const {
   usesGooglePostal,
   postalShadowEnabled,
   postalFromGoogle,
-  keepTypedUnit,
+  keepTypedAddress,
   postalCategories,
 } = require('./postalAdapter');
 
@@ -234,6 +234,7 @@ function buildStoredDecisionInputs(address) {
     po_box_flag: raw.po_box_flag ?? null,
     po_box_only_zip: raw.po_box_only_zip === true,
     coming_soon: raw.coming_soon === true,
+    not_listed: raw.not_listed === true,
     usps_suspended: raw.usps_suspended === true,
   } : {
     inconclusive: false,
@@ -414,7 +415,7 @@ async function lookupExistingHouseholdByHash(addressHash) {
  */
 async function recordPostalShadow(input, googleResult, addressId, trigger) {
   try {
-    const google = keepTypedUnit(googleResult, input);
+    const google = keepTypedAddress(googleResult, input);
     const postal = postalFromGoogle(google);
     const verdict = decisionEngine.classify({
       google,
@@ -478,7 +479,7 @@ async function runValidationPipeline(input, options = {}) {
     const googleStartedAt = Date.now();
     try {
       googleResult = await googleProvider.validate(input);
-      if (googlePostal) googleResult = keepTypedUnit(googleResult, input);
+      if (googlePostal) googleResult = keepTypedAddress(googleResult, input);
       pushProviderCall({
         provider: 'google_address_validation',
         status: googleResult?.normalized ? 'ok' : 'empty_or_failed',

@@ -89,16 +89,10 @@ const CHECKS = {
     id: (row) => row.PID,
     map: [['year_built', 'YR_BUILT'], ['living_sqft', 'LIVING_AREA'], ['gross_sqft', 'GROSS_AREA'], ['bedrooms', 'BED_RMS'], ['full_baths', 'FULL_BTH'], ['half_baths', 'HLF_BTH'], ['rooms', 'TT_RMS'], ['assessed_value', 'TOTAL_VALUE', moneyNear], ['assessed_land_value', 'LAND_VALUE', moneyNear], ['lot_sqft', 'LAND_SF']],
   },
-  'ma-cambridge': {
-    county: '25017', rows: () => socrataRows('data.cambridgema.gov', 'eey2-rv59', ['pid', 'yearofassessment', 'condition_yearbuilt', 'interior_livingarea', 'assessedvalue', 'landarea'], { where: "yearofassessment='2026'" }),
-    id: (row) => row.pid,
-    prefix: true,
-    map: [['year_built', 'condition_yearbuilt'], ['living_sqft', 'interior_livingarea'], ['assessed_value', 'assessedvalue', moneyNear], ['lot_sqft', 'landarea', near(5)]],
-  },
   'ny-kings': {
-    county: '36047', rows: () => layerRows('https://gisservices.its.ny.gov/arcgis/rest/services/NYS_Tax_Parcels_Public/FeatureServer/1', ['SWIS_SBL_ID', 'SBL', 'YR_BLT', 'GFA', 'TOTAL_AV'], { where: "COUNTY_NAME = 'Kings'", pageSize: 5000 }),
+    county: '36047', rows: () => layerRows('https://gisservices.its.ny.gov/arcgis/rest/services/NYS_Tax_Parcels_Public/FeatureServer/1', ['SWIS_SBL_ID', 'SBL', 'YR_BLT', 'SQFT_LIVING', 'TOTAL_AV'], { where: "COUNTY_NAME = 'Kings'", pageSize: 5000 }),
     id: (row) => row.SBL,
-    map: [['year_built', 'YR_BLT'], ['gross_sqft', 'GFA'], ['assessed_value', 'TOTAL_AV', moneyNear]],
+    map: [['year_built', 'YR_BLT'], ['gross_sqft', 'SQFT_LIVING'], ['assessed_value', 'TOTAL_AV', moneyNear]],
   },
   'ct-2025': {
     rows: () => socrataRows('data.ct.gov', 'rny9-6ak2', ['pid', 'town_id', 'ayb', 'living_area', 'number_of_bedroom', 'number_of_baths', 'number_of_half_baths', 'land_acres', 'stories']),
@@ -117,13 +111,14 @@ const CHECKS = {
     map: [['year_built', 'YR_CONSTR'], ['assessed_value', 'NET_VALUE', moneyNear], ['assessed_land_value', 'LAND_VAL', moneyNear], ['assessed_building_value', 'IMPRVT_VAL', moneyNear], ['sale_price', 'SALE_PRICE', moneyNear]],
   },
   'tx-collin': {
-    county: '48085', rows: () => socrataRows('data.texas.gov', 'vffy-snc6', ['propid', 'imprvyearbuilt', 'currvalmarket', 'currvallandmarket', 'currvalimprv'], {}),
+    // The district's own file is a year behind StratMap's, so only what doesn't change in a year is fair to compare.
+    county: '48085', rows: () => socrataRows('data.texas.gov', 'vffy-snc6', ['propid', 'imprvyearbuilt']),
     id: (row) => row.propid,
-    map: [['year_built', 'imprvyearbuilt'], ['market_value', 'currvalmarket', moneyNear]],
+    map: [['year_built', 'imprvyearbuilt']],
   },
   'mn-hennepin': {
-    county: '27053', rows: () => layerRows('https://gis.hennepin.us/arcgis/rest/services/HennepinData/LAND_PROPERTY/MapServer/1', ['PID_TEXT', 'BUILD_YR', 'MKT_VAL_TOT', 'SALE_PRICE', 'PARCEL_AREA']),
-    id: (row) => row.PID_TEXT,
+    county: '27053', rows: () => layerRows('https://gis.hennepin.us/arcgis/rest/services/HennepinData/LAND_PROPERTY/MapServer/1', ['PID', 'BUILD_YR', 'MKT_VAL_TOT', 'SALE_PRICE', 'PARCEL_AREA']),
+    id: (row) => row.PID,
     map: [['year_built', 'BUILD_YR'], ['market_value', 'MKT_VAL_TOT', moneyNear], ['sale_price', 'SALE_PRICE', moneyNear]],
   },
   'nc-wake': {

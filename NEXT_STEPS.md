@@ -346,6 +346,7 @@ The ordered steps, with exact values and checks, are in the [launch checklist](d
 - [ ] Agents' closing-gift kit (draft in PR 1499), the first homeowners association conversation, the business walk.
 - [ ] Optional: draw the radon card in Claude Design. Agents build it from the brief and existing components if it isn't ready.
 - [ ] Decide about videos stored before the server began cleaning them (November 6) that still say where they were taken. New uploads are clean. `node backend/scripts/clean-stored-video-locations.js` reports how many and changes nothing; `--rewrite` cleans them, and the CDN then needs those keys invalidated. Details are in the [photo-location handoff](docs/photo-location-place-picker-handoff-2026-11-05.md).
+- [ ] Check one real Android 14–16 phone with a current Google Play system update, then decide whether the Android app should ask for `ACCESS_MEDIA_LOCATION`. Of the emulators tested (Android 13, 16 and 17), only 17 hid where a gallery photo was taken from the post composer. The permission would fix that, but its prompt reads "Allow Pantopus to access photos and videos on this device?", though the app would still see only what the person picks. With a build containing PR 3461 (the store builds so far predate it): take a photo with the phone's camera app with location on, open the post composer, attach the photo from the picker's Recent or Images, and tap "Add location". A "Photo location" chip means the location comes through and that phone needs no prompt. No chip means it's hidden, so the prompt is worth deciding on. A session can hand over a small test app that shows the same thing without a new build. Details are in the [photo-location handoff](docs/photo-location-place-picker-handoff-2026-11-05.md).
 
 ## 3. Build now: the mobile pilot (instructions in the brief)
 
@@ -776,3 +777,14 @@ The September acceptance backlog ([REMAINING_WORK](docs/REMAINING_WORK_2026-09-1
 - [x] October 21, dependency security: [#2551](https://github.com/WangPantopus/skinny-pantopus/pull/2551) updates the existing `follow-redirects` override to 1.16.1. The production dependency audit reports no known vulnerabilities. Existing web checks passed, and signed-in navigation, notifications, mark-all-read and reload persistence passed in the local web app. PR and master CI passed.
 
 - [x] October 21, Android association source: the existing generator now includes `app.pantopus.android` with the current Play app-signing SHA-256 from Play Console's Digital Asset Links snippet and both public certificates from its previous quantum-ready signing key. The legacy `com.pantopus.app` entry is preserved. No debug certificate or secret key is included. Production hosting and a Play-installed device verification remain separate release checks.
+
+## Replacing ATTOM, Smarty and Lob (added November 6)
+
+The plan, decisions and status are in [docs/research/provider-replacement/](docs/research/provider-replacement/README.md). Builders keep going without asking; the steps below are yours and hold nothing up, except that county data stays off screens until each county's switch is on.
+
+- [ ] **ATTOM's free trial ended November 4. By about November 18:** take `ATTOM_API_KEY` out of `.env.prod` and `.env.staging`, restart, and run the purge on every hosted database at the same time (with the key gone, stored copies still show until the purge); delete local copies; confirm the end date from ATTOM's notice; sign the affidavit ([steps](docs/research/provider-replacement/cost-and-rights.md#5-attom-free-trial)).
+- [ ] Send the public-records letters and pay fees of $500 or less ([requests](docs/research/provider-replacement/public-records-requests.md)).
+- [ ] Reader key and settings on the servers, then each county's live switch.
+- [ ] `ADDRESS_POSTAL_PROVIDER=google` in staging, then production with the Google key.
+- [ ] PostGrid test account and the written questions to PostGrid and Lob; the real-mail pilot ([pilot](docs/research/provider-replacement/mail-pilot.md)).
+

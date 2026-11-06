@@ -126,6 +126,9 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
   // "My home doesn't have a unit number" — survives the revalidate it triggers,
   // resets with the address. Sent to the server as no_unit_attestation.
   const [noUnitAttested, setNoUnitAttested] = useState(false);
+  // USPS couldn't confirm the unit or hasn't answered. The person has seen why; the next press
+  // continues on this same answer, and any change to the address clears it.
+  const [postalNotice, setPostalNotice] = useState<{ text: string; validation: ValidateAddressResponse } | null>(null);
 
   // Step 1 — Location
   const [addressText, setAddressText] = useState('');
@@ -245,6 +248,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
     setValidatingAddress(false);
     setValidatedAddressId(null);
     setNoUnitAttested(false);
+    setPostalNotice(null);
     setAddressCheckResult(null);
     setExistingHomeId(null);
     setIsClaimingExistingHome(false);
@@ -536,13 +540,14 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
 
     try {
       let conflictFallbackResult: AddressCheckResult | null = null;
-      const validation = await api.addressValidation.validateAddress({
+      const seenPostalNotice = postalNotice;
+      const validation = seenPostalNotice?.validation ?? await api.addressValidation.validateAddress({
         line1: normalized.address,
         line2: unit.trim() || undefined,
         city: normalized.city,
         state: normalized.state.trim().toUpperCase(),
         zip: normalized.zipcode,
-      });
+      }, { postal: 2 });
 
       if (!current()) return false;
       const verdict = validation?.verdict;
@@ -555,8 +560,9 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
           city: resolved.city,
           state: resolved.state,
           zipcode: resolved.zip,
-          latitude: resolved.lat,
-          longitude: resolved.lng,
+          // Google unreachable: the map pin may have to stay the one the person picked.
+          latitude: resolved.lat ?? normalized.latitude,
+          longitude: resolved.lng ?? normalized.longitude,
           label: buildAddressLabel(resolved.line1, resolved.city, resolved.state, resolved.zip, resolved.line2),
         };
         setNormalized(nextNormalized);
@@ -572,8 +578,23 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
           // through to the success path instead of looping them forever.
           if (attestedNoUnit) break;
           setValidatedAddressId(null);
-          setFieldErrors({ unit_number: 'This address needs a unit or apartment number.' });
+          setFieldErrors({
+            unit_number: verdict.reasons?.includes('USPS_UNIT_REQUIRED')
+              ? 'This building needs a unit number. Which one is yours?'
+              : 'This address needs a unit or apartment number.',
+          });
           setError('Please fix the highlighted fields.');
+          return false;
+        case 'UNIT_NOT_CONFIRMED':
+        case 'POSTAL_PENDING':
+          if (seenPostalNotice) break;
+          setValidatedAddressId(null);
+          setPostalNotice({
+            validation,
+            text: verdict.status === 'UNIT_NOT_CONFIRMED'
+              ? `We couldn’t confirm unit ${resolvedUnit} with USPS. Check the number, or continue and we’ll confirm it by mail.`
+              : 'We couldn’t check this address with USPS yet. We’ll try again shortly. You can finish now; your postcard waits for the check.',
+          });
           return false;
         case 'BUSINESS':
           setValidatedAddressId(null);
@@ -907,6 +928,11 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
               {error}
             </div>
           ) : null}
+          {step === 1 && postalNotice ? (
+            <div role="status" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {postalNotice.text}
+            </div>
+          ) : null}
 
           {/* ============ STEP 1: LOCATION ============ */}
           {step === 1 && (
@@ -1078,7 +1104,7 @@ function NewHomeWizard({ recovery }: { recovery: ReturnType<typeof useHomeCreati
                   disabled={!canProceedStep1 || validatingAddress}
                   className="px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-900 font-semibold disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                  {validatingAddress ? 'Verifying…' : 'Next →'}
+                  {validatingAddress ? 'Verifying…' : postalNotice ? 'Continue →' : 'Next →'}
                 </button>
               </div>
             </div>

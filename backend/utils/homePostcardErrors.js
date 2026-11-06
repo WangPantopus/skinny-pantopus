@@ -24,6 +24,8 @@ const MESSAGES = {
   OWNERSHIP_FLOW_REQUIRED: 'Use ownership verification to manage your ownership request.',
   POSTCARD_ADDRESS_CHANGED: "This address doesn't match the one saved for this Home. Check the street, apartment and ZIP.",
   POSTCARD_COUNTRY_UNAVAILABLE: 'Mail verification is not available for this country yet.',
+  POSTCARD_ADDRESS_PENDING: 'We couldn’t check this address with USPS yet. We’ll try again shortly, and your postcard can go out after that.',
+  POSTCARD_ADDRESS_NOT_CONFIRMED: 'Please check this address. USPS couldn’t confirm it, so we can’t mail a postcard there.',
   POSTCARD_ADDRESS_LIMIT: 'Too many postcards have been requested for this address. Try again later.',
   POSTCARD_USER_LIMIT: 'You’ve asked for too many postcards in the last hour. Try again later.',
   POSTCARD_RETURNED_LIMIT: 'Two postcards to this address came back, so we won’t send a third. Check the address, or verify another way.',

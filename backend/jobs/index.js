@@ -72,6 +72,8 @@ const generateHomeTaskRecurrences = require('./generateHomeTaskRecurrences');
 const expireAddressVerifications = require('./expireAddressVerifications');
 const purgeAddressVerificationEvents = require('./purgeAddressVerificationEvents');
 const replaceExpiredCoordinates = require('./replaceExpiredCoordinates');
+const recheckPendingPostalAddresses = require('./recheckPendingPostalAddresses');
+const clearExpiredUspsData = require('./clearExpiredUspsData');
 const reconcileHomeHouseholdResolution = require('./reconcileHomeHouseholdResolution');
 // Chat jobs
 const chatRedactionJob = require('./chatRedactionJob');
@@ -534,6 +536,22 @@ function startJobs(options = {}) {
   scheduleCron('3 4 * * *', wrapJob(
     'replaceExpiredCoordinates',
     () => replaceExpiredCoordinates(),
+  // ─── Recheck Pending Postal Addresses ───
+  // Runs every 5 minutes. Nothing to do unless Google is the postal source.
+  // Homes finished while Google was down, or USPS gave no answer, wait on this for mail proof.
+  scheduleCron('*/5 * * * *', wrapJob(
+    'recheckPendingPostalAddresses',
+    () => recheckPendingPostalAddresses(),
+  ), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── Clear Expired USPS Data ───
+  // Runs daily at 03:53 UTC. Google allows USPS data for 30 days.
+  scheduleCron('53 3 * * *', wrapJob(
+    'clearExpiredUspsData',
+    () => clearExpiredUspsData(),
   ), {
     scheduled: true,
     timezone: 'UTC',

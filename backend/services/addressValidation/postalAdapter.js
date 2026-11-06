@@ -45,6 +45,7 @@ function postalFromGoogle(google) {
   const answered = !!usps && usps.cass_processed !== false && !usps.suspended;
   const dpv = answered && DPV_ANSWERS.has(usps.dpv_match_code) ? usps.dpv_match_code : '';
   const footnotes = answered ? splitFootnotes(usps.dpv_footnote) : [];
+  const streetNumber = google?.components?.street_number;
 
   return {
     source: 'google',
@@ -65,20 +66,37 @@ function postalFromGoogle(google) {
     po_box_flag: metadata?.po_box ?? null,
     po_box_only_zip: answered ? usps.po_box_only_zip === true : false,
     coming_soon: answered && usps.ews_flag === true,
+    // USPS has no such number, yet Google's map data confirms it: in real answers this is new
+    // construction USPS hasn't listed yet. A mistyped number comes back unconfirmed by Google.
+    not_listed: dpv === 'N'
+      && footnotes.includes('M3')
+      && streetNumber?.confirmed === true
+      && !streetNumber.inferred
+      && !google?.verdict?.hasUnconfirmedComponents,
     cass_processed: usps ? usps.cass_processed ?? null : null,
     usps_suspended: !!usps?.suspended,
     checked_at: new Date().toISOString(),
   };
 }
 
+const blank = (value) => !String(value || '').trim();
+
 /**
- * The person's typed unit stays on the normalized address when Google dropped it, so a
- * "check your unit" answer never loses what they typed.
+ * What the person typed stays on the normalized address where Google dropped it: a "check your
+ * unit" answer never loses the unit, and a Puerto Rico address with no street number keeps its line.
  */
-function keepTypedUnit(google, input) {
-  const typed = String(input?.line2 || '').trim();
-  if (!typed || !google?.normalized || String(google.normalized.line2 || '').trim()) return google;
-  return { ...google, normalized: { ...google.normalized, line2: typed } };
+function keepTypedAddress(google, input) {
+  if (!google?.normalized || !input) return google;
+  const normalized = { ...google.normalized };
+  if (blank(normalized.line2) && !blank(input.line2)) normalized.line2 = String(input.line2).trim();
+  for (const [field, typed] of [['city', input.city], ['state', input.state], ['zip', input.zip]]) {
+    if (blank(normalized[field]) && !blank(typed)) normalized[field] = String(typed).trim();
+  }
+  const missingStreetNumber = (google.missing_component_types || []).includes('street_number');
+  if (!blank(input.line1) && (blank(normalized.line1) || missingStreetNumber)) {
+    normalized.line1 = String(input.line1).trim();
+  }
+  return { ...google, normalized };
 }
 
 /** The categories shadow mode counts: Google's own answer, with no address in it. */
@@ -104,6 +122,6 @@ module.exports = {
   postalShadowEnabled,
   splitFootnotes,
   postalFromGoogle,
-  keepTypedUnit,
+  keepTypedAddress,
   postalCategories,
 };

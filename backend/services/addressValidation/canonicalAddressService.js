@@ -432,7 +432,9 @@ class CanonicalAddressService {
       fields.commercial_mailbox_flag = googlePostal
         ? smarty.commercial_mailbox ?? null
         : !!smarty.commercial_mailbox;
-      fields.deliverability_status = smarty.dpv_match_code === 'N'
+      fields.deliverability_status = smarty.not_listed
+        ? 'unverified'
+        : smarty.dpv_match_code === 'N'
         ? 'undeliverable'
         : (smarty.dpv_match_code === 'D' || smarty.dpv_match_code === 'S')
           ? 'partial'
@@ -469,7 +471,7 @@ class CanonicalAddressService {
 
     // Smarty postal validation data stored as JSON blob for caching
     if (googlePostal) {
-      const pending = !smarty.dpv_match_code || smarty.coming_soon;
+      const pending = !smarty.dpv_match_code || smarty.coming_soon || smarty.not_listed;
       fields.validation_vendor = 'google';
       fields.last_validated_at = smarty.checked_at || new Date().toISOString();
       rawResponse.postal_source = 'google';
@@ -479,7 +481,7 @@ class CanonicalAddressService {
       for (const key of [
         'dpv_match_code', 'rdi_type', 'home_and_business', 'missing_secondary', 'unconfirmed_secondary',
         'commercial_mailbox', 'vacant_flag', 'no_stat', 'no_stat_reason', 'footnotes', 'record_type',
-        'carrier_route_type', 'po_box_flag', 'po_box_only_zip', 'coming_soon', 'usps_suspended',
+        'carrier_route_type', 'po_box_flag', 'po_box_only_zip', 'coming_soon', 'not_listed', 'usps_suspended',
       ]) {
         rawResponse[key] = smarty[key] ?? null;
       }

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import QueryProvider from '@/lib/query-provider';
 import ToastContainer from '@/components/ui/ToastContainer';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import StylesheetsFirst from '@/components/StylesheetsFirst';
 import './globals.css';
 // Leaflet's stylesheet is imported by the map components themselves (components/map/leaflet-setup.ts and
 // each map that doesn't use it), so it loads with a map instead of blocking every page's first paint.
@@ -32,6 +33,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <body className="min-h-full antialiased bg-app text-app selection:bg-primary-200/70 selection:text-app-text dark:selection:text-gray-950">
+        <StylesheetsFirst />
         <QueryProvider>{children}</QueryProvider>
         <ToastContainer />
         <ConfirmDialog />

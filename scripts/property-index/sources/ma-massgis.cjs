@@ -1,16 +1,16 @@
 'use strict';
-// Massachusetts: MassGIS's standard extract of all 351 assessors' lists, and the City of Boston's own file, which is
-// public domain (PDDL) and also has bedrooms, baths, heat and roof. MassGIS adds what its towns report, one fiscal year
-// per town, so a town's values can be years behind another's and each record says its own year. A value here is the
-// assessment; state law sets it at full and fair cash value, but it's labeled as the assessor labels it.
+// Massachusetts: MassGIS's standard extract of all 351 assessors' lists, and the Boston and Cambridge assessors' own
+// files, both public domain (PDDL), which also have bedrooms, baths, heat and roof. MassGIS adds what its towns report,
+// one fiscal year per town, so a town's values can be years behind another's and each record says its own year. A value
+// here is the assessment; state law sets it at full and fair cash value, but it's labeled as the assessor labels it.
 //
-// Owner names and mailing addresses are columns of both. They're never asked for from MassGIS and never read from
-// Boston's file; OWN_OCC too (owner occupancy says something about a person).
+// Owner names and mailing addresses are columns of all three. They're never asked for from MassGIS or Cambridge and never
+// read from Boston's file; nor are owner occupancy and the residential exemption, which say something about a person.
 
 const path = require('node:path');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
 const { download } = require('../lib/tables.cjs');
-const { getJson, layerRows, cached } = require('../lib/services.cjs');
+const { getJson, layerRows, socrataRows, cached } = require('../lib/services.cjs');
 const { csvRows } = require('../lib/csv.cjs');
 const { houseNumbers, readAddresses, year, isoDate, zipCode, realUnit, onRecord, unitAfterStreet } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
@@ -21,6 +21,8 @@ const LAYER = 'https://services1.arcgis.com/hGdibHYSPO59RG1h/arcgis/rest/service
 const BOSTON_FILE = 'https://data.boston.gov/dataset/e02c44d2-3c64-459c-8fe2-e1ce5f38a035/resource/ee73430d-96c0-423e-ad21-c4cfb54c8961/download/fy2026-property-assessment-data_rev.csv';
 const BOSTON_YEAR = 2026;
 const BOSTON = 35;
+const CAMBRIDGE = 49;
+const CAMBRIDGE_DATASET = ['data.cambridgema.gov', 'eey2-rv59'];
 
 // MassGIS's town numbers, by county.
 const COUNTIES = {
@@ -239,6 +241,75 @@ function fromBoston(row, fips, county) {
   }));
 }
 
+const CAMBRIDGE_USES = {
+  101: ['property', 'house', 'Single family'], 102: ['unit', 'condo', 'Condominium'], 199: ['building', 'condo', 'Condominium building'], 104: ['building', 'multi_unit', 'Two family'], 105: ['building', 'multi_unit', 'Three family'],
+  109: ['property', 'house', 'Several houses on one parcel'], 111: ['building', 'apartment', 'Apartments, 4 to 8 units'], 112: ['building', 'apartment', 'Apartments, more than 8 units'], 130: ['parcel', null, 'Developable residential land'], 131: ['parcel', null, 'Potentially developable residential land'], 132: ['parcel', null, 'Undevelopable residential land'],
+};
+const CAMBRIDGE_COLUMNS = ['pid', 'map_lot', 'bldgnum', 'address', 'unit', 'stateclasscode', 'propertyclass', 'zoning', 'landarea', 'yearofassessment', 'buildingvalue', 'landvalue', 'assessedvalue', 'saleprice', 'book_page', 'saledate', 'exterior_style', 'exterior_numstories', 'exterior_walltype', 'exterior_rooftype', 'exterior_roofmaterial',
+  'interior_livingarea', 'interior_numunits', 'interior_totalrooms', 'interior_bedrooms', 'interior_fullbaths', 'interior_halfbaths', 'interior_fireplaces', 'interior_flooring', 'systems_heattype', 'systems_heatfuel', 'systems_centralair', 'condition_yearbuilt', 'condition_overallcondition'];
+// Its words come in a few spellings: "HOT-WATER" and "Hot Water", "Frame-Clapbrd".
+const CAMBRIDGE_WORDS = { 'Frame-Clapbrd': 'Frame and clapboard', 'Aluminum-Vinyl': 'Aluminum or vinyl', 'ALUMNM-VINYL': 'Aluminum or vinyl', 'WOOD-SHN-SHK': 'Wood shingle or shake', 'Asbstos Shingl': 'Asbestos shingle', 'HW Radiator': 'Hot water radiator', 'MULT-RESDNCE': 'Several residences' };
+function cambridgeWord(value) {
+  const text = word(value);
+  if (!text || /^(none|other|unknown)$/i.test(text)) return null;
+  if (CAMBRIDGE_WORDS[text]) return CAMBRIDGE_WORDS[text];
+  return /[a-z]/.test(text) ? text : text.replace(/-/g, ' ').toLowerCase().replace(/^\S/, (first) => first.toUpperCase());
+}
+
+function fromCambridge(row, fips, county) {
+  const code = useOf(row.stateclasscode);
+  const [kind, homeType, useWord] = CAMBRIDGE_USES[code] || ['other', null, null];
+  const unit = realUnit(row.unit);
+  const home = kind === 'property' || kind === 'unit';
+  const on = home || kind === 'building';
+  const facts = { parcel_number: word(row.map_lot) || row.pid, county, fips, municipality: 'Cambridge' };
+  put(facts, 'address_on_record', onRecord(row.address, unit));
+  put(facts, 'year_built', on ? year(row.condition_yearbuilt) : null);
+  put(facts, 'living_sqft', home && code !== '109' ? positive(row.interior_livingarea) : null);
+  put(facts, 'stories', on && kind !== 'unit' ? storiesFrom(row.exterior_numstories) : null);
+  put(facts, 'style', on ? cambridgeWord(row.exterior_style) : null);
+  put(facts, 'exterior_walls', on ? cambridgeWord(row.exterior_walltype) : null);
+  put(facts, 'roof_shape', on ? cambridgeWord(row.exterior_rooftype) : null);
+  put(facts, 'roof_cover', on ? cambridgeWord(row.exterior_roofmaterial) : null);
+  if (kind === 'building') put(facts, 'units', positive(row.interior_numunits));
+  if (home) {
+    put(facts, 'rooms', positive(row.interior_totalrooms));
+    put(facts, 'bedrooms', positive(row.interior_bedrooms));
+    const [full, half] = [positive(row.interior_fullbaths), positive(row.interior_halfbaths)];
+    put(facts, 'full_baths', full);
+    put(facts, 'half_baths', half);
+    if (full || half) facts.bathrooms = (full || 0) + (half || 0) * 0.5;
+    put(facts, 'fireplaces', positive(row.interior_fireplaces));
+    put(facts, 'flooring', cambridgeWord(row.interior_flooring));
+    put(facts, 'heating', cambridgeWord(row.systems_heattype));
+    put(facts, 'heating_fuel', cambridgeWord(row.systems_heatfuel));
+    if (String(row.systems_centralair).toLowerCase() === 'true') facts.cooling = 'Central air';
+    put(facts, 'condition', cambridgeWord(row.condition_overallcondition));
+  }
+  if (kind !== 'unit') put(facts, 'lot_sqft', positive(row.landarea));
+  put(facts, 'zoning', word(row.zoning));
+  put(facts, 'land_use', useWord || cambridgeWord(row.propertyclass));
+  put(facts, 'county_use_code', word(row.stateclasscode));
+  put(facts, 'value_year', positive(row.yearofassessment));
+  put(facts, 'assessed_value', positive(row.assessedvalue));
+  put(facts, 'assessed_land_value', positive(row.landvalue));
+  put(facts, 'assessed_building_value', positive(row.buildingvalue));
+  const sold = isoDate(row.saledate);
+  if (positive(row.saleprice) > 100 && sold) {
+    facts.sale_price = positive(row.saleprice);
+    facts.sale_date = sold;
+    const document = /^(\S+)\/(\S+)$/.exec(String(row.book_page ?? '').trim());
+    if (document) facts.sale_document = `Book ${document[1]}, Page ${document[2]}`;
+  }
+  const line = String(row.address ?? '').trim();
+  const number = /^\S+/.exec(line)?.[0] || '';
+  const street = line.slice(number.length).trim();
+  const addresses = readAddresses(houseNumbers(number), street, unit);
+  if (!addresses.length) return [];
+  const id = `pp:${kind}:${fips}:${CAMBRIDGE}-${row.pid}`;
+  return addresses.map((address) => ({ id, kind, home_type: homeType, address: { ...address, city: 'CAMBRIDGE', zip: '' }, facts }));
+}
+
 /** A complex's main record lists its units, as a county's own roster would. */
 function linkBostonCondos(records) {
   const mains = new Map(records.filter((record) => record.kind === 'building' && record.home_type === 'condo').map((record) => [record.id, record]));
@@ -260,6 +331,13 @@ function linkBostonCondos(records) {
   }
 }
 
+async function newestCambridgeYear() {
+  const query = new URLSearchParams({ $select: 'max(yearofassessment) as newest' });
+  const [{ newest }] = await getJson(`https://${CAMBRIDGE_DATASET[0]}/resource/${CAMBRIDGE_DATASET[1]}.json?${query}`, 'Cambridge\'s dataset');
+  if (!newest) throw new Error('Cambridge\'s dataset has no year');
+  return newest;
+}
+
 async function* build({ work }) {
   const info = await getJson(`${LAYER}?f=json`, 'The layer\'s description');
   const edited = isoDate(info.editingInfo?.dataLastEditDate || info.editingInfo?.lastEditDate);
@@ -276,10 +354,10 @@ async function* build({ work }) {
     const records = [];
     const seen = new Set();
     let unreadable = 0;
-    const townIds = ids.filter((id) => id !== BOSTON);
+    const townIds = ids.filter((id) => id !== BOSTON && id !== CAMBRIDGE);
     const rows = cached(path.join(work, 'ma-massgis', `${fips}.jsonl.gz`), () => layerRows(LAYER, COLUMNS, { where: `TOWN_ID IN (${townIds.join(',')})` }));
     for await (const row of rows) {
-      if (!word(row.PROP_ID)) continue;
+      if (!word(row.PROP_ID) || row.TOWN_ID === BOSTON || row.TOWN_ID === CAMBRIDGE) continue;
       const made = fromMassGis(row, fips, county, TOWN_NAMES[row.TOWN_ID] || '');
       if (!made.length) unreadable += 1;
       for (const record of made) {
@@ -300,11 +378,28 @@ async function* build({ work }) {
       log(`Boston: ${boston.length} records`);
       for (const record of boston) records.push(record);
     }
+    if (ids.includes(CAMBRIDGE)) {
+      const year2026 = await newestCambridgeYear();
+      const rows2 = cached(path.join(work, 'ma-massgis', 'cambridge.jsonl.gz'), () => socrataRows(CAMBRIDGE_DATASET[0], CAMBRIDGE_DATASET[1], CAMBRIDGE_COLUMNS, { where: `yearofassessment='${year2026}'` }));
+      let cambridge = 0;
+      const held = new Set();
+      for await (const row of rows2) {
+        for (const record of fromCambridge(row, fips, county)) {
+          // A property with several buildings has a row each: the first stands for it.
+          const key = `${record.id}|${record.address.number}`;
+          if (held.has(key)) continue;
+          held.add(key);
+          records.push(record);
+          cambridge += 1;
+        }
+      }
+      log(`Cambridge: ${cambridge} records`);
+    }
     // Boston says which main record a unit belongs to; the towns' files don't, so their units group by street number.
     const towned = records.filter((record) => !(record.kind === 'unit' && record.parent));
     for (const building of condoBuildings(towned, { fips, county })) records.push(building);
     yield {
-      fips, state: 'MA', name: county, publisher: hasBoston ? 'MassGIS and the City of Boston' : 'MassGIS', dataset: 'assessors\' parcel data', method: 'state', source: 'ma-massgis', title: 'State records',
+      fips, state: 'MA', name: county, publisher: hasBoston ? 'MassGIS and the City of Boston' : ids.includes(CAMBRIDGE) ? 'MassGIS and the City of Cambridge' : 'MassGIS', dataset: 'assessors\' parcel data', method: 'state', source: 'ma-massgis', title: 'State records',
       as_of: edited, stale_after_days: 540, records,
     };
   }

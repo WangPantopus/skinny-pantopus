@@ -278,8 +278,9 @@ Confidence never rises for `D`, `S` or a blank DPV, so neither can reach OK or a
 ## 15. Compatibility with the apps in the stores
 
 Old builds accept only today's vocabulary ([current-system.md](current-system.md#what-the-apps-assume)): the value card
-needs `source` in `cache`, `cache_stale`, `attom`, `fallback`, `unavailable`; the Add Home records card keys on
-`tiers_used` containing `attom`; copy names ATTOM.
+needs `source` in `cache`, `cache_stale`, `attom`, `fallback`, `unavailable`; store build 2.0.7's Add Home card keys
+on `attom_property_detail`, so since #3203 it says "No ATTOM property record was returned…" even with the fields filled
+in; copy names ATTOM.
 
 1. **Readers first (WP2).** New app versions accept a `provenance` object (publisher, dataset, as-of date, scope,
    method) and new tier names, show server-sent labels instead of hard-coded "ATTOM" copy, and send a client header
@@ -288,8 +289,8 @@ needs `source` in `cache`, `cache_stale`, `attom`, `fallback`, `unavailable`; th
    `?lookup=` does); old servers ignore the flag.
 3. **Honest legacy answers.** For old builds the server keeps the old field names and allowed values: a record-based
    profile is `source: cache` (a stored copy, which it is). It never labels county data `attom`. Old Add Home builds
-   will then show their generic "Public records" wording; the switch for old builds waits until the measured share of
-   old-build Add Home sessions is low enough for the founder.
+   keep that "No ATTOM…" line above fields that are filled, until people update; the switch for old builds waits until the
+   measured share of old-build Add Home sessions is low enough for the founder.
 
 ## 16. Privacy and legal guardrails
 
