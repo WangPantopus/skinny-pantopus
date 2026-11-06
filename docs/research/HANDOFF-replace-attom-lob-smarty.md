@@ -51,6 +51,22 @@
 
 **Founder direction (Nov 5, late evening): build our own so Pantopus never pays ATTOM, but replace nothing yet.** Today's ATTOM (free trial), Smarty and Lob integrations stay as they are until the replacement is fully built; build every piece behind flags, prove it with the parity plan, then switch. No paid ATTOM plan. Next: merge #3433 and #3418 into one plan and write the build plan (with #3433's address-check fix) for the founder's OK.
 
+**Corrections accepted from the #3433 author's review (Nov 5, late), for the merged plan:**
+1. Success means what users keep: asking at Add Home for a fact ATTOM used to prefill counts as a regression, not parity.
+2. Unit scope everywhere: no building, parking or average figures in a unit's fields; floor-plan mappings need per-unit
+   evidence. "County records rarely hold condo interiors" is wrong as stated: Dallas 92.1%, Boston 95.6%, Cook 14.2% of
+   condos have bedrooms, baths and area. Upgrade Dallas from basics to bedrooms/baths in the survey.
+3. Replace "top-5 address match" with exact-unit precision, ambiguity and wrong-unit controls.
+4. Phase 1 acceptance uses adjudicated truth (missing and unconfirmed units, unknown delivery, PO box, CMRA, mixed use,
+   outages), not agreement with today's decisions. The Google adapter drops home/business metadata and footnotes and
+   turns absent vacancy and CMRA into false (`googleProvider.js`); fix with the `D`/`N1` and blank-DPV cases.
+5. FHFA gives price change, not a home's value or a ZIP median sale price; NSI is modeled. Keep both out of
+   authoritative fields until measured. Household corrections follow field-specific rules (they don't outrank parcel
+   identity or tax records).
+6. Remove "ATTOM plan allows keeping records" from the architecture, catalog and parity plan (free trial: internal
+   evaluation, 24 hours, no database).
+7. Retiring Lob fully needs a chosen fulfillment route with real-mail trials; keeping Lob per piece is a founder choice.
+
 ## Running elsewhere
 
 - Session `make-attom-lookups-non-b` (started by the founder Nov 5, its own worktree): makes ATTOM lookups
