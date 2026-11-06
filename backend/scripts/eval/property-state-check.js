@@ -43,7 +43,7 @@ function identity(fips, totals) {
     const line = record.facts.address_on_record;
     const query = line ? parse(line) : null;
     if (query) {
-      const answer = ask({ ...query, zip: record.address.zip });
+      const answer = ask({ ...query, zip: record.address.zip, city: record.address.city });
       const part = `Own address text: ${record.kind}`;
       if (answer.match !== 'exact') bump(part, label(answer));
       else if (answer.record.id === record.id) bump(part, 'exact, right record');

@@ -103,6 +103,8 @@ export interface CountyRecord {
   /** "From county records via ATTOM · updated Sep 28, 2026" */
   footer: string | null;
   as_of: string | null;
+  /** The labeled national floor: modeled figures, not a record of this home. */
+  estimate?: boolean;
 }
 
 export interface HomePropertyDetailResponse {

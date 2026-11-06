@@ -26,10 +26,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.data.api.models.place.PlaceHomeEstimate
 import app.pantopus.android.data.api.models.place.PlaceHomeSystemsData
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionId
-import app.pantopus.android.data.api.models.place.PlaceHomeEstimate
 import app.pantopus.android.data.api.models.place.PlaceYourHomeData
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.screens.place.PlacePresentation
