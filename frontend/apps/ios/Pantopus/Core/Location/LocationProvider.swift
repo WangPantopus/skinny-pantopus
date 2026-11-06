@@ -25,7 +25,8 @@ public struct UserCoordinate: Sendable, Hashable {
 
 /// How long an automatic Pulse read (the list, the map's first markers) or opening Plans
 /// waits for a fix it doesn't have to ask for. They fall back to the person's own place, so
-/// a slow GPS acquisition must not hold them up; "Use my location" keeps its full window.
+/// a slow GPS acquisition must not hold them up. With no Home to fall back to, the list and
+/// Plans keep the full window, as "Use my location" does.
 public let passiveLocationTimeoutSeconds: TimeInterval = 0.4
 
 /// Provider interface — abstracted so view-models can inject a fixed
