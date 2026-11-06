@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.ErrorState
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.scheduling._shared.ConflictAlternativesSheet
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingLoadingSkeleton
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingTopBar
@@ -447,6 +448,7 @@ private fun NoteField(
         minLines = 2,
         modifier =
             Modifier
+                .keepsKeyboard()
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(Radii.md))
                 .background(PantopusColors.appSurface)

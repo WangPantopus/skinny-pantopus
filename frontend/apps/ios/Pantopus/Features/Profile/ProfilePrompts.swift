@@ -270,6 +270,7 @@ struct ProfilePromptAnswerView: View {
                     .focused($focused)
                     .padding(.horizontal, 14)
                     .padding(.vertical, Spacing.s3)
+                    .typesInFieldOnTap($focused)
                     .background(Theme.Color.appSurface)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                     .overlay(

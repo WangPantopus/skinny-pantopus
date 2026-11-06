@@ -57,6 +57,17 @@ data class PostCreateRequest(
     val audience: String? = null,
     // v1.2 purpose tag
     val purpose: String? = null,
+    // Where each attachment was taken, read from its own metadata: evidence
+    // for the Place check and the post's pin (`createPostSchema.mediaLocations`).
+    @Json(name = "mediaLocations") val mediaLocations: List<PostMediaLocation>? = null,
+)
+
+/** One attachment's capture point and, when its metadata says, its capture time (ISO 8601). */
+@JsonClass(generateAdapter = true)
+data class PostMediaLocation(
+    val latitude: Double,
+    val longitude: Double,
+    @Json(name = "capturedAt") val capturedAt: String? = null,
 )
 
 /** Just enough of the wire `post` to surface the id for media upload. */

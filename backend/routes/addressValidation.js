@@ -33,6 +33,7 @@ const pipelineService = require('../services/addressValidation/pipelineService')
 const addressVerificationObservability = require('../services/addressValidation/addressVerificationObservability');
 const addressReviewService = require('../services/addressValidation/addressReviewService');
 const { AddressVerdictStatus } = require('../services/addressValidation/types');
+const { usesGooglePostal, postalShadowEnabled } = require('../services/addressValidation/postalAdapter');
 
 // ============================================================
 // VALIDATION SCHEMAS
@@ -68,6 +69,7 @@ const claimAddressSchema = Joi.object({
 });
 
 function areValidationProvidersHealthy() {
+  if (usesGooglePostal()) return googleProvider.isAvailable();
   return googleProvider.isAvailable() && smartyProvider.isAvailable();
 }
 
@@ -84,9 +86,21 @@ function buildOutageVerdict(reason) {
 // A CONFLICT verdict carries the existing household (its Home id, member count
 // and roles) for the server's own checks. Clients get the status and reasons:
 // who lives at an address, and how many, is not an outsider's to learn.
-function clientVerdict(verdict) {
-  if (!verdict || !Object.prototype.hasOwnProperty.call(verdict, 'existing_household')) return verdict;
+//
+// App builds without `?postal=2` don't know UNIT_NOT_CONFIRMED or POSTAL_PENDING, and an unknown
+// status reads "verification is unavailable" with no way forward. They get MIXED_USE, which they
+// already let through; the server still applies every rule, and neither status can auto-verify.
+const NEWER_VERDICT_STATUSES = new Set([
+  AddressVerdictStatus.UNIT_NOT_CONFIRMED,
+  AddressVerdictStatus.POSTAL_PENDING,
+]);
+
+function clientVerdict(verdict, req) {
+  if (!verdict) return verdict;
   const { existing_household: _household, ...rest } = verdict;
+  if (NEWER_VERDICT_STATUSES.has(rest.status) && req?.query?.postal !== '2') {
+    return { ...rest, status: AddressVerdictStatus.MIXED_USE };
+  }
   return rest;
 }
 
@@ -111,6 +125,13 @@ router.post(
           hasGoogle: googleProvider.isAvailable(),
           hasSmarty: smartyProvider.isAvailable(),
         });
+
+        // Shadow mode can still count Google's answer when the live check can't run.
+        if (postalShadowEnabled() && !usesGooglePostal()) {
+          pipelineService.runPostalShadowOnly(input, 'validate').catch((error) => {
+            logger.warn('addressValidation.validate: postal shadow failed', { error: error.message });
+          });
+        }
 
         await addressVerificationObservability.recordValidationOutcome({
           addressId: null,
@@ -144,7 +165,7 @@ router.post(
       });
 
       return res.json({
-        verdict: clientVerdict(result.verdict),
+        verdict: clientVerdict(result.verdict, req),
         address_id: result.address_id,
       });
     } catch (err) {
@@ -233,7 +254,7 @@ router.post(
       });
 
       return res.json({
-        verdict: clientVerdict(result.verdict),
+        verdict: clientVerdict(result.verdict, req),
         address_id: result.address_id || address_id,
       });
     } catch (err) {
@@ -322,7 +343,9 @@ router.post(
       } else if (
         storedStatus === AddressVerdictStatus.OK ||
         storedStatus === AddressVerdictStatus.MIXED_USE ||
-        storedStatus === AddressVerdictStatus.LOW_CONFIDENCE
+        storedStatus === AddressVerdictStatus.LOW_CONFIDENCE ||
+        storedStatus === AddressVerdictStatus.UNIT_NOT_CONFIRMED ||
+        storedStatus === AddressVerdictStatus.POSTAL_PENDING
       ) {
         claimStatus = 'pending';
         // ARC-01: 'escalation_required' is not one of the values
@@ -596,6 +619,7 @@ router.get(
         verification_id: result.verification_id,
         status: result.status,
         ...(result.delivery_unknown && { delivery_unknown: true }),
+        ...(result.mail_outcome && { mail_outcome: result.mail_outcome }),
         expires_at: result.expires_at,
         cooldown_until: result.cooldown_until,
         resends_remaining: result.resends_remaining,

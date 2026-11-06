@@ -46,6 +46,8 @@ export interface NeighborMessageComposeViewProps {
   onChangeRecipient: () => void;
   sending: boolean;
   errorMessage?: string | null;
+  /** Shown while no home is chosen: the Choose a home card. Without it, the "open a home on your block" note. */
+  chooser?: React.ReactNode;
 }
 
 // ── Recipient — an address on your block, never a name ──
@@ -190,6 +192,7 @@ export default function NeighborMessageComposeView({
   onChangeRecipient,
   sending,
   errorMessage,
+  chooser,
 }: NeighborMessageComposeViewProps) {
   const selected = templates.find((t) => t.id === selectedId) ?? null;
   const canSend = !!recipient && !!selected && !sending;
@@ -203,6 +206,8 @@ export default function NeighborMessageComposeView({
           <DetailSectionLabel>To</DetailSectionLabel>
           {recipient ? (
             <RecipientCard recipient={recipient} onChange={onChangeRecipient} />
+          ) : chooser ? (
+            chooser
           ) : (
             <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-4 flex items-start gap-3">
               <span className="w-[38px] h-[38px] rounded-[10px] bg-app-surface-sunken flex items-center justify-center shrink-0 text-app-text-muted">

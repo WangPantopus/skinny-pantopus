@@ -7,7 +7,7 @@ import {
   MessageCircle, Star, CalendarDays, Search, Megaphone,
   AlertTriangle, PenLine, Pencil, Siren, Tag, Wrench, Newspaper, X,
   Trophy, Compass, User, Bookmark, Lightbulb, CalendarCheck, PartyPopper,
-  MapPin, Store, CheckCircle, Hammer, Plane, Bookmark as BookmarkIcon, Share, Repeat2,
+  MapPin, Store, CheckCircle, Hammer, Plane, Bookmark as BookmarkIcon, Share, Repeat2, Camera,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import * as api from '@pantopus/api';
@@ -78,6 +78,21 @@ function getTypeCtaIcon(type: string): ReactNode | null {
     service_offer: reply,
   };
   return map[type] || null;
+}
+
+/**
+ * "Photo taken here" for a post its author's own photo or video placed, with the day it was taken once that's more
+ * than a week ago (as on iOS and Android). The day reads the clock, so it waits for hydration.
+ */
+function photoProvenanceLabel(post: Post, hydrated: boolean): string | null {
+  if (post.location_basis !== 'photo') return null;
+  const taken = post.photo_taken_at ? new Date(post.photo_taken_at) : null;
+  if (!hydrated || !taken || Number.isNaN(taken.getTime()) || Date.now() - taken.getTime() < 7 * 86_400_000) {
+    return 'Photo taken here';
+  }
+  const sameYear = taken.getFullYear() === new Date().getFullYear();
+  const day = taken.toLocaleDateString(undefined, sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', year: 'numeric' });
+  return `Photo taken here ${sameYear ? 'on' : 'in'} ${day}`;
 }
 
 /** Connections: "Ben C. reposted", "Ben C. and Eve H. reposted", "Ben C. and 2 others reposted". */
@@ -224,7 +239,12 @@ function PostCard({
           <span className="flex-shrink-0">{typeIconNode}</span>
           {config.label}
         </span>
-        {post.is_visitor_post && (
+        {/* A post its author's own photo placed says so instead of Visitor. */}
+        {post.location_basis === 'photo' ? (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-50 text-green-700">
+            <Camera className="w-3 h-3" /> {photoProvenanceLabel(post, hydrated)}
+          </span>
+        ) : post.is_visitor_post && (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-50 text-green-700">
             <Plane className="w-3 h-3" /> Visitor
           </span>

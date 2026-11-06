@@ -578,6 +578,8 @@ export interface HomeDiscoverItem {
   } | null;
   is_member?: boolean;
   claim_status?: 'pending' | 'verified' | 'rejected' | null;
+  /** True when the house number and unit are hidden from this searcher (they didn't type the number). */
+  address_redacted?: boolean;
 }
 
 /**

@@ -17,6 +17,7 @@ import type { PostComposerSubmitData } from '@/components/feed/PostComposer';
 import { queryKeys } from '@/lib/query-keys';
 import { FEED_PAGE_SIZE, buildFeedKey, feedLocationKey } from '@/lib/feedKeys';
 import { useFirstPageRefresh } from '@/lib/firstPageRefresh';
+import { withFreshFix } from '@/lib/freshPostFix';
 import type { SportsMode, TopicKey } from '@/constants/feedTopics';
 import { fetchMe } from '@/lib/me';
 
@@ -376,10 +377,13 @@ export function useFeedData({
         if (postData.latitude == null && viewingLat != null) postData.latitude = viewingLat;
         if (postData.longitude == null && viewingLng != null) postData.longitude = viewingLng;
       }
-      if (gpsTimestamp) postData.gpsTimestamp = gpsTimestamp;
-      if (userLat != null) postData.gpsLatitude = userLat;
-      if (userLng != null) postData.gpsLongitude = userLng;
-      const res = await api.posts.createPost(postData);
+      // The newest fix is the evidence: the place picker's can be fresher than this screen's.
+      if (gpsTimestamp && (!postData.gpsTimestamp || gpsTimestamp > postData.gpsTimestamp)) {
+        postData.gpsTimestamp = gpsTimestamp;
+        if (userLat != null) postData.gpsLatitude = userLat;
+        if (userLng != null) postData.gpsLongitude = userLng;
+      }
+      const res = await api.posts.createPost(await withFreshFix(postData));
       const newPost = res.post;
       if (typeof newPost?.id !== 'string' || !newPost.id.trim()) {
         throw new Error('Post could not be confirmed. Try again.');

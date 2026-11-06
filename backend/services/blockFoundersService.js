@@ -14,7 +14,7 @@
  *           read. Shown ONLY to a T4 occupant of the cell — the route
  *           enforces it; previews and lower tiers keep the k-anon
  *           buckets.
- *   INVITES real Lob postcards to nearby addresses, wearing the
+ *   INVITES real postcards to nearby addresses, wearing the
  *           neighbor-messaging safeguards wholesale: template-only
  *           content, sender anonymized to their street (never name or
  *           unit), 3/sender/week cap, 90-day per-recipient dedup
@@ -27,11 +27,13 @@ const crypto = require('crypto');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { encodeGeohash } = require('../utils/geohash');
-const { computeAddressHash, expandAbbreviations } = require('../utils/normalizeAddress');
+const { computeAddressHash } = require('../utils/normalizeAddress');
 const { readRawCountForVerifiedInsider } = require('./place/densityReader');
 const realRentService = require('./realRentService');
 const foundingWindow = require('./place/foundingWindow');
 const { mailVendorService } = require('./addressValidation');
+const { UNIT_TOKEN_RE, suppressionHashFor } = require('./addressValidation/mailSuppression');
+const { outcomeFor, RECONCILE_GRACE_MS, AUTO_RESEND_WINDOW_MS, RECONCILE_BATCH } = require('./addressValidation/mailEvents');
 const { generateLetterCode } = require('./residencyLetterService');
 
 const WEEKLY_INVITE_CAP = 3;
@@ -82,55 +84,6 @@ function cellForHome(home) {
   return encodeGeohash(lat, lng, 6);
 }
 
-/**
- * The suppression key for one mailbox.
- *
- * Stricter than the platform-wide computeAddressHash, which lowercases
- * and expands abbreviations but keeps punctuation, keeps ZIP+4, and
- * leaves a unit inside line 1 — so one physical mailbox yields many
- * hashes ("1425 SE Oak St." vs "1425 SE Oak St" vs "…, Apt 2" vs
- * "97214-1234"). That is harmless for a lookup key and fatal for a
- * suppression list: the opt-out registry and the 90-day dedup exist to
- * protect someone who never asked to hear from us, and a promise a
- * trailing period defeats is not a promise.
- *
- * Deliberately NOT a change to computeAddressHash: that value is
- * persisted in Home.address_hash and HomeAddress.address_hash across
- * the platform, and re-defining it would invalidate every stored row.
- */
-function suppressionHashFor(address) {
-  // Order matters and the first version got it backwards: it stripped
-  // punctuation to SPACES and then let computeAddressHash expand
-  // abbreviations, so "S.E." became "s e" -> "south east" while "SE"
-  // became "southeast". Two keys, one mailbox, opt-out defeated by a
-  // period. Expansion must run on the raw token stream, then punctuation
-  // goes away.
-  const canon = (value) => expandAbbreviations(
-    String(value || '').toLowerCase().replace(/[.,]/g, '').replace(/\s+/g, ' ').trim(),
-  ).replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-
-  const raw = String(address.line1 || '');
-  const unitMatch = UNIT_TOKEN_RE.exec(raw);
-  const streetPart = raw.replace(UNIT_TOKEN_RE, '');
-  // The unit designator is canonicalized away entirely: USPS delivers
-  // "#2", "Unit 2", "Ste 2", "Apt 2" and "Apartment 2" to the same box,
-  // so only the identifier itself may key the suppression.
-  const unitId = unitMatch
-    ? String(unitMatch[0]).toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^(apartment|apt|unit|suite|ste|floor|fl|room|rm|no)/, '')
-    : '';
-
-  return crypto.createHash('sha256').update([
-    canon(streetPart),
-    unitId,
-    // NOT abbreviation-expanded: "St Louis" must not become
-    // "street louis", and a city is not a street.
-    String(address.city || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim(),
-    String(address.state || '').toLowerCase().replace(/[^a-z]/g, ''),
-    // ZIP+4 and ZIP5 are the same mailbox for suppression purposes.
-    String(address.zip || '').replace(/\D/g, '').slice(0, 5),
-  ].join('|')).digest('hex');
-}
-
 /** HTML-escape. Every interpolation into a postcard template goes through this. */
 function escapeHtml(value) {
   return String(value == null ? '' : value)
@@ -141,10 +94,6 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-// A unit token and everything after it is dropped: "123 Main St Apt 4B"
-// must print as "Main St", never the sender's unit. '#' is handled
-// separately because \b does not apply before a non-word character.
-const UNIT_TOKEN_RE = /(\s(apt|apartment|unit|ste|suite|fl|floor|rm|room|no)\b.*$|\s*#.*$)/i;
 const STREET_MAX_LEN = 40;
 
 // A printable street must LOOK like a street, not merely end in one.
@@ -415,6 +364,26 @@ function inviteBackHtml({ street, verifiedCount, optOutCode }) {
     </div></body></html>`;
 }
 
+function memberHashFor(address) {
+  return computeAddressHash(
+    address.line1.replace(/[.,]/g, '').replace(/\s+/g, ' ').trim(),
+    '',
+    address.city.replace(/[.,]/g, '').replace(/\s+/g, ' ').trim(),
+    address.state,
+    address.zip.replace(/\D/g, '').slice(0, 5),
+  );
+}
+
+/** The whole card, from what its row saved, so a repeat prints the identical card. */
+function inviteCard({ street, verified_count: verifiedCount }, optOutCode) {
+  return {
+    description: 'Pantopus block invite',
+    useType: 'marketing',
+    frontHtml: inviteFrontHtml(),
+    backHtml: inviteBackHtml({ street, verifiedCount, optOutCode }),
+  };
+}
+
 /**
  * A safeguard that could not be read refuses the send. supabase-js returns a
  * failed read as { error } and never throws, and an unread opt-out list, member
@@ -434,6 +403,9 @@ function safeguardUnavailable(check, error, userId) {
  * sender weekly cap.
  */
 async function sendInvite({ home, userId, recipient }) {
+  if (!mailVendorService.blockFoundersMailEnabled()) {
+    throw new BlockFoundersError('Invitations by mail are paused right now. Try again later.', 'INVITES_PAUSED');
+  }
   const geohash6 = cellForHome(home);
   if (!geohash6) throw new BlockFoundersError('This home has no usable location.', 'NO_COORDINATES');
 
@@ -451,13 +423,7 @@ async function sendInvite({ home, userId, recipient }) {
   // so the already-member gate must use it — but the RAW input is
   // normalized first, or a trailing period defeats the gate and mails a
   // recruitment card to an existing member.
-  const memberHash = computeAddressHash(
-    address.line1.replace(/[.,]/g, '').replace(/\s+/g, ' ').trim(),
-    '',
-    address.city.replace(/[.,]/g, '').replace(/\s+/g, ' ').trim(),
-    address.state,
-    address.zip.replace(/\D/g, '').slice(0, 5),
-  );
+  const memberHash = memberHashFor(address);
   const suppressionHash = suppressionHashFor(address);
 
   // Read the registry under BOTH hashes. A suppression must never
@@ -544,6 +510,7 @@ async function sendInvite({ home, userId, recipient }) {
       // of any status. A reservation is the row whose lob_id is still
       // null; the confirm below sets it.
       status: 'created',
+      dispatch_status: 'reserved',
       created_at: nowIso,
     });
   if (reserveErr) {
@@ -590,36 +557,163 @@ async function sendInvite({ home, userId, recipient }) {
     throw new BlockFoundersError(`You've sent this week's ${WEEKLY_INVITE_CAP} invitations.`, 'WEEKLY_CAP');
   }
 
-  const verifiedCount = await readRawCountForVerifiedInsider(geohash6);
-  const provider = mailVendorService.getProvider();
+  const provider = mailVendorService.getProvider('block_founders');
+  const cardFields = { street: await streetOnly(home), verified_count: await readRawCountForVerifiedInsider(geohash6) };
+  // The printer and the card go on the row before the printer is called: a
+  // piece finishes with the printer that accepted it, and a repeat under the
+  // same key must print the identical card. Without that record there is no send.
+  const { error: intentErr } = await supabaseAdmin
+    .from('BlockInvite')
+    .update({ mail_provider: provider.name, dispatch_status: 'dispatching', card_fields: cardFields })
+    .eq('id', reservationId);
+  if (intentErr) {
+    await releaseReservation().catch(() => {});
+    logger.error('blockFounders: invite intent failed', { inviteId: reservationId, error: intentErr.message });
+    throw new BlockFoundersError('The postcard could not be sent. Try again shortly.', 'SEND_FAILED');
+  }
+
+  const invitesRemaining = Math.max(0, WEEKLY_INVITE_CAP - (weekNow || 0));
   let lob;
   try {
-    lob = await provider.sendCustomPostcard(address, {
-      description: 'Pantopus block invite',
-      useType: 'marketing',
-      frontHtml: inviteFrontHtml(),
-      backHtml: inviteBackHtml({ street: await streetOnly(home), verifiedCount, optOutCode }),
-    });
+    lob = await provider.sendCustomPostcard(address, inviteCard(cardFields, optOutCode), { inviteId: reservationId });
+    mailVendorService.noteSendResult(provider.name, true);
   } catch (err) {
-    // Nothing was mailed, so the reservation must not linger — it would
-    // silently consume the sender's budget and suppress the recipient.
-    await releaseReservation().catch(() => {});
-    logger.error('blockFounders: invite send failed', { userId, error: err.message });
-    throw new BlockFoundersError('The postcard could not be sent. Try again shortly.', 'SEND_FAILED');
+    mailVendorService.noteSendResult(provider.name, err.definitelyRejected === true);
+    logger.error('blockFounders: invite send failed', { inviteId: reservationId, definitelyRejected: err.definitelyRejected === true });
+    if (err.definitelyRejected === true) {
+      // Nothing was mailed, so the reservation must not linger — it would
+      // silently consume the sender's budget and suppress the recipient.
+      await releaseReservation().catch(() => {});
+      throw new BlockFoundersError('The postcard could not be sent. Try again shortly.', 'SEND_FAILED');
+    }
+    // A timeout is not evidence that nothing was accepted. The reservation
+    // stays, which holds the sender's budget and the recipient's 90 days, and
+    // the printer is asked about this piece before anything is sent again.
+    const { error: pendingErr } = await supabaseAdmin
+      .from('BlockInvite')
+      .update({ dispatch_status: 'delivery_unknown' })
+      .eq('id', reservationId);
+    if (pendingErr) logger.error('blockFounders: invite pending state failed', { inviteId: reservationId, error: pendingErr.message });
+    return {
+      sent: true,
+      pending: true,
+      message: 'We saved your invitation and will mail it once the printer confirms. We won\'t mail it twice.',
+      invites_remaining: invitesRemaining,
+    };
   }
 
   const { error: confirmErr } = await supabaseAdmin
     .from('BlockInvite')
-    .update({ status: 'created', lob_id: lob.vendorJobId })
+    .update({ status: 'created', lob_id: lob.vendorJobId, dispatch_status: 'accepted' })
     .eq('id', reservationId);
   if (confirmErr) {
     // The card IS in the mail and the reservation row already carries
     // the opt-out code and the recipient hash, so the safeguards hold;
-    // only the vendor id is lost.
+    // the printer still answers for this piece by its reference.
     logger.error('blockFounders: invite confirm failed', { inviteId: reservationId, error: confirmErr.message });
   }
   logger.info('blockFounders: invite sent', { inviteId: reservationId, geohash6 });
-  return { sent: true, invites_remaining: Math.max(0, WEEKLY_INVITE_CAP - (weekNow || 0)) };
+  return { sent: true, invites_remaining: invitesRemaining };
+}
+
+/**
+ * A signed delivery update for an invitation. It settles an unresolved reservation.
+ * A card that came back or failed keeps its row, so the address stays suppressed for
+ * its 90 days and the outcome is counted; the sender is told nothing.
+ */
+async function processWebhookEvent(vendorJobId, eventType, event) {
+  const id = event?.body?.metadata?.pantopus_block_invite_id;
+  if (typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id)
+    || event?.body?.id !== vendorJobId || event?.body?.object !== 'postcard') return { success: false };
+  const { data: invite, error } = await supabaseAdmin
+    .from('BlockInvite')
+    .select('id, lob_id, mail_provider')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) return { success: false, retryable: true };
+  if (!invite || (invite.lob_id && invite.lob_id !== vendorJobId)
+    || (invite.mail_provider && invite.mail_provider !== (event.provider || 'lob'))) return { success: false };
+  const outcome = outcomeFor(eventType);
+  const { error: saveError } = await supabaseAdmin
+    .from('BlockInvite')
+    .update({
+      lob_id: vendorJobId,
+      dispatch_status: 'accepted',
+      ...(outcome && { status: 'failed', mail_outcome: outcome, mail_outcome_at: new Date().toISOString() }),
+    })
+    .eq('id', id);
+  return { success: !saveError, retryable: !!saveError };
+}
+
+/**
+ * The printer confirmed it holds no such piece, so nothing is in the mail. Suppression
+ * runs again first: the address may have opted out or joined since. A retry sends the
+ * identical card under the same key. An invitation that can't go is let go, which
+ * returns the sender's budget and lifts the 90 days from an address that got nothing.
+ */
+async function sendInviteAgainOrRelease(invite, now) {
+  const release = async () => {
+    await supabaseAdmin.from('BlockInvite').delete().eq('id', invite.id).is('lob_id', null);
+    return 'released';
+  };
+  const address = invite.recipient_address;
+  if (!invite.card_fields || now - Date.parse(invite.created_at) > AUTO_RESEND_WINDOW_MS) return release();
+  const memberHash = memberHashFor(address);
+  const [{ data: optedOut, error: optOutError }, { data: homes, error: memberError }] = await Promise.all([
+    supabaseAdmin.from('BlockInviteOptOut').select('address_hash').in('address_hash', [invite.recipient_address_hash, memberHash]),
+    supabaseAdmin.from('Home').select('id').eq('address_hash', memberHash).limit(1),
+  ]);
+  if (optOutError || memberError) return 'unanswered';
+  if (optedOut?.length || homes?.length) return release();
+  if (!mailVendorService.blockFoundersMailEnabled()) return 'paused';
+
+  const provider = mailVendorService.getProvider('block_founders');
+  const { data: claimed } = await supabaseAdmin.from('BlockInvite')
+    .update({ mail_provider: provider.name, dispatch_status: 'dispatching' })
+    .eq('id', invite.id).eq('dispatch_status', invite.dispatch_status).is('lob_id', null).select('id');
+  if (!claimed?.length) return 'moved';
+  try {
+    const lob = await provider.sendCustomPostcard(address, inviteCard(invite.card_fields, invite.opt_out_code), { inviteId: invite.id });
+    mailVendorService.noteSendResult(provider.name, true);
+    await supabaseAdmin.from('BlockInvite').update({ lob_id: lob.vendorJobId, dispatch_status: 'accepted' }).eq('id', invite.id);
+    return 'sent_again';
+  } catch (err) {
+    mailVendorService.noteSendResult(provider.name, err.definitelyRejected === true);
+    if (err.definitelyRejected === true) return release();
+    await supabaseAdmin.from('BlockInvite').update({ dispatch_status: 'delivery_unknown' }).eq('id', invite.id);
+    return 'unanswered';
+  }
+}
+
+/** Settle invitations whose send got no answer. See jobs/reconcileMailPieces.js. */
+async function reconcileInvites(now = Date.now()) {
+  const counts = { found: 0, sent_again: 0, released: 0, paused: 0, moved: 0, unanswered: 0 };
+  const { data: invites, error } = await supabaseAdmin
+    .from('BlockInvite')
+    .select('id, recipient_address, recipient_address_hash, opt_out_code, card_fields, mail_provider, dispatch_status, created_at')
+    .is('lob_id', null)
+    .in('dispatch_status', ['dispatching', 'delivery_unknown'])
+    .lt('created_at', new Date(now - RECONCILE_GRACE_MS).toISOString())
+    .order('created_at', { ascending: true })
+    .limit(RECONCILE_BATCH);
+  if (error) throw new Error('Unresolved invitation queue is unavailable');
+  for (const invite of invites || []) {
+    let pieces;
+    try {
+      pieces = await mailVendorService.providerForPiece(invite.mail_provider).findPieces('pantopus_block_invite_id', invite.id);
+    } catch (_) {
+      counts.unanswered += 1;
+      continue;
+    }
+    if (pieces.length) {
+      await supabaseAdmin.from('BlockInvite').update({ lob_id: pieces[0].vendorJobId, dispatch_status: 'accepted' })
+        .eq('id', invite.id).is('lob_id', null);
+      counts.found += 1;
+    } else {
+      counts[await sendInviteAgainOrRelease(invite, now)] += 1;
+    }
+  }
+  return counts;
 }
 
 /**
@@ -659,6 +753,8 @@ async function redeemOptOut(code) {
 module.exports = {
   getBlockStatus,
   sendInvite,
+  processWebhookEvent,
+  reconcileInvites,
   redeemOptOut,
   BlockFoundersError,
   WEEKLY_INVITE_CAP,

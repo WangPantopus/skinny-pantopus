@@ -196,6 +196,7 @@ struct BookingNoteField: View {
                 .padding(.vertical, 6)
                 .frame(minHeight: 58)
         }
+        .typesInFieldOnTap()
         .background(Theme.Color.appSurfaceSunken)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

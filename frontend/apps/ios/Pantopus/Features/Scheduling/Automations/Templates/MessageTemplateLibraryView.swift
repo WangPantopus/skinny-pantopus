@@ -69,6 +69,7 @@ struct MessageTemplateLibraryView: View {
     private var searchField: some View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 15, color: Theme.Color.appTextMuted)
+                .allowsHitTesting(false)
             TextField("Search templates", text: $model.query)
                 .font(Theme.Font.small)
                 .foregroundStyle(Theme.Color.appText)
@@ -77,6 +78,7 @@ struct MessageTemplateLibraryView: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 40)
+        .typesInFieldOnTap($searchFocused)
         .background(Theme.Color.appSurface)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Theme.Color.appBorder, lineWidth: 1))

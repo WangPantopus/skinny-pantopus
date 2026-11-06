@@ -212,7 +212,7 @@ private fun DetailsStep(
 
         FieldLabel("Due date")
         var showPicker by remember { mutableStateOf(false) }
-        OutlinedField(testTag = "addBill_dueDate") {
+        OutlinedField(testTag = "addBill_dueDate", isTextBox = false) {
             Box(
                 modifier =
                     Modifier
@@ -440,12 +440,12 @@ private fun FieldLabel(text: String) {
 @Composable
 private fun OutlinedField(
     testTag: String,
+    isTextBox: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     Box(
         modifier =
-            Modifier
-                .keepsKeyboard()
+            (if (isTextBox) Modifier.keepsKeyboard() else Modifier)
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(Radii.md))
                 .background(PantopusColors.appSurface)

@@ -782,15 +782,19 @@ export default function FeedPage() {
         </div>
       )}
 
-      {/* Compose Modal (shared by list + map) */}
+      {/* Compose Modal (shared by list + map). Stays in <main>, unlike Preferences below: a failed post is reported by
+          the toast at the end of this screen, which a dialog on document.body would cover. data-covers-shell (AppShell)
+          lets it cover the + button, the phone tab bar and the header, which otherwise stay on top (the + button on Post).
+          z-[60] like ModalShell, not higher: a notice that opens over this dialog holds the focus, so it must stay on top. */}
       {showCompose && (
         <>
           <div
+            data-covers-shell
             className="fixed inset-0 z-[60] bg-black/30 backdrop-blur-[2px] flex items-center justify-center p-4"
             onClick={() => setShowCompose(false)}
           />
           <div
-            className="fixed left-1/2 top-1/2 z-[61] w-full max-w-lg max-h-[85vh] -translate-x-1/2 -translate-y-1/2 bg-surface rounded-2xl border border-app shadow-2xl overflow-y-auto"
+            className="fixed left-1/2 top-1/2 z-[60] w-full max-w-lg max-h-[85vh] -translate-x-1/2 -translate-y-1/2 bg-surface rounded-2xl border border-app shadow-2xl overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-3 border-b border-app">

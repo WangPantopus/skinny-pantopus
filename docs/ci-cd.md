@@ -305,7 +305,9 @@ writes the release. The backend reads the areas it needs with range requests
 (`backend/services/plans/placesIndex.js` and `backend/services/geo/venues.js`;
 `PLACES_INDEX_URL` and `VENUES_INDEX_URL` point elsewhere, and an empty value
 turns an index off), and asks the public Overpass servers only where an index
-can't answer. A venues index built from an older selector list
+can't answer: for venues, outside a coarse outline of the US
+(`backend/services/geo/usOutline.js`), because the state extracts spill past the
+border. A venues index built from an older selector list
 (`placesIndexFormat` `VENUES.VERSION`) is never read. A build with under 80% of
 either published index's elements is not published. A pull request that
 changes the build runs it on two small extracts and publishes nothing.

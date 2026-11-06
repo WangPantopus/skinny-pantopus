@@ -6,6 +6,10 @@ const { hashPostcardCode, dispatchPostcardCode } = require('../utils/postcardDis
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const STATES = ['pending', 'completed', 'rejected', 'cancelled'];
 const { MESSAGES, STATUS_CODES, failure } = require('../utils/homePostcardErrors');
+const logger = require('../utils/logger');
+const mailVendorService = require('./addressValidation/mailVendorService');
+const { RECONCILE_GRACE_MS, AUTO_RESEND_WINDOW_MS, RECONCILE_BATCH } = require('./addressValidation/mailEvents');
+const MAIL_STATES = ['sending', 'delayed', 'returned', 'rerouted', 'failed'];
 function identity({ homeId, actorId, requestId }, requireRequest = true) {
   if (![homeId, actorId, ...(requireRequest ? [requestId] : [])].every(v => typeof v === 'string' && UUID.test(v))) throw failure('POSTCARD_REQUEST_INVALID', 400);
   return { p_home_id: homeId.toLowerCase(), p_actor_id: actorId.toLowerCase(), ...(requireRequest ? { p_request_id: requestId.toLowerCase() } : {}) };
@@ -68,7 +72,8 @@ async function current(input) {
   if (p !== null && (!p || !UUID.test(p.id || '') || !date(p.requested_at) || !date(p.expires_at)
     || !['pending', 'verified', 'expired', 'cancelled'].includes(p.status)
     || !['not_started', 'accepted', 'unknown', 'rejected'].includes(p.delivery)
-    || !Number.isInteger(p.attempts_remaining) || p.attempts_remaining < 0 || p.attempts_remaining > 5)) throw failure();
+    || !Number.isInteger(p.attempts_remaining) || p.attempts_remaining < 0 || p.attempts_remaining > 5
+    || !(p.mail_state == null || MAIL_STATES.includes(p.mail_state)))) throw failure();
   let request = null;
   if (r.request !== null) {
     request = projectCommand(r.request, args);
@@ -79,10 +84,29 @@ async function current(input) {
     can_request: r.can_request, can_resume: r.can_resume, can_verify: r.can_verify,
     restriction: r.restriction, restriction_message: r.restriction ? MESSAGES[r.restriction] : null,
     request, postcard: p === null ? null : { id: p.id, requested_at: p.requested_at, expires_at: p.expires_at,
-      status: p.status, delivery: p.delivery, attempts_remaining: p.attempts_remaining },
+      status: p.status, delivery: p.delivery, attempts_remaining: p.attempts_remaining, mail_state: p.mail_state ?? null },
     current_access: 'not_checked',
     mailing_address: r.can_request ? await mailingAddress(args.p_home_id) : null,
   };
+}
+async function cardInTheMail(args) {
+  try {
+    const { data } = await db.from('HomePostcardCode').select('id, vendor_job_id, mail_provider')
+      .eq('home_id', args.p_home_id).eq('user_id', args.p_actor_id).eq('status', 'pending')
+      .not('vendor_job_id', 'is', null).maybeSingle();
+    return data || null;
+  } catch (_) { return null; }
+}
+// A new address retired this card. The printer may still have time to pull it,
+// which saves the postage; if it can't, the retired code simply doesn't work.
+async function pullBack(card) {
+  try {
+    const provider = mailVendorService.providerForPiece(card.mail_provider, card.vendor_job_id);
+    if (await provider.cancelPiece(card.vendor_job_id)) {
+      await db.from('HomePostcardCode').update({ mail_outcome: 'canceled', mail_outcome_at: new Date().toISOString() })
+        .eq('id', card.id).is('mail_outcome', null);
+    }
+  } catch (_) { /* best effort */ }
 }
 async function submit(input) {
   const args = identity(input);
@@ -95,10 +119,12 @@ async function submit(input) {
     // Missing new-code configuration must not hide an already saved request.
     candidate = null; codeHash = null; keyId = null;
   }
+  const replaced = await cardInTheMail(args);
   const work = await rpc('begin_home_postcard_request', { ...args, p_address: input.address,
     p_candidate_id: candidate, p_code_hash: codeHash, p_code_key_id: keyId });
   const result = projectCommand(work, args);
   if (result.state !== 'completed') return result;
+  if (replaced && replaced.id !== result.postcard_id) await pullBack(replaced);
   result.current_access = 'not_checked';
   const card = work.postcard;
   if (!card || card.id !== result.postcard_id || card.home_id !== args.p_home_id || card.user_id !== args.p_actor_id) {
@@ -124,6 +150,62 @@ async function submit(input) {
   }
   return result;
 }
+async function endUnmailed(card) {
+  await db.from('HomePostcardCode').update({ status: 'cancelled', dispatch_status: 'rejected', mail_outcome: 'failed',
+    mail_outcome_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', card.id).eq('status', 'pending').eq('dispatch_status', card.dispatch_status).is('vendor_job_id', null);
+}
+// The printer confirmed it holds no such piece, so nothing is in the mail. A card whose
+// code can be derived again goes back through the same claim as any send, which
+// rechecks current access. Others end, and the person can request another.
+async function sendAgainOrEnd(card, now) {
+  const { data: command } = await db.from('HomePostcardRequestCommand').select('request_id, code_key_id')
+    .eq('postcard_id', card.id).eq('actor_user_id', card.user_id).eq('home_id', card.home_id)
+    .eq('state', 'completed').not('code_key_id', 'is', null).limit(1).maybeSingle();
+  if (!command || now - Date.parse(card.requested_at) > AUTO_RESEND_WINDOW_MS) { await endUnmailed(card); return 'ended'; }
+  const args = { p_home_id: card.home_id, p_actor_id: card.user_id, p_request_id: command.request_id };
+  const code = material.deriveCode({ actorId: card.user_id, homeId: card.home_id, postcardId: card.id, keyId: command.code_key_id });
+  const { data: reset } = await db.from('HomePostcardCode').update({ dispatch_status: 'pending', updated_at: new Date(now).toISOString() })
+    .eq('id', card.id).eq('status', 'pending').eq('dispatch_status', card.dispatch_status).is('vendor_job_id', null).select('id');
+  if (!reset?.length) return 'moved';
+  const claimed = await rpc('claim_home_postcard_current_dispatch', { ...args, p_postcard_id: card.id, p_code_hash: hashPostcardCode(code) });
+  if (claimed.claimed !== true) return 'moved';
+  let sent;
+  try { sent = await dispatchPostcardCode(claimed.postcard.destination, code, card.id, card.home_id); }
+  catch (_) { sent = { success: false, deliveryUnknown: true }; }
+  const accepted = sent?.success === true && typeof sent.vendorJobId === 'string' && sent.vendorJobId.length > 0;
+  const rejected = sent?.success === false && sent.deliveryUnknown === false;
+  await rpc('record_home_postcard_current_dispatch', { p_home_id: card.home_id, p_actor_id: card.user_id, p_postcard_id: card.id,
+    p_outcome: accepted ? 'accepted' : rejected ? 'rejected' : 'delivery_unknown', p_vendor_job_id: accepted ? sent.vendorJobId : null });
+  return 'sent_again';
+}
+/** Settle cards whose send got no answer. See jobs/reconcileMailPieces.js. */
+async function reconcileCards(now = Date.now()) {
+  const counts = { found: 0, sent_again: 0, ended: 0, moved: 0, unanswered: 0, failed: 0 };
+  const { data: cards, error } = await db.from('HomePostcardCode')
+    .select('id, home_id, user_id, dispatch_status, mail_provider, requested_at')
+    .eq('status', 'pending').in('dispatch_status', ['dispatching', 'delivery_unknown']).is('vendor_job_id', null)
+    .lt('updated_at', new Date(now - RECONCILE_GRACE_MS).toISOString()).gt('expires_at', new Date(now).toISOString())
+    .order('updated_at', { ascending: true }).limit(RECONCILE_BATCH);
+  if (error) throw new Error('Unresolved postcard queue is unavailable');
+  for (const card of cards || []) {
+    try {
+      let pieces;
+      try { pieces = await mailVendorService.providerForPiece(card.mail_provider).findPieces('pantopus_home_postcard_id', card.id); }
+      catch (_) { counts.unanswered += 1; continue; }
+      if (pieces.length) {
+        const { data: saved } = await db.from('HomePostcardCode')
+          .update({ vendor_job_id: pieces[0].vendorJobId, dispatch_status: 'accepted', updated_at: new Date(now).toISOString() })
+          .eq('id', card.id).eq('dispatch_status', card.dispatch_status).is('vendor_job_id', null).select('id');
+        counts[saved?.length ? 'found' : 'moved'] += 1;
+      } else counts[await sendAgainOrEnd(card, now)] += 1;
+    } catch (err) {
+      counts.failed += 1;
+      logger.warn('reconcileCards: card still unresolved', { postcardId: card.id, errorCode: err.code || 'unresolved' });
+    }
+  }
+  return counts;
+}
 function send(res, result) {
   res.set('Cache-Control', 'private, no-store');
   if (result.state === 'rejected') return res.status(result.status).json(result);
@@ -138,4 +220,4 @@ function sendError(res, error) {
   const safe = (Object.hasOwn(MESSAGES, error?.code) || error?.code === 'POSTCARD_REQUEST_UNAVAILABLE') && STATUS_CODES.includes(error.statusCode) ? error : failure();
   return res.status(safe.statusCode).json({ code: safe.code, error: safe.message });
 }
-module.exports = { submit, read, cancel, current, send, sendError };
+module.exports = { submit, read, cancel, current, reconcileCards, send, sendError };

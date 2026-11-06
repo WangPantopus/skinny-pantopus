@@ -359,38 +359,6 @@ struct PlaceLaunchView: View {
         }
     }
 
-    private var addressField: some View {
-        HStack(spacing: 10) {
-            Icon(.mapPin, size: 18, strokeWidth: 2, color: addressFocused ? Theme.Color.primary600 : Theme.Color.appTextMuted)
-            TextField("Type your home address", text: $viewModel.query)
-                .accessibilityLabel("Home address")
-                .accessibilityIdentifier("place.launch.address")
-                .focused($addressFocused)
-                .font(Theme.Font.body)
-                .autocorrectionDisabled()
-                .submitLabel(.search)
-                // Weakly: the keyboard's AutoFill can keep this field, and the action with it, after the screen closes.
-                .onSubmit { [weak viewModel] in
-                    if let viewModel, !viewModel.query.isEmpty { viewModel.loadPreview(address: viewModel.query) }
-                }
-            if !viewModel.query.isEmpty {
-                Button { viewModel.query = "" } label: {
-                    Icon(.x, size: 16, strokeWidth: 2, color: Theme.Color.appTextMuted)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear address")
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 14)
-        .background(Theme.Color.appSurface)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(addressFocused ? Theme.Color.primary600 : Theme.Color.appBorder, lineWidth: addressFocused ? 1.5 : 1)
-        )
-    }
-
     private var suggestionList: some View {
         VStack(spacing: 0) {
             ForEach(viewModel.suggestions) { s in
@@ -432,6 +400,41 @@ struct PlaceLaunchView: View {
 }
 
 private extension PlaceLaunchView {
+    var addressField: some View {
+        HStack(spacing: 10) {
+            Icon(.mapPin, size: 18, strokeWidth: 2, color: addressFocused ? Theme.Color.primary600 : Theme.Color.appTextMuted)
+                .allowsHitTesting(false)
+            TextField("Type your home address", text: $viewModel.query)
+                .accessibilityLabel("Home address")
+                .accessibilityIdentifier("place.launch.address")
+                .focused($addressFocused)
+                .font(Theme.Font.body)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                // Weakly: the keyboard's AutoFill can keep this field, and the action with it, after the screen closes.
+                .onSubmit { [weak viewModel] in
+                    if let viewModel, !viewModel.query.isEmpty { viewModel.loadPreview(address: viewModel.query) }
+                }
+            if !viewModel.query.isEmpty {
+                Button { viewModel.query = "" } label: {
+                    Icon(.x, size: 16, strokeWidth: 2, color: Theme.Color.appTextMuted)
+                        .hitArea(horizontal: 8, vertical: 8)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear address")
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
+        .typesInFieldOnTap($addressFocused)
+        .background(Theme.Color.appSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(addressFocused ? Theme.Color.primary600 : Theme.Color.appBorder, lineWidth: addressFocused ? 1.5 : 1)
+        )
+    }
+
     /// On the signed-out front door only: a link copied on the web before
     /// the install, offered back with a Paste button (`InstallLinkPasteCard`).
     @ViewBuilder var installLinkCard: some View {

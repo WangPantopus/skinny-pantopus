@@ -1,0 +1,47 @@
+Field,House,Townhouse,Condo,Rental unit,Apartment complex,Office building,Office suite
+Year built,Building,Own/shared building,Usually building,Usually building,Per building,Per building,Parent building
+Effective year built,Building,Own/shared building,Usually building,Usually building,Per building,Per building,Parent building
+Living area,Residential dwelling,Residential dwelling,Exact unit,Exact unit,Unit or labeled residential total,Residential component only,Residential component only
+Gross area,Building,Building / unit,Unit or named parent,Unit or named parent,"Building(s), separately",Office gross area,Suite area only if defined
+Ground floor area,Building,Building,Parent building,Parent building,Per building,Per building,Parent building
+Stories,Building,Dwelling / building,Parent vs unit levels,Parent vs unit levels,Per building,Per building,Parent vs suite levels
+Bedrooms,Dwelling,Dwelling,Exact unit,Exact unit,Unit mix / floor plans,Usually N/A,Usually N/A
+Bathrooms,Dwelling,Dwelling,Exact unit,Exact unit,Unit mix / floor plans,Usually N/A,Usually N/A
+Full baths,Dwelling,Dwelling,Exact unit,Exact unit,Unit mix / floor plans,Usually N/A,Usually N/A
+Partial baths,Dwelling,Dwelling,Exact unit,Exact unit,Unit mix / floor plans,Usually N/A,Usually N/A
+Fireplaces,Dwelling,Dwelling,Unit vs common,Unit vs common,Common vs unit mix,Only if documented,Only if documented
+Architectural style,Building,Building,Unit vs parent,Unit vs parent,Per building,Per building,Suite finish vs parent
+Condition,Building,Building,Unit vs parent,Unit vs parent,Per building,Per building,Suite finish vs parent
+Quality,Building,Building,Unit vs parent,Unit vs parent,Per building,Per building,Suite finish vs parent
+Buildings on the parcel,Parcel,Parcel,Parent parcel,Parent parcel,Parcel or site,Parcel or site,Parent parcel
+Exterior walls,Building,Own/shared building,Parent building,Parent building,Per building,Per building,Parent building
+Roof cover,Building,Own/shared building,Parent building,Parent building,Per building,Per building,Parent building
+Heating,Dwelling system,Unit/shared system,Unit/shared system,Unit/shared system,Plant vs unit system,Plant vs tenant fit-out,Suite vs common plant
+Cooling,Dwelling system,Unit/shared system,Unit/shared system,Unit/shared system,Plant vs unit system,Plant vs tenant fit-out,Suite vs common plant
+Garage,Dwelling / site,Private vs shared,Deeded vs common,Assigned vs common,Shared or unit counts,Site / garage,Assigned vs common
+Parking type,Dwelling / site,Private vs shared,Deeded vs common,Assigned vs common,Shared or unit counts,Site / garage,Assigned vs common
+Parking spaces,Dwelling / site,Private vs shared,Deeded vs common,Assigned vs common,Shared or unit counts,Site / garage,Assigned vs common
+Parking area,Dwelling / site,Private vs shared,Deeded vs common,Assigned vs common,Shared or unit counts,Site / garage,Assigned vs common
+Lot size,Own parcel,Own or common parcel,Interest vs parent,Parent parcel,Parcel(s) / site,Parcel(s) / site,Parent parcel
+Lot area,Own parcel,Own or common parcel,Interest vs parent,Parent parcel,Parcel(s) / site,Parcel(s) / site,Parent parcel
+Lot number,Own parcel,Own or common parcel,Interest vs parent,Parent parcel,Parcel(s) / site,Parcel(s) / site,Parent parcel
+Address on record,Physical address,Physical address,Exact unit situs,Exact unit situs,Site/building address,Site/building address,Exact suite situs
+ZIP+4,Mail destination,Mail destination,Unit/shared mailbox,Unit/shared mailbox,Mail destination,Mail destination,Suite/shared mailbox
+Parcel number (APN),Tax account,Separate/common APN,Unit APN if assigned,Usually parent APN,One or more APNs,One or more APNs,Separate if legally titled
+County,Situs geography,Situs geography,Situs geography,Situs geography,Situs geography,Situs geography,Situs geography
+County code (FIPS),Situs geography,Situs geography,Situs geography,Situs geography,Situs geography,Situs geography,Situs geography
+Municipality,Situs geography,Situs geography,Situs geography,Situs geography,Situs geography,Situs geography,Situs geography
+Subdivision,Own parcel,Own or common parcel,Interest vs parent,Parent parcel,Parcel(s) / site,Parcel(s) / site,Parent parcel
+Tax code area,Own parcel,Own or common parcel,Interest vs parent,Parent parcel,Parcel(s) / site,Parcel(s) / site,Parent parcel
+Property type,Dwelling/interest,Structure vs tenure,Unit vs whole complex,Use vs tenancy,Whole asset / mixed,Building use / mixed,Suite use / mixed
+Property class,Dwelling/interest,Structure vs tenure,Unit vs whole complex,Use vs tenancy,Whole asset / mixed,Building use / mixed,Suite use / mixed
+Property subtype,Dwelling/interest,Structure vs tenure,Unit vs whole complex,Use vs tenancy,Whole asset / mixed,Building use / mixed,Suite use / mixed
+Land use,Parcel/interest,Parcel/interest,Unit or parent parcel,Usually parent parcel,Parcel use,Parcel use,Usually parent parcel
+County use code,Parcel/interest,Parcel/interest,Unit or parent parcel,Usually parent parcel,Parcel use,Parcel use,Usually parent parcel
+Occupancy,Private record flag,Private record flag,Private unit flag,Usually parent / unknown,Specialist metric only,Lease occupancy differs,Lease occupancy differs
+Legal description,Legal estate,Legal estate,Exact legal unit,Usually parent estate,Parent estate(s),Parent estate(s),Separate estate if titled
+ATTOM ID,Licensed crosswalk,Licensed crosswalk,Exact subject ID,Usually parent/unknown,Exact subject ID,Exact subject ID,Usually parent/unknown
+Estimated value,Eligible home AVM,Eligible home AVM,Eligible exact unit AVM,No separate sale interest,Whole-asset specialist,Whole-asset specialist,If separately saleable
+Estimate range,Eligible home AVM,Eligible home AVM,Eligible exact unit AVM,No separate sale interest,Whole-asset specialist,Whole-asset specialist,If separately saleable
+Confidence score,Eligible home AVM,Eligible home AVM,Eligible exact unit AVM,No separate sale interest,Whole-asset specialist,Whole-asset specialist,If separately saleable
+Estimate date,Eligible home AVM,Eligible home AVM,Eligible exact unit AVM,No separate sale interest,Whole-asset specialist,Whole-asset specialist,If separately saleable

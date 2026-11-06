@@ -167,8 +167,10 @@ struct InviteMemberWizardView: View {
                 + "For a short visit, send a guest pass from the Guests tab instead.")
                 .scaledFont(12).foregroundStyle(Theme.Color.appTextSecondary)
             Text("Personal note (optional)").scaledFont(12)
-            TextEditor(text: $model.message).frame(minHeight: 80)
+            TextEditor(text: $model.message)
+                .frame(minHeight: 80)
                 .accessibilityIdentifier("inviteMember_message")
+                .typesInFieldOnTap(reach: Spacing.s2)
             control("Review invitation", "homeInvitationSenderPrepare") { await model.prepare() }
         }
     }

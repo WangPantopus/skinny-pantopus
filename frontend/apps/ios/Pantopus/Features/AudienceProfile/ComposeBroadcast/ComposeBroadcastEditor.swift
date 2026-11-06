@@ -137,6 +137,7 @@ struct ComposeBroadcastEditor: View {
         }
         .padding(.horizontal, Spacing.s2)
         .padding(.vertical, Spacing.s1)
+        .typesInFieldOnTap()
         .background(Theme.Color.appSurfaceMuted)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)

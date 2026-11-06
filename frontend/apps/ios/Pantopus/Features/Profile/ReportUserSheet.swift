@@ -277,6 +277,7 @@ public struct ReportUserSheet: View {
             .font(Theme.Font.body)
             .foregroundStyle(Theme.Color.appText)
             .padding(Spacing.s3)
+            .typesInFieldOnTap($detailsFocused)
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md))
             .overlay(

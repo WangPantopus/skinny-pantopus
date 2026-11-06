@@ -287,6 +287,7 @@ public struct DeliveryProofSheetView: View {
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, Spacing.s3)
             .frame(minHeight: 74, alignment: .topLeading)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
             .overlay(
