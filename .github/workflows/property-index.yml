@@ -99,7 +99,7 @@ jobs:
       - name: Build and publish
         if: github.event_name != 'workflow_dispatch' || inputs.action == 'build'
         env:
-          SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-stratmap tx-harris tx-tarrant tx-williamson ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels nc-onemap wv-parcels me-parcels mt-cadastral') || 'tx-dallas fl-roll' }}
+          SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-stratmap tx-harris tx-tarrant ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels nc-onemap wv-parcels me-parcels mt-cadastral') || 'tx-dallas fl-roll' }}
         run: |
           for source in $SOURCES; do
             out="$RUNNER_TEMP/property-index/$source"
