@@ -131,7 +131,7 @@ internal fun AddHomeDetailsSection(
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 AddHomeTextField(
                     label = "Bedrooms",
-                    placeholder = lookingUp ?: "3",
+                    placeholder = lookingUp ?: "e.g. 3",
                     value = state.form.details.bedrooms,
                     onValueChange = vm::updateBedrooms,
                     tag = ownEntry(state.form.details.bedrooms, recorded?.bedrooms?.toString()),
@@ -141,7 +141,7 @@ internal fun AddHomeDetailsSection(
                 )
                 AddHomeTextField(
                     label = "Bathrooms",
-                    placeholder = lookingUp ?: "2",
+                    placeholder = lookingUp ?: "e.g. 2",
                     value = state.form.details.bathrooms,
                     onValueChange = vm::updateBathrooms,
                     tag = ownEntry(state.form.details.bathrooms, recorded?.bathrooms?.let(AddHomeWizardViewModel::trimTrailingZero)),

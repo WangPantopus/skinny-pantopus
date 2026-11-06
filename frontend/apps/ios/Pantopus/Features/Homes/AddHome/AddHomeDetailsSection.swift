@@ -119,7 +119,7 @@ struct AddHomeDetailsSection: View {
             HStack(alignment: .top, spacing: Spacing.s2) {
                 AddHomeTextField(
                     label: "Bedrooms",
-                    placeholder: lookingUp ?? "3",
+                    placeholder: lookingUp ?? "e.g. 3",
                     text: Binding(
                         get: { viewModel.form.details.bedrooms },
                         set: { viewModel.updateBedrooms($0) }
@@ -130,7 +130,7 @@ struct AddHomeDetailsSection: View {
                 )
                 AddHomeTextField(
                     label: "Bathrooms",
-                    placeholder: lookingUp ?? "2",
+                    placeholder: lookingUp ?? "e.g. 2",
                     text: Binding(
                         get: { viewModel.form.details.bathrooms },
                         set: { viewModel.updateBathrooms($0) }
