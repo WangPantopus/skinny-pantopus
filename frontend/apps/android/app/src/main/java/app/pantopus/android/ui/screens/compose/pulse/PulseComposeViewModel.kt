@@ -9,6 +9,7 @@
 
 package app.pantopus.android.ui.screens.compose.pulse
 
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -203,6 +204,12 @@ data class PulseComposePhoto(
     val capturedLongitude: Double? = null,
     val mimeType: String = "image/jpeg",
     val capturedAt: java.time.Instant? = null,
+    /**
+     * The picked file, kept only while Android may be hiding its location: a
+     * photo with zeroed GPS tags, or a video. Allowing the permission reads it
+     * again, so the attachment counts without being attached again.
+     */
+    val locationSource: Uri? = null,
 ) {
     override fun equals(other: Any?): Boolean = other is PulseComposePhoto && other.id == id
 
@@ -824,20 +831,29 @@ class PulseComposeViewModel
                 if (photo.capturedLatitude != null) return@launch
                 // In the background, so it can wait for a fresh fix longer than the submit-time refresh does.
                 val fix = locationProvider.requestCurrent(timeoutMillis = CAMERA_FIX_TIMEOUT_MS) ?: return@launch
-                _photos.value =
-                    _photos.value.map {
-                        if (it.id != id) {
-                            it
-                        } else {
-                            it.copy(
-                                id = UUID.randomUUID().toString(),
-                                capturedLatitude = fix.latitude,
-                                capturedLongitude = fix.longitude,
-                                capturedAt = takenAt,
-                            )
-                        }
-                    }
+                placeAttachment(id, MediaCaptureLocation(fix.latitude, fix.longitude, takenAt))
             }
+        }
+
+        /** An attachment already in the draft now has a capture point (see [stampCameraPhoto] about the new id). */
+        fun placeAttachment(
+            id: String,
+            location: MediaCaptureLocation,
+        ) {
+            _photos.value =
+                _photos.value.map {
+                    if (it.id != id) {
+                        it
+                    } else {
+                        it.copy(
+                            id = UUID.randomUUID().toString(),
+                            capturedLatitude = location.latitude,
+                            capturedLongitude = location.longitude,
+                            capturedAt = location.capturedAt,
+                            locationSource = null,
+                        )
+                    }
+                }
         }
 
         /** The camera permission was refused, so "Take photo" did nothing: say where to allow it. */

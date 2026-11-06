@@ -38,8 +38,16 @@ class PushTokenAckStore
             prefs.edit { remove(KEY_LAST_ACK) }
         }
 
+        /** An account left this phone and FCM hasn't confirmed its token is gone yet ([PushTokenSyncer]). */
+        fun tokenDeletePending(): Boolean = prefs.getBoolean(KEY_DELETE_PENDING, false)
+
+        fun setTokenDeletePending(pending: Boolean) {
+            prefs.edit { putBoolean(KEY_DELETE_PENDING, pending) }
+        }
+
         private companion object {
             const val PREFS_NAME = "pantopus.push_token_ack"
             const val KEY_LAST_ACK = "last_acked_token"
+            const val KEY_DELETE_PENDING = "token_delete_pending"
         }
     }

@@ -85,6 +85,7 @@ import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
 import app.pantopus.android.ui.components.keepsKeyboard
+import app.pantopus.android.ui.screens.compose.placepicker.MediaCaptureLocation
 import app.pantopus.android.ui.screens.compose.placepicker.MediaLocationExtractor
 import app.pantopus.android.ui.screens.compose.placepicker.PlacePickerSheet
 import app.pantopus.android.ui.screens.compose.placepicker.PostPlaceTag
@@ -340,6 +341,8 @@ fun PulseComposeScreen(
         )
     }
 
+    PulseComposeLocationAskDialog(media.locationAsk)
+
     if (showPlacePicker) {
         PlacePickerSheet(
             currentTag = selectedPlaceTag,
@@ -380,32 +383,62 @@ private fun readAttachment(
     mimeOverride: String? = null,
 ): PulseComposePhoto? =
     runCatching {
-        val resolver = context.contentResolver
-        val mime = mimeOverride ?: resolver.getType(uri) ?: ""
-        val maxBytes =
-            when {
-                mime.startsWith("video/") -> 100 * 1024 * 1024
-                mime == "application/pdf" -> 25 * 1024 * 1024
-                mime.startsWith("image/") -> 10 * 1024 * 1024
-                else -> 0
-            }
-        val bytes = readBytes(resolver, uri, maxBytes)
+        val mime = mimeOverride ?: context.contentResolver.getType(uri) ?: ""
+        val bytes = readUploadBytes(context, uri, mime)
         require(bytes != null && bytes.isNotEmpty())
-        val captured =
-            when {
-                mime.startsWith("image/") -> MediaLocationExtractor.fromImageBytes(bytes)
-                mime.startsWith("video/") -> MediaLocationExtractor.fromVideoUri(context, uri)
-                else -> null
-            }
+        val place = readPickedPlace(context, uri, mime)
         PulseComposePhoto(
             id = UUID.randomUUID().toString(),
             data = bytes,
-            capturedLatitude = captured?.latitude,
-            capturedLongitude = captured?.longitude,
+            capturedLatitude = place.captured?.latitude,
+            capturedLongitude = place.captured?.longitude,
             mimeType = mime,
-            capturedAt = captured?.capturedAt,
+            capturedAt = place.captured?.capturedAt,
+            locationSource = uri.takeIf { place.mayBeHidden && mimeOverride == null && !MediaLocationAccess.isHeld(context) },
         )
     }.getOrNull()
+
+private fun maxAttachmentBytes(mime: String): Int =
+    when {
+        mime.startsWith("video/") -> 100 * 1024 * 1024
+        mime == "application/pdf" -> 25 * 1024 * 1024
+        mime.startsWith("image/") -> 10 * 1024 * 1024
+        else -> 0
+    }
+
+/**
+ * What's uploaded: Android's copy without the location, where it can give one, else the file as picked. The capture
+ * point leaves the device only as `mediaLocations`.
+ */
+private fun readUploadBytes(
+    context: Context,
+    uri: Uri,
+    mime: String,
+): ByteArray? {
+    val resolver = context.contentResolver
+    val maxBytes = maxAttachmentBytes(mime)
+    val redacted = if (mime.startsWith("image/") || mime.startsWith("video/")) MediaLocationExtractor.redactedUri(context, uri) else null
+    return redacted?.let { readBytes(resolver, it, maxBytes) }?.takeIf { it.isNotEmpty() } ?: readBytes(resolver, uri, maxBytes)
+}
+
+/** Where a picked file was taken, as far as Android shows it, and whether Android may be hiding that. */
+internal class PickedPlace(val captured: MediaCaptureLocation?, val mayBeHidden: Boolean)
+
+internal fun readPickedPlace(
+    context: Context,
+    uri: Uri,
+    mime: String,
+): PickedPlace =
+    when {
+        mime.startsWith("image/") -> {
+            val picked = readBytes(context.contentResolver, uri, maxAttachmentBytes(mime))
+            val captured = picked?.let(MediaLocationExtractor::fromImageBytes)
+            PickedPlace(captured, mayBeHidden = captured == null && picked?.let(MediaLocationExtractor::hasHiddenLocation) == true)
+        }
+        // A video's hidden location leaves no mark, so any video without one may be hiding it.
+        mime.startsWith("video/") -> MediaLocationExtractor.fromVideoUri(context, uri).let { PickedPlace(it, mayBeHidden = it == null) }
+        else -> PickedPlace(null, mayBeHidden = false)
+    }
 
 private fun readBytes(
     resolver: ContentResolver,
@@ -436,6 +469,7 @@ private class PulseComposeMedia(
     val pickFiles: (types: Array<String>, suggest: Boolean) -> Unit,
     val takePhoto: (suggest: Boolean) -> Unit,
     val canTakePhoto: Boolean,
+    val locationAsk: PulseComposeLocationAsk,
 )
 
 @Composable
@@ -454,6 +488,7 @@ private fun rememberPulseComposeMedia(
         if (suggestsAfterPicking && photos.isNotEmpty()) viewModel.suggestPost()
         suggestsAfterPicking = false
     }
+    val locationAsk = rememberPulseComposeLocationAsk(viewModel)
     val filePicker =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
             val requested = uris.take(PULSE_COMPOSE_MAX_PHOTOS - photoCount)
@@ -461,6 +496,7 @@ private fun rememberPulseComposeMedia(
             scope.launch {
                 val loaded = withContext(Dispatchers.IO) { requested.mapNotNull { readAttachment(context, it) } }
                 added(loaded, requested.size)
+                locationAsk.onAttached(loaded)
             }
         }
     // The camera app writes into a cache file shared through the FileProvider (xml/file_paths.xml, post-camera/); its
@@ -511,6 +547,7 @@ private fun rememberPulseComposeMedia(
             cameraPermission.launch(Manifest.permission.CAMERA)
         },
         canTakePhoto = canTakePhoto,
+        locationAsk = locationAsk,
     )
 }
 

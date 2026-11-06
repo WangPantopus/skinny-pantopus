@@ -8,11 +8,13 @@ import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.hub.NotificationPreferences
 import app.pantopus.android.data.api.models.hub.NotificationPreferencesPatch
 import app.pantopus.android.data.api.models.hub.QuietHoursPatch
+import app.pantopus.android.data.api.models.users.ProfileUpdateRequest
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.hub.NotificationPreferencesRepository
 import app.pantopus.android.data.plans.PlansFeature
 import app.pantopus.android.data.plans.PlansRepository
+import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.data.store.StoreKind
 import app.pantopus.android.ui.components.RefreshNotice
 import app.pantopus.android.ui.components.ToastKind
@@ -23,21 +25,26 @@ import app.pantopus.android.ui.screens.shared.grouped_list.GroupedListUiState
 import app.pantopus.android.ui.screens.shared.grouped_list.RowControl
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
  * A14.5 — Notification & briefing preferences, backed by
  * `GET/PUT /api/hub/preferences` (routes `backend/routes/hub.js:648`
- * and `:716`).
+ * and `:716`), and the account-wide Push switch, backed by
+ * `GET/PATCH /api/users/profile` (`backend/routes/users.js:2765` and
+ * `:2891`), the route the web saves it on.
  *
- * Four cards, projected onto the shared GroupedList archetype and
+ * Cards, projected onto the shared GroupedList archetype and
  * mirrored row-for-row in the iOS `NotificationSettingsViewModel`:
- * Briefings (morning + evening enable toggles, each revealing a
+ * Account (the Push switch; off, nothing below reaches a phone, and a
+ * helper line under the card says so), Briefings (morning + evening enable toggles, each revealing a
  * send-time chip strip when on), Alert preferences (five switches),
  * Quiet hours (one toggle — the server signals on/off by whether a
  * start time is stored — plus From / Until chip strips), and Briefing
@@ -61,6 +68,8 @@ class NotificationSettingsViewModel
         /** Nearby Plans' flags, for the quiet-hours note (none in tests). */
         private val plansFeature: PlansFeature? = null,
         private val plans: PlansRepository? = null,
+        /** The account-wide Push switch's route (none in tests, which then have no such row). */
+        private val profile: ProfileRepository? = null,
     ) : ViewModel() {
         val title: String = "Notifications"
         private var canChooseTeams = false
@@ -92,18 +101,43 @@ class NotificationSettingsViewModel
         private var saveInFlight = false
         private var saveRevision = 0L
 
+        /**
+         * The account-wide Push switch (`MailPreferences.push_notifications`), also mutated optimistically. Null until
+         * the server's value is known: the row shows then, and never guesses.
+         */
+        private var accountPush: Boolean? = null
+
+        /** What the server last confirmed: where a failed save goes back to. */
+        private var confirmedAccountPush: Boolean? = null
+
+        /**
+         * The switch's value waiting to save, beside the patch. It goes to its own route, whose failure touches only
+         * this row, so it counts its own edits.
+         */
+        private var pendingAccountPush: Boolean? = null
+        private var accountPushEdits = 0L
+
+        /** Opening the screen asks the server for the switch (see [load]); later reads go by the store. */
+        private var accountPushAsked = false
+
         /** Overridable in tests so the debounce never races the assertions. */
         internal var saveDebounceMillis: Long = DEFAULT_SAVE_DEBOUNCE_MS
 
         /** Screen entry and every return: the store answers from a fresh copy (10 minutes) without a request. */
         fun load() {
             if (preferences == null) _state.value = GroupedListUiState.Loading
+            // The web can change the switch while this phone hears nothing, so a fresh copy could show the old value:
+            // the first read of a visit always asks the server. This runs again on every store change, which needn't.
+            val asksServer = !accountPushAsked
+            if (asksServer) showStoredAccountPush()
+            accountPushAsked = true
             viewModelScope.launch {
                 if (plansFeature?.isOn == true) {
                     val reply = plans?.games()
                     if (reply is NetworkResult.Success) canChooseTeams = reply.data.sports?.canChoose == true
                 }
                 fetch(force = false)
+                fetchAccountPush(force = asksServer)
             }
         }
 
@@ -114,6 +148,7 @@ class NotificationSettingsViewModel
             viewModelScope.launch {
                 try {
                     fetch(force = true)
+                    fetchAccountPush(force = true)
                 } finally {
                     _refreshing.value = false
                 }
@@ -133,6 +168,7 @@ class NotificationSettingsViewModel
         ) {
             val current = preferences ?: return
             when (rowId) {
+                RowId.PUSH_NOTIFICATIONS -> setAccountPush(current, isOn)
                 RowId.MORNING_BRIEFING ->
                     applyLocally(
                         current.copy(dailyBriefingEnabled = isOn),
@@ -273,6 +309,8 @@ class NotificationSettingsViewModel
             preferences = null
             pendingPatch = NotificationPreferencesPatch()
             saveRevision++
+            pendingAccountPush = null
+            accountPushEdits++
             saveJob?.cancel()
             saveJob = null
             _footerCaption.value = null
@@ -310,25 +348,83 @@ class NotificationSettingsViewModel
             if (saveInFlight) return
             saveInFlight = true
             try {
-                while (!pendingPatch.isEmpty) {
-                    val patch = pendingPatch
-                    val revision = saveRevision
-                    pendingPatch = NotificationPreferencesPatch()
-                    val result = repository.updatePreferences(patch)
-                    if (revision != saveRevision) continue
-                    when (result) {
-                        is NetworkResult.Success -> {
-                            publish(result.data)
-                            _toast.value = ToastMessage("Saved", ToastKind.Success)
-                        }
-                        is NetworkResult.Failure -> {
-                            _toast.value = ToastMessage("Failed to save", ToastKind.Error)
-                            rollBackToServer()
-                        }
-                    }
+                while (pendingAccountPush != null || !pendingPatch.isEmpty) {
+                    pendingAccountPush?.let { saveAccountPush(it) }
+                    if (!pendingPatch.isEmpty) savePendingPatch()
                 }
             } finally {
                 saveInFlight = false
+            }
+        }
+
+        private suspend fun savePendingPatch() {
+            val patch = pendingPatch
+            val revision = saveRevision
+            pendingPatch = NotificationPreferencesPatch()
+            val result = repository.updatePreferences(patch)
+            if (revision != saveRevision) return
+            when (result) {
+                is NetworkResult.Success -> {
+                    publish(result.data)
+                    _toast.value = ToastMessage("Saved", ToastKind.Success)
+                }
+                is NetworkResult.Failure -> {
+                    _toast.value = ToastMessage("Failed to save", ToastKind.Error)
+                    rollBackToServer()
+                }
+            }
+        }
+
+        // MARK: - The account-wide Push switch (the profile route, as on the web)
+
+        private fun showStoredAccountPush() {
+            val stored = profile?.ownProfileCopy()?.user?.pushNotifications ?: return
+            accountPush = stored
+            confirmedAccountPush = stored
+        }
+
+        /** The switch's value through the store. Not while a change here waits to save or is saving: its reply is newer. */
+        private suspend fun fetchAccountPush(force: Boolean) {
+            if (pendingAccountPush == null && !saveInFlight) readAccountPush(force)
+        }
+
+        private suspend fun readAccountPush(force: Boolean) {
+            val edits = accountPushEdits
+            val value = profile?.ownProfileStored(force)?.data?.user?.pushNotifications ?: return
+            if (edits != accountPushEdits) return
+            accountPush = value
+            confirmedAccountPush = value
+            preferences?.let(::publish)
+        }
+
+        /** Saved at once, not after the screen's debounce: turning it off and going straight back must still count. */
+        private fun setAccountPush(
+            current: NotificationPreferences,
+            isOn: Boolean,
+        ) {
+            accountPushEdits++
+            accountPush = isOn
+            pendingAccountPush = isOn
+            publish(current)
+            // NonCancellable: leaving the screen doesn't undo the choice.
+            viewModelScope.launch { withContext(NonCancellable) { flushPendingSave() } }
+        }
+
+        /** One save of the switch. A failure rolls back to what the server last confirmed, toasts and re-reads, like the rest. */
+        private suspend fun saveAccountPush(isOn: Boolean) {
+            val edits = accountPushEdits
+            pendingAccountPush = null
+            val result = profile?.updateProfile(ProfileUpdateRequest(pushNotifications = isOn)) ?: return
+            if (result is NetworkResult.Success) confirmedAccountPush = result.data.user.pushNotifications ?: isOn
+            if (edits != accountPushEdits) return
+            accountPush = confirmedAccountPush
+            preferences?.let(::publish)
+            when (result) {
+                is NetworkResult.Success -> _toast.value = ToastMessage("Saved", ToastKind.Success)
+                is NetworkResult.Failure -> {
+                    _toast.value = ToastMessage("Failed to save", ToastKind.Error)
+                    readAccountPush(force = true)
+                }
             }
         }
 
@@ -361,6 +457,7 @@ class NotificationSettingsViewModel
 
         private fun groups(prefs: NotificationPreferences): List<GroupedListGroup> =
             listOfNotNull(
+                accountPush?.let(::pushGroup),
                 briefingsGroup(prefs),
                 suggestionsGroup(prefs),
                 GroupedListGroup(
@@ -374,6 +471,26 @@ class NotificationSettingsViewModel
                 alertsGroup(prefs),
                 quietHoursGroup(prefs),
                 locationGroup(prefs),
+            )
+
+        /**
+         * The same switch as Profile → Settings on the web. It isn't the phone's own notification permission, which is
+         * the banner above (mirrors iOS).
+         */
+        private fun pushGroup(isOn: Boolean): GroupedListGroup =
+            GroupedListGroup(
+                id = GroupId.PUSH,
+                overline = "Account",
+                helper = "Push is off, so nothing below will reach your phone.".takeUnless { isOn },
+                rows =
+                    listOf(
+                        GroupedListRow(
+                            id = RowId.PUSH_NOTIFICATIONS,
+                            label = "Push notifications",
+                            subtext = "Alerts on all your devices",
+                            control = RowControl.Toggle(isOn),
+                        ),
+                    ),
             )
 
         /**
@@ -582,6 +699,7 @@ class NotificationSettingsViewModel
 
         /** Stable card ids — parity contract with iOS `GroupID`. */
         object GroupId {
+            const val PUSH = "push"
             const val SUGGESTIONS = "suggestions"
             const val BRIEFINGS = "briefings"
             const val ALERTS = "alerts"
@@ -591,6 +709,7 @@ class NotificationSettingsViewModel
 
         /** Stable row ids — parity contract with iOS `RowID`. */
         object RowId {
+            const val PUSH_NOTIFICATIONS = "push.enabled"
             const val SUGGESTIONS = "suggestions.enabled"
             const val SUGGESTIONS_RESET = "suggestions.resetFewer"
             const val MORNING_BRIEFING = "briefings.morning"

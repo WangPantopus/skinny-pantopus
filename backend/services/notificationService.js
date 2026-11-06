@@ -1476,8 +1476,26 @@ async function notifyHouseholdAccessRequest({
 }
 
 
+/**
+ * A durable relay's send (`delivery` is its kind and lease, as merge_delivery_device_receipts takes them). A device an
+ * earlier attempt settled is skipped, a device added since or still unknown is sent to, and a device this attempt settled
+ * is saved at once, before anything else can fail. The retry another device's unknown outcome causes never repeats the
+ * push here. A save that fails or is refused (a stale worker's lease) can only repeat a push, never miss one.
+ */
+async function sendUnsettledPush(userId, message, delivery) {
+  const merge = async (accepted) => supabaseAdmin.rpc('merge_delivery_device_receipts', { ...delivery, p_accepted: accepted });
+  const { data: settled, error } = await merge([]);
+  if (error || !Array.isArray(settled)) throw new Error('Delivery lease unavailable');
+  const receipt = await pushService.sendToUserWithReceipt(userId, message, { settledRegistrationIds: settled });
+  if (receipt?.acceptedRegistrationIds?.length) {
+    const saved = await merge(receipt.acceptedRegistrationIds).catch((saveError) => ({ error: saveError }));
+    if (saved.error) logger.warn('delivery_receipts_deferred', { kind: delivery.p_kind });
+  }
+  return receipt;
+}
+
 /** Deliver an already-committed paid-gig notification without inserting again. */
-async function deliverStoredGigNotification(notification, { pushAllowedAtCapture, pushAllowedAtCompletion } = {}) {
+async function deliverStoredGigNotification(notification, { pushAllowedAtCapture, pushAllowedAtCompletion, delivery } = {}) {
   if (!notification?.id || !['bid_accepted', 'bid_on_standby', 'payout_onboarding_nudge', 'payout_sent', 'payment_completed', 'gig_auto_cancelled', 'payment_auth_expiring', 'gig_cancelled', 'bid_reopened', 'bid_rejected', 'worker_cant_make_it', 'tip_received', 'gig_confirmed', 'gig_completed'].includes(notification.type)) {
     throw new Error('Unsupported stored gig notification');
   }
@@ -1500,11 +1518,11 @@ async function deliverStoredGigNotification(notification, { pushAllowedAtCapture
     || !pushSwitchOn(global.data) || granular.data?.gig_updates_enabled === false;
   if (!suppressed) emitDesktopAlert(notification);
   const result = suppressed ? { acceptedCount: 0, unresolvedCount: 0 }
-    : await pushService.sendToUserWithReceipt(userId, {
+    : await sendUnsettledPush(userId, {
       title: notification.title, body: notification.body || '',
       data: { ...(notification.metadata || {}), notificationId: notification.id,
         type: notification.type, link: notification.link || null, recipient_user_id: userId },
-    });
+    }, delivery);
   badgeService.emitBadgeUpdate(userId);
   if (_io && _connectedUsers) {
     for (const socketId of getUserSocketIds(userId)) _io.to(socketId).emit('notification:new', notification);
@@ -1520,7 +1538,7 @@ async function deliverStoredGigNotification(notification, { pushAllowedAtCapture
 }
 
 /** Deliver an existing exact assignment notice; never insert a second one. */
-async function deliverStoredHomeTaskNotification(notification, { pushAllowedAtAssignment } = {}) {
+async function deliverStoredHomeTaskNotification(notification, { pushAllowedAtAssignment, delivery } = {}) {
   if (!notification?.id || !notification.user_id || notification.type !== 'task_assigned'
     || notification.context !== 'personal' || notification.context_type !== 'personal'
     || notification.context_id != null || !notification.metadata?.assignment_event_id
@@ -1547,11 +1565,11 @@ async function deliverStoredHomeTaskNotification(notification, { pushAllowedAtAs
     emitDesktopAlert(alert);
   }
   const result = suppressed ? { acceptedCount: 0, unresolvedCount: 0 }
-    : await pushService.sendToUserWithReceipt(userId, {
+    : await sendUnsettledPush(userId, {
       title: alert.title, body: alert.body || '',
       data: { ...notification.metadata, notificationId: notification.id,
         type: notification.type, link: notification.link || null, recipient_user_id: userId },
-    });
+    }, delivery);
   badgeService.emitBadgeUpdate(userId);
   if (_io && _connectedUsers) {
     for (const socketId of getUserSocketIds(userId)) _io.to(socketId).emit('notification:new', notification);

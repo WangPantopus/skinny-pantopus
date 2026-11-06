@@ -20,7 +20,7 @@ const { fileURLToPath } = require('url');
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const logger = require('../../utils/logger');
 const config = require('../../config/propertyRecords');
-const { FORMAT, SUPPRESSIONS_PATH, statePath, releasePath, findBlock } = require('./format');
+const { FORMAT, SUPPRESSIONS_PATH, statePath, releasePath, switchesPath, findBlock } = require('./format');
 
 const READ_TIMEOUT_MS = 3000;
 const STATE_FRESH_MS = 5 * 60 * 1000;
@@ -113,7 +113,6 @@ function createReader(storage = createStorage(), { keptFiles = KEPT_FILES } = {}
       if (!job && (heldAt === 0 || now - heldAt >= freshMs)) {
         job = read(name, { etag })
           .then((result) => {
-            heldAt = Date.now();
             if (!result) {
               held = null;
               etag = null;
@@ -121,13 +120,17 @@ function createReader(storage = createStorage(), { keptFiles = KEPT_FILES } = {}
               held = parse(result.bytes);
               etag = result.etag;
             }
-          }, (err) => {
+            heldAt = Date.now();
+          })
+          .catch((err) => {
             logger.warn('property_records.refresh_failed', { error: err.message });
             if (held === null) throw err;
             // Keep the last good copy; ask again in a minute.
             heldAt = Date.now() - freshMs + 60 * 1000;
           })
           .finally(() => { job = null; });
+        // Whoever is waiting hears of a first read's failure; in the background it's only logged.
+        job.catch(() => {});
       }
       if (heldAt === 0 && job) await job;
       return held;
@@ -148,6 +151,8 @@ function createReader(storage = createStorage(), { keptFiles = KEPT_FILES } = {}
   }
 
   const suppressionsFile = refreshed(SUPPRESSIONS_PATH, (bytes) => JSON.parse(bytes.toString('utf8')));
+
+  const switchesFile = (name, parse, freshMs) => refreshed(switchesPath(name), parse, freshMs);
 
   const manifests = new Map();
   function manifest(fips, release) {
@@ -214,9 +219,9 @@ function createReader(storage = createStorage(), { keptFiles = KEPT_FILES } = {}
     return files.get(name)();
   }
 
-  return { stateFile, recordsAt, suppressions: suppressionsFile, file };
+  return { stateFile, recordsAt, suppressions: suppressionsFile, switchesFile, file };
 }
 
 const shared = createReader();
 
-module.exports = { stateFile: shared.stateFile, recordsAt: shared.recordsAt, suppressions: shared.suppressions, createReader, createStorage, StorageUnavailable };
+module.exports = { stateFile: shared.stateFile, recordsAt: shared.recordsAt, suppressions: shared.suppressions, switchesFile: shared.switchesFile, createReader, createStorage, StorageUnavailable };

@@ -1228,7 +1228,7 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       privacy_mask_level: 'normal',
       ownership_state: is_owner ? 'claim_pending' : 'unclaimed',
       ...(attomPropertyDetail ? { niche_data: { attom_property_detail: attomPropertyDetail } } : {}),
-      ...(countyRecord?.copy ? { niche_data: { property_record: countyRecord.copy } } : {}),
+      ...(countyRecord?.whole ? { niche_data: { property_record: countyRecord.whole } } : {}),
     };
 
     // Add location if provided.

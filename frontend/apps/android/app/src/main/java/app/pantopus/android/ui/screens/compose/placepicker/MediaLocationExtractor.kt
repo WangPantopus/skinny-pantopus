@@ -1,8 +1,11 @@
 package app.pantopus.android.ui.screens.compose.placepicker
 
+import android.content.ContentResolver
 import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import androidx.exifinterface.media.ExifInterface
 import java.io.ByteArrayInputStream
 import java.time.Instant
@@ -37,24 +40,26 @@ data class MediaCaptureLocation(
  * point for a town tag or no tag) and keeps no other copy of the points.
  *
  * Platform reality, measured on emulators on 2026-11-06 with synthetic
- * files. The app doesn't hold `ACCESS_MEDIA_LOCATION`.
+ * files.
  * - The Pulse composer picks with the document picker
- *   (`OpenMultipleDocuments`). The API 33 and API 36 images return the
- *   original file, so the location reads. The API 37 image hides it
- *   (EXIF GPS zeroed, video `©xyz` removed), except from the picker's
- *   Downloads root.
+ *   (`OpenMultipleDocuments`). Without `ACCESS_MEDIA_LOCATION`, the API 33
+ *   and API 36 images return the original file, so the location reads.
+ *   The API 37 image hides it (EXIF GPS zeroed, video `©xyz` removed),
+ *   except from the picker's Downloads root. Once the permission is held,
+ *   the same URI gives the original, so these readers work unchanged. The
+ *   composer asks for it only when [hasHiddenLocation] says a photo needs
+ *   it (`MediaLocationAccess`).
  * - `ComposeBroadcastScreen` picks with the system photo picker
  *   (`PickMultipleVisualMedia`). API 37 hides the location there, and
  *   the permission doesn't change that.
+ * - `MediaStore.setRequireOriginal` isn't the way in: it throws
+ *   `SecurityException` on a picked file, with or without the permission.
  *
  * A hidden location legitimately reads as nothing: zeroed GPS is 0,0,
  * which `validated` drops, and the picker renders no anchor chips. On
  * API 26-28 (minSdk 26, pre-redaction) the picked bytes DO carry GPS,
  * and any future unredacted source works unchanged. Every reader is
  * failure-silent by design: no location → no chips.
- *
- * Whether to ask for the permission is the founder's call; the
- * measurements are in docs/photo-location-place-picker-handoff-2026-11-05.md.
  */
 object MediaLocationExtractor {
     /**
@@ -68,6 +73,38 @@ object MediaLocationExtractor {
                 validated(latitude = coords[0], longitude = coords[1], capturedAt = gpsTime(exif) ?: cameraTime(exif))
             }
         }.getOrNull()
+
+    /**
+     * True when a still's GPS position reads as zero: the mark Android leaves
+     * on a photo whose location it hides from this app. A photo that never had
+     * a location has no such tags, so it doesn't count.
+     */
+    fun hasHiddenLocation(bytes: ByteArray): Boolean =
+        runCatching {
+            val exif = ExifInterface(ByteArrayInputStream(bytes))
+            isZeroed(exif.getAttribute(ExifInterface.TAG_GPS_LATITUDE)) &&
+                isZeroed(exif.getAttribute(ExifInterface.TAG_GPS_LONGITUDE))
+        }.getOrDefault(false)
+
+    /** A GPS coordinate's rationals ("0/1,0/1,0/1") are all zero. */
+    private fun isZeroed(rationals: String?): Boolean =
+        rationals?.split(',')?.all { it.substringBefore('/').trim().toDoubleOrNull() == 0.0 } == true
+
+    /**
+     * Android's copy of a picked photo or video with the location removed, for
+     * uploading: the capture point leaves the device only as `mediaLocations`.
+     * Null where Android can't give one (before Android 12, the picker's
+     * Downloads root, other document providers), which means today's read.
+     */
+    fun redactedUri(
+        context: Context,
+        uri: Uri,
+    ): Uri? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || uri.scheme != ContentResolver.SCHEME_CONTENT) return null
+        return runCatching {
+            MediaStore.getMediaUri(context, uri)?.let { MediaStore.getRedactedUri(context.contentResolver, it) }
+        }.getOrNull()
+    }
 
     /** The GPS block's own UTC time ("2026:11:02" + "18:04:31"). */
     private fun gpsTime(exif: ExifInterface): Instant? {
@@ -98,8 +135,9 @@ object MediaLocationExtractor {
     /**
      * ISO-6709 location atom off a picked video.
      * [MediaMetadataRetriever] needs a file/URI (it cannot read bytes),
-     * so this must run while the picker URI is still in scope — inside
-     * the picker callback; the URI is never retained beyond it.
+     * so this must run while the picker URI is still in scope: inside the
+     * picker callback, or while the composer keeps it because the location
+     * may be hidden (`PulseComposePhoto.locationSource`).
      */
     fun fromVideoUri(
         context: Context,
