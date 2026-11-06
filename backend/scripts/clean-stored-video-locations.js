@@ -28,11 +28,15 @@ const db = require('../config/supabaseAdmin');
 const s3 = require('../services/s3Service');
 const { UnreadableVideoError, inspectVideo, removeVideoMetadata } = require('../services/videoMetadata');
 
-const rewrite = process.argv.includes('--rewrite');
-const limit = Number((process.argv.find((arg) => arg.startsWith('--limit=')) || '').split('=')[1]) || Infinity;
-
-// Not worth a HEAD request: nothing but a video needs checking, and most objects are photos.
-const NOT_VIDEO = /\.(jpe?g|png|gif|webp|avif|heic|heif|pdf|docx?|xlsx?|txt|m4a|aac|wav|mp3|json)$/i;
+const args = process.argv.slice(2);
+const rewrite = args.includes('--rewrite');
+const limitArg = args.find((arg) => arg.startsWith('--limit='));
+const limit = limitArg ? Number(limitArg.slice('--limit='.length)) : Infinity;
+// A mistyped limit must not become a rewrite of everything.
+if (args.some((arg) => arg !== '--rewrite' && arg !== limitArg) || (limitArg && !(Number.isInteger(limit) && limit > 0))) {
+  console.error('Usage: clean-stored-video-locations.js [--rewrite [--limit=N]]');
+  process.exit(2);
+}
 
 const bytesOf = (body) => body.transformToByteArray().then((array) => Buffer.from(array));
 
@@ -62,8 +66,8 @@ async function* s3Videos() {
   let token;
   do {
     const page = await s3Client.send(new ListObjectsV2Command({ Bucket: S3_BUCKET, ContinuationToken: token }));
+    // Every object, because a key's extension comes from the name the client sent.
     for (const { Key: key } of page.Contents || []) {
-      if (NOT_VIDEO.test(key)) continue;
       const head = await s3Client.send(new HeadObjectCommand({ Bucket: S3_BUCKET, Key: key }));
       if (head.ContentType?.startsWith('video/')) yield s3Video(key, head);
     }

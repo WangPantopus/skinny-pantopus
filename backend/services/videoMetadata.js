@@ -66,8 +66,8 @@ const FIRST_BOXES = new Set([...UNUSED, 'ftyp', 'styp', 'moov', 'mdat', 'pnot', 
 const SAMPLE_TABLES = new Set(['stco', 'co64', 'stsz', 'stz2', 'stsc']);
 const PLAYABLE_TRACKS = new Set(['vide', 'soun']);
 const KEPT_TRACKS = new Set([...PLAYABLE_TRACKS, 'auxv', 'pict', 'tmcd']);
-// Inside a fragment nothing is listed: its boxes vary by writer, and only these two hold metadata.
-const FRAGMENT_METADATA = new Set(['meta', 'udta']);
+// In a fragment or a sample table nothing is listed: their boxes vary by writer, and only these two hold metadata.
+const UNLISTED_METADATA = new Set(['meta', 'udta']);
 
 /** The box at `at`, in a parent ending at `limit`. Its end is clamped to the parent's, as players do; null if bad. */
 function readBox(bytes, at, limit) {
@@ -200,6 +200,7 @@ function cleanMovieBox(bytes, base, parent, plan, movie) {
     if (UNUSED.has(box.type)) plan.zero(base + box.body, base + box.end);
     else if (!keeps.has(box.type)) blankBox(plan, base, box);
     else if (box.type === 'trak') cleanTrack(bytes, base, box, plan, movie);
+    else if (box.type === 'stbl') cleanUnlistedBox(bytes, base, box, plan);
     else if (KEEPS[box.type]) cleanMovieBox(bytes, base, box, plan, movie);
   }
 }
@@ -220,27 +221,19 @@ function cleanTrack(bytes, base, trak, plan, movie) {
   blankBox(plan, base, trak);
 }
 
-function cleanFragment(bytes, base, parent, plan) {
+function cleanUnlistedBox(bytes, base, parent, plan) {
   for (const box of childBoxes(bytes, parent)) {
     plan.count();
-    if (FRAGMENT_METADATA.has(box.type)) blankBox(plan, base, box);
+    if (UNLISTED_METADATA.has(box.type)) blankBox(plan, base, box);
     else if (UNUSED.has(box.type)) plan.zero(base + box.body, base + box.end);
-    else if (box.type === 'traf' && parent.type === 'moof') cleanFragment(bytes, base, box, plan);
+    else if (box.type === 'traf' && parent.type === 'moof') cleanUnlistedBox(bytes, base, box, plan);
   }
 }
 
 /** Bytes after the last box aren't a box (Samsung and Insta360 append their data there): they become one empty box. */
 function blankTail(plan, at) {
-  const length = plan.size - at;
-  if (length >= 8) {
-    const header = Buffer.alloc(8);
-    header.writeUInt32BE(length > 0xffffffff ? 0 : length, 0);
-    header.write('free', 4, 'latin1');
-    plan.write(at, header);
-    plan.zero(at + 8, plan.size);
-  } else {
-    plan.zero(at, plan.size);
-  }
+  if (plan.size - at >= 8) blankBox(plan, at, { start: 0, body: 8, end: plan.size - at });
+  else plan.zero(at, plan.size);
 }
 
 /** Zeroes the samples of tracks we removed, wherever they fall inside `mdat`. */
@@ -279,7 +272,7 @@ async function planMovie(read, plan) {
         cleanMovieBox(bytes, at, box, plan, movie);
       } else {
         movie.fragmented = true;
-        cleanFragment(bytes, at, box, plan);
+        cleanUnlistedBox(bytes, at, box, plan);
       }
     } else if (box.type === 'mdat') {
       movie.mdats.push([at + box.body, at + box.end]);
@@ -341,6 +334,10 @@ function readElement(bytes, at) {
 
 function voidElement(plan, start, end) {
   const total = end - start;
+  if (total < 2) {
+    plan.zero(start, end); // cut short by its parent's end: too small to be an element
+    return;
+  }
   let sizeLength = 1;
   while (total - 1 - sizeLength > 2 ** (7 * sizeLength) - 2) sizeLength += 1;
   const header = Buffer.alloc(1 + sizeLength);
@@ -465,7 +462,8 @@ const AVI_KEEPS = {
   hdrl: new Set(['avih', 'LIST strl', 'LIST odml']),
   strl: new Set(['strh', 'strf', 'indx', 'vprp']),
 };
-const AVI_PLAYABLE_STREAMS = new Set(['vids', 'auds']);
+// iavs is a DV camcorder's picture and sound in one stream.
+const AVI_PLAYABLE_STREAMS = new Set(['vids', 'auds', 'iavs']);
 
 async function planAviList(read, plan, start, end, form, avi) {
   const keeps = AVI_KEEPS[form];
@@ -504,6 +502,7 @@ async function planAvi(read, plan) {
   const avi = { streams: 0 };
   let at = 0;
   while (plan.size - at >= 12) {
+    plan.count();
     const head = await read(at, 12);
     const form = head.toString('latin1', 8, 12);
     if (head.toString('latin1', 0, 4) !== 'RIFF' || (form !== 'AVI ' && form !== 'AVIX')) break;
@@ -587,7 +586,8 @@ async function removeVideoFileMetadata(filePath, { signal } = {}) {
 
 const LOCATION_TEXT = /location|GPS(?:Lat|Long|Coord|Pos)|freeGPS|[+-]\d{1,2}\.\d{2,}[+-]\d{1,3}\.\d{2,}/i;
 // Tags, and the codecs of tracks made for GPS or able to carry it as text (drones and dashcams caption their footage).
-const LOCATION_TAGS = /\0[\s\S]{3}(?:\xa9xyz|loci|gps |gps0|GPS |gpmd|camm|rtmd|djmd|tx3g|wvtt)|LOCA[\s\S]{3}\0/;
+const LOCATION_TAGS = new RegExp('\\0[\\s\\S]{3}(?:\\xa9xyz|loci|gps |gps0|GPS |gpmd|camm|rtmd|djmd|mett|tx3g|wvtt|text|sbtl|stpp)'
+  + '|^GPS |LOCA[\\s\\S]{3}\\0');
 
 /**
  * What a stored video holds that cleaning would remove, read through `fetchRange(position, length)` without changing
