@@ -20,7 +20,9 @@ export type AddressVerdictStatus =
   | 'UNDELIVERABLE'
   | 'LOW_CONFIDENCE'
   | 'SERVICE_ERROR'
-  | 'CONFLICT';
+  | 'CONFLICT'
+  | 'UNIT_NOT_CONFIRMED'
+  | 'POSTAL_PENDING';
 
 export type NormalizedAddress = {
   line1: string;
@@ -104,8 +106,13 @@ export type AddressClaim = {
 // ── API Calls ───────────────────────────────────────────────
 
 /** Full address validation pipeline: Google → Smarty → DecisionEngine → persist */
-export async function validateAddress(input: ValidateAddressInput): Promise<ValidateAddressResponse> {
-  return post<ValidateAddressResponse>('/api/v1/address/validate', input);
+export async function validateAddress(
+  input: ValidateAddressInput,
+  options?: { postal?: 2 },
+): Promise<ValidateAddressResponse> {
+  // `postal=2` asks for UNIT_NOT_CONFIRMED and POSTAL_PENDING; older servers ignore it.
+  const query = options?.postal ? `?postal=${options.postal}` : '';
+  return post<ValidateAddressResponse>(`/api/v1/address/validate${query}`, input);
 }
 
 /** Re-validate with a unit/apt number */
