@@ -30,10 +30,12 @@ import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Spacing
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /*
@@ -79,8 +81,12 @@ class NamePromptViewModel
         fun evaluate(userId: String) {
             if (prefs.getBoolean(askedKey(userId), false) || _form.value != null) return
             viewModelScope.launch {
+                // The kept profile already has the name, so there is nothing to ask and no read to send at launch.
+                // Off the main thread: this opens the entry, which reads its saved copy as the tabs first draw.
+                val kept = withContext(Dispatchers.IO) { repo.ownProfileCopy() }?.user?.takeIf { it.id == userId }
+                if (kept != null && !needsAsking(kept)) return@launch
                 val profile = (repo.ownProfile() as? NetworkResult.Success)?.data?.user ?: return@launch
-                if (profile.id != userId || profile.accountType == "business" || !isMissingName(profile)) return@launch
+                if (profile.id != userId || !needsAsking(profile)) return@launch
                 // Asked once: remembered as soon as it shows.
                 prefs.edit().putBoolean(askedKey(userId), true).apply()
                 _form.value =
@@ -144,6 +150,8 @@ class NamePromptViewModel
             fun askedKey(userId: String) = "namePrompt.$userId.asked"
 
             fun isMissingName(profile: UserProfile): Boolean = profile.firstName.isNullOrBlank() || profile.lastName.isNullOrBlank()
+
+            private fun needsAsking(profile: UserProfile): Boolean = profile.accountType != "business" && isMissingName(profile)
         }
     }
 
