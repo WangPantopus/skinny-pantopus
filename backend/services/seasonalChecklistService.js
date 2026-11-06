@@ -218,6 +218,9 @@ async function getOrCreateChecklist(homeId, seasonKey, year, options = {}) {
       item_key: item.item_key, title: item.title, description: item.description || null,
       gig_category: item.gig_category || null, gig_title_suggestion: item.gig_title || null,
       sort_order: item.sort, status: 'pending' }));
+    // This reply carries the new rows, and any other reader generates or reads them on its next read. A change
+    // signal would only send every open Home screen, the reader's own included, through a whole second load.
+    require('./syncChangedService').expectQuietHomeChange('HomeSeasonalChecklistItem', homeId);
     // Existing unique key handles concurrent readers; ignoreDuplicates never
     // rewrites completed_at, status, gig links, or the history of an old row.
     const { error } = await supabaseAdmin.from('HomeSeasonalChecklistItem')
