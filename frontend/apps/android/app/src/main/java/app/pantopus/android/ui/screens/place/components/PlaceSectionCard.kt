@@ -47,6 +47,8 @@ fun PlaceSectionCard(
     state: PlaceSectionCardState = PlaceSectionCardState.LOADED,
     value: String? = null,
     caption: String? = null,
+    /** The unavailable state's own line, in place of "Not available for your area yet." (the server's reason). */
+    unavailableTitle: String? = null,
     chip: PlaceChipModel? = null,
     statusDot: Color? = null,
     sparkline: Boolean = false,
@@ -228,16 +230,18 @@ fun PlaceSectionCard(
             PlaceSectionCardState.UNAVAILABLE ->
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(
-                        text = "Not available for your area yet.",
+                        text = unavailableTitle ?: "Not available for your area yet.",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
                         color = PantopusColors.appTextSecondary,
                     )
-                    Text(
-                        text = caption ?: "Coverage is expanding. Check back later.",
-                        fontSize = 13.sp,
-                        color = PantopusColors.appTextMuted,
-                    )
+                    if (unavailableTitle == null) {
+                        Text(
+                            text = caption ?: "Coverage is expanding. Check back later.",
+                            fontSize = 13.sp,
+                            color = PantopusColors.appTextMuted,
+                        )
+                    }
                 }
 
             PlaceSectionCardState.ERROR ->
