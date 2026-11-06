@@ -115,16 +115,7 @@ private enum PulsePickedMedia {
         }
         defer { try? FileManager.default.removeItem(at: url) }
         if isVideo {
-            // Where the video was taken is read off the original; the upload is exported without metadata.
-            let location = await MediaLocationExtractor.videoLocation(at: url)
-            return try await PulseComposePhoto(
-                data: videoData(at: url),
-                capturedLatitude: location?.latitude,
-                capturedLongitude: location?.longitude,
-                capturedAt: location?.capturedAt,
-                mimeType: "video/mp4",
-                filename: "video.mp4"
-            )
+            return try await video(at: url)
         }
         let original = try boundedData(at: url, megabytes: 30)
         let location = await MediaLocationExtractor.imageLocation(from: original)
@@ -152,6 +143,19 @@ private enum PulsePickedMedia {
             capturedAt: location?.capturedAt,
             mimeType: "image/jpeg",
             filename: "photo.jpg"
+        )
+    }
+
+    /// A picked video. Where it was taken is read off the original; the upload is exported without metadata.
+    private static func video(at url: URL) async throws -> PulseComposePhoto {
+        let location = await MediaLocationExtractor.videoLocation(at: url)
+        return try await PulseComposePhoto(
+            data: videoData(at: url),
+            capturedLatitude: location?.latitude,
+            capturedLongitude: location?.longitude,
+            capturedAt: location?.capturedAt,
+            mimeType: "video/mp4",
+            filename: "video.mp4"
         )
     }
 

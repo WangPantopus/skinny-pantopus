@@ -15,12 +15,12 @@ import app.pantopus.android.data.api.models.posts.PostCommentRequest
 import app.pantopus.android.data.api.models.posts.PostCommentsResponse
 import app.pantopus.android.data.api.models.posts.PostCreateRequest
 import app.pantopus.android.data.api.models.posts.PostCreateResponse
-import app.pantopus.android.data.api.models.posts.PostMediaLocation
 import app.pantopus.android.data.api.models.posts.PostCreatorDto
 import app.pantopus.android.data.api.models.posts.PostDetailDto
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
 import app.pantopus.android.data.api.models.posts.PostLikeResponse
 import app.pantopus.android.data.api.models.posts.PostLikeStateRequest
+import app.pantopus.android.data.api.models.posts.PostMediaLocation
 import app.pantopus.android.data.api.models.posts.PostReportRequest
 import app.pantopus.android.data.api.models.posts.PostSaveResponse
 import app.pantopus.android.data.api.models.posts.PostSaveStateRequest

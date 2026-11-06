@@ -76,7 +76,7 @@ internal fun pulseCardContent(
         meta = metaString(post, topic),
         intent = intent,
         chipLabel = intent.chipLabelFor(post.lostFoundType),
-        isVisitor = post.isVisitorPost && post.locationBasis != "photo",
+        isVisitor = showsVisitorBadge(post),
         origin = post.origin,
         title = post.title,
         body = post.content.orEmpty(),
@@ -210,6 +210,9 @@ private fun metaString(
         topic?.label,
         post.locationName?.takeIf { it.isNotEmpty() },
     ).joinToString(" · ")
+
+/** A post its author's own photo placed says "Photo taken here" instead of Visitor. */
+private fun showsVisitorBadge(post: FeedPost): Boolean = post.isVisitorPost && post.locationBasis != "photo"
 
 /**
  * "Photo taken here" for a post its author's own photo or video placed, with the day it was taken once that's more

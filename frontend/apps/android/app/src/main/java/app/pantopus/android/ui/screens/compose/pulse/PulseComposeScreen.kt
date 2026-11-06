@@ -169,11 +169,7 @@ fun PulseComposeScreen(
         }
     }
 
-    // The Place check runs again when the tagged place, the attachments' capture points or the audience change.
-    val capturePoints = photos.mapNotNull { photo -> photo.capturedLatitude?.let { "$it,${photo.capturedLongitude}" } }
-    LaunchedEffect(selectedPlaceTag, capturePoints, visibility) {
-        if (!viewModel.isEditing) viewModel.checkPlaceEligibility()
-    }
+    PlaceCheckEffect(viewModel, selectedPlaceTag, photos, visibility)
 
     LaunchedEffect(Unit) {
         Analytics.track(AnalyticsEvent.ScreenPulseComposeViewed(intent = activeIntent.key))
@@ -361,6 +357,20 @@ fun PulseComposeScreen(
             },
             onDismiss = { showPlacePicker = false },
         )
+    }
+}
+
+/** The Place check runs again when the tagged place, the attachments' capture points or the audience change. */
+@Composable
+private fun PlaceCheckEffect(
+    viewModel: PulseComposeViewModel,
+    tag: PostPlaceTag?,
+    photos: List<PulseComposePhoto>,
+    visibility: PulseComposeVisibility,
+) {
+    val capturePoints = photos.mapNotNull { photo -> photo.capturedLatitude?.let { "$it,${photo.capturedLongitude}" } }
+    LaunchedEffect(tag, capturePoints, visibility) {
+        if (!viewModel.isEditing) viewModel.checkPlaceEligibility()
     }
 }
 

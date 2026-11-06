@@ -5,12 +5,12 @@ package app.pantopus.android.ui.screens.compose.pulse
 import androidx.lifecycle.SavedStateHandle
 import app.pantopus.android.data.api.models.posts.BeforeYouAskResponse
 import app.pantopus.android.data.api.models.posts.PlaceEligibilityResponse
-import app.pantopus.android.data.api.models.posts.PostMediaLocation
 import app.pantopus.android.data.api.models.posts.PostCreateRequest
 import app.pantopus.android.data.api.models.posts.PostCreateResponse
 import app.pantopus.android.data.api.models.posts.PostCreateResponsePost
 import app.pantopus.android.data.api.models.posts.PostDetailDto
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
+import app.pantopus.android.data.api.models.posts.PostMediaLocation
 import app.pantopus.android.data.api.models.posts.PostPrecheckResponse
 import app.pantopus.android.data.api.models.posts.PostUpdateRequest
 import app.pantopus.android.data.api.models.posts.PostUpdateResponse

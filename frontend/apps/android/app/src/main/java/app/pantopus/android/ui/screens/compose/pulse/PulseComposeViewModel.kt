@@ -558,13 +558,13 @@ class PulseComposeViewModel
          * the draft isn't going to a place.
          */
         private fun eligibilityPoint(): Pair<Double, Double>? {
-            if (isEditing || isBusinessAuthored || effectiveAudience() != "nearby") return null
             val target = postingTarget
-            if (target != null && !target.isPlaceTarget) return null
-            _selectedPlaceTag.value?.let { return it.latitude to it.longitude }
-            val lat = target?.targetLatitude ?: return null
-            val lon = target.targetLongitude ?: return null
-            return lat to lon
+            val goesToPlace =
+                !isEditing && !isBusinessAuthored && effectiveAudience() == "nearby" && (target == null || target.isPlaceTarget)
+            val tag = _selectedPlaceTag.value
+            val lat = tag?.latitude ?: target?.targetLatitude
+            val lon = tag?.longitude ?: target?.targetLongitude
+            return if (goesToPlace && lat != null && lon != null) lat to lon else null
         }
 
         /**
@@ -1890,14 +1890,14 @@ class PulseComposeViewModel
                         )
                     }
                 }
-            val request = applyPlaceTag(mergeTargetContext(base))
-            // A Place post carries where its attachments were taken: evidence that the author was there, like the GPS fix.
+            return withMediaLocations(applyPlaceTag(mergeTargetContext(base)))
+        }
+
+        /** A Place post carries where its attachments were taken: evidence that the author was there, like the GPS fix. */
+        private fun withMediaLocations(request: PostCreateRequest): PostCreateRequest {
             val media = draftMediaLocations()
-            return if (!isBusinessAuthored && effectiveAudience() == "nearby" && media.isNotEmpty()) {
-                request.copy(mediaLocations = media)
-            } else {
-                request
-            }
+            val placePost = !isBusinessAuthored && effectiveAudience() == "nearby"
+            return if (placePost && media.isNotEmpty()) request.copy(mediaLocations = media) else request
         }
 
         private fun effectivePostType(): String {
