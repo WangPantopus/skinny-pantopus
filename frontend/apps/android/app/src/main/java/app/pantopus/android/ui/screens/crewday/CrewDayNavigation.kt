@@ -3,12 +3,13 @@
 package app.pantopus.android.ui.screens.crewday
 
 import android.net.Uri
-import androidx.compose.runtime.Composable
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import app.pantopus.android.ui.screens.crewday.ask.CrewDayAskActions
+import app.pantopus.android.ui.screens.crewday.ask.CrewDayAskScreen
 import app.pantopus.android.ui.screens.crewday.book.CrewDayBookActions
 import app.pantopus.android.ui.screens.crewday.book.CrewDayBookScreen
 import app.pantopus.android.ui.screens.crewday.booking.CrewDayBookingActions
@@ -27,14 +28,11 @@ import app.pantopus.android.ui.screens.crewday.problem.CrewDayProblemScreen
 import app.pantopus.android.ui.screens.crewday.route.CrewDayHomeScreen
 import app.pantopus.android.ui.screens.crewday.route.CrewDayRouteActions
 import app.pantopus.android.ui.screens.crewday.route.CrewDayRouteScreen
-import app.pantopus.android.ui.screens.root.NotYetAvailableView
-import app.pantopus.android.ui.theme.PantopusColors
-import app.pantopus.android.ui.theme.PantopusIcon
 
 /**
  * Crew Day's pages (docs/product/crew-day-build/01-spec.md): the household's, the organizer's and the crew's. Every
  * one is behind the `crew_day` launch key; nothing navigates here while it is off. Kept out of `RootTabScreen` so the
- * two grow without merge conflicts. Each page is a placeholder until its slice lands.
+ * two grow without merge conflicts.
  */
 object CrewDayRoutes {
     const val CODE_KEY = "code"
@@ -134,6 +132,8 @@ data class CrewDayExternalRoutes(
     val openInvoice: (invoiceId: String) -> Unit,
     /** A business's own invoices (the existing invoices list). */
     val openInvoices: (businessId: String) -> Unit,
+    /** The existing home setup ("Add your home"). */
+    val openAddHome: () -> Unit,
 )
 
 /** Registers every Crew Day page. Call inside the root `NavHost`. */
@@ -212,7 +212,22 @@ fun NavGraphBuilder.crewDayRoutes(
                 ),
         )
     }
-    composable(CrewDayRoutes.ASK) { CrewDayPlaceholder("Ask for a Crew Day", back) }
+    composable(CrewDayRoutes.ASK) {
+        CrewDayAskScreen(
+            actions =
+                CrewDayAskActions(
+                    onBack = back,
+                    // The request shows under "Asked for"; Back from there skips the sent form.
+                    onSent = {
+                        nav.navigate(CrewDayRoutes.MINE) {
+                            popUpTo(CrewDayRoutes.ASK) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    },
+                    onAddHome = external.openAddHome,
+                ),
+        )
+    }
     composable(
         route = CrewDayRoutes.CREW,
         arguments =
@@ -311,19 +326,4 @@ fun NavGraphBuilder.crewDayRoutes(
                 ),
         )
     }
-}
-
-@Composable
-private fun CrewDayPlaceholder(
-    name: String,
-    onBack: () -> Unit,
-    crew: Boolean = false,
-) {
-    NotYetAvailableView(
-        tabName = name,
-        icon = if (crew) PantopusIcon.Truck else PantopusIcon.CalendarCheck,
-        accent = if (crew) PantopusColors.businessBg else PantopusColors.homeBg,
-        foreground = if (crew) PantopusColors.business else PantopusColors.home,
-        onBack = onBack,
-    )
 }

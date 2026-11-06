@@ -3151,6 +3151,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                             openInvoice = { id -> navController.navigate(ChildRoutes.invoiceDetail(id)) },
                             openInvoices = { id -> navController.navigate(ChildRoutes.businessInvoicesOwner(id)) },
+                            openAddHome = { navController.navigate(ChildRoutes.ADD_HOME) },
                         ),
                 )
                 plansRoutes(
