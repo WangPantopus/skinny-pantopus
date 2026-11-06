@@ -34,7 +34,7 @@
   line-gap-override: 0%;
 }
 
-/* Newsreader beyond its preloaded core (page.tsx). These are Google's own files, unchanged, so any character the
+/* Newsreader beyond its core (page.tsx). These are Google's own files, unchanged, so any character the
    core leaves out still draws in Newsreader; the browser fetches one only if a serif text uses a character in its
    range. The latin range is Google's minus the core's characters, so no character is in two files and the page
    never downloads both. Regenerate the files and these ranges together: scripts/newsreader-subset.py. */
