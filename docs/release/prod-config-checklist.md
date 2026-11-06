@@ -1341,8 +1341,9 @@ This section supersedes the historical signing/upload instructions below. Both s
 |---|---|
 | iOS record / main bundle | `6760512315` / `com.pantopus.app` |
 | iOS widget bundle | `com.pantopus.app.widgets` |
+| iOS notification extension bundle | `com.pantopus.app.notifications` |
 | iOS signing team | `6UYZBA546R` (same as published 1.5.0) |
-| App Group | Reuse `group.app.pantopus.ios`; both original app and renamed widget need membership and matching profiles |
+| App Group | Reuse `group.app.pantopus.ios`; the original app, the renamed widget and the notification extension need membership and matching profiles |
 | Android record / application ID | `4974977490173375457` / `com.pantopus.app` |
 | Android Kotlin namespace | Keep `app.pantopus.android`; this is source packaging, not the store identity |
 | Android debug application ID | `com.pantopus.app.debug` |
@@ -1388,8 +1389,13 @@ bundle exec fastlane listing
 
 The `release` lanes submit/promote builds and remain founder actions. The existing store links on the website already point to the correct original records.
 
-Android's `beta` and `listing` lanes disable Fastlane's automatic retry of a
-rejected `changes_not_sent_for_review` request. If Play rejects the hold, the
+Android's `beta` lane uploads a draft to the internal track without asking Play
+to hold changes back from review: Play refused that request ("Changes are sent
+for review automatically"), and on November 6 the founder chose to upload
+without it. Its upload may send other changes waiting in Play Console for
+review, so check Publishing overview before cutting a tag. The `listing` lane
+still asks for the hold and disables Fastlane's automatic retry of a rejected
+`changes_not_sent_for_review` request. If Play rejects the hold there, the
 command fails for founder review; do not retry without the flag as part of
 draft preparation.
 

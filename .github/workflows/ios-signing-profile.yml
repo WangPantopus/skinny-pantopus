@@ -1,0 +1,135 @@
+name: iOS signing profile (temporary)
+
+# One-time, for PantopusNotificationService (#3494). `profile` adds its App Store profile to the
+# signing repo with the secrets the release lanes already use; `beta` runs match read-only, so it
+# can't. Its App ID must exist first. `archive` then builds a signed Release archive without
+# uploading anything. Manual runs from master only (the ios-release environment). Delete after use.
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: What to run
+        type: choice
+        options: [profile, archive]
+        default: profile
+
+concurrency:
+  group: ios-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: frontend/apps/ios
+
+jobs:
+  profile:
+    name: Add the App Store profile
+    if: inputs.task == 'profile'
+    runs-on: xcode-27
+    timeout-minutes: 20
+    environment: ios-release
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+          working-directory: frontend/apps/ios
+
+      # The Fastfile's before_all runs `make bootstrap` for every lane.
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      # Creates only this profile: every other profile in the signing repo stays as it is.
+      - name: Create the profile
+        env:
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          # match commits the profile to the signing repo, and this runner has no git identity. It only
+          # logs a failed commit or push, so a green run doesn't prove it: list the repo's files afterwards.
+          MATCH_GIT_FULL_NAME: github-actions[bot]
+          MATCH_GIT_USER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_KEY_CONTENT }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          FASTLANE_HIDE_CHANGELOG: "true"
+          LC_ALL: en_US.UTF-8
+          LANG: en_US.UTF-8
+        run: bundle exec fastlane add_notification_extension_profile
+
+      # A profile only carries what its App ID had when it was made, so read that back.
+      - name: Show the profile's App Group
+        run: |
+          shopt -s nullglob
+          found=false
+          for dir in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            for file in "$dir"/*; do
+              plist=$(mktemp)
+              security cms -D -i "$file" > "$plist" 2>/dev/null || continue
+              name=$(plutil -extract Name raw -o - "$plist")
+              [[ "$name" == "match AppStore com.pantopus.app.notifications" ]] || continue
+              found=true
+              groups=$(plutil -extract Entitlements.com\\.apple\\.security\\.application-groups json -o - "$plist")
+              echo "$name has App Groups: $groups"
+              [[ "$groups" == *group.app.pantopus.ios* ]] || { echo "::error::Assign group.app.pantopus.ios to the App ID, then remake this profile"; exit 1; }
+            done
+          done
+          "$found" || { echo "::error::The profile wasn't installed"; exit 1; }
+
+  archive:
+    name: Build a signed Release archive (no upload)
+    if: inputs.task == 'archive'
+    runs-on: xcode-27
+    # About 24 minutes, as for ios-beta.yml.
+    timeout-minutes: 90
+    environment: ios-release
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode_27.1.app
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+          working-directory: frontend/apps/ios
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Write .env from secrets
+        env:
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_KEY_CONTENT }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for name in STRIPE_PUBLISHABLE_KEY MATCH_GIT_URL MATCH_PASSWORD APP_STORE_CONNECT_KEY_ID \
+                      APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_CONTENT APPLE_TEAM_ID; do
+            [[ -n "${!name}" ]] || { echo "::error::Missing secret $name"; exit 1; }
+            printf '%s=%s\n' "$name" "${!name}"
+          done > .env
+
+      - name: Fastlane build_release
+        env:
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          FASTLANE_HIDE_CHANGELOG: "true"
+          LC_ALL: en_US.UTF-8
+          LANG: en_US.UTF-8
+        run: bundle exec fastlane build_release

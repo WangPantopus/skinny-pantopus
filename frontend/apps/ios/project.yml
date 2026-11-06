@@ -228,6 +228,8 @@ targets:
         product: PostHog
       # Phase 6b — Live Activity host, embedded into PlugIns.
       - target: PantopusWidgets
+      # Runs before a push is shown, also embedded into PlugIns.
+      - target: PantopusNotificationService
     scheme:
       testTargets:
         - PantopusTests
@@ -294,6 +296,50 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.pantopus.app.widgets
         PRODUCT_NAME: PantopusWidgets
+        TARGETED_DEVICE_FAMILY: "1" # matches the app
+        SKIP_INSTALL: YES
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+        Staging:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: STAGING
+          SWIFT_COMPILATION_MODE: wholemodule
+        Release:
+          SWIFT_COMPILATION_MODE: wholemodule
+
+  # Keeps a push from showing its content when it's for an account that isn't
+  # signed in on this phone (NotificationService.swift). Needs its own App ID
+  # and App Store profile, like the widget (APP_STORE_TARGETS in the Fastfile).
+  PantopusNotificationService:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: PantopusNotificationService
+        excludes:
+          # Bundled explicitly below, like the app's manifest.
+          - "PrivacyInfo.xcprivacy"
+      - path: PantopusNotificationService/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      # Shared contract: the app writes it, this extension reads it.
+      - path: Pantopus/Core/Auth/PushAccountMarker.swift
+    entitlements:
+      path: PantopusNotificationService/PantopusNotificationService.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.app.pantopus.ios
+    info:
+      path: PantopusNotificationService/Info.plist
+      properties:
+        CFBundleDisplayName: Pantopus Notifications
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pantopus.app.notifications
+        PRODUCT_NAME: PantopusNotificationService
         TARGETED_DEVICE_FAMILY: "1" # matches the app
         SKIP_INSTALL: YES
       configs:

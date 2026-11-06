@@ -1,0 +1,92 @@
+name: Signing profile handoff (temporary)
+
+# One-time follow-up to ios-signing-profile.yml. That run created the profile at Apple, but CI's signing
+# repo token is read-only, so match couldn't commit it. This runs match against a local copy of the
+# signing repo and hands over the encrypted file it would have committed, wrapped for a throwaway key,
+# because a public repo's artifacts are public. Someone with push access then commits it. Delete after use.
+on:
+  workflow_dispatch:
+    inputs:
+      recipient_key:
+        description: Base64 of the PEM public key to wrap the file for
+        type: string
+        required: true
+
+concurrency:
+  group: ios-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: frontend/apps/ios
+
+jobs:
+  handoff:
+    name: Wrap the encrypted profile
+    runs-on: xcode-27
+    timeout-minutes: 20
+    environment: ios-release
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+          working-directory: frontend/apps/ios
+
+      # The Fastfile's before_all runs `make bootstrap` for every lane.
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Copy the signing repo locally
+        env:
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+        run: |
+          git -c http.extraheader="Authorization: Basic $MATCH_GIT_BASIC_AUTHORIZATION" clone --quiet --bare "$MATCH_GIT_URL" "$RUNNER_TEMP/signing.git"
+
+      - name: Run match against the copy
+        env:
+          MATCH_GIT_URL: file://${{ runner.temp }}/signing.git
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_FULL_NAME: github-actions[bot]
+          MATCH_GIT_USER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_KEY_CONTENT }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          FASTLANE_HIDE_CHANGELOG: "true"
+          LC_ALL: en_US.UTF-8
+          LANG: en_US.UTF-8
+        run: bundle exec fastlane add_notification_extension_profile
+
+      - name: Wrap what match committed
+        env:
+          RECIPIENT_KEY: ${{ inputs.recipient_key }}
+        run: |
+          file=profiles/appstore/AppStore_com.pantopus.app.notifications.mobileprovision
+          git -C "$RUNNER_TEMP/signing.git" log -1 --format='%s' --name-only master
+          git -C "$RUNNER_TEMP/signing.git" show "master:$file" > "$RUNNER_TEMP/profile.enc"
+          [[ "$(head -c 24 "$RUNNER_TEMP/profile.enc")" == "bWF0Y2hfZW5jcnlwdGVkX3Yy" ]] || { echo "::error::Not a match-encrypted file"; exit 1; }
+          out="$RUNNER_TEMP/handoff"
+          mkdir -p "$out"
+          printf '%s' "$RECIPIENT_KEY" | base64 -D > "$RUNNER_TEMP/recipient.pem"
+          openssl rand -out "$RUNNER_TEMP/k.bin" 32
+          openssl enc -aes-256-cbc -md sha256 -pbkdf2 -iter 100000 -salt -in "$RUNNER_TEMP/profile.enc" -out "$out/profile.enc.aes" -pass "file:$RUNNER_TEMP/k.bin"
+          openssl pkeyutl -encrypt -pubin -inkey "$RUNNER_TEMP/recipient.pem" -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 -in "$RUNNER_TEMP/k.bin" -out "$out/k.enc"
+          rm -f "$RUNNER_TEMP/k.bin"
+          ls -l "$out"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: signing-profile-handoff
+          path: ${{ runner.temp }}/handoff
+          if-no-files-found: error
+          retention-days: 1
