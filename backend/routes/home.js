@@ -2621,7 +2621,8 @@ function registerHomeRecordRoutes(path, kind) {
       if (kind === 'task' && result.task_completed === true && result.record.created_by
         && result.record.created_by !== req.user.id) {
         await require('../services/notificationService').notifyTaskCompleted({ creatorUserId: result.record.created_by,
-          homeId: result.record.home_id, taskId: result.record.id, completedAt: result.record.completed_at });
+          homeId: result.record.home_id, taskId: result.record.id, completedAt: result.record.completed_at,
+          completedById: req.user.id });
       }
       res.json({ [kind]: result.record });
     } catch (error) { homeRecordService.sendError(res, error); }

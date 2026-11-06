@@ -46,7 +46,7 @@ const PERSONAL_TEMPLATES = [
   { name: 'home_invite', pushTitle: '{actor.displayName} invited you to join a home', pushBody: "You've been invited to {home.name} as a household member." },
   { name: 'home_invite_accepted', pushTitle: '{actor.displayName} joined your home', pushBody: '{actor.displayName} accepted your invitation to {home.name}.' },
   { name: 'task_assigned', pushTitle: '{actor.displayName} assigned you a task', pushBody: '{task.title}' },
-  { name: 'task_completed', pushTitle: 'A Home task was completed', pushBody: '' },
+  { name: 'task_completed', pushTitle: '{actor.displayName} completed a task', pushBody: '{task.title}' },
   { name: 'bid_received', pushTitle: 'New bid on "{gig.title}"', pushBody: '{actor.displayName} placed a bid on your gig.' },
   { name: 'first_bid_received', pushTitle: 'Your first response! 🎉', pushBody: "{actor.displayName} wants to help with '{gig.title}'" },
   { name: 'bid_accepted', pushTitle: 'Your bid was accepted!', pushBody: 'Your bid on "{gig.title}" was accepted. You can start a chat to coordinate.' },
@@ -355,9 +355,11 @@ async function publishStoredNotification(data) {
  *   (P0.6 Notification firewall — defaults to 'personal'; every existing
  *   notifyX is personal-side and Phase 1 audience-side notifications must
  *   pass `context: 'audience'` explicitly).
+ * @param {{title: string, body?: string}} [opts.pushText] - what the phone and browser alert say when it is more
+ *   than the stored row may keep: content read for this recipient now (homeTaskPushText). The bell row keeps title/body.
  * @returns {Promise<Object|null>} notification or null on error
  */
-async function createNotification({ id, userId, type, title, body, icon, link, metadata, contextType, contextId, context, idempotencyKey, sendPush = true }) {
+async function createNotification({ id, userId, type, title, body, icon, link, metadata, contextType, contextId, context, idempotencyKey, sendPush = true, pushText = null }) {
   if (!userId || !type || !title) {
     logger.warn('createNotification called with missing required fields', { userId, type, title });
     return null;
@@ -414,10 +416,11 @@ async function createNotification({ id, userId, type, title, body, icon, link, m
       .then(async ([pushEnabled, typeEnabled]) => {
         if (!pushEnabled || !typeEnabled) return;
         if (!(await readableNotifications([data])).length) return;
-        emitDesktopAlert(data);
+        const alert = pushText?.title ? { ...data, title: pushText.title, body: pushText.body ?? data.body } : data;
+        emitDesktopAlert(alert);
         return pushService.sendToUser(userId, {
-          title,
-          body: body || '',
+          title: alert.title,
+          body: alert.body || '',
           data: { notificationId: data.id, type, link: link || null, ...(metadata || {}) },
         });
       })
@@ -570,9 +573,28 @@ async function notifyTaskAssigned({ assigneeUserId, assignerName, taskTitle, hom
 }
 
 /**
- * Notify the task creator that it was completed.
+ * What a Home task notice's phone notification says: who acted, as the Home names its members, and the task's title as
+ * `recipientId` may read it now ("Sam R. completed a task" / "Test for radon"). The founder chose on November 5 that
+ * notifications show their content, as other apps do, and the phone hides it while locked (iOS Show Previews, Android's
+ * sensitive-content setting). The bell row stays generic: it outlives the recipient's access to the Home, and only an
+ * authorized task read shows a task. Null when the task can't be read for them now; the push then says what the bell says.
  */
-async function notifyTaskCompleted({ creatorUserId, homeId, taskId, completedAt }) {
+async function homeTaskPushText({ homeId, taskId, recipientId, actorId, action }) {
+  try {
+    const { records } = await require('./homeRecordService').list({ homeId, actorId: recipientId, kind: 'task', recordId: taskId });
+    const task = String(records[0]?.title || '').trim();
+    if (!task) return null;
+    const names = actorId ? await require('../utils/identityProfiles').localDisplayNames([actorId]) : new Map();
+    return { title: `${names.get(String(actorId)) || 'A household member'} ${action}`, body: task };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Notify the task creator that someone else completed it.
+ */
+async function notifyTaskCompleted({ creatorUserId, homeId, taskId, completedAt, completedById = null }) {
   if (!creatorUserId || !homeId || !taskId || !completedAt || !Number.isFinite(Date.parse(completedAt))) return null;
   return createNotification({
     userId: creatorUserId,
@@ -582,6 +604,7 @@ async function notifyTaskCompleted({ creatorUserId, homeId, taskId, completedAt 
     link: `/app/homes/${homeId}/dashboard?tab=tasks`,
     metadata: { home_id: homeId, task_id: taskId },
     idempotencyKey: `home-task-completed:${taskId}:${completedAt}`,
+    pushText: await homeTaskPushText({ homeId, taskId, recipientId: creatorUserId, actorId: completedById, action: 'completed a task' }),
   });
 }
 
@@ -1507,10 +1530,19 @@ async function deliverStoredHomeTaskNotification(notification, { pushAllowedAtAs
   // A notice created while disabled stays in-app even if push is later enabled.
   const suppressed = !pushAllowedAtAssignment || !pushSwitchOn(global.data)
     || granular.data?.home_reminders_enabled === false;
-  if (!suppressed) emitDesktopAlert(notification);
+  let alert = notification;
+  if (!suppressed) {
+    // The phone says who assigned which task (homeTaskPushText); the stored row stays generic.
+    const { data: event, error: eventError } = await supabaseAdmin.from('HomeTaskAssignmentDelivery').select('actor_id')
+      .eq('id', notification.metadata.assignment_event_id).maybeSingle();
+    const pushText = eventError ? null : await homeTaskPushText({ homeId: notification.metadata.home_id,
+      taskId: notification.metadata.task_id, recipientId: userId, actorId: event?.actor_id, action: 'assigned you a task' });
+    if (pushText) alert = { ...notification, ...pushText };
+    emitDesktopAlert(alert);
+  }
   const result = suppressed ? { acceptedCount: 0, unresolvedCount: 0 }
     : await pushService.sendToUserWithReceipt(userId, {
-      title: notification.title, body: notification.body || '',
+      title: alert.title, body: alert.body || '',
       data: { ...notification.metadata, notificationId: notification.id,
         type: notification.type, link: notification.link || null },
     });
