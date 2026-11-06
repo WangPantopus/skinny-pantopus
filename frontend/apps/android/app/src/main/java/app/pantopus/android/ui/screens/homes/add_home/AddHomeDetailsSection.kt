@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsFields
+import app.pantopus.android.data.api.models.homes.PropertySuggestionsResponse
 import app.pantopus.android.data.api.models.homes.RecordProvenanceDto
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.theme.PantopusColors
@@ -64,46 +65,15 @@ internal fun AddHomeDetailsSection(
 ) {
     val suggestions = state.propertySuggestions
     val hasRecord = suggestions?.hasPublicRecord == true
-    val buildingOnly = suggestions?.isBuildingOnly == true
     // While the county record is on its way, the fields it fills say so.
     val lookingUp = "Looking up…".takeIf { state.propertyLookupPending }
-    // Beside a field the person changed, once the record names its source.
-    val named = suggestions?.provenance != null
     val recorded = suggestions?.suggestions
-    val ownEntry = { value: String, record: String? -> "Your entry".takeIf { named && value.isNotEmpty() && value != record } }
+    val ownEntry = { value: String, record: String? -> ownEntryTag(suggestions, value, record) }
     Column(
         modifier = Modifier.fillMaxWidth().testTag("addHomeDetailsSection"),
         verticalArrangement = Arrangement.spacedBy(Spacing.s4),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-            Text(
-                text =
-                    when {
-                        hasRecord && !buildingOnly -> "Review public property details"
-                        state.propertyLookupComplete -> "Confirm property details"
-                        else -> "Tell us about your home"
-                    },
-                style = PantopusTextStyle.body,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.appText,
-            )
-            Text(
-                text =
-                    when {
-                        buildingOnly -> state.propertyLookupMessage
-                        hasRecord ->
-                            "We found public records for this address. Check the details, " +
-                                "then edit anything that looks off."
-                        state.propertyLookupComplete ->
-                            "Confirm the basic home details before continuing."
-                        state.propertyLookupPending ->
-                            "Looking up public records for this address. The details below fill in by themselves."
-                        else -> "All optional — you can always add these later."
-                    },
-                style = PantopusTextStyle.caption,
-                color = PantopusColors.appTextSecondary,
-            )
-        }
+        DetailsHeading(state, hasRecord, buildingOnly = suggestions?.isBuildingOnly == true)
 
         when {
             state.isLoadingPropertySuggestions || state.propertyLookupPending -> PublicRecordsSkeleton()
@@ -273,6 +243,50 @@ private fun HomeTypeChips(
         }
     }
 }
+
+@Composable
+private fun DetailsHeading(
+    state: AddHomeUiState,
+    hasRecord: Boolean,
+    buildingOnly: Boolean,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+        Text(
+            text =
+                when {
+                    hasRecord && !buildingOnly -> "Review public property details"
+                    state.propertyLookupComplete -> "Confirm property details"
+                    else -> "Tell us about your home"
+                },
+            style = PantopusTextStyle.body,
+            fontWeight = FontWeight.SemiBold,
+            color = PantopusColors.appText,
+        )
+        Text(
+            text =
+                when {
+                    buildingOnly -> state.propertyLookupMessage
+                    hasRecord ->
+                        "We found public records for this address. Check the details, " +
+                            "then edit anything that looks off."
+                    state.propertyLookupComplete ->
+                        "Confirm the basic home details before continuing."
+                    state.propertyLookupPending ->
+                        "Looking up public records for this address. The details below fill in by themselves."
+                    else -> "All optional — you can always add these later."
+                },
+            style = PantopusTextStyle.caption,
+            color = PantopusColors.appTextSecondary,
+        )
+    }
+}
+
+/** Beside a field the person changed, once the record names its source. */
+private fun ownEntryTag(
+    suggestions: PropertySuggestionsResponse?,
+    value: String,
+    recorded: String?,
+): String? = "Your entry".takeIf { suggestions?.provenance != null && value.isNotEmpty() && value != recorded }
 
 /**
  * The public records card. Renders the structured fields the lookup returned
