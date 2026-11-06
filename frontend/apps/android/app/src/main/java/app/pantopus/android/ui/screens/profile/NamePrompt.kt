@@ -76,26 +76,35 @@ class NamePromptViewModel
     ) : ViewModel() {
         private val _form = MutableStateFlow<NamePromptForm?>(null)
         val form: StateFlow<NamePromptForm?> = _form.asStateFlow()
+        private val _deciding = MutableStateFlow(false)
+
+        /** Working out whether to ask. The launch notices wait for the answer, so only one dialog shows at a time. */
+        val deciding: StateFlow<Boolean> = _deciding.asStateFlow()
 
         /** Opens the dialog when [userId]'s account has no name and this device hasn't asked it yet. */
         fun evaluate(userId: String) {
             if (prefs.getBoolean(askedKey(userId), false) || _form.value != null) return
+            _deciding.value = true
             viewModelScope.launch {
-                // The kept profile already has the name, so there is nothing to ask and no read to send at launch.
-                // Off the main thread: this opens the entry, which reads its saved copy as the tabs first draw.
-                val kept = withContext(Dispatchers.IO) { repo.ownProfileCopy() }?.user?.takeIf { it.id == userId }
-                if (kept != null && !needsAsking(kept)) return@launch
-                val profile = (repo.ownProfile() as? NetworkResult.Success)?.data?.user ?: return@launch
-                if (profile.id != userId || !needsAsking(profile)) return@launch
-                // Asked once: remembered as soon as it shows.
-                prefs.edit().putBoolean(askedKey(userId), true).apply()
-                _form.value =
-                    NamePromptForm(
-                        firstName = profile.firstName?.trim().orEmpty(),
-                        middleName = profile.middleName?.trim().orEmpty(),
-                        lastName = profile.lastName?.trim().orEmpty(),
-                    )
+                _form.value = formToAsk(userId)
+                _deciding.value = false
             }
+        }
+
+        private suspend fun formToAsk(userId: String): NamePromptForm? {
+            // The kept profile already has the name, so there is nothing to ask and no read to send at launch.
+            // Off the main thread: this opens the entry, which reads its saved copy as the tabs first draw.
+            val kept = withContext(Dispatchers.IO) { repo.ownProfileCopy() }?.user?.takeIf { it.id == userId }
+            if (kept != null && !needsAsking(kept)) return null
+            val profile = (repo.ownProfile() as? NetworkResult.Success)?.data?.user ?: return null
+            if (profile.id != userId || !needsAsking(profile)) return null
+            // Asked once: remembered as soon as it shows.
+            prefs.edit().putBoolean(askedKey(userId), true).apply()
+            return NamePromptForm(
+                firstName = profile.firstName?.trim().orEmpty(),
+                middleName = profile.middleName?.trim().orEmpty(),
+                lastName = profile.lastName?.trim().orEmpty(),
+            )
         }
 
         fun onFirstNameChange(value: String) = edit { it.copy(firstName = value, firstNameError = null, saveError = null) }
