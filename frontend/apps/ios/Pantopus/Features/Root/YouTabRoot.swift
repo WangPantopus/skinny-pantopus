@@ -1285,6 +1285,9 @@ public struct YouTabRoot: View {
                     Task { @MainActor in
                         path.append(.chatConversation(destination))
                     }
+                },
+                onOpenProfile: { userId in
+                    Task { @MainActor in path.append(.publicProfile(userId: userId)) }
                 }
             )
         case .marketplace:
@@ -1611,6 +1614,9 @@ public struct YouTabRoot: View {
                 },
                 onOpenChat: { destination in
                     Task { @MainActor in path.append(.chatConversation(destination)) }
+                },
+                onOpenProfile: { userId in
+                    Task { @MainActor in path.append(.publicProfile(userId: userId)) }
                 }
             )
         case .searchSupportTrains:
@@ -2557,7 +2563,9 @@ public struct YouTabRoot: View {
             ) { Task { @MainActor in pop() } }
         case let .homeMembers(homeId):
             // Guests tab "Add a guest": the guest-pass manager, which lists the new pass on return.
-            MembersListView(homeId: homeId) {
+            MembersListView(homeId: homeId) { userId in
+                Task { @MainActor in path.append(.publicProfile(userId: userId)) }
+            } onAddGuest: {
                 Task { @MainActor in path.append(.guestPasses(homeId: homeId)) }
             }
         case let .guestPasses(homeId):
@@ -2772,7 +2780,7 @@ public struct YouTabRoot: View {
                 }
             )
         case let .businessTeam(businessId):
-            BusinessTeamView(businessId: businessId)
+            BusinessTeamView(businessId: businessId) { path.append(.publicProfile(userId: $0)) }
         case let .businessPaymentsOwner(businessId):
             BusinessPaymentsView(businessId: businessId)
         case let .businessInvoicesOwner(businessId):

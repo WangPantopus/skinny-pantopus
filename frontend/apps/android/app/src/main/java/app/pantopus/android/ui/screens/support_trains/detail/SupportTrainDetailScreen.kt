@@ -43,9 +43,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
@@ -66,6 +68,7 @@ import app.pantopus.android.ui.components.SlotCalendar
 import app.pantopus.android.ui.components.SlotCalendarState
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
+import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.support_trains.detail.components.RecipientCard
@@ -252,6 +255,8 @@ data class SupportTrainDetailActions(
     val onMessageHost: ((HostedByFooter) -> Unit)? = null,
     /** Opens the train's group chat (room id, train title); shown only to people in it. */
     val onOpenChat: ((roomId: String, title: String) -> Unit)? = null,
+    /** Opens a person's profile (the host's, from their photo). */
+    val onOpenProfile: ((String) -> Unit)? = null,
 )
 
 /**
@@ -283,6 +288,8 @@ private fun GuardedReserveSheet(
                 confirmValueChange = confirmValueChange,
             ),
         containerColor = PantopusColors.appBg,
+        // The sheet is a window of its own: the keyboard rules go with it.
+        modifier = Modifier.closesKeyboardOnTapOrScroll(),
     ) {
         content()
     }
@@ -337,6 +344,8 @@ internal fun SupportTrainDetailContentLayout(
         val viewerIsOrganizer = loaded?.privateDetailsAvailable == true && (isOrganizer || loaded.viewerRole.isOrganizer)
         val messageHost =
             loaded?.takeIf { it.privateDetailsAvailable }?.let { content -> messageHostAction(content, actions.onMessageHost) }
+        val hostProfile =
+            loaded?.hostedBy?.organizerUserId?.let { id -> actions.onOpenProfile?.let { open -> { open(id) } } }
         TopBar(
             onBack = actions.onBack,
             onShare = actions.onShare,
@@ -353,6 +362,7 @@ internal fun SupportTrainDetailContentLayout(
                     onSendCard = actions.onSendCard,
                     onJoinAsBackup = actions.onJoinAsBackup,
                     onMessageHost = messageHost,
+                    onOpenHostProfile = hostProfile,
                     onOpenChat = actions.onOpenChat,
                     isSubmitting = isSubmitting,
                     onReserveSlot = onReserveSlot,
@@ -502,6 +512,7 @@ private fun LoadedBody(
     onSendCard: (() -> Unit)?,
     onJoinAsBackup: (() -> Unit)?,
     onMessageHost: (() -> Unit)?,
+    onOpenHostProfile: (() -> Unit)? = null,
     onOpenChat: ((roomId: String, title: String) -> Unit)? = null,
     isSubmitting: Boolean = false,
     onReserveSlot: (String?) -> Unit = {},
@@ -593,7 +604,9 @@ private fun LoadedBody(
 
             Spacer(modifier = Modifier.height(Spacing.s3))
             GroupChatEntry(content, onOpenChat)
-            if (content.privateDetailsAvailable) HostedByRow(content.hostedBy, onMessageHost = onMessageHost)
+            if (content.privateDetailsAvailable) {
+                HostedByRow(content.hostedBy, onMessageHost = onMessageHost, onOpenProfile = onOpenHostProfile)
+            }
             Spacer(modifier = Modifier.height(Spacing.s3))
         }
 
@@ -982,6 +995,7 @@ private fun CelebrationBannerView(content: CelebrationBanner) {
 private fun HostedByRow(
     content: HostedByFooter,
     onMessageHost: (() -> Unit)?,
+    onOpenProfile: (() -> Unit)? = null,
 ) {
     val shape = RoundedCornerShape(Radii.md)
     Row(
@@ -1001,6 +1015,16 @@ private fun HostedByRow(
                     if (onMessageHost != null) role = Role.Button
                     contentDescription =
                         "Hosted by ${content.organizerDisplayName}${content.neighborHint?.let { ", $it" } ?: ""}"
+                    // The host's photo opens their profile; TalkBack reaches it as an action on the row.
+                    if (onOpenProfile != null) {
+                        customActions =
+                            listOf(
+                                CustomAccessibilityAction("Open ${content.organizerDisplayName}'s profile") {
+                                    onOpenProfile()
+                                    true
+                                },
+                            )
+                    }
                 },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
@@ -1010,7 +1034,8 @@ private fun HostedByRow(
                 Modifier
                     .size(24.dp)
                     .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(PantopusColors.errorLight, PantopusColors.error))),
+                    .background(Brush.linearGradient(listOf(PantopusColors.errorLight, PantopusColors.error)))
+                    .then(onOpenProfile?.let { Modifier.clickable(onClick = it).testTag("supportTrainHostPhoto") } ?: Modifier),
             contentAlignment = Alignment.Center,
         ) {
             Text(

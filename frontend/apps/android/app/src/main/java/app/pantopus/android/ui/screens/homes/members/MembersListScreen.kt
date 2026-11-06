@@ -44,12 +44,17 @@ const val MEMBERS_LIST_TAG = "membersList"
  * `POST …/members/:userId/role`,
  * `POST …/household-access-requests/:requestId/(approve|reject)`, and
  * prepared member-removal commands and separate historical recovery.
+ *
+ * Its complexity is one plain branch per [MembersListEvent], not complex logic.
  */
+@Suppress("CyclomaticComplexMethod")
 @Composable
 fun MembersListScreen(
     onBack: () -> Unit,
     onAddGuest: () -> Unit = {},
     onReviewResidency: () -> Unit = {},
+    /** A member's or requester's row: their profile. */
+    onOpenProfile: (String) -> Unit = {},
     viewModel: MembersListViewModel = hiltViewModel(),
 ) {
     HomeCopyLifecycle(viewModel::load, viewModel::suspendContent, observeStoreChanges = true)
@@ -113,6 +118,10 @@ fun MembersListScreen(
             is MembersListEvent.ConfirmDeclineRequest -> {
                 declineTarget = Triple(event.requestId, event.name, event.identity)
                 viewModel.acknowledgeEvent()
+            }
+            is MembersListEvent.OpenProfile -> {
+                viewModel.acknowledgeEvent()
+                onOpenProfile(event.userId)
             }
         }
     }

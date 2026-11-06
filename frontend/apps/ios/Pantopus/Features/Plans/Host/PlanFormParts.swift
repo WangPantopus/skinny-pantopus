@@ -36,6 +36,8 @@ struct PlanTextInput: View {
     /// What VoiceOver calls the field once it has text (the placeholder goes then).
     var label: String?
 
+    @FocusState private var isFocused: Bool
+
     var body: some View {
         Group {
             if multiline {
@@ -46,11 +48,14 @@ struct PlanTextInput: View {
                 TextField(placeholder, text: $text)
             }
         }
+        .focused($isFocused)
         .planFont(.body)
         .foregroundStyle(Theme.Color.appText)
         .padding(.horizontal, 14)
         .padding(.vertical, Spacing.s3)
         .frame(minHeight: 48)
+        // A tap anywhere in the box types in the field, not only on its line of text.
+        .typesInFieldOnTap($isFocused)
         .background(RoundedRectangle(cornerRadius: Radii.md, style: .continuous).fill(Theme.Color.appSurface))
         .overlay(RoundedRectangle(cornerRadius: Radii.md, style: .continuous).stroke(Theme.Color.appBorderStrong, lineWidth: 1))
         .onChange(of: text) { _, new in

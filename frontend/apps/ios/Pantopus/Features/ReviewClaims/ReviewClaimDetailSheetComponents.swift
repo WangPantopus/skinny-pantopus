@@ -66,7 +66,7 @@ struct ChallengeComposerSheet: View {
             if dynamicTypeSize.isAccessibilitySize {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    Button("Done") { questionFocused = false }
+                    Button("Done") { Keyboard.close() }
                 }
             }
         }
@@ -404,7 +404,7 @@ struct ReviewClaimNoteCaptureSheet: View {
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("Done") { noteFocused = false }
+                Button("Done") { Keyboard.close() }
             }
         }
     }

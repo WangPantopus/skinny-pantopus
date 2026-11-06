@@ -105,31 +105,40 @@ public struct GeoPlaceCenter: Decodable, Sendable, Hashable {
     public let lng: Double
 }
 
-/// One named place (POI / locality) from `GET /api/geo/places/nearby`
-/// or `GET /api/geo/places/search` — the Instagram-style place-tag
-/// picker's row model.
+/// One named place (venue / locality / address) from
+/// `GET /api/geo/places/nearby` or `GET /api/geo/places/search` — the
+/// Instagram-style place-tag picker's row model.
 public struct GeoPlace: Decodable, Sendable, Hashable, Identifiable {
-    /// Mapbox feature id (e.g. `poi.123`). Nullable on the wire.
+    /// OpenStreetMap venue id (`osm:node/123`) or Mapbox feature id
+    /// (`place.123`, `address.456`). Nullable on the wire.
     public let placeId: String?
     public let name: String
-    /// e.g. "coffee shop, cafe" for POIs; nil for localities.
+    /// A venue's kind ("Barbecue restaurant", "Church"); Mapbox's
+    /// category string for its rows; nil for localities.
     public let category: String?
+    /// Icon key for a venue (`restaurant`, `cafe`, `school`, `worship`,
+    /// `park`, `stadium`, …); nil for Mapbox rows (drawn as a pin).
+    public let icon: String?
     /// Short address line ("123 Elm St").
     public let address: String?
-    /// Full Mapbox `place_name` ("Joe's, 123 Elm St, Portland, OR…").
+    /// Full address line ("Joe's, 123 Elm St, Portland, OR…").
     public let fullAddress: String?
     public let center: GeoPlaceCenter
     /// `poi` / `place` / `address` / … (provider `featureKind`).
     public let kind: String
-    /// Metres from the query point; nil when no query coords were sent.
+    /// Metres from the query point (to a venue's outline); nil when no
+    /// query coords were sent.
     public let distanceM: Double?
+    /// True when the query point is inside the venue's outline (the
+    /// stadium the photo was taken in).
+    public let contains: Bool?
 
     public var id: String {
         placeId ?? "\(name)|\(center.lat)|\(center.lng)"
     }
 
     private enum CodingKeys: String, CodingKey {
-        case name, category, address, center, kind
+        case name, category, icon, address, center, kind, contains
         case placeId = "place_id"
         case fullAddress = "full_address"
         case distanceM = "distance_m"
@@ -140,9 +149,16 @@ public struct GeoPlace: Decodable, Sendable, Hashable, Identifiable {
 public struct GeoNearbyPlacesResponse: Decodable, Sendable, Hashable {
     public let places: [GeoPlace]
     public let locality: GeoPlace?
+    /// True while a new area's venues are still being gathered — ask
+    /// again shortly.
+    public let loading: Bool?
+    /// Data credit to show under venue rows ("© OpenStreetMap contributors").
+    public let attribution: String?
 }
 
 /// `GET /api/geo/places/search` envelope.
 public struct GeoPlaceSearchResponse: Decodable, Sendable, Hashable {
     public let places: [GeoPlace]
+    /// Data credit to show under venue rows, when any are listed.
+    public let attribution: String?
 }

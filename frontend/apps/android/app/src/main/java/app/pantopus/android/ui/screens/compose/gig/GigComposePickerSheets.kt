@@ -683,6 +683,7 @@ private fun TagsSheetContent(
                         onDone = {
                             vm.addTag(draft)
                             draft = ""
+                            defaultKeyboardAction(ImeAction.Done)
                         },
                     ),
                 modifier = Modifier.widthIn(min = 90.dp).testTag("gigPicker.tagInput"),

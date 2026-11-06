@@ -18,6 +18,7 @@ import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import ErrorState from '@/components/ui/ErrorState';
 import { pushSignal } from '@/lib/signal-buffer';
 import PaymentStatusBadge from '@/components/payments/PaymentStatusBadge';
+import UserAvatarLink from '@/components/user/UserAvatarLink';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import GigTimeline from '@/components/gig-detail/GigTimeline';
 import MediaLightbox from '@/components/gig-detail/MediaLightbox';
@@ -785,21 +786,24 @@ export default function GigDetailsPage() {
             <div className="bg-app-surface rounded-xl p-6 border border-app-border">
               <h3 className="text-sm font-medium text-app-text-secondary mb-4">Posted by</h3>
               <div className="flex items-center gap-3 mb-4">
-                {posterAvatar ? (
-                  // Native img: avatars may come from any storage host without Next image remotePatterns churn.
-                  <img
-                    src={posterAvatar}
-                    alt={posterDisplayName}
-                    width={48}
-                    height={48}
-                    className="h-12 w-12 shrink-0 rounded-full object-cover ring-1 ring-app-border-subtle"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-lg font-semibold text-white">
-                    {posterInitial}
-                  </div>
-                )}
+                {/* The photo opens the profile the name links to; an anonymous poster's opens nothing. */}
+                <UserAvatarLink href={!isAnonymousPoster && posterUsername ? `/${posterUsername}` : null}>
+                  {posterAvatar ? (
+                    // Native img: avatars may come from any storage host without Next image remotePatterns churn.
+                    <img
+                      src={posterAvatar}
+                      alt={posterDisplayName}
+                      width={48}
+                      height={48}
+                      className="h-12 w-12 shrink-0 rounded-full object-cover ring-1 ring-app-border-subtle"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-purple-500 text-lg font-semibold text-white">
+                      {posterInitial}
+                    </div>
+                  )}
+                </UserAvatarLink>
                 <div>
                   {isAnonymousPoster ? (
                     <p className="font-semibold text-app-text">{posterDisplayName}</p>

@@ -160,7 +160,13 @@ private fun ColumnScope.InviteBody(
                         keyboardType = KeyboardType.Email,
                         imeAction = ImeAction.Done,
                     ),
-                keyboardActions = KeyboardActions(onDone = { vm.addEmailFromQuery() }),
+                keyboardActions =
+                    KeyboardActions(
+                        onDone = {
+                            vm.addEmailFromQuery()
+                            defaultKeyboardAction(ImeAction.Done)
+                        },
+                    ),
             )
         }
     }

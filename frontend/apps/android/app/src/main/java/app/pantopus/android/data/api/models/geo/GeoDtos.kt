@@ -82,23 +82,29 @@ data class GeoPlaceCenter(
 )
 
 /**
- * One nearby / searched place for Instagram-style post tagging —
- * a Mapbox POI (`kind == "poi"`) or a locality (`kind == "place"`).
+ * One nearby / searched place for Instagram-style post tagging — an
+ * OpenStreetMap venue (`kind == "poi"`, with [icon]), a locality
+ * (`kind == "place"`) or a Mapbox address / place from search.
  * Wire shape from `GET /api/geo/places/nearby|search`.
  */
 @JsonClass(generateAdapter = true)
 data class GeoPlace(
+    /** OpenStreetMap venue id (`osm:node/123`) or Mapbox feature id (`place.123`). */
     @Json(name = "place_id") val placeId: String? = null,
     val name: String,
-    /** e.g. "coffee shop, cafe". */
+    /** A venue's kind ("Barbecue restaurant", "Church"); Mapbox's category string for its rows. */
     val category: String? = null,
     /** Short address line. */
     val address: String? = null,
     @Json(name = "full_address") val fullAddress: String? = null,
     val center: GeoPlaceCenter,
     val kind: String,
-    /** Meters from the query point; null when no coords were sent. */
+    /** Meters from the query point (to a venue's outline); null when no coords were sent. */
     @Json(name = "distance_m") val distanceM: Double? = null,
+    /** Icon key for a venue (`restaurant`, `cafe`, `school`, `worship`, …); null for Mapbox rows (a pin). */
+    val icon: String? = null,
+    /** True when the query point is inside the venue's outline (the stadium the photo was taken in). */
+    val contains: Boolean? = null,
 )
 
 /** `GET /api/geo/places/nearby` envelope. */
@@ -106,10 +112,16 @@ data class GeoPlace(
 data class GeoNearbyPlacesResponse(
     val places: List<GeoPlace> = emptyList(),
     val locality: GeoPlace? = null,
+    /** True while a new area's venues are still being gathered — ask again shortly. */
+    val loading: Boolean = false,
+    /** Data credit to show under venue rows ("© OpenStreetMap contributors"). */
+    val attribution: String? = null,
 )
 
 /** `GET /api/geo/places/search` envelope. */
 @JsonClass(generateAdapter = true)
 data class GeoPlaceSearchResponse(
     val places: List<GeoPlace> = emptyList(),
+    /** Data credit to show under venue rows, when any are listed. */
+    val attribution: String? = null,
 )

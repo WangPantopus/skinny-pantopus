@@ -2,11 +2,12 @@
 //  PlacePickerViewModel.swift
 //  Pantopus
 //
-//  Backs `PlacePickerSheet`. Loads nearby named places (POIs + the
-//  enclosing locality) from `GET /api/geo/places/nearby` around the
-//  active anchor — the media capture location when geotagged media is
-//  attached (Instagram behavior), the device fix otherwise — and
-//  drives the debounced place search against
+//  Backs `PlacePickerSheet`. Loads nearby named places (OpenStreetMap
+//  venues + the enclosing locality) from `GET /api/geo/places/nearby`
+//  around the active anchor — the media capture location when geotagged
+//  media is attached (Instagram behavior), the device fix otherwise —
+//  asking again every few seconds while the server is still gathering a
+//  new area's venues, and drives the debounced place search against
 //  `GET /api/geo/places/search`. Neither anchor → search-only mode.
 //
 
@@ -35,11 +36,27 @@ public final class PlacePickerViewModel {
 
     public private(set) var state: State = .loading
 
+    /// A nearby reply kept for restoring the list when a search clears.
+    private struct NearbyPayload {
+        let places: [GeoPlace]
+        let locality: GeoPlace?
+        let attribution: String?
+    }
+
     /// True when the ACTIVE anchor has no coordinate (current-location
     /// anchor with no device fix) — the sheet hides the NEARBY section
     /// and everything flows through search. Never true while the media
     /// anchor is active: media coords are always available.
     public private(set) var isSearchOnly = false
+
+    /// True while the server is still gathering a new area's venues
+    /// (`loading` on the nearby reply): the sheet shows placeholder rows
+    /// under what's listed, and `load()` asks again every few seconds.
+    public private(set) var isFindingPlaces = false
+
+    /// Data credit for the venue rows on screen ("© OpenStreetMap
+    /// contributors"); nil when none are listed.
+    public private(set) var attribution: String?
 
     /// Anchor the nearby list + search proximity revolve around.
     /// Defaults to `.media` when a media capture location was supplied
@@ -64,12 +81,21 @@ public final class PlacePickerViewModel {
     private var deviceCoordinate: UserCoordinate?
     /// Last successful nearby payload — restored when the search field
     /// is cleared so the NEARBY section reappears without a refetch.
-    private var lastNearby: (places: [GeoPlace], locality: GeoPlace?)?
+    private var lastNearby: NearbyPayload?
     /// Debounced in-flight search. Internal so tests can await it.
     private(set) var searchTask: Task<Void, Never>?
     /// Monotonic load stamp — an anchor switch starts a NEW load, and a
     /// stale in-flight load must not clobber the newer anchor's state.
     private var loadGeneration = 0
+    /// How often, and how many times, a nearby list still loading is asked
+    /// for again (the server keeps gathering meanwhile). Internal so tests
+    /// can shorten it.
+    var findingPollInterval: Duration = .seconds(3)
+    var maxFindingPolls = 8
+    /// The pending ask-again for a list the server is still gathering. A
+    /// newer load cancels it; it holds the view-model weakly, so it stops
+    /// once the sheet is gone. Internal so tests can await it.
+    private(set) var findingTask: Task<Void, Never>?
 
     /// Live wiring. Split from the injecting init instead of default
     /// args — default-arg @MainActor VM initializers SIL-crash on
@@ -99,10 +125,15 @@ public final class PlacePickerViewModel {
     /// capture coords are used directly — no device fix is resolved (and
     /// no permission prompt fires). Current anchor: resolve a device fix
     /// (lazy when-in-use prompt lives inside the provider); no fix →
-    /// search-only mode, while a media anchor chip stays switchable.
+    /// search-only mode, while a media anchor chip stays switchable. A
+    /// reply that's still `loading` is shown, and asked for again in the
+    /// background until the venues arrive (or `maxFindingPolls` runs out).
     public func load() async {
         loadGeneration &+= 1
         let generation = loadGeneration
+        findingTask?.cancel()
+        findingTask = nil
+        isFindingPlaces = false
         if !hasActiveQuery {
             state = .loading
         }
@@ -120,27 +151,56 @@ public final class PlacePickerViewModel {
         // their live search results (or error) with the nearby state.
         guard let coordinate = anchor else {
             isSearchOnly = true
-            lastNearby = ([], nil)
+            lastNearby = NearbyPayload(places: [], locality: nil, attribution: nil)
             if !hasActiveQuery {
                 state = .loaded(nearby: [], locality: nil)
+                attribution = nil
             }
             return
         }
         isSearchOnly = false
+        await fetchNearby(
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+            generation: generation,
+            asked: 0
+        )
+    }
+
+    /// One nearby request. A reply still `loading` is shown, and asked for
+    /// again after `findingPollInterval` in `findingTask`.
+    private func fetchNearby(latitude: Double, longitude: Double, generation: Int, asked: Int) async {
         do {
             let response: GeoNearbyPlacesResponse = try await api.request(
-                GeoEndpoints.nearbyPlaces(
-                    latitude: coordinate.latitude,
-                    longitude: coordinate.longitude
-                )
+                GeoEndpoints.nearbyPlaces(latitude: latitude, longitude: longitude)
             )
             guard generation == loadGeneration else { return }
-            lastNearby = (response.places, response.locality)
+            lastNearby = NearbyPayload(
+                places: response.places,
+                locality: response.locality,
+                attribution: response.attribution
+            )
+            let stillFinding = response.loading == true && asked < maxFindingPolls
+            isFindingPlaces = stillFinding
             if !hasActiveQuery {
                 state = .loaded(nearby: response.places, locality: response.locality)
+                attribution = response.attribution
+            }
+            guard stillFinding else { return }
+            let interval = findingPollInterval
+            findingTask = Task { [weak self] in
+                try? await Task.sleep(for: interval)
+                guard !Task.isCancelled, let self, generation == loadGeneration else { return }
+                await fetchNearby(
+                    latitude: latitude,
+                    longitude: longitude,
+                    generation: generation,
+                    asked: asked + 1
+                )
             }
         } catch {
             guard generation == loadGeneration else { return }
+            isFindingPlaces = false
             let message = (error as? APIError)?.errorDescription
                 ?? "Couldn't load nearby places. Try again."
             if !hasActiveQuery {
@@ -210,6 +270,7 @@ public final class PlacePickerViewModel {
             // Cleared / too short — restore the nearby list.
             if let nearby = lastNearby {
                 state = .loaded(nearby: nearby.places, locality: nearby.locality)
+                attribution = nearby.attribution
             }
             return
         }
@@ -242,6 +303,7 @@ public final class PlacePickerViewModel {
             )
             guard !Task.isCancelled, query == trimmedQuery else { return }
             state = response.places.isEmpty ? .empty : .searchResults(response.places)
+            attribution = response.places.isEmpty ? nil : response.attribution
         } catch {
             guard !Task.isCancelled, query == trimmedQuery else { return }
             let message = (error as? APIError)?.errorDescription
