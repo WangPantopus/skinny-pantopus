@@ -44,6 +44,8 @@ export interface SectionCardProps {
   value?: ReactNode;
   /** Quiet supporting line under the value (e.g. "Screening, not a diagnosis"). */
   caption?: ReactNode;
+  /** The unavailable state's own line, in place of "Not available for your area yet." (the server's reason). */
+  unavailableTitle?: ReactNode;
   chip?: PlaceSectionCardChip;
   /** Small semantic dot before the inline value. */
   statusDot?: StatusDotTone;
@@ -69,6 +71,7 @@ export default function SectionCard({
   state = 'loaded',
   value,
   caption,
+  unavailableTitle,
   chip,
   statusDot,
   sparkline,
@@ -131,7 +134,9 @@ export default function SectionCard({
       </div>
     );
   } else if (state === 'unavailable') {
-    body = (
+    body = unavailableTitle ? (
+      <div className="text-[15px] font-medium text-app-text-secondary">{unavailableTitle}</div>
+    ) : (
       <div>
         <div className="text-[15px] font-medium text-app-text-secondary">Not available for your area yet.</div>
         <div className="text-[13px] text-app-text-muted mt-0.5">
