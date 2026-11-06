@@ -49,6 +49,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.analytics.Analytics
 import app.pantopus.android.data.analytics.AnalyticsEvent
 import app.pantopus.android.data.api.models.identity.OwnLocalProfileResponse
+import app.pantopus.android.ui.components.AddressSuggestionList
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.PantopusFieldState
 import app.pantopus.android.ui.components.PantopusTextField
@@ -56,6 +57,7 @@ import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
+import app.pantopus.android.ui.components.rememberAddressSuggestions
 import app.pantopus.android.ui.screens.shared.form.FORM_COMMIT_BUTTON_TAG
 import app.pantopus.android.ui.screens.shared.form.FormFieldGroup
 import app.pantopus.android.ui.screens.shared.form.FormFieldState
@@ -630,13 +632,23 @@ private fun EditProfileSections(
             tag = "editProfileCityRow",
             onClick = extras.onOpenCity,
         )
+        val addressSuggestions = rememberAddressSuggestions()
         TextRow(
             field = EditProfileField.Address,
             label = "Mailing address",
             placeholder = "123 Main St",
             fields = fields,
-            onUpdate = onUpdate,
+            onUpdate = { field, value ->
+                onUpdate(field, value)
+                addressSuggestions?.onTextChanged(value)
+            },
         )
+        AddressSuggestionList(addressSuggestions, testTagPrefix = "field_address.suggestion") { picked ->
+            picked.address?.takeIf { it.isNotBlank() }?.let { onUpdate(EditProfileField.Address, it) }
+            picked.city?.takeIf { it.isNotBlank() }?.let { onUpdate(EditProfileField.City, it) }
+            picked.state?.takeIf { it.isNotBlank() }?.let { onUpdate(EditProfileField.State, it) }
+            picked.zipcode?.takeIf { it.isNotBlank() }?.let { onUpdate(EditProfileField.Zipcode, it) }
+        }
         TextRow(
             field = EditProfileField.City,
             label = "City",
