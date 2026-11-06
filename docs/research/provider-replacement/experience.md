@@ -40,7 +40,7 @@ Web, same page; iOS `AddHomeDetailsSection.swift`; Android `AddHomeDetailsSectio
 | A condo or apartment | ATTOM's building-level numbers can fill a unit's fields | Unit facts only for the exact unit; otherwise "We found the building. Your unit's details weren't in the county record" and the one-tap questions |
 | Typed values | Kept (iOS "Prefill only") | Kept everywhere; a late result never changes a touched field; before the Home is created, filled-in fields get a short "Review what we found" |
 | No record at all | "No ATTOM property record was available…" | "We couldn't find public records for this address. Tell us the basics; you can change them anytime" |
-| Store builds not yet updated | — | Keep working; they show their generic "Public records" wording, and the fields still prefill (section "Old store builds") |
+| Store builds not yet updated | — | Keep working, and the fields still prefill; their line keeps saying "No ATTOM property record was returned…" until people update (section "Old store builds") |
 
 ### Place: "Your home"
 
@@ -139,7 +139,7 @@ They read the same profile fields, so they inherit the record's facts and labels
 
 Builds already in the stores keep working through the whole switch ([architecture.md](architecture.md#15-compatibility-with-the-apps-in-the-stores)):
 the server answers them in today's vocabulary and never labels county data "ATTOM". What they show differently: the
-Add Home card reads "Public records" with generic wording instead of "Public records (ATTOM)". New builds that ship
+Add Home card keeps saying "No ATTOM property record was returned…" above fields that are filled, as it has since #3203. New builds that ship
 first (WP2) show the real source.
 
 ## The "same or better" release gates

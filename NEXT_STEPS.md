@@ -777,3 +777,14 @@ The September acceptance backlog ([REMAINING_WORK](docs/REMAINING_WORK_2026-09-1
 - [x] October 21, dependency security: [#2551](https://github.com/WangPantopus/skinny-pantopus/pull/2551) updates the existing `follow-redirects` override to 1.16.1. The production dependency audit reports no known vulnerabilities. Existing web checks passed, and signed-in navigation, notifications, mark-all-read and reload persistence passed in the local web app. PR and master CI passed.
 
 - [x] October 21, Android association source: the existing generator now includes `app.pantopus.android` with the current Play app-signing SHA-256 from Play Console's Digital Asset Links snippet and both public certificates from its previous quantum-ready signing key. The legacy `com.pantopus.app` entry is preserved. No debug certificate or secret key is included. Production hosting and a Play-installed device verification remain separate release checks.
+
+## Replacing ATTOM, Smarty and Lob (added November 6)
+
+The plan, decisions and status are in [docs/research/provider-replacement/](docs/research/provider-replacement/README.md). Builders keep going without asking; the steps below are yours and hold nothing up, except that county data stays off screens until each county's switch is on.
+
+- [ ] **ATTOM's free trial ended November 4. By about November 18:** take `ATTOM_API_KEY` out of `.env.prod` and `.env.staging`, restart, and run the purge on every hosted database at the same time (with the key gone, stored copies still show until the purge); delete local copies; confirm the end date from ATTOM's notice; sign the affidavit ([steps](docs/research/provider-replacement/cost-and-rights.md#5-attom-free-trial)).
+- [ ] Send the public-records letters and pay fees of $500 or less ([requests](docs/research/provider-replacement/public-records-requests.md)).
+- [ ] Reader key and settings on the servers, then each county's live switch.
+- [ ] `ADDRESS_POSTAL_PROVIDER=google` in staging, then production with the Google key.
+- [ ] PostGrid test account and the written questions to PostGrid and Lob; the real-mail pilot ([pilot](docs/research/provider-replacement/mail-pilot.md)).
+

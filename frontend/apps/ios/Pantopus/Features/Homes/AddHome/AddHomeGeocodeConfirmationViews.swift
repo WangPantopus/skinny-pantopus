@@ -222,12 +222,62 @@ struct ZipMismatchBanner: View {
 
 struct GeocodeConfirmationBlock: View {
     let address: AddHomeGeocodedAddress
+    var postalNotice: AddHomePostalNotice?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             GeocodeMapStrip(address: address)
-            AddressRecognizedRow(address: address)
+            if let postalNotice {
+                AddHomePostalNoticeRow(notice: postalNotice)
+            } else {
+                AddressRecognizedRow(address: address)
+            }
         }
+    }
+}
+
+/// What USPS said, when it isn't a yes and the person can still continue.
+struct AddHomePostalNotice: Equatable {
+    let message: String
+    let icon: PantopusIcon
+
+    init?(status: String, unit: String) {
+        switch status {
+        case "UNIT_NOT_CONFIRMED":
+            message = "We couldn't confirm unit \(unit) with USPS. Check the number, or continue and we'll confirm it by mail."
+            icon = .alertTriangle
+        case "POSTAL_PENDING":
+            message = "We couldn't check this address with USPS yet. We'll try again shortly. "
+                + "You can finish now; your postcard waits for the check."
+            icon = .clock
+        default:
+            return nil
+        }
+    }
+}
+
+private struct AddHomePostalNoticeRow: View {
+    let notice: AddHomePostalNotice
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Spacing.s2) {
+            Icon(notice.icon, size: 18, color: Theme.Color.warningStrong)
+            Text(notice.message)
+                .pantopusTextStyle(.caption)
+                .foregroundStyle(Theme.Color.warningDeep)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, Spacing.s3)
+        .padding(.vertical, Spacing.s2)
+        .background(Theme.Color.warningBg)
+        .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+                .stroke(Theme.Color.warningLight, lineWidth: 1)
+        )
+        .accessibilityIdentifier("addHome_postalNotice")
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(notice.message)
     }
 }
 
