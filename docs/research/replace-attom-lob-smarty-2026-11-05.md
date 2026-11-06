@@ -50,7 +50,8 @@ exists, nationally), its CSVs, and [county-data-survey/](county-data-survey/) (t
   addresses can't be validated and postcards can't be sent there.
 - License conflicts today: ATTOM detail responses are kept forever (`propertyIntelligenceService.js:65`), while the
   published ATTOM trial terms forbid database building and retention past 24 hours
-  (`docs/provider-data-persistence-2026-11-01.md:131`). Google's terms (EEA version seen) cap caching at 30 days, yet
+  (`docs/provider-data-persistence-2026-11-01.md:131`); the founder confirmed on Nov 5 that Pantopus's own ATTOM plan
+  allows keeping its records. Google's terms (EEA version seen) cap caching at 30 days, yet
   `HomeAddress` keeps Google coordinates permanently.
 - iOS/Android Add Home and Place, and the web Property details footer, say "ATTOM" in copy; old store builds keep it.
 - For one sample home (APN 986039129, Camas WA) the county's free full assessor file matched ATTOM on every building
@@ -175,7 +176,7 @@ Done when: Add Home works with only a Google key, checked on web, iOS and Androi
 
 ### Founder-only facts
 
-Smarty account or agreement; ATTOM plan and license terms; the Google billing SKU for USPS (CASS) checks and the
+Smarty account or agreement; ATTOM plan terms beyond storage (the founder confirmed storage is allowed); the Google billing SKU for USPS (CASS) checks and the
 production key; a private storage account for the national data files; Lob live key and return address; whether to
 accept Washington's commercial-use attestation to open Spokane's free files.
 
@@ -225,9 +226,33 @@ coverage arrives.
 **Founder decision (Nov 5, evening): keep ATTOM as a fallback during the switch.** Property details come from the
 county wherever Pantopus has the county's data, and from ATTOM only for counties not yet covered. ATTOM's plan is
 national, so "county by county" means Pantopus stops calling ATTOM for each county as its data arrives, and the
-subscription is cancelled once the homes still relying on ATTOM are few enough. This depends on ATTOM's plan terms
-(still a founder-only fact): if the plan lets Pantopus keep ATTOM's records, the fallback works as today; if it only
-allows short-lived copies (the published trial terms say 24 hours), fallback pages have to call ATTOM again when the
-copy expires, which is slower, and the stored copies kept today must be cleared. The cutover bar (when to cancel) goes
+subscription is cancelled once the homes still relying on ATTOM are few enough. The founder confirmed on Nov 5 that Pantopus's ATTOM plan allows keeping ATTOM's records, so the fallback works as
+today. The cutover bar (when to cancel) goes
 into the Phase 3 plan for the founder's OK.
 
+## 8. How the code uses ATTOM today (checked on master `4c0b685efa`, Nov 5)
+
+The founder's intended flow: look in our database first; if there is no record, ask ATTOM, save what it returns, and
+give it to the person without making them wait. The first three steps are in the code; the last is not.
+
+- **Database first: yes.** Five layers are read before ATTOM is asked: the Home's own stored copy
+  (`Home.niche_data`), a per-home copy (`AttomPropertyCache`), a per-address copy for Add Home
+  (`PlaceSectionCache`, `propertyIntelligenceService.js:923`), a shared copy of each ATTOM answer
+  (`ExternalFeedCache`, `cacheHelper.js:137`), and the built profile (`PropertyIntelligenceCache`,
+  `propertyIntelligenceService.js:814`).
+- **Saved: yes.** Property facts are kept with no expiry (`propertyIntelligenceService.js:65`); the value estimate and
+  ZIP trend are reused for 30 days, then asked for again (`:30`).
+- **People wait on a first lookup: yes, so not asynchronous.** Add Home (`propertySuggestionsService.js:169`),
+  Property details (`homeDetailService.js:206`), the Pulse composer (`neighborhoodPulseComposer.js:274`) and the AI
+  property-profile endpoint (`routes/ai.js:486`) wait for ATTOM, up to its 10-second timeout
+  (`propertyIntelligenceService.js:31`). Place's Your home card and exemption check wait up to 3.5 seconds
+  (`placeIntelligenceService.js:620`); past that they show a retryable error while the lookup finishes and saves in the
+  background. On web the card offers "Try again" and nothing refreshes it by itself (iOS and Android not checked).
+- **A value older than 30 days** is asked for again before the page answers; the old copy shows only if ATTOM fails.
+- **"No record" answers are not saved** (`placeSectionCache.js:166`, `cacheHelper.js:168`): an address ATTOM does not
+  know is asked again, and billed, on every visit.
+- **Duplicate lookups** for the same address are merged only within one server process (`cacheHelper.js:104`).
+
+Proposed fix (not started; needs the founder's OK): start ATTOM lookups in the background and let Add Home, Place and
+Property details fill in when the record lands; show stored values (with their date) while a refresh runs; remember
+"no record" answers for a while; merge duplicate lookups across servers.

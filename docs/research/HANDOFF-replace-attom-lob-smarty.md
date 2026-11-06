@@ -39,8 +39,11 @@
 
 - Nov 5, evening: keep ATTOM as a fallback during the switch. County data wherever Pantopus has it, ATTOM only for
   counties not yet covered; stop calling ATTOM county by county and cancel the (national) subscription once few
-  homes rely on it. Depends on ATTOM's plan terms (whether its records may be kept); details in the design record,
-  section 7. The cancel bar goes into the Phase 3 plan for the founder's OK.
+  homes rely on it. The founder confirmed the ATTOM plan allows keeping its records (details in the design record,
+  section 7). The cancel bar goes into the Phase 3 plan for the founder's OK.
+- Nov 5, evening: the founder's intended ATTOM flow is database first, then ATTOM, save, and answer without making
+  people wait. Checked on master: database first and saving are done; people still wait on a first lookup, and
+  "no record" answers are not remembered (design record, section 8, with the proposed fix awaiting OK).
 
 ## Waiting on the founder
 
@@ -52,7 +55,7 @@ Asked in chat on Nov 5 (~22:00 UTC), no answer yet:
    (a) when Google is down, let the person finish Add Home with the home unverified, no postcard mailed and nothing
    unlocked until a background re-check passes; (b) when Google leaves the home-or-business flag blank, the business
    check uses place types and parcel type (as it does for Smarty's "unknown" today). Recommended yes to both.
-3. Founder-only facts: Smarty account or agreement; ATTOM plan and license terms; Google billing SKU for CASS requests
+3. Founder-only facts: Smarty account or agreement; ATTOM plan terms beyond storage (storage confirmed allowed Nov 5); Google billing SKU for CASS requests
    (and the production key when Add Home should go live); a private storage account for the national data files; Lob
    live key and return address.
 4. New: whether to accept Washington's commercial-use attestation to open Spokane's free parcel files (we would never
