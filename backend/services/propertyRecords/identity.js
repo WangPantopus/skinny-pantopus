@@ -35,6 +35,13 @@ function inZip(query, records) {
   return records.filter(({ address }) => !address.zip || address.zip === query.zip);
 }
 
+/** Sources with no property ZIP name a town instead: the same street line in two towns of a county is told apart by it. */
+function inTown(query, records) {
+  if (!query.city || records.length < 2) return records;
+  const named = records.filter(({ address }) => address.city === query.city);
+  return named.length ? named : records;
+}
+
 function unitMatches(query, address) {
   if (!query.unit || !address.unit) return false;
   if (query.building && address.building) return query.building === address.building && query.unit === address.unit;
@@ -74,7 +81,7 @@ function ambiguous(candidates, requested, reason) {
  * @param {object[]} records  What the release holds at this street name and house number
  */
 function resolve(query, records) {
-  const here = inZip(query, onStreet(query, records));
+  const here = inTown(query, inZip(query, onStreet(query, records)));
   const requested = query.unit ? 'unit' : 'property';
   if (!here.length) return answer('unsupported', { reason: 'no_record', requested_subject: requested });
 
