@@ -80,7 +80,6 @@ function getTypeCtaIcon(type: string): ReactNode | null {
   return map[type] || null;
 }
 
-/** Connections: "Ben C. reposted", "Ben C. and Eve H. reposted", "Ben C. and 2 others reposted". */
 /**
  * "Photo taken here" for a post its author's own photo or video placed, with the day it was taken once that's more
  * than a week ago (as on iOS and Android). The day reads the clock, so it waits for hydration.
@@ -96,6 +95,7 @@ function photoProvenanceLabel(post: Post, hydrated: boolean): string | null {
   return `Photo taken here ${sameYear ? 'on' : 'in'} ${day}`;
 }
 
+/** Connections: "Ben C. reposted", "Ben C. and Eve H. reposted", "Ben C. and 2 others reposted". */
 function repostedByText(repostedBy: Post['reposted_by']): string | null {
   const first = repostedBy?.names?.[0];
   if (!repostedBy || !first || repostedBy.count < 1) return null;

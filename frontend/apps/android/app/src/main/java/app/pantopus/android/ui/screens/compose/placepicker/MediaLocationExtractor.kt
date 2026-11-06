@@ -33,9 +33,8 @@ data class MediaCaptureLocation(
  * taken anchors the picker's "Photo location" suggestions, and it is sent
  * with a Place post (`mediaLocations`) as evidence that the author was at
  * the place, the way a fresh GPS fix is. The backend uses it for the Place
- * check and the post's pin (the tagged venue, or the capture point for a
- * town tag; no exact pin within 150 m of the author's home) and keeps no
- * other copy of the points.
+ * check and the post's pin (the tagged venue or address, or the capture
+ * point for a town tag or no tag) and keeps no other copy of the points.
  *
  * Platform reality: both composers receive system-photo-picker URIs
  * (`PickMultipleVisualMedia`), and on API 29+ the platform REDACTS

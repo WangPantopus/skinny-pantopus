@@ -14,9 +14,9 @@
 //  sent with a Place post (`mediaLocations`) as evidence that the
 //  author was at the place, the way a fresh GPS fix is. The backend
 //  uses it for the Place check and for the post's pin (the tagged
-//  venue, or the capture point for a town tag; no exact pin within
-//  150 m of the author's home). It keeps no other copy of the points,
-//  and uploads are re-encoded without the files' metadata.
+//  venue or address, or the capture point for a town tag or no tag).
+//  It keeps no other copy of the points, and uploads are re-encoded
+//  without the files' metadata.
 //
 
 import AVFoundation
