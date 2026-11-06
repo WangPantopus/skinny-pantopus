@@ -76,7 +76,7 @@ public enum PostsEndpoints {
     /// to the Place feed at these coordinates? `media` is the draft's
     /// attachment taken nearest the place, when one is geotagged. With
     /// `homeId` the answer is for a post as that Home. Route
-    /// `backend/routes/posts.js:2276`.
+    /// `backend/routes/posts.js:2264`.
     public static func placeEligibility(
         latitude: Double,
         longitude: Double,
