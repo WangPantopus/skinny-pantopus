@@ -114,8 +114,12 @@ function normalizeLlmHomeType(v) {
 /**
  * @param {object} input
  * @param {import('@supabase/supabase-js').SupabaseClient} [supabaseAdmin]
+ * @param {object} [options]
+ * @param {'wait'|'background'|'check'} [options.lookup='wait'] How a validated address's ATTOM lookup runs
+ *   (propertyIntelligenceService.fetchAttomPropertyDetailBundleForAddress); the answer's `attom_lookup` says where it
+ *   stands, so Add Home can show the step at once and fill the fields in when the record lands.
  */
-async function getPropertySuggestions(input, supabaseAdmin) {
+async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait' } = {}) {
   const {
     address,
     unit_number: unitNumber,
@@ -157,26 +161,36 @@ async function getPropertySuggestions(input, supabaseAdmin) {
     description: null,
   };
 
+  // Add Home's follow-up isn't counted against the outbound limit, so it never
+  // asks a paid provider (ATTOM or the model) itself.
+  const checkOnly = lookup === 'check';
+
   // Tier 1 — ATTOM (strongest structured signal; one /property/detail call)
   let attom = null;
+  let attomLookup = null;
   { // Stored responses remain available without a live provider credential.
     try {
       // A validated address is looked up as validated, and the server keeps
       // the answer: creating the Home stores that copy, not the app's. The
       // county record itself never goes back to the app; only the Home's
       // verified owners read it, on Property details.
-      const bundle = homeAddressRow
-        ? await fetchAttomPropertyDetailBundleForAddress(homeAddressRow)
-        : await fetchAttomPropertyDetailBundle({
+      let bundle = { snapshot: null };
+      if (homeAddressRow) {
+        bundle = await fetchAttomPropertyDetailBundleForAddress(homeAddressRow, { lookup });
+      } else if (!checkOnly) {
+        bundle = await fetchAttomPropertyDetailBundle({
           address,
           address2: unitNumber,
           city,
           state,
           zipcode: zipCode,
         });
+      }
       attom = bundle.snapshot;
+      attomLookup = bundle.lookup || null;
     } catch (e) {
       logger.warn('ATTOM snapshot failed', { error: e.message });
+      attomLookup = 'unavailable';
     }
     if (attom) {
       tiersUsed.push('attom');
@@ -230,7 +244,9 @@ async function getPropertySuggestions(input, supabaseAdmin) {
   if (merged.lot_sq_ft == null) missingForLlm.push('lot_sq_ft');
   if (merged.year_built == null) missingForLlm.push('year_built');
 
-  if (isLlmEnabled() && missingForLlm.length > 0) {
+  // Guesses fill only what the county record lacks, so they wait for its
+  // answer: filled first, they would keep the record's facts out of the form.
+  if (isLlmEnabled() && missingForLlm.length > 0 && attomLookup !== 'pending' && !checkOnly) {
     const line1 = unitNumber ? `${address} ${unitNumber}` : address;
     const fullAddress = `${line1}, ${city}, ${state} ${zipCode}`;
     const llm = await fetchLlmSuggestions(fullAddress, missingForLlm);
@@ -269,11 +285,14 @@ async function getPropertySuggestions(input, supabaseAdmin) {
   }
 
   // 'attom' in tiers_used is how the apps know a county record was found.
+  // `attom_lookup` ('found', 'none', 'pending', 'unavailable') is answered for
+  // a validated address: 'pending' means ask again with lookup=check.
   return {
     suggestions: merged,
     field_sources: sources,
     tiers_used: [...new Set(tiersUsed)],
     llm_enabled: isLlmEnabled(),
+    ...(homeAddressRow && attomLookup ? { attom_lookup: attomLookup } : {}),
   };
 }
 
