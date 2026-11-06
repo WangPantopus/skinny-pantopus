@@ -4,7 +4,7 @@
 //
 //  A12.2 — the Add-Home wizard's property Details block. Ports RN's
 //  `src/components/homes/DetailsStep.tsx`: a public-records card fed by
-//  `POST /api/homes/property-suggestions` (ATTOM → heuristics → optional
+//  `POST /api/homes/property-suggestions` (county record → heuristics → optional
 //  LLM), followed by the eight editable fields — nickname, home type,
 //  bedrooms, bathrooms, home size, lot size, year built and description.
 //
@@ -25,10 +25,12 @@ struct AddHomeDetailsSection: View {
                 PublicRecordsSkeleton()
             } else if viewModel.propertyLookupComplete {
                 PublicRecordsCard(
-                    hasRecord: viewModel.propertySuggestions?.hasAttomRecord ?? false,
+                    hasRecord: viewModel.propertySuggestions?.hasPublicRecord ?? false,
+                    provenance: viewModel.propertySuggestions?.provenance,
                     message: viewModel.propertyLookupMessage,
                     fields: viewModel.propertySuggestions?.suggestions,
-                    sources: viewModel.propertySuggestions?.fieldSources ?? [:]
+                    sources: viewModel.propertySuggestions?.fieldSources ?? [:],
+                    tags: viewModel.propertySuggestions?.fieldTags ?? [:]
                 )
             }
             editableFields
@@ -55,7 +57,8 @@ struct AddHomeDetailsSection: View {
 
     /// RN `DetailsStep.tsx:57-70`.
     private var headline: String {
-        if viewModel.propertySuggestions?.hasAttomRecord == true {
+        if viewModel.propertySuggestions?.hasPublicRecord == true,
+           viewModel.propertySuggestions?.isBuildingOnly != true {
             return "Review public property details"
         }
         return viewModel.propertyLookupComplete
@@ -64,7 +67,10 @@ struct AddHomeDetailsSection: View {
     }
 
     private var subcopy: String {
-        if viewModel.propertySuggestions?.hasAttomRecord == true {
+        if viewModel.propertySuggestions?.isBuildingOnly == true {
+            return viewModel.propertyLookupMessage
+        }
+        if viewModel.propertySuggestions?.hasPublicRecord == true {
             return "We found public records for this address. Check the details, "
                 + "then edit anything that looks off."
         }
@@ -81,6 +87,16 @@ struct AddHomeDetailsSection: View {
     /// While the county record is on its way, the fields it fills say so.
     private var lookingUp: String? {
         viewModel.propertyLookupPending ? "Looking up…" : nil
+    }
+
+    /// Beside a field the person changed, once the record names its source.
+    private func ownEntryTag(_ value: String, recorded: String?) -> String? {
+        guard viewModel.propertySuggestions?.provenance != nil, !value.isEmpty, value != recorded else { return nil }
+        return "Your entry"
+    }
+
+    private var recorded: PropertySuggestionsFields? {
+        viewModel.propertySuggestions?.suggestions
     }
 
     private var editableFields: some View {
@@ -108,6 +124,7 @@ struct AddHomeDetailsSection: View {
                         get: { viewModel.form.details.bedrooms },
                         set: { viewModel.updateBedrooms($0) }
                     ),
+                    tag: ownEntryTag(viewModel.form.details.bedrooms, recorded: recorded?.bedrooms.map(String.init)),
                     keyboard: .numberPad,
                     identifier: "addHome_bedrooms"
                 )
@@ -117,6 +134,10 @@ struct AddHomeDetailsSection: View {
                     text: Binding(
                         get: { viewModel.form.details.bathrooms },
                         set: { viewModel.updateBathrooms($0) }
+                    ),
+                    tag: ownEntryTag(
+                        viewModel.form.details.bathrooms,
+                        recorded: recorded?.bathrooms.map(AddHomeWizardViewModel.trimTrailingZero)
                     ),
                     keyboard: .decimalPad,
                     identifier: "addHome_bathrooms"
@@ -132,6 +153,7 @@ struct AddHomeDetailsSection: View {
                         set: { viewModel.updateSqFt($0) }
                     ),
                     optional: true,
+                    tag: ownEntryTag(viewModel.form.details.sqFt, recorded: recorded?.sqFt.map(String.init)),
                     keyboard: .numberPad,
                     identifier: "addHome_sqFt"
                 )
@@ -143,6 +165,7 @@ struct AddHomeDetailsSection: View {
                         set: { viewModel.updateLotSqFt($0) }
                     ),
                     optional: true,
+                    tag: ownEntryTag(viewModel.form.details.lotSqFt, recorded: recorded?.lotSqFt.map(String.init)),
                     keyboard: .numberPad,
                     identifier: "addHome_lotSqFt"
                 )
@@ -156,6 +179,7 @@ struct AddHomeDetailsSection: View {
                     set: { viewModel.updateYearBuilt($0) }
                 ),
                 optional: true,
+                tag: ownEntryTag(viewModel.form.details.yearBuilt, recorded: recorded?.yearBuilt.map(String.init)),
                 keyboard: .numberPad,
                 identifier: "addHome_yearBuilt"
             )
@@ -236,22 +260,22 @@ struct AddHomeDetailsSection: View {
 
 // MARK: - Public records card
 
-/// The "Public records (ATTOM)" card. Renders the structured fields the
-/// lookup returned plus their provenance, or the explanatory copy when
-/// nothing came back. Mirrors RN's `AttomStructuredFields` block
-/// (`DetailsStep.tsx:72-111`).
+/// The public records card. Renders the structured fields the lookup returned
+/// and where each came from, or the explanatory copy when nothing came back.
 private struct PublicRecordsCard: View {
     let hasRecord: Bool
+    let provenance: RecordProvenanceDTO?
     let message: String
     let fields: PropertySuggestionsFields?
     let sources: [String: String]
+    let tags: [String: String]
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            Text(hasRecord ? "Public records (ATTOM)" : "Public records")
+            Text(hasRecord ? provenance?.title ?? "Public records" : "Public records")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Theme.Color.appTextSecondary)
-            Text(hasRecord ? "Data from public records via ATTOM." : message)
+            Text(hasRecord ? provenance?.label ?? "Data from public records." : message)
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.Color.appTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -294,6 +318,17 @@ private struct PublicRecordsCard: View {
         let source: String?
     }
 
+    /// The server's tag for a field, or plain words for where it came from.
+    private func tag(_ field: String) -> String? {
+        if let tag = tags[field] { return tag }
+        switch sources[field] {
+        case "attom", "record": return "Public record"
+        case "heuristic": return "Address hint"
+        case "llm": return "Estimate"
+        default: return nil
+        }
+    }
+
     private var rows: [Row] {
         guard let fields else { return [] }
         var out: [Row] = []
@@ -301,33 +336,33 @@ private struct PublicRecordsCard: View {
             out.append(Row(
                 label: "Property type",
                 value: AddHomeHomeType.from(canonical: homeType)?.label ?? homeType,
-                source: sources["home_type"]
+                source: tag("home_type")
             ))
         }
         if let bedrooms = fields.bedrooms {
-            out.append(Row(label: "Bedrooms", value: "\(bedrooms)", source: sources["bedrooms"]))
+            out.append(Row(label: "Bedrooms", value: "\(bedrooms)", source: tag("bedrooms")))
         }
         if let bathrooms = fields.bathrooms {
             let text = bathrooms == bathrooms.rounded()
                 ? String(Int(bathrooms))
                 : String(bathrooms)
-            out.append(Row(label: "Bathrooms", value: text, source: sources["bathrooms"]))
+            out.append(Row(label: "Bathrooms", value: text, source: tag("bathrooms")))
         }
         if let sqFt = fields.sqFt {
-            out.append(Row(label: "Home size", value: "\(sqFt.formatted()) sq ft", source: sources["sq_ft"]))
+            out.append(Row(label: "Home size", value: "\(sqFt.formatted()) sq ft", source: tag("sq_ft")))
         }
         if let lotSqFt = fields.lotSqFt {
             out.append(Row(
                 label: "Lot size",
                 value: "\(lotSqFt.formatted()) sq ft",
-                source: sources["lot_sq_ft"]
+                source: tag("lot_sq_ft")
             ))
         }
         if let yearBuilt = fields.yearBuilt {
             out.append(Row(
                 label: "Year built",
                 value: "\(yearBuilt)",
-                source: sources["year_built"]
+                source: tag("year_built")
             ))
         }
         return out
@@ -367,6 +402,8 @@ struct AddHomeTextField: View {
     let placeholder: String
     @Binding var text: String
     var optional = false
+    /// Beside the label, where "Optional" goes: "Your entry".
+    var tag: String?
     var keyboard: UIKeyboardType = .default
     var isMultiline = false
     var isSecure = false
@@ -382,8 +419,8 @@ struct AddHomeTextField: View {
                 Text(label)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Theme.Color.appTextSecondary)
-                if optional {
-                    Text("Optional")
+                if let side = tag ?? (optional ? "Optional" : nil) {
+                    Text(side)
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(Theme.Color.appTextMuted)
                 }

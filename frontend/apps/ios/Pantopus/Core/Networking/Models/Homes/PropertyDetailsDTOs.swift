@@ -4,7 +4,7 @@
 //
 //  DTOs for `GET /api/homes/:id/property-details` — route
 //  `backend/routes/home.js:1949`. The `home` property fields and the
-//  verified owner's `county_record` (the ATTOM record as labeled sections)
+//  verified owner's `county_record` (the county record as labeled sections)
 //  are modelled; the raw `attom_property_detail` payload + `source` /
 //  `unavailable_reason` aren't surfaced by the A13.5 screen.
 //  Field-for-field parity with the Android `PropertyDetailsDtos.kt`.
@@ -108,11 +108,11 @@ public struct PropertyHomeDTO: Decodable, Sendable {
     }
 }
 
-/// `county_record`: the verified owner's ATTOM record as labeled sections,
+/// `county_record`: the verified owner's county record as labeled sections,
 /// worded and formatted by `backend/serializers/countyRecordSerializer.js`.
 public struct PropertyCountyRecordDTO: Decodable, Sendable, Hashable {
     public let sections: [PropertyRecordSectionDTO]
-    /// "From county records via ATTOM · updated Sep 28, 2026".
+    /// Names the source and date: "From Clark County Assessor's weekly file · updated Oct 31, 2026".
     public let footer: String?
 }
 
@@ -132,6 +132,8 @@ public struct PropertyRecordRowDTO: Decodable, Sendable, Hashable {
     public let value: String
     /// Numbers, measurements and codes render monospaced.
     public let mono: Bool?
+    /// Where this row came from, when it isn't the footer's source ("Your household").
+    public let tag: String?
 }
 
 /// Envelope for `GET /api/homes/:id/property-details`.

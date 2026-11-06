@@ -955,10 +955,10 @@ final class AddHomeWizardViewModel: WizardModel {
 
     /// `POST /api/homes/property-suggestions` — route
     /// `backend/routes/home.js:587`. Fills the Details block from public
-    /// records (ATTOM → heuristics → optional LLM). The server answers at
+    /// records (county record → heuristics → optional LLM). The server answers at
     /// once (`lookup: "background"`); a county record it doesn't have yet is
     /// looked up meanwhile and fills what is still empty when
-    /// `finishPropertyLookup` gets it, so the step never waits for ATTOM. A
+    /// `finishPropertyLookup` gets it, so the step never waits for the record. A
     /// failure is never fatal: the fields stay editable and the card says the
     /// lookup was unavailable, exactly as RN does (`useHomeForm.ts:657-662`).
     func loadPropertySuggestions() async {
@@ -986,7 +986,7 @@ final class AddHomeWizardViewModel: WizardModel {
             )
             guard addressIsCurrent(revision) else { return }
             apply(suggestions: response.suggestions)
-            if response.attomLookup == Self.lookupPending {
+            if response.lookupState == Self.lookupPending {
                 propertyLookupPending = true
                 propertyLookupTask?.cancel()
                 propertyLookupTask = Task { [weak self] in
@@ -1019,9 +1019,9 @@ final class AddHomeWizardViewModel: WizardModel {
             propertyLookupPending = false
             propertySuggestions = response
             propertyLookupComplete = true
-            propertyLookupMessage = [Self.lookupFound, Self.lookupNone].contains(response.attomLookup ?? "")
+            propertyLookupMessage = [Self.lookupFound, Self.lookupNone].contains(response.lookupState ?? "")
                 ? Self.lookupMessage(for: response)
-                : Self.recordsUnavailableMessage
+                : response.lookupMessage ?? Self.recordsUnavailableMessage
             if currentStep.rawValue > AddHomeStep.confirm.rawValue, form.details != before { lateDetailsAdded = true }
         } catch {
             guard !Task.isCancelled, addressIsCurrent(revision), propertyLookupPending else { return }
@@ -1040,16 +1040,19 @@ final class AddHomeWizardViewModel: WizardModel {
     private static let recordsUnavailableMessage =
         "Public property records are unavailable right now. Confirm the details below."
 
-    /// RN's three-way message (`useHomeForm.ts:641-647`).
+    /// The server's words, or the same words from an older server's answer.
     private static func lookupMessage(for response: PropertySuggestionsResponse) -> String {
-        if response.hasAttomRecord {
-            return "Public property records found. Review them before continuing."
+        if let message = response.lookupMessage { return message }
+        if response.hasPublicRecord {
+            return response.isBuildingOnly
+                ? "We found the building. Your unit's details weren't in the county record."
+                : "Public property records found. Review them before continuing."
         }
         if !(response.tiersUsed ?? []).isEmpty {
-            return "No ATTOM property record was returned, so we prefilled what we could "
-                + "from address hints."
+            return "We couldn't find public records for this address, so we filled in what we "
+                + "could from address hints. You can change them anytime."
         }
-        return "No ATTOM property record was available for this address. Confirm the details below."
+        return "We couldn't find public records for this address. Tell us the basics; you can change them anytime."
     }
 
     /// Prefill only — never overwrite something the user already typed (or a home type they picked).
@@ -1081,7 +1084,7 @@ final class AddHomeWizardViewModel: WizardModel {
     }
 
     /// "2.0" → "2", "2.5" → "2.5".
-    private static func trimTrailingZero(_ value: Double) -> String {
+    static func trimTrailingZero(_ value: Double) -> String {
         value == value.rounded()
             ? String(Int(value))
             : String(value)

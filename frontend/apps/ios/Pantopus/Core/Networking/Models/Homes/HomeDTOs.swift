@@ -570,8 +570,46 @@ public struct PropertySuggestionsClassification: Encodable, Sendable, Hashable {
     }
 }
 
+/// Where a record came from, once it names its source, worded by the server
+/// (`backend/services/recordVocabulary.js`). Shown as it comes.
+public struct RecordProvenanceDTO: Decodable, Sendable, Hashable {
+    public let publisher: String?
+    public let dataset: String?
+    public let asOf: String?
+    /// `unit`, `building`, `parcel` or `area`.
+    public let scope: String?
+    public let method: String?
+    /// "From Clark County Assessor's records, updated Oct 31, 2026".
+    public let label: String
+    /// Add Home's heading for the record ("County records").
+    public let title: String?
+
+    public init(
+        publisher: String? = nil,
+        dataset: String? = nil,
+        asOf: String? = nil,
+        scope: String? = nil,
+        method: String? = nil,
+        label: String,
+        title: String? = nil
+    ) {
+        self.publisher = publisher
+        self.dataset = dataset
+        self.asOf = asOf
+        self.scope = scope
+        self.method = method
+        self.label = label
+        self.title = title
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case publisher, dataset, scope, method, label, title
+        case asOf = "as_of"
+    }
+}
+
 /// The merged property fields the tiered lookup resolved. Every field is
-/// optional — the service returns explicit `null`s for anything ATTOM /
+/// optional — the service returns explicit `null`s for anything the record /
 /// heuristics / the LLM couldn't fill
 /// (`backend/services/ai/propertySuggestionsService.js:144-152`).
 public struct PropertySuggestionsFields: Decodable, Sendable, Hashable {
@@ -616,41 +654,83 @@ public struct PropertySuggestionsFields: Decodable, Sendable, Hashable {
 /// record itself stays on the server; only the basics come back.
 public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
     public let suggestions: PropertySuggestionsFields?
-    /// Per-field provenance (`attom` / `heuristic` / `llm`).
+    /// Per-field provenance (`record` or `attom` / `heuristic` / `llm`).
     public let fieldSources: [String: String]?
     public let tiersUsed: [String]?
     public let llmEnabled: Bool?
     /// Where the county-record lookup stands (servers since November 2026):
     /// `found`, `none`, `pending` (ask again with `lookup: "check"`) or `unavailable`.
     public let attomLookup: String?
+    /// The same under its new name, from servers that know `vocabulary=2`.
+    public let recordLookup: String?
+    /// The lookup's outcome in the server's words.
+    public let lookupMessage: String?
+    /// Where the record came from, once it names its source.
+    public let provenance: RecordProvenanceDTO?
+    /// A short tag per field ("County"), once the record names its source.
+    public let fieldTags: [String: String]?
 
     public init(
         suggestions: PropertySuggestionsFields? = nil,
         fieldSources: [String: String]? = nil,
         tiersUsed: [String]? = nil,
         llmEnabled: Bool? = nil,
-        attomLookup: String? = nil
+        attomLookup: String? = nil,
+        recordLookup: String? = nil,
+        lookupMessage: String? = nil,
+        provenance: RecordProvenanceDTO? = nil,
+        fieldTags: [String: String]? = nil
     ) {
         self.suggestions = suggestions
         self.fieldSources = fieldSources
         self.tiersUsed = tiersUsed
         self.llmEnabled = llmEnabled
         self.attomLookup = attomLookup
+        self.recordLookup = recordLookup
+        self.lookupMessage = lookupMessage
+        self.provenance = provenance
+        self.fieldTags = fieldTags
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        suggestions = try container.decodeIfPresent(PropertySuggestionsFields.self, forKey: .suggestions)
+        fieldSources = try container.decodeIfPresent([String: String].self, forKey: .fieldSources)
+        tiersUsed = try container.decodeIfPresent([String].self, forKey: .tiersUsed)
+        llmEnabled = try container.decodeIfPresent(Bool.self, forKey: .llmEnabled)
+        attomLookup = try container.decodeIfPresent(String.self, forKey: .attomLookup)
+        recordLookup = try container.decodeIfPresent(String.self, forKey: .recordLookup)
+        // A malformed label never fails the lookup: the fields still fill in.
+        lookupMessage = try? container.decodeIfPresent(String.self, forKey: .lookupMessage)
+        provenance = try? container.decodeIfPresent(RecordProvenanceDTO.self, forKey: .provenance)
+        fieldTags = try? container.decodeIfPresent([String: String].self, forKey: .fieldTags)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case suggestions
+        case suggestions, provenance
         case fieldSources = "field_sources"
         case tiersUsed = "tiers_used"
         case llmEnabled = "llm_enabled"
         case attomLookup = "attom_lookup"
+        case recordLookup = "record_lookup"
+        case lookupMessage = "lookup_message"
+        case fieldTags = "field_tags"
     }
 
-    /// True when ATTOM actually returned a public record for the address —
-    /// drives the "Public records (ATTOM)" card. The server lists `attom`
-    /// in `tiers_used` only when it found one.
-    public var hasAttomRecord: Bool {
-        tiersUsed?.contains("attom") ?? false
+    /// Where the lookup stands, under either name.
+    public var lookupState: String? {
+        recordLookup ?? attomLookup
+    }
+
+    /// True when a public record was found for the address: any tier the
+    /// server lists that isn't a guess, whatever a new source is called.
+    public var hasPublicRecord: Bool {
+        tiersUsed?.contains { !$0.isEmpty && $0 != "heuristic" && $0 != "llm" } ?? false
+    }
+
+    /// The record is the building's and the person's unit isn't in it.
+    public var isBuildingOnly: Bool {
+        provenance?.scope == "building"
     }
 }
 

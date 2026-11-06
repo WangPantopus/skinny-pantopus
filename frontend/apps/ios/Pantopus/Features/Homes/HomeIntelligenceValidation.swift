@@ -45,7 +45,9 @@ enum HomeIntelligenceValidation {
     }
 
     static func property(_ value: HomePropertyValueDTO) -> Bool {
-        guard let source = value.source, sources.contains(source), timestamp(value.lastUpdated) else { return false }
+        // A record that names its source may answer in words this build doesn't know yet.
+        guard let source = value.source, sources.contains(source) || value.provenance != nil,
+              timestamp(value.lastUpdated) else { return false }
         guard [value.estimatedValue, value.valueRangeLow, value.valueRangeHigh].compactMap({ $0 }).allSatisfy({ $0.isFinite && $0 > 0 })
         else { return false }
         if let confidence = value.valueConfidence, !confidence.isFinite || !(0...100).contains(confidence) { return false }
