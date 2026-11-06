@@ -50,6 +50,8 @@ function envBool(key, fallback = false) {
   return fallback;
 }
 
+const POSTAL_PROVIDERS = new Set(['smarty', 'google']);
+
 // ── Build config object ────────────────────────────────────────
 
 function buildConfig() {
@@ -126,6 +128,22 @@ function buildConfig() {
       enabled: envBool('ENABLE_SAFE_ADDRESS_OUTAGE_FALLBACK', true),
       maxValidationAgeDays: envInt('ADDRESS_OUTAGE_FALLBACK_MAX_AGE_DAYS', 30),
       minConfidence: envFloat('ADDRESS_OUTAGE_FALLBACK_MIN_CONFIDENCE', 0.8),
+    },
+
+    // ── Postal source (who answers for USPS) ─────────────────
+    postal: {
+      // 'smarty' keeps today's two checks. 'google' reads the USPS answer Google already
+      // returned, so Add Home needs one check and one key.
+      provider: POSTAL_PROVIDERS.has(envStr('ADDRESS_POSTAL_PROVIDER').toLowerCase())
+        ? envStr('ADDRESS_POSTAL_PROVIDER').toLowerCase()
+        : 'smarty',
+      // 'google' counts Google's own postal categories and changes nothing people see.
+      shadow: envStr('ADDRESS_POSTAL_SHADOW').toLowerCase() === 'google' ? 'google' : '',
+      // When Google can't be reached, Add Home can finish with the home unverified: no
+      // postcard and nothing unlocked until a background re-check passes.
+      outageFinishUnverified: envBool('ADDRESS_OUTAGE_FINISH_UNVERIFIED', false),
+      // Google's terms: USPS data is kept 30 days, then cleared or checked again.
+      uspsDataDays: envInt('ADDRESS_USPS_DATA_DAYS', 30),
     },
 
     observability: {
@@ -275,6 +293,7 @@ function validate() {
       parcel: config.parcelIntel.cacheDays,
     },
     outageFallback: config.outageFallback,
+    postal: config.postal,
     observability: config.observability,
     rollout: config.rollout,
   });

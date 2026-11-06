@@ -275,6 +275,16 @@ class CanonicalAddressService {
       };
     }
 
+    // The first time USPS gave no answer is what the re-checks count from.
+    if (
+      nextFields.validation_raw_response?.postal_state === 'pending'
+      && existingAddress?.validation_raw_response?.postal_state === 'pending'
+      && existingAddress.validation_raw_response.postal_pending_since
+    ) {
+      merged.validation_raw_response.postal_pending_since =
+        existingAddress.validation_raw_response.postal_pending_since;
+    }
+
     if (existingAddress?.provider_versions || nextFields.provider_versions) {
       merged.provider_versions = {
         ...(existingAddress?.provider_versions || {}),
@@ -394,20 +404,34 @@ class CanonicalAddressService {
       fields.postal_code_plus4 = address.plus4;
     }
 
+    const googlePostal = smarty?.source === 'google';
+
     if (smarty && !smarty.inconclusive) {
       fields.dpv_match_code = smarty.dpv_match_code || null;
-      fields.rdi_type = smarty.rdi_type || 'unknown';
+      // HomeAddress_rdi_type_chk allows residential, business and unknown.
+      fields.rdi_type = googlePostal && smarty.rdi_type === 'commercial'
+        ? 'business'
+        : smarty.rdi_type || 'unknown';
       fields.missing_secondary_flag = !!smarty.missing_secondary;
-      fields.commercial_mailbox_flag = !!smarty.commercial_mailbox;
+      fields.commercial_mailbox_flag = googlePostal
+        ? smarty.commercial_mailbox ?? null
+        : !!smarty.commercial_mailbox;
       fields.deliverability_status = smarty.dpv_match_code === 'N'
         ? 'undeliverable'
         : (smarty.dpv_match_code === 'D' || smarty.dpv_match_code === 'S')
           ? 'partial'
-          : 'deliverable';
+          : (googlePostal && !smarty.dpv_match_code)
+            ? 'unverified'
+            : 'deliverable';
     }
 
     // Structural + classification fields used by later claim/attach flows.
-    if (place?.building_type && place.building_type !== 'unknown') {
+    // HomeAddress_building_type_chk has no mixed_use; the raw response below keeps it.
+    if (
+      place?.building_type
+      && place.building_type !== 'unknown'
+      && !(googlePostal && place.building_type === 'mixed_use')
+    ) {
       fields.building_type = place.building_type;
     }
     if (place?.parcel_type && place.parcel_type !== 'unknown') {
@@ -428,7 +452,24 @@ class CanonicalAddressService {
     const rawResponse = {};
 
     // Smarty postal validation data stored as JSON blob for caching
-    if (smarty && !smarty.inconclusive) {
+    if (googlePostal) {
+      const pending = !smarty.dpv_match_code || smarty.coming_soon;
+      fields.validation_vendor = 'google';
+      fields.last_validated_at = smarty.checked_at || new Date().toISOString();
+      rawResponse.postal_source = 'google';
+      rawResponse.postal_state = pending ? 'pending' : 'checked';
+      rawResponse.postal_pending_since = pending ? fields.last_validated_at : null;
+      rawResponse.postal_cleared_at = null;
+      for (const key of [
+        'dpv_match_code', 'rdi_type', 'home_and_business', 'missing_secondary', 'unconfirmed_secondary',
+        'commercial_mailbox', 'vacant_flag', 'no_stat', 'no_stat_reason', 'footnotes', 'record_type',
+        'carrier_route_type', 'po_box_flag', 'po_box_only_zip', 'coming_soon', 'usps_suspended',
+      ]) {
+        rawResponse[key] = smarty[key] ?? null;
+      }
+      rawResponse.missing_component_types = google?.missing_component_types || [];
+      rawResponse.street_number = google?.components?.street_number || null;
+    } else if (smarty && !smarty.inconclusive) {
       fields.validation_vendor = 'smarty';
       fields.last_validated_at = new Date().toISOString();
       rawResponse.smarty_candidate = smarty.raw || null;
