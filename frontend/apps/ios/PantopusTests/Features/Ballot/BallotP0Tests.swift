@@ -129,10 +129,10 @@ final class BallotP0Tests: XCTestCase {
     }
 
     func testPlaceIntelligenceRequestsOptIntoBallot() {
-        XCTAssertEqual(PlaceEndpoints.intelligence(homeId: "home-1").query, ["ballot": "1"])
+        XCTAssertEqual(PlaceEndpoints.intelligence(homeId: "home-1").query, ["ballot": "1", "vocabulary": "2"])
         XCTAssertEqual(
             PlaceEndpoints.intelligence(homeId: "home-1", sections: [.civicElection]).query,
-            ["ballot": "1", "sections": "civic_election"]
+            ["ballot": "1", "vocabulary": "2", "sections": "civic_election"]
         )
         XCTAssertEqual(PlaceEndpoints.intelligence(homeId: "home-1").path, "/api/homes/home-1/intelligence")
     }

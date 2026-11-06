@@ -148,7 +148,7 @@ struct PlaceMoneyDetailContent: View {
                 }
                 // not_checked links its state's page inside the card instead.
                 if exemption.access != .locked, !notChecked {
-                    PlaceSourceNote(name: "County records · ATTOM", asOf: nil)
+                    PlaceSourceNote(name: exemption.provenance?.label ?? exemption.source ?? "County records", asOf: nil)
                 }
             }
 

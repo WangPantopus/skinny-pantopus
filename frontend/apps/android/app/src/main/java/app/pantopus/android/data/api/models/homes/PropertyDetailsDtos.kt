@@ -8,7 +8,7 @@ import com.squareup.moshi.JsonClass
 /**
  * DTOs for `GET /api/homes/:id/property-details` — route
  * `backend/routes/home.js:1949`. The `home` property fields and the
- * verified owner's `county_record` (the ATTOM record as labeled sections)
+ * verified owner's `county_record` (the county record as labeled sections)
  * are modelled; the raw ATTOM payload + `source` / `unavailable_reason`
  * aren't surfaced by the A13.5 screen.
  * Field-for-field parity with iOS `PropertyDetailsDTOs.swift`.
@@ -41,13 +41,13 @@ data class PropertyHomeDto(
 )
 
 /**
- * `county_record`: the verified owner's ATTOM record as labeled sections,
+ * `county_record`: the verified owner's county record as labeled sections,
  * worded and formatted by `backend/serializers/countyRecordSerializer.js`.
  */
 @JsonClass(generateAdapter = true)
 data class PropertyCountyRecordDto(
     val sections: List<PropertyRecordSectionDto> = emptyList(),
-    /** "From county records via ATTOM · updated Sep 28, 2026". */
+    /** Names the source and date: "From Clark County Assessor's weekly file · updated Oct 31, 2026". */
     val footer: String? = null,
 )
 
@@ -69,6 +69,8 @@ data class PropertyRecordRowDto(
     val value: String,
     /** Numbers, measurements and codes render monospaced. */
     val mono: Boolean? = null,
+    /** Where this row came from, when it isn't the footer's source ("Your household"). */
+    val tag: String? = null,
 )
 
 /** Envelope for `GET /api/homes/:id/property-details`. */

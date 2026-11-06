@@ -201,8 +201,8 @@ class BallotP0Test {
                 api.intelligence("home-1")
                 api.intelligence("home-1", sections = "civic_election")
             }
-            assertEquals("/api/homes/home-1/intelligence?ballot=1", server.takeRequest().path)
-            assertEquals("/api/homes/home-1/intelligence?ballot=1&sections=civic_election", server.takeRequest().path)
+            assertEquals("/api/homes/home-1/intelligence?ballot=1&vocabulary=2", server.takeRequest().path)
+            assertEquals("/api/homes/home-1/intelligence?ballot=1&vocabulary=2&sections=civic_election", server.takeRequest().path)
         } finally {
             server.shutdown()
         }

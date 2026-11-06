@@ -187,6 +187,7 @@ object NetworkModule {
             // How neighbors see you: "no photo" goes out as explicit JSON null.
             .add(app.pantopus.android.data.api.models.identity.LocalProfileUpdateRequestJsonAdapter())
             .add(app.pantopus.android.data.api.models.homes.PollOptionAdapter())
+            .add(app.pantopus.android.data.api.models.homes.RecordProvenanceAdapterFactory)
             .add(app.pantopus.android.data.api.models.gigs.GigStopJsonAdapterFactory)
             // `gig.items` stored as a JSON string by older writers reads as the list inside it.
             .add(app.pantopus.android.data.api.models.gigs.GigItemsJsonAdapterFactory)
@@ -314,7 +315,11 @@ object NetworkModule {
         val platformHeader =
             Interceptor { chain ->
                 chain.proceed(
-                    chain.request().newBuilder().header("X-Client-Platform", "android").build(),
+                    chain
+                        .request()
+                        .newBuilder()
+                        .header(DeviceIdentityInterceptor.HEADER_PLATFORM, DeviceIdentityInterceptor.CLIENT_PLATFORM)
+                        .build(),
                 )
             }
         return OkHttpClient

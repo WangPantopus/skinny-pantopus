@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.models.place
 
+import app.pantopus.android.data.api.models.homes.RecordProvenanceDto
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.JsonReader
 import com.squareup.moshi.JsonWriter
@@ -56,8 +57,12 @@ class PlaceSectionEnvelopeAdapterFactory : JsonAdapter.Factory {
                 data = decodePayload(id, raw["data"]),
                 scope = scopeOf(raw["scope"]),
                 evidence = scopeOf(raw["evidence"]),
+                // A malformed label never fails the section.
+                provenance = runCatching { provenanceAdapter.fromJsonValue(raw["provenance"]) }.getOrNull(),
             )
         }
+
+        private val provenanceAdapter by lazy { moshi.adapter(RecordProvenanceDto::class.java) }
 
         /** `{ kind, label }`; anything else (absent, malformed, no label) reads as no scope. */
         private fun scopeOf(value: Any?): PlaceSectionScope? {
@@ -183,6 +188,7 @@ class PlaceSectionEnvelopeAdapterFactory : JsonAdapter.Factory {
             writer.name("unavailable_reason").value(value.unavailableReason)
             writeScope(writer, "scope", value.scope)
             writeScope(writer, "evidence", value.evidence)
+            value.provenance?.let { writer.name("provenance").jsonValue(provenanceAdapter.toJsonValue(it)) }
             writer.name("data")
             when (val payload = value.data) {
                 null -> writer.nullValue()

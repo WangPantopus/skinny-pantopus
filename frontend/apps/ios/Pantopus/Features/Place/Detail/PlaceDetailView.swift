@@ -232,6 +232,8 @@ extension PlaceDetailViewModel {
             state: state,
             value: reading.value,
             caption: state == .unavailable ? env.unavailableReason : reading.caption,
+            // Your home's gap is ours (no county records yet), never the area's: the server's sentence is the card's line.
+            unavailableTitle: env.id == .yourHome ? env.unavailableReason : nil,
             chip: reading.chip,
             statusDot: reading.statusDot,
             sparkline: false,

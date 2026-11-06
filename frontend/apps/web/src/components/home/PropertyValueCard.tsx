@@ -110,7 +110,7 @@ export default function PropertyValueCard({ data, loading }: PropertyValueCardPr
       <div className="flex items-center gap-1.5">
         <Home className="h-4 w-4 text-app-primary" />
         <span className="text-[13px] font-semibold text-app-text-secondary">
-          Estimated Home Value
+          {data.value_title || 'Estimated Home Value'}
         </span>
       </div>
 
@@ -141,12 +141,14 @@ export default function PropertyValueCard({ data, loading }: PropertyValueCardPr
         </p>
       )}
 
-      {/* Last updated */}
-      {data.last_updated && (
+      {/* Where it came from, or when it was last updated */}
+      {data.provenance?.label ? (
+        <p className="mt-1.5 text-[11px] text-app-text-muted">{data.provenance.label}</p>
+      ) : data.last_updated ? (
         <p className="mt-1.5 text-[11px] text-app-text-muted">
           Updated {fmtDate(data.last_updated)}
         </p>
-      )}
+      ) : null}
     </div>
   );
 }
