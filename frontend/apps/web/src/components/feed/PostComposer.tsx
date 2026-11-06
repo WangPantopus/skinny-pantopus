@@ -176,6 +176,8 @@ export interface PostComposerSubmitData {
   longitude?: number;
   locationName?: string;
   locationAddress?: string;
+  geocodePlaceId?: string;
+  geocodeAccuracy?: string;
   gpsTimestamp?: string;
   gpsLatitude?: number;
   gpsLongitude?: number;
@@ -388,7 +390,14 @@ export default function PostComposer({
     if (!needsLocation || pickedLocation?.source !== 'search') return;
     let current = true;
     api.posts
-      .checkPlaceEligibility({ latitude: pickedLocation.latitude, longitude: pickedLocation.longitude })
+      .checkPlaceEligibility({
+        latitude: pickedLocation.latitude,
+        longitude: pickedLocation.longitude,
+        // With a device fix in hand, being near the place counts too.
+        gpsTimestamp: pickedLocation.gpsTimestamp,
+        gpsLatitude: pickedLocation.gpsLatitude,
+        gpsLongitude: pickedLocation.gpsLongitude,
+      })
       .then((r) => {
         if (current) setSearchedPlaceRefused(!r.eligible);
       })
@@ -696,6 +705,8 @@ export default function PostComposer({
             longitude: f.location.longitude,
             locationName: f.location.locationName,
             locationAddress: f.location.locationAddress,
+            geocodePlaceId: f.location.geocodePlaceId,
+            geocodeAccuracy: f.location.geocodeAccuracy,
             gpsTimestamp: f.location.gpsTimestamp,
             gpsLatitude: f.location.gpsLatitude,
             gpsLongitude: f.location.gpsLongitude,
