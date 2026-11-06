@@ -388,6 +388,9 @@ private struct RoleStep: View {
     var body: some View {
         HeadlineBlock("What's your role?")
         SubcopyBlock("This determines what verification we'll ask for next.")
+        if viewModel.lateDetailsAdded {
+            AddedDetailsLine { viewModel.reviewAddedDetails() }
+        }
         VStack(spacing: Spacing.s2) {
             ForEach(AddHomeRole.allCases, id: \.self) { role in
                 RoleRow(role: role, isSelected: viewModel.form.role == role) {
@@ -407,6 +410,28 @@ private struct RoleStep: View {
     }
 }
 
+/// County details that landed after the person left the details step, with a
+/// way back to check them. Parity twin of Android's `AddedDetailsLine`.
+private struct AddedDetailsLine: View {
+    let onReview: () -> Void
+
+    var body: some View {
+        HStack(spacing: Spacing.s2) {
+            Text("We added your home's details from public records.")
+                .font(.system(size: 12.5))
+                .foregroundStyle(Theme.Color.success)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Review", action: onReview)
+                .font(.system(size: 13, weight: .semibold))
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("addHome_reviewAddedDetails")
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("addHome_addedDetails")
+    }
+}
+
 // MARK: - Step 4: Review
 
 private struct ReviewStep: View {
@@ -415,6 +440,9 @@ private struct ReviewStep: View {
     var body: some View {
         HeadlineBlock("Review and submit")
         SubcopyBlock("Make sure everything below looks right before submitting.")
+        if viewModel.lateDetailsAdded, !viewModel.isClaimingExistingHome {
+            AddedDetailsLine { viewModel.reviewAddedDetails() }
+        }
         ReviewSummaryBlock(summaryRows)
         if viewModel.isClaimingExistingHome {
             SubcopyBlock("Submitting saves a residency request. It does not request mail or grant household access.")
