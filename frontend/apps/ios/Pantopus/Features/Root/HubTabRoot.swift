@@ -1567,7 +1567,7 @@ public struct HubTabRoot: View {
     /// and the error state get them in the bar.
     @ViewBuilder
     private var placeRootContent: some View {
-        switch placeRoot {
+        switch shownPlaceRoot {
         case let .home(homeId):
             placeDashboard(homeId: homeId, isActive: path.isEmpty && rootTabs.selected == owningTab, isRoot: true)
                 // Another Home is another dashboard, with its own state.
@@ -1627,6 +1627,23 @@ public struct HubTabRoot: View {
                 .offlineBanner(isOffline: !NetworkMonitor.shared.isOnline)
             )
         }
+    }
+
+    /// Before its first read has started, the root the kept copies decide:
+    /// with a copy, the first frame after sign-in is already the person's place.
+    private var shownPlaceRoot: PlaceRoot {
+        guard placeRoot == .resolving, mode == .hub, !currentUserId.isEmpty, !placeRootNeedsFreshList else { return placeRoot }
+        return keptPlaceRoot() ?? .resolving
+    }
+
+    /// The root the kept copies decide, the same way the reads will. Nil
+    /// without the copies to decide it.
+    private func keptPlaceRoot() -> PlaceRoot? {
+        guard let copy = HomesStoreReads.peekMyHomes() else { return nil }
+        if let root = PlaceRootResolver.root(for: copy.value, current: currentHomeId) { return root }
+        if let claims = HomesStoreReads.peekMyClaims(), let root = PlaceRootResolver.root(forClaims: claims.value) { return root }
+        guard let saved = HomesStoreReads.peekSavedPlaces() else { return nil }
+        return PlaceRootResolver.savedPlace(in: saved.value.savedPlaces).map(PlaceRoot.savedPlace) ?? .firstRun
     }
 
     /// `screen.place.viewed` each time a settled root shows, as the Hub sent
@@ -4027,15 +4044,7 @@ public struct HubTabRoot: View {
         let generation = placeRootGeneration
         openPendingArrivalIfNeeded()
         let fresh = placeRootNeedsFreshList
-        if !fresh, let copy = HomesStoreReads.peekMyHomes() {
-            if let root = PlaceRootResolver.root(for: copy.value, current: currentHomeId) {
-                placeRoot = root
-            } else if let claims = HomesStoreReads.peekMyClaims(), let root = PlaceRootResolver.root(forClaims: claims.value) {
-                placeRoot = root
-            } else if let saved = HomesStoreReads.peekSavedPlaces() {
-                placeRoot = PlaceRootResolver.savedPlace(in: saved.value.savedPlaces).map(PlaceRoot.savedPlace) ?? .firstRun
-            }
-        }
+        if !fresh, let root = keptPlaceRoot() { placeRoot = root }
         do {
             let homes = try await HomesStoreReads.myHomes(force: fresh).value
             if fresh { placeRootNeedsFreshList = false }
