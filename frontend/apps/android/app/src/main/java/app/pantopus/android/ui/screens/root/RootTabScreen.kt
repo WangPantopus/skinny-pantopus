@@ -3138,6 +3138,18 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             openWebPath = { path ->
                                 ExternalLinks.webUri(InviteLinks.publicPageUrl(path))?.let { WebLinkFallback.open(appContext, it) }
                             },
+                            openChat = { userId, name ->
+                                navController.navigate(
+                                    ChildRoutes.chatConversationFromPicker(
+                                        userId = userId,
+                                        displayName = name,
+                                        initials = name.trim().take(1).uppercase(),
+                                        verified = false,
+                                        locality = null,
+                                    ),
+                                )
+                            },
+                            openInvoice = { id -> navController.navigate(ChildRoutes.invoiceDetail(id)) },
                         ),
                 )
                 plansRoutes(

@@ -11,13 +11,18 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import app.pantopus.android.ui.screens.crewday.book.CrewDayBookActions
 import app.pantopus.android.ui.screens.crewday.book.CrewDayBookScreen
+import app.pantopus.android.ui.screens.crewday.booking.CrewDayBookingActions
+import app.pantopus.android.ui.screens.crewday.booking.CrewDayBookingScreen
 import app.pantopus.android.ui.screens.crewday.create.NewCrewDayScreen
 import app.pantopus.android.ui.screens.crewday.crew.CrewDaysCrewActions
 import app.pantopus.android.ui.screens.crewday.crew.CrewDaysCrewScreen
 import app.pantopus.android.ui.screens.crewday.invite.CrewDayInvitationActions
 import app.pantopus.android.ui.screens.crewday.invite.CrewDayInvitationScreen
+import app.pantopus.android.ui.screens.crewday.mine.MyCrewDaysActions
+import app.pantopus.android.ui.screens.crewday.mine.MyCrewDaysScreen
 import app.pantopus.android.ui.screens.crewday.prep.CrewDayPrepActions
 import app.pantopus.android.ui.screens.crewday.prep.CrewDayPrepScreen
+import app.pantopus.android.ui.screens.crewday.problem.CrewDayProblemScreen
 import app.pantopus.android.ui.screens.root.NotYetAvailableView
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -43,6 +48,9 @@ object CrewDayRoutes {
     /** 5 Your Crew Day: one booking. */
     const val BOOKING = "crew-days/bookings/{$BOOKING_ID_KEY}"
 
+    /** 7 Something needs attention, for a booking. */
+    const val PROBLEM = "crew-days/bookings/{$BOOKING_ID_KEY}/problem"
+
     /** 10 Your Crew Days: bookings, street requests and past days. */
     const val MINE = "crew-days/mine"
 
@@ -66,6 +74,8 @@ object CrewDayRoutes {
     fun book(code: String): String = "crew-day/${Uri.encode(code)}/book"
 
     fun booking(id: String): String = "crew-days/bookings/${Uri.encode(id)}"
+
+    fun problem(id: String): String = "crew-days/bookings/${Uri.encode(id)}/problem"
 
     fun crew(businessId: String? = null): String = "crew-days/crew?$BUSINESS_ID_KEY=${Uri.encode(businessId.orEmpty())}"
 
@@ -96,6 +106,10 @@ data class CrewDayExternalRoutes(
     val openWeb: (url: String) -> Unit,
     /** A path on the web app (`/crew-day/how-it-works`), in the browser. */
     val openWebPath: (path: String) -> Unit,
+    /** The conversation with a person or a business page (the crew, the household). */
+    val openChat: (userId: String, name: String) -> Unit,
+    /** The existing invoice page: the receipt, and paying it. */
+    val openInvoice: (invoiceId: String) -> Unit,
 )
 
 /** Registers every Crew Day page. Call inside the root `NavHost`. */
@@ -142,9 +156,38 @@ fun NavGraphBuilder.crewDayRoutes(
         route = CrewDayRoutes.BOOKING,
         arguments = listOf(navArgument(CrewDayRoutes.BOOKING_ID_KEY) { type = NavType.StringType }),
     ) {
-        CrewDayPlaceholder("Your Crew Day", back)
+        CrewDayBookingScreen(
+            actions =
+                CrewDayBookingActions(
+                    onBack = back,
+                    onProblem = { id -> nav.navigate(CrewDayRoutes.problem(id)) },
+                    onMessageCrew = external.openChat,
+                    onOpenInvoice = external.openInvoice,
+                    onShare = external.share,
+                    onOpenWebPath = external.openWebPath,
+                    onOpenWeb = external.openWeb,
+                    onFindAnother = { nav.navigate(CrewDayRoutes.MINE) },
+                    onAsk = { nav.navigate(CrewDayRoutes.ASK) },
+                ),
+        )
     }
-    composable(CrewDayRoutes.MINE) { CrewDayPlaceholder("Your Crew Days", back) }
+    composable(
+        route = CrewDayRoutes.PROBLEM,
+        arguments = listOf(navArgument(CrewDayRoutes.BOOKING_ID_KEY) { type = NavType.StringType }),
+    ) {
+        CrewDayProblemScreen(onClose = back)
+    }
+    composable(CrewDayRoutes.MINE) {
+        MyCrewDaysScreen(
+            actions =
+                MyCrewDaysActions(
+                    onBack = back,
+                    onOpenBooking = { id -> nav.navigate(CrewDayRoutes.booking(id)) },
+                    onOpenInvitation = { code -> nav.navigate(CrewDayRoutes.invitation(code)) },
+                    onAsk = { nav.navigate(CrewDayRoutes.ASK) },
+                ),
+        )
+    }
     composable(CrewDayRoutes.ASK) { CrewDayPlaceholder("Ask for a Crew Day", back) }
     composable(
         route = CrewDayRoutes.CREW,
