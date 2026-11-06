@@ -357,7 +357,7 @@ async function* build({ work }) {
     const townIds = ids.filter((id) => id !== BOSTON && id !== CAMBRIDGE);
     const rows = cached(path.join(work, 'ma-massgis', `${fips}.jsonl.gz`), () => layerRows(LAYER, COLUMNS, { where: `TOWN_ID IN (${townIds.join(',')})` }));
     for await (const row of rows) {
-      if (!word(row.PROP_ID)) continue;
+      if (!word(row.PROP_ID) || row.TOWN_ID === BOSTON || row.TOWN_ID === CAMBRIDGE) continue;
       const made = fromMassGis(row, fips, county, TOWN_NAMES[row.TOWN_ID] || '');
       if (!made.length) unreadable += 1;
       for (const record of made) {
