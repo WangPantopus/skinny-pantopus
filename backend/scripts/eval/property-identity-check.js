@@ -9,7 +9,7 @@
 const path = require('path');
 const { openRelease, dallasRoll } = require('./lib/propertyRelease');
 const { zipTable } = require('../../../scripts/property-index/lib/tables.cjs');
-const { parts, sortKey, zip5 } = require('../../services/propertyRecords/addressKey');
+const { parse, parts, sortKey, zip5 } = require('../../services/propertyRecords/addressKey');
 const { resolve } = require('../../services/propertyRecords/identity');
 
 const opt = (name) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : null; };
@@ -43,7 +43,8 @@ async function clarkPositives() {
     const street = [row.SitusNum, row.SitusStPre, row.SitusSt, row.SitusSuf].filter(Boolean).join(' ');
     let unit = head.startsWith(street) ? head.slice(street.length).trim() : '';
     if (row.SitusCity && unit.endsWith(row.SitusCity)) unit = unit.slice(0, -row.SitusCity.length).trim();
-    const query = parts({ number: row.SitusNum, pre: row.SitusStPre, name: row.SitusSt, suffix: row.SitusSuf, unit });
+    // Read the way a person's line is read: the release's keys come from columns, a person's from one line of text.
+    const query = parse(street, unit);
     if (!query) continue;
     const answer = ask({ ...query, zip: zip5(row.SitusZip) || record.address.zip });
     const part = `Positives: ${record.kind}`;
@@ -61,7 +62,8 @@ async function dallasPositives() {
     seen.add(row.account);
     const record = byId.get(row.account);
     if (!record || !['property', 'unit'].includes(record.kind)) continue;
-    const query = parts({ number: row.number.replace(/^0+/, ''), pre: row.direction, name: row.name, suffix: row.suffix, unit: row.suite });
+    const line = [row.number.replace(/^0+/, ''), row.direction, row.name, row.suffix].filter(Boolean).join(' ');
+    const query = parse(line, row.suite);
     if (!query) continue;
     const answer = ask({ ...query, zip: record.address.zip });
     const part = `Positives: ${record.kind}`;
