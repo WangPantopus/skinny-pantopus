@@ -63,6 +63,11 @@ data class AddHomeUiState(
     val isSessionCurrent: Boolean = true,
     val addressCheck: CheckAddressResponse? = null,
     val geocodedAddress: AddHomeGeocodedAddress? = null,
+    /** USPS couldn't confirm the unit or hasn't answered: the person can continue, and mail proof still has to pass. */
+    val postalNotice: AddHomePostalNotice? = null,
+    /** USPS says this building needs a unit, and a home without one can say so. */
+    val offersNoUnitAttestation: Boolean = false,
+    val noUnitAttested: Boolean = false,
     val isCheckingAddress: Boolean = false,
     val isSubmitting: Boolean = false,
     val createdHomeId: String? = null,
@@ -313,6 +318,7 @@ open class AddHomeWizardViewModel
             addressJob = null
             _state.update {
                 it.copy(
+                    postalNotice = null, offersNoUnitAttestation = false, noUnitAttested = false,
                     validatedAddressId = null, addressCheck = null, geocodedAddress = null,
                     existingHomeId = null, isClaimingExistingHome = false,
                     showsClaimedModal = false, showsConfirmAddressSheet = false,
@@ -824,12 +830,17 @@ open class AddHomeWizardViewModel
             if (_state.value.form.currentStep == AddHomeStep.Confirm) viewModelScope.launch { runCheckAddress() }
         }
 
-        private suspend fun runCheckAddress() {
+        /** "My home doesn't have a unit number": the base address goes through, and mail proof still has to pass. */
+        fun attestNoUnit() {
+            if (_state.value.form.currentStep == AddHomeStep.Confirm) viewModelScope.launch { runCheckAddress(attestingNoUnit = true) }
+        }
+
+        private suspend fun runCheckAddress(attestingNoUnit: Boolean = false) {
             if (!session.isCurrent || !_state.value.form.address.isComplete || _state.value.isCheckingAddress) return
             invalidateAddress()
             val revision = addressRevision
             val fields = _state.value.form.address
-            _state.update { it.copy(isCheckingAddress = true) }
+            _state.update { it.copy(isCheckingAddress = true, noUnitAttested = attestingNoUnit) }
             try {
                 session.requireCurrent()
                 val validation =
@@ -845,8 +856,14 @@ open class AddHomeWizardViewModel
                         ),
                     )
                 if (!addressIsCurrent(revision)) return
-                if (validation.verdict.status !in listOf("OK", "MIXED_USE", "CONFLICT")) {
-                    _state.update { it.copy(errorMessage = addressValidationMessage(validation.verdict.status)) }
+                val verdictStatus = validation.verdict.status
+                if (verdictStatus !in continuingStatuses && !(verdictStatus == "MISSING_UNIT" && attestingNoUnit)) {
+                    _state.update {
+                        it.copy(
+                            errorMessage = addressValidationMessage(verdictStatus, validation.verdict.reasons.orEmpty()),
+                            offersNoUnitAttestation = verdictStatus == "MISSING_UNIT",
+                        )
+                    }
                     return
                 }
                 val addressId = validation.addressId
@@ -887,6 +904,7 @@ open class AddHomeWizardViewModel
                         it.copy(
                             addressCheck = response,
                             validatedAddressId = addressId,
+                            postalNotice = AddHomePostalNotice.forStatus(verdictStatus, address.line2 ?: fields.unit),
                             geocodedAddress =
                                 AddHomeGeocodedAddress(
                                     street = response.residencyAddress?.line1 ?: address.line1,
@@ -938,9 +956,19 @@ open class AddHomeWizardViewModel
             }
         }
 
-        private fun addressValidationMessage(status: String): String =
+        private val continuingStatuses = setOf("OK", "MIXED_USE", "CONFLICT", "UNIT_NOT_CONFIRMED", "POSTAL_PENDING")
+
+        private fun addressValidationMessage(
+            status: String,
+            reasons: List<String>,
+        ): String =
             when (status) {
-                "MISSING_UNIT" -> "Enter your unit or apartment number, then check this address again."
+                "MISSING_UNIT" ->
+                    if ("USPS_UNIT_REQUIRED" in reasons) {
+                        "This building needs a unit number. Which one is yours? Edit the address to add it."
+                    } else {
+                        "Enter your unit or apartment number, then check this address again."
+                    }
                 "MISSING_STREET_NUMBER", "UNVERIFIED_STREET_NUMBER" -> "Check the street number and try again."
                 "PO_BOX" -> "Enter a street address. A PO Box cannot be used as a Home."
                 "BUSINESS" -> "This appears to be a business address. Check your residential address."
@@ -956,11 +984,11 @@ open class AddHomeWizardViewModel
         /**
          * `POST /api/homes/property-suggestions` — route
          * `backend/routes/home.js:587`. Fills the Details block from
-         * public records (ATTOM → heuristics → optional LLM). The server
+         * public records (county record → heuristics → optional LLM). The server
          * answers at once (`lookup = "background"`); a county record it
          * doesn't have yet is looked up meanwhile and fills what is still
          * empty when [finishPropertyLookup] gets it, so the step never
-         * waits for ATTOM. A failure is never fatal: the fields stay
+         * waits for the record. A failure is never fatal: the fields stay
          * editable and the card says the lookup was unavailable, exactly
          * as RN does (`useHomeForm.ts:657-662`).
          */
@@ -986,7 +1014,7 @@ open class AddHomeWizardViewModel
             if (!addressIsCurrent(revision)) return
             when (result) {
                 is NetworkResult.Success -> {
-                    val pending = result.data.attomLookup == LOOKUP_PENDING
+                    val pending = result.data.lookupState == LOOKUP_PENDING
                     _state.update {
                         it.copy(
                             isLoadingPropertySuggestions = false,
@@ -1027,7 +1055,7 @@ open class AddHomeWizardViewModel
             if (!addressIsCurrent(revision) || !_state.value.propertyLookupPending) return
             when (result) {
                 is NetworkResult.Success -> {
-                    val answered = result.data.attomLookup == LOOKUP_FOUND || result.data.attomLookup == LOOKUP_NONE
+                    val answered = result.data.lookupState == LOOKUP_FOUND || result.data.lookupState == LOOKUP_NONE
                     _state.update {
                         val details = applySuggestions(it.form.details, result.data.suggestions, homeTypeChosen)
                         val movedOn = it.form.currentStep.ordinal0 > AddHomeStep.Confirm.ordinal0
@@ -1035,7 +1063,8 @@ open class AddHomeWizardViewModel
                             propertyLookupPending = false,
                             propertySuggestions = result.data,
                             propertyLookupComplete = true,
-                            propertyLookupMessage = if (answered) lookupMessage(result.data) else RECORDS_UNAVAILABLE_MESSAGE,
+                            propertyLookupMessage =
+                                if (answered) lookupMessage(result.data) else result.data.lookupMessage ?: RECORDS_UNAVAILABLE_MESSAGE,
                             form = it.form.copy(details = details),
                             lateDetailsAdded = it.lateDetailsAdded || (movedOn && details != it.form.details),
                         )
@@ -1226,6 +1255,7 @@ open class AddHomeWizardViewModel
                     yearBuilt = details.yearBuilt.toIntOrNull(),
                     isOwner = role == AddHomeRole.Owner,
                     role = role.claimedRole,
+                    noUnitAttestation = if (_state.value.noUnitAttested) true else null,
                 )
             _state.update { it.copy(showsCreationRecovery = true) }
             try {
@@ -1622,18 +1652,21 @@ open class AddHomeWizardViewModel
             private const val KEY_YEAR_BUILT = "addHome.yearBuilt"
             private const val KEY_DESCRIPTION = "addHome.description"
 
-            /** RN's three-way message (`useHomeForm.ts:641-647`). */
+            /** The server's words, or the same words from an older server's answer. */
             private fun lookupMessage(response: PropertySuggestionsResponse): String =
-                when {
-                    response.hasAttomRecord ->
-                        "Public property records found. Review them before continuing."
-                    !response.tiersUsed.isNullOrEmpty() ->
-                        "No ATTOM property record was returned, so we prefilled what we " +
-                            "could from address hints."
-                    else ->
-                        "No ATTOM property record was available for this address. " +
-                            "Confirm the details below."
-                }
+                response.lookupMessage
+                    ?: when {
+                        response.isBuildingOnly ->
+                            "We found the building. Your unit's details weren't in the county record."
+                        response.hasPublicRecord ->
+                            "Public property records found. Review them before continuing."
+                        !response.tiersUsed.isNullOrEmpty() ->
+                            "We couldn't find public records for this address, so we filled in what we " +
+                                "could from address hints. You can change them anytime."
+                        else ->
+                            "We couldn't find public records for this address. Tell us the basics; " +
+                                "you can change them anytime."
+                    }
 
             /** Prefill only — never overwrite something the user already typed (or a home type they picked). */
             private fun applySuggestions(
@@ -1661,8 +1694,7 @@ open class AddHomeWizardViewModel
             }
 
             /** "2.0" → "2", "2.5" → "2.5". */
-            private fun trimTrailingZero(value: Double): String =
-                if (value == Math.floor(value)) value.toInt().toString() else value.toString()
+            fun trimTrailingZero(value: Double): String = if (value == Math.floor(value)) value.toInt().toString() else value.toString()
         }
     }
 

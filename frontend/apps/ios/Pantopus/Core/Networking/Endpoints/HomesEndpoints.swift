@@ -9,7 +9,8 @@ import Foundation
 /// Endpoint builders for `backend/routes/home.js`.
 public enum HomesEndpoints {
     public static func validateAddress(_ request: HomeAddressValidationRequest) -> Endpoint {
-        Endpoint(method: .post, path: "/api/v1/address/validate", body: request)
+        // `postal=2` asks for UNIT_NOT_CONFIRMED and POSTAL_PENDING; older servers ignore it.
+        Endpoint(method: .post, path: "/api/v1/address/validate", query: ["postal": "2"], body: request)
     }
 
     /// `GET /api/homes/my-homes` — route `backend/routes/home.js:1464`.
@@ -40,8 +41,13 @@ public enum HomesEndpoints {
     /// (`home`) plus an opaque ATTOM payload + `source` /
     /// `unavailable_reason` that the Property Details screen doesn't model.
     public static func propertyDetails(homeId: String) -> Endpoint {
-        Endpoint(method: .get, path: "/api/homes/\(homeId)/property-details")
+        Endpoint(method: .get, path: "/api/homes/\(homeId)/property-details", query: recordVocabulary)
     }
+
+    /// Asks Add Home's suggestions, Property details, the Home's value and Place
+    /// for the new record words (`backend/services/recordVocabulary.js`). Older
+    /// servers ignore it, so the DTOs read both vocabularies.
+    public static let recordVocabulary = ["vocabulary": "2"]
 
     /// `GET /api/homes/:id/public-profile` — route `backend/routes/home.js:2439`.
     public static func publicProfile(homeId: String) -> Endpoint {
@@ -61,7 +67,7 @@ public enum HomesEndpoints {
         Endpoint(
             method: .post,
             path: "/api/homes/property-suggestions",
-            query: lookup.map { ["lookup": $0] } ?? [:],
+            query: recordVocabulary.merging(lookup.map { ["lookup": $0] } ?? [:]) { $1 },
             body: request
         )
     }

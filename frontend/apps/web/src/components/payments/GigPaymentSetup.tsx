@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Lock } from 'lucide-react';
 import { useStripe, useElements, PaymentElement } from '@stripe/react-stripe-js';
 import { payments } from '@pantopus/api';
+import { useDialogFocusTrap } from '@/lib/useDialogFocusTrap';
 const { completePaymentSetup } = payments;
 
 interface GigPaymentSetupProps {
@@ -146,9 +148,16 @@ export default function GigPaymentSetup({
 
   const amountFormatted = `$${(amount / 100).toFixed(2)}`;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-app-surface rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+  // Escape does what the Close and Cancel buttons do, and they're disabled while the card is being confirmed.
+  // On document.body the dialog comes last in the Tab order, so Tab stays inside.
+  const dialogRef = useDialogFocusTrap<HTMLDivElement>(() => { if (!processing) void onClose(); });
+
+  // Rendered into document.body: inside the app's <main> (its own stacking context) the + button sat on Authorize,
+  // and on a shorter phone the tab bar cut off Cancel and Authorize. Every caller renders this in place.
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+      <div ref={dialogRef} className="bg-app-surface rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="p-6 border-b border-app-border-subtle">
           <div className="flex items-center justify-between">
@@ -245,6 +254,7 @@ export default function GigPaymentSetup({
           </p>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

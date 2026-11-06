@@ -3428,7 +3428,6 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 ) {
                     NeighborMessageComposeScreen(
                         onBack = { navController.popBackStack() },
-                        onChangeRecipient = { navController.popBackStack() },
                         onDone = { navController.popBackStack() },
                     )
                 }
@@ -7468,7 +7467,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                     HomePostalNavigation.Home -> ChildRoutes.homeDashboard(homeId)
                                     HomePostalNavigation.Residency -> ChildRoutes.homeResidency(homeId)
                                     HomePostalNavigation.Ownership -> ChildRoutes.claimOwnership(homeId)
-                                    HomePostalNavigation.AddHome -> ChildRoutes.joinHome(homeId)
+                                    HomePostalNavigation.AddHome, HomePostalNavigation.AddressWrong -> ChildRoutes.joinHome(homeId)
+                                    HomePostalNavigation.Document -> ChildRoutes.verifyResidency(homeId)
                                 },
                             ) { launchSingleTop = true }
                         },

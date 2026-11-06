@@ -20,7 +20,7 @@ const META: Record<PlaceSectionId, { group: PlaceSection['group']; band: PlaceSe
   sunrise_sunset: { group: 'today', band: 'A', source: 'Open-Meteo' },
   good_day_to: { group: 'today', band: 'A', source: "Pantopus \u00b7 derived from today's conditions" },
   address_calendar: { group: 'today', band: 'A', source: 'Pantopus registry · city and state sources' },
-  your_home: { group: 'your_home', band: 'B', source: 'County records · ATTOM' },
+  your_home: { group: 'your_home', band: 'B', source: 'County records' },
   home_systems: { group: 'your_home', band: 'C', source: 'Your household record' },
   flood: { group: 'risk_readiness', band: 'A', source: 'FEMA National Flood Hazard Layer' },
   heat_cold: { group: 'risk_readiness', band: 'A', source: 'NWS HeatRisk \u00b7 National Weather Service' },
@@ -35,7 +35,7 @@ const META: Record<PlaceSectionId, { group: PlaceSection['group']; band: PlaceSe
   incentives: { group: 'money_signals', band: 'A', source: 'DSIRE' },
   rent_band: { group: 'money_signals', band: 'A', source: 'HUD Fair Market Rents · county-wide estimate' },
   real_rent: { group: 'money_signals', band: 'D', source: 'Pantopus · verified neighbors on your block' },
-  exemption_check: { group: 'money_signals', band: 'B', source: 'County records · ATTOM' },
+  exemption_check: { group: 'money_signals', band: 'B', source: 'County records' },
   civic_districts: { group: 'civic', band: 'A', source: 'Google Civic Information' },
   civic_election: { group: 'civic', band: 'A', source: 'Official county elections' },
 };
@@ -118,7 +118,7 @@ function build(alert: boolean, tier: PlaceIntelligence['tier'] = 'T4'): PlaceInt
     sec('alerts', { data: { active: [] } }),
     sec('sunrise_sunset', { status: 'unavailable', unavailable_reason: 'Coverage is expanding. Check back later.' }),
 
-    // Your home — Band B, no ATTOM key in the seed
+    // Your home — Band B, no county record in the seed
     sec('your_home', {
       status: 'unavailable',
       unavailable_reason: "Exact property details aren't available for your area yet.",

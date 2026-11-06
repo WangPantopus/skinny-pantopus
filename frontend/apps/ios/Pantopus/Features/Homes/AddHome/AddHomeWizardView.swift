@@ -70,6 +70,11 @@ public struct AddHomeWizardView: View {
                     Button("Try again", action: viewModel.retryCheckAddress)
                         .disabled(viewModel.isCheckingAddress || !viewModel.isCurrent)
                     Button("Edit address", action: viewModel.leadingTapped)
+                    if viewModel.offersNoUnitAttestation {
+                        Button("My home doesn't have a unit number", action: viewModel.attestNoUnit)
+                            .disabled(viewModel.isCheckingAddress || !viewModel.isCurrent)
+                            .accessibilityIdentifier("addHome_noUnitAttestation")
+                    }
                 }
             }
             if viewModel.showsCreationRecovery {
@@ -358,7 +363,7 @@ private struct AddHomeConfirmStep: View {
                     viewModel.applyGeocodedZip()
                 }
             } else if let geocodedAddress = viewModel.geocodedAddress, viewModel.isGeocodeResolved {
-                GeocodeConfirmationBlock(address: geocodedAddress)
+                GeocodeConfirmationBlock(address: geocodedAddress, postalNotice: viewModel.postalNotice)
             }
             AddressConfirmationFields(
                 address: viewModel.form.address,

@@ -4,7 +4,7 @@
 // Maps to the new Home Profile tables (HomeTask, HomeBill, etc.)
 // ============================================================
 
-import { get, post, put, patch, del } from '../client';
+import { get, post, put, patch, del, RECORD_VOCABULARY } from '../client';
 import type { HomeEmergencyType, HomePoll, HomePollOption, HomePollType, HomePollStatus } from '@pantopus/types';
 import { assertHomeTaskSession, taskSessionHeaders, rethrowTaskSessionError, type HomeTaskSessionScope } from '../taskSessionScope';
 
@@ -562,5 +562,5 @@ export async function getHomeTimeline(homeId: string, page?: number, limit?: num
 }
 
 export async function getPropertyValue(homeId: string) {
-  return get<PropertyValueData>(`/api/homes/${homeId}/property-value`);
+  return get<PropertyValueData>(`/api/homes/${homeId}/property-value`, RECORD_VOCABULARY);
 }

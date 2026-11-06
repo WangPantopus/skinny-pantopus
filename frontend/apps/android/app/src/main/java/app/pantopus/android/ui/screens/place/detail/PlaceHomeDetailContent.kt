@@ -59,7 +59,7 @@ fun PlaceHomeDetailContent(
     val env = intel.section(PlaceSectionId.YOUR_HOME)
     val data = env?.yourHome
 
-    // `your_home` is Band B and needs an ATTOM key, so it is unavailable on
+    // `your_home` is Band B and needs a county record, so it is unavailable on
     // plenty of installs. The Systems Ledger is Band C — the household's own
     // record — and must render regardless, so this no longer returns early
     // on a missing property record.
@@ -71,7 +71,12 @@ fun PlaceHomeDetailContent(
             FactsCard(data)
             // The server names where the facts came from: county records, or
             // the details the household entered.
-            PlaceSourceNote(env.source?.takeIf { it.isNotBlank() } ?: "County public records · estimate model", asOf)
+            val label = env.provenance?.label
+            if (label != null) {
+                PlaceSourceNote(label)
+            } else {
+                PlaceSourceNote(env.source?.takeIf { it.isNotBlank() } ?: "County public records · estimate model", asOf)
+            }
 
             ValueSection(intel.valueAccess, data, asOf)
         } else {
@@ -108,7 +113,10 @@ private fun ValueSection(
             PlaceDetailSectionLabel("Value")
             ValueCard(data)
             data.assessedValue?.let { AssessmentCard(it) }
-            if (data.estimatedValue != null || data.assessedValue != null) {
+            val valueSource = data.valueSource
+            if (valueSource != null) {
+                PlaceSourceNote(valueSource)
+            } else if (data.estimatedValue != null || data.assessedValue != null) {
                 PlaceSourceNote("County public records · estimate model", asOf)
             }
 

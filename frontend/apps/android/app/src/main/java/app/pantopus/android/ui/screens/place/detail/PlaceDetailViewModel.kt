@@ -91,7 +91,9 @@ class PlaceDetailViewModel
     ) : ViewModel(),
         AddressCalendarActions {
         val savedPlaceId: String? = savedStateHandle[PLACE_DETAIL_SAVED_ID_KEY]
-        private val homeId: String = savedStateHandle.get<String>(PLACE_DETAIL_HOME_ID_KEY).orEmpty()
+
+        /** The Home this Place shows (empty for a saved place); the invite form favors addresses near it. */
+        val homeId: String = savedStateHandle.get<String>(PLACE_DETAIL_HOME_ID_KEY).orEmpty()
         private val calendarSession = sessionScopes.create(viewModelScope)
         private val keyguard = context.getSystemService(KeyguardManager::class.java)
         override val calendarHomeId: String? get() = homeId.takeIf { savedPlaceId == null && it.isNotBlank() }
@@ -790,7 +792,10 @@ class PlaceDetailViewModel
                         val left = r.data.invitesRemaining
                         val plural = if (left == 1) "invite" else "invites"
                         _actionToast.value =
-                            PlaceActionToast("Postcard on its way — $left $plural left this week.", isError = false)
+                            PlaceActionToast(
+                                r.data.message.takeIf { r.data.pending } ?: "Postcard on its way — $left $plural left this week.",
+                                isError = false,
+                            )
                     }
                     is NetworkResult.Failure ->
                         _actionToast.value =

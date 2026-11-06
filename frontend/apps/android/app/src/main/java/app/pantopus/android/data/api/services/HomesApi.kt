@@ -132,14 +132,18 @@ interface HomesApi {
         @Path("id") id: String,
     ): HomePublicProfileResponse
 
-    /** `GET /api/homes/:id/property-details` — route `backend/routes/home.js:2991`. */
-    @GET("api/homes/{id}/property-details")
+    /**
+     * `GET /api/homes/:id/property-details` — route `backend/routes/home.js:2991`. `vocabulary=2` here, on
+     * the suggestions, the Home's value and Place asks for the new record words
+     * (`backend/services/recordVocabulary.js`); older servers ignore it, so the DTOs read both.
+     */
+    @GET("api/homes/{id}/property-details?vocabulary=2")
     suspend fun propertyDetails(
         @Path("id") id: String,
     ): PropertyDetailsResponse
 
     /** [propertyDetails] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
-    @GET("api/homes/{id}/property-details")
+    @GET("api/homes/{id}/property-details?vocabulary=2")
     suspend fun propertyDetailsConditional(
         @Path("id") id: String,
         @Header("If-None-Match") etag: String?,
@@ -153,21 +157,23 @@ interface HomesApi {
 
     /**
      * `POST /api/homes/property-suggestions` — route `backend/routes/home.js:587`.
-     * Tiered property hints (ATTOM → heuristics → optional LLM) that
+     * Tiered property hints (county record → heuristics → optional LLM) that
      * pre-fill the Add-Home wizard's Details block. The county record
      * itself stays on the server. `lookup = "background"` answers at once and looks a missing county
      * record up meanwhile (`attom_lookup: pending`); `"check"` is the one follow-up, answered when that
-     * lookup ends. Without it the server waits for ATTOM, as it does for older builds.
+     * lookup ends. Without it the server waits for the record, as it does for older builds.
      */
-    @POST("api/homes/property-suggestions")
+    @POST("api/homes/property-suggestions?vocabulary=2")
     suspend fun propertySuggestions(
         @Body body: PropertySuggestionsRequest,
         @Query("lookup") lookup: String? = null,
     ): PropertySuggestionsResponse
 
+    /** `postal=2` asks for UNIT_NOT_CONFIRMED and POSTAL_PENDING; older servers ignore it. */
     @POST("api/v1/address/validate")
     suspend fun validateAddress(
         @Body body: HomeAddressValidationRequest,
+        @Query("postal") postal: Int = 2,
     ): HomeAddressValidationResponse
 
     /** `POST /api/homes/check-address` — route `backend/routes/home.js:555`. */

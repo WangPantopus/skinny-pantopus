@@ -3,7 +3,8 @@
 // Home management, attach/detach, occupancy
 // ============================================================
 
-import { get, post, put, patch, del } from '../client';
+import { get, post, put, patch, del, RECORD_VOCABULARY } from '../client';
+import type { RecordProvenance } from '@pantopus/types';
 import type { 
   Home, 
   HomeOccupancy, 
@@ -47,7 +48,7 @@ export async function checkAddress(data: {
   return post<AddressCheckResult>('/api/homes/check-address', data);
 }
 
-export type PropertySuggestionTier = 'attom' | 'heuristic' | 'llm';
+export type PropertySuggestionTier = 'attom' | 'record' | 'heuristic' | 'llm';
 
 /** Bundle from ATTOM /property/detail — same shape is persisted on create-home as niche_data.attom_property_detail */
 export interface AttomPropertyDetailPayload {
@@ -70,14 +71,22 @@ export interface PropertySuggestionsResponse {
     description: string | null;
   };
   field_sources: Partial<Record<string, PropertySuggestionTier>>;
-  /** Includes 'attom' when a county record was found for the address. */
+  /** Any tier but `heuristic` and `llm` means a public record was found for the address. */
   tiers_used: string[];
   llm_enabled: boolean;
   /**
    * Where the county-record lookup stands for a validated address (servers since November 2026):
-   * 'pending' means ask again with `lookup: 'check'` for the record.
+   * 'pending' means ask again with `lookup: 'check'` for the record. `record_lookup` from servers
+   * that know `vocabulary=2`.
    */
   attom_lookup?: 'found' | 'none' | 'pending' | 'unavailable';
+  record_lookup?: 'found' | 'none' | 'pending' | 'unavailable';
+  /** The lookup's outcome in the server's words. */
+  lookup_message?: string;
+  /** Where the record came from, once it names its source. */
+  provenance?: RecordProvenance;
+  /** A short tag per field ("County"), once the record names its source. */
+  field_tags?: Partial<Record<string, string>>;
 }
 
 /** One label / value row of a county record, worded and formatted by the server. */
@@ -87,6 +96,8 @@ export interface CountyRecordRow {
   value: string;
   /** Numbers, measurements and codes (the apps draw them monospaced). */
   mono?: boolean;
+  /** Where this row came from, when it isn't the footer's source ("Your household"). */
+  tag?: string | null;
 }
 
 export interface CountyRecordSection {
@@ -97,10 +108,10 @@ export interface CountyRecordSection {
   note?: string | null;
 }
 
-/** A verified owner's ATTOM record as labeled sections (backend/serializers/countyRecordSerializer.js). */
+/** A verified owner's county record as labeled sections (backend/serializers/countyRecordSerializer.js). */
 export interface CountyRecord {
   sections: CountyRecordSection[];
-  /** "From county records via ATTOM · updated Sep 28, 2026" */
+  /** Names the source and date: "From Clark County Assessor's weekly file · updated Oct 31, 2026" */
   footer: string | null;
   as_of: string | null;
 }
@@ -110,6 +121,8 @@ export interface HomePropertyDetailResponse {
   /** The raw ATTOM bundle; verified owners only. */
   attom_property_detail: AttomPropertyDetailPayload | null;
   source: 'home' | 'cache' | 'attom' | 'unavailable' | string;
+  /** Where the record came from, once it names its source. */
+  provenance?: RecordProvenance;
   /**
    * OWNER_ONLY: the viewer isn't a verified owner, so only the Home's own facts come. LOOKUP_PENDING: the record
    * is being looked up; its arrival on the Home sends the `home:<id>` change signal.
@@ -139,7 +152,7 @@ export async function getPropertySuggestions(data: {
   };
 }, options?: { lookup?: 'background' | 'check' }): Promise<PropertySuggestionsResponse> {
   return post<PropertySuggestionsResponse>('/api/homes/property-suggestions', data,
-    options?.lookup ? { params: { lookup: options.lookup } } : undefined);
+    { params: { ...RECORD_VOCABULARY, ...(options?.lookup ? { lookup: options.lookup } : {}) } });
 }
 
 // ============ HOME CRUD ============
@@ -165,7 +178,7 @@ export async function getHome(homeId: string): Promise<{ home: Home }> {
  * Get ATTOM-backed property details for a home, with backend backfill/cache.
  */
 export async function getHomePropertyDetail(homeId: string): Promise<HomePropertyDetailResponse> {
-  return get<HomePropertyDetailResponse>(`/api/homes/${homeId}/property-details`);
+  return get<HomePropertyDetailResponse>(`/api/homes/${homeId}/property-details`, RECORD_VOCABULARY);
 }
 
 /**
@@ -565,6 +578,8 @@ export interface HomeDiscoverItem {
   } | null;
   is_member?: boolean;
   claim_status?: 'pending' | 'verified' | 'rejected' | null;
+  /** True when the house number and unit are hidden from this searcher (they didn't type the number). */
+  address_redacted?: boolean;
 }
 
 /**

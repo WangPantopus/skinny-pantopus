@@ -31,7 +31,7 @@ struct HomePostalAddressForm {
     }
 }
 
-enum HomePostalNavigation { case home, residency, ownership, addHome }
+enum HomePostalNavigation { case home, residency, ownership, addHome, document, addressWrong }
 
 @Observable
 @MainActor
@@ -213,7 +213,18 @@ final class HomePostalViewModel {
         case .residency: return true
         case .ownership: return progress.nextStep == .ownershipVerification
         case .addHome: return progress.nextStep == .resubmit
+        case .document: return mailEnded || mailState == "delayed"
+        case .addressWrong: return mailEnded
         }
+    }
+
+    private var mailState: String? {
+        status?.postcard?["mail_state"]?.stringValue
+    }
+
+    /// The mail couldn't prove this address, so the screen offers the ways on.
+    var mailEnded: Bool {
+        HomePostalMessages.mailEnded(mailState) || status?.restriction == "POSTCARD_RETURNED_LIMIT"
     }
 
     private func current(_ revision: Int) -> Bool {

@@ -5,6 +5,7 @@ import type { BusinessLocation } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 import Field from '../shared/Field';
+import AddressField from '../shared/AddressField';
 
 interface LocationsTabProps {
   locations: BusinessLocation[];
@@ -72,7 +73,12 @@ export default function LocationsTab({ locations, businessId, onUpdate, canManag
       {canManage && showAdd && (
         <div className="rounded-xl border border-violet-200 bg-violet-50 p-5 space-y-3">
           <Field label="Label" value={addForm.label} onChange={(v) => setAddForm({ ...addForm, label: v })} placeholder="e.g. Downtown, Main Office" />
-          <Field label="Address *" value={addForm.address} onChange={(v) => setAddForm({ ...addForm, address: v })} />
+          <AddressField
+            label="Address *"
+            value={addForm.address}
+            onChange={(v) => setAddForm((f) => ({ ...f, address: v }))}
+            onPick={(n) => setAddForm((f) => ({ ...f, city: n.city || f.city, state: n.state || f.state, zipcode: n.zipcode || f.zipcode }))}
+          />
           <div className="grid grid-cols-2 gap-3">
             <Field label="City *" value={addForm.city} onChange={(v) => setAddForm({ ...addForm, city: v })} />
             <Field label="State" value={addForm.state} onChange={(v) => setAddForm({ ...addForm, state: v })} />

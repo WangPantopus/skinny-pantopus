@@ -13,7 +13,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import type { BlockStatus } from '@pantopus/api';
 import { toast } from '@/components/ui/toast-store';
+import AddressAutocomplete from '@/components/AddressAutocomplete';
 import { queryKeys } from '@/lib/query-keys';
+import { useHomeCenter } from '@/lib/myHomes';
 import type { PlaceIntelligence, PlaceBlockDensityData, PlaceCensusContextData } from '@pantopus/types';
 import { Map, HardHat, Calendar, Home, Award, Lock, Loader2, Send, Check, Mail } from 'lucide-react';
 import { SectionCard, DensityCard, DetailHeader, DetailSectionLabel, SourceNote, InfoNote } from '@/components/archetypes/place';
@@ -88,12 +90,15 @@ function InviteForm({ homeId, remaining, cap }: { homeId: string; remaining: num
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [zip, setZip] = useState('');
+  // Neighbors live nearby: favor suggestions around this home.
+  const near = useHomeCenter(homeId);
 
   const sendMutation = useMutation({
     mutationFn: () => api.blockFounders.sendBlockInvite(homeId, { line1, city, state, zip }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.blockFounders(homeId) });
-      toast.success(`Postcard on its way — ${result.invites_remaining} invite${result.invites_remaining === 1 ? '' : 's'} left this week.`);
+      toast.success(result.pending && result.message ? result.message
+        : `Postcard on its way — ${result.invites_remaining} invite${result.invites_remaining === 1 ? '' : 's'} left this week.`);
       setLine1(''); setCity(''); setState(''); setZip('');
     },
     // Every refusal on this route is a CODED one the founder has to act
@@ -127,7 +132,23 @@ function InviteForm({ homeId, remaining, cap }: { homeId: string; remaining: num
         Invite a neighbor by mail — {remaining} left this week
       </div>
       <div className="grid grid-cols-1 gap-2">
-        <input aria-label="Street address" placeholder="Street address" value={line1} onChange={(e) => setLine1(e.target.value)} className={inputCls} />
+        <AddressAutocomplete
+          value={line1}
+          onChange={setLine1}
+          onSelectNormalized={(n) => {
+            setCity(n.city || '');
+            // A two-letter code fills ST; anything else is left for the person to type.
+            const st = (n.state || '').trim();
+            setState(/^[A-Za-z]{2}$/.test(st) ? st.toUpperCase() : '');
+            setZip(n.zipcode || '');
+          }}
+          ariaLabel="Street address"
+          placeholder="Street address"
+          hintText={null}
+          inputClassName={`w-full ${inputCls}`}
+          near={near}
+          streetOnly
+        />
         <div className="grid grid-cols-[1fr_64px_92px] gap-2">
           <input aria-label="City" placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} className={inputCls} />
           <input aria-label="State" placeholder="ST" maxLength={2} value={state} onChange={(e) => setState(e.target.value.toUpperCase())} className={`${inputCls} uppercase text-center`} />

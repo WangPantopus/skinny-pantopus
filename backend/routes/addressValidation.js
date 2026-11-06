@@ -30,10 +30,12 @@ const smartyProvider = require('../services/addressValidation/smartyProvider');
 const decisionEngine = require('../services/addressValidation/addressDecisionEngine');
 const mailVerificationService = require('../services/addressValidation/mailVerificationService');
 const pipelineService = require('../services/addressValidation/pipelineService');
+const registryUnits = require('../services/propertyRecords/registryUnits');
 const addressVerificationObservability = require('../services/addressValidation/addressVerificationObservability');
 const addressReviewService = require('../services/addressValidation/addressReviewService');
 const { AddressVerdictStatus } = require('../services/addressValidation/types');
 const { usesGooglePostal, postalShadowEnabled } = require('../services/addressValidation/postalAdapter');
+const postalRecheckService = require('../services/addressValidation/postalRecheckService');
 
 // ============================================================
 // VALIDATION SCHEMAS
@@ -104,6 +106,34 @@ function clientVerdict(verdict, req) {
   return rest;
 }
 
+/**
+ * Google couldn't be reached. An app that knows the path finishes Add Home unverified on the
+ * person's own address, unless a recent USPS answer is already on file for it.
+ *
+ * @returns {Promise<object|null>} the response body, or null for today's answer
+ */
+async function outageFinishResponse(input, req) {
+  if (!postalRecheckService.outageFinishEnabled() || req.query?.postal !== '2') return null;
+
+  const address = await postalRecheckService.savePendingAddress(input);
+  if (!address) return null;
+
+  const recent = address.last_validated_at && address.validation_raw_response?.postal_state !== 'pending'
+    && Date.now() - Date.parse(address.last_validated_at)
+      <= addressConfig.outageFallback.maxValidationAgeDays * 24 * 60 * 60 * 1000;
+  if (recent) {
+    const verdict = decisionEngine.classify({
+      ...pipelineService.buildStoredDecisionInputs(address),
+      postal_source: 'google',
+    });
+    if (verdict.status !== AddressVerdictStatus.SERVICE_ERROR) {
+      return { verdict: clientVerdict(verdict, req), address_id: address.id };
+    }
+  }
+
+  return { verdict: clientVerdict(postalRecheckService.pendingVerdict(address), req), address_id: address.id };
+}
+
 // ============================================================
 // POST /validate — Full address validation pipeline
 // ============================================================
@@ -154,6 +184,11 @@ router.post(
       const result = await pipelineService.runValidationPipeline(input, {
         auditContext: { trigger: 'validate' },
       });
+
+      if (result.verdict.status === AddressVerdictStatus.SERVICE_ERROR) {
+        const finish = await outageFinishResponse(input, req);
+        if (finish) return res.json(finish);
+      }
 
       // SCN-11: six rungs of the ladder emit `manual_review` as their next
       // action. Nothing used to consume it, so every escalation was a dead end.
@@ -324,7 +359,7 @@ router.post(
         const verdict = decisionEngine.classify({
           ...storedInputs,
           use_provider_place_for_business: getRolloutFlag('enforcePlaceProviderBusiness'),
-          use_provider_unit_intelligence: getRolloutFlag('enableSecondaryProvider'),
+          use_provider_unit_intelligence: registryUnits.usesProviderUnits(address),
           use_provider_parcel_for_classification: getRolloutFlag('enforceParcelProviderClassification'),
           provider_parcel_max_age_days: addressConfig.parcelIntel.cacheDays,
         });
@@ -509,6 +544,11 @@ router.post(
     const { address_id, unit } = req.body;
 
     try {
+      const postalHold = await postalRecheckService.holdForAddress(address_id);
+      if (postalHold) {
+        return res.status(409).json({ error: postalHold.message, code: postalHold.code });
+      }
+
       const result = await mailVerificationService.startVerification(
         userId,
         address_id,

@@ -32,9 +32,10 @@ interface PlaceApi {
      * Every request carries `ballot=1`, the client opt-in for the Ballot P0
      * payload (the server adds the `civic_election` card and `civic_districts`
      * governments only when it is present and `ballot_p0` is on for the
-     * viewer), so a build without Ballot never sees Ballot semantics.
+     * viewer), so a build without Ballot never sees Ballot semantics. `vocabulary=2` asks for
+     * where a Home's record came from, once it says.
      */
-    @GET("api/homes/{id}/intelligence?ballot=1")
+    @GET("api/homes/{id}/intelligence?ballot=1&vocabulary=2")
     suspend fun intelligence(
         @Path("id") homeId: String,
         @Query("sections") sections: String? = null,
@@ -51,7 +52,7 @@ interface PlaceApi {
     ): HomeChangesResponse
 
     /** [intelligence] for the screens' store: sends the stored ETag; a 304 means the stored copy is current. */
-    @GET("api/homes/{id}/intelligence?ballot=1")
+    @GET("api/homes/{id}/intelligence?ballot=1&vocabulary=2")
     suspend fun intelligenceConditional(
         @Path("id") homeId: String,
         @Query("sections") sections: String?,

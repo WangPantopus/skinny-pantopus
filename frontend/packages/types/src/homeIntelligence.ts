@@ -87,6 +87,19 @@ export interface BillTrendData {
 
 // ─── Property Value ──────────────────────────────────────────
 
+/** Where a record came from, worded by the server (backend/services/recordVocabulary.js). */
+export interface RecordProvenance {
+  publisher: string;
+  dataset: string;
+  as_of: string;
+  scope: 'unit' | 'building' | 'parcel' | 'area';
+  method: string;
+  /** Shown as it comes: "From Clark County Assessor's records, updated Oct 31, 2026". */
+  label: string;
+  /** Add Home's heading for the record ("County records"); "Public records" without one. */
+  title?: string | null;
+}
+
 export interface PropertyValueData {
   estimated_value: number | null;
   value_range_low: number | null;
@@ -96,7 +109,11 @@ export interface PropertyValueData {
   year_built: number | null;
   sqft: number | null;
   last_updated: string | null;
-  source: 'cache' | 'unavailable' | 'error' | null;
+  /** `cache`, `unavailable` or `error`; a record that names its source sends its own words with `provenance`. */
+  source: string | null;
+  provenance?: RecordProvenance | null;
+  /** The card's title when the record says what the number is ("County market value"). */
+  value_title?: string | null;
 }
 
 // ─── Timeline ────────────────────────────────────────────────

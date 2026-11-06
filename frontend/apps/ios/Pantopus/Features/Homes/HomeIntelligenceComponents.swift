@@ -510,7 +510,7 @@ struct PropertyValueCard: View {
     let onRetry: () -> Void
 
     var body: some View {
-        DashboardCard(title: "Estimated home value", accent: Theme.Color.primary600) {
+        DashboardCard(title: title, accent: Theme.Color.primary600) {
             switch state {
             case .loading:
                 VStack(alignment: .leading, spacing: Spacing.s2) {
@@ -551,6 +551,12 @@ struct PropertyValueCard: View {
             }
         }
         .accessibilityIdentifier("homeDashboard_propertyValueCard")
+    }
+
+    /// The record may say what the number is ("County market value").
+    private var title: String {
+        if case let .loaded(value) = state, let title = value.valueTitle { return title }
+        return "Estimated home value"
     }
 
     private func note(_ text: String) -> some View {
@@ -608,7 +614,12 @@ struct PropertyValueCard: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
             }
 
-            if let updated = HomeDashboardProjection.monthYear(value.lastUpdated) {
+            if let label = value.provenance?.label {
+                Text(label)
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appTextMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let updated = HomeDashboardProjection.monthYear(value.lastUpdated) {
                 Text("Updated \(updated)")
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextMuted)

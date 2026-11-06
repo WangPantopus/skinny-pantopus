@@ -68,7 +68,7 @@ import app.pantopus.android.ui.components.SlotCalendar
 import app.pantopus.android.ui.components.SlotCalendarState
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.homes.HomeCopyLifecycle
 import app.pantopus.android.ui.screens.support_trains.detail.components.RecipientCard
@@ -289,7 +289,7 @@ private fun GuardedReserveSheet(
             ),
         containerColor = PantopusColors.appBg,
         // The sheet is a window of its own: the keyboard rules go with it.
-        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+        modifier = Modifier.sheetKeyboardRules(),
     ) {
         content()
     }

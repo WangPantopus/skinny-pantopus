@@ -480,14 +480,11 @@ public struct EditBusinessPageLoadedView: View {
     private var locationSection: some View {
         EditBusinessSection(overline: "Location") {
             VStack(alignment: .leading, spacing: Spacing.s3) {
-                BizField(
-                    label: "Address",
-                    required: true,
+                BusinessAddressField(
                     field: content.location.address,
                     state: content.location.error.map { .error($0) } ?? .valid,
-                    trailing: .mapPin,
-                    identifier: "editBusinessPage.field.address"
-                ) { onFieldChange(.address, $0) }
+                    onFieldChange: onFieldChange
+                )
                 BizField(
                     label: "City",
                     required: true,

@@ -120,6 +120,12 @@ final class AddHomeWizardViewModel: WizardModel {
     /// Canonical address returned by address validation, used for the
     /// confirmation map and one-tap ZIP correction.
     private(set) var geocodedAddress: AddHomeGeocodedAddress?
+    /// USPS couldn't confirm the unit or hasn't answered. The person can continue;
+    /// mail proof still has to pass.
+    private(set) var postalNotice: AddHomePostalNotice?
+    /// USPS says this building needs a unit, and a home without one can say so.
+    private(set) var offersNoUnitAttestation = false
+    private var noUnitAttested = false
     /// True while the check-address call is in flight.
     private(set) var isCheckingAddress: Bool = false
 
@@ -396,6 +402,9 @@ final class AddHomeWizardViewModel: WizardModel {
         validatedAddressId = nil
         addressCheck = nil
         geocodedAddress = nil
+        postalNotice = nil
+        offersNoUnitAttestation = false
+        noUnitAttested = false
         existingHomeId = nil
         isClaimingExistingHome = false
         showsClaimedModal = false
@@ -830,9 +839,16 @@ final class AddHomeWizardViewModel: WizardModel {
 
     // MARK: - API calls
 
-    private func runCheckAddress() async {
+    /// "My home doesn't have a unit number": the base address goes through, and
+    /// mail proof still has to pass.
+    func attestNoUnit() {
+        Task { await runCheckAddress(attestingNoUnit: true) }
+    }
+
+    private func runCheckAddress(attestingNoUnit: Bool = false) async {
         guard isCurrent, form.address.isComplete, !isCheckingAddress else { return }
         invalidateAddress()
+        noUnitAttested = attestingNoUnit
         let revision = addressRevision
         let fields = form.address
         isCheckingAddress = true
@@ -849,8 +865,10 @@ final class AddHomeWizardViewModel: WizardModel {
                 )
             ))
             guard addressIsCurrent(revision) else { return }
-            guard ["OK", "MIXED_USE", "CONFLICT"].contains(validation.verdict.status) else {
-                errorMessage = Self.addressValidationMessage(validation.verdict.status)
+            let status = validation.verdict.status
+            guard Self.continuingStatuses.contains(status) || (status == "MISSING_UNIT" && attestingNoUnit) else {
+                errorMessage = Self.addressValidationMessage(status, reasons: validation.verdict.reasons ?? [])
+                offersNoUnitAttestation = status == "MISSING_UNIT"
                 return
             }
             guard let addressId = validation.addressId, UUID(uuidString: addressId) != nil,
@@ -876,6 +894,7 @@ final class AddHomeWizardViewModel: WizardModel {
                 rejectDifferentHome()
                 return
             }
+            postalNotice = AddHomePostalNotice(status: status, unit: address.line2 ?? fields.unit)
             await applyAddressCheck(response, address: address, addressId: addressId)
         } catch {
             guard addressIsCurrent(revision) else { return }
@@ -941,8 +960,12 @@ final class AddHomeWizardViewModel: WizardModel {
         guard response.homeId == nil || response.residencyAddress?.isValid == true else { throw APIError.invalidResponse }
     }
 
-    private static func addressValidationMessage(_ status: String) -> String {
+    private static let continuingStatuses: Set<String> = ["OK", "MIXED_USE", "CONFLICT", "UNIT_NOT_CONFIRMED", "POSTAL_PENDING"]
+
+    private static func addressValidationMessage(_ status: String, reasons: [String]) -> String {
         switch status {
+        case "MISSING_UNIT" where reasons.contains("USPS_UNIT_REQUIRED"):
+            "This building needs a unit number. Which one is yours? Edit the address to add it."
         case "MISSING_UNIT": "Enter your unit or apartment number, then check this address again."
         case "MISSING_STREET_NUMBER", "UNVERIFIED_STREET_NUMBER": "Check the street number and try again."
         case "PO_BOX": "Enter a street address. A PO Box cannot be used as a Home."
@@ -955,10 +978,10 @@ final class AddHomeWizardViewModel: WizardModel {
 
     /// `POST /api/homes/property-suggestions` — route
     /// `backend/routes/home.js:587`. Fills the Details block from public
-    /// records (ATTOM → heuristics → optional LLM). The server answers at
+    /// records (county record → heuristics → optional LLM). The server answers at
     /// once (`lookup: "background"`); a county record it doesn't have yet is
     /// looked up meanwhile and fills what is still empty when
-    /// `finishPropertyLookup` gets it, so the step never waits for ATTOM. A
+    /// `finishPropertyLookup` gets it, so the step never waits for the record. A
     /// failure is never fatal: the fields stay editable and the card says the
     /// lookup was unavailable, exactly as RN does (`useHomeForm.ts:657-662`).
     func loadPropertySuggestions() async {
@@ -986,7 +1009,7 @@ final class AddHomeWizardViewModel: WizardModel {
             )
             guard addressIsCurrent(revision) else { return }
             apply(suggestions: response.suggestions)
-            if response.attomLookup == Self.lookupPending {
+            if response.lookupState == Self.lookupPending {
                 propertyLookupPending = true
                 propertyLookupTask?.cancel()
                 propertyLookupTask = Task { [weak self] in
@@ -1019,9 +1042,9 @@ final class AddHomeWizardViewModel: WizardModel {
             propertyLookupPending = false
             propertySuggestions = response
             propertyLookupComplete = true
-            propertyLookupMessage = [Self.lookupFound, Self.lookupNone].contains(response.attomLookup ?? "")
+            propertyLookupMessage = [Self.lookupFound, Self.lookupNone].contains(response.lookupState ?? "")
                 ? Self.lookupMessage(for: response)
-                : Self.recordsUnavailableMessage
+                : response.lookupMessage ?? Self.recordsUnavailableMessage
             if currentStep.rawValue > AddHomeStep.confirm.rawValue, form.details != before { lateDetailsAdded = true }
         } catch {
             guard !Task.isCancelled, addressIsCurrent(revision), propertyLookupPending else { return }
@@ -1040,16 +1063,19 @@ final class AddHomeWizardViewModel: WizardModel {
     private static let recordsUnavailableMessage =
         "Public property records are unavailable right now. Confirm the details below."
 
-    /// RN's three-way message (`useHomeForm.ts:641-647`).
+    /// The server's words, or the same words from an older server's answer.
     private static func lookupMessage(for response: PropertySuggestionsResponse) -> String {
-        if response.hasAttomRecord {
-            return "Public property records found. Review them before continuing."
+        if let message = response.lookupMessage { return message }
+        if response.hasPublicRecord {
+            return response.isBuildingOnly
+                ? "We found the building. Your unit's details weren't in the county record."
+                : "Public property records found. Review them before continuing."
         }
         if !(response.tiersUsed ?? []).isEmpty {
-            return "No ATTOM property record was returned, so we prefilled what we could "
-                + "from address hints."
+            return "We couldn't find public records for this address, so we filled in what we "
+                + "could from address hints. You can change them anytime."
         }
-        return "No ATTOM property record was available for this address. Confirm the details below."
+        return "We couldn't find public records for this address. Tell us the basics; you can change them anytime."
     }
 
     /// Prefill only — never overwrite something the user already typed (or a home type they picked).
@@ -1081,7 +1107,7 @@ final class AddHomeWizardViewModel: WizardModel {
     }
 
     /// "2.0" → "2", "2.5" → "2.5".
-    private static func trimTrailingZero(_ value: Double) -> String {
+    static func trimTrailingZero(_ value: Double) -> String {
         value == value.rounded()
             ? String(Int(value))
             : String(value)
@@ -1233,6 +1259,7 @@ final class AddHomeWizardViewModel: WizardModel {
             isOwner: role == .owner,
             role: role.claimedRole,
             moveInDate: details.justMoved ? Self.isoToday() : nil,
+            noUnitAttestation: noUnitAttested ? true : nil,
             addressId: validatedAddressId
         )
         do {

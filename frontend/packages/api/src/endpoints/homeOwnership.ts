@@ -602,6 +602,8 @@ export interface CurrentPostcardStatus {
     status: 'pending' | 'verified' | 'expired' | 'cancelled';
     delivery: 'not_started' | 'accepted' | 'unknown' | 'rejected';
     attempts_remaining: number;
+    /** Where the mail stands when something needs saying. Newer than delivery, which keeps its old words for apps in the stores. */
+    mail_state?: 'sending' | 'delayed' | 'returned' | 'rerouted' | 'failed' | null;
   } | null;
   current_access: 'not_checked';
   /** The Home's saved address, sent only while a request is allowed; a request must repeat it exactly. */

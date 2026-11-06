@@ -489,8 +489,13 @@ public struct HomePropertyValueDTO: Decodable, Sendable, Hashable {
     public let yearBuilt: Int?
     public let sqft: Int?
     public let lastUpdated: String?
-    /// `cache` / `unavailable` / `error` / nil.
+    /// `cache` / `unavailable` / `error` / nil; a record that names its source
+    /// sends its own words with `provenance`.
     public let source: String?
+    /// Where the value came from, once the record names its source.
+    public let provenance: RecordProvenanceDTO?
+    /// The card's title when the record says what the number is ("County market value").
+    public let valueTitle: String?
 
     private enum CodingKeys: String, CodingKey {
         case estimatedValue = "estimated_value"
@@ -501,7 +506,24 @@ public struct HomePropertyValueDTO: Decodable, Sendable, Hashable {
         case yearBuilt = "year_built"
         case sqft
         case lastUpdated = "last_updated"
-        case source
+        case source, provenance
+        case valueTitle = "value_title"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        estimatedValue = try container.decodeIfPresent(Double.self, forKey: .estimatedValue)
+        valueRangeLow = try container.decodeIfPresent(Double.self, forKey: .valueRangeLow)
+        valueRangeHigh = try container.decodeIfPresent(Double.self, forKey: .valueRangeHigh)
+        valueConfidence = try container.decodeIfPresent(Double.self, forKey: .valueConfidence)
+        zipMedianSalePriceTrend = try container.decodeIfPresent(String.self, forKey: .zipMedianSalePriceTrend)
+        yearBuilt = try container.decodeIfPresent(Int.self, forKey: .yearBuilt)
+        sqft = try container.decodeIfPresent(Int.self, forKey: .sqft)
+        lastUpdated = try container.decodeIfPresent(String.self, forKey: .lastUpdated)
+        source = try container.decodeIfPresent(String.self, forKey: .source)
+        // A malformed label never fails the card.
+        provenance = try? container.decodeIfPresent(RecordProvenanceDTO.self, forKey: .provenance)
+        valueTitle = try? container.decodeIfPresent(String.self, forKey: .valueTitle)
     }
 
     public init(
@@ -513,7 +535,9 @@ public struct HomePropertyValueDTO: Decodable, Sendable, Hashable {
         yearBuilt: Int? = nil,
         sqft: Int? = nil,
         lastUpdated: String? = nil,
-        source: String? = nil
+        source: String? = nil,
+        provenance: RecordProvenanceDTO? = nil,
+        valueTitle: String? = nil
     ) {
         self.estimatedValue = estimatedValue
         self.valueRangeLow = valueRangeLow
@@ -524,6 +548,8 @@ public struct HomePropertyValueDTO: Decodable, Sendable, Hashable {
         self.sqft = sqft
         self.lastUpdated = lastUpdated
         self.source = source
+        self.provenance = provenance
+        self.valueTitle = valueTitle
     }
 }
 

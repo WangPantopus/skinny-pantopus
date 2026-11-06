@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -70,7 +70,7 @@ internal fun WaitlistJoinSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = PantopusColors.appSurface,
-        modifier = Modifier.closesKeyboardOnTapOrScroll().testTag(WAITLIST_JOIN_TAG),
+        modifier = Modifier.sheetKeyboardRules().testTag(WAITLIST_JOIN_TAG),
     ) {
         if (state.alreadyJoined) {
             AlreadyJoinedState(accent = accent, onDone = onDismiss)

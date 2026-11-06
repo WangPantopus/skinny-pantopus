@@ -82,7 +82,7 @@ public enum HomeDashboardEndpoints {
 
     /// `GET /api/homes/:id/property-value` — route `backend/routes/home.js:7752`.
     public static func propertyValue(homeId: String) -> Endpoint {
-        Endpoint(method: .get, path: "/api/homes/\(homeId)/property-value")
+        Endpoint(method: .get, path: "/api/homes/\(homeId)/property-value", query: HomesEndpoints.recordVocabulary)
     }
 
     /// `GET /api/homes/:id/bill-trends` — route `backend/routes/home.js:7599`.

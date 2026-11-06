@@ -26,7 +26,7 @@ logger.silent = true;
 const googleProvider = require('../../services/addressValidation/googleProvider');
 const decisionEngine = require('../../services/addressValidation/addressDecisionEngine');
 const { derivePlaceClassification } = require('../../services/addressValidation/pipelineService');
-const { postalFromGoogle, keepTypedUnit } = require('../../services/addressValidation/postalAdapter');
+const { postalFromGoogle, keepTypedAddress } = require('../../services/addressValidation/postalAdapter');
 const { SHAPES, googleAnswer } = require('./lib/googleAnswerShapes');
 
 const AUTO_VERIFY_CONFIDENCE = 0.8; // routes/addressValidation.js
@@ -41,7 +41,7 @@ function option(name) {
 function decide(answer, input) {
   const parsed = googleProvider._parseResponse(answer);
   if (!parsed) return { status: 'SERVICE_ERROR', confidence: 0, reasons: [], postal: null };
-  const google = keepTypedUnit(parsed, input);
+  const google = keepTypedAddress(parsed, input);
   const postal = postalFromGoogle(google);
   const verdict = decisionEngine.classify({
     google,
@@ -143,6 +143,8 @@ function replayNoUspsCases() {
     ['USPS checks suspended', googleAnswer('usps_suspended', SYNTHETIC)],
     ['not in USPS file', googleAnswer('not_in_usps_file', SYNTHETIC)],
     ['USPS will have it soon', googleAnswer('coming_soon', SYNTHETIC)],
+    ['USPS hasn\'t listed it yet', googleAnswer('not_listed_yet', SYNTHETIC)],
+    ['Puerto Rico, no match', googleAnswer('not_in_usps_file', { ...SYNTHETIC, state: 'PR', zip: '00901' })],
   ];
   const broken = {};
   for (const [name, answer] of cases) {
@@ -218,6 +220,7 @@ const AGREES = {
   mixed_use: (r) => r.status === 'MIXED_USE',
   vacant: (r) => (r.reasons || []).includes('USPS_VACANT'),
   unknown: (r) => r.status === 'POSTAL_PENDING',
+  new_construction: (r) => r.status === 'POSTAL_PENDING' || r.status === 'OK',
 };
 
 function truthReport(casesFile, answersFile) {
@@ -227,6 +230,7 @@ function truthReport(casesFile, answersFile) {
   const gate = { codeBreaks: 0, autoVerified: 0, reachedOk: 0, answered: 0 };
   const disagreements = new Map();
   const latencies = [];
+  const noStatOutcomes = {};
   let useUnset = 0;
   let noStat = 0;
 
@@ -238,19 +242,23 @@ function truthReport(casesFile, answersFile) {
     gate.answered += 1;
     if (Number.isFinite(row.latency_ms)) latencies.push(row.latency_ms);
 
-    const entry = categories.get(item.category) || { n: 0, agree: 0, outcomes: {}, wrongOk: 0, wrongRefused: 0 };
+    const entry = categories.get(item.category) || { n: 0, agree: 0, outcomes: {}, wrongOk: 0, wrongRefused: 0, autoVerified: 0 };
     categories.set(item.category, entry);
     entry.n += 1;
     entry.outcomes[result.status] = (entry.outcomes[result.status] || 0) + 1;
     const agrees = (AGREES[item.truth] || (() => false))(result);
     if (agrees) entry.agree += 1;
+    if (autoVerifies(result)) entry.autoVerified += 1;
     if (!agrees && result.status === 'OK') entry.wrongOk += 1;
     if (!agrees && item.truth === 'deliverable' && REFUSED.has(result.status)) entry.wrongRefused += 1;
 
     const postal = result.postal;
     if (postal) {
       if (postal.rdi_type === 'unknown') useUnset += 1;
-      if (postal.no_stat === true) noStat += 1;
+      if (postal.no_stat === true) {
+        noStat += 1;
+        noStatOutcomes[result.status] = (noStatOutcomes[result.status] || 0) + 1;
+      }
       const doubted = postal.dpv_match_code !== 'Y' || postal.footnotes.includes('N1');
       if (doubted && result.status === 'OK') gate.reachedOk += 1;
       if (doubted && autoVerifies(result)) gate.autoVerified += 1;
@@ -262,15 +270,15 @@ function truthReport(casesFile, answersFile) {
   }
 
   console.log(`\nPostal truth set: ${gate.answered} answers\n`);
-  console.log('category                    n  agree  95% range  wrongly OK  wrongly refused  outcomes');
+  console.log('category                    n  agree  95% range  auto-verify  wrongly OK  wrongly refused  outcomes');
   for (const [category, entry] of [...categories.entries()].sort()) {
     const outcomes = Object.entries(entry.outcomes).sort((a, b) => b[1] - a[1]).map(([status, count]) => `${status} ${count}`).join(', ');
-    console.log(`${category.padEnd(26)} ${String(entry.n).padStart(3)} ${String(entry.agree).padStart(6)}  ${wilson(entry.agree, entry.n).padEnd(9)}  ${String(entry.wrongOk).padStart(10)} ${String(entry.wrongRefused).padStart(16)}  ${outcomes}`);
+    console.log(`${category.padEnd(26)} ${String(entry.n).padStart(3)} ${String(entry.agree).padStart(6)}  ${wilson(entry.agree, entry.n).padEnd(9)}  ${String(entry.autoVerified).padStart(11)}  ${String(entry.wrongOk).padStart(10)} ${String(entry.wrongRefused).padStart(16)}  ${outcomes}`);
   }
   console.log(`\nA missing unit, an unconfirmed unit or no USPS answer reached OK: ${gate.reachedOk}`);
   console.log(`...and auto-verified a claim: ${gate.autoVerified}`);
   console.log(`Google left home-or-business unset: ${useUnset} of ${gate.answered}`);
-  console.log(`USPS says no delivery here (no-stat, recorded only): ${noStat} of ${gate.answered}`);
+  console.log(`USPS says no delivery here (no-stat, recorded only): ${noStat} of ${gate.answered}: ${JSON.stringify(noStatOutcomes)}`);
   if (latencies.length) {
     latencies.sort((a, b) => a - b);
     console.log(`Google answer time: p50 ${latencies[Math.ceil(latencies.length / 2) - 1]} ms, p95 ${latencies[Math.ceil(latencies.length * 0.95) - 1]} ms, max ${latencies.at(-1)} ms`);

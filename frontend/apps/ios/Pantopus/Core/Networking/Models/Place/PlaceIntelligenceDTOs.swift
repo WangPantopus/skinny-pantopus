@@ -1162,9 +1162,13 @@ public struct PlaceYourHomeData: Decodable, Sendable, Hashable {
     public let assessedValue: Double?
     /// The home's outline for the Today sky. Absent from older servers.
     public let house: PlaceHouseShape?
+    /// Where the value came from, when the record names its source; the
+    /// confirmed owner's, like the value.
+    public let valueSource: String?
 
     private enum CodingKeys: String, CodingKey {
         case sqft, bedrooms, bathrooms, house
+        case valueSource = "value_source"
         case yearBuilt = "year_built"
         case lotSqft = "lot_sqft"
         case homeType = "home_type"
@@ -1587,9 +1591,11 @@ public struct PlaceSectionEnvelope: Decodable, Sendable, Hashable {
     /// worded by the server. Nil when unknown and from older servers.
     public var scope: PlaceLabeledKind?
     public var evidence: PlaceLabeledKind?
+    /// Where a Home's record came from, once it names its source.
+    public var provenance: RecordProvenanceDTO?
 
     private enum CodingKeys: String, CodingKey {
-        case id, group, band, access, status, source, coverage, data, scope, evidence
+        case id, group, band, access, status, source, coverage, data, scope, evidence, provenance
         case asOf = "as_of"
         case unavailableReason = "unavailable_reason"
     }
@@ -1609,6 +1615,7 @@ public struct PlaceSectionEnvelope: Decodable, Sendable, Hashable {
         // A malformed label never fails the section.
         scope = try? container.decodeIfPresent(PlaceLabeledKind.self, forKey: .scope)
         evidence = try? container.decodeIfPresent(PlaceLabeledKind.self, forKey: .evidence)
+        provenance = try? container.decodeIfPresent(RecordProvenanceDTO.self, forKey: .provenance)
     }
 
     /// Decode the id-specific payload; a malformed payload degrades this

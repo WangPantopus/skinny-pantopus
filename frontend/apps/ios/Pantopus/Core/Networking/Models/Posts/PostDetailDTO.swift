@@ -501,7 +501,7 @@ public struct PostActionAckResponse: Decodable, Sendable, Hashable {
     public let message: String?
 }
 
-/// `GET /api/posts/place-eligibility` response — `backend/routes/posts.js:2276`.
+/// `GET /api/posts/place-eligibility` response — `backend/routes/posts.js:2264`.
 public struct PlaceEligibilityResponse: Decodable, Sendable, Hashable {
     public let eligible: Bool
     public let readOnly: Bool?

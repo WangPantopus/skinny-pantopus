@@ -17,6 +17,19 @@ jest.mock('../services/ai/neighborhoodProfileService', () => ({
 }));
 jest.mock('../services/ai/propertyIntelligenceService', () => ({
   getProfile: jest.fn(),
+  buildFallbackProfile: (home) => ({
+    home_id: home.id,
+    county_record: false,
+    household_fields: ['year_built', 'sqft', 'bedrooms'],
+    year_built: home.year_built,
+    sqft: home.sq_ft,
+    bedrooms: home.bedrooms,
+    bathrooms: home.bathrooms,
+    lot_sqft: home.lot_sq_ft,
+    property_type: home.home_type,
+    estimated_value: null,
+    source: 'fallback',
+  }),
 }));
 
 const express = require('express');
@@ -539,7 +552,7 @@ describe('GET /api/homes/:id/intelligence', () => {
     expect(s.bill_benchmark.data.comparison_pct).toBe(-24);
   });
 
-  test("a missing ATTOM key yields Your Home = 'unavailable' (not a 500)", async () => {
+  test("a missing ATTOM key shows only what the household entered, labeled (not a 500)", async () => {
     seedHome();
     // ATTOM_API_KEY is deleted in beforeEach.
 
@@ -548,8 +561,10 @@ describe('GET /api/homes/:id/intelligence', () => {
     expect(res.status).toBe(200);
     const s = sectionsById(res.body);
     expect(s.your_home.band).toBe('B');
-    expect(s.your_home.status).toBe('unavailable');
-    expect(s.your_home.data).toBeNull();
+    expect(s.your_home.status).toBe('ready');
+    expect(s.your_home.source).toBe('Details you entered');
+    expect(s.your_home.data.bedrooms).toBe(3);
+    expect(s.your_home.data.estimated_value).toBeNull();
     // We must NOT have called the ATTOM-backed service without a key.
     expect(propertyIntelligenceService.getProfile).not.toHaveBeenCalled();
   });

@@ -9,7 +9,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const {
-  computeTrustState, getPostingIdentities, canPostToAudience, canPostToPlace, mediaCaptureNear,
+  computeTrustState, getPostingIdentities, canPostToAudience, canPostToPlace, canHomePostToPlace, mediaCaptureNear,
 } = require('../utils/trustState');
 const { canPostWithIdentityToAudience } = require('../utils/identityPolicy');
 const {
@@ -991,6 +991,13 @@ function resolveHomeCoordinates(home) {
   return { latitude: null, longitude: null };
 }
 
+// The Place check for a Home post by the Home's id (creating a post already has the Home's row).
+async function homePlaceCheck(homeId, latitude, longitude) {
+  const { data: home, error } = await supabaseAdmin.from('Home').select('location').eq('id', homeId).maybeSingle();
+  if (error) throw error;
+  return canHomePostToPlace({ home: resolveHomeCoordinates(home), targetLatitude: latitude, targetLongitude: longitude });
+}
+
 // A poster is a visitor when every Home of their household is more than ~35 miles
 // (0.5° of latitude or longitude) from where they post; with no such Home they aren't one.
 // The household is the one shared rule (householdHomeIds: trusted, unexpired occupancies,
@@ -1331,19 +1338,22 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
     // Curator accounts bypass place eligibility — platform-owned, not a real neighbor
     let placeBasis = null;
     if (!isCurator && !pulse && isPlacePost && effectiveLatitude != null && effectiveLongitude != null) {
-      const trustState = isHomeIdentityPost
-        ? { level: 'verified_resident' }
-        : await trustStateRead;
-      const eligibility = canPostToPlace({
-        trustLevel: trustState.level,
-        gpsTimestamp: gpsTimestamp || null,
-        gpsLatitude: gpsLatitude ?? null,
-        gpsLongitude: gpsLongitude ?? null,
-        targetLatitude: effectiveLatitude,
-        targetLongitude: effectiveLongitude,
-        mediaLocations: mediaLocations || null,
-        postType: postType || 'general',
-      });
+      const eligibility = isHomeIdentityPost
+        ? canHomePostToPlace({
+          home: resolveHomeCoordinates(homeContext.home),
+          targetLatitude: effectiveLatitude,
+          targetLongitude: effectiveLongitude,
+        })
+        : canPostToPlace({
+          trustLevel: (await trustStateRead).level,
+          gpsTimestamp: gpsTimestamp || null,
+          gpsLatitude: gpsLatitude ?? null,
+          gpsLongitude: gpsLongitude ?? null,
+          targetLatitude: effectiveLatitude,
+          targetLongitude: effectiveLongitude,
+          mediaLocations: mediaLocations || null,
+          postType: postType || 'general',
+        });
       if (!eligibility.eligible) {
         return res.status(403).json({ error: eligibility.reason });
       }
@@ -2248,18 +2258,39 @@ router.get('/saved', verifyToken, async (req, res) => {
  * GET /api/posts/place-eligibility — Check if user can post to Place feed
  * Query: latitude, longitude, gpsTimestamp, gpsLatitude, gpsLongitude, postType, and the draft's attachment taken
  * nearest the place (mediaLatitude, mediaLongitude, mediaCapturedAt). `basis` says which way in counted:
- * resident, business, gps or photo.
+ * resident, business, gps or photo. With homeId the answer is for a post as that Home (canHomePostToPlace), so a fix
+ * or a photo that would count for the person doesn't change it.
  */
 router.get('/place-eligibility', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const {
       latitude, longitude, gpsTimestamp, gpsLatitude, gpsLongitude,
-      mediaLatitude, mediaLongitude, mediaCapturedAt, postType,
+      mediaLatitude, mediaLongitude, mediaCapturedAt, postType, homeId,
     } = req.query;
 
     if (latitude == null || longitude == null) {
       return res.json({ eligible: false, readOnly: true, reason: 'Location required to check Place eligibility.' });
+    }
+
+    if (homeId) {
+      // The same access POST / asks for. Without it the answer can't depend on the Home: it would say how far any Home
+      // is from any point.
+      const { hasAccess } = typeof homeId === 'string' && UUID_RE.test(homeId)
+        ? await checkHomePermission(homeId, userId, 'home.view') : { hasAccess: false };
+      if (!hasAccess) {
+        return res.json({
+          eligible: false, readOnly: true, reason: 'You do not have access to post from this home', basis: null, trustLevel: 'remote_viewer',
+        });
+      }
+      const homeCheck = await homePlaceCheck(homeId, parseFloat(latitude), parseFloat(longitude));
+      return res.json({
+        eligible: homeCheck.eligible,
+        readOnly: homeCheck.readOnly,
+        reason: homeCheck.reason || null,
+        basis: homeCheck.basis || null,
+        trustLevel: homeCheck.eligible ? 'verified_resident' : 'remote_viewer',
+      });
     }
 
     const trustState = await computeTrustState(userId, parseFloat(latitude), parseFloat(longitude));
@@ -2951,7 +2982,7 @@ router.patch('/:id', verifyToken, validate(updatePostSchema), async (req, res) =
     const { data: existing } = await supabaseAdmin.from('Post')
       .select(`user_id, media_urls, media_types, media_thumbnails, media_live_urls, safety_alert_kind, post_metadata,
         post_type, content, topic, area_id, read_scope, latitude, longitude, location_precision,
-        visibility, visibility_scope, radius_miles, event_date, event_end_date, audience, distribution_targets`)
+        visibility, visibility_scope, radius_miles, event_date, event_end_date, audience, distribution_targets, post_as, home_id`)
       .eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only edit your own posts' });
@@ -3016,6 +3047,11 @@ router.patch('/:id', verifyToken, validate(updatePostSchema), async (req, res) =
     if (movedTo && isPlaceFeedPost && req.user.accountType !== 'curator') {
       if (movedTo.latitude == null || movedTo.longitude == null) {
         return res.status(400).json({ error: 'Place posts require a target location or a verified home address.' });
+      }
+      // A Home post stays in its Home's area, even where its author also lives or works.
+      if (existing.post_as === 'home' && existing.home_id) {
+        const homeCheck = await homePlaceCheck(existing.home_id, Number(movedTo.latitude), Number(movedTo.longitude));
+        if (!homeCheck.eligible) return res.status(403).json({ error: homeCheck.reason });
       }
       const trust = await computeTrustState(userId, Number(movedTo.latitude), Number(movedTo.longitude));
       const eligibility = canPostToPlace({
