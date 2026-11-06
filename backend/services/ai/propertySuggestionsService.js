@@ -17,6 +17,8 @@ const propertyRecords = require('../propertyRecords');
 const homeRecords = require('../propertyRecords/homeRecord');
 
 const LLM_TIMEOUT_MS = 12000;
+// Several plausible records at an address: which one isn't for us to guess, so nothing fills in and the person is told why.
+const SEVERAL_RECORDS_NOTE = 'More than one home is on record at this address, so we left the details for you. Add your unit if you have one, or tell us the basics.';
 // A leftover PROPERTY_SUGGESTIONS_LLM_MODEL naming another provider's model is ignored.
 const LLM_MODEL = resolveModel(process.env.PROPERTY_SUGGESTIONS_LLM_MODEL, DRAFT_MODEL);
 const LLM_EFFORT = resolveEffort(process.env.ANTHROPIC_DRAFT_EFFORT, 'low');
@@ -199,6 +201,7 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait' } 
   const record = await homeRecords.forAddress(recordAddress);
   const fieldTags = {};
   let provenance = null;
+  let lookupNote = null;
   let attom = null;
   let attomLookup = null;
   if (record) {
@@ -207,6 +210,8 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait' } 
       tiersUsed.push('record');
       fillFromRecord(record.copy, merged, sources, fieldTags);
       provenance = homeRecords.provenanceOf(record.copy);
+    } else if (record.answer?.match === 'ambiguous') {
+      lookupNote = SEVERAL_RECORDS_NOTE;
     }
   } else { // Tier 1 — ATTOM (strongest structured signal; one /property/detail call). Stored responses remain available without a live provider credential.
     try {
@@ -337,6 +342,7 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait' } 
     llm_enabled: isLlmEnabled(),
     ...(homeAddressRow && attomLookup ? { attom_lookup: attomLookup } : {}),
     ...(provenance ? { provenance, field_tags: fieldTags } : {}),
+    ...(lookupNote ? { lookup_note: lookupNote } : {}),
   };
 }
 
