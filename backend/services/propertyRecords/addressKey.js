@@ -223,6 +223,8 @@ function secondaryStart(tokens) {
       // FRONT, REAR, UPPER at the end of a line that already has its street type; PH 12 with a number.
       if (i === tokens.length - 1 ? SUFFIXES.has(tokens[i - 1]) || DIRECTIONS.has(tokens[i - 1]) || /\d/.test(tokens[i - 1]) : followed && /\d/.test(next)) return i;
     } else if (followed && (/\d/.test(next) || next.replace(/^#/, '').length <= 3)) return i;
+    // 123 EXAMPLE ST APT, with the number left off: nothing to keep, and not part of the street.
+    else if (i === tokens.length - 1 && (SUFFIXES.has(tokens[i - 1]) || DIRECTIONS.has(tokens[i - 1]) || /\d/.test(tokens[i - 1]))) return i;
   }
   // 123 MAIN ST 4B: something unit-like right after the street type. HIGHWAY 99 keeps its number.
   const last = tokens[tokens.length - 1];

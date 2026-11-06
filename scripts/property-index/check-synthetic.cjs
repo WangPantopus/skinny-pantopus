@@ -80,6 +80,7 @@ const FORMS = [
   ['Front is a street here', ['123 Front St'], 'street|123||FRONT|ST|||', ''],
   ['Front is a unit here', ['123 Example St Front', '123 Example St'], 'street|123||EXAMPLE|ST||FRNT|', 'FRONT'],
   ['Apartment, inline', ['123 Example St Apt 4B', '123 Example St #4B', '123 Example St Apt #4-B', '123 Example St 4B', 'Apt 4B 123 Example St'], 'street|123||EXAMPLE|ST||4B|', ''],
+  ['A dangling designator', ['123 Example St Apt', '123 Example St Unit', '123 Example St #'], 'street|123||EXAMPLE|ST|||', ''],
   ['Apartment, second line', ['123 Example St'], 'street|123||EXAMPLE|ST||4B|', 'Unit 4 B'],
   ['Leading zeros stay', ['123 Example St'], 'street|123||EXAMPLE|ST||012|', 'Apt 012'],
   ['Building and unit', ['123 Example St Bldg 2 Apt 4', '123 Example St Apt 4 Bldg 2'], 'street|123||EXAMPLE|ST||4|2', ''],
