@@ -503,11 +503,13 @@ final class HomeDashboardViewModel {
         dashboardData = dashboard
         canCreateTask = collection?.collectionCapabilities?.canCreate == true
         rebuild()
+        // `final` has just confirmed the access, with no request since: it is each card's check before its
+        // read. Each card still checks the access again after its read.
         await withTaskGroup(of: Void.self) { group in
-            group.addTask { [self] in await loadHealthScore() }
-            group.addTask { [self] in await loadChecklist() }
-            group.addTask { [self] in await loadPropertyValue() }
-            group.addTask { [self] in await loadBillTrends() }
+            group.addTask { [self] in await loadHealthScore(confirmedAt: revision) }
+            group.addTask { [self] in await loadChecklist(confirmedAt: revision) }
+            group.addTask { [self] in await loadPropertyValue(confirmedAt: revision) }
+            group.addTask { [self] in await loadBillTrends(confirmedAt: revision) }
         }
     }
 
@@ -681,14 +683,17 @@ final class HomeDashboardViewModel {
         }
     }
 
+    /// A card's read between two access checks. `confirmedAt` is the revision whose recheck has just confirmed
+    /// the access with no request since (the cards it starts): that check is the one before the read, and the
+    /// card stops if a newer recheck has begun. The check after the read always runs.
     private func authorizedCard<Value: Sendable>(
-        permissions: [String], _ work: () async throws -> Value
+        permissions: [String], confirmedAt: Int? = nil, _ work: () async throws -> Value
     ) async -> HomeIntelligenceCardState<Value>? {
-        let revision = generation
+        let revision = confirmedAt ?? generation
         guard current(revision), accessFingerprint != nil else { return nil }
         guard permissions.allSatisfy({ access?.can($0) == true }) else { return .forbidden }
         do {
-            try await authorize(revision)
+            if confirmedAt == nil { try await authorize(revision) }
             let result = await fetchCard(work)
             try await authorize(revision)
             if case .forbidden = result { retireAccess(revision)
@@ -705,9 +710,10 @@ final class HomeDashboardViewModel {
 
     /// Mirrors RN's `useHomeIntelligence`, which always forces a server
     /// recompute so a stale zero-score can't mask a populated home.
-    private func loadHealthScore() async {
+    private func loadHealthScore(confirmedAt: Int? = nil) async {
         guard let result = await authorizedCard(
             permissions: ["home.view", "maintenance.view", "finance.view", "members.view", "docs.view", "sensitive.view"],
+            confirmedAt: confirmedAt,
             {
                 let value = try await self.cardRead(
                     HomeDashboardEndpoints.healthScore(homeId: self.homeId, force: true),
@@ -722,8 +728,8 @@ final class HomeDashboardViewModel {
         rebuild()
     }
 
-    private func loadChecklist() async {
-        guard let result = await authorizedCard(permissions: ["home.view"], {
+    private func loadChecklist(confirmedAt: Int? = nil) async {
+        guard let result = await authorizedCard(permissions: ["home.view"], confirmedAt: confirmedAt, {
             let value = try await self.cardRead(
                 HomeDashboardEndpoints.seasonalChecklist(homeId: self.homeId),
                 as: SeasonalChecklistDTO.self
@@ -735,8 +741,8 @@ final class HomeDashboardViewModel {
         checklist = result
     }
 
-    private func loadPropertyValue() async {
-        guard let result = await authorizedCard(permissions: ["home.view"], {
+    private func loadPropertyValue(confirmedAt: Int? = nil) async {
+        guard let result = await authorizedCard(permissions: ["home.view"], confirmedAt: confirmedAt, {
             let value = try await self.cardRead(
                 HomeDashboardEndpoints.propertyValue(homeId: self.homeId),
                 as: HomePropertyValueDTO.self
@@ -747,11 +753,11 @@ final class HomeDashboardViewModel {
         propertyValue = result
     }
 
-    private func loadBillTrends() async {
+    private func loadBillTrends(confirmedAt: Int? = nil) async {
         let readID = UUID()
         billReadID = readID
         let currency = billCurrency
-        guard let result = await authorizedCard(permissions: ["finance.view"], {
+        guard let result = await authorizedCard(permissions: ["finance.view"], confirmedAt: confirmedAt, {
             try await self.api.request(
                 HomeDashboardEndpoints.billTrends(homeId: self.homeId, currency: currency),
                 as: HomeBillTrendsDTO.self

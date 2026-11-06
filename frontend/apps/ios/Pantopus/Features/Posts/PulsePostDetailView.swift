@@ -287,6 +287,7 @@ public struct PulsePostDetailView: View {
             scrollPlace: viewModel.scrollPlace,
             returnsToComposer: viewModel.returnsToComposer,
             onComposerFocusChange: { [viewModel] focused in viewModel.isComposing = focused },
+            onComposerReturnPending: { [viewModel] in viewModel.composerReturnPending() },
             nearbyProviders: viewModel.nearbyProviders,
             onOpenBusiness: onOpenBusiness,
             onBack: onBack,

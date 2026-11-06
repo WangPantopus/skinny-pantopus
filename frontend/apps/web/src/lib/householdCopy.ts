@@ -16,39 +16,13 @@ import { useEffect, useRef, useState } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 import type { MyHome } from '@pantopus/api';
 import { queryKeys } from '@/lib/query-keys';
+import { showsHomeCopy } from '@/lib/householdCopyRules';
+
+// The rules themselves are plain functions the server's first content applies too.
+export { placeCopyGate, showsHomeCopy, showsMyHomesCopy, showsPrimaryCopy } from '@/lib/householdCopyRules';
 
 /** The Place reads' fresh window (a home's facts for the viewer's role). */
 export const PLACE_FRESH_MS = 60_000;
-
-const HOUSEHOLD = new Set(['owner', 'admin', 'manager', 'lease_resident', 'member', 'restricted_member']);
-const PLACE_HOUSEHOLD = new Set(['owner', 'renter', 'member']);
-
-type HomeCopyContext = Pick<MyHome, 'occupancy' | 'access_kind' | 'has_home_access' | 'role_base' | 'can_delete_home'>;
-
-/** One of your homes is an owner's or household member's, with no end date. */
-export function showsHomeCopy(home: HomeCopyContext): boolean {
-  if (home.occupancy?.end_at != null || home.occupancy?.access_end_at != null
-    || typeof home.can_delete_home !== 'boolean') return false;
-  if (home.access_kind === 'private_setup') return home.has_home_access === false && home.role_base == null;
-  return home.access_kind === 'shared' && home.has_home_access === true && HOUSEHOLD.has(home.role_base ?? '');
-}
-
-/** A Home you have asked to claim or join, still in verification, with no end date. */
-function isOwnRequest(home: HomeCopyContext): boolean {
-  return home.access_kind === 'verification' && home.has_home_access === false
-    && home.occupancy?.end_at == null && home.occupancy?.access_end_at == null && typeof home.can_delete_home === 'boolean';
-}
-
-/** Your homes list shows before its re-check only when every home on it may, or is your own request. */
-export function showsMyHomesCopy(reply: { homes?: MyHome[] } | null | undefined): boolean {
-  return !!reply && (reply.homes ?? []).every((home) => showsHomeCopy(home) || isOwnRequest(home));
-}
-
-/** A Place read shows before its re-check only to the home's owner, renter or household member. */
-export function placeCopyGate(home: MyHome | undefined) {
-  return (intelligence: { viewer?: { role?: string | null } | null } | null | undefined): boolean =>
-    !!home && showsHomeCopy(home) && PLACE_HOUSEHOLD.has(intelligence?.viewer?.role ?? '');
-}
 
 /** A home's own pages (Property Details) follow its row on your kept homes list. */
 export function showsHouseholdHomeCopy(client: QueryClient, homeId: string): boolean {

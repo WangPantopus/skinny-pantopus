@@ -129,6 +129,12 @@ public final class PulsePostDetailViewModel {
         isComposing || composingEndedAt.map { Date().timeIntervalSince($0) < PulseScreenRebuilds.window } ?? false
     }
 
+    /// A rebuilt screen is still giving the comment box the keyboard back: a screen made in the next moment (a second
+    /// rebuild on the way) gives it back too.
+    func composerReturnPending() {
+        if !isComposing { composingEndedAt = Date() }
+    }
+
     /// The post's screens: a screen rebuilt by a fold or a turn reads nothing again (`load()`).
     let screens = PulseScreenRebuilds()
     /// The last read of the post (and of its "Nearby Providers") ran to its end; a screen that leaves mid-read

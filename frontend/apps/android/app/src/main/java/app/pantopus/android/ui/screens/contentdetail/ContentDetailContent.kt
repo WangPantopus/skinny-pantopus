@@ -81,6 +81,8 @@ data class ContentDetailCounterparty(
     val rating: Double?,
     val trailing: String?,
     val showsMessageButton: Boolean = true,
+    /** The person whose profile the card opens; null opens nothing. */
+    val userId: String? = null,
 )
 
 @Immutable

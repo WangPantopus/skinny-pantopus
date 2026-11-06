@@ -1,56 +1,45 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState, type ComponentType } from 'react';
 import { Megaphone } from 'lucide-react';
-import * as api from '@pantopus/api';
 import { useBadges } from '@/contexts/BadgeContext';
-import { useSocket } from '@/contexts/SocketContext';
-import { useNotificationTap } from '@/hooks/useNotificationTap';
-import { toast } from '@/components/ui/toast-store';
-import { queryKeys } from '@/lib/query-keys';
-import { isHiddenOnWeb, resolveWebNotificationPath } from '@/lib/notificationRoutes';
 import { launchFeatures } from '@/lib/featureFlags';
-import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
-import type { Notification } from '@pantopus/types';
+import { NOTIFICATION_PANEL_CLASS, type NotificationBellMode } from './notificationPanelFrame';
+
+export type { NotificationBellMode } from './notificationPanelFrame';
+
+type PanelProps = { mode: NotificationBellMode; open: boolean; unreadCount: number; onClose: () => void };
+
+// The dropdown (its list, live additions and actions) loads on the bell's first
+// open, and hovering or focusing the bell fetches it ahead, so every page's first
+// scripts leave it out. A failed load (offline, say) is tried again next time.
+let panelModule: Promise<{ default: ComponentType<PanelProps> }> | null = null;
+function loadPanel() {
+  panelModule ??= import('./NotificationPanel').catch((error: unknown) => {
+    panelModule = null;
+    throw error;
+  });
+  return panelModule;
+}
 
 /**
  * NotificationBell — top-bar inbox dropdown.
  *
- * `mode` selects the firewall slice the bell represents (P2.3 / unified-IA
- * §6.1). Phase 2 ships the split: `personal` (bell icon, default for the
- * Personal zone) and `audience` (megaphone icon, gated behind the
- * audience_profile flag). `all` is the legacy, single-bell behavior kept
- * so non-flagged users see exactly what they saw before.
- *
+ * `mode` selects the firewall slice the bell represents (notificationPanelFrame.ts).
  * Two streams MUST never merge — the dropdown only shows notifications
  * from the bell's mode.
  */
-export type NotificationBellMode = 'all' | 'personal' | 'audience';
-
 export default function NotificationBell({
   mode = 'all',
 }: {
   mode?: NotificationBellMode;
 }) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const socket = useSocket();
   const [open, setOpen] = useState(false);
-  const tapNotification = useNotificationTap(open);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  // Once loaded, the panel stays mounted, so a reopened panel keeps what it had while it reads again.
+  const [Panel, setPanel] = useState<ComponentType<PanelProps> | null>(null);
+  const [panelFailed, setPanelFailed] = useState(false);
   const { notifications: totalUnread, notificationsByContext } = useBadges();
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState(false);
-  const readRequest = useRef(0);
-  const loadedScope = useRef('');
-  const actionScope = useRef(0);
-  const pendingActions = useRef(new Set<string>());
-  const [pendingKeys, setPendingKeys] = useState<string[]>([]);
   const panelRef = useRef<HTMLDivElement>(null);
-  // Legacy in-dropdown sub-filter for the all-zones bell only.
-  const [contextFilter, setContextFilter] = useState<'all' | 'personal' | 'business'>('all');
 
   // Per-mode unread count. Personal-zone bell counts personal+platform
   // (the user's own private/billing notifications). Audience megaphone
@@ -70,106 +59,11 @@ export default function NotificationBell({
     : mode === 'personal'
     ? 'Personal notifications'
     : 'Notifications';
-  const detailsHref =
-    mode === 'audience'
-      ? '/app/notifications?context=audience'
-      : mode === 'personal'
-      ? '/app/notifications?context=personal'
-      : '/app/notifications';
-  const accentText = isAudience ? 'text-teal-700' : 'text-blue-600';
-  const accentTextHover = isAudience ? 'hover:text-teal-800' : 'hover:text-blue-800';
-  const unreadDot = isAudience ? 'bg-teal-500' : 'bg-blue-500';
-  const notificationMatchesScope = useCallback((notif: Notification) => {
-    // Rows of a hidden feature, and those only the apps open, are left out.
-    if (isHiddenOnWeb(notif)) return false;
-    const firewallContext = notif.context || 'personal';
-    if (mode === 'audience') return firewallContext === 'audience';
-    if (mode === 'personal') return firewallContext === 'personal' || firewallContext === 'platform';
-    if (contextFilter !== 'all') return notif.context_type === contextFilter;
-    return true;
-  }, [mode, contextFilter]);
 
-  const readAllScope = useCallback((): api.notifications.NotificationReadScope | undefined => {
-    if (mode === 'audience') return { context: 'audience' };
-    if (mode === 'personal') return { contexts: ['personal', 'platform'] };
-    if (contextFilter !== 'all') return { context_type: contextFilter };
-    return undefined;
-  }, [mode, contextFilter]);
-
-  const loadNotifications = useCallback(async () => {
-    const request = ++readRequest.current;
-    const token = api.getAuthToken();
-    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
-    const current = () => request === readRequest.current
-      && token === api.getAuthToken()
-      && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
-    const scope = `${mode}:${contextFilter}`;
-    if (loadedScope.current !== scope) {
-      loadedScope.current = scope;
-      setNotifications([]);
-    }
-    setLoading(true);
-    setLoadError(false);
-    try {
-      const params: Parameters<typeof api.notifications.getNotifications>[0] = { limit: 20 };
-      if (mode === 'audience' || mode === 'personal') params.context = mode;
-      else if (contextFilter !== 'all') params.context_type = contextFilter;
-      const requests = mode === 'personal'
-        ? [params, { limit: 20, context: 'platform' as const }]
-        : [params];
-      const results = await Promise.allSettled(requests.map(p => api.notifications.getNotifications(p)));
-      if (!current()) return;
-      setLoadError(results.some(result => result.status === 'rejected'));
-      setNotifications(previous => {
-        if (!current()) return previous;
-        const rows = results.flatMap((result, index) => {
-          if (result.status === 'fulfilled') return result.value.notifications;
-          // Keep known rows only from the same account and failed slice.
-          if (mode !== 'personal') return previous;
-          const context = requests[index].context;
-          return previous.filter(n => (n.context || 'personal') === context);
-        });
-        return [...new Map(rows.map(n => [n.id, n])).values()]
-          // Rows of a hidden feature, and those only the apps open, are left out.
-          .filter(n => !isHiddenOnWeb(n))
-          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      });
-    } catch {
-      if (current()) setLoadError(true);
-    } finally {
-      if (current()) setLoading(false);
-    }
-  }, [mode, contextFilter]);
-
-  // Closing, changing scope or leaving the view retires its pending reads.
-  // QueryProvider already remounts account-local state on session changes.
-  useEffect(() => {
-    const retire = () => { readRequest.current++; actionScope.current++; };
-    pendingActions.current.clear();
-    setPendingKeys([]);
-    if (open) void loadNotifications();
-    return retire;
-  }, [open, loadNotifications]);
-
-  // Listen for real-time notification:new from socket
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleNewNotification = (notif: Notification) => {
-      if (!notificationMatchesScope(notif)) return;
-      // Prepend to list if panel has been loaded
-      setNotifications((prev) => {
-        if (prev.length === 0 && !open) return prev; // not yet loaded
-        if (prev.some((n) => n.id === notif.id)) return prev; // dedupe
-        return [notif, ...prev];
-      });
-    };
-
-    socket.on('notification:new', handleNewNotification);
-    return () => {
-      socket.off('notification:new', handleNewNotification);
-    };
-  }, [socket, open, notificationMatchesScope]);
+  const showPanel = () => {
+    setPanelFailed(false);
+    loadPanel().then((loaded) => setPanel(() => loaded.default), () => setPanelFailed(true));
+  };
 
   // Close on outside click
   useEffect(() => {
@@ -183,66 +77,17 @@ export default function NotificationBell({
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  const handleNotificationClick = (notif: Notification) => tapNotification(notif,
-    () => setNotifications((prev) => prev.map((n) => n.id === notif.id ? { ...n, is_read: true } : n)),
-    () => {
-      const path = resolveWebNotificationPath(notif.link, notif);
-      if (path) { setOpen(false); router.push(path); }
-    });
-
-  const runAction = async (key: string, operation: () => Promise<unknown>, apply: () => void | Promise<void>, message: string) => {
-    if (pendingActions.current.has(key)) return;
-    const scope = actionScope.current;
-    const token = api.getAuthToken();
-    const marker = localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
-    const sameAccount = () => token === api.getAuthToken()
-      && marker === localStorage.getItem(api.AUTH_SESSION_CHANGE_KEY);
-    const current = () => scope === actionScope.current && sameAccount();
-    pendingActions.current.add(key);
-    setPendingKeys([...pendingActions.current]);
-    try {
-      await operation();
-      if (sameAccount()) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.notifications() });
-      }
-      if (current()) {
-        // Reads started before the committed action must not restore its rows.
-        readRequest.current++;
-        setLoading(false);
-        await apply();
-      }
-    } catch {
-      if (sameAccount()) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.notifications(), refetchType: 'none' });
-      }
-      if (current()) toast.error(message);
-    } finally {
-      if (current()) {
-        pendingActions.current.delete(key);
-        setPendingKeys([...pendingActions.current]);
-      }
-    }
-  };
-
-  const handleMarkAllRead = () => runAction('read-all',
-    () => api.notifications.markAllAsRead(readAllScope()),
-    // Fetch authoritative flags, including notifications arriving while pending.
-    async () => { await loadNotifications(); },
-    'Could not confirm marking notifications as read. Please try again.');
-
-  const handleDelete = (e: React.MouseEvent, notifId: string) => {
-    e.stopPropagation();
-    void runAction(notifId, () => api.notifications.deleteNotification(notifId),
-      () => { setNotifications(prev => prev.filter(n => n.id !== notifId)); },
-      'Could not confirm notification removal. Please try again.');
-  };
-
   return (
     // flex: the wrapper is the button's height, not a line of (large) text, so the bell lines up with Messages.
     <div className="relative flex" ref={panelRef}>
       {/* Bell / megaphone button. Below the desktop layout it keeps its size whatever the text size (AppShell's top bar). */}
       <button
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          if (!open && !Panel) showPanel();
+          setOpen(!open);
+        }}
+        onPointerEnter={() => void loadPanel().catch(() => {})}
+        onFocus={() => void loadPanel().catch(() => {})}
         className="p-2 max-lg:p-[8px] hover-bg-app rounded-lg relative"
         aria-label={ariaLabel}
         title={ariaLabel}
@@ -273,140 +118,27 @@ export default function NotificationBell({
         )}
       </button>
 
-      {/* Dropdown panel. Hung from the bell it ran off a phone's left edge, so on phones it drops from the top bar
-       *  across the screen, no taller than the screen (its list scrolls). Below the desktop layout it stays 384 px
-       *  wide at any text size, so it fits beside the bell. While it's open, AppShell's top bar stacks above the + button. */}
-      {open && (
-        <div data-notification-panel className="absolute right-0 top-full mt-2 w-96 max-lg:w-[384px] max-sm:fixed max-sm:inset-x-2 max-sm:top-14 max-sm:w-auto max-sm:flex max-sm:flex-col max-sm:max-h-[calc(100dvh-4.5rem)] bg-surface rounded-xl shadow-2xl border border-app z-[100] overflow-hidden">
-          {/* Header */}
+      {Panel ? (
+        <Panel mode={mode} open={open} unreadCount={unreadCount} onClose={() => setOpen(false)} />
+      ) : open ? (
+        // While the panel loads: its frame, as it looks while its list loads.
+        <div data-notification-panel className={NOTIFICATION_PANEL_CLASS}>
           <div className="px-4 py-3 border-b border-app">
-            <div className="flex flex-wrap items-center justify-between gap-x-2 mb-2">
-              <h3 className="text-sm font-semibold text-app">Notifications</h3>
-              {unreadCount > 0 && (
-                <button
-                  onClick={handleMarkAllRead}
-                  disabled={loading || pendingKeys.includes('read-all')}
-                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  Mark all read
-                </button>
-              )}
-            </div>
-            {/* Legacy context_type sub-filter — only meaningful when this
-                bell represents the combined inbox (non-flagged users). The
-                P2.3 split bells are already scoped to one firewall. */}
-            {mode === 'all' ? (
-              <div className="flex flex-wrap gap-1">
-                {(['all', 'personal', 'business'] as const).map((ctx) => (
-                  <button
-                    key={ctx}
-                    onClick={() => setContextFilter(ctx)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition ${
-                      contextFilter === ctx
-                        ? 'bg-primary-600 text-white'
-                        : 'bg-surface-muted text-app-secondary hover:text-app'
-                    }`}
-                  >
-                    {ctx === 'all' ? 'All' : ctx === 'personal' ? 'Personal' : 'Business'}
-                  </button>
-                ))}
-              </div>
-            ) : null}
+            <h3 className="text-sm font-semibold text-app">Notifications</h3>
           </div>
-
-          {loadError && (
-            <div role="alert" className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              <p>Could not load all notifications.</p>
-              <button onClick={() => void loadNotifications()} disabled={loading} className="mt-1 font-medium underline underline-offset-2 disabled:opacity-50">
-                {loading ? 'Retrying…' : 'Retry'}
-              </button>
+          {panelFailed ? (
+            <div role="alert" className="px-4 py-3 text-sm text-amber-900 bg-amber-50">
+              <p>Could not load your notifications.</p>
+              <button onClick={showPanel} className="mt-1 font-medium underline underline-offset-2">Retry</button>
             </div>
-          )}
-
-          {/* List */}
-          <div className="max-h-[400px] overflow-y-auto">
-            {loading && notifications.length === 0 ? (
-              <div className="px-4 py-8 text-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-2 border-app-border border-t-gray-600 dark:border-t-gray-300 mx-auto" />
-                <p className="text-xs text-app-muted mt-2">Loading...</p>
-              </div>
-            ) : notifications.length === 0 && !loadError ? (
-              <div className="px-4 py-8 text-center">
-                <div className="text-3xl mb-2">🔔</div>
-                <p className="text-sm text-app-muted">No notifications yet</p>
-                <p className="text-xs text-app-muted mt-1">We&apos;ll notify you when something happens</p>
-              </div>
-            ) : (
-              <div>
-                {notifications.map((notif) => (
-                  <div
-                    key={notif.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => handleNotificationClick(notif)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleNotificationClick(notif); }}
-                    className={`w-full text-left px-4 py-3 flex gap-3 hover-bg-app transition border-b border-app last:border-0 group cursor-pointer ${
-                      !notif.is_read ? 'bg-blue-50/40 dark:bg-primary-900/20' : ''
-                    }`}
-                  >
-                    {/* Icon */}
-                    <div className="text-xl flex-shrink-0 mt-0.5">{notif.icon || '🔔'}</div>
-
-                    {/* Content */}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <p
-                          className={`text-sm leading-snug ${
-                            !notif.is_read ? 'font-semibold text-app' : 'font-medium text-app-muted'
-                          }`}
-                        >
-                          {notif.title}
-                        </p>
-                        {/* Unread dot */}
-                        {!notif.is_read && (
-                          <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${unreadDot}`} />
-                        )}
-                      </div>
-                      {notif.body && (
-                        <p className="text-xs text-app-muted mt-0.5 line-clamp-2">{notif.body}</p>
-                      )}
-                      <p className="text-[10px] text-app-muted mt-1">{timeAgo(notif.created_at)}</p>
-                    </div>
-
-                    {/* Delete on hover */}
-                    <button
-                      onClick={(e) => handleDelete(e, notif.id)}
-                      disabled={pendingKeys.includes(notif.id)}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-app-muted hover:text-red-500 p-1 flex-shrink-0 transition"
-                      title="Remove"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          {notifications.length > 0 && (
-            <div className="border-t border-app px-4 py-2.5 text-center">
-              <button
-                onClick={() => {
-                  setOpen(false);
-                  router.push(detailsHref);
-                }}
-                className={`text-xs font-medium ${accentText} ${accentTextHover}`}
-              >
-                {isAudience ? 'View all audience notifications' : 'View all notifications'}
-              </button>
+          ) : (
+            <div className="px-4 py-8 text-center">
+              <div className="animate-spin rounded-full h-6 w-6 border-2 border-app-border border-t-gray-600 dark:border-t-gray-300 mx-auto" />
+              <p className="text-xs text-app-muted mt-2">Loading...</p>
             </div>
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

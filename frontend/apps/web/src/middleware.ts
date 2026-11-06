@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { SESSION_RECOVER_COOKIE, SESSION_RECOVER_MAX_AGE_S, SESSION_REFRESH_PATH } from './lib/session-refresh';
 import { readAuthRedirectQuery, safeRedirectPath } from '@pantopus/ui-utils';
 import { isLaunchCutPath, launchFeatures } from './lib/featureFlags';
+import { FIRST_CONTENT_HEADER, isFirstContentRoute } from './lib/firstContent';
 
 // Backend sets these via same-origin proxy (no separate Next.js session route needed).
 const ACCESS_COOKIE = 'pantopus_access';
@@ -89,6 +90,22 @@ function withRecoveryHint(req: NextRequest, res: NextResponse, onFail: string | 
   return res;
 }
 
+// A tab's document request carries its first content (lib/firstContent.ts): the
+// page reads it on the server with the visitor's session. No other request may
+// ask for it, so client navigations and prefetches, whose payloads the router
+// keeps, never carry account data. Next hides its own navigation headers (RSC,
+// Next-Router-Prefetch) from middleware, and browsers before Sec-Fetch send none
+// of those either; a document navigation is also the only request that accepts HTML.
+function renderAppPage(req: NextRequest, pathname: string): NextResponse {
+  const firstContent = isFirstContentRoute(pathname) && isDocumentRequest(req)
+    && (req.headers?.get('accept') ?? '').includes('text/html');
+  if (!firstContent && !req.headers?.has(FIRST_CONTENT_HEADER)) return NextResponse.next();
+  const headers = new Headers(req.headers);
+  if (firstContent) headers.set(FIRST_CONTENT_HEADER, '1');
+  else headers.delete(FIRST_CONTENT_HEADER);
+  return NextResponse.next({ request: { headers } });
+}
+
 // Where signed-in traffic to an /app path goes: hidden features and the
 // Mailbox entry redirect, everything else renders.
 function appRoute(req: NextRequest, pathname: string): NextResponse {
@@ -101,7 +118,7 @@ function appRoute(req: NextRequest, pathname: string): NextResponse {
   if (isLaunchCutPath(pathname)) {
     return NextResponse.redirect(new URL('/app/place', req.url));
   }
-  return NextResponse.next();
+  return renderAppPage(req, pathname);
 }
 
 export function middleware(req: NextRequest) {

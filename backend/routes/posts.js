@@ -1757,10 +1757,15 @@ router.get('/feed', verifyToken, async (req, res) => {
     }
 
     // The neighborhood cards below can appear only on the first page of the place surface. There, which cards the
-    // reader dismissed is read alongside the feed (one small read, unused once the area has more than 8 posts).
+    // reader dismissed is read alongside the feed (one small read, unused once the area has more than 8 posts),
+    // and so are the cards themselves (a few reads of public area data, unused once the area has 5 posts): an area
+    // with few posts shows them without waiting for the feed first. A read that isn't used waits (the catch only
+    // marks it handled).
     const isColdStart = surface === 'place' && !topic && !cursorCreatedAt && !cursorId && !postType
       && feedLatitude != null && feedLongitude != null;
     const dismissedRead = isColdStart ? loadDismissedSeededFactIds(userId) : null;
+    const factsRead = isColdStart ? generateNeighborhoodFacts(_encodeGeohash6(feedLatitude, feedLongitude)) : null;
+    if (factsRead) factsRead.catch(() => {});
     const result = await feedService.getListFeed({
       userId,
       surface,
@@ -1785,12 +1790,8 @@ router.get('/feed', verifyToken, async (req, res) => {
 
     if (isColdStart && realPostCount < 5) {
       try {
-        const geohash = _encodeGeohash6(feedLatitude, feedLongitude);
-        // The facts and the user's dismissed fact IDs are read together.
-        const [facts, dismissedIds] = await Promise.all([
-          generateNeighborhoodFacts(geohash),
-          dismissedRead,
-        ]);
+        // The facts and the user's dismissed fact IDs, both read alongside the feed.
+        const [facts, dismissedIds] = await Promise.all([factsRead, dismissedRead]);
 
         // Filter out dismissed facts
         const eligibleFacts = facts.filter((f) => !dismissedIds.has(f.id));
@@ -3278,6 +3279,8 @@ router.post('/:id/like', verifyToken, async (req, res) => {
           icon,
           link,
           metadata: { post_id: id, user_id: userId, ...extraMeta },
+          // Once per person per post: unliking and liking again doesn't notify the owner again.
+          idempotencyKey: `post-liked:${id}:${userId}`,
         });
       }).catch(err => {
         logger.warn('Like notification failed (non-blocking)', { error: err.message, postId: id });
@@ -3505,6 +3508,8 @@ function notifyRepost(post, postId, userId) {
       icon: '🔁',
       link,
       metadata: { post_id: postId, user_id: userId, ...extraMeta },
+      // Once per person per post: undoing a share and sharing again doesn't notify the owner again.
+      idempotencyKey: `post-reposted:${postId}:${userId}`,
     });
   }).catch(err => {
     logger.warn('Repost notification failed (non-blocking)', { error: err.message, postId });

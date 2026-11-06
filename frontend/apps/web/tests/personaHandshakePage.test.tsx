@@ -68,7 +68,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 function loadPage() {
-  return require('@/app/(app)/app/persona/[handle]/follow/page').default;
+  return require('@/app/(site)/(app)/app/persona/[handle]/follow/page').default;
 }
 
 describe('FollowHandshakePage', () => {

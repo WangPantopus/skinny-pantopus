@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as api from '@pantopus/api';
-import BlockedUsersPage from '@/app/(app)/app/profile/settings/blocked/page';
+import BlockedUsersPage from '@/app/(site)/(app)/app/profile/settings/blocked/page';
 import { confirmStore } from '@/components/ui/confirm-store';
 
 jest.mock('@pantopus/api', () => ({

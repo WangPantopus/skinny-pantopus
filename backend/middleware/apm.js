@@ -11,6 +11,7 @@
  *   - Automatic cleanup of old metrics (rolling 5-minute window)
  */
 const logger = require('../utils/logger');
+const dbTiming = require('../utils/dbTiming');
 
 const SLOW_THRESHOLD_MS = parseInt(process.env.APM_SLOW_THRESHOLD_MS) || 500;
 const METRICS_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
@@ -94,6 +95,10 @@ function percentile(sorted, p) {
  */
 function apmMiddleware(req, res, next) {
   const startTime = process.hrtime.bigint();
+  const startedAt = Date.now();
+  // Every Supabase call made for this request is counted in its ledger (utils/dbTiming.js).
+  const ledger = dbTiming.open();
+  req.dbLedger = ledger;
 
   // Hook into response finish
   res.on('finish', () => {
@@ -104,7 +109,8 @@ function apmMiddleware(req, res, next) {
 
     recordMetric(routeKey, durationMs, isError);
 
-    // Log slow requests
+    // Log slow requests, with how much of the time was database calls (db_ms, db_calls, the slowest call) and
+    // whether this process was held up meanwhile (loop_lag_max_ms).
     if (durationMs > SLOW_THRESHOLD_MS) {
       logger.warn('Slow request detected', {
         route: routeKey,
@@ -112,11 +118,12 @@ function apmMiddleware(req, res, next) {
         status: res.statusCode,
         user_id: req.user?.id || 'anonymous',
         threshold_ms: SLOW_THRESHOLD_MS,
+        ...dbTiming.fields(ledger, { sinceEpochMs: startedAt }),
       });
     }
   });
 
-  next();
+  dbTiming.run(ledger, next);
 }
 
 /**

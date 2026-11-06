@@ -394,7 +394,9 @@ public struct GroupedListView<DataSource: GroupedListDataSource>: View {
 
     /// A14.5 — horizontally scrolling single-select value chips under
     /// the row label (briefing send time, quiet-hours bounds). The raw
-    /// option string is both the label and the wire value.
+    /// option string is both the label and the wire value. Half folded
+    /// like a book, the strip keeps to the larger side of the fold and
+    /// scrolls there, as on a phone, instead of putting chips on the crease.
     private func chipStrip(rowId: String, options: [String], selected: String) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
@@ -428,6 +430,7 @@ public struct GroupedListView<DataSource: GroupedListDataSource>: View {
             .padding(.trailing, Spacing.s1)
         }
         .accessibilityIdentifier("groupedListChipStrip_\(rowId)")
+        .besideFold()
     }
 
     @ViewBuilder

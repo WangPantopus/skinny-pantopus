@@ -83,7 +83,7 @@ async function processUser(user, year, month) {
         month,
         receipt,
       }, { onConflict: 'user_id,year,month' })
-      .select('id')
+      .select('id, emailed_at')
       .single();
 
     if (storeErr) {
@@ -102,10 +102,13 @@ async function processUser(user, year, month) {
       icon: '📊',
       link: '/profile?tab=receipt',
       metadata: { year, month, receipt_id: receiptId },
+      // One notice per person per month: a second run of the job (a restart or a deploy at 17:00 on the 1st)
+      // doesn't notify everyone again.
+      idempotencyKey: `monthly-receipt:${userId}:${year}-${month}`,
     });
 
-    // Email (check preference)
-    if (user.email) {
+    // Email (check preference), once per month like the notice.
+    if (user.email && !stored?.emailed_at) {
       try {
         const { data: prefs, error: prefsError } = await supabaseAdmin
           .from('MailPreferences')

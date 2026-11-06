@@ -15,7 +15,7 @@ jest.mock('@pantopus/api', () => ({
   getNeighborhoodMeter: () => meter(),
   getNeighborhoodCells: () => cells(),
 }));
-import Nearby from '../src/app/(app)/app/nearby/page';
+import Nearby from '../src/app/(site)/(app)/app/nearby/page';
 
 function show() {
   const client = new QueryClient({

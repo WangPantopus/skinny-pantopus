@@ -19,7 +19,7 @@ struct PlansDestination: View {
             case let .plan(id, intent):
                 PlanScreen(planId: id, intent: intent, path: $path, onHost: onHost)
             case let .requests(planId):
-                PlanRequestsScreen(planId: planId) { pop() }
+                PlanRequestsScreen(planId: planId, onOpenProfile: { path.append(.profile(userId: $0)) }, onBack: { pop() })
             case let .change(planId):
                 PlanChangeScreen(planId: planId) { pop() }
             case let .profile(userId):
@@ -106,6 +106,10 @@ struct PlanChatRoute: Hashable, Identifiable {
 struct PlanChatScreen: View {
     let route: PlanChatRoute
     @Environment(\.dismiss) private var dismiss
+    /// A sender's profile, opened from their name or photo, on top of the chat.
+    @State private var profileUserId: String?
+    /// A conversation with them, from their profile's Message.
+    @State private var directMessage: InboxConversationDestination?
 
     var body: some View {
         ChatConversationView(
@@ -114,16 +118,39 @@ struct PlanChatScreen: View {
                 counterparty: .group(name: route.title, memberCount: route.peopleCount),
                 currentUserId: PlansStoreReads.viewerId ?? ""
             ),
-            mode: .dm
-        ) { dismiss() }
-            .environment(\.chatPlanContext, ChatPlanContext(
-                kind: route.kind,
-                when: route.when,
-                place: route.place,
-                closedNote: route.closedNote
-            ) { dismiss() })
+            mode: .dm,
+            onOpenProfile: { profileUserId = $0 },
+            onBack: { dismiss() }
+        )
+        .environment(\.chatPlanContext, ChatPlanContext(
+            kind: route.kind,
+            when: route.when,
+            place: route.place,
+            closedNote: route.closedNote
+        ) { dismiss() })
+        .toolbar(.hidden, for: .navigationBar)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("planChat")
+        .navigationDestination(item: $profileUserId) { userId in
+            PublicProfileView(
+                userId: userId,
+                onBack: { profileUserId = nil },
+                onOpenMessages: { profile in directMessage = .directMessage(with: profile) },
+                onOpenProfile: { profileUserId = $0 }
+            )
             .toolbar(.hidden, for: .navigationBar)
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("planChat")
+            .navigationDestination(item: $directMessage) { dest in
+                ChatConversationView(
+                    viewModel: ChatConversationViewModel(
+                        mode: dest.threadMode,
+                        counterparty: dest.counterparty,
+                        currentUserId: PlansStoreReads.viewerId ?? "",
+                        initialTopic: dest.initialTopic
+                    ),
+                    mode: dest.kind
+                ) { directMessage = nil }
+                    .toolbar(.hidden, for: .navigationBar)
+            }
+        }
     }
 }

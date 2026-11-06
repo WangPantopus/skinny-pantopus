@@ -16,7 +16,9 @@ import { activateChatStorage, captureChatHistoryFence, deleteChatRecords, readCa
   readChatRecord } from '@/components/chat/chatStorage';
 
 import { CONVERSATIONS_LIMIT, INBOX_KEY, retainInbox as saveInbox, type ConversationsReply, type SavedInbox } from '@/lib/conversation-storage';
+import { compareConversationTime } from '@/lib/conversationOrder';
 export { CONVERSATIONS_LIMIT, type ConversationsReply } from '@/lib/conversation-storage';
+export { compareConversationTime } from '@/lib/conversationOrder';
 
 export const CONVERSATIONS_FRESH_MS = 30 * 1000;
 
@@ -76,15 +78,6 @@ export function conversationKey(conversation: UnifiedConversationItem): string {
   return conversation._type === 'room' ? `room:${conversation.id}` : `person:${conversation.other_participant_id}`;
 }
 
-export function compareConversationTime(a?: string | null, b?: string | null): number {
-  const milliseconds = Date.parse(a || '1970-01-01') - Date.parse(b || '1970-01-01');
-  if (milliseconds) return milliseconds;
-  const fraction = (value?: string | null) => (value?.match(/\.(\d+)/)?.[1] || '').padEnd(6, '0');
-  // Digits order the same either way, but a page's first localeCompare sets up the
-  // browser's collator: 10-100 ms on the main thread while a cold inbox loads.
-  const [x, y] = [fraction(a), fraction(b)];
-  return x < y ? -1 : x > y ? 1 : 0;
-}
 
 type InboxMessage = { id?: string; room_id?: string; message?: string; message_text?: string;
   created_at?: string; user_id?: string; sender_id?: string; sender?: { id?: string }; preview?: string; unread_for?: number };

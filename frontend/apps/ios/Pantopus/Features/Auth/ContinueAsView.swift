@@ -77,6 +77,8 @@ struct ContinueAsView: View {
                 .frame(maxWidth: .infinity)
             }
         }
+        // Half folded like a book, the card keeps to one page instead of running its buttons across the crease.
+        .readableColumnBesideFold()
         .alert(
             "Remove this account from this device?",
             isPresented: $isRemoveConfirmPresented

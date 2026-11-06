@@ -24,6 +24,7 @@
 
 const cron = require('node-cron');
 const logger = require('../utils/logger');
+const dbTiming = require('../utils/dbTiming');
 const householdClaimConfig = require('../config/householdClaims');
 const authorizeUpcomingGigs = require('./authorizeUpcomingGigs');
 const processPendingTransfers = require('./processPendingTransfers');
@@ -170,17 +171,20 @@ function envFlagEnabled(name, defaultValue = true) {
 function wrapJob(name, fn) {
   const wrapped = async () => {
     const start = Date.now();
+    // The job's database calls (count, time, slowest), so its load on the database shows in the log.
+    const ledger = dbTiming.open();
     logger.info(`[CRON] Starting: ${name}`);
     try {
-      await fn();
+      await dbTiming.run(ledger, fn);
       const elapsed = Date.now() - start;
-      logger.info(`[CRON] Completed: ${name}`, { elapsed_ms: elapsed });
+      logger.info(`[CRON] Completed: ${name}`, { elapsed_ms: elapsed, ...dbTiming.fields(ledger) });
     } catch (err) {
       const elapsed = Date.now() - start;
       logger.error(`[CRON] Failed: ${name}`, {
         error: err.message,
         stack: err.stack,
         elapsed_ms: elapsed,
+        ...dbTiming.fields(ledger),
       });
     }
   };
@@ -613,10 +617,11 @@ function startJobs(options = {}) {
   });
 
   // ─── Draft Business Reminders ───
-  // Runs daily at 10:00 AM UTC.
+  // Runs daily at 17:00 UTC: 9 or 10 AM Pacific, noon or 1 PM Eastern, 7 AM Hawaii. Its push used to
+  // go at 10:00 UTC, 2 or 3 AM on the West Coast.
   // Sends in-app and email reminders for draft businesses < 7 days old.
   // Max 3 reminders per business.
-  scheduleCron('0 10 * * *', wrapJob('draftBusinessReminder', draftBusinessReminder), {
+  scheduleCron('0 17 * * *', wrapJob('draftBusinessReminder', draftBusinessReminder), {
     scheduled: true,
     timezone: 'UTC',
   });

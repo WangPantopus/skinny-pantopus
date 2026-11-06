@@ -179,7 +179,7 @@ describe('TierEditor', () => {
 describe('AudienceDashboardPage', () => {
   test('with the flag off, redirects to /app/persona', async () => {
     mockFlagEnabled.mockReturnValue(false);
-    const Page = require('@/app/(app)/app/audience/page').default;
+    const Page = require('@/app/(site)/(app)/app/audience/page').default;
     await act(async () => {
       render(<Page />);
     });
@@ -187,7 +187,7 @@ describe('AudienceDashboardPage', () => {
   });
 
   test('with the flag on, renders the 3-tab shell + status line', async () => {
-    const Page = require('@/app/(app)/app/audience/page').default;
+    const Page = require('@/app/(site)/(app)/app/audience/page').default;
     await act(async () => {
       render(<Page />);
     });
@@ -206,7 +206,7 @@ describe('AudienceDashboardPage', () => {
 
   test('empty state renders when user has no persona', async () => {
     apiMock.personas.getMyPersona.mockResolvedValue({ persona: null, channel: null });
-    const Page = require('@/app/(app)/app/audience/page').default;
+    const Page = require('@/app/(site)/(app)/app/audience/page').default;
     await act(async () => {
       render(<Page />);
     });
@@ -221,7 +221,7 @@ describe('AudienceDashboardPage', () => {
 // ---------------------------------------------------------------------------
 describe('ManageTiersPage', () => {
   test('renders all 3 tiers and a Save button', async () => {
-    const Page = require('@/app/(app)/app/audience/manage/tiers/page').default;
+    const Page = require('@/app/(site)/(app)/app/audience/manage/tiers/page').default;
     await act(async () => {
       render(<Page />);
     });
@@ -233,7 +233,7 @@ describe('ManageTiersPage', () => {
   });
 
   test('shows the Stripe-not-connected banner when paid tiers lack stripe_price_id', async () => {
-    const Page = require('@/app/(app)/app/audience/manage/tiers/page').default;
+    const Page = require('@/app/(site)/(app)/app/audience/manage/tiers/page').default;
     await act(async () => {
       render(<Page />);
     });
@@ -250,7 +250,7 @@ describe('ManageTiersPage', () => {
         tierFixture(3, { stripePriceId: 'price_insider' }),
       ],
     });
-    const Page = require('@/app/(app)/app/audience/manage/tiers/page').default;
+    const Page = require('@/app/(site)/(app)/app/audience/manage/tiers/page').default;
     await act(async () => {
       render(<Page />);
     });
@@ -264,7 +264,7 @@ describe('ManageTiersPage', () => {
 // ---------------------------------------------------------------------------
 describe('AudienceSetupPage', () => {
   test('jumps to step 2 when persona already exists', async () => {
-    const Page = require('@/app/(app)/app/audience/setup/page').default;
+    const Page = require('@/app/(site)/(app)/app/audience/setup/page').default;
     await act(async () => {
       render(<Page />);
     });
@@ -275,7 +275,7 @@ describe('AudienceSetupPage', () => {
 
   test('parks on step 1 when user has no persona', async () => {
     apiMock.personas.getMyPersona.mockResolvedValue({ persona: null, channel: null });
-    const Page = require('@/app/(app)/app/audience/setup/page').default;
+    const Page = require('@/app/(site)/(app)/app/audience/setup/page').default;
     await act(async () => {
       render(<Page />);
     });
@@ -287,7 +287,7 @@ describe('AudienceSetupPage', () => {
 
   test('?step=3 lands on the Stripe Connect step with an enabled button', async () => {
     mockSearchParams = new URLSearchParams('step=3');
-    const Page = require('@/app/(app)/app/audience/setup/page').default;
+    const Page = require('@/app/(site)/(app)/app/audience/setup/page').default;
     await act(async () => {
       render(<Page />);
     });
@@ -308,7 +308,7 @@ describe('AudienceSetupPage', () => {
         chargesEnabled: true, payoutsEnabled: true, detailsSubmitted: true,
       },
     });
-    const Page = require('@/app/(app)/app/audience/setup/page').default;
+    const Page = require('@/app/(site)/(app)/app/audience/setup/page').default;
     await act(async () => {
       render(<Page />);
     });

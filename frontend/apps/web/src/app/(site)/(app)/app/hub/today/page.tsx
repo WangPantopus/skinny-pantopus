@@ -1,0 +1,519 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import ChangeLocationModal from '@/components/hub/ChangeLocationModal';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Briefcase,
+  Calendar,
+  Cloud,
+  CloudDrizzle,
+  CloudLightning,
+  CloudRain,
+  CloudSnow,
+  Clock,
+  CreditCard,
+  Droplets,
+  Leaf,
+  Mail,
+  MapPin,
+  RefreshCw,
+  Sparkles,
+  Sun,
+  Thermometer,
+  Wind,
+  Wrench,
+} from 'lucide-react';
+import * as api from '@pantopus/api';
+import { getAuthToken } from '@pantopus/api';
+import { queryKeys } from '@/lib/query-keys';
+import { hubTodayQuery } from '@/lib/hubToday';
+import { withoutLaunchCutTodayRows } from '@/lib/featureFlags';
+import { resolveWebNotificationPath } from '@/lib/notificationRoutes';
+import type { HubToday } from '@pantopus/types';
+import BallotTodaySection, { useBallotToday } from '@/components/ballot/BallotTodaySection';
+import { claimInReviewNote, claimsInReview, myClaimsQuery } from '@/lib/myHomes';
+import { VerifyBanner } from '@/components/archetypes/place';
+import TodayDetail from '@/components/place/detail/TodayDetail';
+import { claimWaitingLabel } from '@/components/homes/ClaimApprovalChecklist';
+import { PLACE_FRESH_MS, gatedStaleTime, useAfterRecheck } from '@/lib/householdCopy';
+import { useHydrated } from '@/hooks/useHydrated';
+
+// ── Icon helpers ─────────────────────────────────────────────────
+
+function WeatherIcon({ code, className }: { code: string; className?: string }) {
+  const cls = className || 'w-12 h-12 text-blue-500 dark:text-blue-400';
+  const c = (code || '').toLowerCase();
+  if (c.includes('clear') || c === 'hot' || c.includes('mostly_clear')) return <Sun className={cls} />;
+  if (c.includes('heavy_rain') || c.includes('violent')) return <CloudRain className={cls} />;
+  if (c.includes('rain') || c.includes('shower')) return <CloudRain className={cls} />;
+  if (c.includes('drizzle')) return <CloudDrizzle className={cls} />;
+  if (c.includes('snow') || c.includes('flurr') || c.includes('blizzard') || c.includes('sleet') || c.includes('freezing') || c === 'frigid') return <CloudSnow className={cls} />;
+  if (c.includes('thunder') || c.includes('storm')) return <CloudLightning className={cls} />;
+  if (c.includes('wind') || c.includes('breez')) return <Wind className={cls} />;
+  if (c.includes('cloudy') || c.includes('overcast') || c.includes('fog') || c.includes('haze') || c.includes('smoke') || c.includes('dust')) return <Cloud className={cls} />;
+  return <Sun className={cls} />;
+}
+
+function SignalIcon({ kind, className }: { kind: string; className?: string }) {
+  const cls = className || 'w-4 h-4';
+  switch (kind) {
+    case 'alert': return <AlertTriangle className={cls} />;
+    case 'weather': return <Sun className={cls} />;
+    case 'precipitation': return <CloudRain className={cls} />;
+    case 'aqi': return <Wind className={cls} />;
+    case 'temperature': return <Thermometer className={cls} />;
+    case 'bill_due': return <CreditCard className={cls} />;
+    case 'task_due': return <Wrench className={cls} />;
+    case 'calendar': return <Calendar className={cls} />;
+    case 'mail': return <Mail className={cls} />;
+    case 'gig': return <Briefcase className={cls} />;
+    case 'seasonal': return <Leaf className={cls} />;
+    case 'local_update': return <Sparkles className={cls} />;
+    default: return <Sparkles className={cls} />;
+  }
+}
+
+const URGENCY_BG: Record<string, string> = {
+  critical: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/40',
+  high: 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800/40',
+  medium: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/40',
+  low: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800/40',
+};
+
+const URGENCY_TEXT: Record<string, string> = {
+  critical: 'text-red-700 dark:text-red-400',
+  high: 'text-orange-700 dark:text-orange-400',
+  medium: 'text-amber-700 dark:text-amber-400',
+  low: 'text-blue-700 dark:text-blue-400',
+};
+
+// The footer names its sources the way the Place cards do, not by provider code.
+const PROVIDER_NAMES: Record<string, string> = {
+  OPEN_METEO: 'Open-Meteo',
+  WEATHERKIT: 'Apple Weather',
+  AIRNOW: 'AirNow (EPA)',
+  NOAA: 'National Weather Service',
+};
+const SECTION_NAMES: Record<string, string> = { weather: 'weather', aqi: 'air quality', alerts: 'alerts' };
+
+function freshnessLabel(fetchedAt: string): string {
+  const mins = Math.round((Date.now() - new Date(fetchedAt).getTime()) / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  return `${Math.round(mins / 60)}h ago`;
+}
+
+/** On a quiet day the summary is only the weather line ("Overcast."), which the card already shows. */
+function repeatsCondition(summary: string, label?: string | null): boolean {
+  const plain = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  return !!label && plain(summary) === plain(label);
+}
+
+// Instant Screens contract §4: how old a shown briefing may be after a failed refresh before the
+// page says so ("Couldn't refresh"), and how old its alerts may be before they show as unavailable.
+const TODAY_MAX_SHOWN_MS = 2 * 60 * 60 * 1000;
+const ALERTS_MAX_SHOWN_MS = 30 * 60 * 1000;
+
+// ── Page ─────────────────────────────────────────────────────────
+
+export default function HubTodayPage() {
+  const router = useRouter();
+  // The briefing's routes are the apps' (e.g. '/place/today', '/app/pulse'): open the web's page for each.
+  const openRoute = (route: string) => {
+    const to = resolveWebNotificationPath(route);
+    if (to) router.push(to);
+  };
+  // /app/today is a tab (bottom bar, sidebar): nothing to go back to. The Back
+  // arrow stays on /app/hub/today, which a card or the morning push opens.
+  const isTab = usePathname() === '/app/today';
+  const queryClient = useQueryClient();
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  // Times follow this browser's clock, time zone and locale: shown once hydrated,
+  // so the server's first content (lib/firstContent.ts) hydrates as rendered.
+  const hydrated = useHydrated();
+
+  useEffect(() => {
+    if (!mounted) return;
+    if (!getAuthToken()) router.replace('/login?redirectTo=%2Fapp%2Fhub%2Ftoday');
+  }, [router, mounted]);
+
+  const hasToken = mounted && !!getAuthToken();
+
+  const query = useQuery<HubToday | null>({
+    ...hubTodayQuery(),
+    enabled: hasToken,
+  });
+
+  // Ballot P0 (ballot_p0): read alongside the briefing, not after it; sends
+  // nothing for a viewer who does not have the flag.
+  const ballot = useBallotToday(hasToken);
+
+  const today = query.data ? withoutLaunchCutTodayRows(query.data) : null;
+  // No briefing yet, but a claim in review: say so, as the apps' Today does (a claim makes its Home
+  // yours only once it's approved).
+  const noBriefing = query.isSuccess && (!today || today.display_mode === 'hidden');
+  const claims = useQuery({ ...myClaimsQuery(), enabled: hasToken && noBriefing });
+  const claim = claimsInReview(claims.data)[0] ?? null;
+  const claimNote = claim ? claimInReviewNote(claim, 'Today') : null;
+  // The claimed address's public Today (the server's view for an open claim) under the claim's status;
+  // the Place page reads the same copy. A refusal (an older server, a closed Home) keeps the claim's note.
+  const claimTodayQuery = useQuery({
+    queryKey: claim ? queryKeys.placeIntelligence(claim.home_id) : ['place', 'intelligence', 'none'],
+    queryFn: () => api.place.getPlaceIntelligence(claim?.home_id as string),
+    enabled: hasToken && !!claim,
+    staleTime: gatedStaleTime(PLACE_FRESH_MS, () => false),
+  });
+  const { data: claimToday, waiting: claimTodayWaiting } = useAfterRecheck(claimTodayQuery, () => false);
+  const claimTodayPending = !!claim && claimToday === undefined && (claimTodayQuery.isPending || claimTodayWaiting);
+  // The first frame shows what this tab already loaded; the skeleton only while nothing has been
+  // (a fresh page load starts with an empty cache, like the server).
+  const loading = query.data === undefined && (!mounted || (query.isPending && hasToken));
+  // Only a briefing that never loaded shows the error. A failed refresh keeps the briefing
+  // (contract §3) and says so once it is older than Today's max shown age (§4: 2 hours; alerts 30 minutes).
+  const error = query.data === undefined && query.error instanceof Error ? query.error.message : '';
+  const refreshFailed = query.isError && query.data !== undefined;
+  const shownAge = Date.now() - query.dataUpdatedAt;
+  const showStaleLine = refreshFailed && shownAge > TODAY_MAX_SHOWN_MS;
+  const alertsUnavailable = refreshFailed && shownAge > ALERTS_MAX_SHOWN_MS;
+  // Quiet refreshes show nothing; the icon turns only after a tap on Refresh.
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => {
+    setRefreshing(true);
+    try { await Promise.all([query.refetch(), claim ? claimTodayQuery.refetch() : null]); } finally { setRefreshing(false); }
+  };
+
+  return (
+    <div className="min-h-screen bg-app pb-16">
+      <div className="max-w-3xl mx-auto px-4 py-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-3">
+            {!isTab && (
+              <button
+                onClick={() => router.back()}
+                className="p-1.5 hover:bg-app-hover rounded-lg transition"
+                aria-label="Back"
+              >
+                <ArrowLeft className="w-5 h-5 text-app-text" />
+              </button>
+            )}
+            <h1 className="text-xl font-bold text-app-text">Today</h1>
+          </div>
+          <button
+            onClick={() => { void refresh(); }}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 text-sm text-app-text-secondary hover:text-app-text transition disabled:opacity-50"
+            aria-label="Refresh"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+        </div>
+
+        {/* Loading skeleton */}
+        {loading && (
+          <div className="rounded-2xl border border-app bg-surface dark:bg-surface-dark p-6 animate-pulse space-y-5">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-xl bg-surface-muted dark:bg-gray-700" />
+              <div className="space-y-2 flex-1">
+                <div className="h-5 bg-surface-muted dark:bg-gray-700 rounded w-24" />
+                <div className="h-3 bg-surface-muted dark:bg-gray-700 rounded w-40" />
+              </div>
+            </div>
+            <div className="h-4 bg-surface-muted dark:bg-gray-700 rounded w-full" />
+            <div className="h-4 bg-surface-muted dark:bg-gray-700 rounded w-5/6" />
+            <div className="h-20 bg-surface-muted dark:bg-gray-700 rounded" />
+          </div>
+        )}
+
+        {/* A refresh failed and the briefing shown is older than its max shown age */}
+        {!loading && showStaleLine && (
+          <div className="mb-3 flex items-center justify-between gap-3 px-1 text-xs text-app-text-secondary" role="status">
+            <span>Couldn’t refresh. Showing {new Date(query.dataUpdatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.</span>
+            <button onClick={() => { void refresh(); }} disabled={refreshing} className="font-semibold text-primary-600 dark:text-primary-400 hover:underline disabled:opacity-50">
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Error */}
+        {!loading && error && (
+          <div className="rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/20 p-4 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-sm">
+              <AlertTriangle className="w-4 h-4" />
+              <span>{error || 'Could not load today’s briefing'}</span>
+            </div>
+            <button
+              onClick={() => { void refresh(); }}
+              className="text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* A claim in review: its address's Today, the claim's status on top */}
+        {!loading && !error && (!today || today.display_mode === 'hidden') && claim && claimToday ? (
+          <div className="space-y-4">
+            <VerifyBanner
+              icon={Clock}
+              title={`Your claim is in review. ${claimWaitingLabel(claim)}.`}
+              cta="Check claim status"
+              onClick={() => router.push('/app/homes')}
+            />
+            <TodayDetail intelligence={claimToday} embedded />
+          </div>
+        ) : null}
+
+        {/* Empty */}
+        {!loading && !error && (!today || today.display_mode === 'hidden') && !(claim && claimToday) && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-app bg-surface dark:bg-surface-dark p-8 text-center">
+              {/* Wait for the claims, so "No briefing" doesn't flash before a claim in review. */}
+              {claims.isPending || claimTodayPending ? (
+                <p className="text-sm text-app-text-secondary" aria-hidden="true">&nbsp;</p>
+              ) : claimNote ? (
+                <>
+                  <p className="text-base font-semibold text-app-text">{claimNote.title}</p>
+                  <p className="mt-1 text-sm text-app-text-secondary">{claimNote.description}</p>
+                  <button
+                    onClick={() => router.push('/app/homes')}
+                    className="mt-4 text-sm font-semibold text-primary-600 dark:text-primary-400 hover:underline"
+                  >
+                    Check status
+                  </button>
+                </>
+              ) : (
+                <p className="text-sm text-app-text-secondary">No briefing available right now.</p>
+              )}
+            </div>
+            <BallotTodaySection data={ballot} />
+          </div>
+        )}
+
+        {/* Content */}
+        {!loading && !error && today && today.display_mode !== 'hidden' && (
+          <div className="space-y-4">
+            {/* Main card */}
+            <div className="rounded-2xl border border-app bg-surface dark:bg-surface-dark overflow-hidden">
+              {/* Location + freshness */}
+              <div className="flex items-center justify-between px-5 pt-4">
+                <div className="flex items-center gap-1.5 text-xs text-app-text-muted">
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span className="truncate">{today.location.label}</span>
+                </div>
+                <span className="text-[11px] text-app-text-muted">
+                  {hydrated ? `Updated ${freshnessLabel(today.fetched_at)}` : null}
+                </span>
+              </div>
+
+              {/* Weather panel */}
+              {today.weather && (
+                <div className="flex items-center gap-5 px-5 py-4">
+                  <WeatherIcon code={today.weather.condition_code} />
+                  <div className="flex-1 min-w-0">
+                    {today.weather.current_temp_f != null && (
+                      <div className="text-4xl font-bold text-gray-900 dark:text-white leading-none">
+                        {today.weather.current_temp_f}°
+                      </div>
+                    )}
+                    <div className="text-sm text-app-text-secondary mt-1">
+                      {today.weather.condition_label}
+                    </div>
+                    {(today.weather.high_f != null && today.weather.low_f != null) && (
+                      <div className="text-xs text-app-text-muted mt-0.5">
+                        H {today.weather.high_f}° · L {today.weather.low_f}°
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Precipitation outlook */}
+              {today.weather?.precipitation_next_6h && (
+                <div className="mx-5 mb-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                  <Droplets className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span className="text-xs text-blue-700 dark:text-blue-400">
+                    Precipitation expected in the next 6 hours
+                    {hydrated && today.weather.precipitation_start_at && (
+                      <> — around {new Date(today.weather.precipitation_start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</>
+                    )}
+                  </span>
+                </div>
+              )}
+
+              {/* Summary */}
+              {today.summary && !repeatsCondition(today.summary, today.weather?.condition_label) && (
+                <p className="px-5 pb-4 text-[15px] leading-relaxed text-app-text">
+                  {today.summary}
+                </p>
+              )}
+
+              {/* AQI */}
+              {today.aqi?.is_noteworthy && (
+                <div className="mx-5 mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-orange-50 dark:bg-orange-900/20">
+                  <Wind className="w-4 h-4 text-orange-500 dark:text-orange-400" />
+                  <span className="text-sm font-semibold text-orange-700 dark:text-orange-400">
+                    AQI {today.aqi.index} — {today.aqi.category}
+                  </span>
+                </div>
+              )}
+
+              {/* Actions */}
+              {today.actions.length > 0 && (
+                <div className="border-t border-app-border/50 px-5 py-3 flex flex-wrap gap-2">
+                  {today.actions.map((action, i) => {
+                    const isChangeLocation = action.route === '/app/location';
+                    const isViewDetails = action.route === '/app/hub/today';
+                    if (isViewDetails) return null; // already on this page
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          if (isChangeLocation) {
+                            setShowLocationPicker(true);
+                          } else {
+                            openRoute(action.route);
+                          }
+                        }}
+                        className="text-sm font-semibold px-3.5 py-2 rounded-lg border border-app text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition"
+                      >
+                        {action.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Ballot P0 (ballot_p0): ballot week and "Moved this year?" */}
+            <BallotTodaySection data={ballot} />
+
+            {/* Alerts: an out-of-date alert check is never shown as "no alerts" (contract §4) */}
+            {alertsUnavailable && (
+              <div className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-app bg-surface dark:bg-surface-dark" role="status">
+                <span className="text-sm text-app-text-secondary">Alerts unavailable</span>
+                <button onClick={() => { void refresh(); }} disabled={refreshing} className="text-xs font-semibold text-primary-600 dark:text-primary-400 hover:underline disabled:opacity-50">
+                  Retry
+                </button>
+              </div>
+            )}
+            {!alertsUnavailable && today.alerts.length > 0 && (
+              <div className="space-y-2">
+                {today.alerts.map((alert) => (
+                  <div
+                    key={alert.id}
+                    className="flex items-start gap-2.5 p-3.5 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40"
+                  >
+                    <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-red-700 dark:text-red-400">
+                        {alert.title}
+                      </div>
+                      {hydrated && (alert.starts_at || alert.ends_at) && (
+                        <div className="text-[11px] text-red-600/80 dark:text-red-400/80 mt-0.5">
+                          {alert.starts_at && new Date(alert.starts_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                          {alert.ends_at && <> – {new Date(alert.ends_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Seasonal tip — only when the ranked signals did not already
+                surface it as a card (they usually do; showing both read as
+                the same sentence twice). */}
+            {today.seasonal?.tip && !today.signals.some((s) => s.kind === 'seasonal') && (
+              <div className="flex items-start gap-2.5 p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/40">
+                <Leaf className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-green-800 dark:text-green-400 leading-relaxed">
+                  {today.seasonal.tip}
+                </p>
+              </div>
+            )}
+
+            {/* Signals */}
+            {today.signals.length > 0 && (
+              <div className="rounded-2xl border border-app bg-surface dark:bg-surface-dark p-5">
+                <h2 className="text-xs font-bold text-app-text-muted uppercase tracking-wider mb-3">
+                  Signals
+                </h2>
+                <div className="space-y-2">
+                  {today.signals.map((signal, i) => {
+                    const bg = URGENCY_BG[signal.urgency] || URGENCY_BG.low;
+                    const text = URGENCY_TEXT[signal.urgency] || URGENCY_TEXT.low;
+                    const body = (
+                      <>
+                        <div className={`mt-0.5 ${text}`}>
+                          <SignalIcon kind={signal.kind} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-sm font-semibold ${text}`}>
+                            {signal.label}
+                          </div>
+                          {signal.detail && (
+                            <div className="text-xs text-app-text-secondary mt-1 leading-relaxed">
+                              {signal.detail}
+                            </div>
+                          )}
+                        </div>
+                        {signal.action && (
+                          <span className={`text-[11px] font-semibold ${text} opacity-80 flex-shrink-0 mt-1 whitespace-nowrap`}>
+                            {signal.action.label} →
+                          </span>
+                        )}
+                      </>
+                    );
+                    const baseCls = `w-full flex items-start gap-3 px-3.5 py-3 rounded-xl border ${bg} text-left`;
+                    return signal.action ? (
+                      <button
+                        key={i}
+                        onClick={() => openRoute(signal.action!.route)}
+                        className={`${baseCls} hover:opacity-80 transition`}
+                      >
+                        {body}
+                      </button>
+                    ) : (
+                      <div key={i} className={baseCls}>
+                        {body}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Meta footer */}
+            {today.meta.providers_used.length > 0 && (
+              <div className="text-[11px] text-app-text-muted px-1">
+                Sources: {today.meta.providers_used.map((p) => PROVIDER_NAMES[p] ?? p).join(', ')}
+                {today.meta.partial_failures.length > 0 && (
+                  <> · Some data unavailable: {today.meta.partial_failures.map((f) => SECTION_NAMES[f] ?? f).join(', ')}</>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {showLocationPicker && (
+        <ChangeLocationModal
+          onClose={() => setShowLocationPicker(false)}
+          onLocationChanged={() => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.hubToday() });
+            queryClient.invalidateQueries({ queryKey: queryKeys.hub() });
+          }}
+        />
+      )}
+    </div>
+  );
+}

@@ -1,6 +1,6 @@
 // The Nearby window's cell styling: buckets shade, the home cell is
 // outlined, and nothing about a cell is ever more than its bucket.
-import { cellStyle, LEGEND_ORDER } from '@/app/(app)/app/nearby/nearbyCells';
+import { cellStyle, LEGEND_ORDER } from '@/app/(site)/(app)/app/nearby/nearbyCells';
 
 it('shades by bucket and outlines only the home cell', () => {
   expect(cellStyle('none', false).fillOpacity).toBe(0);

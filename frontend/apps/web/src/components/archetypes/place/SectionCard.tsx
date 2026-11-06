@@ -16,6 +16,7 @@ import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { CloudOff, RefreshCw } from 'lucide-react';
 import { ShimmerBlock } from '@/components/ui/Shimmer';
+import { useHydrated } from '@/hooks/useHydrated';
 import Chip, { type ChipVariant } from '../primitives/Chip';
 import { Chevron, IconTile, StatusDot, Sparkline, TextButton, cardButtonProps, type StatusDotTone } from './primitives';
 
@@ -43,6 +44,8 @@ export interface SectionCardProps {
   value?: ReactNode;
   /** Quiet supporting line under the value (e.g. "Screening, not a diagnosis"). */
   caption?: ReactNode;
+  /** The unavailable state's own line, in place of "Not available for your area yet." (the server's reason). */
+  unavailableTitle?: ReactNode;
   chip?: PlaceSectionCardChip;
   /** Small semantic dot before the inline value. */
   statusDot?: StatusDotTone;
@@ -68,6 +71,7 @@ export default function SectionCard({
   state = 'loaded',
   value,
   caption,
+  unavailableTitle,
   chip,
   statusDot,
   sparkline,
@@ -81,6 +85,8 @@ export default function SectionCard({
   const loading = state === 'loading';
   const isReading = state === 'loaded' || state === 'stale';
   const tone = state === 'empty' || state === 'unavailable' ? 'muted' : 'home';
+  // An as-of time reads in this browser's time zone: shown once hydrated (hooks/useHydrated.ts).
+  const hydrated = useHydrated();
 
   // ── INLINE: compact single-line reading ──────────────────
   if (inline && isReading) {
@@ -128,7 +134,9 @@ export default function SectionCard({
       </div>
     );
   } else if (state === 'unavailable') {
-    body = (
+    body = unavailableTitle ? (
+      <div className="text-[15px] font-medium text-app-text-secondary">{unavailableTitle}</div>
+    ) : (
       <div>
         <div className="text-[15px] font-medium text-app-text-secondary">Not available for your area yet.</div>
         <div className="text-[13px] text-app-text-muted mt-0.5">
@@ -185,7 +193,7 @@ export default function SectionCard({
         <div className="flex-1 min-w-0">
           <div className="text-[15px] font-semibold text-app-text -tracking-[0.01em]">{title}</div>
         </div>
-        {asOf && !loading ? (
+        {asOf && !loading && hydrated ? (
           <div
             className={`flex items-center gap-1.5 text-xs whitespace-nowrap ${
               state === 'stale' ? 'text-app-warning' : 'text-app-text-muted'

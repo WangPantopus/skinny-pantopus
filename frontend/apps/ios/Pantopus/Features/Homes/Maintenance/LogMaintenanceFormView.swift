@@ -167,6 +167,8 @@ private struct CategoryGroup: View {
                 viewModel.recomputeDirty()
             }
             .accessibilityIdentifier("logMaintenance_category")
+            // Half folded like a book, the tiles keep to the larger side of the fold instead of one on the crease.
+            .besideFold()
         }
     }
 }
@@ -289,6 +291,8 @@ private struct PerformedByGroup: View {
                 }
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("logMaintenance_performedBy")
+                // Half folded like a book, the segments keep beside the fold too.
+                .besideFold()
 
                 if viewModel.performedBy != .self {
                     PantopusTextField(
@@ -396,6 +400,7 @@ private struct CostAndNextDueGroup: View {
                     }
                     .pickerStyle(.segmented)
                     .accessibilityIdentifier("logMaintenance_recurrence")
+                    .besideFold()
 
                     Text(Self.nextDueCaption)
                         .pantopusTextStyle(.caption)
@@ -464,6 +469,8 @@ private struct PhotosGroup: View {
                 }
                 .accessibilityIdentifier("logMaintenance_photos")
                 .disabled(true)
+                // Half folded like a book, the second column of tiles sat on the crease.
+                .besideFold()
             }
         }
     }

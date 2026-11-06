@@ -74,6 +74,8 @@ struct VerifyEmailLandingView: View {
         .animation(.easeInOut(duration: 0.2), value: viewModel.toast)
         .background(Theme.Color.appBg)
         .navigationBarHidden(true)
+        // Half folded like a book, the screen keeps to one page instead of running its buttons across the crease.
+        .readableColumnBesideFold()
         // No Back here: the link's result leads on with Continue or a different email.
         .swipeBackDisabled()
         .accessibilityIdentifier("verifyEmailScreen")

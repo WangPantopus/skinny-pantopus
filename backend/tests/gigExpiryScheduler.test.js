@@ -8,6 +8,7 @@ function load(name) {
   if (id==='node-cron') return { schedule: jest.fn((expression, fn) => registered.push({ expression, fn })) };
   if (id==='../utils/logger') return { info: jest.fn(), error: jest.fn() };
   if (id==='../config/householdClaims') return { jobs: { dryRun: true } };
+  if (id==='../utils/dbTiming') return require('../utils/dbTiming');
   const fn=jest.fn(); jobs.set(id,fn);
   return Object.assign(fn, { runSupportTrainReminders: fn, runBookingReminders: fn, checkAndAlertStuckPayments: fn });
  } };

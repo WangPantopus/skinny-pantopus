@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as api from '@pantopus/api';
-import MembersPage from '../src/app/(app)/app/homes/[id]/members/page';
-import WaitingRoomPage from '../src/app/(app)/app/homes/[id]/waiting-room/page';
+import MembersPage from '../src/app/(site)/(app)/app/homes/[id]/members/page';
+import WaitingRoomPage from '../src/app/(site)/(app)/app/homes/[id]/waiting-room/page';
 
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({ useParams: () => ({ id: '10000000-0000-4000-8000-000000000001' }),

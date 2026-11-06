@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Store, Search } from 'lucide-react';
 import type { Listing, MarketplaceDiscoverResponse } from '@pantopus/api';
-import ListingCard from '@/app/(app)/app/marketplace/ListingCard';
+import ListingCard from '@/app/(site)/(app)/app/marketplace/ListingCard';
 import ListingCategoryClusterCard from './ListingCategoryClusterCard';
 import MarketplaceSectionHeader from './MarketplaceSectionHeader';
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton';

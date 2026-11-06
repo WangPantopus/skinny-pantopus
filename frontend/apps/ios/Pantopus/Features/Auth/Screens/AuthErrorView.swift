@@ -62,6 +62,8 @@ struct AuthErrorView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.Color.appSurface)
         .navigationBarHidden(true)
+        // Half folded like a book, the screen keeps to one page instead of running its buttons across the crease.
+        .readableColumnBesideFold()
         .accessibilityIdentifier("authErrorScreen")
     }
 }

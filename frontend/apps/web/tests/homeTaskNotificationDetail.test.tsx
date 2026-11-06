@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import * as api from '@pantopus/api';
-import HomeTaskPage from '../src/app/(app)/app/homes/[id]/tasks/[taskId]/page';
+import HomeTaskPage from '../src/app/(site)/(app)/app/homes/[id]/tasks/[taskId]/page';
 import HomeTaskNotificationDetail from '../src/components/home/HomeTaskNotificationDetail';
 
 const home = 'ddf18400-0000-4000-8000-000000000100';

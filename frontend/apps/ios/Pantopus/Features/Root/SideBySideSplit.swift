@@ -34,6 +34,21 @@ struct SideBySideColumnWidth {
     func fitsBeside(in width: CGFloat) -> Bool {
         width >= ideal + 375
     }
+
+    /// The ideal width in a split this wide: the narrowest where the ideal would leave the other column the smaller
+    /// side. Upright, the open Duo (669 pt) leaves 329 pt beside a 340 pt chat list, and UIKit won't put a detail
+    /// that narrow beside it: a split laid over its detail there (Mail off, after a launch open sideways or in book)
+    /// stayed that way. At 320 pt the conversation gets 349 pt, as UIKit already lays it out when it tiles.
+    func ideal(in width: CGFloat?) -> CGFloat {
+        guard let width, width - ideal < ideal else { return ideal }
+        return min
+    }
+
+    /// The column can narrow from its ideal to its minimum (`ideal(in:)`): the chat list. The Nearby tab's column
+    /// and Mail's never do.
+    var narrows: Bool {
+        min < ideal
+    }
 }
 
 /// Apple's split view with the tab's screen on the leading side. The screens draw their own headers, so the
@@ -43,18 +58,29 @@ struct SideBySideSplit<Leading: View, Detail: View>: View {
     @ViewBuilder let leading: () -> Leading
     @ViewBuilder let detail: () -> Detail
     @State private var columnVisibility = NavigationSplitViewVisibility.all
+    /// The split's width, for the leading column's ideal width. Read only for a column that narrows: the width arrives
+    /// a layout pass after a turn, and setting it laid the split out once more after the turn had settled, which took
+    /// the keyboard from a post's comment box on the Nearby tab (half folded to upright).
+    @State private var width: CGFloat?
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             leading()
                 .toolbar(removing: .sidebarToggle)
                 .toolbar(.hidden, for: .navigationBar)
-                .navigationSplitViewColumnWidth(min: leadingWidth.min, ideal: leadingWidth.ideal, max: leadingWidth.max)
+                .navigationSplitViewColumnWidth(
+                    min: leadingWidth.min,
+                    ideal: leadingWidth.ideal(in: width),
+                    max: leadingWidth.max
+                )
         } detail: {
             detail()
                 .background { KeepsColumnsBeside().accessibilityHidden(true) }
         }
         .navigationSplitViewStyle(.balanced)
+        .onGeometryChange(for: CGFloat?.self) { leadingWidth.narrows ? $0.size.width : nil } action: { newWidth in
+            if width != newWidth { width = newWidth }
+        }
     }
 }
 

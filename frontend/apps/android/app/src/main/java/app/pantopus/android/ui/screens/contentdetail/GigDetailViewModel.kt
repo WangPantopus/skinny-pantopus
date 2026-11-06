@@ -2485,6 +2485,7 @@ class GigDetailViewModel
                     rating = null,
                     trailing = handle,
                     showsMessageButton = showsButton,
+                    userId = posterId,
                 )
             }
 

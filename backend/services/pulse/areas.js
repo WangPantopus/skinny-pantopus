@@ -51,20 +51,30 @@ async function searchTowns(text) {
  */
 async function homeAreaContext(userId) {
   if (!userId) return { homes: [], primary: null, areas: [], matches: [], verifiedAreaIds: new Set() };
-  const [occupancies, preferences] = await Promise.all([
+  const [occupancies, preferences, userAreas] = await Promise.all([
     checked(db.from('HomeOccupancy').select(HOME_SELECT).eq('user_id', userId)
       .eq('is_active', true).order('created_at').order('home_id')),
     // #2280 adds default_home_id here. Reading the existing preferences row keeps this
     // compatible before that column ships and follows the choice as soon as it does.
     checked(db.from('UserNotificationPreferences').select('*').eq('user_id', userId).maybeSingle()),
+    // The areas of every home the person actively occupies, in the same round trip as those homes; only the rows of
+    // the homes found eligible below are used. Each row depends on its home alone, so these are the rows a read for
+    // the eligible homes returns.
+    checked(db.rpc('pulse_user_home_area_context', { p_user_id: userId }))
+      .then(value => ({ value }), error => ({ error })),
   ]);
   const homes = (occupancies || []).filter(eligibleHomeOccupancy)
     .map(row => ({ id: row.home_id, verified: verifiedHomeOccupancy(row),
       pendingPostcard: row.verification_status === 'pending_postcard' }));
   const primary = homes.find(home => home.id === preferences?.default_home_id) || homes[0] || null;
   if (!homes.length) return { homes, primary, areas: [], matches: [], verifiedAreaIds: new Set() };
-  // pulse_home_area_matches' rows (open areas only), each with its area's AREA_SELECT fields, in one read.
-  const rows = await checked(db.rpc('pulse_home_area_context', { p_home_ids: homes.map(home => home.id) })) || [];
+  // pulse_home_area_matches' rows (open areas only), each with its area's AREA_SELECT fields. Without
+  // pulse_user_home_area_context (a database before its migration) or when it fails, they are read for the
+  // eligible homes after all, as before.
+  const eligible = new Set(homes.map(home => home.id));
+  const rows = userAreas.error
+    ? await checked(db.rpc('pulse_home_area_context', { p_home_ids: homes.map(home => home.id) })) || []
+    : (userAreas.value || []).filter(row => eligible.has(row.home_id));
   const matches = rows.map(({ home_id, area_id, inside, distance_m }) => ({ home_id, area_id, inside, distance_m }));
   const areas = [...new Map(rows.map(row => [row.area_id, { id: row.area_id, kind: row.kind, name: row.name,
     slug: row.slug, parent_id: row.parent_id, state: row.state, opened_at: row.opened_at }])).values()];

@@ -331,8 +331,6 @@ private struct AddPortfolioItemSheet: View {
                 .accessibilityIdentifier("portfolioAddTypePicker")
             }
         }
-        // As in Edit profile: a focused field's whole box stays above the Add bar, not just its text.
-        .contentMargins(.bottom, Spacing.s4, for: .scrollContent)
         .photosPicker(isPresented: $showsPicker, selection: $selection, matching: .images)
         .onChange(of: selection) { _, newValue in
             guard let newValue else { return }

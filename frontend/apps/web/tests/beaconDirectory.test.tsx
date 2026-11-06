@@ -30,7 +30,7 @@ jest.mock('@pantopus/api', () => ({
 jest.mock('@/lib/featureFlags', () => ({
   webFeatureFlags: { persona: false },
 }));
-import Beacons from '../src/app/(app)/app/beacons/page';
+import Beacons from '../src/app/(site)/(app)/app/beacons/page';
 const item = {
   membershipId: 'm1',
   persona: {

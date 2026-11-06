@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import * as api from '@pantopus/api';
+import UserAvatarLink from '@/components/user/UserAvatarLink';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { personColor, personInitials } from '@/lib/personColor';
 import { PostMediaPreview, resolvePostMediaSlots } from './PostMediaGrid';
@@ -27,6 +28,7 @@ import { canSharePost, sharePostLink } from './sharePostLink';
 import type { AudienceProfile, Post } from '@pantopus/types';
 import { launchFeatures } from '@/lib/featureFlags';
 import { canOfferProfilePin } from '@/hooks/useProfilePin';
+import { useHydrated } from '@/hooks/useHydrated';
 
 // ─── Lucide icon lookup (platform-specific JSX — data from shared config) ──
 const LUCIDE_MAP: Record<string, LucideIcon> = {
@@ -147,6 +149,7 @@ function PostCard({
 }: PostCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [solving, setSolving] = useState(false);
+  const hydrated = useHydrated();
   const config = getPostTypeConfig(post.post_type || 'general');
   const typeIconNode = getTypeIcon(post.post_type || 'general');
   const ctaIconNode = getTypeCtaIcon(post.post_type || 'general');
@@ -185,6 +188,10 @@ function PostCard({
     post.creator?.profile_picture_url ||
     null;
   const creatorInitial = creatorName[0]?.toUpperCase() || '?';
+  // The author's photo opens the page their name links to (launch cuts #1 + #2: a Beacon author's links to none).
+  const hidesPersona = publicAuthor?.type === 'persona' && !(launchFeatures.beacon && launchFeatures.personas);
+  const authorHandle = publicAuthor?.handle || post.creator?.username || '';
+  const authorHref = hidesPersona ? null : publicAuthor?.href || (authorHandle ? `/${authorHandle}` : null);
   // City / state never lived on the typed author shape; the legacy reads
   // were always a User-row leak, gone after P0.3 narrowed the SELECT.
   const locationText = '';
@@ -222,8 +229,13 @@ function PostCard({
             <Plane className="w-3 h-3" /> Visitor
           </span>
         )}
-        <span className="text-[10px] text-app-muted">·</span>
-        <span className="text-[10px] text-app-muted">{timeAgo(post.created_at)}</span>
+        {/* "5m ago" follows the clock: shown once hydrated (hooks/useHydrated.ts). */}
+        {hydrated ? (
+          <>
+            <span className="text-[10px] text-app-muted">·</span>
+            <span className="text-[10px] text-app-muted">{timeAgo(post.created_at)}</span>
+          </>
+        ) : null}
         {post.is_edited && (
           <>
             <span className="text-[10px] text-app-muted">·</span>
@@ -244,24 +256,26 @@ function PostCard({
 
       {/* ─── Author row ──────────────────────────────── */}
       <div className="flex items-center gap-3 px-4 py-2">
-        {creatorAvatar ? (
-          <Image
-            src={creatorAvatar}
-            alt={creatorName}
-            className="w-9 h-9 rounded-full object-cover ring-2 ring-app"
-            width={36}
-            height={36}
-            sizes="36px"
-            quality={75}
-          />
-        ) : (
-          <div
-            className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold ring-2"
-            style={{ background: authorColorSeed ? personColor(authorColorSeed) : config.color }}
-          >
-            {authorColorSeed ? personInitials(creatorName) || creatorInitial : creatorInitial}
-          </div>
-        )}
+        <UserAvatarLink href={authorHref}>
+          {creatorAvatar ? (
+            <Image
+              src={creatorAvatar}
+              alt={creatorName}
+              className="w-9 h-9 rounded-full object-cover ring-2 ring-app"
+              width={36}
+              height={36}
+              sizes="36px"
+              quality={75}
+            />
+          ) : (
+            <div
+              className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold ring-2"
+              style={{ background: authorColorSeed ? personColor(authorColorSeed) : config.color }}
+            >
+              {authorColorSeed ? personInitials(creatorName) || creatorInitial : creatorInitial}
+            </div>
+          )}
+        </UserAvatarLink>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             {/* Launch cuts #1 + #2: a Beacon author's name does not link to the hidden persona page. */}

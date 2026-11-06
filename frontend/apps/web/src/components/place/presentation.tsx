@@ -9,6 +9,7 @@
 
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
+import AfterHydration from '@/components/first-content/AfterHydration';
 import {
   CloudOff,
   CloudSun,
@@ -150,6 +151,8 @@ interface SectionConfig {
   format?: (data: unknown, env: PlaceSection) => SectionFormatted;
   /** Optional freshness caption from the envelope. */
   asOf?: (env: PlaceSection) => string | undefined;
+  /** The reading is a clock time in this browser's time zone: shown once hydrated. */
+  clock?: boolean;
 }
 
 const SECTION_CONFIG: Record<PlaceSectionId, SectionConfig> = {
@@ -189,6 +192,7 @@ const SECTION_CONFIG: Record<PlaceSectionId, SectionConfig> = {
     icon: Sunrise,
     title: 'Sunrise & sunset',
     inline: true,
+    clock: true,
     format: (data) => {
       const d = data as PlaceSunriseSunsetData;
       return { value: `${fmtSunClock(d.sunrise)} · ${fmtSunClock(d.sunset)}` };
@@ -535,16 +539,20 @@ export function renderSection(env: PlaceSection, opts?: PlaceSectionRenderOption
 
   const state = cardState(env, opts);
   const reading = (state === 'loaded' || state === 'stale') && env.data ? cfg.format?.(env.data, env) ?? {} : {};
+  // Your home's gap is ours (a record still being looked up, no county records yet), never the area's:
+  // the server's sentence is the card's line.
+  const ownGap = env.id === 'your_home' && state === 'unavailable' ? env.unavailable_reason ?? undefined : undefined;
 
   return (
     <SectionCard
       icon={cfg.icon}
       title={cfg.title}
+      unavailableTitle={ownGap}
       state={state}
       inline={cfg.inline}
       sparkline={cfg.sparkline && (state === 'loaded' || state === 'stale')}
       asOf={state === 'loaded' || state === 'stale' ? cfg.asOf?.(env) : undefined}
-      value={reading.value}
+      value={cfg.clock && reading.value != null ? <AfterHydration>{reading.value}</AfterHydration> : reading.value}
       chip={reading.chip}
       statusDot={reading.statusDot}
       caption={state === 'unavailable' ? env.unavailable_reason ?? undefined : reading.caption}
