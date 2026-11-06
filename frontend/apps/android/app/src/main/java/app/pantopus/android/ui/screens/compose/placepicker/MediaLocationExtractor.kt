@@ -5,16 +5,23 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.exifinterface.media.ExifInterface
 import java.io.ByteArrayInputStream
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 
 /**
- * A media attachment's capture coordinate — where the photo/video was
- * TAKEN, read from its own metadata. Mirrors the iOS
- * `MediaCaptureLocation` value type 1:1.
+ * A media attachment's capture coordinate — where (and, when the metadata
+ * says, when) the photo/video was TAKEN, read from its own metadata.
+ * Mirrors the iOS `MediaCaptureLocation` value type 1:1.
  */
 data class MediaCaptureLocation(
     val latitude: Double,
     val longitude: Double,
+    /** The GPS time stamp, else the camera's capture time; null when the file carries neither. */
+    val capturedAt: Instant? = null,
 )
 
 /**
@@ -22,9 +29,13 @@ data class MediaCaptureLocation(
  * anchor its NEARBY suggestions on where the photo or video was taken
  * (Instagram parity), not only on where the user is right now.
  *
- * PRIVACY RULE: media GPS is a LOCAL picker anchor only. It is NEVER
- * auto-attached to an outgoing post or broadcast body — those carry only
- * the venue the user explicitly picks, exactly as before.
+ * PRIVACY RULE (founder decision, 2026-11-05): where an attachment was
+ * taken anchors the picker's "Photo location" suggestions, and it is sent
+ * with a Place post (`mediaLocations`) as evidence that the author was at
+ * the place, the way a fresh GPS fix is. The backend uses it for the Place
+ * check and the post's pin (the tagged venue, or the capture point for a
+ * town tag; no exact pin within 150 m of the author's home) and keeps no
+ * other copy of the points.
  *
  * Platform reality: both composers receive system-photo-picker URIs
  * (`PickMultipleVisualMedia`), and on API 29+ the platform REDACTS
@@ -43,10 +54,37 @@ object MediaLocationExtractor {
      */
     fun fromImageBytes(bytes: ByteArray): MediaCaptureLocation? =
         runCatching {
-            ExifInterface(ByteArrayInputStream(bytes)).latLong?.let { coords ->
-                validated(latitude = coords[0], longitude = coords[1])
+            val exif = ExifInterface(ByteArrayInputStream(bytes))
+            exif.latLong?.let { coords ->
+                validated(latitude = coords[0], longitude = coords[1], capturedAt = gpsTime(exif) ?: cameraTime(exif))
             }
         }.getOrNull()
+
+    /** The GPS block's own UTC time ("2026:11:02" + "18:04:31"). */
+    private fun gpsTime(exif: ExifInterface): Instant? {
+        val day = exif.getAttribute(ExifInterface.TAG_GPS_DATESTAMP) ?: return null
+        val time = exif.getAttribute(ExifInterface.TAG_GPS_TIMESTAMP)?.substringBefore('.') ?: return null
+        return runCatching { LocalDateTime.parse("$day $time", EXIF_TIME).toInstant(ZoneOffset.UTC) }.getOrNull()
+    }
+
+    /** The camera's capture time, in its recorded offset ("-07:00") when there is one, else the phone's zone. */
+    private fun cameraTime(exif: ExifInterface): Instant? {
+        val raw = exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL) ?: return null
+        return runCatching {
+            val local = LocalDateTime.parse(raw, EXIF_TIME)
+            val offset =
+                exif.getAttribute(ExifInterface.TAG_OFFSET_TIME_ORIGINAL)?.let { runCatching { ZoneOffset.of(it) }.getOrNull() }
+            if (offset != null) local.toInstant(offset) else local.atZone(ZoneId.systemDefault()).toInstant()
+        }.getOrNull()
+    }
+
+    /** A video's creation date ("20261102T180431.000Z"; some writers drop the milliseconds). */
+    private fun videoTime(raw: String?): Instant? {
+        val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return VIDEO_TIMES.firstNotNullOfOrNull { format ->
+            runCatching { LocalDateTime.parse(value, format).toInstant(ZoneOffset.UTC) }.getOrNull()
+        }
+    }
 
     /**
      * ISO-6709 location atom off a picked video.
@@ -65,6 +103,7 @@ object MediaLocationExtractor {
                 retriever
                     .extractMetadata(MediaMetadataRetriever.METADATA_KEY_LOCATION)
                     ?.let(::parseIso6709)
+                    ?.copy(capturedAt = videoTime(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DATE)))
             } finally {
                 retriever.release()
             }
@@ -87,11 +126,14 @@ object MediaLocationExtractor {
     private fun validated(
         latitude: Double,
         longitude: Double,
+        capturedAt: Instant? = null,
     ): MediaCaptureLocation? {
         val latitudeValid = latitude.isFinite() && abs(latitude) <= MAX_LATITUDE
         val longitudeValid = longitude.isFinite() && abs(longitude) <= MAX_LONGITUDE
-        return if (latitudeValid && longitudeValid) {
-            MediaCaptureLocation(latitude = latitude, longitude = longitude)
+        // 0, 0 is where a missing fix lands, not a photo from the Gulf of Guinea.
+        val placed = latitude != 0.0 || longitude != 0.0
+        return if (latitudeValid && longitudeValid && placed) {
+            MediaCaptureLocation(latitude = latitude, longitude = longitude, capturedAt = capturedAt)
         } else {
             null
         }
@@ -101,4 +143,10 @@ object MediaLocationExtractor {
     private val ISO_6709_PREFIX = Regex("""^([+-]\d+(?:\.\d+)?)([+-]\d+(?:\.\d+)?)""")
     private const val MAX_LATITUDE = 90.0
     private const val MAX_LONGITUDE = 180.0
+    private val EXIF_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy:MM:dd HH:mm:ss")
+    private val VIDEO_TIMES: List<DateTimeFormatter> =
+        listOf(
+            DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss.SSS'Z'"),
+            DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'"),
+        )
 }

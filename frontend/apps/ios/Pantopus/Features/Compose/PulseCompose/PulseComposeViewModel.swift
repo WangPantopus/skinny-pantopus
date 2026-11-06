@@ -208,10 +208,12 @@ public enum PulseAskCategory: String, CaseIterable, Sendable, Hashable {
 public struct PulseComposePhoto: Identifiable, Sendable, Hashable {
     public let id: UUID
     public let data: Data
-    /// Where the photo was captured (EXIF GPS), when present. A local
-    /// place-picker anchor hint ONLY — never sent on any request.
+    /// Where (and when) the photo or video was captured, from its own
+    /// metadata, or the device fix when the in-app camera took it. Anchors
+    /// the place picker and rides a Place post as `mediaLocations`.
     public let capturedLatitude: Double?
     public let capturedLongitude: Double?
+    public let capturedAt: Date?
     public let mimeType: String?
     public let filename: String?
     public let liveVideo: Data?
@@ -221,6 +223,7 @@ public struct PulseComposePhoto: Identifiable, Sendable, Hashable {
         data: Data,
         capturedLatitude: Double? = nil,
         capturedLongitude: Double? = nil,
+        capturedAt: Date? = nil,
         mimeType: String? = nil,
         filename: String? = nil,
         liveVideo: Data? = nil
@@ -229,6 +232,7 @@ public struct PulseComposePhoto: Identifiable, Sendable, Hashable {
         self.data = data
         self.capturedLatitude = capturedLatitude
         self.capturedLongitude = capturedLongitude
+        self.capturedAt = capturedAt
         self.mimeType = mimeType
         self.filename = filename
         self.liveVideo = liveVideo
@@ -293,8 +297,12 @@ public final class PulseComposeViewModel {
     /// New Deals default to one week; existing network posts can omit expiry.
     public var dealExpiresAt: Date? = Date().addingTimeInterval(7 * 86400)
 
-    /// Place-eligibility warning surfaced as a banner on the draft step.
+    /// Place-eligibility warning surfaced as a banner on the draft step
+    /// (in the Location section when a place is tagged).
     public private(set) var eligibilityWarning: String?
+    /// Which way in the check counted (`resident`, `business`, `gps` or
+    /// `photo`), when the draft may post to its place.
+    public private(set) var eligibilityBasis: String?
     /// The place was checked to its end; a screen rebuilt by a fold or a turn doesn't check it again.
     @ObservationIgnored private var eligibilityChecked = false
 
@@ -618,19 +626,87 @@ public final class PulseComposeViewModel {
         photos.removeAll { $0.id == id }
     }
 
+    /// A photo the in-app camera just took. Re-encoding dropped its
+    /// metadata, so it has no place of its own; `stampCameraPhoto` gives
+    /// it the device fix, which is where it was taken.
+    @discardableResult
+    public func appendCameraPhoto(data: Data, filename: String) -> UUID {
+        let photo = PulseComposePhoto(data: data, mimeType: "image/jpeg", filename: filename)
+        append(photo: photo)
+        return photo.id
+    }
+
+    /// Stamp a camera photo with the device fix — only when one can be had
+    /// without a permission prompt, so taking a photo never asks for location.
+    public func stampCameraPhoto(_ id: UUID) async {
+        let takenAt = Date()
+        guard locationProvider.canLocateWithoutAsking,
+              let fix = await locationProvider.requestCurrent(timeoutSeconds: 3),
+              let index = photos.firstIndex(where: { $0.id == id })
+        else { return }
+        let photo = photos[index]
+        photos[index] = PulseComposePhoto(
+            id: photo.id,
+            data: photo.data,
+            capturedLatitude: fix.latitude,
+            capturedLongitude: fix.longitude,
+            capturedAt: takenAt,
+            mimeType: photo.mimeType,
+            filename: photo.filename,
+            liveVideo: photo.liveVideo
+        )
+    }
+
     /// Capture location of the FIRST geotagged attachment — passed to
     /// `PlacePickerSheet` as its "Photo location" anchor. Derived from
     /// `photos`, so it recomputes on every add / remove and clears when
-    /// the last geotagged photo goes. PRIVACY: a local picker anchor
-    /// ONLY — never attached to the outgoing request (`applyPlaceTag`
-    /// sends just the explicitly picked venue).
+    /// the last geotagged photo goes. PRIVACY: it never becomes the
+    /// post's place by itself (`applyPlaceTag` sends just the explicitly
+    /// picked venue); the capture points ride only as Place-check
+    /// evidence (`draftMediaLocations`).
     public var mediaCaptureLocation: MediaCaptureLocation? {
         for photo in photos {
             if let latitude = photo.capturedLatitude, let longitude = photo.capturedLongitude {
-                return MediaCaptureLocation(latitude: latitude, longitude: longitude)
+                return MediaCaptureLocation(latitude: latitude, longitude: longitude, capturedAt: photo.capturedAt)
             }
         }
         return nil
+    }
+
+    /// Every geotagged attachment's capture point, as `mediaLocations` sends it.
+    var draftMediaLocations: [PostMediaLocation] {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return photos.compactMap { photo in
+            guard let latitude = photo.capturedLatitude, let longitude = photo.capturedLongitude else { return nil }
+            return PostMediaLocation(
+                latitude: latitude,
+                longitude: longitude,
+                capturedAt: photo.capturedAt.map { formatter.string(from: $0) }
+            )
+        }
+    }
+
+    /// The attachment taken nearest a point — what the precheck sends.
+    private func nearestMediaLocation(latitude: Double, longitude: Double) -> PostMediaLocation? {
+        draftMediaLocations.min { lhs, rhs in
+            squaredDegrees(lhs, latitude, longitude) < squaredDegrees(rhs, latitude, longitude)
+        }
+    }
+
+    private func squaredDegrees(_ media: PostMediaLocation, _ latitude: Double, _ longitude: Double) -> Double {
+        let dLat = media.latitude - latitude
+        let dLng = (media.longitude - longitude) * cos(latitude * .pi / 180)
+        return dLat * dLat + dLng * dLng
+    }
+
+    /// What the Place check depends on: the place the post would go to,
+    /// the attachments' capture points and the audience. The view re-runs
+    /// `checkPlaceEligibility()` when it changes.
+    public var placeEligibilityKey: String {
+        let point = eligibilityPoint().map { "\($0.latitude),\($0.longitude)" } ?? "-"
+        let media = draftMediaLocations.map { "\($0.latitude),\($0.longitude),\($0.capturedAt ?? "")" }
+        return ([point, effectiveAudience, effectivePostType] + media).joined(separator: "|")
     }
 
     // MARK: - Place tag
@@ -1221,6 +1297,11 @@ public final class PulseComposeViewModel {
         // LAST step — an explicitly tagged place overrides the flow
         // target's location so the picked venue wins.
         applyPlaceTag(to: &request)
+        // A Place post carries where its attachments were taken: evidence
+        // that the author was there, like the GPS fix.
+        if businessAuthorId == nil, audience == "nearby", !draftMediaLocations.isEmpty {
+            request.mediaLocations = draftMediaLocations
+        }
         return request
     }
 
@@ -1544,30 +1625,60 @@ public final class PulseComposeViewModel {
         return (nil, nil)
     }
 
-    /// Check whether the signed-in user can post to the selected place.
-    /// Surfaces a warning banner instead of letting the submit 403.
+    /// Where a Place post would go: the tagged place when there is one
+    /// (it wins in `buildRequest`), else a place target's own point. Nil
+    /// when the draft isn't going to a place.
+    private func eligibilityPoint() -> (latitude: Double, longitude: Double)? {
+        guard !isEditing, businessAuthorId == nil, effectiveAudience == "nearby" else { return nil }
+        if postingTarget.map({ !$0.isPlaceTarget }) == true { return nil }
+        if let tag = selectedPlaceTag { return (tag.latitude, tag.longitude) }
+        guard let target = postingTarget, let lat = target.latitude, let lon = target.longitude else { return nil }
+        return (lat, lon)
+    }
+
+    /// Check whether the signed-in user can post to the selected place —
+    /// the tagged place when there is one — counting where the draft's
+    /// attachments were taken. Surfaces a warning instead of letting the
+    /// submit 403.
     public func checkPlaceEligibility() async {
-        guard let target = postingTarget, target.isPlaceTarget,
-              let lat = target.latitude, let lon = target.longitude else { return }
+        guard let point = eligibilityPoint() else {
+            eligibilityWarning = nil
+            eligibilityBasis = nil
+            return
+        }
         if eligibilityChecked, screens.isRebuilding { return }
         eligibilityChecked = false
         defer { eligibilityChecked = !Task.isCancelled }
-        let gps = gpsFields(for: target)
+        let gps = postingTarget.map(gpsFields(for:)) ?? GPSFields(timestamp: nil, latitude: nil, longitude: nil)
         do {
             let response: PlaceEligibilityResponse = try await api.request(
                 PostsEndpoints.placeEligibility(
-                    latitude: lat,
-                    longitude: lon,
+                    latitude: point.latitude,
+                    longitude: point.longitude,
                     gpsTimestamp: gps.timestamp,
                     gpsLatitude: gps.latitude,
-                    gpsLongitude: gps.longitude
+                    gpsLongitude: gps.longitude,
+                    media: nearestMediaLocation(latitude: point.latitude, longitude: point.longitude),
+                    postType: effectivePostType
                 )
             )
+            guard !Task.isCancelled else { return }
             eligibilityWarning = response.eligible ? nil : response.reason
+            eligibilityBasis = response.eligible ? response.basis : nil
         } catch {
             // Non-blocking — the submit path still reports real errors.
+            guard !Task.isCancelled else { return }
             eligibilityWarning = nil
+            eligibilityBasis = nil
         }
+    }
+
+    /// The refused draft's way forward: share it with connections, which
+    /// isn't a Place post.
+    public func shareWithConnectionsInstead() {
+        visibility = .connections
+        eligibilityWarning = nil
+        eligibilityBasis = nil
     }
 
     /// Build the `PATCH /api/posts/:id` body from the active intent's

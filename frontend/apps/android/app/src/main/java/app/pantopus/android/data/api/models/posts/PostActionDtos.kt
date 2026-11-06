@@ -60,12 +60,14 @@ data class PostActionAckResponse(
     val message: String? = null,
 )
 
-/** `GET /api/posts/place-eligibility` response — `backend/routes/posts.js:1941`. */
+/** `GET /api/posts/place-eligibility` response — `backend/routes/posts.js:2276`. */
 @JsonClass(generateAdapter = true)
 data class PlaceEligibilityResponse(
     val eligible: Boolean,
     val readOnly: Boolean? = null,
     val reason: String? = null,
+    /** Which way in counted: `resident`, `business`, `gps` or `photo`. */
+    val basis: String? = null,
     val trustLevel: String? = null,
 )
 

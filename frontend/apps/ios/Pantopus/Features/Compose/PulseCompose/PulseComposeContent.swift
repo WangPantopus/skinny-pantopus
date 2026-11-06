@@ -27,6 +27,9 @@ public struct PulseComposeContentState: Equatable {
     public var recommendRating: Int
     public var dealExpiresAt: Date?
     public var eligibilityWarning: String?
+    /// The draft may post to its tagged place because an attachment was
+    /// taken there (the Place check's `photo` basis).
+    public var isPhotoPlaced: Bool
     /// Soft nudge from `POST /api/posts/precheck` — dismissible.
     public var precheckNudge: String?
     /// Cooldown copy when the viewer is rate-limited / restricted.
@@ -71,6 +74,7 @@ public struct PulseComposeContentState: Equatable {
         recommendRating: Int = 5,
         dealExpiresAt: Date? = Date().addingTimeInterval(7 * 86400),
         eligibilityWarning: String? = nil,
+        isPhotoPlaced: Bool = false,
         precheckNudge: String? = nil,
         precheckCooldown: String? = nil,
         isVisitorPost: Bool = false,
@@ -100,6 +104,7 @@ public struct PulseComposeContentState: Equatable {
         self.recommendRating = recommendRating
         self.dealExpiresAt = dealExpiresAt
         self.eligibilityWarning = eligibilityWarning
+        self.isPhotoPlaced = isPhotoPlaced
         self.precheckNudge = precheckNudge
         self.precheckCooldown = precheckCooldown
         self.isVisitorPost = isVisitorPost
@@ -149,6 +154,8 @@ public struct PulseComposeContentActions {
     public var onAddLocation: () -> Void
     /// ✕ on the filled location row.
     public var onClearLocation: () -> Void
+    /// The refused draft's way forward: share it with connections instead.
+    public var onShareWithConnections: () -> Void
     /// A "Before you ask" row: opens that earlier post.
     public var onOpenEarlierPost: (String) -> Void
     /// The AI assist: suggest the whole post from the photos, the place and the words.
@@ -182,6 +189,7 @@ public struct PulseComposeContentActions {
         onDismissPrecheckNudge: @escaping () -> Void = {},
         onAddLocation: @escaping () -> Void = {},
         onClearLocation: @escaping () -> Void = {},
+        onShareWithConnections: @escaping () -> Void = {},
         onOpenEarlierPost: @escaping (String) -> Void = { _ in },
         onSuggest: @escaping () -> Void = {},
         onUndoSuggestion: @escaping () -> Void = {},
@@ -209,6 +217,7 @@ public struct PulseComposeContentActions {
         self.onDismissPrecheckNudge = onDismissPrecheckNudge
         self.onAddLocation = onAddLocation
         self.onClearLocation = onClearLocation
+        self.onShareWithConnections = onShareWithConnections
         self.onOpenEarlierPost = onOpenEarlierPost
         self.onSuggest = onSuggest
         self.onUndoSuggestion = onUndoSuggestion
@@ -345,7 +354,8 @@ public struct PulseComposeContent: View {
             .padding(.horizontal, Spacing.s4)
             .accessibilityIdentifier("composePulsePostingBanner")
         }
-        if let warning = state.eligibilityWarning {
+        // A tagged place's check shows under the place, in the Location section.
+        if let warning = state.eligibilityWarning, state.selectedPlaceTag == nil {
             HStack(alignment: .top, spacing: Spacing.s2) {
                 Icon(.alertCircle, size: 16, strokeWidth: 2, color: Theme.Color.warning)
                 Text(warning)
@@ -382,7 +392,8 @@ public struct PulseComposeContent: View {
             .padding(.horizontal, Spacing.s4)
             .accessibilityIdentifier("composePulsePrecheckCooldown")
         }
-        if state.isVisitorPost {
+        // A photo-placed post shows "Photo taken here", not a visitor badge (the Location section says so).
+        if state.isVisitorPost, !state.isPhotoPlaced {
             HStack(alignment: .top, spacing: Spacing.s2) {
                 Icon(.plane, size: 16, strokeWidth: 2, color: Theme.Color.success)
                 Text("You're posting as a visitor. Your post will show a visitor badge.")
@@ -1132,10 +1143,63 @@ public struct PulseComposeContent: View {
         FormFieldGroup("Location (optional)") {
             if let tag = state.selectedPlaceTag {
                 selectedLocationRow(tag)
+                if let warning = state.eligibilityWarning {
+                    locationRefusal(warning)
+                } else if state.isPhotoPlaced {
+                    photoPlacedNote
+                }
             } else {
                 addLocationRow
             }
         }
+    }
+
+    /// Why the draft can't go to the tagged place, and a way forward.
+    private func locationRefusal(_ warning: String) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            HStack(alignment: .top, spacing: Spacing.s2) {
+                Icon(.alertCircle, size: 16, strokeWidth: 2, color: Theme.Color.warning)
+                Text(warning)
+                    .pantopusTextStyle(.caption)
+                    .foregroundStyle(Theme.Color.appText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if state.isFlowMode, state.visibility != .connections {
+                Button(action: actions.onShareWithConnections) {
+                    Text("Share with your connections instead")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.Color.primaryInk)
+                        .frame(minHeight: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, Spacing.s5)
+                .accessibilityIdentifier("composePulseShareWithConnections")
+            }
+        }
+        .padding(Spacing.s3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Color.warningBg)
+        .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("composePulseLocationEligibilityWarning")
+    }
+
+    /// The draft may post here because one of its attachments was taken here.
+    private var photoPlacedNote: some View {
+        HStack(alignment: .top, spacing: Spacing.s2) {
+            Icon(.camera, size: 16, strokeWidth: 2, color: Theme.Color.success)
+            Text("Your photo was taken here, so you can post to this place. Your post will say \u{201C}Photo taken here.\u{201D}")
+                .pantopusTextStyle(.caption)
+                .foregroundStyle(Theme.Color.success)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(Spacing.s3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Color.successBg)
+        .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("composePulsePhotoPlacedNote")
     }
 
     private var addLocationRow: some View {
@@ -1205,8 +1269,15 @@ public struct PulseComposeContent: View {
         }
     }
 
+    /// A tagged place's neighbors are the people near that place, not near the author.
+    private func visibilityCaption(_ option: PulseComposeVisibility) -> String? {
+        guard option == .neighbors, let place = state.selectedPlaceTag?.name, !place.isEmpty else { return nil }
+        return "People near \(place)"
+    }
+
     private func visibilityRow(_ option: PulseComposeVisibility) -> some View {
         let active = state.visibility == option
+        let caption = visibilityCaption(option)
         return Button { actions.onSelectVisibility(option) } label: {
             HStack(spacing: Spacing.s2) {
                 ZStack {
@@ -1219,16 +1290,24 @@ public struct PulseComposeContent: View {
                             .frame(width: 10, height: 10)
                     }
                 }
-                Text(option.label)
-                    .pantopusTextStyle(.body)
-                    .foregroundStyle(Theme.Color.appText)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(option.label)
+                        .pantopusTextStyle(.body)
+                        .foregroundStyle(Theme.Color.appText)
+                    if let caption {
+                        Text(caption)
+                            .pantopusTextStyle(.caption)
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                            .lineLimit(1)
+                    }
+                }
                 Spacer()
             }
             .padding(.horizontal, Spacing.s2)
             .frame(minHeight: 44)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(option.label)
+        .accessibilityLabel(caption.map { "\(option.label), \($0)" } ?? option.label)
         .accessibilityAddTraits(active ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier("composePulseVisibility_\(option.rawValue)")
     }

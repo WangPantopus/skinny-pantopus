@@ -5,6 +5,7 @@ package app.pantopus.android.ui.screens.compose.pulse
 import android.Manifest
 import android.app.DatePickerDialog
 import android.content.ContentResolver
+import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -135,6 +136,7 @@ fun PulseComposeScreen(
     val lostFoundContactPref by viewModel.lostFoundContactPref.collectAsStateWithLifecycle()
     val dealExpiresAt by viewModel.dealExpiresAt.collectAsStateWithLifecycle()
     val eligibilityWarning by viewModel.eligibilityWarning.collectAsStateWithLifecycle()
+    val eligibilityBasis by viewModel.eligibilityBasis.collectAsStateWithLifecycle()
     val precheckNudge by viewModel.precheckNudge.collectAsStateWithLifecycle()
     val precheckCooldown by viewModel.precheckCooldown.collectAsStateWithLifecycle()
     val isVisitorPost by viewModel.isVisitorPost.collectAsStateWithLifecycle()
@@ -165,6 +167,12 @@ fun PulseComposeScreen(
         if (businessAuthorId != null) {
             viewModel.applyBusinessAuthor(businessAuthorId)
         }
+    }
+
+    // The Place check runs again when the tagged place, the attachments' capture points or the audience change.
+    val capturePoints = photos.mapNotNull { photo -> photo.capturedLatitude?.let { "$it,${photo.capturedLongitude}" } }
+    LaunchedEffect(selectedPlaceTag, capturePoints, visibility) {
+        if (!viewModel.isEditing) viewModel.checkPlaceEligibility()
     }
 
     LaunchedEffect(Unit) {
@@ -252,6 +260,7 @@ fun PulseComposeScreen(
                                 lostFoundContactPref = lostFoundContactPref,
                                 dealExpiresAt = dealExpiresAt,
                                 eligibilityWarning = eligibilityWarning,
+                                isPhotoPlaced = eligibilityBasis == "photo",
                                 precheckNudge = precheckNudge,
                                 precheckCooldown = precheckCooldown,
                                 isVisitorPost = isVisitorPost,
@@ -296,6 +305,7 @@ fun PulseComposeScreen(
                                 onDismissPrecheckNudge = viewModel::dismissPrecheckNudge,
                                 onAddLocation = { showPlacePicker = true },
                                 onClearLocation = viewModel::clearPlaceTag,
+                                onShareWithConnections = viewModel::shareWithConnectionsInstead,
                                 onOpenEarlierPost = onOpenPost,
                                 onSuggest = viewModel::suggestPost,
                                 onUndoSuggestion = viewModel::undoSuggestion,
@@ -355,11 +365,12 @@ fun PulseComposeScreen(
 }
 
 private fun readAttachment(
-    resolver: ContentResolver,
+    context: Context,
     uri: Uri,
     mimeOverride: String? = null,
 ): PulseComposePhoto? =
     runCatching {
+        val resolver = context.contentResolver
         val mime = mimeOverride ?: resolver.getType(uri) ?: ""
         val maxBytes =
             when {
@@ -370,13 +381,19 @@ private fun readAttachment(
             }
         val bytes = readBytes(resolver, uri, maxBytes)
         require(bytes != null && bytes.isNotEmpty())
-        val captured = if (mime.startsWith("image/")) MediaLocationExtractor.fromImageBytes(bytes) else null
+        val captured =
+            when {
+                mime.startsWith("image/") -> MediaLocationExtractor.fromImageBytes(bytes)
+                mime.startsWith("video/") -> MediaLocationExtractor.fromVideoUri(context, uri)
+                else -> null
+            }
         PulseComposePhoto(
             id = UUID.randomUUID().toString(),
             data = bytes,
             capturedLatitude = captured?.latitude,
             capturedLongitude = captured?.longitude,
             mimeType = mime,
+            capturedAt = captured?.capturedAt,
         )
     }.getOrNull()
 
@@ -432,7 +449,7 @@ private fun rememberPulseComposeMedia(
             val requested = uris.take(PULSE_COMPOSE_MAX_PHOTOS - photoCount)
             onLoading(requested.isNotEmpty())
             scope.launch {
-                val loaded = withContext(Dispatchers.IO) { requested.mapNotNull { readAttachment(context.contentResolver, it) } }
+                val loaded = withContext(Dispatchers.IO) { requested.mapNotNull { readAttachment(context, it) } }
                 added(loaded, requested.size)
             }
         }
@@ -449,11 +466,13 @@ private fun rememberPulseComposeMedia(
             scope.launch {
                 val photo =
                     withContext(Dispatchers.IO) {
-                        val read = captured?.let { readAttachment(context.contentResolver, Uri.fromFile(it), mimeOverride = "image/jpeg") }
+                        val read = captured?.let { readAttachment(context, Uri.fromFile(it), mimeOverride = "image/jpeg") }
                         file?.delete()
                         read
                     }
                 added(listOfNotNull(photo), if (captured != null) 1 else 0)
+                // Taken here and now: without the camera app's own GPS, the device fix says where.
+                if (photo != null && photo.capturedLatitude == null) viewModel.stampCameraPhoto(photo.id)
             }
         }
     // CAMERA is declared in the manifest, so the camera app needs the runtime grant. A refusal skips the capture.
@@ -509,6 +528,8 @@ internal data class PulseComposeContentState(
     val lostFoundContactPref: PulseLostFoundContactPref = PulseLostFoundContactPref.Dm,
     val dealExpiresAt: LocalDateTime? = LocalDateTime.now().plusDays(7),
     val eligibilityWarning: String? = null,
+    /** The draft may post to its tagged place because an attachment was taken there (the check's `photo` basis). */
+    val isPhotoPlaced: Boolean = false,
     /** Soft nudge from `POST /api/posts/precheck` — dismissible. */
     val precheckNudge: String? = null,
     /** Cooldown copy when the viewer is rate-limited / restricted. */
@@ -570,6 +591,8 @@ internal data class PulseComposeActions(
     val onAddLocation: () -> Unit = {},
     /** ✕ on the set-tag row — clears the venue tag. */
     val onClearLocation: () -> Unit = {},
+    /** The refused draft's way forward: share it with connections instead. */
+    val onShareWithConnections: () -> Unit = {},
     /** A "Before you ask" row: opens that earlier post. */
     val onOpenEarlierPost: (String) -> Unit = {},
     /** The AI assist: suggest the whole post from the photos, the place and the words. */
@@ -606,7 +629,12 @@ private fun PulseComposeBodySections(
     actions: PulseComposeActions,
 ) {
     if (state.isFlowMode) {
-        FlowContextHeader(state.composePurpose, state.postingTargetLabel, state.eligibilityWarning)
+        // A tagged place's check shows under the place, in the Location section.
+        FlowContextHeader(
+            state.composePurpose,
+            state.postingTargetLabel,
+            state.eligibilityWarning.takeIf { state.selectedPlaceTag == null },
+        )
     } else {
         IntentPicker(
             active = state.activeIntent,
@@ -617,7 +645,8 @@ private fun PulseComposeBodySections(
     }
     PrecheckBanners(
         cooldown = state.precheckCooldown,
-        isVisitorPost = state.isVisitorPost,
+        // A photo-placed post shows "Photo taken here", not a visitor badge (the Location section says so).
+        isVisitorPost = state.isVisitorPost && !state.isPhotoPlaced,
         nudge = state.precheckNudge,
         onDismissNudge = actions.onDismissPrecheckNudge,
     )
@@ -655,11 +684,24 @@ private fun PulseComposeBodySections(
             tag = state.selectedPlaceTag,
             onAdd = actions.onAddLocation,
             onClear = actions.onClearLocation,
+            note =
+                PlaceCheckNote(
+                    warning = state.eligibilityWarning,
+                    isPhotoPlaced = state.isPhotoPlaced,
+                    onShareWithConnections =
+                        actions.onShareWithConnections.takeIf {
+                            state.isFlowMode && state.visibility != PulseComposeVisibility.Connections
+                        },
+                ),
         )
     }
     // The audience is fixed after posting (edits don't send it), so edit mode shows no selector, like web.
     if (!state.isIntentLocked && !state.isNetworkTarget) {
-        VisibilitySection(active = state.visibility, onSelect = actions.selection.onSelectVisibility)
+        VisibilitySection(
+            active = state.visibility,
+            onSelect = actions.selection.onSelectVisibility,
+            taggedPlace = state.selectedPlaceTag?.name,
+        )
     }
 }
 
@@ -1631,6 +1673,7 @@ private fun LocationSection(
     tag: PostPlaceTag?,
     onAdd: () -> Unit,
     onClear: () -> Unit,
+    note: PlaceCheckNote = PlaceCheckNote(),
 ) {
     FormFieldGroup("Location (optional)") {
         if (tag == null) {
@@ -1721,6 +1764,63 @@ private fun LocationSection(
                     )
                 }
             }
+            PlaceCheckNoteRow(note)
+        }
+    }
+}
+
+private const val PHOTO_PLACED_NOTE =
+    "Your photo was taken here, so you can post to this place. Your post will say \u201CPhoto taken here.\u201D"
+
+/** What the Place check said about the tagged place, with the refused draft's way forward. */
+private data class PlaceCheckNote(
+    val warning: String? = null,
+    val isPhotoPlaced: Boolean = false,
+    val onShareWithConnections: (() -> Unit)? = null,
+)
+
+@Composable
+private fun PlaceCheckNoteRow(note: PlaceCheckNote) {
+    val warning = note.warning
+    if (warning == null && !note.isPhotoPlaced) return
+    Column(
+        modifier =
+            Modifier
+                .padding(top = Spacing.s2)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Radii.md))
+                .background(if (warning != null) PantopusColors.warningBg else PantopusColors.successBg)
+                .padding(Spacing.s3)
+                .testTag(if (warning != null) "composePulseLocationEligibilityWarning" else "composePulsePhotoPlacedNote"),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            PantopusIconImage(
+                icon = if (warning != null) PantopusIcon.AlertCircle else PantopusIcon.Camera,
+                contentDescription = null,
+                size = 16.dp,
+                strokeWidth = 2f,
+                tint = if (warning != null) PantopusColors.warning else PantopusColors.success,
+            )
+            Text(
+                text = warning ?: PHOTO_PLACED_NOTE,
+                style = PantopusTextStyle.caption,
+                color = if (warning != null) PantopusColors.appText else PantopusColors.success,
+            )
+        }
+        val share = note.onShareWithConnections
+        if (warning != null && share != null) {
+            Text(
+                text = "Share with your connections instead",
+                style = PantopusTextStyle.caption.copy(fontWeight = FontWeight.SemiBold),
+                color = PantopusColors.primary700,
+                modifier =
+                    Modifier
+                        .padding(start = Spacing.s5)
+                        .heightIn(min = 32.dp)
+                        .clickable(onClick = share)
+                        .testTag("composePulseShareWithConnections"),
+            )
         }
     }
 }
@@ -1729,11 +1829,15 @@ private fun LocationSection(
 private fun VisibilitySection(
     active: PulseComposeVisibility,
     onSelect: (PulseComposeVisibility) -> Unit,
+    taggedPlace: String? = null,
 ) {
     FormFieldGroup("Who can see this") {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             PulseComposeVisibility.entries.forEach { option ->
-                VisibilityRow(option = option, isActive = option == active, onSelect = onSelect)
+                // A tagged place's neighbors are the people near that place, not near the author.
+                val caption =
+                    taggedPlace?.takeIf { option == PulseComposeVisibility.Neighbors && it.isNotBlank() }?.let { "People near $it" }
+                VisibilityRow(option = option, isActive = option == active, onSelect = onSelect, caption = caption)
             }
         }
     }
@@ -1744,6 +1848,7 @@ private fun VisibilityRow(
     option: PulseComposeVisibility,
     isActive: Boolean,
     onSelect: (PulseComposeVisibility) -> Unit,
+    caption: String? = null,
 ) {
     Row(
         modifier =
@@ -1753,7 +1858,7 @@ private fun VisibilityRow(
                 .clickable { onSelect(option) }
                 .padding(horizontal = Spacing.s2)
                 .testTag("composePulseVisibility_${option.key}")
-                .semantics { contentDescription = option.label },
+                .semantics { contentDescription = caption?.let { "${option.label}, $it" } ?: option.label },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
@@ -1779,11 +1884,16 @@ private fun VisibilityRow(
                 )
             }
         }
-        Text(
-            text = option.label,
-            style = PantopusTextStyle.body,
-            color = PantopusColors.appText,
-        )
+        Column {
+            Text(
+                text = option.label,
+                style = PantopusTextStyle.body,
+                color = PantopusColors.appText,
+            )
+            caption?.let {
+                Text(text = it, style = PantopusTextStyle.caption, color = PantopusColors.appTextSecondary, maxLines = 1)
+            }
+        }
     }
 }
 
