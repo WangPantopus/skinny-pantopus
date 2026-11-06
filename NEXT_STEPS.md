@@ -808,8 +808,9 @@ status), and the 42 screens are on the [Crew Day designs canvas](https://claude.
   1. Rename the migration so it sorts after master's newest (`20261105120000_pulse_user_home_area_context.sql` on
      November 6), and check it with `MIGRATION_BASE_SHA=$(git rev-parse origin/master) node scripts/db/check-migrations.cjs`.
   2. Merge `crew-day` into `master`. That deploys the server, runs the migration on the production database and
-     deploys the web to pantopus.com, with Crew Day still off. On November 6 `master` was 82 commits ahead, and the
-     two merged without conflicts.
+     deploys the web to pantopus.com, with Crew Day still off. Bring `master` into `crew-day` first. On November 6
+     `master` was 98 commits ahead, and only the iOS and Android deep-link routers conflicted: both sides add link
+     cases, so keep both.
   3. To turn it on, add `crew_day` to `LAUNCH_FEATURES` (server), `NEXT_PUBLIC_LAUNCH_FEATURES` (Vercel) and
      `PANTOPUS_LAUNCH_FEATURES` (the iOS and Android release builds), then ship app builds.
 

@@ -164,8 +164,11 @@ None blocks a release; none is built.
   (`20261105120000_pulse_user_home_area_context.sql`, November 6). Before `crew-day` merges into `master`, rename it
   (`git mv`, same bytes) to a version after master's newest and check with
   `MIGRATION_BASE_SHA=$(git rev-parse origin/master) node scripts/db/check-migrations.cjs`.
-- On November 6 (02:58 UTC) `master` was 82 commits ahead of `crew-day`, and `crew-day` merged into it without
-  conflicts.
+- Bring `master` into `crew-day` before the release; master gains commits every day. On November 6 at 04:25 UTC
+  `master` was 98 commits ahead. Two files conflicted: the iOS and Android deep-link routers
+  (`DeepLinkRouter.swift`, `DeepLinkRouter.kt`). Master's 69566bc657 (business notices open their dashboard section)
+  added cases in the same place as Crew Day's links. Both sides only add cases, so keep both. Every other file merged
+  cleanly.
 - Merging `crew-day` into `master` deploys the server and runs the migration on the production database (Deploy
   Backend), and deploys the web, all with Crew Day off. Turning it on is `crew_day` in `LAUNCH_FEATURES`,
   `NEXT_PUBLIC_LAUNCH_FEATURES` and the iOS and Android `PANTOPUS_LAUNCH_FEATURES`, then new app builds.
