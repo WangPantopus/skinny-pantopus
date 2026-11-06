@@ -170,7 +170,7 @@ None blocks a release; none is built.
   `20261106054000_crew_day.sql`, after master's newest), not on `crew-day`. CI's migration check treats
   `crew-day`'s file as applied and refuses the rename on a PR into `crew-day`; on a PR into `master` it passes.
   The founder chose this on November 6. A local database that applied the old name needs `supabase migration repair
-  --status reverted 20261105100000` and `--status applied 20261106054000`, or a reset.
+  --local --status reverted 20261105100000` and `--local --status applied 20261106054000`, or a reset.
 - The release is that branch's PR into `master`. If master gains a newer migration first, rename again.
 - Merging `crew-day` into `master` deploys the server and runs the migration on the production database (Deploy
   Backend), and deploys the web, all with Crew Day off. Turning it on is `crew_day` in `LAUNCH_FEATURES`,

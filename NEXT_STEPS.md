@@ -822,8 +822,8 @@ status), and the 42 screens are on the [Crew Day designs canvas](https://claude.
      master's newest (`20261106054000_crew_day.sql`). CI's migration check refuses that rename on a PR into
      `crew-day` and passes on a PR into `master`. Open the branch's PR into `master` and merge it. If master gains a
      newer migration first, rename again. A local database that applied the old name needs
-     `supabase migration repair --status reverted 20261105100000` and
-     `supabase migration repair --status applied 20261106054000`, or a reset.
+     `supabase migration repair --local --status reverted 20261105100000` and
+     `supabase migration repair --local --status applied 20261106054000`, or a reset.
   3. That merge deploys the server, runs the migration on the production database and deploys the web to
      pantopus.com, with Crew Day still off.
   4. To turn it on, add `crew_day` to `LAUNCH_FEATURES` (server), `NEXT_PUBLIC_LAUNCH_FEATURES` (Vercel) and
