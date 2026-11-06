@@ -30,6 +30,7 @@ const smartyProvider = require('../services/addressValidation/smartyProvider');
 const decisionEngine = require('../services/addressValidation/addressDecisionEngine');
 const mailVerificationService = require('../services/addressValidation/mailVerificationService');
 const pipelineService = require('../services/addressValidation/pipelineService');
+const registryUnits = require('../services/propertyRecords/registryUnits');
 const addressVerificationObservability = require('../services/addressValidation/addressVerificationObservability');
 const addressReviewService = require('../services/addressValidation/addressReviewService');
 const { AddressVerdictStatus } = require('../services/addressValidation/types');
@@ -358,7 +359,7 @@ router.post(
         const verdict = decisionEngine.classify({
           ...storedInputs,
           use_provider_place_for_business: getRolloutFlag('enforcePlaceProviderBusiness'),
-          use_provider_unit_intelligence: getRolloutFlag('enableSecondaryProvider'),
+          use_provider_unit_intelligence: registryUnits.usesProviderUnits(address),
           use_provider_parcel_for_classification: getRolloutFlag('enforceParcelProviderClassification'),
           provider_parcel_max_age_days: addressConfig.parcelIntel.cacheDays,
         });

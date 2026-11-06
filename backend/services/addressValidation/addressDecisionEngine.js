@@ -26,6 +26,7 @@
  */
 
 const { AddressVerdictStatus } = require('./types');
+const { parse: parseAddress } = require('../propertyRecords/addressKey');
 
 /** @typedef {import('./types').GoogleValidationResult} GoogleValidationResult */
 /** @typedef {import('./types').SmartyPostalResult} SmartyPostalResult */
@@ -330,6 +331,7 @@ class AddressDecisionEngine {
         unitIntelligence,
         useProviderUnitIntelligence,
       );
+    this._applyRegistryUnits(missingUnit, google, smarty, unitIntelligence, useProviderUnitIntelligence);
 
     if (missingUnit.isMissing) {
       reasons.push('MISSING_SECONDARY');
@@ -338,6 +340,7 @@ class AddressDecisionEngine {
         reasons.push('GOOGLE_SUBPREMISE_MISSING');
       }
       if (missingUnit.requiredByUsps) reasons.push('USPS_UNIT_REQUIRED');
+      if (missingUnit.requiredByRegistry) reasons.push('REGISTRY_UNIT_REQUIRED');
 
       return this._verdict({
         status: AddressVerdictStatus.MISSING_UNIT,
@@ -347,6 +350,7 @@ class AddressDecisionEngine {
         deliverability: this._buildDeliverability(smarty),
         next_actions: ['prompt_unit'],
         candidates: candidates || [],
+        unit_choices: unitIntelligence?.unit_choices,
       });
     }
 
@@ -484,13 +488,14 @@ class AddressDecisionEngine {
     if (missingUnit.isUnconfirmed) {
       return this._verdict({
         status: AddressVerdictStatus.UNIT_NOT_CONFIRMED,
-        reasons: [...baseReasons, ...heuristicPlaceReasons, 'USPS_UNIT_NOT_CONFIRMED'],
+        reasons: [...baseReasons, ...heuristicPlaceReasons, missingUnit.rejectedByRegistry ? 'REGISTRY_UNIT_NOT_FOUND' : 'USPS_UNIT_NOT_CONFIRMED'],
         confidence: UNSETTLED_POSTAL_CONFIDENCE,
         normalized,
         deliverability: this._buildDeliverability(smarty),
         classification: effectiveClassification,
         next_actions: ['confirm_unit_by_mail'],
         candidates: candidates || [],
+        unit_choices: unitIntelligence?.unit_choices,
       });
     }
 
@@ -651,7 +656,10 @@ class AddressDecisionEngine {
     // "Sunset Apartments" + "Apt 4A" are valid (not missing a number).
     const line1 = google.normalized?.line1?.trim();
     const line2 = google.normalized?.line2?.trim();
-    if (line1 && !/^\d/.test(line1) && !line2) return true;
+    if (line1 && !/^\d/.test(line1) && !line2) {
+      // Not every address starts with a digit: RR 2 BOX 152, PSC 3 BOX 1234, N89W16785 MAIN ST, Puerto Rico's A1 CALLE 2.
+      return !parseAddress(line1, '', { state: google.normalized?.state, zip: google.normalized?.zip });
+    }
 
     return false;
   }
@@ -733,6 +741,24 @@ class AddressDecisionEngine {
       legacyFromSmarty: false,
       legacyFromGoogle: false,
     };
+  }
+
+  /**
+   * What Pantopus's address registry adds to either postal path: an address with several units
+   * needs one, and a unit the address authority doesn't list asks again and can continue, unless
+   * USPS itself confirmed it (a roster can miss a unit; USPS delivers there).
+   */
+  _applyRegistryUnits(missingUnit, google, postal, unitIntelligence, enabled) {
+    if (unitIntelligence?.provider !== 'pantopus_registry') return;
+    const signals = this._buildProviderUnitSignals(unitIntelligence, String(google?.normalized?.line2 || '').trim(), enabled);
+    if (signals.providerRequiresUnit && !missingUnit.isMissing) {
+      missingUnit.isMissing = true;
+      missingUnit.requiredByRegistry = true;
+    }
+    if (signals.providerRejectsUnit && postal?.dpv_match_code !== 'Y') {
+      missingUnit.isUnconfirmed = true;
+      missingUnit.rejectedByRegistry = true;
+    }
   }
 
   /**
@@ -1289,6 +1315,7 @@ class AddressDecisionEngine {
       candidates: fields.candidates || [],
       next_actions: fields.next_actions || [],
       existing_household: fields.existing_household,
+      ...(fields.unit_choices?.length ? { unit_choices: fields.unit_choices } : {}),
     };
   }
 }
