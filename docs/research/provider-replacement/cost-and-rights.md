@@ -1,71 +1,148 @@
-# Delivery, operating costs and subscription exit
+# Cost and rights
 
-**Starting position.** The founder reported no current paid ATTOM subscription and wants to keep it that way. The eight-state proof used existing equipment and paid **$0** in data fees. A public-record experiment establishes access and field presence. It does not pay for national operations, establish publication rights or send a postcard.
+November 5, 2026. Planning figures and terms as published or quoted on that date; nothing was bought, no supplier was
+contacted, no paid lookup was made. Merges #3433's cost model and rights review with #3418's prices.
 
-## What replacing ATTOM would cost
+## 1. Where Pantopus stands
 
-USD planning scenarios for **10,000 distinct property opens per month**, from the editable [cost model](studies/sourcing-and-cost.xlsx). Treat this as a set of choices, not a bill or a supplier quote.
+| Vendor | What Pantopus has | Monthly cost |
+|---|---|---|
+| ATTOM | The free trial (founder, November 5); its terms are below | $0; the founder's direction is that it stays $0 (no paid plan) |
+| Smarty | Unknown whether any account or agreement exists (founder-only fact); production has had no key since Oct 9 | Unknown |
+| Google Address Validation | Already called with USPS CASS; billed per request (the SKU is a founder-only fact); no production key since Oct 9 | Per request |
+| Lob | Developer plan, no monthly fee; about $0.87-0.91 per 4x6 postcard with postage (first pass); no production key since Oct 9 | Per piece |
 
-| Approach | Initial implementation, including setup | Annual operations, including labor | Year one | Modeled external cash in year one if founder supplies labor |
-| --- | ---: | ---: | ---: | ---: |
-| Public-first connectors and nationwide lookup with explicit gaps | $47,500 | $30,480 | $77,980 | $5,400 |
-| Public records plus metered property API | $55,800 | $49,904 | $105,704 | $15,424 |
-| Licensed national bulk baseline plus metered valuations | $120,000 | $172,240 | $292,240 | $116,680 |
+## 2. What replacing ATTOM costs
 
-**Where the public-first money goes.** The model values 500 initial engineering/GIS/review hours at $44,500 and 28 hours/month of ongoing work at $28,080/year. That $72,580 is labor value, payable externally only if someone is hired. The other $5,400 is a modeled $3,000 setup/diligence allowance and $200/month of incremental infrastructure for storage, compute, backups and serving. It can be lower on existing capacity. Commercial property-data fees are $0 in this option. The model funds an initial set of connectors, not all local jurisdictions or national parity. Larger storage and failover still need sizing.
+#3433's planning model, at 10,000 distinct property opens a month (editable in
+[studies/sourcing-and-cost.xlsx](studies/sourcing-and-cost.xlsx)). Scenarios, not quotes:
 
-**Optional purchases.** At a 30% fresh-lookup rate with one additional eligible residential valuation call for 70% of those misses, the metered case generates 3,000 detail and 2,100 valuation requests. The historical pricing example was $202/month for 5,100 calls. The bulk case used an $80,000/year published starting allowance. Consumer-display, derivatives, special property types, unit inventories, minimum terms and model rights can change the price. Never let a miss automatically invoke a paid vendor. Treat any optional expense as a founder decision informed by measured unanswered searches and a written license. [RentCast pricing](https://www.rentcast.io/api) · [RentCast API terms](https://www.rentcast.io/terms-api) · [PropertyLayer terms](https://propertylayer.com/terms)
+| Approach | Build, including setup | Running per year, including labor | Year one | Cash in year one if the founder supplies the labor |
+|---|---:|---:|---:|---:|
+| **Public records first, nationwide lookup, gaps said plainly** (the founder's direction) | $47,500 | $30,480 | $77,980 | $5,400 |
+| Public records plus a metered property API | $55,800 | $49,904 | $105,704 | $15,424 |
+| A national bulk license plus metered values | $120,000 | $172,240 | $292,240 | $116,680 |
 
-**Scale sensitivity.** The original model used $105/hour engineering, $80/hour GIS and $55/hour review. At an illustrative three engineer-days per additional mapping and four GIS hours per quarter, 100 additional mappings add $252,000 of build labor and $128,000/year of upkeep. One statewide mapping may serve many counties. An optional residential AVM feasibility case estimates $57,200 initial and $51,360/year of labor, plus any data rights and compute. Office and multifamily valuation need distinct models, eligible subjects, held-out sales or income evidence, error/range calibration, and suppression when evidence is weak. These assumptions are separate from the free test. [Detailed procurement study](studies/nationwide-property-sourcing-plan.pdf) · [FHFA index](https://www.fhfa.gov/data/hpi)
+The second and third rows are subscriptions again; they are kept only to show what the public route avoids.
 
-**Smarty and Lob have separate economics.** Meter postal requests and any licensed local postal-engine data, certification, update cadence and operational support. Reusing Google CASS can carry usage fees and terms even without Smarty. For mail, track printing, materials, postage, reissues, undeliverable pieces and support per successfully completed verification. A printer’s no-monthly-fee plan still incurs physical cost when pieces are mailed. Maintain separate budgets and opt-outs for neighbor invitations. [USPS DPV](https://postalpro.usps.com/address-quality/dpv) · [Lob pricing and billing](https://help.lob.com/print-and-mail/ready-to-get-started/pricing-details)
+**Where the public-first money goes.** 500 hours of engineering, GIS and review to build ($44,500 of labor value) and
+28 hours a month to run ($28,080 a year), payable only if someone is hired; plus a $3,000 setup allowance and about
+$200 a month of storage, compute, backups and serving. No data fees. It funds the first connectors and nationwide
+handling of gaps, not every county.
 
-## County-by-county ATTOM transition
+**Scale.** At the model's rates ($105 an hour engineering, $80 GIS, $55 review), three engineer-days per additional
+source mapping and four GIS hours a quarter to keep it, 100 more mappings cost about $252,000 to build and $128,000 a
+year to keep. One statewide mapping can serve dozens of counties, and connectors are built in order of unanswered
+lookups, so the real count grows with demand.
 
-The [updated parallel design record](https://github.com/WangPantopus/skinny-pantopus/blob/5d514f94d45c46575ec978ccd43d1213685bc71d/docs/research/replace-attom-lob-smarty-2026-11-05.md) records a founder preference for coverage continuity during the switch. This package does not assume there is an active subscription or authorize a purchase.
+**Storage, sized roughly** (to be measured in WP5): about 150 million address points and 140 million parcels at roughly
+120-150 bytes each compressed is on the order of 40 GB per release, about 80 GB with the previous release kept. On
+S3-compatible storage that is a few dollars a month plus small per-request charges for range reads, inside the model's
+$200 allowance.
 
-| County and rights state | Routing rule |
-| --- | --- |
-| Qualified independent county release | Read the independently sourced index. Unavailable fields stay labeled or accept authorized household input. Do not trigger a vendor call simply to fill a blank. |
-| Uncovered county, no confirmed usable entitlement | Return available national or household facts with their labels and the county coverage reason. ATTOM requests remain zero. |
-| Uncovered county, existing founder-authorized entitlement | Use the isolated ATTOM adapter only for the permitted purpose. Check eligibility, display rights, budget and expiry on every read/refresh. A time-limited grant can require a fresh lookup after expiry. An evaluation agreement that prohibits production display cannot serve consumer traffic. |
-| County approved for cutover | Switch its route to public sources, observe zero ATTOM requests for that county including asynchronous and operator paths, monitor wrong matches, field regression and support cases, and remove vendor-derived copies according to the applicable terms. |
+**A value estimate (optional, D9).** #3433 sized an in-house residential estimate at about $57,200 of initial labor and
+$51,360 a year, before any sales-data rights. It ships only where measured.
 
-Track the 30-day share of distinct eligible home opens still using the bridge, by county and property type, plus renewals, cache expiry, latency, error rate and cost per useful response. Agree on the “few enough” threshold with the founder before cutover; an example planning threshold is under 1% for two consecutive 30-day windows, subject to critical coverage and quality gates. That threshold is a proposal. Stop calls per county, then have the founder decide on the single national agreement. A geography-level switch is not a county-specific subscription cancellation.
+## 3. Prices found, for decisions only
 
-## Source rights before a production switch
+None is automatic; each is a founder decision recorded in [decisions.md](decisions.md):
 
-| Input | Engineering control and procurement question |
-| --- | --- |
-| ATTOM | Published evaluation terms restrict database building and retention beyond 24 hours. The current detail-cache request uses effectively indefinite reuse and the profile can serve older data. Isolate and inventory existing raw/derived records, job paths and backups. Determine the actual agreement, retention and deletion obligations with the founder. Keep trial content out of the independent index and evaluation truth. [ATTOM API evaluation terms](https://api.developer.attomdata.com/legal) · [Cache implementation](../../../backend/services/ai/propertyIntelligenceService.js) |
-| Smarty | Check the applicable agreement for competing-product/dataset restrictions, derivatives and any obligations after termination. Confirm whether the agreement or a later order applies. US Address Enrichment carries separate consumer-use restrictions. Do not build a permanent competing registry from Smarty responses. [Subscription agreement](https://www.smarty.com/legal/subscription-agreement) · [Product terms](https://www.smarty.com/legal/product-terms) |
-| Google / postal products | Separate source-controlled address facts from licensed postal responses. Use per-field entitlements, permitted purpose, attribution, refresh and expiry. CASS is a software certification program; DPV, RDI and other USPS products have separate access conditions. Verify the covered jurisdictions and whether a provider result can be stored or passed to a client. [Google policies](https://developers.google.com/maps/documentation/address-validation/policies) · [USPS DPV](https://postalpro.usps.com/address-quality/dpv) |
-| Lob / next printer | Check contractual use and retention of address results, proofs, receipts and tracking. Qualification covers sensitive mailpiece contents, destruction/retention, opt-outs and an in-flight webhook transition. Lob is used here for fulfillment. [Lob terms](https://www.lob.com/terms) · [Lob API](https://docs.lob.com/) |
-| Public agencies / market feeds | Approve the exact dataset release, commercial end-user display, suppression and derivatives, not only the download or schema. Keep names and private claimant data outside the shared registry. A fee for copying records and a license granting republication are separate decisions. [WA public records statute](https://app.leg.wa.gov/RCW/default.aspx?cite=42.56.070) · [LA County use terms](https://egis-lacounty.hub.arcgis.com/pages/terms-of-use) |
+| Item | Price | Notes |
+|---|---|---|
+| USPS Address Management System license | About $7,570 a year (first pass) | Runs on Pantopus's server; worth it past about 40,000 checks a month |
+| USPS ZIP+4 reference (all states) | $1,750 a year | A reference file, not a postal processor or display rights |
+| County files where nothing is free | Fresno CA $15,492; Greenville SC $500; Lancaster PA $50 or $500; Johnson KS $100 a year; Knox TN $100 per map tile; Clark NV $7,500 a year (GIS subscription); Cobb GA parcel shapes $22,000 | [evidence/uncovered-counties.csv](evidence/uncovered-counties.csv) |
+| Reseller copies of county files | About $200-300 per county | For counties with lookup sites only |
+| Public-records requests | Copying cost; terms vary by state | To be priced for the 20 largest uncovered counties (D2) |
+| MLS access | For example $1,000 setup plus $1,200 a quarter at one MLS, plus a broker relationship | Not recommended now |
+| National bulk property license | From about $80,000 a year (one published listing) | Not recommended: a subscription |
+| Metered property API | For example about $202 a month for 5,100 calls (one published tier) | Not recommended: a subscription that bills on misses |
 
-## Postal evidence and physical-mail plan
+**Smarty and Lob have their own economics.** Dropping Smarty leaves Google's per-request charge (one request instead
+of two systems). Mail is measured as cost per verified household: printing, postage, reissues, returns and support
+time; Block Founders invitations get their own budget and switch.
 
-1. **Separate four decisions.** Physical address match, postal delivery-point validation (DPV), individual residence/authority, and dispatch/delivery of a piece are different events. A ZIP+4 or confirmed parcel can support lookup. Only a permitted postal response can supply postal signals. Only the appropriate private proof can support a privilege decision. Returning from an invite must preserve household scope.
-2. **Qualify the Smarty replacement.** Shadow an allowed postal adapter on independent synthetic and consented cases across covered geographies. The existing Google adapter already requests CASS. Map DPV Y, D (required secondary missing), S (secondary unconfirmed), N and blank; footnotes, vacancy, CMRA, carrier route and optional RDI separately. Distinguish “unknown” from false. Google residential/business metadata, a tax class and a USPS RDI code have different meanings. If exact RDI, secondary data or a territory is unsupported, expose the correct unknown/manual result. A USPS-licensed processor is an alternative if scope, usage economics and terms justify it. [Smarty reference](https://www.smarty.com/docs/cloud/us-street-api) · [USPS DPV](https://postalpro.usps.com/address-quality/dpv) · [Google address-validation policies](https://developers.google.com/maps/documentation/address-validation/policies)
-3. **Preserve Address and Add Home UX.** Retain normalized component/coordinates, postal versus physical separation, missing-unit correction, P.O. box, CMRA, business/mixed use, vacancy, conflicts, no-unit/manual addresses and recoverable outages. Do not unlock or dispatch on an inconclusive result. A private provisional setup during an outage, or a different business decision when residential evidence is missing, would change current behavior and needs founder product approval before implementation. A cached verdict needs the exact unit, purpose, freshness and an allowed lifetime.
-4. **Qualify a second fulfillment route.** Exercise production, mail induction, template/address rendering, unit lines, receipts, signing/replay controls, tracking quality, cancellation boundaries and both verification and marketing suppression. A permitted per-piece provider or printer plus USPS can replace Lob. Include a qualified contingency and an audited manual path if viable. Track opt-outs before ordering, including on retries and after restore. No real send was part of this study.
-5. **Make duplicates and late events harmless.** Reserve a durable intent before dispatch and use the same idempotency key on retries. On a timeout with uncertain acceptance, retain “pending confirmation” and reconcile against the printer before issuing another piece or switching vendors. Persist vendor namespace, piece ID, event ID and effective time. Reject invalid signatures, isolate metadata namespaces, deduplicate and apply only valid forward or terminal transitions. A delivered scan conveys carrier status; code redemption still checks address version, actor, expiry, tries, revoked access and replay. Fail/review returned, rerouted, cancelled and conclusively rejected attempts as appropriate to each existing flow. In-flight pieces keep the original webhook/verifier until drained and reconciled. [Mail vendor workflow](../../../backend/services/addressValidation/mailVendorService.js) · [Home card handler](../../../backend/services/homePostcardService.js) · [Lob events](https://help.lob.com/print-and-mail/getting-data-and-results/tracking-your-mail)
+## 4. Rights register
 
-## Build sequence and release gates
+Every source passes this before production use. "Checked" means the terms were read on the date shown.
 
-These milestones are a proposed order. Duration depends on source rights, connector quality and measured load. Authorization here covers documentation and publication only.
+| Source | What the terms allow | What they forbid or require | Status |
+|---|---|---|---|
+| ATTOM free trial | Internal evaluation, to decide whether to license | A database built from it; storing anything past 24 hours; disclosing it to anyone (including showing it in a product); see section 5 | Checked November 5 (published trial terms) |
+| Google Address Validation | Keeping the address, USPS data and components 30 days for later transactions, then delete or replace with what the person confirmed; confirmation flags 30 days for correction requests; coordinates 30 days, then delete; place IDs indefinitely | No artificially-created US or Puerto Rico addresses (Google stops USPS checks and reports the account to USPS); attribution when Google content is shown | Checked November 5 (non-EEA service terms, modified October 28, 2026); section 6 |
+| Smarty | As the account's agreement says | The published agreement restricts competitive development, benchmarking and compiling databases (sections 6-7) and has duties after termination; never build a registry from Smarty answers | Founder to confirm whether an agreement exists |
+| Lob | Printing and mailing | Terms on using and keeping address results, proofs and tracking; competitive-use limits | To check before the mail work package |
+| USPS (AMS, DPV, CASS) | A licensed local engine with periodic updates | Field of use, display, retention, replicas and exit in writing | Later, if AMS is chosen |
+| County and state files | Per source | King County: no redistribution without permission (and Washington's commercial-use acknowledgement before download); SanGIS: its own license; DuPage: written permission; Will County: no redistribution without written permission; Stanislaus and KGIS: own use only; Los Angeles County: its terms of use; Arizona: commercial-purpose declaration for records requests; Washington (RCW 42.56.070): no commercial use of lists of individuals | Per connector, before its first release |
+| Address points (NAD, OpenAddresses, Overture) | Free use per source | Overture and OpenAddresses carry per-source licenses; anything derived from OpenStreetMap (ODbL, share-alike) stays out | Per source, before WP6 |
+| Federal data (Census, FHFA, FEMA USA Structures, USACE NSI) | Public data | Attribution; NSI and FHFA keep their labels (modeled; area index) | To confirm per dataset |
+| Building floor-plan sheets | Use with the building's written permission | Images only if the owner agrees | Per building |
+| Household entries | Pantopus's own privacy policy | Never shown outside the household; never in the shared index | — |
+| Mapbox (autocomplete and resolve) | Its geocoding terms | Storage of temporary geocoding results is limited; not changed by this work, but coordinates kept on `HomeAddress` should come from the registry | To check alongside WP6 |
 
-| Stage | Deliverable | Gate before broader rollout |
-| --- | --- | --- |
-| 0. Rights and inventory | Inventory all three vendors’ call sites, cache layers, terms and kill switches. Register national custodian routes, current data vintages, protected-address policy and a held-out test sample. | Independently sourced inputs only. Verify restricted data exclusions, deletion and suppression propagation. Founder decides whether to approve any contract, changes to verification behavior, new tables, or hosted configuration. |
-| 1. First vertical property slice | Read one published version through Add Home, Property Details and Place. Keep optional enrichments and advanced value fields off where evidence is missing. | Exact condo and adjacent-unit controls, valid building-only result, ambiguous and missing cases, authenticated owner and another viewer, old-client compatibility, honest source labels and no outbound ATTOM call. |
-| 2. Nationwide public coverage | Add cleared statewide connectors, then local high-value gaps by demand. Serve per-jurisdiction snapshots with atomic rollback. Keep corrections private and provenance visible. | Publish per-field/class denominators, same-record intersections and freshness. Adjudicate a holdout independent of the indexes. Compare both false matches and excessive unknowns. |
-| 3. Postal replacement | Use a qualified postal source behind the existing validation interface and add corrected outage/missing-unit behavior if approved. | Shadow results with independent postal truth. Verify address quality cannot grant occupancy, ownership or other-household visibility. Exercise all Add Home, claim and Mailbox Check paths on web, iOS and Android. |
-| 4. Replace physical dispatch | Qualify primary and backup for verification plus Block Founders invites; preserve receipts and callbacks across a cutover. | Synthetic/fake channel first; a founder-authorized real-piece pilot must pass induction, delivery/return handling, redemption, opt-out, deduplication and reconciliation. |
-| 5. Retire each named vendor independently | Remove live calls, retries and operator prefill, verify source attribution, process in-flight mail and reconcile billing/data retention. | Keep new ATTOM subscription spend at $0 by default and apply the uncovered-county bridge conditions above. Smarty can be retired when postal UX and accuracy pass. Lob can be retired when both mail flows and all in-flight pieces are covered. Registry and app rollout switches can return to a prior permitted release without triggering a paid fallback. |
+A fee for copying public records and a license to republish them are separate questions; an unauthenticated download
+proves only that the file can be read.
 
-**Proposed service objectives, not measured production results.** Warm server address search p95 ≤150 ms / p99 ≤400 ms and device p95 ≤350 ms on a named network excluding debounce. Local resolution p95 ≤300 ms; authorized cached property read p95 ≤400 ms. Target monthly availability ≥99.9% for eligible reads (about 43 minutes of error budget per 30 days). Keep completeness, ambiguity and restricted responses as separate indicators. Exercise cold/warm across U.S. regions at twice projected peak and recover a bad release within 30 minutes. Measure the late/return tail for physical pieces independently of API latency.
+## 5. ATTOM free trial
 
-**Acceptance sample.** Select urban, rural, tribal, new-build, multifamily, condo/parking, mixed-use, office, territories and permitted military address formats; use difficult negatives as well as successful matches. Evaluate exact-unit auto-link precision (proposed ≥99.5%, report confidence intervals), address correction and false acceptance, time to first usable screen, and field accuracy against matched ground truth. Assess AVM accuracy, bias, interval coverage, and date only on eligible markets using time-separated holdouts. Check each changed flow in the real web, iOS and Android apps, persist through reload, and check the other viewer’s privileges. An import outage, a bad shard and an expiring license should leave an authorized partial screen or dated allowed snapshot. Never use a cached record to silently grant new trust.
+**The terms** (ATTOM's published API terms at api.developer.attomdata.com/legal, re-read November 5, paraphrased): the
+products may be used only to test and evaluate them before deciding on a license, for internal evaluation, with no
+commercial use. Among the prohibited uses: building or enhancing a database of any kind from them, disclosing or
+publishing any portion to others, and storing the content for more than 24 hours. The trial runs 90 days from its
+effective date; at the end Pantopus must stop using the content, purge it from every system, and sign an affidavit of
+destruction within 10 business days.
 
-**Founder decisions for implementation.** Choose provisional Add Home behavior during postal outages, the policy for unknown business/residential evidence, and fulfillment strategy if any physical mail is required. Decide which missing property/unit facts justify a negotiated source and whether an AVM should ship at all. Actual contracts, hosted deployment, purchases, and physical mail remain separate actions.
+**What the code does today** ([current-system.md](current-system.md#five-stored-copies)): five stored copies, property
+detail kept forever, values for 30 days, shown in the apps; the November 1-2 prefill saved 195 trial responses. All of
+that sits outside the trial terms.
+
+**Phase 0 steps** (founder decision D3; hosted deletes and contacts with ATTOM are founder-only):
+1. Find the trial's effective date (and so its end) and whether any other ATTOM agreement exists.
+2. Stop the operator prefill: no new copies from it.
+3. Choose how to handle today's live use until the replacement is ready: ask ATTOM in writing whether the current use is
+   allowed; or shorten every ATTOM copy to 24 hours in code (more calls, slower screens, a quota that may run out); or
+   turn ATTOM off and show labeled partial results.
+4. At the trial's end: purge `Home.niche_data.attom_property_detail`, `AttomPropertyCache`, the per-address
+   `PlaceSectionCache` sections, ATTOM rows in `ExternalFeedCache` and ATTOM-sourced `PropertyIntelligenceCache` rows,
+   handle backups as the affidavit requires, then sign it.
+5. In every case: no ATTOM content in the new index, its mappings or its evaluation sets.
+
+**The timing risk.** The founder's direction is to replace nothing until the replacement is built. If the trial ends
+first, the screens that rely on ATTOM lose those facts at the purge. That is why the build plan's first property slice
+targets the counties where Pantopus homes already are ([build-plan.md](build-plan.md#wp5-property-index-foundation-and-the-first-vertical-slice)).
+
+## 6. Google Address Validation: retention
+
+Fields on `HomeAddress` that are Google content, and what happens to each (WP3, WP6):
+
+| Field | Rule | Plan |
+|---|---|---|
+| The address the person confirmed | Allowed to keep as the person's own data once they confirm it | Keep, marked as confirmed |
+| USPS data (DPV, footnotes, flags, ZIP+4) | 30 days, then delete or replace | `postal_checked_at`; a daily job clears older USPS fields, and screens that need them re-check |
+| Coordinates | 30 days, then delete | Replaced by Pantopus registry coordinates (address points or parcel centroids) |
+| Place ID | Indefinitely | Keep |
+| Confirmation flags | 30 days, for correction requests | Clear with the USPS fields |
+
+Testing follows the "no made-up addresses" rule: synthetic cases run offline through the adapter, never against Google
+([parity-and-acceptance.md](parity-and-acceptance.md#principles)).
+
+## 7. The ATTOM transition, county by county
+
+With no paid plan, there is no long-term ATTOM bridge. Routing per county:
+
+| County state | Routing |
+|---|---|
+| Qualified (its gates passed, founder's OK) | The record; zero ATTOM calls there, including background and operator paths |
+| Not qualified, trial in force | Today's ATTOM path, as decision D3 allows, until the replacement covers it (founder: replace nothing until built) |
+| Not qualified, trial ended | Labeled partial results and household entries; ATTOM calls zero |
+
+Tracked per county and property type: the 30-day share of distinct Home opens still served by ATTOM, latency, errors.
+#3433's example bar for the national switch: under 1% for two consecutive 30-day windows, with the gates passed; the
+founder sets the bar (D4).
+
+## 8. Smarty and Lob exits
+
+- **Smarty:** if an agreement exists, check its post-termination duties (deleting cached Smarty answers:
+  `HomeAddress.validation_raw_response.smarty_candidate`, reused 90 days) before WP14.
+- **Lob:** keeping Lob per piece costs nothing monthly; retiring it fully needs a chosen second route that passed the
+  real-mail pilot. Which one is the founder's choice (D5).

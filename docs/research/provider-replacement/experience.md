@@ -22,7 +22,7 @@ Web `app/(site)/(app)/app/homes/new/page.tsx`; iOS `Features/Homes/AddHome/AddHo
 |---|---|---|
 | A normal house | Google, then Smarty: up to 5 s of checks | One Google check, up to 2.5 s; same result |
 | A building needing a unit (`D` or `N1`) | Often accepted without the unit (OK at 0.85; a claim can auto-verify) | "This building needs a unit number. Which one is yours?" The typed text is kept; nothing is mailed until a unit is given |
-| A unit USPS doesn't know (`S`) | "Missing unit", which reads wrong to someone who typed one | "We couldn't confirm unit 4B with USPS. Check the number, or continue and we'll confirm it by mail" (the continue path waits on D1a's rule) |
+| A unit USPS doesn't know (`S`) | "Missing unit", which reads wrong to someone who typed one | "We couldn't confirm unit 4B with USPS. Check the number, or continue and we'll confirm it by mail" (continuing is decision D1c; it never auto-verifies) |
 | USPS gave no answer (blank DPV) | Accepted at 0.75 | "We couldn't check this address with USPS yet." Pending, never OK; a background re-check |
 | PO box, mail-drop store, business, mixed use, vacant | Refused or flagged as today | The same refusals, with Google's own PO-box and business flags instead of Smarty's |
 | Google is down | "Address verification is temporarily unavailable" unless a recent check exists | Decision D1a: finish Add Home with the home unverified; no postcard and nothing unlocked until a background re-check passes; if it fails, "Please check this address" |
