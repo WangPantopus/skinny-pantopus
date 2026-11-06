@@ -2,10 +2,27 @@
 
 The founder asked a coordinator session to run two tasks at the same time, each in its own Claude session. The coordinator passed on the founder's words and brainstormed the real-world cases. This note records where both tasks stand at handoff, so a new coordinator session can pick up.
 
+## Update, November 6: where this ended
+
+Everything after this section is the state at handoff. Since then:
+
+- **The venue index is published, and production runs the code that reads it.**
+  - [Run 42171989645](https://github.com/WangPantopus/skinny-pantopus/actions/runs/42171989645) finished green in about 45 minutes, not the 1.5–2 hours estimated below.
+  - It published `places-20261106.bin` (1,442,372 elements) and `venues-20261106.bin` (2,320,646 elements, 100.4 MB, above the 70–90 MB estimate). The backend reads the file in ranges, so its size isn't a limit.
+  - [Deploy run 42178189692](https://github.com/WangPantopus/skinny-pantopus/actions/runs/42178189692) was the first real release with #3437 and #3438.
+  - Verified: the published file holds real venues in the right areas, and the iOS picker listed them through a local backend, with no Overpass requests.
+  - Not verified: the picker against production.
+- **[#3461](https://github.com/WangPantopus/skinny-pantopus/pull/3461) is merged, as `917f8e4bf`.**
+  - The iOS composer check passed on the merged code, in the simulator with synthetic photos. A poster living far from the venue saw the inline note, and the post was stored with an exact pin at the venue. A second account saw "Photo taken here", also after a relaunch, with the marker at the venue. The refusals worked too.
+  - Not verified in the apps: Alerts and Lost & Found in the iOS composer (API only), and Android and web on the merged code (CI only; both were checked in the apps before that merge).
+  - It wasn't released when this was written. A release counts only once a Deploy Backend run's "Release backend" job succeeds on a commit containing it.
+- **The open items below are still open and not started.** They go to the founder one at a time.
+  - The video item is wider than it says below. From reading the code (not tested): the iOS post composer is the only place in the iOS app that removes a video's metadata before upload, and iOS chat attachments send the original. On the server, `routes/upload.js`, `services/chatMediaUpload.js` and `routes/files.js` all clean photos only, so a server fix has to cover all three.
+
 ## What the founder asked for
 
 1. **Post to where your photo was taken.** Until now, a user could post to a place's feed only if they were physically there (fresh GPS) or were a verified resident or business there. In the founder's case, a photo taken in another city and posted later was refused, even though the app had already read the photo's location. The founder asked for a third way in: an attached photo or video taken at a place lets its author post there. The post then shows on the map at the exact spot where the photo was taken.
-2. **A place picker that names the actual place.** For that photo, the "Add location" sheet listed only the city ("Vancouver, WA"), never the restaurant where it was taken. The founder wants the restaurants, schools, churches, parks, venues, stadiums and so on around the photo, or around the user, the way Instagram shows them.
+2. **A place picker that names the actual place.** For that photo, the "Add location" sheet listed only the city, never the restaurant where it was taken. The founder wants the restaurants, schools, churches, parks, venues, stadiums and so on around the photo, or around the user, the way Instagram shows them.
 
 ## Founder decisions
 
