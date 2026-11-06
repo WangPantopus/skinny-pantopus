@@ -109,6 +109,8 @@ These are compatibility traps for any change of source:
 - **"ATTOM" in copy.** iOS and Android Add Home show "Public records (ATTOM)" and "Data from public records via ATTOM."
   when `tiers_used` contains `attom` ([iOS][iosadd] 231-246; [Android][andadd] 260-290), and otherwise "No ATTOM property
   record was returned…" or "…was available…" ([iOS view model][iosvm] 972-981; [Android view model][andvm] 1554-1557).
+  Store build 2.0.7 keys this on `attom_property_detail`, not `tiers_used`, so since #3203 it says "No ATTOM…" with the
+  fields filled in.
   Web Property details falls back to "Data from public records via ATTOM" ([`page.tsx`][webdetail] 317). Store builds
   keep these strings until they update.
 - **Vendor IDs.** The serializer shows "ATTOM ID" (145-147).

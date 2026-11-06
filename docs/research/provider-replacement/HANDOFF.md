@@ -13,8 +13,7 @@ Updated November 6, 2026 (UTC). Live status is on the coordinator's board, outsi
 - **Private storage (P1) exists:** bucket `pantopus-property-index` in us-west-2, public access blocked; GitHub Actions
   writes through the `master`-only environment `property-index`; the reader key can read only under `index/`.
 - **WP1 is done:** #3439, #3445, #3446 and #3447 merged.
-- **Running:** a build coordinator session holds the board; WP2, WP3 with WP4, WP5 and WP13 have builder sessions, at most
-  three building at once. Each sends the founder a plain-words plan first.
+- **Running:** a build coordinator session holds the board; builder sessions cover WP2, WP3 with WP4, WP5, WP6, WP7 and WP13, and sessions for WP8, WP9, WP10, WP11 and WP12 start as their dependencies land. Live status is on the board, outside Git.
 
 ## Verified, and not
 
