@@ -573,14 +573,23 @@ const propertySuggestionsSchema = Joi.object({
 });
 
 /**
- * POST /api/homes/property-suggestions
+ * POST /api/homes/property-suggestions[?lookup=background|check]
  * Tiered hints for Add Home step 2: ATTOM → heuristics → optional LLM (PROPERTY_SUGGESTIONS_LLM=1).
  * Answers with the basics only. The county record stays on the server for the
  * new Home, where only its verified owners see it (GET /:id/property-details).
+ * Without `lookup` (app builds before November 2026) a validated address waits
+ * for ATTOM. `background` answers from the database at once and looks a
+ * missing record up meanwhile (`attom_lookup: 'pending'`); `check`, Add Home's
+ * follow-up, waits for that lookup and never asks ATTOM, so it isn't counted
+ * against the outbound limit.
  */
-router.post('/property-suggestions', verifyToken, homeOutboundLimiter, validate(propertySuggestionsSchema), async (req, res) => {
+const PROPERTY_LOOKUPS = new Set(['background', 'check']);
+router.post('/property-suggestions', verifyToken,
+  (req, res, next) => (req.query.lookup === 'check' ? next() : homeOutboundLimiter(req, res, next)),
+  validate(propertySuggestionsSchema), async (req, res) => {
   try {
-    const result = await propertySuggestionsService.getPropertySuggestions(req.body, supabaseAdmin);
+    const lookup = PROPERTY_LOOKUPS.has(req.query.lookup) ? req.query.lookup : 'wait';
+    const result = await propertySuggestionsService.getPropertySuggestions(req.body, supabaseAdmin, { lookup });
     res.json(result);
   } catch (err) {
     logger.error('property-suggestions error', { error: err.message });
@@ -5539,7 +5548,8 @@ router.get('/:id/property-value', verifyToken, async (req, res) => {
         zip_median_sale_price_trend: profile.zip_median_sale_price_trend || null,
         year_built: profile.year_built || null,
         sqft: profile.sqft || null,
-        last_updated: profile.cached_at || null,
+        // A value estimate kept after a refresh found nothing newer says when ATTOM gave it.
+        last_updated: profile.value_as_of || profile.cached_at || null,
         source,
       };
     });
