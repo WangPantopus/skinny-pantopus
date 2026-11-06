@@ -45,6 +45,7 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.screens.gigs.tasks_map.taskCategoryGlyph
 import app.pantopus.android.ui.screens.shared.wizard.blocks.HeadlineBlock
 import app.pantopus.android.ui.screens.shared.wizard.blocks.SubcopyBlock
@@ -637,7 +638,13 @@ private fun MagicDescribeCard(
             visualTransformation = transformation,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { onDismissKeyboard() }),
-            modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp).padding(Spacing.s3).testTag("gigCompose.describe.field"),
+            modifier =
+                Modifier
+                    .keepsKeyboard()
+                    .fillMaxWidth()
+                    .heightIn(min = 96.dp)
+                    .padding(Spacing.s3)
+                    .testTag("gigCompose.describe.field"),
             decorationBox = { inner ->
                 if (text.isEmpty()) {
                     Text(
