@@ -55,6 +55,7 @@ const {
 } = require('../services/addressValidation');
 const addressVerificationObservability = require('../services/addressValidation/addressVerificationObservability');
 const { usesGooglePostal } = require('../services/addressValidation/postalAdapter');
+const postalRecheckService = require('../services/addressValidation/postalRecheckService');
 const { redactStreet, queryKnowsNumber } = require('../utils/addressRedaction');
 const { serializeHomeForViewer, serializeOwnerForViewer } = require('../serializers/homeProfileSerializer');
 const { displayNameFromUser } = require('../serializers/identitySerializers');
@@ -871,6 +872,26 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       addressVerdict = validationResult.verdict;
       canonicalAddress = validationResult.canonical_address || (googlePostal ? canonicalAddress : null);
 
+      // Google can't be reached: finish unverified on the address the person gave (decision D1a).
+      if (addressVerdict.status === AddressVerdictStatus.SERVICE_ERROR && postalRecheckService.outageFinishEnabled()) {
+        const pendingAddress = canonicalAddress || await postalRecheckService.savePendingAddress({
+          line1: address,
+          line2: unit_number || undefined,
+          city,
+          state,
+          zip: normalizedZip,
+        });
+        if (pendingAddress) {
+          canonicalAddress = pendingAddress;
+          const fresh = pendingAddress.last_validated_at
+            && isFreshTimestamp(pendingAddress.last_validated_at, addressConfig.outageFallback.maxValidationAgeDays);
+          addressVerdict = fresh && pendingAddress.validation_raw_response?.postal_state !== 'pending'
+            ? await classifyStoredAddress(pendingAddress, !selectAddress)
+            : postalRecheckService.pendingVerdict(pendingAddress);
+          createHomeValidationPath = 'outage_finish_unverified';
+        }
+      }
+
       if (requestedAddressId && validationResult.address_id && requestedAddressId !== validationResult.address_id) {
         await recordCreateHomeOutcomeSafe({
           address_id: requestedAddressId,
@@ -1216,7 +1237,8 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
     // is the backstop that checks it against the address.
     const coordsAreCanonical = !!(canonicalAddress
       && Number.isFinite(canonicalAddress.geocode_lat)
-      && Number.isFinite(canonicalAddress.geocode_lng));
+      && Number.isFinite(canonicalAddress.geocode_lng)
+      && createHomeValidationPath !== 'outage_finish_unverified');
     if (coords && Number.isFinite(coords.latitude) && Number.isFinite(coords.longitude)) {
       homeData.location = formatLocationForDB(coords.latitude, coords.longitude);
       homeData.map_center_lat = coords.latitude;

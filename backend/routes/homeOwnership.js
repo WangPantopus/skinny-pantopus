@@ -2532,11 +2532,14 @@ async function mayRequestPostcard(homeId, userId) {
 
 const postcardNoStore = (_req, res, next) => { res.set('Cache-Control', 'private, no-store'); next(); };
 const postcardRequests = require('../services/homePostcardRequestService');
+const postalRecheckService = require('../services/addressValidation/postalRecheckService');
 router.post('/:id/postcard-requests', postcardNoStore, verifyToken, homePostcardRequestLimiter, async (req, res) => {
   try {
     if (!req.body || Object.keys(req.body).some(key => !['request_id', 'address'].includes(key))) {
       return res.status(400).json({ code: 'POSTCARD_REQUEST_INVALID', error: 'Check the mailing address and apartment before continuing.' });
     }
+    const postalHold = await postalRecheckService.holdForHome(req.params.id);
+    if (postalHold) return res.status(409).json({ code: postalHold.code, error: postalHold.message });
     postcardRequests.send(res, await postcardRequests.submit({ homeId: req.params.id, actorId: req.user.id,
       requestId: req.body.request_id, address: req.body.address }));
   } catch (error) { postcardRequests.sendError(res, error); }
@@ -2550,7 +2553,11 @@ router.post('/:id/postcard-requests/:requestId/cancel', postcardNoStore, verifyT
   catch (error) { postcardRequests.sendError(res, error); }
 });
 router.get('/:id/postcard-status', postcardNoStore, verifyToken, async (req, res) => {
-  try { res.status(200).json(await postcardRequests.current({ homeId: req.params.id, actorId: req.user.id })); }
+  try {
+    const status = await postcardRequests.current({ homeId: req.params.id, actorId: req.user.id });
+    const postalHold = status.can_request ? await postalRecheckService.holdForHome(req.params.id) : null;
+    res.status(200).json(postalRecheckService.applyHoldToPostcardStatus(status, postalHold));
+  }
   catch (error) { postcardRequests.sendError(res, error); }
 });
 
@@ -2589,6 +2596,8 @@ router.post('/:id/request-postcard', postcardNoStore, verifyToken, postcardLimit
     if (!(await mayRequestPostcard(req.params.id, req.user.id))) {
       return res.status(403).json({ error: 'You do not have a pending claim on this home.' });
     }
+    const postalHold = await postalRecheckService.holdForHome(req.params.id);
+    if (postalHold) return res.status(409).json({ code: postalHold.code, error: postalHold.message });
     const result = await homePostcardService.request(req.params.id, req.user.id);
     return res.status(result.status).json(result.body);
   } catch (err) {
