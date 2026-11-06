@@ -348,6 +348,14 @@ public final class PulseFeedViewModel {
         await fetch(force: true)
     }
 
+    /// Back in the app on "Set an area": a fix may be ready now, or location may have come on in Settings. Reads again,
+    /// as coming back to the tab does, and looks for the full time again.
+    func cameBackToApp() async {
+        guard needsArea else { return }
+        stopLookingForFix()
+        await load()
+    }
+
     /// Nearby ↔ Connections toggle. Clears the chip filter like RN's
     /// `handleSurfaceChange` (`useFeedData.ts:228-233`).
     public func selectSurface(_ next: FeedSurface) async {
