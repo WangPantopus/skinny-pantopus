@@ -469,6 +469,12 @@
   font-weight: 400;
 }
 
+/* The break Newsreader takes. Balancing picks by a few pixels' width, so the fallback would otherwise break after
+   "place," and the heading would re-wrap when the font lands. */
+.heroTitleEnd {
+  white-space: nowrap;
+}
+
 .heroSub {
   margin: 0;
   max-width: 500px;
