@@ -392,8 +392,27 @@ data class PropertySuggestionsClassification(
 )
 
 /**
+ * Where a record came from, once it names its source, worded by the server
+ * (`backend/services/recordVocabulary.js`). Shown as it comes. A malformed one reads as none
+ * ([RecordProvenanceAdapterFactory]), so it never fails the answer it came with.
+ */
+@JsonClass(generateAdapter = true)
+data class RecordProvenanceDto(
+    val publisher: String? = null,
+    val dataset: String? = null,
+    @Json(name = "as_of") val asOf: String? = null,
+    /** `unit`, `building`, `parcel` or `area`. */
+    val scope: String? = null,
+    val method: String? = null,
+    /** "From Clark County Assessor's records, updated Oct 31, 2026". */
+    val label: String,
+    /** Add Home's heading for the record ("County records"). */
+    val title: String? = null,
+)
+
+/**
  * The merged property fields the tiered lookup resolved. Every field is
- * nullable — the service returns explicit nulls for anything ATTOM,
+ * nullable — the service returns explicit nulls for anything the record,
  * heuristics, or the LLM couldn't fill
  * (`backend/services/ai/propertySuggestionsService.js:144-152`).
  */
@@ -416,7 +435,7 @@ data class PropertySuggestionsFields(
 @JsonClass(generateAdapter = true)
 data class PropertySuggestionsResponse(
     val suggestions: PropertySuggestionsFields? = null,
-    /** Per-field provenance (`attom` / `heuristic` / `llm`). */
+    /** Per-field provenance (`record` or `attom` / `heuristic` / `llm`). */
     @Json(name = "field_sources") val fieldSources: Map<String, String>? = null,
     @Json(name = "tiers_used") val tiersUsed: List<String>? = null,
     @Json(name = "llm_enabled") val llmEnabled: Boolean? = null,
@@ -425,14 +444,29 @@ data class PropertySuggestionsResponse(
      * with `lookup = "check"`) or `unavailable`.
      */
     @Json(name = "attom_lookup") val attomLookup: String? = null,
+    /** The same under its new name, from servers that know `vocabulary=2`. */
+    @Json(name = "record_lookup") val recordLookup: String? = null,
+    /** The lookup's outcome in the server's words. */
+    @Json(name = "lookup_message") val lookupMessage: String? = null,
+    /** Where the record came from, once it names its source. */
+    val provenance: RecordProvenanceDto? = null,
+    /** A short tag per field ("County"), once the record names its source. */
+    @Json(name = "field_tags") val fieldTags: Map<String, String>? = null,
 ) {
+    /** Where the lookup stands, under either name. */
+    val lookupState: String?
+        get() = recordLookup ?: attomLookup
+
     /**
-     * True when ATTOM actually returned a public record for the address —
-     * drives the "Public records (ATTOM)" card. The server lists `attom`
-     * in `tiers_used` only when it found one.
+     * True when a public record was found for the address: any tier the
+     * server lists that isn't a guess, whatever a new source is called.
      */
-    val hasAttomRecord: Boolean
-        get() = tiersUsed?.contains("attom") == true
+    val hasPublicRecord: Boolean
+        get() = tiersUsed?.any { it.isNotEmpty() && it != "heuristic" && it != "llm" } == true
+
+    /** The record is the building's and the person's unit isn't in it. */
+    val isBuildingOnly: Boolean
+        get() = provenance?.scope == "building"
 }
 
 /**

@@ -176,7 +176,7 @@ private fun LoadedBody(
                     MismatchBanner(data = content.banner)
                 }
                 PropertySection(title = "Property", rows = content.propertyFacts)
-                // The county record (ATTOM) comes for verified owners only,
+                // The county record comes for verified owners only,
                 // so everyone else sees just the Property card.
                 content.recordSections.forEach { section ->
                     PropertySection(title = section.title, rows = section.rows, note = section.note)
