@@ -16,6 +16,7 @@
  * on their screens, because a county's copies shouldn't vanish over a storage outage.
  */
 
+const crypto = require('crypto');
 const logger = require('../../utils/logger');
 const config = require('../../config/propertyRecords');
 const reader = require('./reader');
@@ -97,6 +98,20 @@ function without(facts, withheld) {
   return facts && Object.fromEntries(Object.entries(facts).filter(([name]) => !withheld.has(name)));
 }
 
+/** Each county named here and its mode. */
+const listed = () => new Map(modes);
+
+/** This server's lists, short enough to write down, so servers that disagree can be told apart. */
+function summary() {
+  const named = [...modes].filter(([, mode]) => mode !== 'off').sort();
+  const withheld = Object.entries(counties).filter(([, entry]) => entry.withheld.size).map(([fips, entry]) => [fips, [...entry.withheld].sort()]).sort();
+  return {
+    live: named.filter(([, mode]) => mode === 'live').length,
+    shadow: named.filter(([, mode]) => mode === 'shadow').length,
+    hash: crypto.createHash('sha256').update(JSON.stringify([named, withheld])).digest('hex').slice(0, 12),
+  };
+}
+
 /** A copy as it may be served now: facts withheld for its county left out. The copy itself is never changed. */
 function served(copy) {
   const withheld = copy && withholding(copy.jurisdiction);
@@ -104,4 +119,4 @@ function served(copy) {
   return { ...copy, facts: without(copy.facts, withheld), ...(copy.building ? { building: without(copy.building, withheld) } : {}) };
 }
 
-module.exports = { modeFor, liveState, anyShadow, showsCopies, served };
+module.exports = { modeFor, liveState, anyShadow, showsCopies, served, listed, summary };

@@ -23,6 +23,7 @@ const { parse, zip5, stateCode } = require('./addressKey');
 const { lookup, StorageUnavailable } = require('./index');
 const reader = require('./reader');
 const router = require('./router');
+const counts = require('./counts');
 
 const SCHEMA = 1;
 const REFRESH_EVERY_MS = 60 * 60 * 1000;
@@ -142,6 +143,21 @@ function refreshSoon(home, copy) {
   })().catch((err) => logger.info('property_records.refresh_later', { error: err.name }));
 }
 
+/** Counts a lookup for the daily report: county and outcome only. */
+function noteLookup(surface, address, found) {
+  let outcome = 'no_record';
+  if (!found) outcome = 'off';
+  else if (found.copy) outcome = 'answered';
+  else if (found.lookup === 'pending') outcome = 'waiting';
+  else if ((found.match || found.answer?.match) === 'ambiguous') outcome = 'ambiguous';
+  try {
+    counts.noteLookup(surface, { mark: addressStamp(address), zip: address.zip, state: address.state }, outcome,
+      found?.copy?.jurisdiction || found?.jurisdiction || found?.answer?.jurisdiction);
+  } catch (err) {
+    logger.info('property_records.count_failed', { error: err.name });
+  }
+}
+
 /**
  * What the record has for a Home, for a screen: its stored copy at once, or for a
  * Home in a live county with no copy yet, a lookup now (a few milliseconds of
@@ -152,7 +168,14 @@ function refreshSoon(home, copy) {
  *   `pending`: storage can't be read just now, so say "Looking up…"; `none`: no record.
  */
 async function forHome(home) {
-  if (!config.enabled() || !home) return null;
+  if (!home) return null;
+  const found = await readForHome(home);
+  noteLookup('home', homeAddress(home), found);
+  return found;
+}
+
+async function readForHome(home) {
+  if (!config.enabled()) return null;
   const stored = storedCopy(home);
   // Taking a county off its live list takes its copies off the screens too; they stay on the Home for when it comes back.
   if (stored && router.showsCopies(stored.jurisdiction)) {
@@ -165,7 +188,7 @@ async function forHome(home) {
     const answer = await lookup(address);
     if (answer.match === 'unsupported' && answer.reason === 'no_release') return null;
     const copy = copyFromAnswer(answer, address);
-    if (!copy) return { copy: null, lookup: 'none', match: answer.match };
+    if (!copy) return { copy: null, lookup: 'none', match: answer.match, jurisdiction: answer.jurisdiction };
     await storeCopy(home, copy);
     return { copy: router.served(copy), lookup: null };
   } catch (err) {
@@ -180,6 +203,12 @@ async function forHome(home) {
  * @returns {Promise<null|{ copy: object|null, whole: object|null, answer: object, lookup: 'found'|'none'|'pending' }>} null outside live counties.
  */
 async function forAddress(address) {
+  const found = await readForAddress(address);
+  noteLookup('add_home', address, found);
+  return found;
+}
+
+async function readForAddress(address) {
   if (!router.liveState(stateCode(address.state))) return null;
   try {
     const answer = await lookup(address);
@@ -192,4 +221,4 @@ async function forAddress(address) {
   }
 }
 
-module.exports = { copyFromAnswer, provenanceOf, storedCopy, storeCopy, forHome, forAddress, homeAddress, dateLabel };
+module.exports = { copyFromAnswer, provenanceOf, storedCopy, storeCopy, forHome, forAddress, noteLookup, homeAddress, dateLabel };
