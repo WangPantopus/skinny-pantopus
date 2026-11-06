@@ -3468,14 +3468,12 @@ private struct ChatBubbleRow: View {
                 bubbleStack
             } else {
                 if let initials = senderInitials ?? incomingInitials, showsIncomingAvatarSlot {
+                    // A tap, not a button: the row stays one VoiceOver element, with the profile as a named action.
                     if let onOpenSender, !content.isContinuation {
-                        Button(action: onOpenSender) {
-                            ChatMiniAvatar(initials: initials)
-                                .hitArea(horizontal: 4, vertical: 11)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(openSenderLabel)
-                        .accessibilityIdentifier("chatSenderAvatar_\(content.id)")
+                        ChatMiniAvatar(initials: initials)
+                            .hitArea(horizontal: 4, vertical: 11)
+                            .onTapGesture(perform: onOpenSender)
+                            .accessibilityIdentifier("chatSenderAvatar_\(content.id)")
                     } else {
                         ChatMiniAvatar(initials: initials, hidden: content.isContinuation)
                     }
@@ -3522,6 +3520,11 @@ private struct ChatBubbleRow: View {
         }
         // A reply with action cards or link buttons keeps each button its own element.
         .accessibilityElement(children: hasAIControls ? .contain : .combine)
+        .accessibilityActions {
+            if let onOpenSender {
+                Button(openSenderLabel, action: onOpenSender)
+            }
+        }
     }
 
     private var hasAIControls: Bool {
@@ -3568,13 +3571,11 @@ private struct ChatBubbleRow: View {
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .lineLimit(1)
                 if let onOpenSender {
-                    Button(action: onOpenSender) {
-                        label.hitArea(vertical: 8)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.bottom, 2)
-                    .accessibilityLabel(openSenderLabel)
-                    .accessibilityIdentifier("chatSenderName_\(content.id)")
+                    label
+                        .hitArea(vertical: 8)
+                        .onTapGesture(perform: onOpenSender)
+                        .padding(.bottom, 2)
+                        .accessibilityIdentifier("chatSenderName_\(content.id)")
                 } else {
                     label.padding(.bottom, 2)
                 }
