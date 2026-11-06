@@ -191,18 +191,22 @@ const RESOLVE_TTL = 300_000; // 5 minutes
 const mapboxProvider = {
   /**
    * @param {string} query
-   * @param {{ sessionToken?: string, limit?: number, country?: string }} [options]
+   * @param {{ sessionToken?: string, limit?: number, country?: string,
+   *   proximity?: { lat: number, lng: number }, types?: string }} [options]
    * @returns {Promise<{ suggestions: import('./geoProvider').NormalizedSuggestion[] }>}
    */
   async autocomplete(query, options = {}) {
-    const { limit = 6, country = 'us' } = options;
+    const { limit = 6, country = 'us', proximity, types = 'address,place,locality,postcode' } = options;
     const token = requireToken();
 
-    const url =
+    let url =
       `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json` +
       `?access_token=${encodeURIComponent(token)}` +
       `&autocomplete=true&limit=${limit}&country=${encodeURIComponent(country)}` +
-      `&types=address,place,locality,postcode`;
+      `&types=${encodeURIComponent(types)}`;
+    if (proximity && Number.isFinite(proximity.lat) && Number.isFinite(proximity.lng)) {
+      url += `&proximity=${encodeURIComponent(proximity.lng)},${encodeURIComponent(proximity.lat)}`;
+    }
 
     const r = await fetch(url, { signal: AbortSignal.timeout(MAPBOX_TIMEOUT_MS) });
     if (!r.ok) {
