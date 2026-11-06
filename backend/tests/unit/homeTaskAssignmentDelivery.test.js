@@ -4,6 +4,7 @@ const notifications = require('../../services/notificationService');
 const service = require('../../services/homeTaskAssignmentDeliveryService');
 const event = { id: 'original-event', lease_id: 'current-lease' };
 const args = { p_id: event.id, p_lease_id: event.lease_id };
+const delivery = { p_kind: 'home_task_assignment', ...args };
 const notification = { id: 'original-notification' };
 let calls;
 function setup(current = { eligible: true, notification, push_allowed_at_assignment: true }, acknowledged = true) {
@@ -34,7 +35,7 @@ test.each([
 ])('provider receipt %j determines acknowledgement %s', async (receipt, outcome) => {
   setup(); notifications.deliverStoredHomeTaskNotification.mockResolvedValue(receipt);
   await service.deliverPending();
-  expect(notifications.deliverStoredHomeTaskNotification).toHaveBeenCalledWith(notification, { pushAllowedAtAssignment: true });
+  expect(notifications.deliverStoredHomeTaskNotification).toHaveBeenCalledWith(notification, { pushAllowedAtAssignment: true, delivery });
   expect(calls).toContainEqual(['finish_home_task_assignment_delivery', { ...args, p_outcome: outcome }]);
 });
 test.each([{ eligible: false }, { lease_lost: true }, null, { eligible: true }, new Error('private SQL failure')])(
@@ -57,6 +58,6 @@ test('assignment replaced during transport cannot acknowledge an obsolete lease'
 test('off-at-assignment snapshot reaches transport suppression unchanged', async () => {
   setup({ eligible: true, notification, push_allowed_at_assignment: false });
   await service.deliverPending(1);
-  expect(notifications.deliverStoredHomeTaskNotification).toHaveBeenCalledWith(notification, { pushAllowedAtAssignment: false });
+  expect(notifications.deliverStoredHomeTaskNotification).toHaveBeenCalledWith(notification, { pushAllowedAtAssignment: false, delivery });
   expect(calls.filter(([name]) => name === 'claim_home_task_assignment_delivery')).toHaveLength(1);
 });

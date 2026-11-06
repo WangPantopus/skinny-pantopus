@@ -4,6 +4,7 @@ const notificationMock = require('./__mocks__/notificationService');
 const push = require('./__mocks__/pushService');
 const notify = require(path.resolve(__dirname, '../services/notificationService.js'));
 const relay = require('../jobs/deliverWalletSettlement');
+const delivery = { p_kind: 'wallet_settlement', p_id: 'event', p_lease_id: 'lease' };
 const note = { id: 'note', user_id: 'worker', type: 'payout_sent', title: 'Wallet credited',
   body: 'Synthetic credit', link: '/app/wallet', metadata: { gig_id: 'gig' } };
 beforeEach(() => {
@@ -18,17 +19,17 @@ describe('stored notification delivery', () => {
   test('worker completion uses its existing stored notice and current push preferences', async () => {
     const completion = { ...note, type: 'gig_completed' };
     db.seedTable('Notification', [completion]);
-    expect(await notify.deliverStoredGigNotification(completion)).toMatchObject({ acceptedCount: 1, suppressed: false });
+    expect(await notify.deliverStoredGigNotification(completion, { delivery })).toMatchObject({ acceptedCount: 1, suppressed: false });
     expect(push.sendToUserWithReceipt).toHaveBeenCalledWith('worker', expect.objectContaining({ data: expect.objectContaining({
       notificationId: 'note', type: 'gig_completed',
-    }) }));
+    }) }), { settledRegistrationIds: [] });
     expect(db.getTable('Notification')).toEqual([completion]);
   });
   test('delivers the exact stored notification and never inserts another row', async () => {
-    expect(await notify.deliverStoredGigNotification(note)).toMatchObject({ acceptedCount: 1, suppressed: false });
+    expect(await notify.deliverStoredGigNotification(note, { delivery })).toMatchObject({ acceptedCount: 1, suppressed: false });
     expect(push.sendToUserWithReceipt).toHaveBeenCalledWith('worker', expect.objectContaining({ data: {
       notificationId: 'note', type: 'payout_sent', link: '/app/wallet', gig_id: 'gig', recipient_user_id: 'worker',
-    } }));
+    } }), { settledRegistrationIds: [] });
     expect(db.getTable('Notification')).toEqual([note]);
   });
   test.each(['global', 'gig'])('%s opt-out leaves in-app content and suppresses transport', async (kind) => {
@@ -117,7 +118,8 @@ describe('existing payment relay handles committed tip notices', () => {
   }
   test('delivers the committed tip with its capture-time preference and exact lease', async () => {
     const rpc = fixture(); expect(await relay()).toEqual({ processed: 1 });
-    expect(notificationMock.deliverStoredGigNotification).toHaveBeenCalledWith(tip, { pushAllowedAtCapture: true });
+    expect(notificationMock.deliverStoredGigNotification).toHaveBeenCalledWith(tip, { pushAllowedAtCapture: true,
+      delivery: { p_kind: 'gig_tip', p_id: 'payment', p_lease_id: 'tip-lease' } });
     expect(rpc).toHaveBeenCalledWith('finish_gig_tip_delivery', { p_id: 'payment', p_lease_id: 'tip-lease', p_outcome: 'done', p_error: null });
     expect(db.getTable('Notification')).toEqual([note]);
   });
@@ -133,7 +135,7 @@ describe('existing payment relay handles committed tip notices', () => {
   });
   test.each([false, true])('stored tip respects capture-time push permission=%s', async allowed => {
     db.seedTable('Notification', [tip]);
-    const receipt = await notify.deliverStoredGigNotification(tip, { pushAllowedAtCapture: allowed });
+    const receipt = await notify.deliverStoredGigNotification(tip, { pushAllowedAtCapture: allowed, delivery });
     expect(receipt.suppressed).toBe(!allowed);
     expect(push.sendToUserWithReceipt).toHaveBeenCalledTimes(allowed ? 1 : 0);
     expect(db.getTable('Notification')).toEqual([tip]);
