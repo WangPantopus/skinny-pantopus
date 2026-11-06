@@ -16,8 +16,7 @@ Everything after this section is the state at handoff. Since then:
   - The iOS composer check passed on the merged code, in the simulator with synthetic photos. A poster living far from the venue saw the inline note, and the post was stored with an exact pin at the venue. A second account saw "Photo taken here", also after a relaunch, with the marker at the venue. The refusals worked too.
   - Not verified in the apps: Alerts and Lost & Found in the iOS composer (API only), and Android and web on the merged code (CI only; both were checked in the apps before that merge).
   - It wasn't released when this was written. A release counts only once a Deploy Backend run's "Release backend" job succeeds on a commit containing it.
-- **The open items below are still open and not started.** They go to the founder one at a time.
-  - The video item is wider than it says below. From reading the code (not tested): the iOS post composer is the only place in the iOS app that removes a video's metadata before upload, and iOS chat attachments send the original. On the server, `routes/upload.js`, `services/chatMediaUpload.js` and `routes/files.js` all clean photos only, so a server fix has to cover all three.
+- **The open items below are still open and not started, apart from the first.** They go to the founder one at a time. New uploads no longer keep a video's location; see item 1.
 
 ## What the founder asked for
 
@@ -103,11 +102,14 @@ Verified:
 
 ## Open items found along the way (not started)
 
-1. **Videos keep their GPS.**
-   - Videos uploaded from the web, and from Android 9 and older, keep their location in the stored file. This predates #3461.
-   - Photos are already stripped by `validateAndStripUploads` in `backend/routes/upload.js`. Videos need the same treatment, without re-encoding.
-   - Someone needs to decide what to do about videos that are already stored.
-   - #3461 doesn't touch `upload.js`, so this can start any time.
+1. **Videos kept their GPS. New uploads are fixed; videos already stored are the founder's call.**
+   - The server now cleans every video it stores, in place and without re-encoding (`backend/services/videoMetadata.js`), through the flow that cleans photos: `routes/upload.js`, `services/chatMediaUpload.js` and `routes/files.js`.
+   - No client removes the location first. Measured with a synthetic clip and a made-up location:
+     - The iOS post composer and iOS chat use one export, which keeps a `loci` box with the exact coordinates: `exporter.metadata = []` doesn't remove it.
+     - The Android post composer on Android 13 sends the file byte for byte, `©xyz` included. Other Android versions weren't tested.
+     - The web composer and web chat send the original.
+   - Videos already stored: `node backend/scripts/clean-stored-video-locations.js` reports how many still carry a location and changes nothing. `--rewrite` cleans them with the same cleaner, and `--limit=1` tries one first. After a rewrite, the CDN keeps the old bytes until those keys are invalidated.
+   - Not removed: the capture time in the movie and track headers, and GPS that some dashcams write between frames, outside any box or track.
 2. **Home posts skip the location check.**
    - Posting as a Home with a far-away place tag isn't checked against the home's area. This also predates #3461.
    - Founder decision: should Home posts be limited to places near the home?
