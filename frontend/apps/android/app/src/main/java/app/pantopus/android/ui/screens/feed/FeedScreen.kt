@@ -61,7 +61,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -122,6 +121,7 @@ import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import app.pantopus.android.ui.theme.rememberReduceMotion
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
@@ -163,6 +163,8 @@ fun FeedScreen(
     onRefreshQuietStateCard: (() -> Unit)? = null,
     /** Ask Pantopus about posts nearby (AI assistant phase 1); null hides the button. */
     onAsk: ((AIScreenContext) -> Unit)? = null,
+    /** The feed's tab tapped again on this screen: the list goes back to its top, where the header is. */
+    scrollToTop: Flow<Unit>? = null,
     viewModel: PulseFeedViewModel = hiltViewModel(),
     contextBarViewModel: FeedContextBarViewModel = hiltViewModel(),
 ) {
@@ -236,6 +238,8 @@ fun FeedScreen(
         headerState.show()
         onPauseOrDispose { }
     }
+    // Over the map, the list's place doesn't count.
+    LaunchedEffect(mapMode) { if (mapMode) headerState.awayFromListTop = false }
     val headerProgress =
         animateFloatAsState(
             targetValue = if (headerState.isHidden) 1f else 0f,
@@ -478,6 +482,7 @@ fun FeedScreen(
                                 state = s,
                                 header = topCard,
                                 collapsingHeader = headerState,
+                                scrollToTop = scrollToTop,
                                 contentTop = headerHeight,
                                 headerBottom = { headerState.visibleBottomPx(headerProgress.value, reduceMotion) },
                                 newPostCount = newPostCount,
@@ -1414,6 +1419,7 @@ private fun PopulatedFrame(
     state: PulseFeedUiState.Loaded,
     header: (@Composable () -> Unit)? = null,
     collapsingHeader: PulseHeaderState? = null,
+    scrollToTop: Flow<Unit>? = null,
     contentTop: Dp = 0.dp,
     headerBottom: () -> Int = { 0 },
     onTapPost: (String) -> Unit,
@@ -1457,9 +1463,10 @@ private fun PopulatedFrame(
     LaunchedEffect(header != null) {
         if (header != null && listState.firstVisibleItemIndex <= 1) listState.scrollToItem(0)
     }
-    val headerScroll = rememberPulseHeaderScroll(collapsingHeader, listState)
+    PulseHeaderFollowsList(collapsingHeader, listState)
+    LaunchedEffect(listState, scrollToTop) { scrollToTop?.collect { listState.animateScrollToItem(0) } }
     // While typing in Search posts, the first tap on the posts only puts the keyboard away; the next one opens a post.
-    Box(modifier = Modifier.fillMaxSize().firstTapClosesKeyboard().nestedScroll(headerScroll).pullRefresh(pullState)) {
+    Box(modifier = Modifier.fillMaxSize().firstTapClosesKeyboard().pullRefresh(pullState)) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().testTag("pulseFeedList"),

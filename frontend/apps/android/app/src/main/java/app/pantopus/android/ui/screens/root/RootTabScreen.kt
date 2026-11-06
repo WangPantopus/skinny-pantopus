@@ -2342,6 +2342,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     // Place tapped again on its root: one event, which scrolls the root back to the top.
     val placeReselects = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
     val todayReselects = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+    val nearbyReselects = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
     var ballotHomeId by rememberSaveable { mutableStateOf<String?>(null) }
     // Place's "Next step: Add radon test information": Today opens its home setup on this Home's radon question once,
     // then clears it (as on iPhone).
@@ -2956,6 +2957,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             if (target == PantopusRoute.Today && navController.currentDestination?.route == PantopusRoute.Today.path) {
                                 todayReselects.tryEmit(Unit)
                             }
+                            // Nearby tapped again on its own page: back to the top of the feed, where the header is.
+                            if (target == PantopusRoute.Nearby && navController.currentDestination?.route == PantopusRoute.Nearby.path) {
+                                nearbyReselects.tryEmit(Unit)
+                            }
                             // The Mailbox goes back up to its hero when Mail is tapped again on it.
                             if (target == PantopusRoute.Mail && navController.currentDestination?.route == PantopusRoute.Mail.path) {
                                 MailboxRepository.announceMailboxTop(incoming = false)
@@ -3073,6 +3078,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             pulse = { segmentRow ->
                                 FeedScreen(
                                     header = segmentRow,
+                                    scrollToTop = nearbyReselects,
                                     onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
                                     onOpenAuthor = { link -> navController.navigate(ChildRoutes.pulseAuthor(link)) },
                                     onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },

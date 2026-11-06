@@ -307,8 +307,9 @@ export default function FeedPage() {
 
   // ── The Pulse header (founder request 2026-10-22) ─────────
   // One header block over the content, which fills the screen: sticky over the list, overlaid on
-  // the full-screen map. It slides away as the list scrolls down or the map is dragged up, and
-  // comes back on the way up (usePulseQuickReturn). Nothing on it is removed.
+  // the full-screen map. It slides away as the list scrolls down or the map is dragged up; it
+  // comes back at the top of the list, or as the map is dragged down (usePulseQuickReturn).
+  // Nothing on it is removed.
   const reducedMotion = useReducedMotion();
   const listHasNothingToScroll = feed.loading || areaResolving || areaFailed || feed.error || feed.posts.length === 0;
   const quick = usePulseQuickReturn({
