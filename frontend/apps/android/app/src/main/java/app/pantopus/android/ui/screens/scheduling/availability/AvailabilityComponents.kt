@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
@@ -99,8 +100,9 @@ fun AvailabilityTopBar(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            // Grows with a text action (Save, Done), which is wider than the icon button.
             Box(
-                modifier = Modifier.size(ICON_BUTTON_SIZE),
+                modifier = Modifier.widthIn(min = ICON_BUTTON_SIZE),
                 contentAlignment = Alignment.Center,
             ) {
                 trailing?.invoke()
