@@ -21,12 +21,8 @@ interface NotificationPreferencesApi {
      *
      * Always 200s: the handler falls back to a hand-built default object
      * when the user has no `UserNotificationPreferences` row
-     * (`hub.js:666-684`).
+     * (`hub.js:666-684`). Sends the stored ETag; a 304 means the copy is current.
      */
-    @GET("api/hub/preferences")
-    suspend fun preferences(): NotificationPreferencesResponse
-
-    /** [preferences] for the screens' store: sends the stored ETag; a 304 means the copy is current. */
     @GET("api/hub/preferences")
     suspend fun preferencesConditional(
         @Header("If-None-Match") etag: String?,

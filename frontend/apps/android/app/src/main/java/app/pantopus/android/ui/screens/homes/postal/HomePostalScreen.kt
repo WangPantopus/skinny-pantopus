@@ -32,6 +32,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.homes.HomePostalStatus
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Spacing
@@ -110,26 +111,7 @@ private fun HomePostalCurrentStatus(
     onNavigate: (String, HomePostalNavigation) -> Unit,
 ) {
     val status = state.status ?: return
-    val postcard = status.postcard
-    if (postcard != null) {
-        Text(
-            HomePostalMessages.postcardHeadline(postcard.status, postcard.delivery, postcard.attemptsRemaining),
-            style = PantopusTextStyle.h3,
-            modifier = Modifier.testTag("homePostalDelivery"),
-        )
-        if (!postcardEnded(postcard.status)) {
-            Text(HomePostalMessages.postcardStatus(postcard.status), style = PantopusTextStyle.body)
-        }
-        if (postcard.status == "pending") {
-            Text(
-                triesLeft(postcard.attemptsRemaining),
-                style = PantopusTextStyle.caption,
-                modifier = Modifier.testTag("homePostalAttemptsRemaining"),
-            )
-        }
-    } else {
-        Text("You haven't requested a postcard yet.", style = PantopusTextStyle.body)
-    }
+    HomePostalPostcardSummary(status)
     status.restriction?.let {
         Text(HomePostalMessages.restriction(it), style = PantopusTextStyle.body, modifier = Modifier.testTag("homePostalRestriction"))
     }
@@ -139,6 +121,14 @@ private fun HomePostalCurrentStatus(
             Text(HomePostalMessages.address(it), style = PantopusTextStyle.body, modifier = Modifier.testTag("homePostalResumeAddress"))
         }
         HomePostalButton("Send the postcard", "homePostalResume", viewModel.canResumeMail, viewModel::resumeMail)
+    }
+    listOf(
+        HomePostalNavigation.Document to "Verify another way",
+        HomePostalNavigation.AddressWrong to "This address is wrong",
+    ).forEach { (destination, label) ->
+        if (viewModel.permits(destination)) {
+            HomePostalButton(label, "homePostal${destination.name}") { onNavigate(viewModel.homeId, destination) }
+        }
     }
     if (status.canRequest) HomePostalMailForm(state, viewModel)
     if (status.canVerify) HomePostalCodeForm(state, viewModel)
@@ -159,6 +149,35 @@ private fun HomePostalCurrentStatus(
         }
     }
     HomePostalButton("Refresh", "homePostalRefresh", onClick = viewModel::open)
+}
+
+@Composable
+private fun HomePostalPostcardSummary(status: HomePostalStatus) {
+    val postcard = status.postcard
+    if (postcard == null) {
+        Text("You haven't requested a postcard yet.", style = PantopusTextStyle.body)
+        return
+    }
+    val mail = HomePostalMailCopy.forState(postcard.mailState)
+    Text(
+        mail?.headline ?: HomePostalMessages.postcardHeadline(postcard.status, postcard.delivery, postcard.attemptsRemaining),
+        style = PantopusTextStyle.h3,
+        modifier = Modifier.testTag("homePostalDelivery"),
+    )
+    if (mail != null) {
+        if (status.restriction != "POSTCARD_RETURNED_LIMIT") {
+            Text(mail.body, style = PantopusTextStyle.body, modifier = Modifier.testTag("homePostalMailState"))
+        }
+    } else if (!postcardEnded(postcard.status)) {
+        Text(HomePostalMessages.postcardStatus(postcard.status), style = PantopusTextStyle.body)
+    }
+    if (postcard.status == "pending") {
+        Text(
+            triesLeft(postcard.attemptsRemaining),
+            style = PantopusTextStyle.caption,
+            modifier = Modifier.testTag("homePostalAttemptsRemaining"),
+        )
+    }
 }
 
 @OptIn(ExperimentalComposeUiApi::class)

@@ -2830,7 +2830,8 @@ public struct YouTabRoot: View {
                     case .residency:
                         if path.last != .residencyStatus(homeId: homeId) { path.append(.residencyStatus(homeId: homeId)) }
                     case .ownership: path.append(.claimOwnership(homeId: homeId))
-                    case .addHome: path.append(.joinHome(homeId: homeId))
+                    case .addHome, .addressWrong: path.append(.joinHome(homeId: homeId))
+                    case .document: path.append(.verifyResidency(homeId: homeId))
                     }
                 }
             )

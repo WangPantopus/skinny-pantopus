@@ -37,6 +37,11 @@ async function claimPrivateSetup({ homeId, user, source }) {
   if (!(await isOn(user))) {
     return { claimed: false, reason: 'off', status: 404, message: REFUSALS.HOME_CLAIM_OFF[1] };
   }
+  // Nothing unlocks while USPS hasn't answered for this address, or after the re-check refused it.
+  const postalHold = await require('./addressValidation/postalRecheckService').holdForHome(homeId);
+  if (postalHold) {
+    return { claimed: false, reason: 'HOME_CLAIM_UNAVAILABLE', status: 409, message: postalHold.message };
+  }
   const watch = await watchResidencyRequest({ homeId, userId, source });
   if (!watch || watch.level === 'high') {
     return { claimed: false, reason: 'held', status: 200,

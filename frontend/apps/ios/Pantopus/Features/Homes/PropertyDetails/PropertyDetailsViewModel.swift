@@ -6,7 +6,7 @@
 //  fields from `GET /api/homes/:id/property-details` (route
 //  `backend/routes/home.js:1949`) and projects them into a `.clean`
 //  state. The property facts + address are backed for everyone who can
-//  open the home; the county record (ATTOM) sections for its verified
+//  open the home; the county record sections for its verified
 //  owners, whom the server sends them to. The Verification (provenance)
 //  section + the mismatch banner have no clean backend source, so they
 //  stay empty / nil. An injectable `loader` seam (non-nil) bypasses the
@@ -161,7 +161,7 @@ final class PropertyDetailsViewModel {
         // The server words and formats every county-record row.
         let sections = (countyRecord?.sections ?? []).compactMap { section -> PropertyRecordSection? in
             let rows = section.rows.map {
-                PropertyFactRow(id: $0.id, label: $0.label, value: $0.value, mono: $0.mono ?? false)
+                PropertyFactRow(id: $0.id, label: $0.label, value: $0.value, sub: $0.tag?.nonBlank, mono: $0.mono ?? false)
             }
             return rows.isEmpty ? nil : PropertyRecordSection(id: section.id, title: section.title, rows: rows, note: section.note)
         }

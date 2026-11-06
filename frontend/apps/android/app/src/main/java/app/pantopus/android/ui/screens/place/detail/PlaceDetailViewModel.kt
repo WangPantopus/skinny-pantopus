@@ -792,7 +792,10 @@ class PlaceDetailViewModel
                         val left = r.data.invitesRemaining
                         val plural = if (left == 1) "invite" else "invites"
                         _actionToast.value =
-                            PlaceActionToast("Postcard on its way — $left $plural left this week.", isError = false)
+                            PlaceActionToast(
+                                r.data.message.takeIf { r.data.pending } ?: "Postcard on its way — $left $plural left this week.",
+                                isError = false,
+                            )
                     }
                     is NetworkResult.Failure ->
                         _actionToast.value =

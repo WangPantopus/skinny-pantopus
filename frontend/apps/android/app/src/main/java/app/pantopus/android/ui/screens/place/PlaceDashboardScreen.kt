@@ -171,7 +171,7 @@ fun PlaceDashboardScreen(
         if ((state as? PlaceDashboardUiState.Error)?.unavailable == true) onPlaceUnavailable(homeId)
     }
     HomeCopyLifecycle({ viewModel.load(homeId) }, viewModel::suspendContent)
-    RefreshOnStoreChange { viewModel.load(homeId) }
+    RefreshOnStoreChange { viewModel.recheck(homeId) }
 
     var showSwitcher by remember { mutableStateOf(false) }
     var showVerify by remember { mutableStateOf(false) }

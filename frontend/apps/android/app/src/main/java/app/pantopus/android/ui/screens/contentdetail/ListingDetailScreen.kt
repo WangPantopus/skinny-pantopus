@@ -41,7 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
 import app.pantopus.android.ui.components.ToastKind
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.settings.payments.StripePaymentSheets
 import app.pantopus.android.ui.theme.PantopusColors
@@ -174,7 +174,7 @@ fun ListingDetailScreen(
 
     if (sheetVisible) {
         ModalBottomSheet(
-            modifier = Modifier.closesKeyboardOnTapOrScroll(),
+            modifier = Modifier.sheetKeyboardRules(),
             onDismissRequest = { sheetVisible = false },
             sheetState = sheetState,
         ) {

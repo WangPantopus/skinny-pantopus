@@ -17,6 +17,7 @@
  */
 
 const logger = require('../../utils/logger');
+const addressRegistryConfig = require('../../config/addressRegistry');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const { computeAddressHash } = require('../../utils/normalizeAddress');
 
@@ -268,6 +269,12 @@ class CanonicalAddressService {
   _mergeStoredMetadata(existingAddress, nextFields) {
     const merged = { ...nextFields };
 
+    // A registry point isn't replaced by a passing Google answer: Google's would have to be deleted again in 30 days.
+    if (existingAddress?.geocode_provider === 'pantopus_registry' && nextFields.geocode_provider !== 'pantopus_registry') {
+      delete merged.geocode_lat;
+      delete merged.geocode_lng;
+    }
+
     if (existingAddress?.validation_raw_response || nextFields.validation_raw_response) {
       merged.validation_raw_response = {
         ...(existingAddress?.validation_raw_response || {}),
@@ -391,8 +398,17 @@ class CanonicalAddressService {
   _buildPostalFields(address, google, smarty, place, providerPlace, unitIntelligence, parcelIntel) {
     const fields = {};
 
-    // Geocode from Google (or from normalized address)
-    if (google?.geocode) {
+    // Pantopus's own point when the registry has one and its switch is on: it can be kept. Else from Google (or from normalized address)
+    const registryPoint = addressRegistryConfig.coordinatesMode() === 'on' ? unitIntelligence?.registry_point : null;
+    if (registryPoint) {
+      fields.geocode_lat = registryPoint.lat;
+      fields.geocode_lng = registryPoint.lng;
+      fields.geocode_provider = 'pantopus_registry';
+      fields.geocode_mode = 'verified';
+      fields.geocode_accuracy = registryPoint.accuracy;
+      fields.geocode_source_flow = 'address_validation';
+      fields.geocode_created_at = new Date().toISOString();
+    } else if (google?.geocode) {
       fields.geocode_lat = google.geocode.lat;
       fields.geocode_lng = google.geocode.lng;
     } else if (address.lat != null && address.lng != null) {
@@ -416,7 +432,9 @@ class CanonicalAddressService {
       fields.commercial_mailbox_flag = googlePostal
         ? smarty.commercial_mailbox ?? null
         : !!smarty.commercial_mailbox;
-      fields.deliverability_status = smarty.dpv_match_code === 'N'
+      fields.deliverability_status = smarty.not_listed
+        ? 'unverified'
+        : smarty.dpv_match_code === 'N'
         ? 'undeliverable'
         : (smarty.dpv_match_code === 'D' || smarty.dpv_match_code === 'S')
           ? 'partial'
@@ -453,7 +471,7 @@ class CanonicalAddressService {
 
     // Smarty postal validation data stored as JSON blob for caching
     if (googlePostal) {
-      const pending = !smarty.dpv_match_code || smarty.coming_soon;
+      const pending = !smarty.dpv_match_code || smarty.coming_soon || smarty.not_listed;
       fields.validation_vendor = 'google';
       fields.last_validated_at = smarty.checked_at || new Date().toISOString();
       rawResponse.postal_source = 'google';
@@ -463,7 +481,7 @@ class CanonicalAddressService {
       for (const key of [
         'dpv_match_code', 'rdi_type', 'home_and_business', 'missing_secondary', 'unconfirmed_secondary',
         'commercial_mailbox', 'vacant_flag', 'no_stat', 'no_stat_reason', 'footnotes', 'record_type',
-        'carrier_route_type', 'po_box_flag', 'po_box_only_zip', 'coming_soon', 'usps_suspended',
+        'carrier_route_type', 'po_box_flag', 'po_box_only_zip', 'coming_soon', 'not_listed', 'usps_suspended',
       ]) {
         rawResponse[key] = smarty[key] ?? null;
       }
@@ -628,6 +646,9 @@ class CanonicalAddressService {
 
     if (Object.keys(rawResponse).length > 0) {
       fields.validation_raw_response = rawResponse;
+    }
+    if (registryPoint) {
+      fields.provider_versions = { ...(fields.provider_versions || {}), address_registry: { id: registryPoint.id, release: registryPoint.release } };
     }
 
     return fields;

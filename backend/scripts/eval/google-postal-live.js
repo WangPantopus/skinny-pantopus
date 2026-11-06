@@ -35,7 +35,7 @@ function requestBody(item) {
   if (item.line2) addressLines.push(item.line2);
   return {
     address: {
-      regionCode: 'US',
+      regionCode: item.regionCode || 'US',
       locality: item.city,
       administrativeArea: item.state,
       postalCode: item.zip,

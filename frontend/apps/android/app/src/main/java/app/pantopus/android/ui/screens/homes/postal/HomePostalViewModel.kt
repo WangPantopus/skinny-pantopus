@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-enum class HomePostalNavigation { Home, Residency, Ownership, AddHome }
+enum class HomePostalNavigation { Home, Residency, Ownership, AddHome, Document, AddressWrong }
 
 enum class HomePostalAddressField { Line1, Line2, City, State, Zip, Country }
 
@@ -237,8 +237,18 @@ class HomePostalViewModel
                 HomePostalNavigation.Residency -> true
                 HomePostalNavigation.Ownership -> progress.nextStep == "ownership_verification"
                 HomePostalNavigation.AddHome -> progress.nextStep == "resubmit"
+                HomePostalNavigation.Document -> mailEnded || _state.value.status?.postcard?.mailState == "delayed"
+                HomePostalNavigation.AddressWrong -> mailEnded
             }
         }
+
+        /** The mail couldn't prove this address, so the screen offers the ways on. */
+        val mailEnded: Boolean
+            get() {
+                val status = _state.value.status
+                val mailState = status?.postcard?.mailState
+                return mailState in setOf("returned", "rerouted", "failed") || status?.restriction == "POSTCARD_RETURNED_LIMIT"
+            }
 
         private fun current(revision: Long): Boolean = visible && generation == revision && session.isCurrent
 

@@ -4,7 +4,10 @@ import { useMemo, useState } from 'react';
 import type { AttomPropertyDetailPayload } from '@pantopus/api';
 import { buildAttomDisplaySections, type AttomDisplaySection } from '@pantopus/utils';
 
-type Section = AttomDisplaySection & { note?: string | null };
+type Section = Omit<AttomDisplaySection, 'rows'> & {
+  rows: (AttomDisplaySection['rows'][number] & { tag?: string | null })[];
+  note?: string | null;
+};
 
 type Props = {
   attomPropertyDetail?: AttomPropertyDetailPayload | null;
@@ -38,7 +41,10 @@ function SectionBlock({
           {section.rows.map((row, i) => (
             <div key={`${section.id}-${i}`} className="grid grid-cols-1 sm:grid-cols-2 gap-1 px-3 py-2 text-xs">
               <div className="text-app-text-secondary leading-snug">{row.label}</div>
-              <div className="text-app-text-strong font-medium leading-snug break-words">{row.value}</div>
+              <div className="text-app-text-strong font-medium leading-snug break-words">
+                {row.value}
+                {row.tag ? <div className="mt-0.5 text-[11px] font-normal text-app-text-muted">{row.tag}</div> : null}
+              </div>
             </div>
           ))}
           {section.note ? (

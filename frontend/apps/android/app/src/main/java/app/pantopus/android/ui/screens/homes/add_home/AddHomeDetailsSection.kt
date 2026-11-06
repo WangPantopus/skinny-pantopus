@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.pantopus.android.core.LaunchFeatures
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsFields
+import app.pantopus.android.data.api.models.homes.PropertySuggestionsResponse
+import app.pantopus.android.data.api.models.homes.RecordProvenanceDto
 import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTextStyle
@@ -48,7 +50,7 @@ internal val ADD_HOME_HAIRLINE: Dp = 1.dp
 /**
  * A12.2 — the Add-Home wizard's property Details block. Ports RN's
  * `src/components/homes/DetailsStep.tsx`: a public-records card fed by
- * `POST /api/homes/property-suggestions` (ATTOM → heuristics → optional
+ * `POST /api/homes/property-suggestions` (county record → heuristics → optional
  * LLM), followed by the eight editable fields — nickname, home type,
  * bedrooms, bathrooms, home size, lot size, year built and description.
  *
@@ -62,50 +64,27 @@ internal fun AddHomeDetailsSection(
     vm: AddHomeWizardViewModel,
 ) {
     val suggestions = state.propertySuggestions
-    val hasRecord = suggestions?.hasAttomRecord == true
+    val hasRecord = suggestions?.hasPublicRecord == true
     // While the county record is on its way, the fields it fills say so.
     val lookingUp = "Looking up…".takeIf { state.propertyLookupPending }
+    val recorded = suggestions?.suggestions
+    val ownEntry = { value: String, record: String? -> ownEntryTag(suggestions, value, record) }
     Column(
         modifier = Modifier.fillMaxWidth().testTag("addHomeDetailsSection"),
         verticalArrangement = Arrangement.spacedBy(Spacing.s4),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-            Text(
-                text =
-                    when {
-                        hasRecord -> "Review public property details"
-                        state.propertyLookupComplete -> "Confirm property details"
-                        else -> "Tell us about your home"
-                    },
-                style = PantopusTextStyle.body,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.appText,
-            )
-            Text(
-                text =
-                    when {
-                        hasRecord ->
-                            "We found public records for this address. Check the details, " +
-                                "then edit anything that looks off."
-                        state.propertyLookupComplete ->
-                            "Confirm the basic home details before continuing."
-                        state.propertyLookupPending ->
-                            "Looking up public records for this address. The details below fill in by themselves."
-                        else -> "All optional — you can always add these later."
-                    },
-                style = PantopusTextStyle.caption,
-                color = PantopusColors.appTextSecondary,
-            )
-        }
+        DetailsHeading(state, hasRecord, buildingOnly = suggestions?.isBuildingOnly == true)
 
         when {
             state.isLoadingPropertySuggestions || state.propertyLookupPending -> PublicRecordsSkeleton()
             state.propertyLookupComplete ->
                 PublicRecordsCard(
                     hasRecord = hasRecord,
+                    provenance = suggestions?.provenance,
                     message = state.propertyLookupMessage,
                     fields = suggestions?.suggestions,
                     sources = suggestions?.fieldSources.orEmpty(),
+                    tags = suggestions?.fieldTags.orEmpty(),
                 )
         }
 
@@ -155,6 +134,7 @@ internal fun AddHomeDetailsSection(
                     placeholder = lookingUp ?: "3",
                     value = state.form.details.bedrooms,
                     onValueChange = vm::updateBedrooms,
+                    tag = ownEntry(state.form.details.bedrooms, recorded?.bedrooms?.toString()),
                     keyboardType = KeyboardType.Number,
                     modifier = Modifier.weight(1f),
                     testTag = "addHome_bedrooms",
@@ -164,6 +144,7 @@ internal fun AddHomeDetailsSection(
                     placeholder = lookingUp ?: "2",
                     value = state.form.details.bathrooms,
                     onValueChange = vm::updateBathrooms,
+                    tag = ownEntry(state.form.details.bathrooms, recorded?.bathrooms?.let(AddHomeWizardViewModel::trimTrailingZero)),
                     keyboardType = KeyboardType.Decimal,
                     modifier = Modifier.weight(1f),
                     testTag = "addHome_bathrooms",
@@ -175,6 +156,7 @@ internal fun AddHomeDetailsSection(
                     placeholder = lookingUp ?: "e.g. 1200",
                     value = state.form.details.sqFt,
                     onValueChange = vm::updateSqFt,
+                    tag = ownEntry(state.form.details.sqFt, recorded?.sqFt?.toString()),
                     optional = true,
                     keyboardType = KeyboardType.Number,
                     modifier = Modifier.weight(1f),
@@ -185,6 +167,7 @@ internal fun AddHomeDetailsSection(
                     placeholder = lookingUp ?: "e.g. 5000",
                     value = state.form.details.lotSqFt,
                     onValueChange = vm::updateLotSqFt,
+                    tag = ownEntry(state.form.details.lotSqFt, recorded?.lotSqFt?.toString()),
                     optional = true,
                     keyboardType = KeyboardType.Number,
                     modifier = Modifier.weight(1f),
@@ -196,6 +179,7 @@ internal fun AddHomeDetailsSection(
                 placeholder = lookingUp ?: "e.g. 2017",
                 value = state.form.details.yearBuilt,
                 onValueChange = vm::updateYearBuilt,
+                tag = ownEntry(state.form.details.yearBuilt, recorded?.yearBuilt?.toString()),
                 optional = true,
                 keyboardType = KeyboardType.Number,
                 testTag = "addHome_yearBuilt",
@@ -260,18 +244,62 @@ private fun HomeTypeChips(
     }
 }
 
+@Composable
+private fun DetailsHeading(
+    state: AddHomeUiState,
+    hasRecord: Boolean,
+    buildingOnly: Boolean,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+        Text(
+            text =
+                when {
+                    hasRecord && !buildingOnly -> "Review public property details"
+                    state.propertyLookupComplete -> "Confirm property details"
+                    else -> "Tell us about your home"
+                },
+            style = PantopusTextStyle.body,
+            fontWeight = FontWeight.SemiBold,
+            color = PantopusColors.appText,
+        )
+        Text(
+            text =
+                when {
+                    buildingOnly -> state.propertyLookupMessage
+                    hasRecord ->
+                        "We found public records for this address. Check the details, " +
+                            "then edit anything that looks off."
+                    state.propertyLookupComplete ->
+                        "Confirm the basic home details before continuing."
+                    state.propertyLookupPending ->
+                        "Looking up public records for this address. The details below fill in by themselves."
+                    else -> "All optional — you can always add these later."
+                },
+            style = PantopusTextStyle.caption,
+            color = PantopusColors.appTextSecondary,
+        )
+    }
+}
+
+/** Beside a field the person changed, once the record names its source. */
+private fun ownEntryTag(
+    suggestions: PropertySuggestionsResponse?,
+    value: String,
+    recorded: String?,
+): String? = "Your entry".takeIf { suggestions?.provenance != null && value.isNotEmpty() && value != recorded }
+
 /**
- * The "Public records (ATTOM)" card. Renders the structured fields the
- * lookup returned plus their provenance, or the explanatory copy when
- * nothing came back. Mirrors RN's `AttomStructuredFields` block
- * (`DetailsStep.tsx:72-111`).
+ * The public records card. Renders the structured fields the lookup returned
+ * and where each came from, or the explanatory copy when nothing came back.
  */
 @Composable
 private fun PublicRecordsCard(
     hasRecord: Boolean,
+    provenance: RecordProvenanceDto?,
     message: String,
     fields: PropertySuggestionsFields?,
     sources: Map<String, String>,
+    tags: Map<String, String>,
 ) {
     Column(
         modifier =
@@ -285,18 +313,18 @@ private fun PublicRecordsCard(
         verticalArrangement = Arrangement.spacedBy(Spacing.s2),
     ) {
         Text(
-            text = if (hasRecord) "Public records (ATTOM)" else "Public records",
+            text = provenance?.title?.takeIf { hasRecord } ?: "Public records",
             style = PantopusTextStyle.caption,
             fontWeight = FontWeight.SemiBold,
             color = PantopusColors.appTextSecondary,
         )
         Text(
-            text = if (hasRecord) "Data from public records via ATTOM." else message,
+            text = if (hasRecord) provenance?.label ?: "Data from public records." else message,
             style = PantopusTextStyle.caption,
             color = PantopusColors.appTextSecondary,
         )
         if (hasRecord) {
-            publicRecordRows(fields, sources).forEach { row ->
+            publicRecordRows(fields, sources, tags).forEach { row ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -334,9 +362,24 @@ private data class PublicRecordRow(
     val source: String?,
 )
 
+/** The server's tag for a field, or plain words for where it came from. */
+private fun fieldTag(
+    field: String,
+    sources: Map<String, String>,
+    tags: Map<String, String>,
+): String? =
+    tags[field]
+        ?: when (sources[field]) {
+            "attom", "record" -> "Public record"
+            "heuristic" -> "Address hint"
+            "llm" -> "Estimate"
+            else -> null
+        }
+
 private fun publicRecordRows(
     fields: PropertySuggestionsFields?,
     sources: Map<String, String>,
+    tags: Map<String, String>,
 ): List<PublicRecordRow> {
     if (fields == null) return emptyList()
     val rows = mutableListOf<PublicRecordRow>()
@@ -345,19 +388,19 @@ private fun publicRecordRows(
             PublicRecordRow(
                 "Property type",
                 AddHomeHomeType.fromCanonical(it)?.label ?: it,
-                sources["home_type"],
+                fieldTag("home_type", sources, tags),
             ),
         )
     }
-    fields.bedrooms?.let { rows.add(PublicRecordRow("Bedrooms", it.toString(), sources["bedrooms"])) }
+    fields.bedrooms?.let { rows.add(PublicRecordRow("Bedrooms", it.toString(), fieldTag("bedrooms", sources, tags))) }
     fields.bathrooms?.let {
         val text = if (it == Math.floor(it)) it.toInt().toString() else it.toString()
-        rows.add(PublicRecordRow("Bathrooms", text, sources["bathrooms"]))
+        rows.add(PublicRecordRow("Bathrooms", text, fieldTag("bathrooms", sources, tags)))
     }
-    fields.sqFt?.let { rows.add(PublicRecordRow("Home size", sqFtText(it), sources["sq_ft"])) }
-    fields.lotSqFt?.let { rows.add(PublicRecordRow("Lot size", sqFtText(it), sources["lot_sq_ft"])) }
+    fields.sqFt?.let { rows.add(PublicRecordRow("Home size", sqFtText(it), fieldTag("sq_ft", sources, tags))) }
+    fields.lotSqFt?.let { rows.add(PublicRecordRow("Lot size", sqFtText(it), fieldTag("lot_sq_ft", sources, tags))) }
     fields.yearBuilt?.let {
-        rows.add(PublicRecordRow("Year built", it.toString(), sources["year_built"]))
+        rows.add(PublicRecordRow("Year built", it.toString(), fieldTag("year_built", sources, tags)))
     }
     return rows
 }
@@ -399,6 +442,8 @@ internal fun AddHomeTextField(
     testTag: String,
     modifier: Modifier = Modifier,
     optional: Boolean = false,
+    // Beside the label, where "Optional" goes: "Your entry".
+    tag: String? = null,
     keyboardType: KeyboardType = KeyboardType.Text,
     singleLine: Boolean = true,
     isSecure: Boolean = false,
@@ -413,9 +458,9 @@ internal fun AddHomeTextField(
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.appTextSecondary,
             )
-            if (optional) {
+            (tag ?: "Optional".takeIf { optional })?.let {
                 Text(
-                    text = "Optional",
+                    text = it,
                     style = PantopusTextStyle.overline,
                     color = PantopusColors.appTextMuted,
                 )

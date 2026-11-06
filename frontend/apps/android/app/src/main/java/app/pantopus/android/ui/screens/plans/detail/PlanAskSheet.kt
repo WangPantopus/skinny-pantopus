@@ -34,7 +34,7 @@ import app.pantopus.android.data.plans.planKind
 import app.pantopus.android.data.plans.standing
 import app.pantopus.android.ui.components.PantopusCheckbox
 import app.pantopus.android.ui.components.PrimaryButton
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.screens.plans.components.PlanChoice
 import app.pantopus.android.ui.screens.plans.components.PlanChoiceGroup
 import app.pantopus.android.ui.screens.plans.components.PlanOverline
@@ -79,7 +79,7 @@ internal fun PlanAskSheet(
         onDismissRequest = onClose,
         sheetState = sheet,
         containerColor = PantopusColors.appSurface,
-        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+        modifier = Modifier.sheetKeyboardRules(),
     ) {
         Column(
             modifier =

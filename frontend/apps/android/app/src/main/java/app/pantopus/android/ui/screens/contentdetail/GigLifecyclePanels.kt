@@ -60,8 +60,8 @@ import app.pantopus.android.data.api.models.gigs.GigPaymentResponse
 import app.pantopus.android.data.api.models.gigs.GigReportReason
 import app.pantopus.android.ui.components.FutureDateTimePickerDialogs
 import app.pantopus.android.ui.components.Shimmer
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.components.keepsKeyboard
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -284,7 +284,7 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
         ModalBottomSheet(
             onDismissRequest = { runningLateSheetVisible = false },
             sheetState = sheetState,
-            modifier = Modifier.closesKeyboardOnTapOrScroll(),
+            modifier = Modifier.sheetKeyboardRules(),
         ) {
             GigRunningLateSheetContent(
                 onSubmit = { etaMinutes, note ->
@@ -307,7 +307,7 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
         ModalBottomSheet(
             onDismissRequest = { proposeChangeSheetVisible = false },
             sheetState = sheetState,
-            modifier = Modifier.closesKeyboardOnTapOrScroll(),
+            modifier = Modifier.sheetKeyboardRules(),
         ) {
             GigProposeChangeSheetContent(
                 onSubmit = { type, description, amountChange, timeChangeMinutes ->
@@ -337,7 +337,7 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
         ModalBottomSheet(
             onDismissRequest = { counterTarget = null },
             sheetState = sheetState,
-            modifier = Modifier.closesKeyboardOnTapOrScroll(),
+            modifier = Modifier.sheetKeyboardRules(),
         ) {
             GigCounterSheetContent(
                 bid = target,
@@ -375,7 +375,7 @@ fun GigLifecycleSections(viewModel: GigDetailViewModel) {
         ModalBottomSheet(
             onDismissRequest = { noShowSheetVisible = false },
             sheetState = sheetState,
-            modifier = Modifier.closesKeyboardOnTapOrScroll(),
+            modifier = Modifier.sheetKeyboardRules(),
         ) {
             GigNoShowSheetContent(
                 onSubmit = { description ->
@@ -1915,7 +1915,7 @@ private fun GigReviewSection(
         ModalBottomSheet(
             onDismissRequest = { sheetVisible = false },
             sheetState = sheetState,
-            modifier = Modifier.closesKeyboardOnTapOrScroll(),
+            modifier = Modifier.sheetKeyboardRules(),
         ) {
             GigReviewSheetContent(
                 initialRating = presetRating,

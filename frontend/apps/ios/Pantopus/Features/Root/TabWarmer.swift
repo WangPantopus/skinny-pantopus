@@ -4,9 +4,10 @@
 //
 //  "Get there first" (Instant Screens design, tool 6): once the first tab has
 //  loaded after launch, the other tabs' first reads run quietly so opening
-//  them is instant. Today shares Place's copy and Messages the chat badge's,
-//  so only the Pulse tab's quiet-state card (the neighborhood meter) is read
-//  here. Never in Low Data Mode or offline, and once per account per launch.
+//  them is instant. Today shares Place's copy and Messages opens from its
+//  encrypted copy, so only the Pulse tab's quiet-state card (the neighborhood
+//  meter) is read here. Never in Low Data Mode or offline, and once per
+//  account per launch.
 //
 
 import Foundation

@@ -74,9 +74,9 @@ function fileStorage(url) {
   };
 }
 
-function createStorage() {
-  if (!config.manifestUrl) return null;
-  const url = new URL(config.manifestUrl);
+function createStorage(root = config.manifestUrl) {
+  if (!root) return null;
+  const url = new URL(root);
   return url.protocol === 's3:' ? s3Storage(url) : fileStorage(url);
 }
 
@@ -208,4 +208,4 @@ function createReader(storage = createStorage()) {
 
 const shared = createReader();
 
-module.exports = { stateFile: shared.stateFile, recordsAt: shared.recordsAt, suppressions: shared.suppressions, createReader, StorageUnavailable };
+module.exports = { stateFile: shared.stateFile, recordsAt: shared.recordsAt, suppressions: shared.suppressions, createReader, createStorage, StorageUnavailable };

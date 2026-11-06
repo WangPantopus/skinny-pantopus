@@ -26,10 +26,18 @@ const asOf = () => RELEASE.slice(0, 10);
 
 /** Yields the rows a county's connector would: see nad.cjs. */
 async function* rows({ states = null }) {
-  const duck = spawn(process.env.DUCKDB || 'duckdb', ['-c', query()], { stdio: ['ignore', 'pipe', 'ignore'] });
+  // Through a shell pipe: on Linux a child can't open /dev/stdout when it's the socket Node gives it. DuckDB's own errors name
+  // files and SQL, not rows, so the first of them goes in the log.
+  const duck = spawn('bash', ['-c', 'set -o pipefail; "$DUCKDB_BIN" -c "$DUCKDB_QUERY" | cat'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, DUCKDB_BIN: process.env.DUCKDB || 'duckdb', DUCKDB_QUERY: query() },
+  });
+  let complaint = '';
+  duck.stderr.setEncoding('utf8');
+  duck.stderr.on('data', (text) => { if (!complaint) complaint = text.split('\n')[0].slice(0, 200); });
   const exited = new Promise((resolve, reject) => {
     duck.on('error', reject);
-    duck.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`DuckDB exited ${code}`))));
+    duck.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`DuckDB exited ${code}: ${complaint}`))));
   });
   duck.stdout.setEncoding('utf8');
   let header = null;

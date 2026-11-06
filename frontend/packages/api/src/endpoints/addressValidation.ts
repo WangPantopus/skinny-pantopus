@@ -167,6 +167,8 @@ export type MailVerifyStatusResponse = {
   verification_id: string;
   status: MailVerificationStatus;
   delivery_unknown?: boolean;
+  /** Why an expired attempt ended, when the mail ended it. */
+  mail_outcome?: 'returned' | 'rerouted' | 'failed';
   expires_at: string;
   cooldown_until: string;
   resends_remaining: number;

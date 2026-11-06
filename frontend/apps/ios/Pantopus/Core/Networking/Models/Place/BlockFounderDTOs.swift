@@ -158,9 +158,14 @@ public struct SendBlockInviteRequest: Encodable, Sendable {
 public struct BlockInviteResult: Decodable, Sendable, Hashable {
     public let sent: Bool
     public let invitesRemaining: Int
+    /// The printer hasn't answered yet. The invitation is saved and won't be mailed twice.
+    public let pending: Bool?
+    public let message: String?
 
     private enum CodingKeys: String, CodingKey {
         case sent
         case invitesRemaining = "invites_remaining"
+        case pending
+        case message
     }
 }

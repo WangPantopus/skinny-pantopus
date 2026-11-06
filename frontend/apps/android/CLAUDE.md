@@ -111,9 +111,11 @@ in the chrome stack so the strip auto-appears when offline.
 `ui/components/KeyboardRules.kt` holds the app's keyboard rules. The activity root uses
 `Modifier.closesKeyboardOnTapOrScroll()`: a tap or a drag outside the focused text box puts the keyboard away,
 and the tap still does its job; a drag that starts on a text box or a field's box puts it away once the page
-moves under the finger. Each sheet or dialog that has a text field runs in its own window, so it passes
-the same modifier as its `modifier` (or on its content root), including a sheet wrapper whose content comes from
-its caller. A text box drawn by a container around a `BasicTextField` marks that container `keepsKeyboard()`; a tap
+moves under the finger. Each dialog that has a text field runs in its own window, so it passes the same modifier as
+its `modifier` (or on its content root). A `ModalBottomSheet` that has a text field passes `Modifier.sheetKeyboardRules()`
+first in its `modifier` instead, including a sheet wrapper whose content comes from its caller: the plain rules there
+would cover the dim above the sheet, so a tap above it could never close it. With a text box focused, a tap above the
+sheet puts the keyboard away first and the next one closes the sheet. A text box drawn by a container around a `BasicTextField` marks that container `keepsKeyboard()`; a tap
 on the container's own space then types in the field inside it, so the whole box is the text box. A field that draws
 its box in its own `modifier` puts `keepsKeyboard()` first in it, because padding there sits outside the field's own
 taps; a field whose `decorationBox` draws the box needs nothing. Mark only text boxes: a wrapper shared with a date row

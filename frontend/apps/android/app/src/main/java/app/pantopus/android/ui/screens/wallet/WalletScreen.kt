@@ -74,8 +74,8 @@ import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.OfflineBannerHost
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.components.keepsKeyboard
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.screens.wallet.components.ActivityRow
 import app.pantopus.android.ui.screens.wallet.components.HoldBanner
 import app.pantopus.android.ui.screens.wallet.components.InvoicesRow
@@ -223,7 +223,7 @@ fun WalletScreen(
 
     if (showWithdrawSheet) {
         ModalBottomSheet(
-            modifier = Modifier.closesKeyboardOnTapOrScroll(),
+            modifier = Modifier.sheetKeyboardRules(),
             onDismissRequest = { showWithdrawSheet = false },
             sheetState = sheetState,
         ) {

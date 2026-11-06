@@ -107,7 +107,7 @@ private struct LoadedBody: View {
                         MismatchBanner(data: banner)
                     }
                     PropertySection(title: "Property", rows: content.propertyFacts)
-                    // The county record (ATTOM) comes for verified owners
+                    // The county record comes for verified owners
                     // only, so everyone else sees just the Property card.
                     ForEach(content.recordSections) { section in
                         PropertySection(title: section.title, rows: section.rows, note: section.note)

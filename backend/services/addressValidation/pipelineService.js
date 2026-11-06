@@ -7,6 +7,8 @@ const googleProvider = require('./googleProvider');
 const smartyProvider = require('./smartyProvider');
 const placeClassificationProvider = require('./placeClassificationProvider');
 const secondaryAddressProvider = require('./secondaryAddressProvider');
+const registryUnits = require('../propertyRecords/registryUnits');
+const addressRegistry = require('../propertyRecords/registry');
 const parcelIntelProvider = require('./parcelIntelProvider');
 const { comparePlaceClassifications } = require('./placeShadowComparison');
 const { compareParcelIntelligence } = require('./parcelShadowComparison');
@@ -17,7 +19,7 @@ const {
   usesGooglePostal,
   postalShadowEnabled,
   postalFromGoogle,
-  keepTypedUnit,
+  keepTypedAddress,
   postalCategories,
 } = require('./postalAdapter');
 
@@ -232,6 +234,7 @@ function buildStoredDecisionInputs(address) {
     po_box_flag: raw.po_box_flag ?? null,
     po_box_only_zip: raw.po_box_only_zip === true,
     coming_soon: raw.coming_soon === true,
+    not_listed: raw.not_listed === true,
     usps_suspended: raw.usps_suspended === true,
   } : {
     inconclusive: false,
@@ -412,7 +415,7 @@ async function lookupExistingHouseholdByHash(addressHash) {
  */
 async function recordPostalShadow(input, googleResult, addressId, trigger) {
   try {
-    const google = keepTypedUnit(googleResult, input);
+    const google = keepTypedAddress(googleResult, input);
     const postal = postalFromGoogle(google);
     const verdict = decisionEngine.classify({
       google,
@@ -476,7 +479,7 @@ async function runValidationPipeline(input, options = {}) {
     const googleStartedAt = Date.now();
     try {
       googleResult = await googleProvider.validate(input);
-      if (googlePostal) googleResult = keepTypedUnit(googleResult, input);
+      if (googlePostal) googleResult = keepTypedAddress(googleResult, input);
       pushProviderCall({
         provider: 'google_address_validation',
         status: googleResult?.normalized ? 'ok' : 'empty_or_failed',
@@ -640,7 +643,26 @@ async function runValidationPipeline(input, options = {}) {
   }
 
   let unitIntelligence = null;
-  const shouldRunSecondaryLookup = secondaryAddressProvider.shouldRunLookup({
+  const registryInput = googleResult?.normalized || null;
+  if (registryInput) {
+    // States being watched: counts in the log, and this path doesn't wait for them.
+    addressRegistry.shadow({ line1: registryInput.line1, unit: registryInput.line2 || input?.line2, city: registryInput.city, state: registryInput.state, zip: registryInput.zip });
+  }
+  const usesRegistryUnits = registryUnits.usesRegistry(registryInput);
+  if (usesRegistryUnits) {
+    const registryStartedAt = Date.now();
+    unitIntelligence = await registryUnits.lookup({
+      normalizedAddress: registryInput,
+      submittedUnit: registryInput.line2 || input?.line2 || null,
+    });
+    pushProviderCall({
+      provider: 'address_registry',
+      status: unitIntelligence ? 'ok' : 'empty_or_failed',
+      startedAt: registryStartedAt,
+      selectively_invoked: false,
+    });
+  }
+  const shouldRunSecondaryLookup = !usesRegistryUnits && secondaryAddressProvider.shouldRunLookup({
     input,
     normalizedAddress: googleResult?.normalized || null,
     submittedUnit: googleResult?.normalized?.line2 || input?.line2 || null,
@@ -686,7 +708,7 @@ async function runValidationPipeline(input, options = {}) {
         selectively_invoked: true,
       });
     }
-  } else if (getRolloutFlag('enableSecondaryProvider')) {
+  } else if (!usesRegistryUnits && getRolloutFlag('enableSecondaryProvider')) {
     pushProviderCall({
       provider: 'secondary_address',
       status: 'not_invoked',
@@ -810,7 +832,7 @@ async function runValidationPipeline(input, options = {}) {
     provider_place: providerPlace,
     use_provider_place_for_business: getRolloutFlag('enforcePlaceProviderBusiness'),
     unit_intelligence: unitIntelligence,
-    use_provider_unit_intelligence: getRolloutFlag('enableSecondaryProvider'),
+    use_provider_unit_intelligence: registryUnits.usesProviderUnits(registryInput),
     parcel_intel: parcelIntel,
     use_provider_parcel_for_classification: getRolloutFlag('enforceParcelProviderClassification'),
     provider_parcel_max_age_days: addressConfig.parcelIntel.cacheDays,
