@@ -369,7 +369,7 @@ async function recheckPendingAddresses({ limit = 25 } = {}) {
 const USPS_RAW_FIELDS = [
   'dpv_match_code', 'rdi_type', 'home_and_business', 'missing_secondary', 'unconfirmed_secondary',
   'commercial_mailbox', 'vacant_flag', 'no_stat', 'no_stat_reason', 'footnotes', 'record_type',
-  'carrier_route_type', 'po_box_flag', 'po_box_only_zip', 'coming_soon', 'usps_suspended',
+  'carrier_route_type', 'po_box_flag', 'po_box_only_zip', 'coming_soon', 'not_listed', 'usps_suspended',
   'missing_component_types', 'street_number',
 ];
 
