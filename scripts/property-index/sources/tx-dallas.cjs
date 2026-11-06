@@ -6,9 +6,8 @@
 // records with no facts. Sale prices aren't public in Texas.
 
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
 const { parts, zip5 } = require('../../../backend/services/propertyRecords/addressKey');
-const { download, zipTable } = require('../lib/tables.cjs');
+const { download, zipDates, zipTable } = require('../lib/tables.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
@@ -34,10 +33,8 @@ async function build({ work, today = new Date() }) {
   const year = today.getMonth() >= 7 ? today.getFullYear() : today.getFullYear() - 1;
   const zip = path.join(dir, 'DCAD_CURRENT.zip');
   download(zipUrl(year), zip);
-  const listing = execFileSync('unzip', ['-l', zip], { encoding: 'latin1' });
-  const stamp = /(\d{2})-(\d{2})-(\d{4})\s+\d{2}:\d{2}\s+ACCOUNT_INFO\.CSV/.exec(listing);
-  if (!stamp) throw new Error('The district\'s file no longer dates its account table');
-  const asOf = `${stamp[3]}-${stamp[1]}-${stamp[2]}`;
+  const asOf = zipDates(zip).get('ACCOUNT_INFO.CSV');
+  if (!asOf) throw new Error('The district\'s file no longer dates its account table');
 
   const records = new Map();
   const accounts = new Map();
