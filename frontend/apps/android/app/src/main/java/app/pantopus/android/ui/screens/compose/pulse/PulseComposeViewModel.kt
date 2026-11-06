@@ -820,7 +820,8 @@ class PulseComposeViewModel
             viewModelScope.launch {
                 val photo = _photos.value.firstOrNull { it.id == id } ?: return@launch
                 if (photo.capturedLatitude != null) return@launch
-                val fix = locationProvider.requestCurrent(timeoutMillis = GPS_REFRESH_TIMEOUT_MS) ?: return@launch
+                // In the background, so it can wait for a fresh fix longer than the submit-time refresh does.
+                val fix = locationProvider.requestCurrent(timeoutMillis = CAMERA_FIX_TIMEOUT_MS) ?: return@launch
                 _photos.value =
                     _photos.value.map {
                         if (it.id != id) {
@@ -2061,6 +2062,7 @@ class PulseComposeViewModel
             private const val PHONE_MAX_DIGITS = 15
             private const val DEAL_DEFAULT_EXPIRY_DAYS = 7L
             private const val GPS_REFRESH_TIMEOUT_MS = 3_000L
+            private const val CAMERA_FIX_TIMEOUT_MS = 15_000L
             private const val EARLIER_ANSWERS_MIN_WORDS = 3
             private const val EARLIER_ANSWERS_DEBOUNCE_MS = 600L
             private const val POST_CHECK_TIMEOUT_MS = 10_000L

@@ -640,8 +640,9 @@ public final class PulseComposeViewModel {
     /// without a permission prompt, so taking a photo never asks for location.
     public func stampCameraPhoto(_ id: UUID) async {
         let takenAt = Date()
+        // In the background, so it can wait for a fresh fix longer than the submit-time refresh does.
         guard locationProvider.canLocateWithoutAsking,
-              let fix = await locationProvider.requestCurrent(timeoutSeconds: 3),
+              let fix = await locationProvider.requestCurrent(timeoutSeconds: 15),
               let index = photos.firstIndex(where: { $0.id == id })
         else { return }
         let photo = photos[index]
