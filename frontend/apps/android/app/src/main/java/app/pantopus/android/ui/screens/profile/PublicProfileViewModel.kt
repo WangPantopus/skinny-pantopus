@@ -689,7 +689,8 @@ class PublicProfileViewModel
                         _toastMessage.value = "Connection request sent"
                     }
                     is NetworkResult.Failure -> {
-                        val message = friendlyMessage(result.error)
+                        // A refused request gets the server's reason, not "This profile is private."
+                        val message = (result.error as? NetworkError.Forbidden)?.reason ?: friendlyMessage(result.error)
                         _connectState.value = PublicProfileActionState.Failed(message)
                         _toastMessage.value = message
                     }
