@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pantopus.android.data.api.models.gigs.GigQuestionDto
 import app.pantopus.android.data.api.models.gigs.GigQuestionUser
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -233,9 +235,11 @@ private fun AskQuestionForm(
     onSubmit: () -> Unit,
 ) {
     val canSubmit = text.trim().length >= 5 && !submitting
+    val focusManager = LocalFocusManager.current
     Column(
         modifier =
             Modifier
+                .keepsKeyboard()
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(Radii.lg))
                 .background(PantopusColors.appSurface)
@@ -279,8 +283,10 @@ private fun AskQuestionForm(
                     Modifier
                         .clip(RoundedCornerShape(Radii.md))
                         .background(if (canSubmit) PantopusColors.primary600 else PantopusColors.appSurfaceSunken)
-                        .clickable(enabled = canSubmit, onClick = onSubmit)
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                        .clickable(enabled = canSubmit) {
+                            focusManager.clearFocus()
+                            onSubmit()
+                        }.padding(horizontal = 14.dp, vertical = 8.dp)
                         .testTag("gigQuestionsAskButton"),
             ) {
                 Text(
@@ -547,6 +553,7 @@ private fun OwnerAnswerControls(
                 onValueChange = onAnswerDraftChange,
                 modifier =
                     Modifier
+                        .keepsKeyboard()
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(Radii.md))
                         .background(PantopusColors.appSurfaceSunken)

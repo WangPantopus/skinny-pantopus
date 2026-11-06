@@ -53,6 +53,7 @@ const nfipPremiumService = require('./nfipPremiumService');
 const { isConnecticutPlanningRegion } = require('../data/connecticutTowns');
 const exemptionCheckService = require('./exemptionCheckService');
 const propertyRecordsConfig = require('../config/propertyRecords');
+const recordVocabulary = require('./recordVocabulary');
 const realRentService = require('./realRentService');
 const { locationFromCoordinates, inferTimezone } = require('./context/locationResolver');
 
@@ -110,7 +111,7 @@ const NOT_BY_MAIL_REASON = 'Available once your address is verified.';
 const verifyReason = (id) => (mailVendorService.canSendPostcards() ? VERIFY_BY_MAIL_REASONS[id] : NOT_BY_MAIL_REASON);
 const OWNERSHIP_PENDING_REASON = 'Available once your ownership is confirmed.';
 const CLAIM_REVIEW_REASON = 'Available once your claim is approved.';
-const VALUE_FIELDS = ['estimated_value', 'value_low', 'value_high', 'assessed_value'];
+const VALUE_FIELDS = ['estimated_value', 'value_low', 'value_high', 'assessed_value', 'value_source', 'value_title'];
 
 function resolveViewer(access, tier, ownershipPending) {
   const base = (access && (access.effective_role_base || access.role_base)) || null;
@@ -969,6 +970,8 @@ async function composeDensity(home) {
 // `county_record` existed keep the default label.
 function yourHomeProvenance(profile) {
   if (profile.source === 'fallback') return { source: 'Details you entered', coverage: 'partial' };
+  // A record that names its source is never labeled as ATTOM's.
+  if (profile.provenance) return { source: profile.provenance.publisher };
   const ownFacts = Array.isArray(profile.household_fields) && profile.household_fields.length > 0;
   if (profile.county_record === false) {
     // ATTOM answered with a value model or the ZIP trend only.
@@ -987,7 +990,7 @@ function yourHomeProvenance(profile) {
 const YOUR_HOME_LOOKING_UP = "Looking up this home's county record. It fills in here by itself.";
 const VALUE_FRESH_MS = propertyIntelligenceService.CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
 
-async function composeYourHome(home, tier, viewerAccess) {
+async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary = false) {
   const access = bandAccess('B', tier);
   if (access === 'locked') {
     return [serializePlaceSection('your_home', {
@@ -1043,6 +1046,7 @@ async function composeYourHome(home, tier, viewerAccess) {
     // instead (database-first resilience) — surfaced as a stale envelope.
     status: result.source === 'cache_stale' || oldValue ? 'stale' : 'ready',
     ...yourHomeProvenance(profile),
+    ...(wantsRecordVocabulary && profile.provenance ? { provenance: profile.provenance } : {}),
     data: {
       year_built: profile.year_built ?? null,
       sqft: profile.sqft ?? null,
@@ -1057,6 +1061,7 @@ async function composeYourHome(home, tier, viewerAccess) {
       // The home's outline for the Today sky: the county record's, with the
       // kind of home the household chose over it.
       house: resolveHouse(profile.house, home.home_type),
+      ...(wantsRecordVocabulary ? recordVocabulary.placeValueFields(profile) : {}),
     },
   })];
 }
@@ -1348,7 +1353,7 @@ async function composeRealRent(home, tier, userId, canVerify = true) {
   }
 }
 
-async function composeExemptionCheck(home, tier) {
+async function composeExemptionCheck(home, tier, wantsRecordVocabulary = false) {
   const access = bandAccess('B', tier);
   if (access === 'locked') {
     return [serializePlaceSection('exemption_check', {
@@ -1384,7 +1389,14 @@ async function composeExemptionCheck(home, tier) {
         unavailableReason: EXEMPTION_UNAVAILABLE_COPY[result.unavailableReason] || null,
       })];
     }
-    return [serializePlaceSection('exemption_check', { access, status: 'ready', data: result.data })];
+    return [serializePlaceSection('exemption_check', {
+      access,
+      status: 'ready',
+      data: result.data,
+      // A record that names its source is never labeled as ATTOM's.
+      ...(result.provenance ? { source: result.provenance.publisher } : {}),
+      ...(wantsRecordVocabulary && result.provenance ? { provenance: result.provenance } : {}),
+    })];
   } catch (err) {
     logger.warn('placeIntelligence: exemption_check failed', { homeId: home.id, error: err.message });
     return [serializePlaceSection('exemption_check', { access, status: 'error' })];
@@ -1420,10 +1432,10 @@ const COMPOSER_SECTIONS = [
   { ids: ['drinking_water'], budget: true, run: ({ home }) => placeSectionAdapters.composeDrinkingWater(home) },
   { ids: ['environmental_hazards'], budget: true, run: ({ home }) => placeSectionAdapters.composeEnvironmentalHazards(home) },
   { ids: ['block_density'], run: ({ home }) => composeDensity(home) },
-  { ids: ['your_home'], budget: true, run: ({ home, tier, access }) => composeYourHome(home, tier, access) },
+  { ids: ['your_home'], budget: true, run: ({ home, tier, access, wantsRecordVocabulary }) => composeYourHome(home, tier, access, wantsRecordVocabulary) },
   { ids: ['home_systems'], run: ({ home, tier, access }) => composeHomeSystems(home, tier, access) },
   { ids: ['bill_benchmark'], run: ({ home, access, userId }) => composeBillBenchmark(home, access, userId) },
-  { ids: ['exemption_check'], budget: true, run: ({ home, tier }) => composeExemptionCheck(home, tier) },
+  { ids: ['exemption_check'], budget: true, run: ({ home, tier, wantsRecordVocabulary }) => composeExemptionCheck(home, tier, wantsRecordVocabulary) },
   { ids: ['rent_band'], budget: true, run: ({ home }) => placeSectionAdapters.composeRentBand(home) },
   { ids: ['real_rent'], run: ({ home, tier, userId, access }) => composeRealRent(home, tier, userId, !nonResidentViewer(access)) },
   { ids: ['civic_districts'], budget: true, run: ({ home, ballot }) => placeSectionAdapters.composeCivicDistricts(home, { ballot }) },
@@ -1468,6 +1480,8 @@ function buildPlaceRef(home, privacy) {
  *                                   is on for the user — decided once by the route, so the
  *                                   composers never read the flag (or the User row) themselves.
  *                                   Guests and service providers never get Ballot fields.
+ * @param {boolean} [params.wantsRecordVocabulary]  The request asked for the new words (`vocabulary=2`,
+ *                                                  services/recordVocabulary.js).
  * @param {boolean} [params.claimant]  The viewer only has an open claim on this Home
  *                                     (`readAccess`): the public view, about the address
  *                                     and not the household's own entries.
@@ -1484,7 +1498,7 @@ function readHome(homeId) {
     .catch((error) => ({ data: null, error }));
 }
 
-async function composeHomeIntelligence({ homeId, userId, access, sectionIds, ballot = false, homeRead = null, claimant = false }) {
+async function composeHomeIntelligence({ homeId, userId, access, sectionIds, ballot = false, wantsRecordVocabulary = false, homeRead = null, claimant = false }) {
   // Owner-only sections depend on whether the viewer's ownership is still
   // pending; read it alongside the Home.
   const ownershipPending = access && access.isOwner ? Promise.resolve(false) : hasPendingOwnership(homeId, userId);
@@ -1576,7 +1590,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   const [privacy, ...groups] = await Promise.all([
     getHomePrivacy(homeId).catch(() => ({ address_precision: true })),
     ...runs.map(({ ids, budget, run }) => {
-      const compose = () => run({ home: subject, userId, tier, hubPromise, access, ballot: ballotOn, claimant, countyReads, budgetMs });
+      const compose = () => run({ home: subject, userId, tier, hubPromise, access, ballot: ballotOn, wantsRecordVocabulary, claimant, countyReads, budgetMs });
       if (!budget) return compose();
       let over = false;
       // A section past its budget keeps running to fill its cache; its real
@@ -1624,7 +1638,10 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   if (composed.your_home && composed.your_home.data && viewer.ownership !== 'confirmed') {
     composed.your_home = {
       ...composed.your_home,
-      data: { ...composed.your_home.data, ...Object.fromEntries(VALUE_FIELDS.map((field) => [field, null])) },
+      data: {
+        ...composed.your_home.data,
+        ...Object.fromEntries(VALUE_FIELDS.filter((field) => field in composed.your_home.data).map((field) => [field, null])),
+      },
     };
   }
 

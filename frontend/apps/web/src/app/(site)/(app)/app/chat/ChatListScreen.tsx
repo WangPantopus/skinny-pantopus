@@ -19,6 +19,7 @@ import { launchFeatures } from '@/lib/featureFlags';
 import { chosenUsername, usernameHandle } from '@pantopus/utils';
 import { fetchMe } from '@/lib/me';
 import { useConversationPages, conversationKey } from '@/lib/conversations';
+import { useRetainFirstContent } from '@/lib/inboxFirstContent';
 import { releaseShellReads } from '@/lib/shellReads';
 import { useOnlineStatus } from '@/components/map/OfflineIndicator';
 import { navigateChatPath, useChatOfflineShell } from '@/hooks/useChatOfflineShell';
@@ -123,6 +124,7 @@ export default function ChatListPage() {
 
   // ── Conversations via useQuery ─────────────────────────────
   const pages = useConversationPages(inboxSearch);
+  useRetainFirstContent();
   const conversationsQuery = pages.query;
   const conversations = pages.conversations;
   const totalUnread = Number(conversationsQuery.data?.totalUnread || 0);

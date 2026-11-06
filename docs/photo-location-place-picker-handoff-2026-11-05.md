@@ -115,10 +115,9 @@ Verified:
 3. **Android gallery photos have no GPS.**
    - The system photo picker redacts it on Android 10 and later, so on Android only in-app camera photos qualify.
    - Changing that needs a new permission prompt and a Google Play policy review. That's the founder's call.
-4. **The web composer has no place picker.**
-   - iOS and Android have one.
-   - A follow-up could add it, using `GET /api/geo/places/nearby`, `GET /api/geo/places/search` and the same post fields.
-   - Once #3461 is merged, it could also send `mediaLocations` and show the precheck.
+4. **The web composer's place picker.**
+   - Update, November 6: it now lists nearby venues and searches them by name, like iOS and Android, and a post records the venue as OpenStreetMap's. With no device fix, the list comes from the saved viewing area.
+   - Not started: sending `mediaLocations`, so a photo can place a web post.
 
 ## Sessions and branches
 
