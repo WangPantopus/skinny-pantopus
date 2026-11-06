@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Home, Link2, MapPin, Store, Tag, User, type LucideIcon } from 'lucide-react';
+import { Camera, Home, Link2, MapPin, Store, Tag, User, type LucideIcon } from 'lucide-react';
 import type {
   Audience,
   FeedSurface,
@@ -28,6 +28,7 @@ import VisibilityPicker from './composer/VisibilityPicker';
 import PostPrecheck from './composer/PostPrecheck';
 import MediaUpload from './composer/MediaUpload';
 import PostAssist, { usePostAssist } from './composer/PostAssist';
+import { nearestMediaLocation, readMediaLocations, useMediaLocations, type MediaLocation } from './composer/mediaLocation';
 import { PURPOSE_TO_POST_TYPE, getPostTypeConfig } from '@pantopus/ui-utils';
 
 const POST_TYPE_TO_API_PURPOSE: Record<PostType, string> = {
@@ -144,6 +145,9 @@ function apiPurposeForPostType(postType: PostType | null | undefined): string | 
 
 const LOCAL_PUBLIC_AUDIENCES = new Set<Audience>(['nearby', 'neighborhood', 'saved_place', 'target_area']);
 
+// How long the server counts a device fix as the person being there (trustState.canPostToPlace).
+const FIX_FRESH_MS = 5 * 60 * 1000;
+
 // Personal-zone composer never offers persona. Audience-zone posting goes
 // through the separate audience composer (P2.5) and the persona-specific
 // routes — see unified-IA §4.1.
@@ -181,6 +185,7 @@ export interface PostComposerSubmitData {
   gpsTimestamp?: string;
   gpsLatitude?: number;
   gpsLongitude?: number;
+  mediaLocations?: MediaLocation[];
   eventDate?: string;
   eventEndDate?: string;
   eventVenue?: string;
@@ -345,7 +350,10 @@ export default function PostComposer({
   // useEffect below), so the type narrows to PersonalPostAs.
   const activePostAs: PersonalPostAs = (selectedIdentity?.type as PersonalPostAs | undefined) || 'personal';
   const globalAudienceOptions = GLOBAL_AUDIENCE_OPTIONS[activePostAs];
-  const selectedAudienceLabel = globalAudienceOptions.find((option) => option.value === selectedAudience)?.label || selectedAudience;
+  // A tagged place's neighbors are the people near that place, not near the author.
+  const taggedPlaceAudience = f.location?.source === 'search' ? `People near ${f.location.locationName}` : undefined;
+  const selectedAudienceLabel = (selectedAudience === 'nearby' && taggedPlaceAudience)
+    || globalAudienceOptions.find((option) => option.value === selectedAudience)?.label || selectedAudience;
 
   // Backend-allowed post types per identity — filter UI to prevent invalid submissions
   const PLACE_POST_TYPES = ['ask_local', 'recommendation', 'event', 'lost_found', 'alert', 'deal', 'local_update', 'neighborhood_win', 'visitor_guide'];
@@ -367,6 +375,10 @@ export default function PostComposer({
     ? selectedAudience
     : (networkVisibility || f.visibility) === 'connections' ? 'connections' : 'nearby';
   const dealExpiryRequired = isEdit ? Boolean(editSeed?.dealExpires) : LOCAL_PUBLIC_AUDIENCES.has(createAudience);
+  // A post to connections carries no place. One control for both kinds of composer, so an open picker stays open when
+  // the posting identities arrive and this becomes the global composer.
+  const showPostLocation = showGlobalLocation
+    || (!canUseGlobalAudience && !isNetworkSurface && !isEdit && createAudience !== 'connections');
 
   // The AI assist card: the whole post from the photos, the place and the words. The place goes only as its area
   // name ("Camas"): a picked or current address could be someone's home.
@@ -381,14 +393,18 @@ export default function PostComposer({
   // "Post this?": a post with words the AI suggested waits for the person to check it.
   const [confirmingAIPost, setConfirmingAIPost] = useState(false);
 
-  // A searched place (no GPS fix) takes posts only from someone with a verified home or business
-  // near it. Ask when it's picked instead of refusing the finished post.
-  const [searchedPlaceRefused, setSearchedPlaceRefused] = useState(false);
+  // A searched place takes posts only from someone who lives or works near it, is there now, or attaches a photo or
+  // video taken there. Ask when the place, the attachments or the audience change, instead of refusing the finished post.
+  const mediaLocations = useMediaLocations(f.mediaFiles);
+  const [placeCheck, setPlaceCheck] = useState<api.posts.PlaceEligibility | null>(null);
+  const placeRefused = placeCheck?.eligible === false;
   const pickedLocation = f.location;
+  const checksPlace = requiresExplicitLocation(activePostAs, createAudience);
   useEffect(() => {
-    setSearchedPlaceRefused(false);
-    if (!needsLocation || pickedLocation?.source !== 'search') return;
+    setPlaceCheck(null);
+    if (!checksPlace || pickedLocation?.source !== 'search') return;
     let current = true;
+    const nearest = nearestMediaLocation(mediaLocations, pickedLocation.latitude, pickedLocation.longitude);
     api.posts
       .checkPlaceEligibility({
         latitude: pickedLocation.latitude,
@@ -397,9 +413,16 @@ export default function PostComposer({
         gpsTimestamp: pickedLocation.gpsTimestamp,
         gpsLatitude: pickedLocation.gpsLatitude,
         gpsLongitude: pickedLocation.gpsLongitude,
+        mediaLatitude: nearest?.latitude,
+        mediaLongitude: nearest?.longitude,
+        mediaCapturedAt: nearest?.capturedAt ?? undefined,
+        postType: f.selectedIntent ?? undefined,
       })
       .then((r) => {
-        if (current) setSearchedPlaceRefused(!r.eligible);
+        if (!current) return;
+        // Asked again long after the place was picked, the fix may just have aged: posting asks for a new one.
+        const fixAged = pickedLocation.gpsTimestamp != null && Date.now() - Date.parse(pickedLocation.gpsTimestamp) > FIX_FRESH_MS;
+        setPlaceCheck(!r.eligible && fixAged ? null : r);
       })
       .catch(() => {
         // Unknown: posting checks again.
@@ -407,7 +430,19 @@ export default function PostComposer({
     return () => {
       current = false;
     };
-  }, [needsLocation, pickedLocation]);
+  }, [checksPlace, pickedLocation, mediaLocations, f.selectedIntent]);
+
+  // A post its own photo placed says "Photo taken here" instead of carrying the visitor badge the precheck warns about.
+  const precheckNotes = placeCheck?.basis === 'photo'
+    ? f.precheckSuggestions.filter((note) => note.type !== 'visitor_context')
+    : f.precheckSuggestions;
+
+  // The way forward from a refused place: a post to connections isn't a Place post.
+  const shareWithConnectionsInstead = () => {
+    if (canUseGlobalAudience) setSelectedAudience('connections');
+    else setField('visibility', 'connections');
+    setSubmitError(null);
+  };
 
   const contentPlaceholder = activeSurface === 'connections'
     ? 'Share something with your connections…'
@@ -664,7 +699,7 @@ export default function PostComposer({
       return;
     }
 
-    if (requiresExplicitLocation(targetPostAs, targetAudience) && searchedPlaceRefused) return;
+    if (requiresExplicitLocation(targetPostAs, targetAudience) && placeRefused) return;
 
     const contactPhoneDigits = f.contactPhone.replace(/\D/g, '');
     if (f.selectedIntent === 'lost_found' && f.contactPref === 'phone') {
@@ -688,6 +723,8 @@ export default function PostComposer({
     const shouldIncludeLocation = Boolean(f.location && showLocationControl(targetPostAs, targetAudience));
     const parsedTags = parseTags(f.tags);
     createCommand.current ??= crypto.randomUUID();
+    // Read here too: a post sent right after attaching doesn't wait for the screen to catch up.
+    const placeEvidence = requiresExplicitLocation(targetPostAs, targetAudience) ? await readMediaLocations(f.mediaFiles) : [];
     const saved = await onPost({
       clientRequestId: createCommand.current,
       content: f.content.trim(),
@@ -712,6 +749,7 @@ export default function PostComposer({
             gpsLongitude: f.location.gpsLongitude,
           }
         : {}),
+      ...(placeEvidence.length > 0 ? { mediaLocations: placeEvidence } : {}),
       eventDate: f.selectedIntent === 'event' && f.eventDate ? asStoredWallClock(f.eventDate) : undefined,
       eventEndDate: f.selectedIntent === 'event' && f.eventEndDate ? asStoredWallClock(f.eventEndDate) : undefined,
       eventVenue: f.selectedIntent === 'event' && f.eventVenue ? f.eventVenue : undefined,
@@ -1019,7 +1057,12 @@ export default function PostComposer({
             </div>
           )}
 
-          {!isEdit && <PostPrecheck suggestions={f.precheckSuggestions} onDismiss={dismissPrecheck} />}
+          {!isEdit && (
+            <PostPrecheck
+              suggestions={precheckNotes}
+              onDismiss={(i) => dismissPrecheck(f.precheckSuggestions.indexOf(precheckNotes[i]))}
+            />
+          )}
 
           {f.selectedIntent && !isEdit && (
             <div className="flex items-center gap-2 px-4 pb-2 text-sm">
@@ -1235,7 +1278,7 @@ export default function PostComposer({
               </div>
             )}
 
-            {showGlobalLocation && f.location && (
+            {showPostLocation && f.location && (
               <div className="flex items-center">
                 <PostLocationPicker
                   value={f.location}
@@ -1247,27 +1290,29 @@ export default function PostComposer({
               </div>
             )}
 
-            {!canUseGlobalAudience && !isNetworkSurface && !isEdit && f.location && (
-              <div className="flex items-center">
-                <PostLocationPicker
-                  value={f.location}
-                  onChange={(loc) => setField('location', loc)}
-                  accentColor={activeIntent.color}
-                  textColor={activeIntent.textColor}
-                  darkTextColor={activeIntent.darkTextColor}
-                />
+            {placeRefused && (
+              <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <p>
+                  {placeCheck?.reason} To post where you are, remove this place and choose Location, then Use current location.
+                </p>
+                {activePostAs === 'personal' && (
+                  <button type="button" onClick={shareWithConnectionsInstead} className="mt-1 font-semibold underline">
+                    Share with your connections instead
+                  </button>
+                )}
               </div>
             )}
 
-            {searchedPlaceRefused && (
-              <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                You can post to this place only when you&apos;re near it or have a verified home or business near it. To post
-                where you are, remove this place and choose Location, then Use current location.
+            {placeCheck?.eligible && placeCheck.basis === 'photo' && (
+              <p role="status" className="flex items-start gap-1.5 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
+                <Camera className="mt-px h-3.5 w-3.5 flex-shrink-0" />
+                <span>Your photo was taken here, so you can post to this place. Your post will say “Photo taken here.”</span>
               </p>
             )}
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            {/* Wraps when it doesn't fit: on one line it can be wider than the card, which clips it (at phone width, Post was off the screen). */}
+            <div className="flex flex-wrap items-center justify-between gap-y-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {isEdit && (
                   <span className="text-xs text-app-muted">
                     {editPost && (editPost.media_urls?.length ?? 0) > 0
@@ -1279,6 +1324,7 @@ export default function PostComposer({
                 {!canUseGlobalAudience && !isNetworkSurface && !isEdit && (
                   <VisibilityPicker
                     visibility={f.visibility}
+                    neighborhoodCaption={taggedPlaceAudience}
                     showVisibility={f.showVisibility}
                     onVisibilityChange={(v) => {
                       setField('visibility', v);
@@ -1288,12 +1334,13 @@ export default function PostComposer({
                   />
                 )}
 
-                {showGlobalLocation && !f.location && (
-                  <PostLocationPicker value={null} onChange={(loc) => setField('location', loc)} accentColor={activeIntent.color} />
-                )}
-
-                {!canUseGlobalAudience && !isNetworkSurface && !isEdit && !f.location && (
-                  <PostLocationPicker value={null} onChange={(loc) => setField('location', loc)} accentColor={activeIntent.color} />
+                {showPostLocation && !f.location && (
+                  <PostLocationPicker
+                    value={null}
+                    onChange={(loc) => setField('location', loc)}
+                    accentColor={activeIntent.color}
+                    photoLocation={mediaLocations[0]}
+                  />
                 )}
 
                 {!showGlobalLocation && canUseGlobalAudience && needsLocation && (
@@ -1303,7 +1350,7 @@ export default function PostComposer({
                 <span className="text-[10px] tabular-nums text-app-muted">{f.content.length}/5000</span>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="ml-auto flex items-center gap-2">
                 <button
                   onClick={isEdit ? onCancelEdit : resetComposer}
                   disabled={isEdit && savingEdit}
@@ -1323,7 +1370,7 @@ export default function PostComposer({
                 ) : (
                   <button
                     onClick={() => void handlePost()}
-                    disabled={!f.content.trim() || isPosting || searchedPlaceRefused || postAssist.assist.kind === 'writing'}
+                    disabled={!f.content.trim() || isPosting || placeRefused || postAssist.assist.kind === 'writing'}
                     className="rounded-lg px-4 py-1.5 text-xs font-semibold text-white transition-all hover:shadow-md active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
                     style={{ background: activeIntent.color }}
                   >

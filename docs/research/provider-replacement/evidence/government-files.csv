@@ -1,0 +1,418 @@
+Source ID,Publishing jurisdiction,Florida county FIPS,Vintage,Input records,Selected accounts,Official bulk file
+FL,Alachua,12001,2026 final,109374,74156,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Alachua%2011%20Final%20NAL%202026.zip
+FL,Baker,12003,2026 final,13180,5263,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Baker%2012%20Final%20NAL%202026.zip
+FL,Bay,12005,2026 final,131336,87690,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Bay%2013%20Final%20NAL%202026.zip
+FL,Bradford,12007,2026 final,15892,6219,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Bradford%2014%20Final%20NAL%202026.zip
+FL,Brevard,12009,2026 final,351104,254051,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Brevard%2015%20Final%20NAL%202026.zip
+FL,Broward,12011,2026 final,754509,650587,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Broward%2016%20Final%20NAL%202026.zip
+FL,Calhoun,12013,2026 final,13373,2702,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Calhoun%2017%20Final%20NAL%202026.zip
+FL,Charlotte,12015,2026 final,222511,108877,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Charlotte%2018%20Final%20NAL%202026.zip
+FL,Citrus,12017,2026 final,147815,64776,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Citrus%2019%20Final%20NAL%202026.zip
+FL,Clay,12019,2026 final,106382,72910,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Clay%2020%20Final%20NAL%202026.zip
+FL,Collier,12021,2026 final,297748,214853,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Collier%2021%20Final%20NAL%202026.zip
+FL,Columbia,12023,2026 final,37674,14296,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Columbia%2022%20Final%20NAL%202026.zip
+FL,Dade,12086,2026 final,939447,789098,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Dade%2023%20Final%20NAL%202026.zip
+FL,DeSoto,12027,2026 preliminary,20199,6925,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026P/DeSoto%2024%20Preliminary%20NAL%202026.zip
+FL,Dixie,12029,2026 final,16520,3015,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Dixie%2025%20Final%20NAL%202026.zip
+FL,Duval,12031,2026 final,404069,328997,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Duval%2026%20Final%20NAL%202026.zip
+FL,Escambia,12033,2026 final,171602,117691,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Escambia%2027%20Final%20NAL%202026.zip
+FL,Flagler,12035,2026 preliminary,89043,59733,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026P/Flagler%2028%20Preliminary%20NAL%202026.zip
+FL,Franklin,12037,2026 final,18564,7631,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Franklin%2029%20Final%20NAL%202026.zip
+FL,Gadsden,12039,2026 final,27932,11611,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Gadsden%2030%20Final%20NAL%202026.zip
+FL,Gilchrist,12041,2026 final,14776,3191,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Gilchrist%2031%20Final%20NAL%202026.zip
+FL,Glades,12043,2026 final,11642,2266,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Glades%2032%20Final%20NAL%202026.zip
+FL,Gulf,12045,2026 final,20351,8152,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Gulf%2033%20Final%20NAL%202026.zip
+FL,Hamilton,12047,2026 final,13211,2063,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Hamilton%2034%20Final%20NAL%202026.zip
+FL,Hardee,12049,2026 final,15341,4528,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Hardee%2035%20Final%20NAL%202026.zip
+FL,Hendry,12051,2026 final,35795,9455,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Hendry%2036%20Final%20NAL%202026.zip
+FL,Hernando,12053,2026 final,121161,74188,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Hernando%2037%20Final%20NAL%202026.zip
+FL,Highlands,12055,2026 final,112764,37636,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Highlands%2038%20Final%20NAL%202026.zip
+FL,Hillsborough,12057,2026 final,528132,437059,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Hillsborough%2039%20Final%20NAL%202026.zip
+FL,Holmes,12059,2026 final,14735,3531,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Holmes%2040%20Final%20NAL%202026.zip
+FL,Indian River,12061,2026 final,95583,75902,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Indian%20River%2041%20Final%20NAL%202026.zip
+FL,Jackson,12063,2026 final,40421,10623,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Jackson%2042%20Final%20NAL%202026.zip
+FL,Jefferson,12065,2026 final,12344,3034,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Jefferson%2043%20Final%20NAL%202026.zip
+FL,Lafayette,12067,2026 final,7497,1102,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Lafayette%2044%20Final%20NAL%202026.zip
+FL,Lake,12069,2026 final,215805,141152,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Lake%2045%20Final%20NAL%202026.zip
+FL,Lee,12071,2026 final,563025,365426,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Lee%2046%20Final%20NAL%202026.zip
+FL,Leon,12073,2026 final,111823,81989,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Leon%2047%20Final%20NAL%202026.zip
+FL,Levy,12075,2026 final,47386,8924,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Levy%2048%20Final%20NAL%202026.zip
+FL,Liberty,12077,2026 preliminary,6012,1446,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026P/Liberty%2049%20Preliminary%20NAL%202026.zip
+FL,Madison,12079,2026 final,16497,3366,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Madison%2050%20Final%20NAL%202026.zip
+FL,Manatee,12081,2026 final,240202,171447,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Manatee%2051%20Final%20NAL%202026.zip
+FL,Marion,12083,2026 final,286195,146628,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Marion%2052%20Final%20NAL%202026.zip
+FL,Martin,12085,2026 final,98240,67255,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Martin%2053%20Final%20NAL%202026.zip
+FL,Monroe,12087,2026 final,89164,37404,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Monroe%2054%20Final%20NAL%202026.zip
+FL,Nassau,12089,2026 final,60305,37583,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Nassau%2055%20Final%20NAL%202026.zip
+FL,Okaloosa,12091,2026 final,114105,87638,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Okaloosa%2056%20Final%20NAL%202026.zip
+FL,Okeechobee,12093,2026 final,31417,8175,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Okeechobee%2057%20Final%20NAL%202026.zip
+FL,Orange,12095,2026 final,494750,407414,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Orange%2058%20Final%20NAL%202026.zip
+FL,Osceola,12097,2026 final,215895,156331,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Osceola%2059%20Final%20NAL%202026.zip
+FL,Palm Beach,12099,2026 final,657468,577332,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Palm%20Beach%2060%20Final%20NAL%202026.zip
+FL,Pasco,12101,2026 final,339666,217252,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Pasco%2061%20Final%20NAL%202026.zip
+FL,Pinellas,12103,2026 final,433745,361028,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Pinellas%2062%20Final%20NAL%202026.zip
+FL,Polk,12105,2026 final,436919,247103,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Polk%2063%20Final%20NAL%202026.zip
+FL,Putnam,12107,2026 final,98150,17973,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Putnam%2064%20Final%20NAL%202026.zip
+FL,Saint Johns,12109,2026 final,168410,130151,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Saint%20Johns%2065%20Final%20NAL%202026.zip
+FL,Saint Lucie,12111,2026 final,192432,145879,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Saint%20Lucie%2066%20Final%20NAL%202026.zip
+FL,Santa Rosa,12113,2026 final,123267,72341,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Santa%20Rosa%2067%20Final%20NAL%202026.zip
+FL,Sarasota,12115,2026 final,307173,224683,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Sarasota%2068%20Final%20NAL%202026.zip
+FL,Seminole,12117,2026 final,179757,151096,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Seminole%2069%20Final%20NAL%202026.zip
+FL,Sumter,12119,2026 final,105829,78290,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Sumter%2070%20Final%20NAL%202026.zip
+FL,Suwannee,12121,2026 final,39040,6669,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Suwannee%2071%20Final%20NAL%202026.zip
+FL,Taylor,12123,2026 final,19729,5427,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Taylor%2072%20Final%20NAL%202026.zip
+FL,Union,12125,2026 final,7157,1545,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Union%2073%20Final%20NAL%202026.zip
+FL,Volusia,12127,2026 final,312278,224413,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Volusia%2074%20Final%20NAL%202026.zip
+FL,Wakulla,12129,2026 final,26780,10924,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Wakulla%2075%20Final%20NAL%202026.zip
+FL,Walton,12131,2026 final,94943,52428,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Walton%2076%20Final%20NAL%202026.zip
+FL,Washington,12133,2026 final,46533,5713,https://floridarevenue.com/property/dataportal/Documents/PTO%20Data%20Portal/Tax%20Roll%20Data%20Files/NAL/2026F/Washington%2077%20Final%20NAL%202026.zip
+MA,ABINGTON,,2026,5877,4685,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M001_ABINGTON.zip
+MA,ARLINGTON,,2026,15663,12362,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M010_ARLINGTON.zip
+MA,FRAMINGHAM,,2025,20888,17081,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M100_FRAMINGHAM.zip
+MA,FRANKLIN,,2027,11923,9768,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M101_FRANKLIN.zip
+MA,FREETOWN,,2026,4188,2947,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M102_FREETOWN.zip
+MA,GARDNER,,2026,7165,4669,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M103_GARDNER.zip
+MA,AQUINNAH,,2025,990,407,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M104_AQUINNAH.zip
+MA,GEORGETOWN,,2026,3339,2710,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M105_GEORGETOWN.zip
+MA,GILL,,2026,879,473,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M106_GILL.zip
+MA,GLOUCESTER,,2026,14879,9034,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M107_GLOUCESTER.zip
+MA,GOSHEN,,2026,1036,518,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M108_GOSHEN.zip
+MA,GOSNOLD,,2026,275,117,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M109_GOSNOLD.zip
+MA,ASHBURNHAM,,2025,3963,2522,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M011_ASHBURNHAM.zip
+MA,GRAFTON,,2026,7625,6218,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M110_GRAFTON.zip
+MA,GRANBY,,2026,3340,2224,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M111_GRANBY.zip
+MA,GRANVILLE,,2025,1001,563,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M112_GRANVILLE.zip
+MA,GREAT BARRINGTON,,2027,4199,2512,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M113_GREATBARRINGTON.zip
+MA,GREENFIELD,,2027,7028,4400,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M114_GREENFIELD.zip
+MA,GROTON,,2026,5139,3714,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M115_GROTON.zip
+MA,GROVELAND,,2026,2684,2126,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M116_GROVELAND.zip
+MA,HADLEY,,2026,3146,1803,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M117_HADLEY.zip
+MA,HALIFAX,,2026,3346,2575,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M118_HALIFAX.zip
+MA,HAMILTON,,2026,3024,2500,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M119_HAMILTON.zip
+MA,ASHBY,,2027,1773,1136,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M012_ASHBY.zip
+MA,HAMPDEN,,2026,2400,1841,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M120_HAMPDEN.zip
+MA,HANCOCK,,2026,1003,653,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M121_HANCOCK.zip
+MA,HANOVER,,2025,5592,4619,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M122_HANOVER.zip
+MA,HANSON,,2026,4505,3640,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M123_HANSON.zip
+MA,HARDWICK,,2026,1634,718,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M124_HARDWICK.zip
+MA,HARVARD,,2027,2715,1923,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M125_HARVARD.zip
+MA,HARWICH,,2026,12354,9553,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M126_HARWICH.zip
+MA,HATFIELD,,2027,2182,1113,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M127_HATFIELD.zip
+MA,HAVERHILL,,2025,21650,15983,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M128_HAVERHILL.zip
+MA,HAWLEY,,2026,357,146,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M129_HAWLEY.zip
+MA,ASHFIELD,,2024,1334,604,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M013_ASHFIELD.zip
+MA,HEATH,,2026,1167,340,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M130_HEATH.zip
+MA,HINGHAM,,2027,8886,7523,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M131_HINGHAM.zip
+MA,HINSDALE,,2026,1606,899,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M132_HINSDALE.zip
+MA,HOLBROOK,,2022,5000,3335,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M133_HOLBROOK.zip
+MA,HOLDEN,,2026,8754,6953,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M134_HOLDEN.zip
+MA,HOLLAND,,2026,2346,1393,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M135_HOLLAND.zip
+MA,HOLLISTON,,2025,6380,5146,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M136_HOLLISTON.zip
+MA,HOLYOKE,,2026,10523,6014,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M137_HOLYOKE.zip
+MA,HOPEDALE,,2027,2522,1951,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M138_HOPEDALE.zip
+MA,HOPKINTON,,2025,7315,5986,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M139_HOPKINTON.zip
+MA,ASHLAND,,2026,6800,5875,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M014_ASHLAND.zip
+MA,HUBBARDSTON,,2027,2601,1613,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M140_HUBBARDSTON.zip
+MA,HUDSON,,2026,7447,5991,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M141_HUDSON.zip
+MA,HULL,,2027,5683,4713,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M142_HULL.zip
+MA,HUNTINGTON,,2026,1459,760,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M143_HUNTINGTON.zip
+MA,IPSWICH,,2026,6283,4773,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M144_IPSWICH.zip
+MA,KINGSTON,,2026,5692,4432,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M145_KINGSTON.zip
+MA,LAKEVILLE,,2027,5424,4411,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M146_LAKEVILLE.zip
+MA,LANCASTER,,2026,3205,2284,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M147_LANCASTER.zip
+MA,LANESBOROUGH,,2026,2037,1281,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M148_LANESBOROUGH.zip
+MA,LAWRENCE,,2026,13830,5945,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M149_LAWRENCE.zip
+MA,ATHOL,,2026,5685,3645,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M015_ATHOL.zip
+MA,LEE,,2026,3075,2103,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M150_LEE.zip
+MA,LEICESTER,,2026,5147,3439,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M151_LEICESTER.zip
+MA,LENOX,,2026,2974,2228,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M152_LENOX.zip
+MA,LEOMINSTER,,2026,14584,10441,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M153_LEOMINSTER.zip
+MA,LEVERETT,,2026,1214,666,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M154_LEVERETT.zip
+MA,LEXINGTON,,2026,12755,10483,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M155_LEXINGTON.zip
+MA,LEYDEN,,2025,704,269,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M156_LEYDEN.zip
+MA,LINCOLN,,2027,2696,1945,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M157_LINCOLN.zip
+MA,LITTLETON,,2026,4529,3348,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M158_LITTLETON.zip
+MA,LONGMEADOW,,2026,5885,5517,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M159_LONGMEADOW.zip
+MA,ATTLEBORO,,2026,15875,11629,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M016_ATTLEBORO.zip
+MA,LOWELL,,2026,28134,17987,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M160_LOWELL.zip
+MA,LUDLOW,,2026,9148,6791,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M161_LUDLOW.zip
+MA,LUNENBURG,,2027,5354,4183,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M162_LUNENBURG.zip
+MA,LYNN,,2027,22025,14843,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M163_LYNN.zip
+MA,LYNNFIELD,,2026,4641,4063,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M164_LYNNFIELD.zip
+MA,MALDEN,,2026,13517,8033,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M165_MALDEN.zip
+MA,MANCHESTER,,2027,2692,1834,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M166_MANCHESTER.zip
+MA,MANSFIELD,,2026,8124,6537,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M167_MANSFIELD.zip
+MA,MARBLEHEAD,,2027,8765,7373,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M168_MARBLEHEAD.zip
+MA,MARION,,2026,3523,2360,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M169_MARION.zip
+MA,AUBURN,,2026,7092,5692,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M017_AUBURN.zip
+MA,MARLBOROUGH,,2025,12786,9810,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M170_MARLBOROUGH.zip
+MA,MARSHFIELD,,2026,12659,10165,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M171_MARSHFIELD.zip
+MA,MASHPEE,,2027,12531,10143,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M172_MASHPEE.zip
+MA,MATTAPOISETT,,2027,4661,3246,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M173_MATTAPOISETT.zip
+MA,MAYNARD,,2026,4025,3335,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M174_MAYNARD.zip
+MA,MEDFIELD,,2026,4809,3964,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M175_MEDFIELD.zip
+MA,MEDFORD,,2026,18570,12013,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M176_MEDFORD.zip
+MA,MEDWAY,,2026,5168,4270,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M177_MEDWAY.zip
+MA,MELROSE,,2026,9489,7732,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M178_MELROSE.zip
+MA,MENDON,,2026,2878,2093,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M179_MENDON.zip
+MA,AVON,,2026,2011,1389,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M018_AVON.zip
+MA,MERRIMAC,,2026,2632,2052,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M180_MERRIMAC.zip
+MA,METHUEN,,2025,17220,13643,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M181_METHUEN.zip
+MA,MIDDLEBOROUGH,,2026,9882,6472,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M182_MIDDLEBOROUGH.zip
+MA,MIDDLEFIELD,,2026,588,190,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M183_MIDDLEFIELD.zip
+MA,MIDDLETON,,2026,4029,3119,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M184_MIDDLETON.zip
+MA,MILFORD,,2026,10606,7834,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M185_MILFORD.zip
+MA,MILLBURY,,2025,5853,4353,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M186_MILLBURY.zip
+MA,MILLIS,,2026,4084,3117,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M187_MILLIS.zip
+MA,MILLVILLE,,2026,1345,957,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M188_MILLVILLE.zip
+MA,MILTON,,2025,8904,7696,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M189_MILTON.zip
+MA,AYER,,2026,3391,2380,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M019_AYER.zip
+MA,MONROE,,2025,196,66,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M190_MONROE.zip
+MA,MONSON,,2026,4058,2781,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M191_MONSON.zip
+MA,MONTAGUE,,2026,4476,2221,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M192_MONTAGUE.zip
+MA,MONTEREY,,2026,1308,750,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M193_MONTEREY.zip
+MA,MONTGOMERY,,2025,521,334,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M194_MONTGOMERY.zip
+MA,MOUNT WASHINGTON,,2022,291,147,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M195_MOUNTWASHINGTON.zip
+MA,NAHANT,,2027,1494,1239,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M196_NAHANT.zip
+MA,NANTUCKET,,2026,14367,6319,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M197_NANTUCKET.zip
+MA,NATICK,,2027,14366,11601,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M198_NATICK.zip
+MA,NEEDHAM,,2027,10899,9545,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M199_NEEDHAM.zip
+MA,ACTON,,2026,9372,7789,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M002_ACTON.zip
+MA,BARNSTABLE,,2026,29262,23096,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M020_BARNSTABLE.zip
+MA,NEW ASHFORD,,2026,194,95,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M200_NEWASHFORD.zip
+MA,NEW BEDFORD,,2027,26677,13929,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M201_NEWBEDFORD.zip
+MA,NEW BRAINTREE,,2026,749,297,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M202_NEWBRAINTREE.zip
+MA,NEW MARLBOROUGH,,2025,1931,888,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M203_NEWMARLBOROUGH.zip
+MA,NEW SALEM,,2027,842,428,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M204_NEWSALEM.zip
+MA,NEWBURY,,2026,3641,2621,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M205_NEWBURY.zip
+MA,NEWBURYPORT,,2026,9211,7083,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M206_NEWBURYPORT.zip
+MA,NEWTON,,2026,30165,23091,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M207_NEWTON.zip
+MA,NORFOLK,,2026,4456,3646,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M208_NORFOLK.zip
+MA,NORTH ADAMS,,2025,5402,2770,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M209_NORTHADAMS.zip
+MA,BARRE,,2026,3116,1639,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M021_BARRE.zip
+MA,NORTH ANDOVER,,2026,10810,8578,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M210_NORTHANDOVER.zip
+MA,NORTH ATTLEBOROUGH,,2027,11096,8434,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M211_NORTHATTLEBOROUGH.zip
+MA,NORTH BROOKFIELD,,2026,2378,1440,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M212_NORTHBROOKFIELD.zip
+MA,NORTH READING,,2026,6750,5626,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M213_NORTHREADING.zip
+MA,NORTHAMPTON,,2026,11415,7536,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M214_NORTHAMPTON.zip
+MA,NORTHBOROUGH,,2026,5866,4868,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M215_NORTHBOROUGH.zip
+MA,NORTHBRIDGE,,2027,6200,4644,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M216_NORTHBRIDGE.zip
+MA,NORTHFIELD,,2025,2259,1095,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M217_NORTHFIELD.zip
+MA,NORTON,,2026,7653,5793,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M218_NORTON.zip
+MA,NORWELL,,2026,4782,3837,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M219_NORWELL.zip
+MA,BECKET,,2026,4064,1708,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M022_BECKET.zip
+MA,NORWOOD,,2025,9367,7111,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M220_NORWOOD.zip
+MA,OAK BLUFFS,,2026,5189,3522,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M221_OAKBLUFFS.zip
+MA,OAKHAM,,2025,1037,681,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M222_OAKHAM.zip
+MA,ORANGE,,2027,3743,2210,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M223_ORANGE.zip
+MA,ORLEANS,,2027,6367,4645,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M224_ORLEANS.zip
+MA,OTIS,,2025,3049,1547,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M225_OTIS.zip
+MA,OXFORD,,2026,6063,4375,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M226_OXFORD.zip
+MA,PALMER,,2026,5823,3497,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M227_PALMER.zip
+MA,PAXTON,,2025,1995,1609,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M228_PAXTON.zip
+MA,PEABODY,,2026,16625,13467,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M229_PEABODY.zip
+MA,BEDFORD,,2025,5047,4191,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M023_BEDFORD.zip
+MA,PELHAM,,2019,768,471,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M230_PELHAM.zip
+MA,PEMBROKE,,2026,7242,5947,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M231_PEMBROKE.zip
+MA,PEPPERELL,,2027,4714,3577,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M232_PEPPERELL.zip
+MA,PERU,,2026,810,348,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M233_PERU.zip
+MA,PETERSHAM,,2026,1097,513,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M234_PETERSHAM.zip
+MA,PHILLIPSTON,,2026,1439,821,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M235_PHILLIPSTON.zip
+MA,PITTSFIELD,,2025,18341,12081,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M236_PITTSFIELD.zip
+MA,PLAINFIELD,,2025,703,272,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M237_PLAINFIELD.zip
+MA,PLAINVILLE,,2026,3311,2542,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M238_PLAINVILLE.zip
+MA,PLYMOUTH,,2026,30903,24451,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M239_PLYMOUTH.zip
+MA,BELCHERTOWN,,2026,6802,4929,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M024_BELCHERTOWN.zip
+MA,PLYMPTON,,2025,1446,951,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M240_PLYMPTON.zip
+MA,PRINCETON,,2025,1943,1347,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M241_PRINCETON.zip
+MA,PROVINCETOWN,,2026,4984,3707,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M242_PROVINCETOWN.zip
+MA,QUINCY,,2027,28307,21003,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M243_QUINCY.zip
+MA,RANDOLPH,,2027,10392,8939,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M244_RANDOLPH.zip
+MA,RAYNHAM,,2026,5639,4479,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M245_RAYNHAM.zip
+MA,READING,,2026,9453,8341,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M246_READING.zip
+MA,REHOBOTH,,2027,6201,4386,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M247_REHOBOTH.zip
+MA,REVERE,,2026,15305,7573,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M248_REVERE.zip
+MA,RICHMOND,,2026,1260,761,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M249_RICHMOND.zip
+MA,BELLINGHAM,,2026,6999,5861,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M025_BELLINGHAM.zip
+MA,ROCHESTER,,2026,3010,1988,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M250_ROCHESTER.zip
+MA,ROCKLAND,,2026,6182,4839,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M251_ROCKLAND.zip
+MA,ROCKPORT,,2026,4503,3041,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M252_ROCKPORT.zip
+MA,ROWE,,2026,675,212,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M253_ROWE.zip
+MA,ROWLEY,,2026,3001,2050,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M254_ROWLEY.zip
+MA,ROYALSTON,,2025,1314,527,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M255_ROYALSTON.zip
+MA,RUSSELL,,2026,842,551,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M256_RUSSELL.zip
+MA,RUTLAND,,2026,4647,3269,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M257_RUTLAND.zip
+MA,SALEM,,2026,13943,9913,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M258_SALEM.zip
+MA,SALISBURY,,2026,5586,3386,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M259_SALISBURY.zip
+MA,BELMONT,,2024,8648,6383,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M026_BELMONT.zip
+MA,SANDISFIELD,,2026,1299,599,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M260_SANDISFIELD.zip
+MA,SANDWICH,,2026,11353,9218,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M261_SANDWICH.zip
+MA,SAUGUS,,2027,10505,8173,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M262_SAUGUS.zip
+MA,SAVOY,,2025,590,306,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M263_SAVOY.zip
+MA,SCITUATE,,2026,9471,7752,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M264_SCITUATE.zip
+MA,SEEKONK,,2027,6636,5254,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M265_SEEKONK.zip
+MA,SHARON,,2026,6983,5834,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M266_SHARON.zip
+MA,SHEFFIELD,,2026,2826,1366,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M267_SHEFFIELD.zip
+MA,SHELBURNE,,2026,1145,543,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M268_SHELBURNE.zip
+MA,SHERBORN,,2025,2034,1472,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M269_SHERBORN.zip
+MA,BERKLEY,,2026,2920,2210,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M027_BERKLEY.zip
+MA,SHIRLEY,,2026,2836,1949,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M270_SHIRLEY.zip
+MA,SHREWSBURY,,2027,13189,11345,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M271_SHREWSBURY.zip
+MA,SHUTESBURY,,2026,1374,792,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M272_SHUTESBURY.zip
+MA,SOMERSET,,2027,7287,6139,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M273_SOMERSET.zip
+MA,SOMERVILLE,,2025,19013,9692,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M274_SOMERVILLE.zip
+MA,SOUTH HADLEY,,2026,7608,5559,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M275_SOUTHHADLEY.zip
+MA,SOUTHAMPTON,,2026,3085,2317,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M276_SOUTHAMPTON.zip
+MA,SOUTHBOROUGH,,2027,4036,3271,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M277_SOUTHBOROUGH.zip
+MA,SOUTHBRIDGE,,2025,5826,2975,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M278_SOUTHBRIDGE.zip
+MA,SOUTHWICK,,2025,4522,3502,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M279_SOUTHWICK.zip
+MA,BERLIN,,2026,1748,1142,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M028_BERLIN.zip
+MA,SPENCER,,2026,5300,3323,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M280_SPENCER.zip
+MA,SPRINGFIELD,,2026,44319,28782,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M281_SPRINGFIELD.zip
+MA,STERLING,,2026,3928,2794,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M282_STERLING.zip
+MA,STOCKBRIDGE,,2026,1958,1277,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M283_STOCKBRIDGE.zip
+MA,STONEHAM,,2024,8027,6782,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M284_STONEHAM.zip
+MA,STOUGHTON,,2026,11128,8486,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M285_STOUGHTON.zip
+MA,STOW,,2026,3099,2521,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M286_STOW.zip
+MA,STURBRIDGE,,2027,4755,3391,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M287_STURBRIDGE.zip
+MA,SUDBURY,,2026,7265,6071,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M288_SUDBURY.zip
+MA,SUNDERLAND,,2026,1536,843,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M289_SUNDERLAND.zip
+MA,BERNARDSTON,,2026,1365,757,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M029_BERNARDSTON.zip
+MA,SUTTON,,2026,4861,3390,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M290_SUTTON.zip
+MA,SWAMPSCOTT,,2027,5690,4711,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M291_SWAMPSCOTT.zip
+MA,SWANSEA,,2026,7992,6313,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M292_SWANSEA.zip
+MA,TAUNTON,,2026,20923,13608,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M293_TAUNTON.zip
+MA,TEMPLETON,,2026,4203,2705,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M294_TEMPLETON.zip
+MA,TEWKSBURY,,2027,12056,10429,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M295_TEWKSBURY.zip
+MA,TISBURY,,2025,3556,2372,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M296_TISBURY.zip
+MA,TOLLAND,,2026,1121,547,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M297_TOLLAND.zip
+MA,TOPSFIELD,,2026,2560,2101,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M298_TOPSFIELD.zip
+MA,TOWNSEND,,2026,4041,3200,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M299_TOWNSEND.zip
+MA,ACUSHNET,,2027,4685,3450,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M003_ACUSHNET.zip
+MA,BEVERLY,,2027,13034,10270,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M030_BEVERLY.zip
+MA,TRURO,,2027,3966,2723,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M300_TRURO.zip
+MA,TYNGSBOROUGH,,2025,5281,4234,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M301_TYNGSBOROUGH.zip
+MA,TYRINGHAM,,2025,574,257,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M302_TYRINGHAM.zip
+MA,UPTON,,2026,3487,2710,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M303_UPTON.zip
+MA,UXBRIDGE,,2026,6426,4854,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M304_UXBRIDGE.zip
+MA,WAKEFIELD,,2027,9963,7931,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M305_WAKEFIELD.zip
+MA,WALES,,2025,1232,734,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M306_WALES.zip
+MA,WALPOLE,,2026,10036,8130,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M307_WALPOLE.zip
+MA,WALTHAM,,2026,16610,12761,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M308_WALTHAM.zip
+MA,WARE,,2027,4573,2663,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M309_WARE.zip
+MA,BILLERICA,,2026,15891,12417,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M031_BILLERICA.zip
+MA,WAREHAM,,2027,14902,10250,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M310_WAREHAM.zip
+MA,WARREN,,2027,2589,1398,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M311_WARREN.zip
+MA,WARWICK,,2027,786,341,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M312_WARWICK.zip
+MA,WASHINGTON,,2026,603,256,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M313_WASHINGTON.zip
+MA,WATERTOWN,,2026,10859,7027,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M314_WATERTOWN.zip
+MA,WAYLAND,,2024,5714,4794,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M315_WAYLAND.zip
+MA,WEBSTER,,2025,6674,4354,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M316_WEBSTER.zip
+MA,WELLESLEY,,2026,9051,8081,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M317_WELLESLEY.zip
+MA,WELLFLEET,,2027,5332,3506,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M318_WELLFLEET.zip
+MA,WENDELL,,2027,847,342,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M319_WENDELL.zip
+MA,BLACKSTONE,,2026,3703,2596,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M032_BLACKSTONE.zip
+MA,WENHAM,,2025,1553,1213,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M320_WENHAM.zip
+MA,WEST BOYLSTON,,2026,3275,2500,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M321_WESTBOYLSTON.zip
+MA,WEST BRIDGEWATER,,2027,3320,2311,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M322_WESTBRIDGEWATER.zip
+MA,WEST BROOKFIELD,,2026,2551,1348,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M323_WESTBROOKFIELD.zip
+MA,WEST NEWBURY,,2026,2078,1576,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M324_WESTNEWBURY.zip
+MA,WEST SPRINGFIELD,,2024,9724,7424,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M325_WESTSPRINGFIELD.zip
+MA,WEST STOCKBRIDGE,,2026,1148,719,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M326_WESTSTOCKBRIDGE.zip
+MA,WEST TISBURY,,2027,2802,1473,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M327_WESTTISBURY.zip
+MA,WESTBOROUGH,,2026,7177,5787,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M328_WESTBOROUGH.zip
+MA,WESTFIELD,,2025,14108,10414,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M329_WESTFIELD.zip
+MA,BLANDFORD,,2027,1156,509,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M033_BLANDFORD.zip
+MA,WESTFORD,,2025,9653,8018,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M330_WESTFORD.zip
+MA,WESTHAMPTON,,2024,1239,659,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M331_WESTHAMPTON.zip
+MA,WESTMINSTER,,2025,4167,3058,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M332_WESTMINSTER.zip
+MA,WESTON,,2026,4356,3650,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M333_WESTON.zip
+MA,WESTPORT,,2026,9192,6309,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M334_WESTPORT.zip
+MA,WESTWOOD,,2025,5361,4801,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M335_WESTWOOD.zip
+MA,WEYMOUTH,,2025,20383,17124,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M336_WEYMOUTH.zip
+MA,WHATELY,,2026,1192,577,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M337_WHATELY.zip
+MA,WHITMAN,,2026,5365,4136,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M338_WHITMAN.zip
+MA,WILBRAHAM,,2026,6198,5248,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M339_WILBRAHAM.zip
+MA,BOLTON,,2026,2511,1887,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M034_BOLTON.zip
+MA,WILLIAMSBURG,,2026,1380,779,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M340_WILLIAMSBURG.zip
+MA,WILLIAMSTOWN,,2026,3080,2155,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M341_WILLIAMSTOWN.zip
+MA,WILMINGTON,,2025,9517,7479,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M342_WILMINGTON.zip
+MA,WINCHENDON,,2026,4993,3011,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M343_WINCHENDON.zip
+MA,WINCHESTER,,2026,8146,7211,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M344_WINCHESTER.zip
+MA,WINDSOR,,2026,877,456,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M345_WINDSOR.zip
+MA,WINTHROP,,2026,5983,3818,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M346_WINTHROP.zip
+MA,WOBURN,,2026,14064,10848,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M347_WOBURN.zip
+MA,WORCESTER,,2026,47675,31360,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M348_WORCESTER.zip
+MA,WORTHINGTON,,2026,878,492,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M349_WORTHINGTON.zip
+MA,WRENTHAM,,2026,4872,4003,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M350_WRENTHAM.zip
+MA,YARMOUTH,,2026,18086,14971,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M351_YARMOUTH.zip
+MA,BOURNE,,2024,11879,9090,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M036_BOURNE.zip
+MA,BOXBOROUGH,,2027,2613,2090,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M037_BOXBOROUGH.zip
+MA,BOXFORD,,2026,3288,2761,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M038_BOXFORD.zip
+MA,BOYLSTON,,2027,2403,1820,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M039_BOYLSTON.zip
+MA,ADAMS,,2026,3654,2249,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M004_ADAMS.zip
+MA,BRAINTREE,,2025,13497,11057,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M040_BRAINTREE.zip
+MA,BREWSTER,,2027,9069,7242,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M041_BREWSTER.zip
+MA,BRIDGEWATER,,2026,9038,6812,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M042_BRIDGEWATER.zip
+MA,BRIMFIELD,,2026,2311,1332,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M043_BRIMFIELD.zip
+MA,BROCKTON,,2025,27085,19179,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M044_BROCKTON.zip
+MA,BROOKFIELD,,2026,1579,961,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M045_BROOKFIELD.zip
+MA,BROOKLINE,,2027,18114,15225,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M046_BROOKLINE.zip
+MA,BUCKLAND,,2026,1131,608,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M047_BUCKLAND.zip
+MA,BURLINGTON,,2026,8338,7358,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M048_BURLINGTON.zip
+MA,CAMBRIDGE,,2026,28812,19775,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M049_CAMBRIDGE.zip
+MA,AGAWAM,,2026,11589,9541,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M005_AGAWAM.zip
+MA,CANTON,,2026,9009,7411,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M050_CANTON.zip
+MA,CARLISLE,,2026,2240,1850,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M051_CARLISLE.zip
+MA,CARVER,,2025,4724,3372,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M052_CARVER.zip
+MA,CHARLEMONT,,2026,983,409,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M053_CHARLEMONT.zip
+MA,CHARLTON,,2026,6484,4473,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M054_CHARLTON.zip
+MA,CHATHAM,,2018,8389,6404,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M055_CHATHAM.zip
+MA,CHELMSFORD,,2026,14276,12185,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M056_CHELMSFORD.zip
+MA,CHELSEA,,2026,6942,3077,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M057_CHELSEA.zip
+MA,CHESHIRE,,2026,1737,1148,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M058_CHESHIRE.zip
+MA,CHESTER,,2027,1154,496,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M059_CHESTER.zip
+MA,ALFORD,,2027,537,316,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M006_ALFORD.zip
+MA,CHESTERFIELD,,2026,972,532,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M060_CHESTERFIELD.zip
+MA,CHICOPEE,,2026,18533,13173,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M061_CHICOPEE.zip
+MA,CHILMARK,,2026,2392,1112,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M062_CHILMARK.zip
+MA,CLARKSBURG,,2025,854,626,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M063_CLARKSBURG.zip
+MA,CLINTON,,2027,5058,3608,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M064_CLINTON.zip
+MA,COHASSET,,2027,3514,2744,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M065_COHASSET.zip
+MA,COLRAIN,,2026,1474,599,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M066_COLRAIN.zip
+MA,CONCORD,,2026,7219,5790,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M067_CONCORD.zip
+MA,CONWAY,,2026,1415,600,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M068_CONWAY.zip
+MA,CUMMINGTON,,2026,838,338,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M069_CUMMINGTON.zip
+MA,AMESBURY,,2026,7041,5383,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M007_AMESBURY.zip
+MA,DALTON,,2026,2783,2111,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M070_DALTON.zip
+MA,DANVERS,,2025,9755,7967,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M071_DANVERS.zip
+MA,DARTMOUTH,,2026,14681,10707,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M072_DARTMOUTH.zip
+MA,DEDHAM,,2026,9414,7424,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M073_DEDHAM.zip
+MA,DEERFIELD,,2026,3266,1674,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M074_DEERFIELD.zip
+MA,DENNIS,,2026,17478,13957,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M075_DENNIS.zip
+MA,DIGHTON,,2025,3699,2568,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M076_DIGHTON.zip
+MA,DOUGLAS,,2027,4621,3167,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M077_DOUGLAS.zip
+MA,DOVER,,2027,2594,1943,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M078_DOVER.zip
+MA,DRACUT,,2025,12178,10188,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M079_DRACUT.zip
+MA,AMHERST,,2026,7317,5335,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M008_AMHERST.zip
+MA,DUDLEY,,2026,5214,3460,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M080_DUDLEY.zip
+MA,DUNSTABLE,,2026,1534,1122,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M081_DUNSTABLE.zip
+MA,DUXBURY,,2026,6770,5476,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M082_DUXBURY.zip
+MA,EAST BRIDGEWATER,,2026,5750,4392,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M083_EASTBRIDGEWATER.zip
+MA,EAST BROOKFIELD,,2027,1310,863,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M084_EASTBROOKFIELD.zip
+MA,EAST LONGMEADOW,,2026,6935,5823,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M085_EASTLONGMEADOW.zip
+MA,EASTHAM,,2024,6765,5484,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M086_EASTHAM.zip
+MA,EASTHAMPTON,,2026,6373,4588,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M087_EASTHAMPTON.zip
+MA,EASTON,,2026,9385,7462,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M088_EASTON.zip
+MA,EDGARTOWN,,2027,6685,3851,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M089_EDGARTOWN.zip
+MA,ANDOVER,,2026,13277,10853,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M009_ANDOVER.zip
+MA,EGREMONT,,2025,1289,790,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M090_EGREMONT.zip
+MA,ERVING,,2026,953,542,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M091_ERVING.zip
+MA,ESSEX,,2027,2220,1115,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M092_ESSEX.zip
+MA,EVERETT,,2026,9453,4452,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M093_EVERETT.zip
+MA,FAIRHAVEN,,2025,7981,5735,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M094_FAIRHAVEN.zip
+MA,FALL RIVER,,2026,22060,11589,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M095_FALLRIVER.zip
+MA,FALMOUTH,,2022,24989,20075,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M096_FALMOUTH.zip
+MA,FITCHBURG,,2027,13159,7812,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M097_FITCHBURG.zip
+MA,FLORIDA,,2025,710,301,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M098_FLORIDA.zip
+MA,FOXBOROUGH,,2025,6641,5072,https://s3.dualstack.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M099_FOXBOROUGH.zip

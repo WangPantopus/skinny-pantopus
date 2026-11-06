@@ -3428,7 +3428,6 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 ) {
                     NeighborMessageComposeScreen(
                         onBack = { navController.popBackStack() },
-                        onChangeRecipient = { navController.popBackStack() },
                         onDone = { navController.popBackStack() },
                     )
                 }
