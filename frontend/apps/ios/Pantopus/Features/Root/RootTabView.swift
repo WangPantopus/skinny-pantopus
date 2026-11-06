@@ -345,7 +345,7 @@ public struct RootTabView: View {
              .notifications, .createBusiness, .businessProfile, .businessPage,
              .editBusinessPage,
              .wallet, .paymentsSettings, .securityDevices, .notificationSettings, .assistantMemory, .assistantRules,
-             .businessOwner, .businessConversation, .viewAs, .waitingRoom, .neighborMessage,
+             .businessOwner, .businessOwnerSection, .businessConversation, .viewAs, .waitingRoom, .neighborMessage,
              .bookingDetail, .myBookings,
              .invoiceDetail:
             model.selected = .place
