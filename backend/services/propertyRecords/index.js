@@ -50,7 +50,7 @@ async function lookup(address, { serves = (fips) => config.modeFor(fips) === 'li
   const counties = countiesFor(stateFile, zip, cityKey(address.city)).filter((fips) => serves(fips) && stateFile.jurisdictions[fips]);
   if (!counties.length) return { match: 'unsupported', reason: 'no_release' };
 
-  const query = { ...parsed, zip };
+  const query = { ...parsed, zip, city: cityKey(address.city) };
   const suppressions = await reader.suppressions();
   const answers = await Promise.all(counties.map(async (fips) => {
     const county = stateFile.jurisdictions[fips];
