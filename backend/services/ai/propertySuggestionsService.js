@@ -52,16 +52,16 @@ function buildHeuristicSuggestions({ classification, homeAddressRow, unit_number
     ? classification.google_place_types
     : (Array.isArray(homeAddressRow?.google_place_types) ? homeAddressRow.google_place_types : []);
   const typeStr = types.join(' ').toLowerCase();
+  const units = homeAddressRow?.residential_unit_count;
 
-  if (bt === 'multi_unit' || pt === 'commercial' || /apartment|subpremise|premise/.test(typeStr)) {
-    out.home_type = unit_number ? 'apartment' : (out.home_type || 'apartment');
+  // `premise` says nothing here: the pipeline tags every residential address
+  // with it, houses included.
+  if (unit_number || bt === 'multi_unit' || bt === 'mixed_use' || pt === 'commercial' || /apartment|subpremise/.test(typeStr)) {
+    out.home_type = 'apartment';
+  } else if (typeof units === 'number' && units > 1) {
+    out.home_type = 'multi_unit';
   } else if (bt === 'single_family') {
     out.home_type = 'house';
-  }
-
-  const units = homeAddressRow?.residential_unit_count;
-  if (typeof units === 'number' && units > 1 && !out.home_type) {
-    out.home_type = 'multi_unit';
   }
 
   return out;

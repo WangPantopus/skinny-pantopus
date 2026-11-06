@@ -187,6 +187,10 @@ export interface Post {
   show_on_profile?: boolean;
   profile_visibility_scope?: 'public' | 'followers' | 'connections' | 'local_context' | 'hidden';
   is_visitor_post?: boolean;
+  /** 'photo' when the author's own photo or video placed the post (backend feedService). */
+  location_basis?: 'photo' | null;
+  /** When that photo or video was taken (ISO 8601), when its metadata said. */
+  photo_taken_at?: string | null;
   state?: 'open' | 'solved' | null;
   solved_at?: string | null;
   not_helpful_count?: number;

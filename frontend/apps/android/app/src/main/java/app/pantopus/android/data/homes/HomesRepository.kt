@@ -164,8 +164,11 @@ open class HomesRepository
         /** The stored property facts, without a request. */
         open fun storedPropertyDetails(id: String): PropertyDetailsResponse? = store.peek(HomeStoreKeys.propertyDetails(id)).data
 
-        /** `POST /api/homes/property-suggestions`. */
-        open suspend fun propertySuggestions(request: PropertySuggestionsRequest) = safeApiCall { api.propertySuggestions(request) }
+        /** `POST /api/homes/property-suggestions`; `lookup` as in [HomesApi.propertySuggestions]. */
+        open suspend fun propertySuggestions(
+            request: PropertySuggestionsRequest,
+            lookup: String? = null,
+        ) = safeApiCall { api.propertySuggestions(request, lookup) }
 
         open suspend fun validateAddress(request: HomeAddressValidationRequest) = safeApiCall { api.validateAddress(request) }
 

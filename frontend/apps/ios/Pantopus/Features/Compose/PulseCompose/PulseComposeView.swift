@@ -163,7 +163,8 @@ public struct PulseComposeView: View {
                     viewModel.toast = ToastMessage(text: "Couldn't use that photo. Try again.", kind: .error)
                     return
                 }
-                viewModel.append(photo: PulseComposePhoto(data: jpeg, mimeType: "image/jpeg", filename: "camera-\(UUID().uuidString).jpg"))
+                let photoId = viewModel.appendCameraPhoto(data: jpeg, filename: "camera-\(UUID().uuidString).jpg")
+                Task { await viewModel.stampCameraPhoto(photoId) }
                 suggestAfterPicking(1)
             }
             .ignoresSafeArea()
@@ -201,6 +202,10 @@ public struct PulseComposeView: View {
             if viewModel.isEditing, case .loading = viewModel.prefillState {
                 await viewModel.loadForEdit()
             }
+        }
+        // The Place check runs on open and again when the tagged place, the attachments' capture points or the
+        // audience change; a newer key cancels the older check.
+        .task(id: viewModel.placeEligibilityKey) {
             if !viewModel.isEditing {
                 await viewModel.checkPlaceEligibility()
             }
@@ -310,6 +315,7 @@ public struct PulseComposeView: View {
             onDismissPrecheckNudge: { viewModel.precheckNudge = nil },
             onAddLocation: { showsPlacePicker = true },
             onClearLocation: { viewModel.clearPlaceTag() },
+            onShareWithConnections: { viewModel.shareWithConnectionsInstead() },
             onOpenEarlierPost: { openedEarlierPost = OpenedEarlierPost(id: $0) },
             onSuggest: { Task { await viewModel.suggestPost() } },
             onUndoSuggestion: { viewModel.undoSuggestion() },
@@ -344,6 +350,7 @@ public extension PulseComposeViewModel {
             recommendRating: recommendRating,
             dealExpiresAt: dealExpiresAt,
             eligibilityWarning: eligibilityWarning,
+            isPhotoPlaced: eligibilityBasis == "photo",
             precheckNudge: precheckNudge,
             precheckCooldown: precheckCooldown,
             isVisitorPost: isVisitorPost,

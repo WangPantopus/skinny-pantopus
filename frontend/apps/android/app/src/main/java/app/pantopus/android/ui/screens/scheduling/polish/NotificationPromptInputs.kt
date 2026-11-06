@@ -34,6 +34,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
@@ -145,6 +146,7 @@ fun PhoneEntryField(
             onValueChange = onPhoneChange,
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .weight(1f)
                     .height(FIELD_MIN_HEIGHT)
                     .clip(RoundedCornerShape(Radii.sm))

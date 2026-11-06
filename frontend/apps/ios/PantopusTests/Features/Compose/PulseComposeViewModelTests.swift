@@ -388,9 +388,10 @@ final class PulseComposeViewModelTests: XCTestCase {
         XCTAssertEqual(vm.mediaCaptureLocation?.latitude ?? 0, 41.8781, accuracy: 0.0001)
     }
 
-    /// PRIVACY: the media capture location never leaks onto the outgoing
-    /// request — the body carries only an explicitly picked venue.
-    func testMediaCaptureLocationNeverRidesTheRequest() {
+    /// PRIVACY: the media capture location never becomes the post's place
+    /// on its own — the body's place is only an explicitly picked venue.
+    /// It rides only as Place-check evidence (`mediaLocations`).
+    func testMediaCaptureLocationNeverBecomesThePlace() {
         let vm = PulseComposeViewModel(intent: .ask, api: makeAPI())
         vm.update(.title, to: "Need a plumber")
         vm.update(.body, to: "Pipe is leaking.")
@@ -406,6 +407,7 @@ final class PulseComposeViewModelTests: XCTestCase {
         XCTAssertNil(request.longitude)
         XCTAssertNil(request.locationName)
         XCTAssertNil(request.geocodePlaceId)
+        XCTAssertEqual(request.mediaLocations, [PostMediaLocation(latitude: 41.8781, longitude: -87.6298)])
     }
 
     // MARK: - Submit pipeline

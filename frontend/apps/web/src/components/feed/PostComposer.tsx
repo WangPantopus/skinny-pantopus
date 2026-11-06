@@ -176,6 +176,8 @@ export interface PostComposerSubmitData {
   longitude?: number;
   locationName?: string;
   locationAddress?: string;
+  geocodePlaceId?: string;
+  geocodeAccuracy?: string;
   gpsTimestamp?: string;
   gpsLatitude?: number;
   gpsLongitude?: number;
@@ -388,7 +390,14 @@ export default function PostComposer({
     if (!needsLocation || pickedLocation?.source !== 'search') return;
     let current = true;
     api.posts
-      .checkPlaceEligibility({ latitude: pickedLocation.latitude, longitude: pickedLocation.longitude })
+      .checkPlaceEligibility({
+        latitude: pickedLocation.latitude,
+        longitude: pickedLocation.longitude,
+        // With a device fix in hand, being near the place counts too.
+        gpsTimestamp: pickedLocation.gpsTimestamp,
+        gpsLatitude: pickedLocation.gpsLatitude,
+        gpsLongitude: pickedLocation.gpsLongitude,
+      })
       .then((r) => {
         if (current) setSearchedPlaceRefused(!r.eligible);
       })
@@ -696,6 +705,8 @@ export default function PostComposer({
             longitude: f.location.longitude,
             locationName: f.location.locationName,
             locationAddress: f.location.locationAddress,
+            geocodePlaceId: f.location.geocodePlaceId,
+            geocodeAccuracy: f.location.geocodeAccuracy,
             gpsTimestamp: f.location.gpsTimestamp,
             gpsLatitude: f.location.gpsLatitude,
             gpsLongitude: f.location.gpsLongitude,
@@ -1250,7 +1261,7 @@ export default function PostComposer({
 
             {searchedPlaceRefused && (
               <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                You can post to a searched place only with a verified home or business near it. To post
+                You can post to this place only when you&apos;re near it or have a verified home or business near it. To post
                 where you are, remove this place and choose Location, then Use current location.
               </p>
             )}

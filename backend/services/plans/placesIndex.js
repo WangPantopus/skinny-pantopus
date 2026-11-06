@@ -51,20 +51,27 @@ const REACH_DEGREES = 0.02;
  * @param {number} opts.maxCellElements  At most this many elements a box, the nearest its middle.
  * @param {number} [opts.sampleDegrees]  For areas smaller than a box: how far apart the points are that find
  *   every area it touches (under an area's size). Without it, the box's corners.
+ * @param {boolean} [opts.anywhere]  The caller decides where the index is the whole answer: a box whose middle
+ *   is in no area it holds gets what the index has in the box, not null.
  */
 function createIndexReader({
   manifestUrl, precision, set = null, logPrefix, userAgent, keptAreas, maxCellElements, sampleDegrees = null,
+  anywhere = false,
 }) {
   let manifest = null;
+  let manifestEtag = null;
   let manifestAt = 0;
   let manifestTriedAt = 0;
   let manifestJob = null;
 
   async function readManifest() {
     const response = await fetch(manifestUrl, {
-      headers: { 'User-Agent': userAgent },
+      headers: { 'User-Agent': userAgent, ...(manifest && manifestEtag ? { 'If-None-Match': manifestEtag } : {}) },
       signal: AbortSignal.timeout(READ_TIMEOUT_MS),
     });
+    // It changes monthly. Unchanged, the hourly check downloads nothing and parses nothing (the venues manifest
+    // is ~5 MB, a pause for every request on this server).
+    if (response.status === 304) return manifest;
     if (!response.ok) throw new Error(`The places index manifest answered ${response.status}`);
     const data = await response.json();
     if (data?.v !== FORMAT || data.precision !== precision || typeof data.data !== 'string'
@@ -72,6 +79,7 @@ function createIndexReader({
       || (set && (data.set !== set.name || data.version !== set.version))) {
       throw new Error('The places index manifest is not one this server reads');
     }
+    manifestEtag = response.headers.get('etag');
     return { ...data, dataUrl: new URL(data.data, manifestUrl).toString() };
   }
 
@@ -144,7 +152,7 @@ function createIndexReader({
     const current = await currentManifest();
     if (!current) return null;
     const middle = { latitude: (box.south + box.north) / 2, longitude: (box.west + box.east) / 2 };
-    if (!current.regions[encodeGeohash(middle.latitude, middle.longitude, precision)]) return null;
+    if (!anywhere && !current.regions[encodeGeohash(middle.latitude, middle.longitude, precision)]) return null;
     // A park whose middle is just past the box (in the next area) can still reach into it.
     const s = box.south - REACH_DEGREES;
     const n = box.north + REACH_DEGREES;

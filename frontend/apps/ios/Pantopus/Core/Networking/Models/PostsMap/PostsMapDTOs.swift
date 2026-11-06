@@ -96,6 +96,9 @@ public struct PostsMapMarkerDTO: Decodable, Sendable, Hashable, Identifiable {
     public let userHasSaved: Bool?
     public let createdAt: String?
     public let creator: PostsMapCreatorDTO?
+    /// `photo` when the author's own photo or video placed the post: the
+    /// pin is where it was taken (`backend/routes/posts.js` map layer).
+    public let locationBasis: String?
 
     // ── task / offer layers (backend/routes/posts.js:1730 / :1765) ──
     public let description: String?
@@ -127,6 +130,7 @@ public struct PostsMapMarkerDTO: Decodable, Sendable, Hashable, Identifiable {
         case commentCount = "comment_count"
         case userHasLiked, userHasSaved
         case createdAt = "created_at"
+        case locationBasis = "location_basis"
         case creator, description, status, category, locationUnlocked
         case businessName = "business_name"
         case address
@@ -154,6 +158,7 @@ public struct PostsMapMarkerDTO: Decodable, Sendable, Hashable, Identifiable {
         userHasSaved: Bool? = nil,
         createdAt: String? = nil,
         creator: PostsMapCreatorDTO? = nil,
+        locationBasis: String? = nil,
         description: String? = nil,
         status: String? = nil,
         category: String? = nil,
@@ -183,6 +188,7 @@ public struct PostsMapMarkerDTO: Decodable, Sendable, Hashable, Identifiable {
         self.userHasSaved = userHasSaved
         self.createdAt = createdAt
         self.creator = creator
+        self.locationBasis = locationBasis
         self.description = description
         self.status = status
         self.category = category
@@ -223,6 +229,7 @@ public struct PostsMapMarkerDTO: Decodable, Sendable, Hashable, Identifiable {
         userHasSaved = try container.decodeIfPresent(Bool.self, forKey: .userHasSaved)
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
         creator = try container.decodeIfPresent(PostsMapCreatorDTO.self, forKey: .creator)
+        locationBasis = try? container.decodeIfPresent(String.self, forKey: .locationBasis)
         description = try container.decodeIfPresent(String.self, forKey: .description)
         status = try container.decodeIfPresent(String.self, forKey: .status)
         category = try container.decodeIfPresent(String.self, forKey: .category)

@@ -89,7 +89,7 @@ const { registerPgBossJobs } = moduleStub.exports;
       return work(name, options, fn);
     };
     await registerPgBossJobs(boss);
-    assert.equal(consumers.length, 21);
+    assert.equal(consumers.length, 22);
     const schedules = await boss.getSchedules();
     assert.equal(schedules.length, consumers.length);
     for (const name of consumers) {
@@ -182,7 +182,7 @@ const { registerPgBossJobs } = moduleStub.exports;
     let attempts = 0;
     const query = guarded.pool.query.bind(guarded.pool);
     guarded.pool.query = (...args) => { attempts += 1; return query(...args); };
-    await Promise.all(Array.from({ length: 21 }, () => assert.rejects(
+    await Promise.all(Array.from({ length: 22 }, () => assert.rejects(
       guarded.executeSql('SELECT 1'), error => error.code === 'PGBOSS_DB_BACKOFF')));
     assert.equal(attempts, 0, 'Consumers queried PostgreSQL during shared backoff');
     await until(async () => {
@@ -227,6 +227,6 @@ const { registerPgBossJobs } = moduleStub.exports;
       await admin.query('ALTER DATABASE postgres ALLOW_CONNECTIONS true');
       await admin.end();
     }
-    console.log('Production queue contract passed: all 21 consumers, schedules, retries, retention, restart, SQL cancellation, shared exponential backoff and idempotent dispatch recovery');
+    console.log('Production queue contract passed: all 22 consumers, schedules, retries, retention, restart, SQL cancellation, shared exponential backoff and idempotent dispatch recovery');
   } finally { await stopPgBoss(); }
 })().catch(error => { console.error(error); process.exit(1); });

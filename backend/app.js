@@ -291,11 +291,19 @@ const BEARER_CODE_PATH = /^(\/api\/public\/(?:fridge-cards|residency-claims|resi
 // and abuse control is unaffected — the mount-level previewLimiter rate
 // limits per IP without reading this log.
 const NO_CALLER_ID_PATH = /^\/api\/public\/unlisted$/i;
+// Which build is asking, as its X-Client-Platform header says: ios-2.0.7, android-2.0.9, web-1a2b3c4d. A bare
+// "android" is a build from before November 2026. It counts how many old builds remain
+// (scripts/client-build-report.js) and is logged only in this shape.
+const CLIENT_BUILD = /^(ios|android|web)(-[\w.+-]{1,40})?$/;
+const clientBuild = (req) => {
+  const build = req.get('x-client-platform');
+  return CLIENT_BUILD.test(build || '') ? build : undefined;
+};
 app.use((req, res, next) => {
   const path = req.path.replace(BEARER_CODE_PATH, '$1/:code');
   logger.info(`${req.method} ${path}`, NO_CALLER_ID_PATH.test(req.path)
     ? {}
-    : { ip: req.ip, userAgent: req.get('user-agent') });
+    : { ip: req.ip, userAgent: req.get('user-agent'), client: clientBuild(req) });
   next();
 });
 

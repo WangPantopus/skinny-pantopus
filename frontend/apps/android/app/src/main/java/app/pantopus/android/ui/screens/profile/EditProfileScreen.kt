@@ -57,6 +57,7 @@ import app.pantopus.android.ui.components.Shimmer
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastKind
 import app.pantopus.android.ui.components.ToastMessage
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.components.rememberAddressSuggestions
 import app.pantopus.android.ui.screens.shared.form.FORM_COMMIT_BUTTON_TAG
 import app.pantopus.android.ui.screens.shared.form.FormFieldGroup
@@ -774,6 +775,7 @@ private fun BioField(
             cursorBrush = SolidColor(PantopusColors.primary600),
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 96.dp)
                     .clip(RoundedCornerShape(Radii.md))

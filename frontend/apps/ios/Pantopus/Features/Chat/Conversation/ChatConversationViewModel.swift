@@ -4472,14 +4472,8 @@ public final class ChatConversationViewModel {
                 continue
             }
             let side: ChatMessageSide = (message.userId == sendingIdentityId) ? .outgoing : .incoming
-            let previousSameSide =
-                index > 0 &&
-                combined[index - 1].userId == message.userId &&
-                Self.dayKey(for: combined[index - 1].createdAt) == dayKey
-            let nextSameSide =
-                index + 1 < combined.count &&
-                combined[index + 1].userId == message.userId &&
-                Self.dayKey(for: combined[index + 1].createdAt) == dayKey
+            let previousSameSide = index > 0 && Self.sharesBubbleGroup(message, combined[index - 1], dayKey: dayKey)
+            let nextSameSide = index + 1 < combined.count && Self.sharesBubbleGroup(message, combined[index + 1], dayKey: dayKey)
             let hasTail = !nextSameSide
             let deliveryState: ChatDeliveryState? = {
                 guard side == .outgoing else { return nil }
@@ -4872,6 +4866,15 @@ public final class ChatConversationViewModel {
             subtitle: metadata?["subtitle"]?.stringValue ?? "This conversation started from a creator broadcast.",
             metric: metadata?["metric"]?.stringValue ?? "Audience update"
         )
+    }
+
+    /// A message joins its neighbor's bubble group when one person sent both on the same day.
+    /// System lines and broadcast references never join one, as on Android: a system line
+    /// carries the id of whoever caused it ("Ben let in Ava"), and the next message from that
+    /// person still shows their name and photo.
+    private static func sharesBubbleGroup(_ message: ChatMessageDTO, _ neighbor: ChatMessageDTO, dayKey: String) -> Bool {
+        neighbor.messageType != "system" && neighbor.messageType != "broadcast_reference" &&
+            neighbor.userId == message.userId && Self.dayKey(for: neighbor.createdAt) == dayKey
     }
 
     private static func dayKey(for iso: String) -> String {
