@@ -8,13 +8,17 @@ const defaultApiUrl =
     : 'http://localhost:8000');
 
 // The root layout's scripts load on every page. The modules they share with a layout's
-// or a page's scripts (the API client, React Query, chat storage...) go out once, in one
-// chunk the root layout loads, instead of also in those other chunks: webpack's default
-// split (shared groups of 20 KB or more, at most 25 requests per entry) left the smaller
-// shared groups copied into each, so a page loaded some modules twice. Every page loads
-// the root layout, so no page gets code it didn't load already. 'app/layout' and
-// 'main-app' are Next's names for the root layout's entry and the App Router's own;
-// modules in the latter (React, Next) keep Next's split.
+// or a page's scripts (the API client, React Query...) go out once, in one chunk the root
+// layout loads, instead of also in those other chunks: webpack's default split (shared
+// groups of 20 KB or more, at most 25 requests per entry) left the smaller shared groups
+// copied into each, so a page loaded some modules twice. Every page loads the root layout,
+// so no page gets code it didn't load already. 'app/layout' and 'main-app' are Next's names
+// for the root layout's entry and the App Router's own; modules in the latter (React, Next)
+// keep Next's split.
+//
+// #3427 added this and #3428 took it out: on the throttled profile, the chunk's early request
+// delayed the stylesheets. Scripts now wait for the stylesheets (components/StylesheetsFirst.tsx);
+// if that ever goes, time this again.
 function shareRootLayoutModules(config) {
   const splitChunks = config.optimization && config.optimization.splitChunks;
   if (!splitChunks || !splitChunks.cacheGroups) return;
