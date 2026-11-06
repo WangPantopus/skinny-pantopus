@@ -52,21 +52,31 @@ struct PlaceHomeDetailContent: View {
                     switch intel.valueAccess {
                     case .shown:
                         PlaceDetailSectionLabel(text: "Value")
-                        ValueCard(data: data)
-                        if let assessed = data.assessedValue {
-                            AssessmentCard(assessed: assessed)
-                        }
-                        if let valueSource = data.valueSource {
-                            PlaceSourceNote(name: valueSource)
-                        } else if data.estimatedValue != nil || data.assessedValue != nil {
-                            PlaceSourceNote(
-                                name: "County public records · estimate model",
-                                asOf: PlacePresentation.fmtMonthYear(env.asOf)
-                            )
+                        if let card = data.valueCard {
+                            RecordValueCard(card: card)
+                            if let source = card.source {
+                                PlaceSourceNote(name: source)
+                            }
+                        } else {
+                            ValueCard(data: data)
+                            if let assessed = data.assessedValue {
+                                AssessmentCard(assessed: assessed)
+                            }
+                            if let valueSource = data.valueSource {
+                                PlaceSourceNote(name: valueSource)
+                            } else if data.estimatedValue != nil || data.assessedValue != nil {
+                                PlaceSourceNote(
+                                    name: "County public records · estimate model",
+                                    asOf: PlacePresentation.fmtMonthYear(env.asOf)
+                                )
+                            }
                         }
 
-                        PlaceDetailSectionLabel(text: "Equity")
-                        EquityCalculator(estimatedValue: data.estimatedValue)
+                        // An assessment alone isn't a value to borrow against.
+                        if data.valueCard == nil || data.estimatedValue != nil {
+                            PlaceDetailSectionLabel(text: "Equity")
+                            EquityCalculator(estimatedValue: data.estimatedValue)
+                        }
                     case .pending:
                         // The value is the confirmed owner's; a pending owner waits for the ownership review.
                         PlaceDetailSectionLabel(text: "Value")
@@ -174,6 +184,34 @@ private struct ValueCard: View {
                     Spacer(minLength: 0)
                 }
             }
+        }
+    }
+}
+
+/// The server's card: each number says what it is.
+private struct RecordValueCard: View {
+    let card: HomeValueCardDTO
+
+    var body: some View {
+        PlaceDetailCard {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(card.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appTextMuted)
+                if let number = card.value {
+                    Text(number)
+                        .font(.system(size: 28, weight: .bold))
+                        .kerning(-0.5)
+                        .foregroundStyle(Theme.Color.appText)
+                } else if let message = card.emptyMessage {
+                    Text(message)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                HomeValueCardDetails(card: card)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
