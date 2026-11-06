@@ -48,6 +48,9 @@ final class NeighborMessageComposeViewModel {
 
     private(set) var recipientSearchState: RecipientSearchState = .idle
     private var searchGeneration = 0
+    /// Address suggestions while typing, nearest your home first; picking
+    /// one looks that exact address up (`chooseSuggestion`).
+    let addressSuggestions = AddressSuggestions()
 
     private let api: APIClient
 
@@ -85,6 +88,7 @@ final class NeighborMessageComposeViewModel {
 
     func searchRecipients() async {
         guard canSearchRecipients else { return }
+        addressSuggestions.dismiss()
         searchGeneration += 1
         let generation = searchGeneration
         let query = recipientQuery.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -107,6 +111,14 @@ final class NeighborMessageComposeViewModel {
         }
     }
 
+    /// A picked address suggestion is the exact address: search for it at once.
+    func chooseSuggestion(_ suggestion: GeoSuggestion) async {
+        guard !sending, let address = await addressSuggestions.choose(suggestion),
+              let street = address.address, !street.isEmpty else { return }
+        recipientQuery = street
+        await searchRecipients()
+    }
+
     func selectRecipient(_ home: DiscoveredHomeDTO) {
         guard !sending, case let .loaded(homes) = recipientSearchState,
               homes.contains(where: { $0.id == home.id }), let address = home.address else { return }
@@ -125,6 +137,9 @@ final class NeighborMessageComposeViewModel {
     }
 
     func load() async {
+        if addressSuggestions.near == nil {
+            addressSuggestions.near = await AddressSuggestions.homePoint(homeId: senderHomeId)
+        }
         if case .loaded = state { return }
         state = .loading
         do {

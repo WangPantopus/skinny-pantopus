@@ -33,12 +33,16 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.data.api.models.geo.NormalizedAddress
 import app.pantopus.android.data.api.models.place.BlockInviteRecipient
 import app.pantopus.android.data.api.models.place.BlockMeter
 import app.pantopus.android.data.api.models.place.BlockStatus
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceTier
+import app.pantopus.android.ui.components.AddressSuggestionList
+import app.pantopus.android.ui.components.AddressSuggestions
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.components.rememberAddressSuggestions
 import app.pantopus.android.ui.screens.place.PlacePresentation
 import app.pantopus.android.ui.screens.place.components.PlaceIconTile
 import app.pantopus.android.ui.screens.place.components.PlaceLockedCard
@@ -343,6 +347,8 @@ private fun BlockInviteForm(
     // and iOS. A refusal leaves the budget alone and keeps the typed address to correct.
     val draft = remember(block.invitesRemaining) { BlockInviteDraft() }
     val isSending by viewModel.isSendingInvite.collectAsStateWithLifecycle()
+    // Neighbors live nearby: suggestions near this Home come first.
+    val suggestions = rememberAddressSuggestions(nearHomeId = viewModel.homeId.ifEmpty { null })
 
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         Text(
@@ -351,7 +357,7 @@ private fun BlockInviteForm(
             fontWeight = FontWeight.SemiBold,
             color = PantopusColors.appTextSecondary,
         )
-        BlockInviteFields(draft)
+        BlockInviteFields(draft, suggestions)
         PrimaryButton(
             title = if (isSending) "Mailing…" else "Mail the invitation",
             isLoading = isSending,
@@ -374,6 +380,14 @@ private class BlockInviteDraft {
     var state by mutableStateOf("")
     var zip by mutableStateOf("")
 
+    /** A picked suggestion fills the whole address; a state that isn't a two-letter code is left to type. */
+    fun fill(picked: NormalizedAddress) {
+        picked.address?.takeIf { it.isNotBlank() }?.let { line1 = it }
+        picked.city?.takeIf { it.isNotBlank() }?.let { city = it }
+        state = picked.state?.trim()?.takeIf { it.length == STATE_CODE_CHARS && it.all(Char::isLetter) }?.uppercase().orEmpty()
+        picked.zipcode?.takeIf { it.isNotBlank() }?.let { zip = it }
+    }
+
     fun toRecipient(): BlockInviteRecipient =
         BlockInviteRecipient(
             line1 = line1.trim(),
@@ -384,15 +398,24 @@ private class BlockInviteDraft {
 }
 
 @Composable
-private fun BlockInviteFields(draft: BlockInviteDraft) {
+private fun BlockInviteFields(
+    draft: BlockInviteDraft,
+    suggestions: AddressSuggestions?,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         OutlinedTextField(
             value = draft.line1,
-            onValueChange = { draft.line1 = it },
+            onValueChange = {
+                draft.line1 = it
+                suggestions?.onTextChanged(it)
+            },
             placeholder = { Text("Street address") },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().testTag("place.blockFounders.street"),
         )
+        AddressSuggestionList(suggestions, testTagPrefix = "place.blockFounders.addressSuggestion") { picked ->
+            draft.fill(picked)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             OutlinedTextField(
                 value = draft.city,
