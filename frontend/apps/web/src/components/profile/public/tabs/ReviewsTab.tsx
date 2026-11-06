@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import ReviewForm from '@/components/ReviewForm';
+import UserAvatarLink from '@/components/user/UserAvatarLink';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import MediaLightbox, { type LightboxImage } from '@/components/gig-detail/MediaLightbox';
 import { launchFeatures } from '@/lib/featureFlags';
@@ -151,19 +152,26 @@ export default function ReviewsTab({
             <div key={review.id} className="bg-surface rounded-xl border border-app p-6">
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0">
-                  {review.reviewer_avatar || review.reviewer?.profile_picture_url ? (
-                    <Image
-                      src={review.reviewer_avatar || review.reviewer?.profile_picture_url || ''}
-                      alt={review.reviewer_name || ''}
-                      width={48}
-                      height={48}
-                      className="w-12 h-12 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold">
-                      {review.reviewer_name?.[0] || '?'}
-                    </div>
-                  )}
+                  {/* The photo opens the reviewer's profile, as their name does. */}
+                  <UserAvatarLink
+                    href={(review.reviewer_username || review.reviewer?.username)
+                      ? `/${review.reviewer_username || review.reviewer?.username}`
+                      : null}
+                  >
+                    {review.reviewer_avatar || review.reviewer?.profile_picture_url ? (
+                      <Image
+                        src={review.reviewer_avatar || review.reviewer?.profile_picture_url || ''}
+                        alt={review.reviewer_name || ''}
+                        width={48}
+                        height={48}
+                        className="w-12 h-12 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold">
+                        {review.reviewer_name?.[0] || '?'}
+                      </div>
+                    )}
+                  </UserAvatarLink>
                 </div>
 
                 <div className="flex-1">

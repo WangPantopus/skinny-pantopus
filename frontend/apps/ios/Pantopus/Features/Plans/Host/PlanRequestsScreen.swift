@@ -112,10 +112,13 @@ final class PlanRequestsViewModel {
 struct PlanRequestsScreen: View {
     @State private var viewModel: PlanRequestsViewModel
     let onBack: () -> Void
+    /// A requester's profile, from their card.
+    let onOpenProfile: (String) -> Void
     @State private var pendingAccept: PlanRequestViewDTO?
 
-    init(planId: String, onBack: @escaping () -> Void) {
+    init(planId: String, onOpenProfile: @escaping (String) -> Void = { _ in }, onBack: @escaping () -> Void) {
         _viewModel = State(initialValue: PlanRequestsViewModel(planId: planId))
+        self.onOpenProfile = onOpenProfile
         self.onBack = onBack
     }
 
@@ -235,7 +238,8 @@ struct PlanRequestsScreen: View {
                     kind: viewModel.plan?.card.kind ?? .watchParty,
                     isWorking: viewModel.working.contains(request.id),
                     onDecline: { Task { await viewModel.decline(request) } },
-                    onAccept: { accept(request) }
+                    onAccept: { accept(request) },
+                    onOpenProfile: onOpenProfile
                 )
             }
         } else if viewModel.loadFailed {
@@ -261,7 +265,8 @@ struct PlanRequestsScreen: View {
                         kind: viewModel.plan?.card.kind ?? .watchParty,
                         isWorking: viewModel.working.contains(request.id),
                         onDecline: { Task { await viewModel.decline(request) } },
-                        onAccept: { accept(request) }
+                        onAccept: { accept(request) },
+                        onOpenProfile: onOpenProfile
                     )
                 }
             }
@@ -284,27 +289,22 @@ struct PlanRequestCard: View {
     let isWorking: Bool
     let onDecline: () -> Void
     let onAccept: () -> Void
+    /// The requester's profile, from their photo and name; nil leaves them plain.
+    var onOpenProfile: ((String) -> Void)?
 
     var body: some View {
         PlanCardBox(padding: Spacing.s4) {
             VStack(alignment: .leading, spacing: Spacing.s3) {
-                HStack(spacing: Spacing.s3) {
-                    PlanAvatar(name: request.user.displayName, url: request.user.avatarUrl)
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: Spacing.s2) {
-                            Text(request.user.displayName).planFont(.bodyStrong).foregroundStyle(Theme.Color.appText)
-                            if request.user.verifiedAddress { PlanVerifiedLabel(text: "Verified") }
-                        }
-                        Text(facts)
-                            .planFont(.small)
-                            .foregroundStyle(Theme.Color.appTextSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                if let userId = request.user.userId, let onOpenProfile {
+                    Button { onOpenProfile(userId) } label: {
+                        who.contentShape(Rectangle())
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    // The word carries the state (board P2); VoiceOver hears just the word.
-                    StatusChip(party, variant: .neutral).accessibilityLabel(party)
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens their profile")
+                    .accessibilityIdentifier("planRequestPerson")
+                } else {
+                    who
                 }
-                .accessibilityElement(children: .combine)
                 // A forwarded email invitation: the host sees whose address it went to before saying yes.
                 if let address = request.openedInviteTo {
                     PlanFactRow(icon: .mail, text: "Opened your invitation to \(address)", strong: false)
@@ -337,6 +337,27 @@ struct PlanRequestCard: View {
     }
 
     /// "About 1 mi away · joined 2 plans · 1 mutual connection".
+    /// Who is asking: photo, name, verified, the facts and their party.
+    private var who: some View {
+        HStack(spacing: Spacing.s3) {
+            PlanAvatar(name: request.user.displayName, url: request.user.avatarUrl)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: Spacing.s2) {
+                    Text(request.user.displayName).planFont(.bodyStrong).foregroundStyle(Theme.Color.appText)
+                    if request.user.verifiedAddress { PlanVerifiedLabel(text: "Verified") }
+                }
+                Text(facts)
+                    .planFont(.small)
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // The word carries the state (board P2); VoiceOver hears just the word.
+            StatusChip(party, variant: .neutral).accessibilityLabel(party)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
     private var facts: String {
         var parts: [String] = []
         if let distance = PlanFormat.distance(request.user.distanceBand) {

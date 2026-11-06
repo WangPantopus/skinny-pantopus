@@ -589,6 +589,9 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
     /// group's, a Support Train's); never the room's title. `nil` in a
     /// one-to-one thread.
     public let senderName: String?
+    /// The person who sent an incoming message in such a room, whose
+    /// profile the sender's name and photo open; `nil` otherwise.
+    public let senderUserId: String?
     /// Link buttons under an assistant reply (`.aiReply` only).
     public let aiLinks: [ChatAILink]
 
@@ -605,6 +608,7 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
         lockedTier: String? = nil,
         sentSupportTier: String? = nil,
         senderName: String? = nil,
+        senderUserId: String? = nil,
         aiLinks: [ChatAILink] = [],
         attachments: [ChatAttachmentDTO] = []
     ) {
@@ -620,6 +624,7 @@ public struct ChatBubbleContent: Identifiable, Sendable, Hashable {
         self.lockedTier = lockedTier
         self.sentSupportTier = sentSupportTier
         self.senderName = senderName
+        self.senderUserId = senderUserId
         self.aiLinks = aiLinks
         self.attachments = attachments
     }

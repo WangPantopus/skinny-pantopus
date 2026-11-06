@@ -620,17 +620,22 @@ public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
     public let fieldSources: [String: String]?
     public let tiersUsed: [String]?
     public let llmEnabled: Bool?
+    /// Where the county-record lookup stands (servers since November 2026):
+    /// `found`, `none`, `pending` (ask again with `lookup: "check"`) or `unavailable`.
+    public let attomLookup: String?
 
     public init(
         suggestions: PropertySuggestionsFields? = nil,
         fieldSources: [String: String]? = nil,
         tiersUsed: [String]? = nil,
-        llmEnabled: Bool? = nil
+        llmEnabled: Bool? = nil,
+        attomLookup: String? = nil
     ) {
         self.suggestions = suggestions
         self.fieldSources = fieldSources
         self.tiersUsed = tiersUsed
         self.llmEnabled = llmEnabled
+        self.attomLookup = attomLookup
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -638,6 +643,7 @@ public struct PropertySuggestionsResponse: Decodable, Sendable, Hashable {
         case fieldSources = "field_sources"
         case tiersUsed = "tiers_used"
         case llmEnabled = "llm_enabled"
+        case attomLookup = "attom_lookup"
     }
 
     /// True when ATTOM actually returned a public record for the address —

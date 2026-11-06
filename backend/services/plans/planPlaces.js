@@ -73,6 +73,7 @@ const SHOW_RADIUS_METERS = 3 * rules.MILE_METERS;
 const MAX_RESULTS = 40;
 const MAX_FACTS = 2;
 const ATTRIBUTION = '© OpenStreetMap contributors';
+const USER_AGENT = 'Pantopus/1.0 (Nearby Plans place picker)';
 
 const SPORT_NAMES = {
   pickleball: 'pickleball courts',
@@ -248,10 +249,10 @@ function toPlaces(elements) {
 }
 
 /** One server's answer: its elements, or an error for anything short of a full answer. */
-async function askOverpass(url, query, signal, timeoutMs = FETCH_TIMEOUT_MS) {
+async function askOverpass(url, query, signal, timeoutMs = FETCH_TIMEOUT_MS, userAgent = USER_AGENT) {
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Pantopus/1.0 (Nearby Plans place picker)' },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': userAgent },
     body: `data=${encodeURIComponent(query)}`,
     signal: AbortSignal.any([signal, AbortSignal.timeout(Math.max(1000, Math.min(FETCH_TIMEOUT_MS, timeoutMs)))]),
   });
@@ -277,8 +278,10 @@ async function askOverpass(url, query, signal, timeoutMs = FETCH_TIMEOUT_MS) {
  * after a pause that doubles each time: a busy one answers 502 "at capacity"
  * at once and usually has room a few seconds later. The first full answer
  * wins and the others are stopped; with none in ASK_BUDGET_MS, the last error.
+ * Other pickers (services/geo/venues.js) ask through this too, under their own
+ * log prefix and User-Agent.
  */
-function askServers(query) {
+function askServers(query, { logPrefix = 'plans.places', userAgent = USER_AGENT } = {}) {
   return new Promise((resolve, reject) => {
     const stop = new AbortController();
     const deadline = Date.now() + ASK_BUDGET_MS;
@@ -301,12 +304,12 @@ function askServers(query) {
     };
     const ask = (url, attempt) => {
       if (done) return;
-      askOverpass(url, query, stop.signal, deadline - Date.now()).then(
+      askOverpass(url, query, stop.signal, deadline - Date.now(), userAgent).then(
         (elements) => finish(resolve, elements),
         (err) => {
           if (done) return;
           lastError = err;
-          logger.warn('plans.places.overpass_failed', { host: new URL(url).host, attempt, error: err.message });
+          logger.warn(`${logPrefix}.overpass_failed`, { host: new URL(url).host, attempt, error: err.message });
           if (attempt === 0) startNext();
           const pause = RETRY_PAUSE_MS * 2 ** attempt;
           if (Date.now() + pause + MIN_ASK_MS < deadline) {
@@ -597,5 +600,5 @@ function parkNameOf(name) {
 }
 
 module.exports = {
-  placesNear, warmAround, toPlaces, parkNameOf, PlacesUnavailableError, ATTRIBUTION, PREFERRED,
+  placesNear, warmAround, toPlaces, parkNameOf, PlacesUnavailableError, ATTRIBUTION, PREFERRED, askServers,
 };

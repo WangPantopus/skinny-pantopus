@@ -1160,7 +1160,8 @@ router.patch('/tasks/:id', verifyToken, validate(updateTaskSchema), async (req, 
     const result = await homeRecordService.mutateTaskById({ actorId: req.user.id, taskId: req.params.id, action: 'update', payload });
     if (result.task_completed === true && result.record.created_by && result.record.created_by !== req.user.id) {
       await notificationService.notifyTaskCompleted({ creatorUserId: result.record.created_by,
-        homeId: result.record.home_id, taskId: result.record.id, completedAt: result.record.completed_at });
+        homeId: result.record.home_id, taskId: result.record.id, completedAt: result.record.completed_at,
+        completedById: req.user.id });
     }
     res.json({ task: mailTaskDto(result.record) });
   } catch (error) { homeRecordService.sendError(res, error); }

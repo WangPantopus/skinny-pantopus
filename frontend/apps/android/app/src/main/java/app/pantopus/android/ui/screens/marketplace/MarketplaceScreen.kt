@@ -243,7 +243,13 @@ private fun MarketSearchBar(
                     ),
                 cursorBrush = SolidColor(PantopusColors.primary600),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
+                keyboardActions =
+                    KeyboardActions(
+                        onSearch = {
+                            defaultKeyboardAction(ImeAction.Done)
+                            onSubmit()
+                        },
+                    ),
                 modifier = Modifier.fillMaxWidth(),
             )
         }

@@ -225,6 +225,10 @@ async function _sendDayOfReminders() {
 
 // ─── Open Slot Nudges ──────────────────────────────────────────────────────
 
+// Train-local hours an organizer may get the open-slots nudge: from 9 AM, until 8 PM.
+const OPEN_SLOT_NUDGE_FROM_HOUR = 9;
+const OPEN_SLOT_NUDGE_UNTIL_HOUR = 20;
+
 async function _sendOpenSlotNudges() {
   try {
     const now = new Date();
@@ -259,12 +263,19 @@ async function _sendOpenSlotNudges() {
       // Check train is published or active
       const { data: train } = await supabaseAdmin
         .from('SupportTrain')
-        .select('id, organizer_user_id, status, Activity!inner ( title )')
+        .select('id, organizer_user_id, status, delivery_lat, delivery_lng, Activity!inner ( title, timezone )')
         .eq('id', trainId)
         .in('status', ['published', 'active'])
         .single();
 
       if (!train) continue;
+
+      // The organizer hears about open slots in the daytime where the Train is, 9 AM to 8 PM: this job runs all
+      // day, and the 48-hour spacing below would otherwise keep whatever hour the first nudge went, 3 AM included.
+      // A Train whose zone can't be told waits for UTC daytime.
+      const local = localReminderTime({ SupportTrain: train }, now);
+      const hour = local.isValid ? local.hour : now.getUTCHours();
+      if (hour < OPEN_SLOT_NUDGE_FROM_HOUR || hour >= OPEN_SLOT_NUDGE_UNTIL_HOUR) continue;
 
       // Check if we already nudged in the last 48 hours (use notification log)
       // Simple approach: check last open_slots nudge notification

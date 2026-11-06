@@ -367,7 +367,7 @@ private struct MagicDescribeCard: View {
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("Done") { isFocused = false }
+                Button("Done") { Keyboard.close() }
                     .font(.system(size: 16, weight: .semibold))
                     .accessibilityIdentifier("composeGigDescribeKeyboardDone")
             }

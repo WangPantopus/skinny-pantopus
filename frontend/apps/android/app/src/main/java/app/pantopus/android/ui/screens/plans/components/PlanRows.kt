@@ -262,6 +262,8 @@ fun PlanAvatarStack(
     names: List<Pair<String?, String?>>,
     modifier: Modifier = Modifier,
     size: Dp = 30.dp,
+    /** Opens the person whose photo was tapped, by the second of each pair (their account); null leaves them plain. */
+    onOpen: ((String) -> Unit)? = null,
 ) {
     Row(modifier = modifier.clearAndSetSemantics {}) {
         names.take(MAX_STACK).forEachIndexed { index, (name, seed) ->
@@ -270,7 +272,12 @@ fun PlanAvatarStack(
                 seed = seed,
                 size = size,
                 ring = true,
-                modifier = Modifier.offset(x = (-8 * index).dp),
+                modifier =
+                    Modifier
+                        .offset(x = (-8 * index).dp)
+                        .then(
+                            if (onOpen != null && seed != null) Modifier.clip(CircleShape).clickable { onOpen(seed) } else Modifier,
+                        ),
             )
         }
     }
