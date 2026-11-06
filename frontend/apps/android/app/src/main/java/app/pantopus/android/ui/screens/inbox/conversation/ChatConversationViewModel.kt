@@ -4286,6 +4286,12 @@ class ChatConversationViewModel
                                 } else {
                                     null
                                 },
+                            // The person behind a room's message, for their profile; none for a business's.
+                            senderUserId =
+                                message.userId?.takeIf {
+                                    mode is ChatThreadMode.Room && side == ChatMessageSide.Incoming && it.isNotEmpty() &&
+                                        (message.sender?.type ?: "local") == "local"
+                                },
                             attachments = message.attachments,
                         ),
                     ),

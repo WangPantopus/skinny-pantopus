@@ -128,6 +128,7 @@ import app.pantopus.android.ui.screens.explore.ExploreMapScreen
 import app.pantopus.android.ui.screens.feed.FeedScreen
 import app.pantopus.android.ui.screens.feed.FeedTopMenu
 import app.pantopus.android.ui.screens.feed.beacons.BeaconsFeedScreen
+import app.pantopus.android.ui.screens.feed.pulse.PulseAuthorLink
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
 import app.pantopus.android.ui.screens.feed.rememberTouchExplorationEnabled
 import app.pantopus.android.ui.screens.following.FollowingScreen
@@ -2130,6 +2131,13 @@ private fun EmailFallbackDialog(
 
 private fun NavHostController.isOnBackStack(route: String): Boolean = runCatching { getBackStackEntry(route) }.isSuccess
 
+/** A Pulse card's author: a person's profile, or a business's page (`/business/:key`, as the post page opens it). */
+private fun pulseAuthorRoute(link: PulseAuthorLink): String =
+    when (link) {
+        is PulseAuthorLink.Person -> ChildRoutes.publicProfile(link.userId)
+        is PulseAuthorLink.Business -> ChildRoutes.businessProfile(link.businessId)
+    }
+
 private fun NavHostController.navigateToRootTab(
     route: PantopusRoute,
     restoreState: Boolean = true,
@@ -3050,6 +3058,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 FeedScreen(
                                     header = segmentRow,
                                     onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
+                                    onOpenAuthor = { link -> navController.navigate(pulseAuthorRoute(link)) },
                                     onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
                                     onComposeStarter = { starter ->
                                         navController.navigate(
@@ -3160,6 +3169,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         )
                     FeedScreen(
                         onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
+                        onOpenAuthor = { link -> navController.navigate(pulseAuthorRoute(link)) },
                         onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
                         onComposeStarter = { starter ->
                             navController.navigate(
@@ -4842,6 +4852,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         // Guests tab "Add a guest": the guest-pass manager, which lists the new pass on return.
                         onAddGuest = { navController.navigate(ChildRoutes.guestPasses(homeId)) },
                         onReviewResidency = { navController.navigate(ChildRoutes.homeClaimReview(homeId, residency = true)) },
+                        onOpenProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
                     )
                 }
                 composable(
@@ -5486,6 +5497,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(ChildRoutes.PULSE_FEED) {
                     FeedScreen(
                         onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
+                        onOpenAuthor = { link -> navController.navigate(pulseAuthorRoute(link)) },
                         onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
                         onBack = { navController.popBackStack() },
                         onComposeStarter = { starter ->

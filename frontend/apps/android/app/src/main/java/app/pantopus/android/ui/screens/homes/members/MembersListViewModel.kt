@@ -155,6 +155,11 @@ sealed interface MembersListEvent {
         val name: String,
         val identity: String,
     ) : MembersListEvent
+
+    /** A member's (or requester's) row — their profile. */
+    data class OpenProfile(
+        val userId: String,
+    ) : MembersListEvent
 }
 
 /**
@@ -823,6 +828,7 @@ class MembersListViewModel
                         verified = occ.hasAddressVerification,
                     ),
                 trailing = if (hasActions) RowTrailing.Kebab else RowTrailing.None,
+                onTap = { _pendingEvent.value = MembersListEvent.OpenProfile(occ.userId) },
                 onSecondary =
                     if (hasActions) {
                         { _pendingEvent.value = MembersListEvent.OpenMemberActions(target) }
@@ -964,6 +970,8 @@ class MembersListViewModel
                                 },
                             ),
                     ),
+                // The requester's profile, to see who is asking before deciding.
+                onTap = { _pendingEvent.value = MembersListEvent.OpenProfile(request.requesterUserId) },
                 body = requested,
                 subtitleIcon = PantopusIcon.UserPlus,
                 bodyIcon = PantopusIcon.Clock,
