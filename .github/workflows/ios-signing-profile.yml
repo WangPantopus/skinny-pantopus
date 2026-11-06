@@ -53,6 +53,10 @@ jobs:
           MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          # match commits the profile to the signing repo, and this runner has no git identity. It only
+          # logs a failed commit or push, so a green run doesn't prove it: list the repo's files afterwards.
+          MATCH_GIT_FULL_NAME: github-actions[bot]
+          MATCH_GIT_USER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_KEY_CONTENT }}
