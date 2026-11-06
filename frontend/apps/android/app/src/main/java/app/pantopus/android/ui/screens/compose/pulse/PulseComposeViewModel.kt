@@ -570,9 +570,10 @@ class PulseComposeViewModel
         /**
          * Check whether the signed-in user can post to the selected place —
          * the tagged place when there is one — counting where the draft's
-         * attachments were taken. Surfaces a warning instead of letting the
-         * submit 403. Errors are non-blocking — the warning is simply cleared.
-         * A newer check cancels an older one.
+         * attachments were taken, or for a Home target whether the place is
+         * near that Home. Surfaces a warning instead of letting the submit 403.
+         * Errors are non-blocking — the warning is simply cleared. A newer
+         * check cancels an older one.
          */
         fun checkPlaceEligibility() {
             eligibilityJob?.cancel()
@@ -596,6 +597,7 @@ class PulseComposeViewModel
                                 gpsLongitude = gps.longitude,
                                 media = nearestMediaLocation(lat, lon),
                                 postType = effectivePostType(),
+                                homeId = postingTarget?.targetHomeId,
                             )
                     ) {
                         is NetworkResult.Success -> {

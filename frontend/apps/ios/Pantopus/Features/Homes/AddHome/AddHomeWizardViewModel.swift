@@ -120,6 +120,12 @@ final class AddHomeWizardViewModel: WizardModel {
     /// Canonical address returned by address validation, used for the
     /// confirmation map and one-tap ZIP correction.
     private(set) var geocodedAddress: AddHomeGeocodedAddress?
+    /// USPS couldn't confirm the unit or hasn't answered. The person can continue;
+    /// mail proof still has to pass.
+    private(set) var postalNotice: AddHomePostalNotice?
+    /// USPS says this building needs a unit, and a home without one can say so.
+    private(set) var offersNoUnitAttestation = false
+    private var noUnitAttested = false
     /// True while the check-address call is in flight.
     private(set) var isCheckingAddress: Bool = false
 
@@ -396,6 +402,9 @@ final class AddHomeWizardViewModel: WizardModel {
         validatedAddressId = nil
         addressCheck = nil
         geocodedAddress = nil
+        postalNotice = nil
+        offersNoUnitAttestation = false
+        noUnitAttested = false
         existingHomeId = nil
         isClaimingExistingHome = false
         showsClaimedModal = false
@@ -830,9 +839,16 @@ final class AddHomeWizardViewModel: WizardModel {
 
     // MARK: - API calls
 
-    private func runCheckAddress() async {
+    /// "My home doesn't have a unit number": the base address goes through, and
+    /// mail proof still has to pass.
+    func attestNoUnit() {
+        Task { await runCheckAddress(attestingNoUnit: true) }
+    }
+
+    private func runCheckAddress(attestingNoUnit: Bool = false) async {
         guard isCurrent, form.address.isComplete, !isCheckingAddress else { return }
         invalidateAddress()
+        noUnitAttested = attestingNoUnit
         let revision = addressRevision
         let fields = form.address
         isCheckingAddress = true
@@ -849,8 +865,10 @@ final class AddHomeWizardViewModel: WizardModel {
                 )
             ))
             guard addressIsCurrent(revision) else { return }
-            guard ["OK", "MIXED_USE", "CONFLICT"].contains(validation.verdict.status) else {
-                errorMessage = Self.addressValidationMessage(validation.verdict.status)
+            let status = validation.verdict.status
+            guard Self.continuingStatuses.contains(status) || (status == "MISSING_UNIT" && attestingNoUnit) else {
+                errorMessage = Self.addressValidationMessage(status, reasons: validation.verdict.reasons ?? [])
+                offersNoUnitAttestation = status == "MISSING_UNIT"
                 return
             }
             guard let addressId = validation.addressId, UUID(uuidString: addressId) != nil,
@@ -876,6 +894,7 @@ final class AddHomeWizardViewModel: WizardModel {
                 rejectDifferentHome()
                 return
             }
+            postalNotice = AddHomePostalNotice(status: status, unit: address.line2 ?? fields.unit)
             await applyAddressCheck(response, address: address, addressId: addressId)
         } catch {
             guard addressIsCurrent(revision) else { return }
@@ -941,8 +960,12 @@ final class AddHomeWizardViewModel: WizardModel {
         guard response.homeId == nil || response.residencyAddress?.isValid == true else { throw APIError.invalidResponse }
     }
 
-    private static func addressValidationMessage(_ status: String) -> String {
+    private static let continuingStatuses: Set<String> = ["OK", "MIXED_USE", "CONFLICT", "UNIT_NOT_CONFIRMED", "POSTAL_PENDING"]
+
+    private static func addressValidationMessage(_ status: String, reasons: [String]) -> String {
         switch status {
+        case "MISSING_UNIT" where reasons.contains("USPS_UNIT_REQUIRED"):
+            "This building needs a unit number. Which one is yours? Edit the address to add it."
         case "MISSING_UNIT": "Enter your unit or apartment number, then check this address again."
         case "MISSING_STREET_NUMBER", "UNVERIFIED_STREET_NUMBER": "Check the street number and try again."
         case "PO_BOX": "Enter a street address. A PO Box cannot be used as a Home."
@@ -1233,6 +1256,7 @@ final class AddHomeWizardViewModel: WizardModel {
             isOwner: role == .owner,
             role: role.claimedRole,
             moveInDate: details.justMoved ? Self.isoToday() : nil,
+            noUnitAttestation: noUnitAttested ? true : nil,
             addressId: validatedAddressId
         )
         do {

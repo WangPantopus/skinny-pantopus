@@ -16,8 +16,7 @@ Everything after this section is the state at handoff. Since then:
   - The iOS composer check passed on the merged code, in the simulator with synthetic photos. A poster living far from the venue saw the inline note, and the post was stored with an exact pin at the venue. A second account saw "Photo taken here", also after a relaunch, with the marker at the venue. The refusals worked too.
   - Not verified in the apps: Alerts and Lost & Found in the iOS composer (API only), and Android and web on the merged code (CI only; both were checked in the apps before that merge).
   - It wasn't released when this was written. A release counts only once a Deploy Backend run's "Release backend" job succeeds on a commit containing it.
-- **The open items below are still open and not started.** They go to the founder one at a time.
-  - The video item is wider than it says below. From reading the code (not tested): the iOS post composer is the only place in the iOS app that removes a video's metadata before upload, and iOS chat attachments send the original. On the server, `routes/upload.js`, `services/chatMediaUpload.js` and `routes/files.js` all clean photos only, so a server fix has to cover all three.
+- **The open items below are still open and not started, apart from the first.** They go to the founder one at a time. New uploads no longer keep a video's location; see item 1.
 
 ## What the founder asked for
 
@@ -103,22 +102,31 @@ Verified:
 
 ## Open items found along the way (not started)
 
-1. **Videos keep their GPS.**
-   - Videos uploaded from the web, and from Android 9 and older, keep their location in the stored file. This predates #3461.
-   - Photos are already stripped by `validateAndStripUploads` in `backend/routes/upload.js`. Videos need the same treatment, without re-encoding.
-   - Someone needs to decide what to do about videos that are already stored.
-   - #3461 doesn't touch `upload.js`, so this can start any time.
+1. **Videos kept their GPS. New uploads are fixed; videos already stored are the founder's call.**
+   - The server now cleans every video it stores, in place and without re-encoding (`backend/services/videoMetadata.js`), through the flow that cleans photos: `routes/upload.js`, `services/chatMediaUpload.js` and `routes/files.js`.
+   - No client removes the location first. Measured with a synthetic clip and a made-up location:
+     - The iOS post composer and iOS chat use one export, which keeps a `loci` box with the exact coordinates: `exporter.metadata = []` doesn't remove it.
+     - The Android post composer on Android 13 sends the file byte for byte, `©xyz` included. Other Android versions weren't tested.
+     - The web composer and web chat send the original.
+   - Videos already stored: `node backend/scripts/clean-stored-video-locations.js` reports how many still carry a location and changes nothing. `--rewrite` cleans them with the same cleaner, and `--limit=1` tries one first. After a rewrite, the CDN keeps the old bytes until those keys are invalidated.
+   - Not removed: the capture time in the movie and track headers, and GPS that some dashcams write between frames, outside any box or track.
 2. **Home posts skip the location check.**
    - Posting as a Home with a far-away place tag isn't checked against the home's area. This also predates #3461.
    - Founder decision: should Home posts be limited to places near the home?
    - The code is in `posts.js` and `trustState.js`, which #3461 also changes, so do this after #3461 merges.
-3. **Android gallery photos have no GPS.**
-   - The system photo picker redacts it on Android 10 and later, so on Android only in-app camera photos qualify.
-   - Changing that needs a new permission prompt and a Google Play policy review. That's the founder's call.
-4. **The web composer has no place picker.**
-   - iOS and Android have one.
-   - A follow-up could add it, using `GET /api/geo/places/nearby`, `GET /api/geo/places/search` and the same post fields.
-   - Once #3461 is merged, it could also send `mediaLocations` and show the precheck.
+3. **Android gallery photos: asking for `ACCESS_MEDIA_LOCATION` is the founder's call.**
+   - Update, November 6: measured on emulators with a small test app, the composer's own picker intent and synthetic files. "Android 10 and later" was too broad, and the Android post composer uses the document picker (`OpenMultipleDocuments`), not the system photo picker.
+     - On the Android 13 and 16 images, the location of a gallery photo or video comes through with no permission.
+     - On the Android 17 image, it's hidden (photo GPS zeroed, video `©xyz` removed), so only in-app camera photos and files from the picker's Downloads root qualify.
+   - The permission works, but the prompt asks for more than it gives. Android grants it with no media-read permission, and the prompt reads "Allow Pantopus to access photos and videos on this device?", with Allow limited access / Allow all / Don't allow on Android 16 and 17, and Allow / Don't allow on 13. After "Allow all", the app's gallery queries returned 0 rows on 16 and 17. On 17, it also couldn't open files by path or by direct URI, so it reads the location only in what the person picks.
+   - `setRequireOriginal` isn't the way in: it throws `SecurityException` on a picked file, granted or not. Once granted, the plain document URI gives the original, so the existing readers work unchanged. But uploads would then carry the GPS, unless they read through `getRedactedUri`, which returned today's exact photo bytes on Android 16 and 17 (videos not checked with the grant).
+   - The options: hold and check one real phone first (the recommendation, and a row in `NEXT_STEPS.md`), ask only when a photo's zeroed GPS tags show a hidden location, ask on the first photo or video attached, or leave it.
+   - [Google Play's photo and video policy](https://support.google.com/googleplay/android-developer/answer/14115180) names only `READ_MEDIA_IMAGES` and `READ_MEDIA_VIDEO`. We found nothing saying whether this permission needs a declaration.
+   - Not measured: physical phones, Android 10–12 and 14–15, and real camera files. Phones are the key unknown, because Google Play system updates replace the media module and these images carry old ones.
+4. **The web composer's place picker.**
+   - Update, November 6: it now lists nearby venues and searches them by name, like iOS and Android, and a post records the venue as OpenStreetMap's. With no device fix, the list comes from the saved viewing area.
+   - Update, November 6: the web composer now places a post by its photo or video, as the apps do. It reads the capture point in the browser, with no new dependency, sends `mediaLocations`, and runs the check on the tagged place with the nearest attachment. The list opens on "Photo location", with "Near me" beside it. PNG and WebP aren't read, because cameras don't write them.
+   - Not verified: browsers on phones. iOS Safari and Android Chrome can remove a photo's location before the page sees the file, so on a phone the photo may simply not count.
 
 ## Sessions and branches
 

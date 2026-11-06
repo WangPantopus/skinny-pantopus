@@ -747,6 +747,7 @@ public struct FeedView: View {
     private var searchField: some View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 14, color: Theme.Color.appTextMuted)
+                .allowsHitTesting(false)
             TextField(
                 "Search posts",
                 text: Binding(
@@ -765,6 +766,7 @@ public struct FeedView: View {
                 } label: {
                     Icon(.x, size: 13, color: Theme.Color.appTextMuted)
                         .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
@@ -772,14 +774,14 @@ public struct FeedView: View {
         }
         .padding(.horizontal, Spacing.s3)
         .frame(height: 36)
+        // Clearing the box keeps typing.
+        .typesInFieldOnTap($searchFieldFocused)
         .background(Theme.Color.appSurface)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.pill, style: .continuous)
                 .stroke(Theme.Color.appBorder, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: Radii.pill, style: .continuous))
-        // Clearing the box keeps typing.
-        .keepsKeyboardOnTap()
         .padding(.horizontal, Spacing.s4)
         .padding(.bottom, Spacing.s2)
         .background(Theme.Color.appBg)

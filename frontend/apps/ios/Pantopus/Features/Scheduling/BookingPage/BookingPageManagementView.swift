@@ -220,6 +220,7 @@ private struct BookingMgmtSlugCard: View {
                 Text("\(BookingLinkURL.displayOrigin)/book/")
                     .font(.system(size: 12.5, design: .monospaced))
                     .foregroundStyle(Theme.Color.appTextSecondary)
+                    .allowsHitTesting(false)
                 TextField("your-handle", text: $viewModel.slugText)
                     .font(.system(size: 12.5, weight: .semibold, design: .monospaced))
                     .foregroundStyle(Theme.Color.appText)
@@ -228,9 +229,11 @@ private struct BookingMgmtSlugCard: View {
                     .onChange(of: viewModel.slugText) { _, _ in viewModel.slugTextChanged() }
                     .accessibilityIdentifier("bookingPageManagement.slugField")
                 trailingStatusIcon
+                    .allowsHitTesting(false)
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, Spacing.s2)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .overlay(
@@ -475,6 +478,7 @@ private struct BookingMgmtField: View {
                 .foregroundStyle(Theme.Color.appText)
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s2)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 .overlay(
@@ -504,6 +508,7 @@ private struct BookingMgmtMultilineField: View {
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s2)
                 .frame(minHeight: 48, alignment: .top)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 .overlay(

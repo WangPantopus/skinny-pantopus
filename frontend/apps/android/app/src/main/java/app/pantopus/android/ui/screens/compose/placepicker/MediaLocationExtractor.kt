@@ -36,15 +36,25 @@ data class MediaCaptureLocation(
  * check and the post's pin (the tagged venue or address, or the capture
  * point for a town tag or no tag) and keeps no other copy of the points.
  *
- * Platform reality: both composers receive system-photo-picker URIs
- * (`PickMultipleVisualMedia`), and on API 29+ the platform REDACTS
- * location EXIF / video atoms at read time for those URIs —
- * `ACCESS_MEDIA_LOCATION` and `setRequireOriginal` do NOT apply to
- * picker URIs, so extraction legitimately returns null there and the
- * picker simply renders no anchor chips (zero UX regression). On
+ * Platform reality, measured on emulators on 2026-11-06 with synthetic
+ * files. The app doesn't hold `ACCESS_MEDIA_LOCATION`.
+ * - The Pulse composer picks with the document picker
+ *   (`OpenMultipleDocuments`). The API 33 and API 36 images return the
+ *   original file, so the location reads. The API 37 image hides it
+ *   (EXIF GPS zeroed, video `©xyz` removed), except from the picker's
+ *   Downloads root.
+ * - `ComposeBroadcastScreen` picks with the system photo picker
+ *   (`PickMultipleVisualMedia`). API 37 hides the location there, and
+ *   the permission doesn't change that.
+ *
+ * A hidden location legitimately reads as nothing: zeroed GPS is 0,0,
+ * which `validated` drops, and the picker renders no anchor chips. On
  * API 26-28 (minSdk 26, pre-redaction) the picked bytes DO carry GPS,
  * and any future unredacted source works unchanged. Every reader is
  * failure-silent by design: no location → no chips.
+ *
+ * Whether to ask for the permission is the founder's call; the
+ * measurements are in docs/photo-location-place-picker-handoff-2026-11-05.md.
  */
 object MediaLocationExtractor {
     /**

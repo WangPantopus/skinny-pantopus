@@ -346,6 +346,7 @@ class PostsRepository
             gpsLongitude: Double? = null,
             media: PostMediaLocation? = null,
             postType: String? = null,
+            homeId: String? = null,
         ): NetworkResult<PlaceEligibilityResponse> =
             safeApiCall {
                 api.placeEligibility(
@@ -358,6 +359,7 @@ class PostsRepository
                     mediaLongitude = media?.longitude,
                     mediaCapturedAt = media?.capturedAt,
                     postType = postType,
+                    homeId = homeId,
                 )
             }
 

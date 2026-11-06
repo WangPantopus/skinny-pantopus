@@ -23,6 +23,7 @@ data class HomeAddressValidationResponse(
 data class HomeAddressVerdict(
     val status: String,
     val normalized: ValidatedHomeAddress? = null,
+    val reasons: List<String>? = null,
 )
 
 @JsonClass(generateAdapter = true)

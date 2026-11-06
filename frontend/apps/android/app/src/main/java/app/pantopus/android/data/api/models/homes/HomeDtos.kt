@@ -349,6 +349,8 @@ data class CreateHomeRequest(
      * guest` (`backend/routes/home.js:102`).
      */
     val role: String? = null,
+    /** "My home doesn't have a unit number", said at the address step. */
+    @Json(name = "no_unit_attestation") val noUnitAttestation: Boolean? = null,
     @Json(name = "address_id") val addressId: String? = null,
     @Json(name = "request_id") val requestId: String? = null,
     @Json(name = "access_secrets") val accessSecrets: List<CreateAccessSecretRequest>? = null,

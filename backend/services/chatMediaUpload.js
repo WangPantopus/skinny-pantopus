@@ -7,7 +7,7 @@ const { Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const multer = require('multer');
 const s3 = require('./s3Service');
-const { cleanUploadedPhoto } = require('./photoMetadata');
+const { cleanUploadedPhoto, cleanUploadedMedia } = require('./photoMetadata');
 const logger = require('../utils/logger');
 
 const MAX_BATCH_BYTES = 250 * 1024 * 1024;
@@ -149,6 +149,9 @@ module.exports = function chatMediaUpload({ validateFileMime }) {
             Object.assign(file, { mimetype: photo.mimetype, originalname: photo.originalname, size: photo.buffer.length });
           }, req.chatUpload.controller.signal);
           if (file.size > s3.MAX_FILE_SIZES.image) throw uploadError('This image exceeds the file size limit.', 413, 'CHAT_UPLOAD_TOO_LARGE');
+        } else if (file.mimetype.startsWith('video/')) {
+          // Likewise a video, which is overwritten where it sits on disk: it keeps its size (services/videoMetadata.js).
+          await cleanUploadedMedia(file, { signal: req.chatUpload.controller.signal });
         }
         const hash = crypto.createHash('sha256');
         const hashing = pipeline(fs.createReadStream(file.path), hash, { signal: req.chatUpload.controller.signal });

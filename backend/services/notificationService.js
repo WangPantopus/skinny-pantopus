@@ -1275,7 +1275,7 @@ function buildMailNotificationCopy({ mailIntent, senderName, address, amount, ve
     case 'household_notice':
       return {
         title: 'Household notice',
-        body: `A notice just arrived for your home at ${loc}.`,
+        body: address ? `A notice just arrived for your home at ${address}.` : 'A notice just arrived for your home.',
         icon: '📢',
       };
 

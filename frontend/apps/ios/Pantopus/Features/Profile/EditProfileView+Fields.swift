@@ -89,6 +89,9 @@ extension EditProfileView {
                 placeholder: "123 Main St",
                 contentType: .streetAddressLine1
             )
+            AddressSuggestionList(suggestions: viewModel.addressSuggestions, identifier: "field_address.suggestion") { item in
+                Task { await viewModel.chooseAddressSuggestion(item) }
+            }
             textField(
                 .city,
                 label: "City",
@@ -226,6 +229,7 @@ extension EditProfileView {
             TextEditor(text: liveText(.bio))
                 .frame(minHeight: 96)
                 .padding(Spacing.s2)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 .overlay(

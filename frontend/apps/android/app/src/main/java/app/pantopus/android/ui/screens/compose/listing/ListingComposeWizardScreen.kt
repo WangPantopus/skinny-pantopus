@@ -1312,7 +1312,7 @@ private fun SuggestedCategoryField(
     state: ListingComposeUiState,
     vm: ListingComposeWizardViewModel,
 ) {
-    SuggestedFieldShell(label = "Category") {
+    SuggestedFieldShell(label = "Category", isTextBox = false) {
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2), modifier = Modifier.fillMaxWidth()) {
             ListingComposeCategory.entries.forEach { category ->
                 CategoryChip(
@@ -1359,6 +1359,7 @@ private fun SuggestedPriceField(
         Column(
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(Radii.lg))
                     .background(PantopusColors.appSurface)
@@ -1619,14 +1620,14 @@ private fun TogglePill(isOn: Boolean) {
 private fun SuggestedFieldShell(
     label: String,
     hint: String? = null,
+    isTextBox: Boolean = true,
     content: @Composable RowScope.() -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         SuggestedLabel(label)
         Row(
             modifier =
-                Modifier
-                    .keepsKeyboard()
+                (if (isTextBox) Modifier.keepsKeyboard() else Modifier)
                     .fillMaxWidth()
                     .heightIn(min = 44.dp)
                     .clip(RoundedCornerShape(Radii.lg))
@@ -1756,6 +1757,7 @@ private fun ConditionDescriptionStep(
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
         modifier =
             Modifier
+                .keepsKeyboard()
                 .fillMaxWidth()
                 .heightIn(min = 128.dp)
                 .clip(RoundedCornerShape(Radii.md))

@@ -1,0 +1,100 @@
+181|N|D|Assessor viewer only (kcsgis); no bulk found|Madison County AL
+374|N|D|Revenue Commissioner property search only; vendors sell files|Lee County AL
+189|N|D|No official bulk found; vendors|Pulaski County AR
+153|N|D|No official bulk found (California assessors usually sell)|Tulare County CA
+170|N|V|County GIS parcels have only parcel area; no official bulk found|Monterey County CA
+208|N|D|Lookup tool only; statewide composite has no building facts|Weld County CO
+158|B|V|Florida DOR statewide roll: year built, living area, sale prices|FL DOR NAL
+183|B|V|Florida DOR statewide roll|FL DOR NAL
+252|B|D|Florida DOR statewide roll|FL DOR NAL
+410|B|D|Florida DOR statewide roll|FL DOR NAL
+1951|B|D|Florida DOR statewide roll|FL DOR NAL
+438|C|V|County sales-analysis layer: bedrooms, baths, year built, area for sold homes only|Johnson County IA assessor (Sales Analysis)
+552|B|V|Maine statewide organized-towns parcels: residential area, last sale price (fill not checked)|Maine GeoLibrary parcels
+400|B|V|Maryland SDAT statewide + county parcels (year built)|MD iMAP
+308|B|V|MassGIS statewide|MassGIS
+204|B|V|Minnesota compiled parcels: year built and finished sq ft on 85% of Anoka parcels|MnGeo plan_parcels_open
+800|N|V|In the Minnesota compiled layer but no building facts; county layer has impervious area only|MnGeo + Crow Wing GIS
+2318|B|V|Montana statewide: earliest year built per parcel (year only)|Montana DOC
+263|B|V|NJ MOD-IV: year built, sale price (no size)|NJOGIS
+216|A|V|NY State public parcels: year built 91%, bedrooms 68%|NYS Tax Parcels Public
+362|A|V|NY State public parcels: year built 75%, bedrooms 69%|NYS Tax Parcels Public
+419|B|V|County tax parcels: actual year built|Brunswick County NC GIS
+337|A|V|County taxlots: year built, bedrooms, bathrooms, garage sq ft|Deschutes County GIS
+229|A|R|County offers lookups only (Vision); a City of Bethlehem layer re-publishes county CAMA fields for all 122,379 county parcels: year built, living area, bedrooms, full/half baths, rooms, sale price|Northampton County via City of Bethlehem
+561|A|V|County parcel layer: year built, building sq ft, bedrooms, baths, sale price|Bradley County TN GIS
+172|B|D|Texas statewide parcels carry year built; appraisal-district export not checked (no sale prices in Texas)|TxGIO StratMap
+228|B|D|Texas statewide year built; CAD export not checked|TxGIO StratMap
+295|B|D|Texas statewide year built; CAD export not checked|TxGIO StratMap
+411|B|D|Texas statewide year built; CAD export not checked|TxGIO StratMap
+662|B|D|Texas statewide year built; CAD export not checked|TxGIO StratMap
+974|B|D|Texas statewide year built; CAD export not checked|TxGIO StratMap
+1831|B|D|Texas statewide year built; CAD export not checked|TxGIO StratMap
+344|B|V|Utah state LIR parcels: year built, building sq ft (no sale prices in Utah)|UGRC LIR
+496|A|V|County's own assessor tax parcel service: bedrooms on 38,548 of 83,004 parcels, year built on 49,062, living area, plumbing, sale price|geo.skagitcountywa.gov Tax Parcels
+582|B|V|West Virginia's statewide parcel summary (WV GIS Technical Center, county assessor data, tax year 2026): year built on 41,424 of 65,497 Monongalia parcels (63%), stories, style, grade|services.wvgis.wvu.edu WV_Parcels ParcelSummary
+319|P|D|Residential characteristics sold per parcel at the assessor's office (fee)|Yolo County CA assessor
+671|N|D|County parcel GIS is ownership only; no characteristics found|Mendocino County CA
+270|N|D|County's own assessment download not found; vendors only|Sussex County DE
+321|N|D|Tax portal and GIS viewer only; vendors|Hall County GA
+274|N|D|Free GIS FTP has parcels and ownership; characteristics only via per-parcel search|Canyon County ID
+510|N|D|qPublic lookups only; vendors|Carroll County GA
+786|N|D|qPublic lookups only; vendors|Spalding County GA
+1641|N|D|qPublic lookups only; vendors|Tattnall County GA
+256|N|D|No county bulk found; vendors|Winnebago County IL
+476|N|D|Assessment search only; automated retrieval prohibited|Rock Island County IL
+1382|N|D|No county bulk found; vendors|Fulton County IL
+268|B|D|Indiana DLGF statewide improvement files by request (county site has lookups only)|Indiana DLGF
+514|B|D|Indiana DLGF statewide improvement files by request|Indiana DLGF
+1218|B|D|Indiana DLGF statewide improvement files by request|Indiana DLGF
+165|N|V|Free tax roll has values, units, structure use and transfer date but no year built or size (no sale prices in Louisiana)|data.brla.gov EBRP Tax Roll
+1966|N|D|Assessor property search only; vendors|Madison County IA
+1347|N|D|Appraiser parcel search only; vendors|Harvey County KS
+568|N|D|PVA search on qPublic only|Hardin County KY
+1488|N|D|PVA search only|Logan County KY
+347|N|D|Assessor search only; vendors|Calcasieu Parish LA
+1094|N|D|Assessor search; GIS by subscription|Washington Parish LA
+253|P|D|County equalization sells data under an enhanced-access fee policy|Ingham County MI
+492|N|D|No county bulk found; vendors|Calhoun County MI
+331|N|D|County search; state copy of the land roll dates from 2016|Harrison County MS
+238|N|D|Assessor search portal only|Greene County MO
+912|N|D|Per-parcel inquiry only; Nevada's statewide parcel layer is restricted|Carson City NV
+742|N|D|Not in NY State public layer; Image Mate lookups only|Clinton County NY
+193|B|V|North Carolina Emergency Management statewide building layer: parcel-derived year built on 140,740 of 202,178 buildings (70%), heated sq ft 55%; the county itself has lookups only|NC Emergency Management NC Risk Building Footprints
+297|N|V|County open-data tax parcels carry values and sale prices but no building facts (2005 and 2010 archive layers had year built); North Carolina's statewide building layer is mostly modeled here (15% of buildings have a parcel-derived year built)|Cabarrus County open data + NC Emergency Management buildings
+636|A|V|County GIS publishes free CSVs: improvements (year built on 93% of records, finished area, bedrooms, full/half baths, fireplaces, basement) and sales|Lincoln County NC GIS downloads (improvements.zip, sales.zip)
+1087|N|V|County parcels carry values and sale dates only; North Carolina's statewide building layer has no parcel-derived values here (modeled only)|Davie County GIS + NC Emergency Management buildings
+231|N|D|Per-parcel auditor search shows year built and bedrooms; no bulk found|Lorain County OH
+377|B|D|Auditor's free download page lists a CAMA file of dwellings, buildings, additions and features (pipe-delimited) plus parcel and transfer files; fields not opened because the auditor's site certificate has expired|Medina County Auditor Available Downloads
+659|N|D|Parcel shapefile from tax map office; no characteristics found|Tuscarawas County OH
+1152|N|D|Auditor real estate search only; vendors|Fulton County OH
+664|N|D|Assessor search (Spatialest) only|Wagoner County OK
+156|N|D|Assessment lookup site; GIS hub parcels without assessment fields found|York County PA
+358|N|D|GIS maps and parcel search only; vendors|Butler County PA
+586|N|D|GIS map and lookups only; vendors|Adams County PA
+184|N|D|No county bulk found; vendors|Horry County SC
+352|N|D|GIS parcel search only; vendors|Beaufort County SC
+203|N|D|Assessor GIS service has owners only (no CAMA); lookups|Rutherford County TN
+163|N|D|Property search tool has bedrooms/baths/year built per parcel; no bulk download confirmed|Virginia Beach VA
+288|N|D|No assessor download found|Chesapeake VA
+1098|A|V|City open data: residential details with year built, square footage, bedrooms, full baths|Charlottesville Real Estate (Residential Details)
+2143|A|R|County source not found (vendors sell the county file); the Rappahannock-Rapidan Regional Commission layer re-publishes county assessment data: year built, gross area, bedrooms, full baths, sale price|Rappahannock-Rapidan Regional Commission copy
+182|N|V|County parcel map service and downloads carry values and owners only, no building facts; Wisconsin statewide parcels carry values only|Waukesha County Web Tax Parcel
+531|N|D|Older county export and statewide parcels carry assessment values only|La Crosse County WI + Wisconsin statewide parcels
+551|N|D|Real estate lookups; county GIS download not confirmed|Hanover County VA
+403|N|D|Municipal assessor lookups (Vision) only|Kent County RI towns
+588|N|D|Assessor search and GIS map only; vendors|Franklin County MO
+1158|N|D|County equalization; no bulk found; vendors|Mecosta County MI
+1109|N|D|Wisconsin statewide parcels carry values only; city GIS for Superior|Douglas County WI
+1106|N|D|Assessor site and state property viewer lookups only|Fayette County TN
+1169|N|D|Assessor search (Delta Computer Systems) only|Washington County MS
+966|N|D|Revenue Commissioner parcel viewer only|Jackson County AL
+1057|N|D|Assessor records and state map viewer only|Crittenden County AR
+2388|N|D|Assessor portal only|Johnston County OK
+751|N|D|Assessor map viewer and GIS hub parcels; no building facts found (no sale prices in New Mexico)|Lea County NM
+2103|N|D|County GIS parcels; no building facts found|McKenzie County ND
+3112|N|D|Borough assessor office; state copy is an archive; vendors|Bristol Bay Borough AK
+2630|N|D|EagleWeb lookups and parcel viewer only|Lake County CO
+1702|N|D|Assessor office; no download found; vendors|Morgan County MO
+1411|N|D|Municipal assessors; vendors only|Coos County NH towns
+1447|N|D|Assessor site and parcel map only; vendors|Williamsburg County SC

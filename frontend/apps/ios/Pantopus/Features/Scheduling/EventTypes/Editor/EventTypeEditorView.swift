@@ -418,6 +418,7 @@ struct EventTypeEditorView: View {
                             .foregroundStyle(Theme.Color.appText)
                             .keyboardType(.decimalPad)
                             .accessibilityIdentifier("scheduling.eventType.price")
+                            .typesInFieldOnTap(reach: Spacing.s2)
                     }
                     VStack(alignment: .leading, spacing: Spacing.s2) {
                         Text("Currency")

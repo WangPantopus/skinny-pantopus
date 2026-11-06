@@ -876,6 +876,7 @@ private struct ModuleMultilineField: View {
                     .accessibilityIdentifier(identifier)
                     .accessibilityLabel(label)
             }
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .overlay(
@@ -1137,6 +1138,7 @@ private struct DescriptionField: View {
                 .frame(minHeight: 120)
                 .scrollContentBackground(.hidden)
                 .padding(Spacing.s2)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 .overlay(

@@ -110,7 +110,7 @@ async function getMailboxCheck({ homeId, userId }) {
   if (!userId) throw new Error('A caller is required for the mailbox check.');
   const { data: postcard, error: postcardError } = await supabaseAdmin
     .from('HomePostcardCode')
-    .select('status, verified_at, expires_at, dispatch_status, vendor_job_id, destination')
+    .select('status, verified_at, expires_at, dispatch_status, vendor_job_id, destination, mail_outcome')
     .eq('home_id', homeId)
     .eq('user_id', userId)
     .order('requested_at', { ascending: false })
@@ -155,6 +155,17 @@ async function getMailboxCheck({ homeId, userId }) {
         title: 'Postcard delivery is unconfirmed',
         detail: 'Your postcard request is recorded, but delivery is not confirmed. You can enter its code if it arrives.',
       };
+    }
+  }
+
+  if (matchesAddress && postcard.status === 'cancelled') {
+    const title = {
+      returned: 'Your last postcard came back undeliverable',
+      rerouted: 'USPS re-routed your last postcard',
+      failed: 'We couldn\'t print or mail your last postcard',
+    }[postcard.mail_outcome || (postcard.dispatch_status === 'rejected' ? 'failed' : '')];
+    if (title) {
+      physical = { status: 'not_run', title, detail: 'Its code won\'t work. Check the address and send another, or verify another way.' };
     }
   }
 

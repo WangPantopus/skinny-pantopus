@@ -690,6 +690,7 @@ private fun MessageField(
             interactionSource = interaction,
             modifier =
                 Modifier
+                    .keepsKeyboard()
                     .fillMaxWidth()
                     .heightIn(min = 96.dp)
                     .clip(RoundedCornerShape(Radii.md))

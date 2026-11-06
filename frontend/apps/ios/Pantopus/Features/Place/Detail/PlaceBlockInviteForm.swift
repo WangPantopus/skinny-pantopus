@@ -98,6 +98,10 @@ struct BlockInviteForm: View {
     private var fields: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             field(label: "Street address", placeholder: "1425 SE Oak St", text: $vm.recipientLine1)
+                .onChange(of: vm.recipientLine1) { _, text in vm.addressSuggestions.textChanged(text) }
+            AddressSuggestionList(suggestions: vm.addressSuggestions, identifier: "place.blockFounders.addressSuggestion") { item in
+                Task { await vm.chooseAddressSuggestion(item) }
+            }
             field(label: "City", placeholder: "Portland", text: $vm.recipientCity)
             HStack(spacing: Spacing.s2) {
                 field(label: "State", placeholder: "OR", text: $vm.recipientState)
