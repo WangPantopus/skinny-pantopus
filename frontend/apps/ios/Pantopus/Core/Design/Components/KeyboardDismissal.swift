@@ -8,11 +8,11 @@
 //  composers included. The tap still reaches what's under it, so Save, Log in,
 //  a switch or a segmented control work on the first tap, and a screen left by
 //  a tap doesn't bring the keyboard back on return. A tap anywhere in a field's
-//  box types in that field (`typesInFieldOnTap`). Composers that keep typing
-//  after a tap or a drag (chat's Send and its thread, a search box's clear
-//  button) opt out with `keepsKeyboardOnTap()`; a list under a search box, or a
-//  post while its reply is typed, takes only the closing tap with
-//  `closesKeyboardFirst`. The keyboard's Done closes it whichever field has it
+//  box types in that field (`typesInFieldOnTap`), and its own controls (a
+//  search box's clear button) keep typing. Composers that keep typing after a
+//  tap or a drag (chat's Send and its thread) opt out with
+//  `keepsKeyboardOnTap()`; a list under a search box, or a post while its reply
+//  is typed, takes only the closing tap with `closesKeyboardFirst`. The keyboard's Done closes it whichever field has it
 //  (`Keyboard.close()`). When the keyboard moves (the iPhone Duo folded or
 //  turned while typing), the text being typed scrolls back into view.
 //
@@ -31,7 +31,7 @@ public extension View {
 
     /// A tap or a drag that starts here leaves the keyboard up: a composer's
     /// Send, attach and emoji buttons, a chat thread (it moves the keyboard
-    /// itself), a search box's clear button.
+    /// itself).
     func keepsKeyboardOnTap() -> some View {
         background(KeepsKeyboardRegion(alsoWhileScrolling: true).accessibilityHidden(true))
     }
@@ -39,7 +39,12 @@ public extension View {
     /// The box drawn around a text field: a tap anywhere in it, not only on
     /// the line of text, types in the field (`focus`) rather than closing the
     /// keyboard. Scrolling the page from here still closes it. Put it on the
-    /// box, under its background, so the field keeps its own taps.
+    /// box, under its background, so the field keeps its own taps. What is only
+    /// drawn in the box (an icon, a "$") needs `.allowsHitTesting(false)`. A
+    /// control in the box (a clear button) leaves the keyboard up; it needs
+    /// `.buttonStyle(.plain)` and a solid tap area on its label
+    /// (`.contentShape(Rectangle())` or `.hitArea`), because a bare icon loses
+    /// the tap to the box.
     func typesInFieldOnTap(_ focus: FocusState<Bool>.Binding) -> some View {
         background {
             Color.clear
@@ -48,6 +53,21 @@ public extension View {
                 .accessibilityHidden(true)
         }
         .background(KeepsKeyboardRegion(alsoWhileScrolling: false).accessibilityHidden(true))
+    }
+
+    /// The same for a box that doesn't follow its field's focus itself, or
+    /// follows it with an enum: it finds the text box inside this view.
+    func typesInFieldOnTap() -> some View {
+        modifier(TypesInFieldInsideOnTap())
+    }
+
+    /// A field drawn as a bare line of text, in a card or a system form row:
+    /// a tap a little above or below the line types in it too. Nothing moves.
+    /// Put it last, so the field stays its own accessibility element.
+    func typesInFieldOnTap(reach: CGFloat) -> some View {
+        padding(.vertical, reach)
+            .typesInFieldOnTap()
+            .padding(.vertical, -reach)
     }
 
     /// While `isTyping` (the search box above this list has the keyboard), a
@@ -73,6 +93,17 @@ public enum Keyboard {
     /// keyboard, a screen's own Save.
     public static func close() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+
+private struct TypesInFieldInsideOnTap: ViewModifier {
+    /// `focused` on a view around a text box follows and moves the focus of the text box inside it.
+    @FocusState private var isFocused: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .focused($isFocused)
+            .typesInFieldOnTap($isFocused)
     }
 }
 
@@ -383,7 +414,8 @@ private struct KeepsKeyboardRegion: UIViewRepresentable {
             guard region.window === window,
                   region.bounds.contains(touch.location(in: region)),
                   let screen = region.screenView,
-                  touch.view?.isDescendant(of: screen) == true else { continue }
+                  touch.view?.isDescendant(of: screen) == true,
+                  region.isOnPage(of: touch) else { continue }
             if region.alsoWhileScrolling { return .tapsAndDrags }
             kept = .taps
         }
@@ -406,11 +438,27 @@ private struct KeepsKeyboardRegion: UIViewRepresentable {
             nil
         }
 
+        /// False when this region has scrolled under something fixed on the
+        /// screen (a top bar, a Save button) and the finger is on that instead.
+        func isOnPage(of touch: UITouch) -> Bool {
+            var view = superview
+            while let current = view {
+                if let page = current as? UIScrollView { return touch.view?.isDescendant(of: page) == true }
+                view = current.superview
+            }
+            return true
+        }
+
         /// The root view of the screen this region is drawn in.
         var screenView: UIView? {
             var view: UIView? = superview
             while let current = view {
-                if current.next is UIViewController { return current }
+                // SwiftUI can put a responder of its own (for key presses) between a root view and its controller.
+                var next = current.next
+                while let responder = next, !(responder is UIView), !(responder is UIViewController) {
+                    next = responder.next
+                }
+                if next is UIViewController { return current }
                 view = current.superview
             }
             return nil

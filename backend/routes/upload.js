@@ -19,7 +19,7 @@ const s3 = require('../services/s3Service');
 // Letters' enclosures are kept privately (Mail tab, SRV-4).
 const mailEnclosures = require('../services/mailEnclosures');
 const imageResizeService = require('../services/marketplace/imageResizeService');
-const { PhotoNotCleanedError, cleanUploadedPhoto } = require('../services/photoMetadata');
+const { MediaNotCleanedError, cleanUploadedPhoto, cleanUploadedMedia } = require('../services/photoMetadata');
 const { photoReference, pdfFacts, MAX_PDF_BYTES, MAX_PDF_PAGES } = require('../services/ai/photos');
 const { calculateAndStoreCompleteness } = require('../utils/businessCompleteness');
 const { requireIdentityFirewallEnabled, requirePersonaEnabled } = require('../utils/featureFlags');
@@ -137,8 +137,9 @@ async function validateFileMime(file) {
 }
 
 /**
- * Middleware: validate MIME types and remove photos' metadata (location, camera, time taken) for all uploaded
- * files. A photo that can't be cleaned is refused, never stored as it was sent; an iPhone HEIC becomes a JPEG.
+ * Middleware: validate MIME types and remove metadata for all uploaded files: location, camera and time taken from
+ * photos, location and camera from videos. One that can't be cleaned is refused, never stored as it was sent; an
+ * iPhone HEIC becomes a JPEG.
  * Must run AFTER multer and AFTER enforceFileSizeLimits.
  */
 async function validateAndStripUploads(req, res, next) {
@@ -169,11 +170,11 @@ async function validateAndStripUploads(req, res, next) {
         });
       }
 
-      // 2. Photos lose their metadata (services/photoMetadata.js)
+      // 2. Photos and videos lose their metadata (services/photoMetadata.js)
       try {
-        await cleanUploadedPhoto(file);
+        await cleanUploadedMedia(file);
       } catch (err) {
-        if (!(err instanceof PhotoNotCleanedError)) throw err;
+        if (!(err instanceof MediaNotCleanedError)) throw err;
         return res.status(err.status).json({ error: err.message, code: err.code });
       }
     }
@@ -1878,7 +1879,7 @@ router.post(
   ]),
   // Note: enforceFileSizeLimits and validateAndStripUploads expect req.files
   // to be an array, but upload.fields() returns an object. This endpoint does
-  // its own type + size validation below and cleans the still itself, so we
+  // its own type + size validation below and cleans both files itself, so we
   // skip those middlewares.
   async (req, res) => {
     try {
@@ -1915,11 +1916,12 @@ router.post(
         });
       }
 
-      // The still is stored without its metadata (a HEIC as a JPEG), or not at all.
+      // The still and the clip are stored without their metadata (a HEIC as a JPEG), or not at all.
       try {
-        await cleanUploadedPhoto(imageFile);
+        await cleanUploadedMedia(imageFile);
+        await cleanUploadedMedia(videoFile);
       } catch (err) {
-        if (!(err instanceof PhotoNotCleanedError)) throw err;
+        if (!(err instanceof MediaNotCleanedError)) throw err;
         return res.status(err.status).json({ error: err.message, code: err.code });
       }
 

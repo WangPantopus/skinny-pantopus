@@ -91,6 +91,7 @@ struct ScheduleVisitView: View {
                 .font(Theme.Font.body)
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityIdentifier("scheduling.scheduleVisit.titleField")
+                .typesInFieldOnTap(reach: Spacing.s2)
             if let error = viewModel.titleError {
                 fieldError(error)
             }
@@ -165,6 +166,7 @@ struct ScheduleVisitView: View {
                 .font(Theme.Font.body)
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityIdentifier("scheduling.scheduleVisit.entryNoteField")
+                .typesInFieldOnTap(reach: Spacing.s2)
             Text("Optional — e.g. \u{201C}Front door code 4827\u{201D}.")
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)

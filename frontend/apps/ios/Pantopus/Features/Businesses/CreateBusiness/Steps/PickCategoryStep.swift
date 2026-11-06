@@ -273,6 +273,7 @@ struct BusinessSearchField: View {
     var body: some View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 16, color: Theme.Color.appTextSecondary)
+                .allowsHitTesting(false)
             TextField(
                 "Search categories — e.g. \"tutor\", \"lawn care\"",
                 text: $text
@@ -292,6 +293,7 @@ struct BusinessSearchField: View {
                             .frame(width: 22, height: 22)
                         Icon(.x, size: 12, color: Theme.Color.appTextSecondary)
                     }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
@@ -300,6 +302,7 @@ struct BusinessSearchField: View {
         }
         .padding(.horizontal, Spacing.s3)
         .frame(height: 44)
+        .typesInFieldOnTap()
         .background(Theme.Color.appSurface)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)

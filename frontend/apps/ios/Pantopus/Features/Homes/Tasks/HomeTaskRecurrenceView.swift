@@ -86,6 +86,7 @@ struct HomeTaskRecurrenceView: View {
                 .keyboardType(.numberPad)
                 .disabled(!model.canChange)
                 .accessibilityIdentifier("homeTaskRecurrence.interval")
+                .typesInFieldOnTap(reach: Spacing.s2)
             Picker("Period", selection: $model.frequency) {
                 ForEach(HomeTaskRecurrenceFrequency.allCases, id: \.self) { frequency in
                     Text("\(frequency.period.capitalized)s").tag(frequency)

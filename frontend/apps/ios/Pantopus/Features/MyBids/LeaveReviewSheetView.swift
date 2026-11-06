@@ -168,6 +168,7 @@ public struct LeaveReviewSheetView: View {
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s2)
                 .frame(minHeight: 44, alignment: .topLeading)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 .overlay(

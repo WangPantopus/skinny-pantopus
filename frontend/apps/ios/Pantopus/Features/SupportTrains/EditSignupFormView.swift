@@ -107,6 +107,7 @@ public struct EditSignupFormView: View {
                 TextEditor(text: binding(.dietaryNotes))
                     .frame(minHeight: 96)
                     .padding(Spacing.s2)
+                    .typesInFieldOnTap()
                     .background(Theme.Color.appSurface)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                     .overlay(

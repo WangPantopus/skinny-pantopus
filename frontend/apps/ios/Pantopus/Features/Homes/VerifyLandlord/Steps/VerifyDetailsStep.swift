@@ -226,6 +226,7 @@ private struct VerifyLandlordMessageField: View {
             .frame(minHeight: 96)
             .padding(.horizontal, Spacing.s2)
             .padding(.vertical, Spacing.s2)
+            .typesInFieldOnTap($isFocused)
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .overlay {
@@ -354,6 +355,7 @@ private struct VerifyLandlordField: View {
             }
             HStack(spacing: Spacing.s2) {
                 Icon(icon, size: 15, color: Theme.Color.appTextSecondary)
+                    .allowsHitTesting(false)
                 TextField(placeholder, text: Binding(
                     get: { value },
                     set: { onChange($0) }
@@ -370,6 +372,7 @@ private struct VerifyLandlordField: View {
             }
             .frame(height: 44)
             .padding(.horizontal, Spacing.s3)
+            .typesInFieldOnTap($isFocused)
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .overlay {

@@ -91,6 +91,7 @@ struct ResourceEditorView: View {
                 .font(Theme.Font.body)
                 .foregroundStyle(Theme.Color.appText)
                 .accessibilityIdentifier("scheduling.resourceEditor.nameField")
+                .typesInFieldOnTap(reach: Spacing.s2)
             if let error = viewModel.nameError {
                 fieldError(error)
             }

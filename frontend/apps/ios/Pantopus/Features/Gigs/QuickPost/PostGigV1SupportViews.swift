@@ -483,6 +483,7 @@ struct PostGigV1ItemsField: View {
             .foregroundStyle(Theme.Color.appText)
             .frame(minHeight: 40)
             .padding(.horizontal, Spacing.s3)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.sm, style: .continuous))
             .overlay(
