@@ -306,7 +306,8 @@ public struct PulseComposeContent: View {
                 .toolbar {
                     ToolbarItemGroup(placement: .keyboard) {
                         Spacer()
-                        Button("Done") { isBodyFieldFocused = false }
+                        // Every field on the form shows this bar: Done closes the keyboard whichever has it.
+                        Button("Done") { Keyboard.close() }
                             .font(.system(size: 16, weight: .semibold))
                             .accessibilityIdentifier("composePulseBodyKeyboardDone")
                     }
@@ -1357,6 +1358,8 @@ public struct PulseComposeContent: View {
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: minHeight)
                 .padding(Spacing.s2)
+                // The margin around the text types in it too.
+                .typesInFieldOnTap($isBodyFieldFocused)
                 .background(Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 .overlay(

@@ -247,7 +247,8 @@ private fun SearchBar(
                         ),
                     cursorBrush = SolidColor(PantopusColors.primary600),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(),
+                    // The keyboard's Search key puts the keyboard away: the results are already showing.
+                    keyboardActions = KeyboardActions(onSearch = { defaultKeyboardAction(ImeAction.Done) }),
                     singleLine = true,
                     modifier =
                         Modifier
