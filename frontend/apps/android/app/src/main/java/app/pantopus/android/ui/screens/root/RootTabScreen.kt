@@ -3114,6 +3114,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                             openNearby = { navController.navigateToRootTab(PantopusRoute.Plans) },
                             askPantopus = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
+                            openProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
                         ),
                 )
                 composable(PantopusRoute.Mail.path) {
@@ -5725,6 +5726,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     GigDetailScreen(
                         onBack = { navController.popBackStack() },
                         onOpenPayouts = { navController.navigate(ChildRoutes.SETTINGS_PAYMENTS) },
+                        onOpenProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
                         onOpenChat = { roomId, displayName, initials, verified, asBusinessUserId ->
                             navController.navigate(
                                 ChildRoutes.chatConversationRoom(
@@ -6516,6 +6518,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                         ),
                                     )
                                 },
+                                onOpenProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
                                 // The train's group chat opens under the train's title.
                                 onOpenChat = { roomId, title ->
                                     val initials = title.split(" ").take(2).mapNotNull { it.firstOrNull()?.uppercase() }
@@ -7083,7 +7086,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = ChildRoutes.BUSINESS_TEAM,
                     arguments = listOf(navArgument(ChildRoutes.BUSINESS_OWNER_ID_KEY) { type = NavType.StringType }),
                 ) {
-                    BusinessTeamScreen(onBack = { navController.popBackStack() })
+                    BusinessTeamScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
+                    )
                 }
                 composable(
                     route = ChildRoutes.BUSINESS_PAYMENTS_OWNER,

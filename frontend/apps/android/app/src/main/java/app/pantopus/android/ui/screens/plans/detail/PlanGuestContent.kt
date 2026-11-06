@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.plans.detail
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -14,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
@@ -32,6 +34,7 @@ import app.pantopus.android.data.plans.planKind
 import app.pantopus.android.data.plans.planState
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.screens.plans.LocalPlanOpenProfile
 import app.pantopus.android.ui.screens.plans.components.PlanBanner
 import app.pantopus.android.ui.screens.plans.components.PlanBannerTone
 import app.pantopus.android.ui.screens.plans.components.PlanHostRow
@@ -151,13 +154,19 @@ internal fun PlanHostCard(
     ruleCaption: String? = null,
 ) {
     val host = plan.host ?: return
+    // The host's card opens their profile, as on iOS.
+    val openProfile = host.userId?.let { id -> LocalPlanOpenProfile.current?.let { open -> { open(id) } } }
     PlanHostRow(
         name = host.displayName ?: "Neighbor",
         verified = host.verifiedAddress && ruleCaption == null,
         caption = ruleCaption ?: hostCaption(plan),
         seed = host.userId,
         avatarUrl = host.avatarUrl,
-        modifier = Modifier.planCard().padding(14.dp),
+        modifier =
+            Modifier
+                .planCard()
+                .then(openProfile?.let { Modifier.clickable(onClickLabel = "Open profile", role = Role.Button, onClick = it) } ?: Modifier)
+                .padding(14.dp),
     )
 }
 

@@ -2,6 +2,7 @@
 
 package app.pantopus.android.ui.screens.plans.requests
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +47,7 @@ import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
+import app.pantopus.android.ui.screens.plans.LocalPlanOpenProfile
 import app.pantopus.android.ui.screens.plans.components.PlanAvatar
 import app.pantopus.android.ui.screens.plans.components.PlanOverline
 import app.pantopus.android.ui.screens.plans.components.PlanScopeLine
@@ -232,7 +234,13 @@ private fun RequestCard(
         modifier = Modifier.fillMaxWidth().planCard().padding(Spacing.s4),
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+        // Who is asking: their photo and name open their profile, to see them before deciding.
+        val openProfile = user?.userId?.let { id -> LocalPlanOpenProfile.current?.let { open -> { open(id) } } }
+        Row(
+            modifier = openProfile?.let { Modifier.clickable(onClickLabel = "Open profile", role = Role.Button, onClick = it) } ?: Modifier,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+        ) {
             PlanAvatar(name = name, seed = user?.userId ?: request.id, avatarUrl = user?.avatarUrl)
             Column(modifier = Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {

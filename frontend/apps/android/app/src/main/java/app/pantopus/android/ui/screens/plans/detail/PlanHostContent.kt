@@ -48,6 +48,7 @@ import app.pantopus.android.ui.components.DestructiveButton
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.screens.plans.LocalPlanOpenProfile
 import app.pantopus.android.ui.screens.plans.components.PlanAvatar
 import app.pantopus.android.ui.screens.plans.components.PlanBanner
 import app.pantopus.android.ui.screens.plans.components.PlanBannerTone
@@ -367,14 +368,25 @@ private fun GuestRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
         ) {
-            PlanAvatar(name = name, seed = person.userId, avatarUrl = person.avatarUrl)
-            Column(modifier = Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
-                Text(
-                    text = title,
-                    style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
-                    color = PantopusColors.appText,
-                )
-                Text(text = subtitle, style = PantopusTextStyle.small.copy(fontSize = 13.sp), color = PantopusColors.appTextSecondary)
+            // The guest's photo and name open their profile; the options stay on the button beside them.
+            val openProfile = person.userId?.let { id -> LocalPlanOpenProfile.current?.let { open -> { open(id) } } }
+            Row(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .then(openProfile?.let { Modifier.clickable(onClickLabel = "Open profile", role = Role.Button, onClick = it) } ?: Modifier),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+            ) {
+                PlanAvatar(name = name, seed = person.userId, avatarUrl = person.avatarUrl)
+                Column(modifier = Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
+                    Text(
+                        text = title,
+                        style = PantopusTextStyle.body.copy(fontWeight = FontWeight.SemiBold),
+                        color = PantopusColors.appText,
+                    )
+                    Text(text = subtitle, style = PantopusTextStyle.small.copy(fontSize = 13.sp), color = PantopusColors.appTextSecondary)
+                }
             }
             if (person.requestId != null && onRemove != null) {
                 Box {
