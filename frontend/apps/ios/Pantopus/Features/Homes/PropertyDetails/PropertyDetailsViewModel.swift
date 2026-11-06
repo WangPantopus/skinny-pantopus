@@ -29,8 +29,11 @@ final class PropertyDetailsViewModel {
     private(set) var state: PropertyDetailsState = .loading
     /// "Couldn't refresh. Showing 3:42 PM." once a failed refresh leaves an old copy on screen.
     private(set) var staleNotice: String?
+    /// A change to the household's facts is on its way.
+    private(set) var savingFacts = false
 
     let homeId: String
+    private let api: APIClient
     private let store: ScreenStore
     /// Preview/test seam. When non-nil, `load()` projects this loader's
     /// output instead of calling the backend.
@@ -42,6 +45,7 @@ final class PropertyDetailsViewModel {
         loader: (@Sendable (String) throws -> PropertyDetailsContent)? = nil
     ) {
         self.homeId = homeId
+        self.api = api
         store = ScreenStore.store(for: api)
         self.loader = loader
         // The store's copy shows in the first frame (Instant Screens), for household access only.
@@ -69,6 +73,34 @@ final class PropertyDetailsViewModel {
             return
         }
         await fetch(force: true)
+    }
+
+    /// Confirm, correct or undo the household's facts, then show the server's answer.
+    /// False leaves everything on screen as it was.
+    @discardableResult
+    func saveFacts(_ changes: [HouseholdFactChange]) async -> Bool {
+        guard !savingFacts, !changes.isEmpty else { return false }
+        savingFacts = true
+        defer { savingFacts = false }
+        do {
+            let _: HouseholdWriteResponse = try await api.request(HomesEndpoints.updateHouseholdFacts(homeId: homeId, changes: changes))
+        } catch {
+            return false
+        }
+        await fetch(force: true)
+        return true
+    }
+
+    /// "Report a problem": it reaches review, and the page stays as it is but for saying so.
+    func reportProblem(section: String, field: String?, note: String?) async -> Bool {
+        let request = RecordProblemRequest(section: section, field: field, note: note)
+        do {
+            let _: HouseholdWriteResponse = try await api.request(HomesEndpoints.reportRecordProblem(homeId: homeId, request: request))
+        } catch {
+            return false
+        }
+        await fetch(force: true)
+        return true
     }
 
     private var endpoint: Endpoint {
@@ -109,7 +141,11 @@ final class PropertyDetailsViewModel {
 
     private func show(_ snapshot: ScreenSnapshot<PropertyDetailsResponse>) {
         staleNotice = snapshot.refreshNotice
-        let content = Self.content(from: snapshot.value.home, countyRecord: snapshot.value.countyRecord)
+        let content = Self.content(
+            from: snapshot.value.home,
+            countyRecord: snapshot.value.countyRecord,
+            household: snapshot.value.household
+        )
         state = content.banner == nil ? .clean(content) : .mismatch(content)
     }
 
@@ -127,7 +163,11 @@ final class PropertyDetailsViewModel {
     /// the screen's projection. Verification stays empty (no clean source)
     /// and the banner is never raised from the backend, so this always
     /// yields the clean state.
-    static func content(from home: PropertyHomeDTO, countyRecord: PropertyCountyRecordDTO? = nil) -> PropertyDetailsContent {
+    static func content(
+        from home: PropertyHomeDTO,
+        countyRecord: PropertyCountyRecordDTO? = nil,
+        household: HouseholdPartDTO? = nil
+    ) -> PropertyDetailsContent {
         let line1 = [home.address?.nonBlank, home.unitNumber?.nonBlank]
             .compactMap { $0 }
             .joined(separator: " · ")
@@ -159,12 +199,7 @@ final class PropertyDetailsViewModel {
         }
 
         // The server words and formats every county-record row.
-        let sections = (countyRecord?.sections ?? []).compactMap { section -> PropertyRecordSection? in
-            let rows = section.rows.map {
-                PropertyFactRow(id: $0.id, label: $0.label, value: $0.value, sub: $0.tag?.nonBlank, mono: $0.mono ?? false)
-            }
-            return rows.isEmpty ? nil : PropertyRecordSection(id: section.id, title: section.title, rows: rows, note: section.note)
-        }
+        let sections = (countyRecord?.sections ?? []).compactMap(Self.recordSection)
 
         return PropertyDetailsContent(
             address: PropertyAddress(
@@ -177,8 +212,25 @@ final class PropertyDetailsViewModel {
             recordSections: sections,
             recordFooter: sections.isEmpty ? nil : countyRecord?.footer?.nonBlank,
             verification: [],
-            banner: nil
+            banner: nil,
+            household: household.map {
+                PropertyHouseholdContent(
+                    sections: $0.sections.compactMap(Self.recordSection),
+                    groups: $0.groups,
+                    questions: $0.questions,
+                    countyPage: $0.countyPage
+                )
+            }
         )
+    }
+
+    private static func recordSection(_ section: PropertyRecordSectionDTO) -> PropertyRecordSection? {
+        let rows = section.rows.map {
+            // Where the row came from, and under it what stands beside it ("County record: 3").
+            let sub = [$0.tag?.nonBlank, $0.note?.nonBlank].compactMap { $0 }.joined(separator: "\n")
+            return PropertyFactRow(id: $0.id, label: $0.label, value: $0.value, sub: sub.nonBlank, mono: $0.mono ?? false)
+        }
+        return rows.isEmpty ? nil : PropertyRecordSection(id: section.id, title: section.title, rows: rows, note: section.note)
     }
 
     private static func humanize(_ raw: String) -> String {
