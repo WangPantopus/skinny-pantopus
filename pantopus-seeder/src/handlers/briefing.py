@@ -30,6 +30,13 @@ log.setLevel(logging.INFO)
 # Maximum users per invocation (safety cap)
 MAX_USERS_PER_RUN = 100
 
+# Supabase answers at most 1000 rows to one read, so preferences are read page by page.
+PREFS_PAGE_SIZE = 1000
+
+# Ids go in the request's URL. A uuid and its comma are 37 characters, so 100 stay under 4 KB,
+# and with a morning and an evening row each, a batch can't reach the 1000-row limit.
+DELIVERY_CHECK_BATCH_SIZE = 100
+
 # Deliver at or after the preferred time, never before it.
 WINDOW_MINUTES = 15
 
@@ -166,16 +173,23 @@ def _find_eligible_users(supabase, *, secrets=None, retry: _RestartRetry | None 
 
     # 1. Fetch preference rows
     try:
-        result = (
-            supabase.table("UserNotificationPreferences")
-            .select(
-                "user_id, daily_briefing_enabled, daily_briefing_time_local, "
-                "evening_briefing_enabled, evening_briefing_time_local, daily_briefing_timezone, "
-                "quiet_hours_start_local, quiet_hours_end_local"
+        prefs_rows: list[dict[str, Any]] = []
+        while True:
+            result = (
+                supabase.table("UserNotificationPreferences")
+                .select(
+                    "user_id, daily_briefing_enabled, daily_briefing_time_local, "
+                    "evening_briefing_enabled, evening_briefing_time_local, daily_briefing_timezone, "
+                    "quiet_hours_start_local, quiet_hours_end_local"
+                )
+                .order("user_id")
+                .range(len(prefs_rows), len(prefs_rows) + PREFS_PAGE_SIZE - 1)
+                .execute()
             )
-            .execute()
-        )
-        prefs_rows = result.data or []
+            page = result.data or []
+            prefs_rows.extend(page)
+            if len(page) < PREFS_PAGE_SIZE:
+                break
         print(f"[BRIEFING] Query returned {len(prefs_rows)} preference rows")
     except Exception as exc:
         print(f"[BRIEFING] ERROR querying UserNotificationPreferences: {exc}")
@@ -187,8 +201,7 @@ def _find_eligible_users(supabase, *, secrets=None, retry: _RestartRetry | None 
         return []
 
     # 2. Batch idempotency check — get all deliveries for today (across timezones)
-    user_ids = [r["user_id"] for r in prefs_rows]
-    today_dates = set()
+    user_ids_by_date: dict[str, list[str]] = {}  # local_date → the users whose date it is
     user_tz_map: dict[str, tuple[str, str]] = {}  # user_id → (local_date, local_time_hhmm)
 
     # The selected location wins over historical defaults or an old device
@@ -212,7 +225,7 @@ def _find_eligible_users(supabase, *, secrets=None, retry: _RestartRetry | None 
         now_local = datetime.now(tz)
         local_date = now_local.strftime("%Y-%m-%d")
         local_time = now_local.strftime("%H:%M")
-        today_dates.add(local_date)
+        user_ids_by_date.setdefault(local_date, []).append(row["user_id"])
         user_tz_map[row["user_id"]] = (local_date, local_time)
 
         morning_time = row.get("daily_briefing_time_local") or "07:30"
@@ -222,22 +235,23 @@ def _find_eligible_users(supabase, *, secrets=None, retry: _RestartRetry | None 
             f"local_time={local_time} tz={tz_str}"
         )
 
-    # Query deliveries for all relevant dates in one batch
+    # Query deliveries for each user's own local date, in batches
     # A failed attempt stays eligible only within this local date/time window.
     # Daily cleanup never retries it at an unrelated hour or on a later day.
     already_processed: set[tuple[str, str, str]] = set()
     try:
-        for date_str in today_dates:
-            result = (
-                supabase.table("DailyBriefingDelivery")
-                .select("user_id, briefing_kind, status")
-                .in_("user_id", user_ids)
-                .eq("briefing_date_local", date_str)
-                .in_("status", ["sent", "skipped", "composing"])
-                .execute()
-            )
-            for row in result.data or []:
-                already_processed.add((row["user_id"], row.get("briefing_kind") or "morning", date_str))
+        for date_str, ids in user_ids_by_date.items():
+            for offset in range(0, len(ids), DELIVERY_CHECK_BATCH_SIZE):
+                result = (
+                    supabase.table("DailyBriefingDelivery")
+                    .select("user_id, briefing_kind, status")
+                    .in_("user_id", ids[offset:offset + DELIVERY_CHECK_BATCH_SIZE])
+                    .eq("briefing_date_local", date_str)
+                    .in_("status", ["sent", "skipped", "composing"])
+                    .execute()
+                )
+                for row in result.data or []:
+                    already_processed.add((row["user_id"], row.get("briefing_kind") or "morning", date_str))
     except Exception:
         log.exception("Failed to batch-check DailyBriefingDelivery")
         raise
