@@ -1165,13 +1165,7 @@ public final class PulseFeedViewModel {
     private func keepLookingForFix() {
         guard lateFix == nil, locationProvider.canLocateWithoutAsking else { return }
         lateFix = Task { [weak self, locationProvider] in
-            let deadline = Date.now.addingTimeInterval(Self.lateFixSeconds)
-            var fix: UserCoordinate?
-            // Core Location gives up on a request by itself (after 10 s on the simulator), so this asks again.
-            while fix == nil, deadline.timeIntervalSinceNow > 0, !Task.isCancelled, locationProvider.canLocateWithoutAsking {
-                fix = await locationProvider.requestCurrent(timeoutSeconds: deadline.timeIntervalSinceNow)
-                if fix == nil { try? await Task.sleep(for: .seconds(1)) }
-            }
+            let fix = await locationProvider.requestCurrent(timeoutSeconds: Self.lateFixSeconds)
             guard let self, !Task.isCancelled else { return }
             lateFix = nil
             guard let fix else { return }
