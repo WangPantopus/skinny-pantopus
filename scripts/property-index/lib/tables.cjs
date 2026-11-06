@@ -52,21 +52,21 @@ const blank = (value) => value === undefined || value === '' || value === 'NULL'
  * @param {string} zip           The zip file
  * @param {string} member        The table inside it
  * @param {string[]} columns     What this connector reads; a missing one stops the build (the source changed)
- * @param {object} [options]     { delimiter: ',', quoted: true }
+ * @param {object} [options]     { delimiter: ',', quoted: true, encoding: 'latin1' }
  */
-async function* zipTable(zip, member, columns, { delimiter = ',', quoted = true } = {}) {
+async function* zipTable(zip, member, columns, { delimiter = ',', quoted = true, encoding = 'latin1' } = {}) {
   const unzip = spawn('unzip', ['-p', zip, member], { stdio: ['ignore', 'pipe', 'ignore'] });
   const exited = new Promise((resolve, reject) => {
     unzip.on('error', reject);
     unzip.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`unzip of ${member} exited ${code}`))));
   });
-  unzip.stdout.setEncoding('latin1');
+  unzip.stdout.setEncoding(encoding);
   let positions = null;
   let rows = 0;
   for await (const line of readline.createInterface({ input: unzip.stdout, crlfDelay: Infinity })) {
-    const fields = quoted ? splitQuoted(line, delimiter) : line.split(delimiter);
+    const fields = quoted && line.includes('"') ? splitQuoted(line, delimiter) : line.split(delimiter);
     if (!positions) {
-      const header = fields.map((name) => name.trim());
+      const header = fields.map((name) => name.replace(/^\ufeff/, '').trim());
       positions = columns.map((column) => header.indexOf(column));
       const missing = columns.filter((_, i) => positions[i] < 0);
       if (missing.length) throw new Error(`${member} no longer has ${missing.join(', ')}`);
@@ -84,12 +84,18 @@ async function* zipTable(zip, member, columns, { delimiter = ',', quoted = true 
   log(`${member}: ${rows} rows`);
 }
 
-/** Every row of a public map layer, page by page, holding only `fields`. */
-async function* mapLayer(url, fields) {
+/** What a zip holds. */
+function zipMembers(zip) {
+  return execFileSync('unzip', ['-Z1', zip], { maxBuffer: 16 * 1024 * 1024 }).toString('utf8').split('\n').filter(Boolean);
+}
+
+/** Every row of a public map layer, page by page, holding only `fields` (and with `points`, each point as _lng and _lat). */
+async function* mapLayer(url, fields, { points = false } = {}) {
   let offset = 0;
   for (;;) {
     const query = new URLSearchParams({
-      where: '1=1', outFields: fields.join(','), returnGeometry: 'false', orderByFields: 'OBJECTID',
+      where: '1=1', outFields: fields.join(','), returnGeometry: points ? 'true' : 'false', orderByFields: 'OBJECTID',
+      ...(points ? { outSR: '4326' } : {}),
       resultOffset: String(offset), resultRecordCount: '2000', f: 'json',
     });
     let page = null;
@@ -105,7 +111,7 @@ async function* mapLayer(url, fields) {
         await new Promise((resolve) => { setTimeout(resolve, attempt * 10000); });
       }
     }
-    for (const feature of page.features || []) yield feature.attributes;
+    for (const feature of page.features || []) yield points ? { ...feature.attributes, _lng: feature.geometry?.x, _lat: feature.geometry?.y } : feature.attributes;
     offset += (page.features || []).length;
     if (!page.features?.length || !page.exceededTransferLimit) break;
   }
@@ -126,4 +132,4 @@ async function* cachedLayer(file, url, fields) {
   }
 }
 
-module.exports = { download, zipTable, mapLayer, cachedLayer, USER_AGENT };
+module.exports = { download, zipTable, zipMembers, splitQuoted, mapLayer, cachedLayer, USER_AGENT };

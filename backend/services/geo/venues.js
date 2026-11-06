@@ -61,7 +61,9 @@ const NEARBY_LIMIT = 30;
 const SEARCH_LIMIT = 8;
 const SEARCH_RADIUS_M = 5000;
 const FIRST_ANSWER_WAIT_MS = 5000;
-// With rows from the index to list, Overpass gets only this long (a cached answer arrives in time).
+// With rows from the index to list, a new fetch gets only this long (a cached answer arrives in time). Asked
+// again while it runs, the person already has those rows, so the usual wait stands: the app asks a set number
+// of times, and with quick answers it would stop asking before a slow server has answered.
 const LISTED_ANSWER_WAIT_MS = 500;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const FAILURE_COOLDOWN_MS = 60 * 1000;
@@ -436,6 +438,7 @@ out tags bb 4000;`;
 }
 
 const inflight = new Map();
+const overpassKey = (cell, radiusM) => `geo7:${cell}:${radiusM}`;
 const failedUntil = new Map();
 
 /**
@@ -444,7 +447,7 @@ const failedUntil = new Map();
  * radius at a time; a failed one isn't asked again for a minute.
  */
 function overpassRecords(cell, radiusM) {
-  const key = `geo7:${cell}:${radiusM}`;
+  const key = overpassKey(cell, radiusM);
   if (inflight.has(key)) return inflight.get(key);
   const job = (async () => {
     const row = await placeSectionCache.readRow(key, SECTION_ID);
@@ -521,9 +524,9 @@ async function venuesNear({ latitude, longitude, limit = NEARBY_LIMIT, waitMs = 
   for (const radius of RADII_M) {
     let records = sure ? await indexRecords(latitude, longitude, radius) : null;
     if (!records) {
-      if (!around) {
-        around = await indexRecords(latitude, longitude, widest) || [];
-        if (around.length) deadline = Math.min(deadline, Date.now() + LISTED_ANSWER_WAIT_MS);
+      if (!around) around = await indexRecords(latitude, longitude, widest) || [];
+      if (around.length && !inflight.has(overpassKey(encodeGeohash(latitude, longitude, CELL_PRECISION), radius))) {
+        deadline = Math.min(deadline, Date.now() + LISTED_ANSWER_WAIT_MS);
       }
       try {
         records = await overpassRecordsBy(latitude, longitude, radius, deadline);
@@ -557,7 +560,7 @@ async function searchVenues({ q, latitude, longitude, limit = SEARCH_LIMIT }) {
   if (!records) {
     const cell = encodeGeohash(latitude, longitude, CELL_PRECISION);
     const cached = await Promise.all(RADII_M.map(async (radius) => {
-      const row = await placeSectionCache.readRow(`geo7:${cell}:${radius}`, SECTION_ID);
+      const row = await placeSectionCache.readRow(overpassKey(cell, radius), SECTION_ID);
       return row && Array.isArray(row.payload) ? row.payload : [];
     }));
     records = [...cached.flat(), ...(await indexRecords(latitude, longitude, SEARCH_RADIUS_M) || [])];

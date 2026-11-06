@@ -55,11 +55,14 @@ function inZip(query, records) {
   return records.filter(({ address }) => !address.zip || address.zip === query.zip);
 }
 
-/** Sources with no property ZIP name a town instead: the same street line in two towns of a county is told apart by it. */
+/**
+ * Sources with no property ZIP name a town instead: the same street line in two towns of a county is told apart by it,
+ * only when the person's town picks out exactly one record. A postal city that matches none stays ambiguous.
+ */
 function inTown(query, records) {
-  if (!query.city || records.length < 2) return records;
+  if (!query.city || records.length < 2 || records.some(({ address }) => address.zip)) return records;
   const named = records.filter(({ address }) => address.city === query.city);
-  return named.length ? named : records;
+  return named.length === 1 ? named : records;
 }
 
 function unitMatches(query, address) {
@@ -102,10 +105,12 @@ function ambiguous(candidates, requested, reason) {
 }
 
 /**
- * @param {object} query   addressKey.parse()'s parts with `zip`
+ * @param {object} address addressKey.parse()'s parts with `zip`
  * @param {object[]} records  What the release holds at this street name and house number
  */
-function resolve(query, records) {
+function resolve(address, records) {
+  // "BLDG A" with no unit under it: the building letter is what tells homes apart there.
+  const query = !address.unit && address.building ? { ...address, unit: address.building, building: '' } : address;
   const here = inUrbanization(query, inTown(query, inZip(query, onStreet(query, records))));
   const requested = query.unit ? 'unit' : 'property';
   if (!here.length) return answer('unsupported', { reason: 'no_record', requested_subject: requested });

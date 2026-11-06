@@ -155,6 +155,9 @@ struct ProfileStep: View {
                     placeholder: "123 Main St",
                     identifier: "createBusiness_address"
                 )
+                AddressSuggestionList(suggestions: viewModel.addressSuggestions, identifier: "createBusiness_addressSuggestion") { item in
+                    Task { await viewModel.chooseAddressSuggestion(item) }
+                }
                 PantopusTextField(
                     "City",
                     text: Binding(

@@ -15,12 +15,16 @@ import retrofit2.http.Query
 interface GeoApi {
     /**
      * Address typeahead (Mapbox-backed). Suggestions carry a GeoJSON
-     * `[lng, lat]` center; resolve one via [resolve].
-     * Route `backend/routes/geo.js:39`.
+     * `[lng, lat]` center; resolve one via [resolve]. [lat]/[lng] favor
+     * suggestions near a point; [kind] `address` keeps street addresses only.
+     * Route `backend/routes/geo.js:65`.
      */
     @GET("api/geo/autocomplete")
     suspend fun autocomplete(
         @Query("q") query: String,
+        @Query("lat") lat: Double? = null,
+        @Query("lng") lng: Double? = null,
+        @Query("kind") kind: String? = null,
     ): GeoAutocompleteResponse
 
     /**
