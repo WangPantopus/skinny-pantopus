@@ -21,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -34,6 +36,7 @@ import app.pantopus.android.data.plans.isPlaydate
 import app.pantopus.android.data.plans.planKind
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
+import app.pantopus.android.ui.screens.plans.LocalPlanOpenProfile
 import app.pantopus.android.ui.screens.plans.colors
 import app.pantopus.android.ui.screens.plans.components.PlanAvatarStack
 import app.pantopus.android.ui.screens.plans.components.PlanBanner
@@ -199,8 +202,28 @@ private fun PeopleLine(
             shown.size > 1 -> shown.dropLast(1).joinToString(", ") + " and " + shown.last()
             else -> shown.joinToString()
         }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-        PlanAvatarStack(names = people.take(4).map { it.displayName to it.userId })
+    // Each photo opens that person's profile; TalkBack offers the same as actions on the line.
+    val openProfile = LocalPlanOpenProfile.current
+    val shownPeople = people.take(4)
+    Row(
+        modifier =
+            Modifier.semantics(mergeDescendants = true) {
+                if (openProfile != null) {
+                    customActions =
+                        shownPeople.mapNotNull { person ->
+                            person.userId?.let { id ->
+                                CustomAccessibilityAction("Open ${person.displayName ?: "their"}'s profile") {
+                                    openProfile(id)
+                                    true
+                                }
+                            }
+                        }
+                }
+            },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        PlanAvatarStack(names = shownPeople.map { it.displayName to it.userId }, onOpen = openProfile)
         Text(text = line, style = PantopusTextStyle.small, color = PantopusColors.appTextSecondary, modifier = Modifier.weight(1f))
     }
 }

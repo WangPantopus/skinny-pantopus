@@ -84,6 +84,8 @@ fun ContentDetailShell(
     onSecondaryAction: (() -> Unit)? = null,
     onRetry: () -> Unit = {},
     onMessageCounterparty: (() -> Unit)? = null,
+    /** Opens the counterparty's profile from their photo and name. */
+    onOpenCounterparty: ((String) -> Unit)? = null,
     overflowItems: List<ContentDetailOverflowItem> = emptyList(),
     renderLocationMaps: Boolean = true,
     /** Optional trailing top-bar control (e.g. the gig save toggle, P1.C). */
@@ -117,6 +119,7 @@ fun ContentDetailShell(
                     onPrimaryAction = onPrimaryAction,
                     onSecondaryAction = onSecondaryAction,
                     onMessageCounterparty = onMessageCounterparty,
+                    onOpenCounterparty = onOpenCounterparty,
                     overflowItems = overflowItems,
                     renderLocationMaps = renderLocationMaps,
                     topBarAccessory = topBarAccessory,
@@ -210,6 +213,7 @@ private fun LoadedFrame(
     onPrimaryAction: () -> Unit,
     onSecondaryAction: (() -> Unit)?,
     onMessageCounterparty: (() -> Unit)?,
+    onOpenCounterparty: ((String) -> Unit)?,
     overflowItems: List<ContentDetailOverflowItem>,
     renderLocationMaps: Boolean,
     topBarAccessory: (@Composable () -> Unit)?,
@@ -253,7 +257,7 @@ private fun LoadedFrame(
                     )
                     Spacer(modifier = Modifier.height(Spacing.s2))
                 }
-                CounterpartyCard(party = party, onMessage = onMessageCounterparty)
+                CounterpartyCard(party = party, onMessage = onMessageCounterparty, onOpenProfile = onOpenCounterparty)
             }
             content.modules.forEach { module ->
                 Spacer(modifier = Modifier.height(22.dp))
@@ -788,7 +792,9 @@ private fun StatStrip(stats: List<ContentDetailStat>) {
 private fun CounterpartyCard(
     party: ContentDetailCounterparty,
     onMessage: (() -> Unit)?,
+    onOpenProfile: ((String) -> Unit)?,
 ) {
+    val openProfile = party.userId?.let { userId -> onOpenProfile?.let { open -> { open(userId) } } }
     Row(
         modifier =
             Modifier
@@ -802,30 +808,46 @@ private fun CounterpartyCard(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
-        AvatarView(initials = party.initials, verified = party.verified, size = 44.dp, imageUrl = party.avatarUrl)
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = party.displayName,
-                    fontSize = 13.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PantopusColors.appText,
-                )
-                party.identityKind?.let { IdentityChip(it) }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-                party.rating?.let {
-                    PantopusIconImage(icon = PantopusIcon.Star, contentDescription = null, size = 10.dp, tint = PantopusColors.warning)
+        // The photo and name open their profile; the message button keeps its own tap.
+        Row(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .then(
+                        openProfile?.let {
+                            Modifier
+                                .clickable(onClickLabel = "Open profile", role = Role.Button, onClick = it)
+                                .testTag("contentDetailCounterpartyProfile")
+                        } ?: Modifier,
+                    ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+        ) {
+            AvatarView(initials = party.initials, verified = party.verified, size = 44.dp, imageUrl = party.avatarUrl)
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = String.format("%.1f", it),
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = PantopusColors.appTextSecondary,
+                        text = party.displayName,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PantopusColors.appText,
                     )
+                    party.identityKind?.let { IdentityChip(it) }
                 }
-                party.trailing?.let {
-                    val prefix = if (party.rating != null) " · " else ""
-                    Text(text = "$prefix$it", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextSecondary)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+                    party.rating?.let {
+                        PantopusIconImage(icon = PantopusIcon.Star, contentDescription = null, size = 10.dp, tint = PantopusColors.warning)
+                        Text(
+                            text = String.format("%.1f", it),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = PantopusColors.appTextSecondary,
+                        )
+                    }
+                    party.trailing?.let {
+                        val prefix = if (party.rating != null) " · " else ""
+                        Text(text = "$prefix$it", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextSecondary)
+                    }
                 }
             }
         }
