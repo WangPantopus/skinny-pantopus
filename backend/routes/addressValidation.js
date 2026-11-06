@@ -596,6 +596,7 @@ router.get(
         verification_id: result.verification_id,
         status: result.status,
         ...(result.delivery_unknown && { delivery_unknown: true }),
+        ...(result.mail_outcome && { mail_outcome: result.mail_outcome }),
         expires_at: result.expires_at,
         cooldown_until: result.cooldown_until,
         resends_remaining: result.resends_remaining,

@@ -23,6 +23,7 @@
 const logger = require('../../utils/logger');
 const { destinationFor, sameDestination } = require('./mailDestination');
 const { noMailToDestination } = require('./mailSuppression');
+const { vendorStatusFor, outcomeFor, RECONCILE_GRACE_MS, RECONCILE_BATCH } = require('./mailEvents');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const lobMailProvider = require('./lobMailProvider');
 const mockMailProvider = require('./mockMailProvider');
@@ -107,6 +108,16 @@ class MailVendorService {
   /** The switch that stops invitations alone; verification cards keep going. */
   blockFoundersMailEnabled() {
     return String(process.env.BLOCK_FOUNDERS_MAIL_ENABLED).toLowerCase() !== 'false';
+  }
+
+  /** MAIL_RETURNS_END_ATTEMPTS=false puts a returned card back to waiting until its code expires. */
+  returnsEndAttempts() {
+    return String(process.env.MAIL_RETURNS_END_ATTEMPTS).toLowerCase() !== 'false';
+  }
+
+  /** MAIL_RECONCILE=off stops asking printers about unresolved pieces. */
+  reconcileEnabled() {
+    return String(process.env.MAIL_RECONCILE).toLowerCase() !== 'off';
   }
 
   /**
@@ -331,7 +342,7 @@ class MailVendorService {
       && eventData?.body?.id === vendorJobId && eventData?.body?.object === 'postcard') {
       const recovered = await supabaseAdmin.from('MailVerificationJob')
         .update({ vendor_job_id: vendorJobId, sent_at: new Date().toISOString() })
-        .eq('id', correlationId).eq('vendor', 'lob').is('vendor_job_id', null)
+        .eq('id', correlationId).eq('vendor', eventData?.provider || 'lob').is('vendor_job_id', null)
         .in('vendor_status', ['dispatching', 'delivery_unknown'])
         .select('*').maybeSingle();
       job = recovered.data;
@@ -347,23 +358,7 @@ class MailVendorService {
     }
 
     // ── 2. Map event type to vendor_status ──────────────────
-    const statusMap = {
-      'postcard.created': 'created',
-      'postcard.rendered_pdf': 'rendered',
-      'postcard.rendered_thumbnails': 'rendered',
-      'postcard.deleted': 'canceled',
-      'postcard.delivered': 'delivered',
-      'postcard.failed': 'failed',
-      'postcard.re-routed': 'rerouted',
-      'postcard.returned_to_sender': 'returned',
-      'postcard.mailed': 'mailed',
-      'postcard.in_transit': 'in_transit',
-      'postcard.in_local_area': 'in_local_area',
-      'postcard.international_exit': 'in_transit',
-      'postcard.processed_for_delivery': 'out_for_delivery',
-    };
-
-    const newStatus = statusMap[eventType] || 'unknown';
+    const newStatus = vendorStatusFor(eventType);
 
     // ── 3. Update job ───────────────────────────────────────
     // The RPC merges into the row while holding its update lock, preserving
@@ -385,7 +380,11 @@ class MailVendorService {
         .in('status', ['created', 'sent']);
     }
 
-    if (eventType === 'postcard.returned_to_sender') {
+    // A card that came back, was re-routed or failed ends the attempt. Only the
+    // newest card decides: a resend may already be on its way.
+    const outcome = outcomeFor(eventType);
+    if ((eventType === 'postcard.returned_to_sender' || (outcome && this.returnsEndAttempts()))
+      && await this._isNewestJob(job)) {
       await supabaseAdmin
         .from('AddressVerificationAttempt')
         .update({ status: 'expired', updated_at: new Date().toISOString() })
@@ -410,6 +409,59 @@ class MailVendorService {
     });
 
     return { success: true };
+  }
+
+  async _isNewestJob(job) {
+    const { data, error } = await supabaseAdmin.from('MailVerificationJob')
+      .select('id, created_at, metadata').eq('attempt_id', job.attempt_id);
+    if (error || !data?.length) return true;
+    const newest = [...data].sort((a, b) => (b.metadata?.resend_number || 0) - (a.metadata?.resend_number || 0)
+      || new Date(b.created_at) - new Date(a.created_at))[0];
+    return newest.id === job.id;
+  }
+
+  /**
+   * Settle verification cards whose send got no answer. The code isn't kept, so a
+   * card the printer never took can't go out again: its attempt ends and the person
+   * can request another right away. See jobs/reconcileMailPieces.js.
+   */
+  async reconcileJobs(now = Date.now()) {
+    const counts = { found: 0, ended: 0, unanswered: 0 };
+    const nowIso = new Date(now).toISOString();
+    const { data: jobs, error } = await supabaseAdmin.from('MailVerificationJob').select('*')
+      .in('vendor_status', ['dispatching', 'delivery_unknown']).is('vendor_job_id', null)
+      .lt('updated_at', new Date(now - RECONCILE_GRACE_MS).toISOString())
+      .order('updated_at', { ascending: true }).limit(RECONCILE_BATCH);
+    if (error) throw new Error('Unresolved verification mail queue is unavailable');
+    for (const job of jobs || []) {
+      let pieces;
+      try {
+        pieces = await this.providerForPiece(job.vendor).findPieces('pantopus_verification_job_id', job.id);
+      } catch (_) {
+        counts.unanswered += 1;
+        continue;
+      }
+      const piece = pieces[0];
+      const { data: saved } = await supabaseAdmin.from('MailVerificationJob')
+        .update(piece
+          ? { vendor_job_id: piece.vendorJobId, vendor_status: 'created', sent_at: nowIso, updated_at: nowIso }
+          : { vendor_status: 'rejected', updated_at: nowIso })
+        .eq('id', job.id).eq('vendor_status', job.vendor_status).is('vendor_job_id', null).select('id');
+      if (!saved?.length) continue;
+      if (piece) {
+        await supabaseAdmin.from('AddressVerificationAttempt')
+          .update({ status: 'sent', updated_at: nowIso }).eq('id', job.attempt_id).in('status', ['created']);
+        counts.found += 1;
+      } else {
+        if (await this._isNewestJob(job)) {
+          await supabaseAdmin.from('AddressVerificationAttempt')
+            .update({ status: 'expired', updated_at: nowIso }).eq('id', job.attempt_id).in('status', ['created', 'sent']);
+          await supabaseAdmin.from('AddressVerificationToken').update({ cooldown_until: nowIso }).eq('attempt_id', job.attempt_id);
+        }
+        counts.ended += 1;
+      }
+    }
+    return counts;
   }
 }
 
