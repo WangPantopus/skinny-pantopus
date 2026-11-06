@@ -7,14 +7,16 @@
  * and stations around the photo's capture point or the device. Mapbox's
  * geocoding no longer returns points of interest, so like the Plans picker
  * (plans/planPlaces.js) they come from OpenStreetMap:
- *   - in the US from our own monthly venues index (placesIndexFormat VENUES,
- *     built and published beside the Plans index), which answers in about a
- *     second;
- *   - anywhere the index can't answer (abroad, not published yet, a stretch
- *     with no venues) from the public Overpass servers, asked through
- *     planPlaces' client (hedged, retried) and cached for a day per small area.
- *     A new area waits a few seconds, then answers `loading: true` while the
- *     fetch finishes, so the app can ask again.
+ *   - where a point is surely in the US (usOutline.js) from our own monthly
+ *     venues index (placesIndexFormat VENUES, built and published beside the
+ *     Plans index), which answers in about a second, an empty stretch included;
+ *   - anywhere else (abroad, right on the border, or before the index is
+ *     published) from the public Overpass servers, asked through planPlaces'
+ *     client (hedged, retried) and cached for a day per small area. A new area
+ *     waits a few seconds, then answers `loading: true` while the fetch
+ *     finishes, so the app can ask again. What the index holds around the point
+ *     (a border town's US side) is listed right away, until Overpass answers or
+ *     if it can't.
  *
  * Nearest first, except that a venue whose outline holds the point (the
  * stadium the photo was taken in) comes first, ahead of everything but the
@@ -33,6 +35,7 @@ const placeSectionCache = require('../placeSectionCache');
 const { createIndexReader, RELEASE_URL } = require('../plans/placesIndex');
 const { VENUES } = require('../plans/placesIndexFormat');
 const { askServers, ATTRIBUTION } = require('../plans/planPlaces');
+const { isSurelyInUS } = require('./usOutline');
 
 const USER_AGENT = 'Pantopus/1.0 (post place-tag picker)';
 const LOG_PREFIX = 'geo.venues';
@@ -45,8 +48,10 @@ const venuesIndex = createIndexReader({
   logPrefix: LOG_PREFIX,
   userAgent: USER_AGENT,
   keptAreas: 64,
-  maxCellElements: 6000,
+  // A guard, not a limit anyone meets: the densest 5 km search box (Times Square) holds about 20,000.
+  maxCellElements: 30000,
   sampleDegrees: 0.02,
+  anywhere: true,
 });
 
 // The list widens through these radii until it has ENOUGH rows.
@@ -56,6 +61,8 @@ const NEARBY_LIMIT = 30;
 const SEARCH_LIMIT = 8;
 const SEARCH_RADIUS_M = 5000;
 const FIRST_ANSWER_WAIT_MS = 5000;
+// With rows from the index to list, Overpass gets only this long (a cached answer arrives in time).
+const LISTED_ANSWER_WAIT_MS = 500;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const FAILURE_COOLDOWN_MS = 60 * 1000;
 const SECTION_ID = 'geo_venues_osm_v1';
@@ -467,25 +474,28 @@ function overpassRecords(cell, radiusM) {
   return job;
 }
 
-/**
- * Venue records within `radiusM` of the point: the index's when it answers
- * there, else Overpass's. With Overpass, waits until `deadline` at most, then
- * answers null (still loading; the fetch carries on and is cached).
- */
-async function recordsAround(latitude, longitude, radiusM, deadline) {
-  let elements = null;
+/** Venue records the index holds within `radiusM` of the point, or null when it can't be read just now. */
+async function indexRecords(latitude, longitude, radiusM) {
   try {
-    elements = await venuesIndex.elementsIn(boxAround(latitude, longitude, radiusM));
+    const elements = await venuesIndex.elementsIn(boxAround(latitude, longitude, radiusM));
+    return elements && toRecords(elements);
   } catch (err) {
     logger.warn(`${LOG_PREFIX}.index_failed`, { error: err.message });
+    return null;
   }
-  if (elements) return { records: toRecords(elements), source: 'index' };
+}
+
+/**
+ * Venue records within `radiusM` of the point from Overpass. Waits until
+ * `deadline` at most, then answers null (still loading; the fetch carries on
+ * and is cached).
+ */
+function overpassRecordsBy(latitude, longitude, radiusM, deadline) {
   const job = overpassRecords(encodeGeohash(latitude, longitude, CELL_PRECISION), radiusM);
   job.catch(() => {});
   const wait = Math.max(0, deadline - Date.now());
   const timeout = new Promise((resolve) => { setTimeout(() => resolve(null), wait).unref?.(); });
-  const records = await Promise.race([job, timeout]);
-  return { records, source: 'overpass' };
+  return Promise.race([job, timeout]);
 }
 
 // ─── The two questions the picker asks ──────────────────────────────────────
@@ -498,15 +508,33 @@ async function recordsAround(latitude, longitude, radiusM, deadline) {
  * @throws when neither the index nor Overpass can answer
  */
 async function venuesNear({ latitude, longitude, limit = NEARBY_LIMIT, waitMs = FIRST_ANSWER_WAIT_MS }) {
-  const deadline = Date.now() + waitMs;
+  let deadline = Date.now() + waitMs;
   const answer = (rows, loading) => ({
     places: rows.slice(0, limit).map(toPlace), loading, attribution: rows.length ? ATTRIBUTION : null,
   });
+  const sure = isSurelyInUS(latitude, longitude);
+  const widest = RADII_M[RADII_M.length - 1];
   let rows = [];
+  let found = [];
+  let around = null;
+  const listed = () => ranked([...found, ...around], latitude, longitude, widest);
   for (const radius of RADII_M) {
-    const { records } = await recordsAround(latitude, longitude, radius, deadline);
-    // Still on its way: what the smaller radius found, and the app asks again.
-    if (!records) return answer(rows, true);
+    let records = sure ? await indexRecords(latitude, longitude, radius) : null;
+    if (!records) {
+      if (!around) {
+        around = await indexRecords(latitude, longitude, widest) || [];
+        if (around.length) deadline = Math.min(deadline, Date.now() + LISTED_ANSWER_WAIT_MS);
+      }
+      try {
+        records = await overpassRecordsBy(latitude, longitude, radius, deadline);
+      } catch (err) {
+        if (!around.length) throw err;
+        return answer(listed(), false);
+      }
+      // Still on its way: what's known so far, and the app asks again.
+      if (!records) return answer(listed(), true);
+    }
+    found = records;
     rows = ranked(records, latitude, longitude, radius);
     if (rows.length >= ENOUGH) break;
   }
@@ -516,29 +544,23 @@ async function venuesNear({ latitude, longitude, limit = NEARBY_LIMIT, waitMs = 
 /**
  * Venues near the point whose name matches the query: names with a word that
  * starts with it, nearest first, then names that hold it anywhere, nearest
- * first. From the index within 5 km, or (abroad, or
- * before the index is published) from what nearby already gathered here, so
- * typing never sends a query per keystroke to the public servers.
+ * first. Within 5 km, from the index where the point is surely in the US, or
+ * elsewhere from what nearby already gathered here and whatever the index holds
+ * around it, so typing never sends a query per keystroke to the public servers.
  *
  * @returns {Promise<{ places: object[], attribution: string|null }>}
  */
 async function searchVenues({ q, latitude, longitude, limit = SEARCH_LIMIT }) {
   const needle = normalized(q);
   if (!needle || !Number.isFinite(latitude) || !Number.isFinite(longitude)) return { places: [], attribution: null };
-  let records = null;
-  try {
-    const elements = await venuesIndex.elementsIn(boxAround(latitude, longitude, SEARCH_RADIUS_M));
-    if (elements) records = toRecords(elements);
-  } catch (err) {
-    logger.warn(`${LOG_PREFIX}.index_failed`, { error: err.message });
-  }
+  let records = isSurelyInUS(latitude, longitude) ? await indexRecords(latitude, longitude, SEARCH_RADIUS_M) : null;
   if (!records) {
     const cell = encodeGeohash(latitude, longitude, CELL_PRECISION);
     const cached = await Promise.all(RADII_M.map(async (radius) => {
       const row = await placeSectionCache.readRow(`geo7:${cell}:${radius}`, SECTION_ID);
       return row && Array.isArray(row.payload) ? row.payload : [];
     }));
-    records = cached.flat();
+    records = [...cached.flat(), ...(await indexRecords(latitude, longitude, SEARCH_RADIUS_M) || [])];
   }
   // 0: a word starts with the query; 1: the name holds it elsewhere (spaces ignored).
   const qualityOf = (name) => {
