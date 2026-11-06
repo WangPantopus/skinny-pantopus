@@ -17,10 +17,13 @@
 //      frequently and sends only once a user actually has unreviewed
 //      pieces waiting, inside their own local daytime window.
 //
-//   2. NOTHING IDENTIFYING ON THE LOCK SCREEN. The copy is counts and
-//      generic kinds only — never a sender, never a category that leaks
-//      a health, legal, or financial relationship. "3 pieces today —
-//      1 needs you." is the whole message; the detail lives behind auth.
+//   2. SAY WHO IT'S FROM. The copy counts the pieces and names up to two
+//      senders, as the triage screen shows them: "3 pieces today from
+//      PG&E, Chase and 1 more — 1 needs you." Reversed November 5, 2026
+//      (founder): notifications show their content, as other apps do, and
+//      the phone hides it while locked (iOS Show Previews, Android's
+//      sensitive-content setting). The earlier rule was "nothing
+//      identifying on the lock screen": counts only, never a sender.
 //
 // Idempotency is `MailDaySession.notified_at` (migration 160): one row
 // per (user_id, day_date) with a unique constraint, so a frequent job
@@ -141,8 +144,8 @@ function isSendableNow(prefs, now = new Date(), deliveryTime = '08:00') {
 }
 
 /**
- * The push copy. Counts only — no sender, no category, nothing that
- * describes a relationship. Returns null when there is nothing to say.
+ * The push copy: the count, who it's from (up to two senders by name, see
+ * rule 2) and how many need you. Returns null when there is nothing to say.
  */
 function composeMailDayPush(unreviewedItems) {
   const pieces = unreviewedItems.length;
@@ -150,10 +153,14 @@ function composeMailDayPush(unreviewedItems) {
 
   const needsYou = unreviewedItems.filter((i) => ACTIONABLE_KINDS.has(i.kind)).length;
   const pieceWord = pieces === 1 ? 'piece' : 'pieces';
+  const senders = [...new Set(unreviewedItems.map((i) => String(i.sender || '').trim()).filter(Boolean))];
+  const from = senders.length === 0 ? ''
+    : senders.length <= 2 ? ` from ${senders.join(' and ')}`
+      : ` from ${senders.slice(0, 2).join(', ')} and ${senders.length - 2} more`;
 
   const body = needsYou > 0
-    ? `${pieces} ${pieceWord} today — ${needsYou} needs you.`
-    : `${pieces} ${pieceWord} today.`;
+    ? `${pieces} ${pieceWord} today${from} — ${needsYou} needs you.`
+    : `${pieces} ${pieceWord} today${from}.`;
 
   return { title: 'Mail day', body, pieces, needs_you: needsYou };
 }
@@ -266,7 +273,7 @@ async function mailDayNotification() {
       await ensureTodayItems(userId, today);
       const { data: items } = await supabaseAdmin
         .from('MailDayItem')
-        .select('user_id, kind, scanned_at')
+        .select('user_id, kind, scanned_at, sender')
         .eq('user_id', userId)
         .eq('day_date', today)
         .eq('status', 'unreviewed');

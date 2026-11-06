@@ -105,9 +105,11 @@ describe('push/apnsClient.buildPayload', () => {
     const payload = apnsClient.buildPayload({
       title: 'New message',
       body: 'Hello',
-      data: { link: '/chat/42', type: 'chat_message', aps: 'IGNORED', empty: null },
+      data: { link: '/chat/42', room_id: '42', type: 'chat_message', aps: 'IGNORED', empty: null },
     });
-    expect(payload.aps).toEqual({ alert: { title: 'New message', body: 'Hello' }, sound: 'default' });
+    expect(payload.aps).toEqual({
+      alert: { title: 'New message', body: 'Hello' }, sound: 'default', category: 'CHAT_MESSAGE', 'thread-id': 'chat:42',
+    });
     for (const category of ['PICKUP_REMINDER', 'TASK_REMINDER', 'TASK_REMINDER_DONE_ONLY']) {
       const reminder = apnsClient.buildPayload({ title: 'Reminder', data: { category, recipient_user_id: 'test-actor' } });
       expect(reminder.aps.category).toBe(category);
