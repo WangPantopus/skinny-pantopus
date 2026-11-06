@@ -1,13 +1,13 @@
 import { authSessionMarker, getApiBaseUrl, getAuthToken } from '@pantopus/api/client';
 import { readTaskRecoveryValue, taskRecoveryEncryptionKey } from '@/components/home/tasks/TaskRecoveryStorage';
 import { HISTORY_TTL, activeChatStorageScope, beginChatStorageScope, chatAccountKey, chatHistoryMessageIds, chatHistoryRooms,
-  chatRetirementsSeen, chatSessionMarker as sessionMarker, clearChatDevice, historyGenerations, isChatStorageCurrent,
+  chatRetirementsSeen, chatSessionMarker as sessionMarker, historyGenerations, isChatStorageCurrent,
   isRetainedKind as isRetained, noteChatRetirement, openChatDatabase as open, publishHistoryRetirement, receivedHistoryGenerations,
   type ChatRecordKind as Kind, type ChatRecordMetadata as Metadata, type ChatStorageScope, type HistoryRetirement } from './chatSession';
 
 // The session's state (what a sign-out or an account switch must stop at once)
 // lives in chatSession.ts, which every page loads; it keeps its names here too.
-export { chatHistoryMessageIds, chatHistoryRooms, establishVerifiedChatSession, isChatStorageActiveFor, isChatStorageCurrent,
+export { chatHistoryMessageIds, chatHistoryRooms, isChatStorageActiveFor, isChatStorageCurrent,
   onChatHistoryRetired, suspendChatStorage, type ChatStorageScope } from './chatSession';
 
 const HISTORY_BYTES = 5 * 1024 * 1024;
@@ -132,9 +132,9 @@ export async function activateChatStorage(accountId: string): Promise<ChatStorag
   return scope;
 }
 
-/** Everything (a sign-out: chatSession's clearChatDevice), or only the saved history and media of this account. */
+/** Everything (as a sign-out does, chatDevice.ts, which the root layout has loaded), or only this account's saved history and media. */
 export async function clearChatStorage(historyOnly = false): Promise<void> {
-  if (!historyOnly) return clearChatDevice();
+  if (!historyOnly) return (await import('./chatDevice')).clearChatDevice();
   noteChatRetirement();
   const db = await open();
   const scope = activeChatStorageScope();

@@ -63,7 +63,7 @@ import type { CSSProperties } from 'react';
 import { Search, MessageCircle, Menu, X, ChevronsLeft, ChevronsRight, WifiOff, UserRound, type LucideIcon } from 'lucide-react';
 import { useOnlineStatus } from '@/components/map/OfflineIndicator';
 import { chosenUsername } from '@pantopus/utils';
-import { establishVerifiedChatSession, purgeOtherChatAccounts, retryChatOutboxStart, startChatOutboxAfterPaint } from '@/components/chat/chatSession';
+import { chatShellNavigated, chatShellSignedIn } from '@/lib/chatShell';
 
 // ── Constants ──────────────────────────────────────────────────
 const SIDEBAR_EXPANDED = 240;
@@ -300,16 +300,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const { data: me } = useMe({ enabled: mounted && !!getAuthToken() });
   const user: User | null = me ?? null;
   useConversationEvents(user?.id);
-  useEffect(() => {
-    if (!user?.id || establishVerifiedChatSession()) return;
-    // At once: this browser keeps only this account's chat (other accounts' keys
-    // and records, expired history). The outbox's code loads after first paint and
-    // sends what any tab queued, from any page (components/chat/chatSession.ts).
-    void purgeOtherChatAccounts(user.id).catch(() => {});
-    return startChatOutboxAfterPaint(user.id);
-  }, [user?.id]);
-  // An outbox whose code failed to load tries again on the next navigation.
-  useEffect(() => { retryChatOutboxStart(); }, [pathname]);
+  // Chat on this device follows the signed-in account, and the outbox starts after
+  // first paint (lib/query-provider.tsx, through lib/chatShell.ts).
+  useEffect(() => (user?.id ? chatShellSignedIn(user.id) : undefined), [user?.id]);
+  useEffect(() => { chatShellNavigated(); }, [pathname]);
 
   // ── Tile prefetch for home area ──────────────────────────────
   // A cold Messages inbox paints its rows first (lib/shellReads.ts).

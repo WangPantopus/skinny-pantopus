@@ -7,16 +7,33 @@ import { subscribeConnectivity } from '@/lib/connectivity';
 import { clearCachedMapTiles } from '@/utils/tilePrefetch';
 import { AUTH_SESSION_CHANGE_KEY, getAuthToken, onTokenChange } from '@pantopus/api/client';
 import { setActiveQueryClient } from '@/lib/active-query-client';
-// Chat's session state only: the encrypted store and the outbox load with Messages,
-// or after first paint on other app pages (components/chat/chatSession.ts).
-import { chatHistoryMessageIds, chatHistoryRooms, clearChatDevice, deleteRetiredChatSnapshots, onChatHistoryRetired, suspendChatSession,
-  type HistoryRetirement } from '@/components/chat/chatSession';
+// Chat's session state and device clears only: the encrypted store and the outbox
+// load with Messages, or after first paint on other app pages.
+import { chatHistoryMessageIds, chatHistoryRooms, onChatHistoryRetired, suspendChatSession, type HistoryRetirement } from '@/components/chat/chatSession';
+import { clearChatDevice, deleteRetiredChatSnapshots, establishVerifiedChatSession, purgeOtherChatAccounts, retryChatOutboxStart,
+  startChatOutboxAfterPaint } from '@/components/chat/chatDevice';
+import { setChatShell } from '@/lib/chatShell';
 import type { ConversationsReply } from '@/lib/conversation-storage';
 import { queryKeys } from '@/lib/query-keys';
 
 // Queries pause while offline. React Query's own detection believes the
 // browser's offline event, which can be wrong while requests still work.
 onlineManager.setEventListener((setOnline) => subscribeConnectivity(setOnline));
+
+// Once the app shell knows who is signed in (lib/chatShell.ts): at once, this
+// browser keeps only that account's chat (other accounts' keys and records, expired
+// history go); then the outbox's code loads after first paint and sends what any tab
+// queued, from any page. A start whose code failed to load tries again on navigation.
+if (typeof window !== 'undefined') {
+  setChatShell({
+    signedIn(userId) {
+      if (establishVerifiedChatSession()) return undefined;
+      void purgeOtherChatAccounts(userId).catch(() => {});
+      return startChatOutboxAfterPaint(userId);
+    },
+    navigated: retryChatOutboxStart,
+  });
+}
 
 // What this browser keeps for the signed-in account: the private Place inputs
 // (your rent, mortgage balance and rate), refund recovery and the map tiles
