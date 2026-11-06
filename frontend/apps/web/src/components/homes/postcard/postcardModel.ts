@@ -69,6 +69,15 @@ export function validatePostalStatus(value: unknown, actor: string, home: string
     || (r.can_resume && (!r.request || !p || p.status !== 'pending' || p.delivery !== 'not_started'))
     || (r.can_request && (r.can_verify || r.can_resume))) return unavailable();
 }
+const NEXT_STEP = 'Check the address and send another, or verify another way.';
+/** What the screen says when the mail itself is the news. `delivery` keeps its old words for apps in the stores. */
+export const MAIL_STATE_COPY: Record<string, { heading: string; body: string }> = {
+  sending: { heading: 'Sending your postcard…', body: 'We’re confirming with the printer. We won’t mail a second one. If a card arrives, its code works.' },
+  delayed: { heading: 'We’ll mail your card as soon as we can', body: 'The printer isn’t answering right now. Your request is saved, so there’s nothing you need to do.' },
+  returned: { heading: 'Your postcard came back', body: `Your postcard came back undeliverable. ${NEXT_STEP}` },
+  rerouted: { heading: 'Your postcard was re-routed', body: `USPS re-routed your postcard, so its code won’t work. ${NEXT_STEP}` },
+  failed: { heading: 'We couldn’t mail your postcard', body: `We couldn’t print or mail your postcard. ${NEXT_STEP}` },
+};
 export const postalMessage = (code?: string) => ({
   POSTCARD_WRONG_CODE: 'That code didn’t match this postcard. Check it and try again.',
   POSTCARD_ADDRESS_CHANGED: "This address doesn't match the one saved for this Home. Check the street, apartment and ZIP.",
@@ -83,6 +92,7 @@ export const postalMessage = (code?: string) => ({
   POSTCARD_COUNTRY_UNAVAILABLE: 'Mail verification is currently available for US addresses.',
   POSTCARD_ADDRESS_LIMIT: 'Too many postcards have been requested for this address. Try again later.',
   POSTCARD_USER_LIMIT: 'You’ve asked for too many postcards in the last hour. Try again later.',
+  POSTCARD_RETURNED_LIMIT: 'Two postcards to this address came back, so we won’t send a third. Check the address, or verify another way.',
   POSTCARD_NOT_DISPATCHED: 'This postcard hasn’t been sent yet. Send it first.',
   OWNERSHIP_FLOW_REQUIRED: 'Mail verification isn’t available to this Home’s owners, admins or managers.',
   HOME_NOT_FOUND: 'This Home is no longer available. Check your residency status.',
