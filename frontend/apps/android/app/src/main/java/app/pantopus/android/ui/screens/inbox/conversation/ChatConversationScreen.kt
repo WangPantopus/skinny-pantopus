@@ -117,6 +117,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -647,6 +648,7 @@ fun ChatConversationScreen(
                                     val folder = ChatMediaUrl.openedFilesFolder(context.cacheDir).apply { mkdirs() }
                                     viewModel.openAttachment(attachment, folder)
                                 },
+                                onOpenSender = onOpenProfile,
                                 timelineSession = viewModel.timelineSession,
                             )
                         }
@@ -2893,6 +2895,8 @@ internal fun PopulatedFrame(
     onOpenUrl: (String) -> Unit = {},
     onOpenPhotos: ((List<String>, Int) -> Unit)? = null,
     onOpenAttachment: ((ChatBubbleBody.Attachment) -> Unit)? = null,
+    /** Opens the profile of a room message's sender, from their name and photo; null leaves them plain. */
+    onOpenSender: ((String) -> Unit)? = null,
     timelineSession: String? = null,
 ) {
     val listState = rememberLazyListState()
@@ -3099,6 +3103,11 @@ internal fun PopulatedFrame(
                             onOpenUrl = onOpenUrl,
                             onOpenPhotos = onOpenPhotos.takeIf { selectedMessageIds.isEmpty() },
                             onOpenAttachment = onOpenAttachment.takeIf { selectedMessageIds.isEmpty() },
+                            // While messages are being picked, a tap picks the message instead.
+                            onOpenSender =
+                                row.content.senderUserId
+                                    ?.takeIf { selectedMessageIds.isEmpty() }
+                                    ?.let { userId -> onOpenSender?.let { open -> { open(userId) } } },
                         )
                 }
             }
@@ -3284,6 +3293,8 @@ private fun BubbleRow(
     // Null while selecting messages, so a tap selects instead of opening.
     onOpenPhotos: ((List<String>, Int) -> Unit)? = null,
     onOpenAttachment: ((ChatBubbleBody.Attachment) -> Unit)? = null,
+    // A room's sender's profile, from their name and photo; null while selecting and in one-to-one threads.
+    onOpenSender: (() -> Unit)? = null,
 ) {
     val isOut = content.side == ChatMessageSide.Outgoing
     // A15.2 link bubbles: first http(s) URL in a plain text body drives
@@ -3329,13 +3340,35 @@ private fun BubbleRow(
                 Spacer(modifier = Modifier.size(44.dp))
             }
         } else if (incomingInitials != null && !content.body.isRichCard) {
-            MiniAvatar(initials = incomingInitials, hidden = content.isContinuation)
+            MiniAvatar(
+                initials = incomingInitials,
+                hidden = content.isContinuation,
+                modifier =
+                    if (onOpenSender != null && !content.isContinuation) {
+                        Modifier
+                            .clickable(onClickLabel = "Open profile", role = Role.Button, onClick = onOpenSender)
+                            .semantics { contentDescription = "Open ${content.senderName ?: "the sender"}'s profile" }
+                            .testTag("chatSenderAvatar_${content.id}")
+                    } else {
+                        Modifier
+                    },
+            )
             Spacer(modifier = Modifier.size(6.dp))
         }
         Column(horizontalAlignment = if (isOut) Alignment.End else Alignment.Start) {
             if (!isOut && !content.isContinuation) {
                 content.senderName?.let { name ->
-                    Text(text = name, fontSize = 12.sp, color = PantopusColors.appTextSecondary)
+                    Text(
+                        text = name,
+                        fontSize = 12.sp,
+                        color = PantopusColors.appTextSecondary,
+                        modifier =
+                            onOpenSender?.let { open ->
+                                Modifier
+                                    .clickable(onClickLabel = "Open profile", role = Role.Button, onClick = open)
+                                    .testTag("chatSenderName_${content.id}")
+                            } ?: Modifier,
+                    )
                 }
             }
             val canViewAttachments = content.lockedTier == null || isOut
@@ -4746,10 +4779,11 @@ private fun PaidSupportFooter(
 private fun MiniAvatar(
     initials: String,
     hidden: Boolean,
+    modifier: Modifier = Modifier,
 ) {
     Box(
         modifier =
-            Modifier
+            modifier
                 .size(22.dp)
                 .clip(CircleShape)
                 .background(if (hidden) Color.Transparent else PantopusColors.primary600),
