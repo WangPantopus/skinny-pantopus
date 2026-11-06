@@ -45,7 +45,7 @@ internal fun HomePostalMailForm(
             )
         }
         Text("Include your apartment or unit. The complete address is checked before mailing.", style = PantopusTextStyle.caption)
-        PrimaryButton("Request postcard", {
+        PrimaryButton(if (viewModel.mailEnded) "Send another postcard" else "Request postcard", {
             focus.clearFocus()
             viewModel.reviewMail()
         }, Modifier.testTag("homePostalRequestMail"), isEnabled = viewModel.canRequestMail)
