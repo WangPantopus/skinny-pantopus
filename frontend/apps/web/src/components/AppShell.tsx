@@ -26,6 +26,7 @@ import { HomePermissionsProvider, useHomePermissions } from '@/components/home/u
 import { businessAccessQuery } from '@/components/business/useBusinessData';
 import { useConversationEvents } from '@/lib/conversationEvents';
 import type { PostComposerSubmitData } from '@/components/feed/PostComposer';
+import { withFreshFix } from '@/lib/freshPostFix';
 import { identityCopy } from '@/lib/identityLabels';
 import PrerenderSuspense from '@/components/first-content/PrerenderSuspense';
 
@@ -410,7 +411,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     try {
       const { mediaFiles, ...composerData } = data;
       const postData = { ...composerData } as Parameters<typeof api.posts.createPost>[0];
-      const res = await api.posts.createPost(postData);
+      const res = await api.posts.createPost(await withFreshFix(postData));
       const newPost = res.post;
       if (typeof newPost?.id !== 'string' || !newPost.id.trim()) {
         throw new Error('Post could not be confirmed. Try again.');
