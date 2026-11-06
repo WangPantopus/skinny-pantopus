@@ -77,7 +77,7 @@ purpose is **App functionality / Account management**; analytics where noted.
 | Play data type | Collected | Shared | Purpose | Notes |
 |----------------|-----------|--------|---------|-------|
 | Approximate location | Yes | No | App functionality | `ACCESS_COARSE_LOCATION` |
-| Precise location | Yes | No | App functionality | `ACCESS_FINE_LOCATION`; "near you" + maps |
+| Precise location | Yes | No | App functionality | `ACCESS_FINE_LOCATION`; "near you" + maps. `ACCESS_MEDIA_LOCATION`: where a photo or video the person picked was taken, sent with a post to that place |
 
 ### Photos and videos
 | Play data type | Collected | Shared | Purpose | Notes |

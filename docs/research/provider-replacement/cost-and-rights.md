@@ -80,7 +80,8 @@ Every source passes this before production use. "Checked" means the terms were r
 | Overture Maps addresses | Per row: public domain, CC0, PDDL, CC BY 4.0; "proprietary" read per source | No OpenStreetMap data in this theme; each row's dataset is checked; CC BY needs credit | Checked November 6 |
 | OpenAddresses sources | Per source, in `scripts/property-index/sources/address/openaddresses-rights.json`: 179 clear | Share-alike, no-sale and internal-use sources stay out; sources stating nothing stay out until someone asks | Checked November 6 |
 | County address points | Clark County WA: public layer, disclaimers only. Held until read: San Diego, Stanislaus, Kent, Allegan and Muskegon MI, Carson City | | Per county |
-| Federal data (Census, FHFA, FEMA USA Structures, USACE NSI) | Public data | Attribution; NSI and FHFA keep their labels (modeled; area index) | To confirm per dataset |
+| Federal data (Census, FEMA USA Structures, USACE NSI) | Public data | Attribution; NSI keeps its label (modeled) | To confirm per dataset |
+| FHFA House Price Index, annual ZIP and county files | Federal agency's public download; the data.gov entry says public with no license stated; FHFA calls these annual series developmental | Keeps its name on every line; an area's price change, never a home's value or a median sale price | Read November 6; a written question to FHFA is on the founder's list |
 | Building floor-plan sheets | Use with the building's written permission | Images only if the owner agrees | Per building |
 | Household entries | Pantopus's own privacy policy | Never shown outside the household; never in the shared index | — |
 | Mapbox (autocomplete and resolve) | Its geocoding terms | Storage of temporary geocoding results is limited; not changed by this work, but coordinates kept on `HomeAddress` should come from the registry | To check alongside WP6 |

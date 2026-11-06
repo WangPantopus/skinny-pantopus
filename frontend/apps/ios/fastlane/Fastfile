@@ -102,18 +102,6 @@ platform :ios do
     UI.success("✓ Signed Release archive built (no upload). Verify it points at api.pantopus.com with the Stripe key decision D4 calls for (pk_test_ during the pilot, pk_live_ after).")
   end
 
-  # One-time, from ios-signing-profile.yml: the only lane that writes to the signing repo from CI.
-  desc "Add the notification extension's App Store profile to the signing repo"
-  lane :add_notification_extension_profile do
-    setup_ci if is_ci
-    match(
-      type: "appstore",
-      app_identifier: "com.pantopus.app.notifications",
-      readonly: false,
-      api_key: appstore_api_key
-    )
-  end
-
   desc "Build and upload to TestFlight (via match for signing)"
   lane :beta do
     version = tag_marketing_version
