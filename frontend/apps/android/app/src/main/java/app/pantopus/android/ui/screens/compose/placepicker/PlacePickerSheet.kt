@@ -38,6 +38,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -78,6 +80,7 @@ private val SKELETON_TITLE_WIDTH = 160.dp
 private val SKELETON_SUBTITLE_WIDTH = 220.dp
 private val SKELETON_LINE_HEIGHT = 14.dp
 private const val SKELETON_ROW_COUNT = 3
+private const val FINDING_ROW_COUNT = 3
 
 /** Meters-per-mile / feet-per-meter for the trailing distance label. */
 private const val METERS_PER_MILE = 1609.344
@@ -115,6 +118,8 @@ fun PlacePickerSheet(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val searchOnly by viewModel.searchOnly.collectAsStateWithLifecycle()
     val anchor by viewModel.anchor.collectAsStateWithLifecycle()
+    val findingPlaces by viewModel.findingPlaces.collectAsStateWithLifecycle()
+    val attribution by viewModel.attribution.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val permissionLauncher =
@@ -179,6 +184,8 @@ fun PlacePickerSheet(
             state = state,
             query = query,
             searchOnly = searchOnly,
+            findingPlaces = findingPlaces,
+            attribution = attribution,
             onSelect = onSelect,
             onRetry = viewModel::retry,
         )
@@ -191,6 +198,8 @@ private fun ColumnScope.ListArea(
     state: PlacePickerUiState,
     query: String,
     searchOnly: Boolean,
+    findingPlaces: Boolean,
+    attribution: String?,
     onSelect: (PostPlaceTag) -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -207,16 +216,22 @@ private fun ColumnScope.ListArea(
             is PlacePickerUiState.Loaded ->
                 when {
                     searchOnly -> SearchOnlyHint()
+                    current.nearby.isEmpty() && current.locality == null && findingPlaces -> SkeletonRows()
                     current.nearby.isEmpty() && current.locality == null -> NoNearbyPlaces()
-                    else ->
+                    else -> {
                         NearbySection(
                             nearby = current.nearby,
                             locality = current.locality,
+                            findingMore = findingPlaces,
                             onSelect = onSelect,
                         )
+                        AttributionFooter(attribution)
+                    }
                 }
-            is PlacePickerUiState.SearchResults ->
+            is PlacePickerUiState.SearchResults -> {
                 ResultsSection(places = current.places, onSelect = onSelect)
+                AttributionFooter(attribution)
+            }
             PlacePickerUiState.Empty -> NoMatch(query = query)
             is PlacePickerUiState.Error ->
                 ErrorCard(message = current.message, onRetry = onRetry)
@@ -438,6 +453,7 @@ private fun SectionLabel(text: String) {
 private fun NearbySection(
     nearby: List<GeoPlace>,
     locality: GeoPlace?,
+    findingMore: Boolean,
     onSelect: (PostPlaceTag) -> Unit,
 ) {
     SectionLabel("Nearby")
@@ -449,8 +465,10 @@ private fun NearbySection(
                 modifier = Modifier.testTag("placePickerRow_$index"),
             )
         }
+        // More venues on their way (a new area): placeholder rows, as iOS.
+        if (findingMore) FindingRows()
         locality?.let { place ->
-            if (nearby.isNotEmpty()) {
+            if (nearby.isNotEmpty() || findingMore) {
                 Box(
                     modifier =
                         Modifier
@@ -486,6 +504,44 @@ private fun ResultsSection(
     }
 }
 
+/** Placeholder rows inside the list card while the server gathers a new area's venues. */
+@Composable
+private fun FindingRows() {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .semantics(mergeDescendants = true) { contentDescription = "Finding places nearby" }
+                .testTag("placePickerFindingRows"),
+    ) {
+        repeat(FINDING_ROW_COUNT) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4, vertical = Spacing.s3),
+                verticalArrangement = Arrangement.spacedBy(Spacing.s1),
+            ) {
+                Shimmer(width = SKELETON_TITLE_WIDTH, height = SKELETON_LINE_HEIGHT)
+                Shimmer(width = SKELETON_SUBTITLE_WIDTH, height = SKELETON_LINE_HEIGHT)
+            }
+        }
+    }
+}
+
+/** The venues' data credit ("© OpenStreetMap contributors") under the list, when venue rows show. */
+@Composable
+private fun AttributionFooter(attribution: String?) {
+    if (attribution.isNullOrBlank()) return
+    Text(
+        text = attribution,
+        style = PantopusTextStyle.caption,
+        color = PantopusColors.appTextMuted,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.s5, vertical = Spacing.s2)
+                .testTag("placePickerAttribution"),
+    )
+}
+
 @Composable
 private fun PlaceListCard(content: @Composable () -> Unit) {
     Column(
@@ -518,7 +574,7 @@ private fun PlaceRow(
         horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
         PantopusIconImage(
-            icon = PantopusIcon.MapPin,
+            icon = placeIcon(place),
             contentDescription = null,
             size = ICON_SM,
             tint = PantopusColors.appTextSecondary,
@@ -530,13 +586,7 @@ private fun PlaceRow(
                 fontWeight = FontWeight.SemiBold,
                 color = PantopusColors.appText,
             )
-            // Address first, category fallback, locality full line last —
-            // mirrors iOS `secondaryLine(for:)` so the locality row
-            // (address=null, category=null) still gets a subtitle.
-            val secondary =
-                place.address?.takeIf { it.isNotBlank() }
-                    ?: place.category?.takeIf { it.isNotBlank() }
-                    ?: place.fullAddress?.takeIf { it.isNotBlank() && it != place.name }
+            val secondary = placeSecondaryLine(place)
             if (!secondary.isNullOrBlank()) {
                 Text(
                     text = secondary,
@@ -545,15 +595,58 @@ private fun PlaceRow(
                 )
             }
         }
-        place.distanceM?.let { meters ->
+        val trailing = if (place.contains == true) "Here" else place.distanceM?.let(::distanceLabel)
+        trailing?.let { label ->
             Text(
-                text = distanceLabel(meters),
+                text = label,
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appTextMuted,
             )
         }
     }
 }
+
+/**
+ * A venue: its kind and address ("Barbecue restaurant · 123 Elm St").
+ * Otherwise address first, category fallback, locality full line last —
+ * so the locality row (address=null, category=null) still gets a
+ * subtitle. Mirrors iOS `secondaryLine(for:)`.
+ */
+internal fun placeSecondaryLine(place: GeoPlace): String? {
+    if (place.icon != null) {
+        val parts = listOfNotNull(place.category, place.address).filter { it.isNotBlank() }
+        if (parts.isNotEmpty()) return parts.joinToString(" · ")
+    }
+    return place.address?.takeIf { it.isNotBlank() }
+        ?: place.category?.takeIf { it.isNotBlank() }
+        ?: place.fullAddress?.takeIf { it.isNotBlank() && it != place.name }
+}
+
+/**
+ * The row's icon for a venue's kind (the server's `icon` key, as iOS
+ * `icon(for:)`); a pin for localities, addresses and anything unknown.
+ */
+internal fun placeIcon(place: GeoPlace): PantopusIcon =
+    when (place.icon) {
+        "restaurant", "bar" -> PantopusIcon.Utensils
+        "cafe" -> PantopusIcon.Coffee
+        "school" -> PantopusIcon.GraduationCap
+        "worship", "museum", "government", "library" -> PantopusIcon.Landmark
+        "park" -> PantopusIcon.Trees
+        "stadium", "venue" -> PantopusIcon.Ticket
+        "arts" -> PantopusIcon.Palette
+        "sports" -> PantopusIcon.Activity
+        "attraction" -> PantopusIcon.Camera
+        "zoo", "pet" -> PantopusIcon.PawPrint
+        "shop" -> PantopusIcon.ShoppingBag
+        "hotel" -> PantopusIcon.Building2
+        "transit" -> PantopusIcon.Bus
+        "airport" -> PantopusIcon.Plane
+        "health" -> PantopusIcon.Stethoscope
+        "community" -> PantopusIcon.UsersRound
+        "water" -> PantopusIcon.Waves
+        else -> PantopusIcon.MapPin
+    }
 
 @Composable
 private fun SkeletonRows() {

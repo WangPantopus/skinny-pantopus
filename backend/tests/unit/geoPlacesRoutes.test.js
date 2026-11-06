@@ -1,8 +1,8 @@
 // ============================================================
 // TEST: Geo place-tag routes — contract tests for the
 // Instagram-style place picker endpoints:
-//   GET /geo/places/nearby   → { places, locality }
-//   GET /geo/places/search   → { places }
+//   GET /geo/places/nearby   → { places, locality, loading, attribution }
+//   GET /geo/places/search   → { places[, attribution] }
 //
 // Verifies validation, response passthrough, cache behavior, and
 // error handling. Uses the handler-extraction pattern with mock
@@ -46,11 +46,18 @@ jest.mock('../../services/geo', () => ({
   resolve: jest.fn(),
   reverseGeocode: jest.fn(),
   forwardGeocode: jest.fn(),
-  nearbyPlaces: jest.fn(),
+  localityAt: jest.fn(),
   searchPlaces: jest.fn(),
 }));
 
+// Mock the OpenStreetMap venues so route tests don't hit the index or Overpass
+jest.mock('../../services/geo/venues', () => ({
+  venuesNear: jest.fn(),
+  searchVenues: jest.fn(),
+}));
+
 const geoProvider = require('../../services/geo');
+const venues = require('../../services/geo/venues');
 const { geoCache } = require('../../utils/geoCache');
 
 // ── Import router (uses mocked express) ──────────────────────
@@ -99,6 +106,20 @@ function mockRes() {
 
 // ── Fixtures (NormalizedPlace wire shape) ────────────────────
 
+const VENUE_PLACE = {
+  place_id: 'osm:node/123',
+  name: 'Blue Star Donuts',
+  category: 'Bakery',
+  icon: 'shop',
+  address: '1237 SW Washington St',
+  full_address: '1237 SW Washington St, Portland',
+  center: { lat: 45.5219, lng: -122.6841 },
+  kind: 'poi',
+  distance_m: 12,
+};
+
+const ATTRIBUTION = '© OpenStreetMap contributors';
+
 const POI_PLACE = {
   place_id: 'poi.123',
   name: 'Blue Star Donuts',
@@ -126,37 +147,43 @@ const LOCALITY_PLACE = {
 beforeEach(() => {
   geoCache.clear();
   jest.clearAllMocks();
+  venues.searchVenues.mockResolvedValue({ places: [], attribution: null });
 });
 
 // ── Tests ────────────────────────────────────────────────────
 
 describe('GET /geo/places/nearby', () => {
-  it('returns { places, locality } passed through from the provider', async () => {
-    geoProvider.nearbyPlaces.mockResolvedValue({ places: [POI_PLACE], locality: LOCALITY_PLACE });
+  it('returns the venues, the locality, loading and the credit', async () => {
+    venues.venuesNear.mockResolvedValue({ places: [VENUE_PLACE], loading: false, attribution: ATTRIBUTION });
+    geoProvider.localityAt.mockResolvedValue(LOCALITY_PLACE);
     const req = mockReq({ query: { lat: '45.5219', lng: '-122.6841' } });
     const res = mockRes();
 
     await nearbyHandler(req, res);
 
     expect(res._status).toBe(200);
-    expect(res._json.places).toEqual([POI_PLACE]);
-    expect(res._json.locality).toEqual(LOCALITY_PLACE);
-    expect(geoProvider.nearbyPlaces).toHaveBeenCalledWith(45.5219, -122.6841, { limit: 10 });
+    expect(res._json).toEqual({
+      places: [VENUE_PLACE], locality: LOCALITY_PLACE, loading: false, attribution: ATTRIBUTION,
+    });
+    expect(venues.venuesNear).toHaveBeenCalledWith({ latitude: 45.5219, longitude: -122.6841 });
+    expect(geoProvider.localityAt).toHaveBeenCalledWith(45.5219, -122.6841);
   });
 
   it('accepts the lon alias for lng', async () => {
-    geoProvider.nearbyPlaces.mockResolvedValue({ places: [], locality: null });
+    venues.venuesNear.mockResolvedValue({ places: [], loading: false, attribution: null });
+    geoProvider.localityAt.mockResolvedValue(null);
     const req = mockReq({ query: { lat: '45.5219', lon: '-122.6841' } });
     const res = mockRes();
 
     await nearbyHandler(req, res);
 
     expect(res._status).toBe(200);
-    expect(geoProvider.nearbyPlaces).toHaveBeenCalledWith(45.5219, -122.6841, { limit: 10 });
+    expect(venues.venuesNear).toHaveBeenCalledWith({ latitude: 45.5219, longitude: -122.6841 });
   });
 
   it('normalizes a missing locality to null', async () => {
-    geoProvider.nearbyPlaces.mockResolvedValue({ places: [POI_PLACE], locality: undefined });
+    venues.venuesNear.mockResolvedValue({ places: [VENUE_PLACE], loading: false, attribution: ATTRIBUTION });
+    geoProvider.localityAt.mockResolvedValue(undefined);
     const req = mockReq({ query: { lat: '45.5219', lng: '-122.6841' } });
     const res = mockRes();
 
@@ -164,6 +191,25 @@ describe('GET /geo/places/nearby', () => {
 
     expect(res._status).toBe(200);
     expect(res._json.locality).toBeNull();
+  });
+
+  it('keeps the venues when the locality lookup fails, and the locality when the venues do', async () => {
+    venues.venuesNear.mockResolvedValue({ places: [VENUE_PLACE], loading: false, attribution: ATTRIBUTION });
+    geoProvider.localityAt.mockRejectedValue(new Error('Mapbox down'));
+    const res1 = mockRes();
+    await nearbyHandler(mockReq({ query: { lat: '45.5219', lng: '-122.6841' } }), res1);
+    expect(res1._status).toBe(200);
+    expect(res1._json.places).toEqual([VENUE_PLACE]);
+    expect(res1._json.locality).toBeNull();
+
+    geoCache.clear();
+    venues.venuesNear.mockRejectedValue(new Error('Overpass down'));
+    geoProvider.localityAt.mockResolvedValue(LOCALITY_PLACE);
+    const res2 = mockRes();
+    await nearbyHandler(mockReq({ query: { lat: '45.5219', lng: '-122.6841' } }), res2);
+    expect(res2._status).toBe(200);
+    expect(res2._json.places).toEqual([]);
+    expect(res2._json.locality).toEqual(LOCALITY_PLACE);
   });
 
   it('returns 400 for non-finite lat/lng', async () => {
@@ -177,7 +223,8 @@ describe('GET /geo/places/nearby', () => {
       expect(res._status).toBe(400);
       expect(res._json).toHaveProperty('error', 'lat and lng are required numbers');
     }
-    expect(geoProvider.nearbyPlaces).not.toHaveBeenCalled();
+    expect(venues.venuesNear).not.toHaveBeenCalled();
+    expect(geoProvider.localityAt).not.toHaveBeenCalled();
   });
 
   it('returns 400 for out-of-range lat/lng without burning Mapbox calls', async () => {
@@ -191,26 +238,41 @@ describe('GET /geo/places/nearby', () => {
       expect(res._status).toBe(400);
       expect(res._json).toHaveProperty('error', 'lat and lng are required numbers');
     }
-    expect(geoProvider.nearbyPlaces).not.toHaveBeenCalled();
+    expect(venues.venuesNear).not.toHaveBeenCalled();
+    expect(geoProvider.localityAt).not.toHaveBeenCalled();
   });
 
   it('serves cached response on second identical request', async () => {
-    geoProvider.nearbyPlaces.mockResolvedValue({ places: [POI_PLACE], locality: LOCALITY_PLACE });
+    venues.venuesNear.mockResolvedValue({ places: [VENUE_PLACE], loading: false, attribution: ATTRIBUTION });
+    geoProvider.localityAt.mockResolvedValue(LOCALITY_PLACE);
 
     const res1 = mockRes();
     await nearbyHandler(mockReq({ query: { lat: '45.5219', lng: '-122.6841' } }), res1);
-    expect(geoProvider.nearbyPlaces).toHaveBeenCalledTimes(1);
+    expect(venues.venuesNear).toHaveBeenCalledTimes(1);
 
     const res2 = mockRes();
     await nearbyHandler(mockReq({ query: { lat: '45.5219', lng: '-122.6841' } }), res2);
 
     expect(res2._status).toBe(200);
-    expect(res2._json.places).toEqual([POI_PLACE]);
-    expect(geoProvider.nearbyPlaces).toHaveBeenCalledTimes(1); // Still 1
+    expect(res2._json.places).toEqual([VENUE_PLACE]);
+    expect(venues.venuesNear).toHaveBeenCalledTimes(1); // Still 1
   });
 
-  it('returns 500 on provider failure', async () => {
-    geoProvider.nearbyPlaces.mockRejectedValue(new Error('Mapbox down'));
+  it('never caches a list that is still loading', async () => {
+    venues.venuesNear.mockResolvedValue({ places: [], loading: true, attribution: null });
+    geoProvider.localityAt.mockResolvedValue(LOCALITY_PLACE);
+
+    const res1 = mockRes();
+    await nearbyHandler(mockReq({ query: { lat: '45.5219', lng: '-122.6841' } }), res1);
+    expect(res1._json.loading).toBe(true);
+    await nearbyHandler(mockReq({ query: { lat: '45.5219', lng: '-122.6841' } }), mockRes());
+
+    expect(venues.venuesNear).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns 500 when neither the venues nor the locality can answer', async () => {
+    venues.venuesNear.mockRejectedValue(new Error('Overpass down'));
+    geoProvider.localityAt.mockRejectedValue(new Error('Mapbox down'));
     const res = mockRes();
 
     await nearbyHandler(mockReq({ query: { lat: '45.5219', lng: '-122.6841' } }), res);
@@ -235,6 +297,19 @@ describe('GET /geo/places/search', () => {
       lng: -122.6841,
       limit: 8,
     });
+    expect(venues.searchVenues).toHaveBeenCalledWith({ q: 'blue star', latitude: 45.5219, longitude: -122.6841 });
+  });
+
+  it('lists matching venues first and drops the Mapbox duplicate of one', async () => {
+    venues.searchVenues.mockResolvedValue({ places: [VENUE_PLACE], attribution: ATTRIBUTION });
+    geoProvider.searchPlaces.mockResolvedValue({ places: [POI_PLACE, LOCALITY_PLACE] });
+    const res = mockRes();
+
+    await searchHandler(mockReq({ query: { q: 'blue star', lat: '45.5219', lng: '-122.6841' } }), res);
+
+    expect(res._status).toBe(200);
+    expect(res._json.places).toEqual([VENUE_PLACE, LOCALITY_PLACE]);
+    expect(res._json.attribution).toBe(ATTRIBUTION);
   });
 
   it('omits proximity when coords are missing', async () => {
@@ -245,6 +320,7 @@ describe('GET /geo/places/search', () => {
 
     expect(res._status).toBe(200);
     expect(geoProvider.searchPlaces).toHaveBeenCalledWith('blue star', { limit: 8 });
+    expect(venues.searchVenues).not.toHaveBeenCalled();
   });
 
   it('drops out-of-range proximity coords instead of forwarding them', async () => {

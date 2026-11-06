@@ -44,7 +44,8 @@ sealed interface PlacePickerUiState {
 /**
  * Backs [PlacePickerSheet] — the Instagram-style venue picker shared by
  * the Pulse and Beacon composers. [load] resolves a device fix and fetches
- * `GET /api/geo/places/nearby`; typing searches
+ * `GET /api/geo/places/nearby` (asking again every few seconds while the
+ * server is still gathering a new area's venues); typing searches
  * `GET /api/geo/places/search` (debounced, proximity-biased when a fix is
  * known). No fix ⇒ search-only mode with no NEARBY section. Mirrors the
  * iOS `PlacePickerViewModel`.
@@ -81,6 +82,19 @@ class PlacePickerViewModel
         private val _mediaLocation = MutableStateFlow<MediaCaptureLocation?>(null)
         val mediaLocation: StateFlow<MediaCaptureLocation?> = _mediaLocation.asStateFlow()
 
+        /**
+         * True while the server is still gathering a new area's venues
+         * (`loading` on the nearby reply): the sheet shows placeholder rows
+         * under what's listed, and [load] asks again. Mirrors iOS
+         * `isFindingPlaces`.
+         */
+        private val _findingPlaces = MutableStateFlow(false)
+        val findingPlaces: StateFlow<Boolean> = _findingPlaces.asStateFlow()
+
+        /** Data credit for the venue rows on screen; null when none are listed. */
+        private val _attribution = MutableStateFlow<String?>(null)
+        val attribution: StateFlow<String?> = _attribution.asStateFlow()
+
         /** Active anchor chip — defaults to Photo when media has a location. */
         private val _anchor = MutableStateFlow(PlacePickerAnchor.Current)
         val anchor: StateFlow<PlacePickerAnchor> = _anchor.asStateFlow()
@@ -106,6 +120,7 @@ class PlacePickerViewModel
         private data class NearbyPayload(
             val nearby: List<GeoPlace>,
             val locality: GeoPlace?,
+            val attribution: String? = null,
         )
 
         /**
@@ -154,6 +169,7 @@ class PlacePickerViewModel
          */
         fun load() {
             val generation = ++loadGeneration
+            _findingPlaces.value = false
             if (!hasActiveQuery()) {
                 searchJob?.cancel()
                 _state.value = PlacePickerUiState.Loading
@@ -167,26 +183,38 @@ class PlacePickerViewModel
                     return@launch
                 }
                 _searchOnly.value = false
-                when (val result = repo.geoNearbyPlaces(coordinate.latitude, coordinate.longitude)) {
-                    is NetworkResult.Success -> {
-                        if (generation != loadGeneration) return@launch
-                        lastNearby = NearbyPayload(result.data.places, result.data.locality)
-                        if (!hasActiveQuery()) showNearby()
-                    }
-                    is NetworkResult.Failure -> {
-                        if (generation != loadGeneration) return@launch
-                        if (!hasActiveQuery()) {
-                            _state.value =
-                                PlacePickerUiState.Error(
-                                    result.error.message.ifBlank { "Couldn't load nearby places." },
-                                )
-                        } else {
-                            // A failed reload behind a live search must not
-                            // leave the PREVIOUS anchor's payload restorable
-                            // under the newly active chip — drop the cache so
-                            // clearing the query can't resurrect a mislabeled
-                            // nearby list (mirrors iOS).
-                            lastNearby = null
+                var asked = 0
+                while (true) {
+                    when (val result = repo.geoNearbyPlaces(coordinate.latitude, coordinate.longitude)) {
+                        is NetworkResult.Success -> {
+                            if (generation != loadGeneration) return@launch
+                            val reply = result.data
+                            lastNearby = NearbyPayload(reply.places, reply.locality, reply.attribution)
+                            val stillFinding = reply.loading && asked < MAX_FINDING_POLLS
+                            _findingPlaces.value = stillFinding
+                            if (!hasActiveQuery()) showNearby()
+                            if (!stillFinding) return@launch
+                            asked += 1
+                            delay(FINDING_POLL_MS)
+                            if (generation != loadGeneration) return@launch
+                        }
+                        is NetworkResult.Failure -> {
+                            if (generation != loadGeneration) return@launch
+                            _findingPlaces.value = false
+                            if (!hasActiveQuery()) {
+                                _state.value =
+                                    PlacePickerUiState.Error(
+                                        result.error.message.ifBlank { "Couldn't load nearby places." },
+                                    )
+                            } else {
+                                // A failed reload behind a live search must not
+                                // leave the PREVIOUS anchor's payload restorable
+                                // under the newly active chip — drop the cache so
+                                // clearing the query can't resurrect a mislabeled
+                                // nearby list (mirrors iOS).
+                                lastNearby = null
+                            }
+                            return@launch
                         }
                     }
                 }
@@ -203,6 +231,7 @@ class PlacePickerViewModel
             lastNearby = NearbyPayload(emptyList(), null)
             if (!hasActiveQuery()) {
                 _state.value = PlacePickerUiState.Loaded(nearby = emptyList(), locality = null)
+                _attribution.value = null
             }
         }
 
@@ -225,13 +254,15 @@ class PlacePickerViewModel
                     // mid-typing biases the request that actually fires.
                     val coordinate = searchProximity()
                     when (val result = repo.geoSearchPlaces(q, coordinate?.latitude, coordinate?.longitude)) {
-                        is NetworkResult.Success ->
+                        is NetworkResult.Success -> {
+                            _attribution.value = result.data.attribution.takeIf { result.data.places.isNotEmpty() }
                             _state.value =
                                 if (result.data.places.isEmpty()) {
                                     PlacePickerUiState.Empty
                                 } else {
                                     PlacePickerUiState.SearchResults(result.data.places)
                                 }
+                        }
                         is NetworkResult.Failure ->
                             _state.value =
                                 PlacePickerUiState.Error(
@@ -279,6 +310,7 @@ class PlacePickerViewModel
             // Loaded even when empty — the sheet renders "No places
             // nearby" from the loaded state, matching iOS.
             _state.value = PlacePickerUiState.Loaded(nearby = cached.nearby, locality = cached.locality)
+            _attribution.value = cached.attribution
         }
 
         private companion object {
@@ -288,5 +320,9 @@ class PlacePickerViewModel
             // Mirrors PlaceLaunchViewModel: one request per pause, not per key.
             const val SEARCH_DEBOUNCE_MS = 220L
             const val MIN_QUERY_LENGTH = 2
+
+            // A nearby list still loading is asked for again this often, this many times (as iOS).
+            const val FINDING_POLL_MS = 3_000L
+            const val MAX_FINDING_POLLS = 8
         }
     }
