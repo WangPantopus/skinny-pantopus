@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import { confirmStore } from '@/components/ui/confirm-store';
+import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { chosenUsername } from '@pantopus/utils';
 
 export default function BusinessTeamPage() {
@@ -109,7 +110,16 @@ export default function BusinessTeamPage() {
               {members.map((m) => (
                 <div key={m.id} className="px-4 py-3 flex items-center justify-between">
                   <div>
-                    <div className="text-sm font-medium text-app-text">{m.user?.name || chosenUsername(m.user?.username) || 'Team member'}</div>
+                    {/* The member's name opens their profile. */}
+                    <div className="text-sm font-medium text-app-text">
+                      <UserIdentityLink
+                        userId={m.user?.id}
+                        username={chosenUsername(m.user?.username)}
+                        displayName={m.user?.name || chosenUsername(m.user?.username) || 'Team member'}
+                        avatarUrl={m.user?.profile_picture_url || null}
+                        textClassName="text-sm font-medium text-app-text hover:underline"
+                      />
+                    </div>
                     <div className="text-xs text-app-text-secondary">{[chosenUsername(m.user?.username) && `@${chosenUsername(m.user?.username)}`, m.role_base, m.title].filter(Boolean).join(' · ')}</div>
                   </div>
                   {m.role_base !== 'owner' && (
