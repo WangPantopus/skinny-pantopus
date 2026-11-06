@@ -129,13 +129,15 @@ describe('getExemptionCheck', () => {
       assessed: { assdTtlValue: 550000 },
       market: { mktTtlValue: 500000 },
     });
-    const res = await getExemptionCheck(HOME);
+    const res = await getExemptionCheck({ ...HOME, state: 'WA' });
     expect(res.data.assessment_signal).toEqual({
       assessed_value: 550000, market_value: 500000, ratio_pct: 10, stance: 'above',
     });
+    // Where the law sets a fraction or a cap, the two totals aren't meant to match.
+    expect((await getExemptionCheck(HOME)).data.assessment_signal).toBeNull();
 
     mockParcel({ tax: { exemption: [] } });
-    expect((await getExemptionCheck(HOME)).data.assessment_signal).toBeNull();
+    expect((await getExemptionCheck({ ...HOME, state: 'WA' })).data.assessment_signal).toBeNull();
   });
 
   test('no parcel match and no key degrade honestly', async () => {

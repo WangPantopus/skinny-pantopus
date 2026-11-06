@@ -73,8 +73,7 @@ const MOCK_ATTOM_DETAIL = {
 const MOCK_ATTOM_AVM = {
   property: [{
     avm: {
-      amount: { value: 385000, low: 365000, high: 405000 },
-      confidence: 0.85,
+      amount: { value: 385000, low: 365000, high: 405000, scr: 85 },
     },
   }],
 };
@@ -174,7 +173,7 @@ describe('PropertyIntelligenceService', () => {
       expect(result.profile.estimated_value).toBe(385000);
       expect(result.profile.value_range_low).toBe(365000);
       expect(result.profile.value_range_high).toBe(405000);
-      expect(result.profile.value_confidence).toBe(0.85);
+      expect(result.profile.value_confidence).toBe(85);
       expect(result.profile.year_built).toBe(1978);
       expect(result.profile.sqft).toBe(1650);
       expect(result.profile.bedrooms).toBe(3);

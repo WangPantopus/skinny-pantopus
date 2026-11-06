@@ -34,7 +34,9 @@
 const logger = require('../utils/logger');
 const propertyIntelligenceService = require('./ai/propertyIntelligenceService');
 const { programForState } = require('../data/homesteadPrograms');
+const { ASSESSED_AT_FULL_VALUE } = require('../data/valuePractice');
 const homeRecords = require('./propertyRecords/homeRecord');
+const { stateCode } = require('./propertyRecords/addressKey');
 
 const HOMESTEAD_RE = /homestead|hmstd|hstd|principal residence|owner[- ]?occ/i;
 
@@ -133,6 +135,14 @@ function assessmentSignal(assessment) {
   };
 }
 
+/**
+ * The signal, only where it can say something: a legal fraction or a cap isn't
+ * "below market" (Connecticut's 70%, New York's town shares, Florida's Save Our Homes).
+ */
+function homeAssessmentSignal(home, assessment) {
+  return ASSESSED_AT_FULL_VALUE.has(stateCode(home.state)) ? assessmentSignal(assessment) : null;
+}
+
 function stateProgramPayload(home) {
   const program = programForState(home.state);
   return {
@@ -185,7 +195,7 @@ async function getExemptionCheck(home) {
         filing_status: !labels ? 'unknown' : (labels.length ? 'on_file' : 'none_on_file'),
         exemptions: labels || [],
         homestead_on_file: (labels || []).some((label) => HOMESTEAD_RE.test(label)),
-        assessment_signal: assessmentSignal({ assessed: { assdTtlValue: facts.assessed_value }, market: { mktTtlValue: facts.market_value } }),
+        assessment_signal: homeAssessmentSignal(home, { assessed: { assdTtlValue: facts.assessed_value }, market: { mktTtlValue: facts.market_value } }),
         state_program: stateProgramPayload(home),
       },
     };
@@ -218,7 +228,7 @@ async function getExemptionCheck(home) {
       homestead_on_file: extracted.homestead,
       // Wave 2b: assessed vs the county's own market value (null when
       // either total is missing from the feed).
-      assessment_signal: assessmentSignal(property.assessment),
+      assessment_signal: homeAssessmentSignal(home, property.assessment),
       state_program: stateProgramPayload(home),
     },
   };
