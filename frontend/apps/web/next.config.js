@@ -180,7 +180,8 @@ const createNextConfig = (phase) => ({
       { source: '/app', destination: '/app/place', permanent: false },
       // Old /app addresses also redirect here: their redirect() pages render inside the
       // app shell's Suspense, so Next redirects on the client, which crashed with
-      // "Rendered more hooks than during the previous render" (Next's Router).
+      // "Rendered more hooks than during the previous render" (Next's Router). The Mailbox's old
+      // addresses do the same in the middleware, after its launch cuts and sign-in redirect.
       { source: '/app/hub', destination: '/app/place', permanent: false },
       { source: '/app/control-center', destination: '/app/place', permanent: false },
       { source: '/app/neighborhood', destination: '/app/nearby', permanent: false },
