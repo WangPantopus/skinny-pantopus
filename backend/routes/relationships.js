@@ -29,6 +29,7 @@ const { isBlocked, getRelationshipStatus } = require('../utils/visibilityPolicy'
 const { invalidateFilterCache } = require('../services/feedService');
 const marketplaceService = require('../services/marketplace/marketplaceService');
 const { writeIdentityAuditLog } = require('../utils/identityAudit');
+const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const { chosenUsernameOrNull } = require('../utils/personalUsername');
 
@@ -121,6 +122,39 @@ const requestSchema = Joi.object({
 // ============ HELPERS ============
 
 const USER_SELECT = 'id, username, name, first_name, last_name, profile_picture_url, city, state';
+
+// A declined request deletes its row, so the decline is remembered apart from it: for 30 days the person who was
+// declined can't ask (and notify) the same person again. It sits in the shared expiring-claims table (cleaned up by
+// the alert checker), under a hash so no ids stay behind after the people or the request are gone.
+const DECLINE_COOL_DOWN_MS = 30 * 24 * 60 * 60 * 1000;
+const declineClaim = (requesterId, addresseeId) => ({
+  alert_type: 'reminder',
+  alert_id: `connection_decline_${crypto.createHash('sha256').update(`${requesterId}:${addresseeId}`).digest('hex')}`,
+  geohash: 'global',
+});
+
+async function rememberDecline(requesterId, addresseeId) {
+  const { error } = await supabaseAdmin.from('AlertNotificationHistory').upsert({
+    ...declineClaim(requesterId, addresseeId),
+    headline: 'connection_decline',
+    expires_at: new Date(Date.now() + DECLINE_COOL_DOWN_MS).toISOString(),
+  }, { onConflict: 'alert_type,alert_id,geohash' });
+  if (error) logger.warn('Connection decline not remembered', { error: error.message });
+}
+
+// An unreadable answer lets the request through: at worst it's one more notice, and the rate limit still applies.
+async function recentlyDeclined(requesterId, addresseeId) {
+  const { alert_type: alertType, alert_id: alertId, geohash } = declineClaim(requesterId, addresseeId);
+  const { data, error } = await supabaseAdmin.from('AlertNotificationHistory').select('id')
+    .eq('alert_type', alertType).eq('alert_id', alertId).eq('geohash', geohash)
+    .gt('expires_at', new Date().toISOString())
+    .maybeSingle();
+  if (error) {
+    logger.warn('Connection decline not read', { error: error.message });
+    return false;
+  }
+  return Boolean(data);
+}
 
 // A made-up username (user_…, or the kind made from an email address) isn't the person's handle, and the
 // email kind shows part of their email address, so the lists send null instead (clients link by id then).
@@ -315,6 +349,13 @@ router.post('/requests', verifyToken, connectionRequestLimiter, validate(request
       }
     }
 
+    if (await recentlyDeclined(requesterId, addressee_id)) {
+      return res.status(403).json({
+        error: "You can't send this person another request right now.",
+        code: 'CONNECTION_REQUEST_COOL_DOWN',
+      });
+    }
+
     // Create new request
     const { data: relationship, error } = await supabaseAdmin
       .from('Relationship')
@@ -495,7 +536,7 @@ router.post('/:id/reject', verifyToken, async (req, res) => {
       return res.status(400).json({ error: `Cannot reject a ${rel.status} request` });
     }
 
-    // Delete the request (allow re-requesting later)
+    // Delete the request (they can ask again once the cool-down ends)
     const { error } = await supabaseAdmin
       .from('Relationship')
       .delete()
@@ -505,6 +546,8 @@ router.post('/:id/reject', verifyToken, async (req, res) => {
       logger.error('Error rejecting relationship', { error: error.message });
       return res.status(500).json({ error: 'Failed to reject connection' });
     }
+
+    await rememberDecline(rel.requester_id, rel.addressee_id);
 
     res.json({ message: 'Connection request rejected' });
   } catch (err) {

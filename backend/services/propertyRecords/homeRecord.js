@@ -22,6 +22,7 @@ const { FACTS } = require('./facts');
 const { parse, zip5, stateCode } = require('./addressKey');
 const { lookup, StorageUnavailable } = require('./index');
 const reader = require('./reader');
+const router = require('./router');
 
 const SCHEMA = 1;
 const REFRESH_EVERY_MS = 60 * 60 * 1000;
@@ -154,11 +155,11 @@ async function forHome(home) {
   if (!config.enabled() || !home) return null;
   const stored = storedCopy(home);
   // Taking a county off its live list takes its copies off the screens too; they stay on the Home for when it comes back.
-  if (stored && config.modeFor(stored.jurisdiction) === 'live') {
+  if (stored && router.showsCopies(stored.jurisdiction)) {
     refreshSoon(home, stored);
-    return { copy: stored, lookup: null };
+    return { copy: router.served(stored), lookup: null };
   }
-  if (!config.liveState(stateCode(home.state))) return null;
+  if (!router.liveState(stateCode(home.state))) return null;
   try {
     const address = homeAddress(home);
     const answer = await lookup(address);
@@ -166,7 +167,7 @@ async function forHome(home) {
     const copy = copyFromAnswer(answer, address);
     if (!copy) return { copy: null, lookup: 'none', match: answer.match };
     await storeCopy(home, copy);
-    return { copy, lookup: null };
+    return { copy: router.served(copy), lookup: null };
   } catch (err) {
     if (err instanceof StorageUnavailable) return { copy: null, lookup: 'pending' };
     throw err;
@@ -174,18 +175,19 @@ async function forHome(home) {
 }
 
 /**
- * What the record has for an address with no Home yet (Add Home).
- * @returns {Promise<null|{ copy: object|null, answer: object, lookup: 'found'|'none'|'pending' }>} null outside live counties.
+ * What the record has for an address with no Home yet (Add Home). `copy` is what may be shown; `whole` is what a new
+ * Home keeps, so a fact withheld today comes back without a new lookup.
+ * @returns {Promise<null|{ copy: object|null, whole: object|null, answer: object, lookup: 'found'|'none'|'pending' }>} null outside live counties.
  */
 async function forAddress(address) {
-  if (!config.liveState(stateCode(address.state))) return null;
+  if (!router.liveState(stateCode(address.state))) return null;
   try {
     const answer = await lookup(address);
     if (answer.match === 'unsupported' && answer.reason === 'no_release') return null;
     const copy = copyFromAnswer(answer, address);
-    return { copy, answer, lookup: copy ? 'found' : 'none' };
+    return { copy: router.served(copy), whole: copy, answer, lookup: copy ? 'found' : 'none' };
   } catch (err) {
-    if (err instanceof StorageUnavailable) return { copy: null, answer: null, lookup: 'pending' };
+    if (err instanceof StorageUnavailable) return { copy: null, whole: null, answer: null, lookup: 'pending' };
     throw err;
   }
 }

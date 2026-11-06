@@ -4,6 +4,7 @@ const notificationMock = require('./__mocks__/notificationService');
 const push = require('./__mocks__/pushService');
 const notify = require(path.resolve(__dirname, '../services/notificationService.js'));
 const relay = require('../jobs/deliverGigAcceptance');
+const delivery = { p_kind: 'gig_acceptance', p_id: 'event', p_lease_id: 'lease' };
 const note = { id: 'note', user_id: 'worker', type: 'bid_accepted', title: 'Accepted',
   body: 'Synthetic acceptance', link: '/gigs/gig', metadata: { gig_id: 'gig' } };
 beforeEach(() => {
@@ -18,14 +19,20 @@ describe('stored notification delivery', () => {
   test('stored owner confirmation reuses preference-aware transport without inserting a notice', async () => {
     db.seedTable('MailPreferences', [{ user_id: 'worker', push_notifications: true }]);
     const confirmation = { id: 'completion', user_id: 'worker', type: 'gig_confirmed', title: 'Confirmed', metadata: { gig_id: 'gig' } };
-    expect(await notify.deliverStoredGigNotification(confirmation)).toMatchObject({ suppressed: false });
+    expect(await notify.deliverStoredGigNotification(confirmation, { delivery })).toMatchObject({ suppressed: false });
     expect(db.getTable('Notification')).toEqual([note]);
   });
   test('delivers the exact stored notification and never inserts another row', async () => {
-    expect(await notify.deliverStoredGigNotification(note)).toMatchObject({ acceptedCount: 1, suppressed: false });
+    // Devices an earlier attempt settled are skipped; this attempt's accepted devices are saved under the same lease.
+    const rpc = jest.fn(async (name, args) => ({ data: ['settled-device', ...args.p_accepted] }));
+    db.setRpcMock(rpc);
+    push.sendToUserWithReceipt.mockResolvedValue({ acceptedCount: 1, unresolvedCount: 1, acceptedRegistrationIds: ['new-device'] });
+    expect(await notify.deliverStoredGigNotification(note, { delivery })).toMatchObject({ acceptedCount: 1, suppressed: false });
     expect(push.sendToUserWithReceipt).toHaveBeenCalledWith('worker', expect.objectContaining({ data: {
       notificationId: 'note', type: 'bid_accepted', link: '/gigs/gig', gig_id: 'gig', recipient_user_id: 'worker',
-    } }));
+    } }), { settledRegistrationIds: ['settled-device'] });
+    expect(rpc.mock.calls).toEqual([['merge_delivery_device_receipts', { ...delivery, p_accepted: [] }],
+      ['merge_delivery_device_receipts', { ...delivery, p_accepted: ['new-device'] }]]);
     expect(db.getTable('Notification')).toEqual([note]);
   });
   test.each(['global', 'gig'])('%s opt-out leaves in-app content and suppresses transport', async (kind) => {
@@ -120,7 +127,8 @@ describe('existing relay recovers completion notifications', () => {
   }
   test('uses the existing notice identity and commit-time consent', async () => {
     const rpc = fixture(); expect(await relay()).toEqual({ processed: 1 });
-    expect(notificationMock.deliverStoredGigNotification).toHaveBeenCalledWith(completion, { pushAllowedAtCompletion: true });
+    expect(notificationMock.deliverStoredGigNotification).toHaveBeenCalledWith(completion, { pushAllowedAtCompletion: true,
+      delivery: { p_kind: 'gig_completion', p_id: completion.id, p_lease_id: 'completion-lease' } });
     expect(rpc).toHaveBeenCalledWith('finish_gig_completion_delivery', {
       p_id: completion.id, p_lease_id: 'completion-lease', p_outcome: 'done', p_error: null,
     });
@@ -142,7 +150,8 @@ describe('existing relay recovers completion notifications', () => {
   test('retains commit-time opt-out even if transport is enabled later', async () => {
     const rpc = fixture({ consent: false });
     notificationMock.deliverStoredGigNotification.mockResolvedValue({ acceptedCount: 0, unresolvedCount: 0, suppressed: true });
-    await relay(); expect(notificationMock.deliverStoredGigNotification).toHaveBeenCalledWith(completion, { pushAllowedAtCompletion: false });
+    await relay(); expect(notificationMock.deliverStoredGigNotification).toHaveBeenCalledWith(completion, { pushAllowedAtCompletion: false,
+      delivery: { p_kind: 'gig_completion', p_id: completion.id, p_lease_id: 'completion-lease' } });
     expect(rpc).toHaveBeenCalledWith('finish_gig_completion_delivery', expect.objectContaining({ p_outcome: 'suppressed' }));
   });
 });

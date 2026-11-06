@@ -12,9 +12,13 @@ public enum UsersEndpoints {
         Endpoint(method: .get, path: "/api/users/profile")
     }
 
-    /// `PATCH /api/users/profile` — route `backend/routes/users.js:2052`.
-    public static func updateProfile(_ update: ProfileUpdateRequest) -> Endpoint {
-        Endpoint(method: .patch, path: "/api/users/profile", body: update)
+    /// `PATCH /api/users/profile` — route `backend/routes/users.js:2891`.
+    /// `dispatchGuard` keeps a save that waited from going out under the next session.
+    public static func updateProfile(
+        _ update: ProfileUpdateRequest,
+        dispatchGuard: (@MainActor @Sendable () throws -> Void)? = nil
+    ) -> Endpoint {
+        Endpoint(method: .patch, path: "/api/users/profile", body: update, dispatchGuard: dispatchGuard)
     }
 
     /// `GET /api/users/username-availability?username=` — route

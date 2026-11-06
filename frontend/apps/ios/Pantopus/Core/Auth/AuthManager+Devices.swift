@@ -11,6 +11,8 @@
 import Foundation
 import LocalAuthentication
 import Logging
+import UIKit
+import UserNotifications
 
 /// Errors from the step-up flow (`AuthManager.stepUp(purpose:)`).
 public enum StepUpError: Error, Equatable, Sendable {
@@ -156,6 +158,27 @@ extension AuthManager {
         pendingPushToken = token
         guard case .signedIn = state else { return }
         await registerDevice()
+    }
+
+    /// Ask APNs for this phone's token, at launch and at sign-in, when the phone
+    /// allows notifications and has a session to register it for. Permission isn't
+    /// asked for here: the briefings notice asks after sign-in, with the reason on
+    /// screen (`BriefingNoticeView`). Signing out unregisters the phone
+    /// (`clearLocalSession`), so a launch while signed out must not register: the
+    /// server may still hold this token for the account that left, and registering
+    /// would bring its pushes back. The next sign-in does it.
+    func registerForPushIfAllowed() {
+        guard ProcessInfo.processInfo.environment["UI_TESTS_DISABLE_NOTIFICATIONS"] != "1", hasStoredSession else { return }
+        Task { [weak self] in
+            let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+            // Signed out while that was answered: stay unregistered.
+            guard [.authorized, .provisional, .ephemeral].contains(status), self?.hasStoredSession == true else { return }
+            UIApplication.shared.registerForRemoteNotifications()
+        }
+    }
+
+    private var hasStoredSession: Bool {
+        nonEmpty(store.get(SecureStoreKey.accessToken)) != nil || nonEmpty(store.get(SecureStoreKey.refreshToken)) != nil
     }
 
     /// Await the fire-and-forget follow-ups (tests, and callers that need

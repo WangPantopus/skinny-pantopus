@@ -112,8 +112,9 @@ describe('expiry notification receipt delivery', () => {
  test.each(['gig_auto_cancelled', 'payment_auth_expiring'])('%s follows stored ID and current global/gig preferences', async type => {
   db.seedTable('Notification', [{ ...note, type }]); db.seedTable('MailPreferences', [{ user_id: 'worker', push_notifications: true }]);
   push.sendToUserWithReceipt.mockResolvedValue({ acceptedCount: 1, unresolvedCount: 0 });
-  await expect(notify.deliverStoredGigNotification({ ...note, type })).resolves.toMatchObject({ suppressed: false });
-  expect(push.sendToUserWithReceipt).toHaveBeenCalledWith('worker', expect.objectContaining({ data: expect.objectContaining({ notificationId: 'note', type }) }));
+  handler = async () => ({ data: [] });
+  await expect(notify.deliverStoredGigNotification({ ...note, type }, { delivery: { p_kind: 'gig_expiry', p_id: 'event', p_lease_id: 'lease' } })).resolves.toMatchObject({ suppressed: false });
+  expect(push.sendToUserWithReceipt).toHaveBeenCalledWith('worker', expect.objectContaining({ data: expect.objectContaining({ notificationId: 'note', type }) }), { settledRegistrationIds: [] });
   db.seedTable('UserNotificationPreferences', [{ user_id: 'worker', gig_updates_enabled: false }]);
   await expect(notify.deliverStoredGigNotification({ ...note, type })).resolves.toMatchObject({ suppressed: true });
   db.seedTable('UserNotificationPreferences', [{ user_id: 'worker', gig_updates_enabled: true }]);

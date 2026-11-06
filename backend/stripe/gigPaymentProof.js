@@ -45,10 +45,15 @@ function assertCapturedIntent(payment, intent) {
   }
   return intent;
 }
-// This private transaction field is never part of any existing client DTO.
+// This private transaction field is never part of any existing client DTO. Neither is the tip relay's state
+// (metadata.gig_tip_delivery_v1): its device receipts are the payee's push registrations, and the payer reads this row.
 function publicPayment(payment) {
   if (!payment) return payment;
   const { gig_completion_original: _original, ...visible } = payment;
+  if (visible.metadata?.gig_tip_delivery_v1) {
+    const { gig_tip_delivery_v1: _delivery, ...metadata } = visible.metadata;
+    visible.metadata = metadata;
+  }
   return visible;
 }
 // The payer's instrument, provider identities and risk review belong to the payer (and anyone

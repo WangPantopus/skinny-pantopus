@@ -11,13 +11,13 @@
  *   shadow(address)  the same lookup for counties being watched: logs counts,
  *                    returns nothing, never throws
  *
- * Which counties serve is configuration (config/propertyRecords.js), per FIPS.
+ * Which counties serve is the router's answer (router.js), per FIPS.
  * Addresses, record IDs and Home IDs never go in the log: county, answer, time.
  */
 
 const crypto = require('crypto');
 const logger = require('../../utils/logger');
-const config = require('../../config/propertyRecords');
+const router = require('./router');
 const reader = require('./reader');
 const identity = require('./identity');
 const { parse, sortKey, zip5, city: cityKey, stateCode } = require('./addressKey');
@@ -40,7 +40,7 @@ function countiesFor(stateFile, zip, city) {
  * @param {(fips: string) => boolean} [options.serves] Which counties may answer; by default the ones that are live
  * @returns {Promise<object>} { match, jurisdiction, county, release, ... } (identity.js)
  */
-async function lookup(address, { serves = (fips) => config.modeFor(fips) === 'live' } = {}) {
+async function lookup(address, { serves = (fips) => router.modeFor(fips) === 'live' } = {}) {
   const state = stateCode(address.state);
   const parsed = parse(address.line1, address.unit, { state, zip: address.zip });
   if (!parsed) return { match: 'unsupported', reason: 'unreadable_address' };
@@ -86,10 +86,10 @@ function shadowDue(address) {
 
 /** Watches a county: what the record would have answered. No facts leave this function. */
 async function shadow(address) {
-  if (!config.anyShadow() || !shadowDue(address)) return;
+  if (!router.anyShadow() || !shadowDue(address)) return;
   const started = Date.now();
   try {
-    const result = await lookup(address, { serves: (fips) => config.modeFor(fips) === 'shadow' });
+    const result = await lookup(address, { serves: (fips) => router.modeFor(fips) === 'shadow' });
     if (result.jurisdiction) {
       logger.info('property_records.shadow', {
         fips: result.jurisdiction,

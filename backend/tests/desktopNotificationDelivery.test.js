@@ -60,7 +60,7 @@ test.each([[true,true],[true,false],[false,true]])('durable Home notice honors a
   const note = { id:'task-note',user_id:userId,type:'task_assigned',title:'A Home task was assigned to you',
     context:'personal',context_type:'personal',context_id:null,link:'/app/homes/home/dashboard?tab=tasks',
     metadata:{home_id:'home',task_id:'task',assignment_event_id:'assignment'} };
-  await notifications.deliverStoredHomeTaskNotification(note,{pushAllowedAtAssignment:atAssignment});
+  await notifications.deliverStoredHomeTaskNotification(note,{pushAllowedAtAssignment:atAssignment,delivery:{p_kind:'home_task_assignment',p_id:'assignment',p_lease_id:'lease'}});
   expect(emit).toHaveBeenCalledWith('notification:new',note);
   expect(emit.mock.calls.filter(([event])=>event==='notification:alert')).toEqual(atAssignment&&current?[['notification:alert',note]]:[]);
 });
@@ -80,7 +80,7 @@ test.each(['persona_broadcast', 'gig_completed', 'home_update', 'mail_new'])('%s
 test.each([false, true])('durable wallet notice uses the same alert policy; opted out=%s', async (off) => {
   db.seedTable('UserNotificationPreferences', [{ user_id: userId, gig_updates_enabled: !off }]);
   const note = { id: 'wallet-note', user_id: userId, type: 'payout_sent', title: 'Wallet credited', link: '/app/wallet' };
-  await notifications.deliverStoredGigNotification(note);
+  await notifications.deliverStoredGigNotification(note, { delivery: { p_kind: 'wallet_settlement', p_id: 'event', p_lease_id: 'lease' } });
   expect(emit).toHaveBeenCalledWith('notification:new', note);
   expect(emit.mock.calls.filter(([event]) => event === 'notification:alert')).toEqual(off ? [] : [['notification:alert', note]]);
 });
