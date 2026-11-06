@@ -88,7 +88,9 @@ internal object HomeIntelligenceValidation {
     }
 
     private fun propertyMetadata(value: HomePropertyValueDto): Boolean {
-        if (value.source !in sources || !timestamp(value.lastUpdated)) return false
+        // A record that names its source may answer in words this build doesn't know yet.
+        val knownSource = value.source in sources || (value.source != null && value.provenance != null)
+        if (!knownSource || !timestamp(value.lastUpdated)) return false
         if (value.valueConfidence?.let { !it.isFinite() || it !in 0.0..100.0 } == true) return false
         if (value.zipMedianSalePriceTrend?.let { it !in setOf("up", "down", "flat") } == true) return false
         return value.yearBuilt?.let { it in 1..9999 } != false && value.sqft?.let { it > 0 } != false

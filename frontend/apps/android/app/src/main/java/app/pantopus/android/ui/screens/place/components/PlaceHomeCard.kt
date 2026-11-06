@@ -121,7 +121,7 @@ fun PlaceHomeCard(
                 HomeFacts(facts)
                 // One provenance line, source first (TPR brief 8): "County public records · Record Oct 2026".
                 val record =
-                    listOfNotNull(
+                    home?.provenance?.label ?: listOfNotNull(
                         home?.source?.takeIf { it.isNotBlank() },
                         PlacePresentation.fmtMonthYear(home?.asOf, zone)?.let { "Record $it" },
                     ).joinToString(" · ")

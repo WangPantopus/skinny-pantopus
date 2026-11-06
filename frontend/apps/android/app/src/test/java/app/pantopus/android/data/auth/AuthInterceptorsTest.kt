@@ -85,7 +85,7 @@ class AuthInterceptorsTest {
         client().newCall(get("/api/hub")).execute().close()
 
         val recorded = server.takeRequest()
-        assertEquals("android", recorded.getHeader("X-Client-Platform"))
+        assertEquals(DeviceIdentityInterceptor.CLIENT_PLATFORM, recorded.getHeader("X-Client-Platform"))
         assertEquals(identity.deviceId(), recorded.getHeader("X-Device-Id"))
         assertNull(recorded.getHeader("Authorization"))
     }

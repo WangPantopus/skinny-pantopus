@@ -751,7 +751,8 @@ fun PropertyValueCard(
     onRetry: () -> Unit,
 ) {
     DashboardCard(
-        title = "Estimated home value",
+        // The record may say what the number is ("County market value").
+        title = (state as? HomeIntelligenceCardState.Loaded)?.value?.valueTitle ?: "Estimated home value",
         accent = PantopusColors.primary600,
         modifier = Modifier.testTag("homeDashboard_propertyValueCard"),
     ) {
@@ -867,9 +868,10 @@ private fun PropertyValueBody(
                 color = PantopusColors.appTextSecondary,
             )
         }
-        HomeDashboardProjection.monthYear(value.lastUpdated)?.let { updated ->
+        val sourceLine = value.provenance?.label ?: HomeDashboardProjection.monthYear(value.lastUpdated)?.let { "Updated $it" }
+        sourceLine?.let {
             Text(
-                text = "Updated $updated",
+                text = it,
                 style = PantopusTextStyle.caption,
                 color = PantopusColors.appTextMuted,
             )
