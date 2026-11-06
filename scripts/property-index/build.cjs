@@ -60,11 +60,11 @@ async function main() {
   const built = new Date();
 
   for await (const county of await source.build({ work, today: built })) {
-    const { records, stale_after_days: staleAfterDays, ...about } = county;
+    const { records, stale_after_days: staleAfterDays, extra_zips: extraZips = [], ...about } = county;
     assertAllowed(records);
     const release = releaseId(about.as_of, built);
     const report = writeRelease(opts.out, { fips: about.fips, release }, records);
-    const zips = new Set();
+    const zips = new Set(extraZips);
     const cities = new Set();
     for (const { address } of records) {
       if (address.zip) zips.add(address.zip);
