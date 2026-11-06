@@ -525,10 +525,10 @@ public struct ChatConversationView: View {
             // Ask on a screen: what the thread is about.
             if let topic = viewModel.aiTopic { AIAboutStrip(about: topic.about) }
             if mode == .creatorThread {
-                ChatCreatorAudienceStrip(
-                    context: resolvedCreatorContext,
-                    onOpenAudienceProfile: onOpenAudienceProfile
-                )
+                ChatCreatorAudienceStrip(context: resolvedCreatorContext) {
+                    leaveWithoutKeyboard()
+                    onOpenAudienceProfile()
+                }
                 if let quota = resolvedCreatorContext.quota {
                     ChatCreatorQuotaMeter(quota: quota)
                     if quota.isMaxed {
@@ -913,7 +913,10 @@ public struct ChatConversationView: View {
     private var headerProfileTap: (@MainActor () -> Void)? {
         guard mode == .dm, let userId = viewModel.profileUserId else { return nil }
         let open = onOpenProfile
-        return { open(userId) }
+        return {
+            leaveWithoutKeyboard()
+            open(userId)
+        }
     }
 
     private var composerPlaceholder: String {
@@ -1041,11 +1044,13 @@ public struct ChatConversationView: View {
 
     private func openGigDetail(gigId: String) {
         guard let url = URL(string: "pantopus://gigs/\(gigId)") else { return }
+        leaveWithoutKeyboard()
         DeepLinkRouter.shared.handle(url: url)
     }
 
     private func openListingDetail(listingId: String) {
         guard let url = URL(string: "pantopus://listings/\(listingId)") else { return }
+        leaveWithoutKeyboard()
         DeepLinkRouter.shared.handle(url: url)
     }
 
@@ -1101,6 +1106,14 @@ public struct ChatConversationView: View {
         composerFocused = false
         emojiPickerPresented = false
         emojiDragOffset = 0
+    }
+
+    /// Leaving the thread for another screen (a profile, a draft, a gig or a listing) puts the keyboard away first.
+    /// Raised again as the thread slides back in after Back, it hid the composer behind it; and coming back isn't a
+    /// fold or a turn, so the composer doesn't take it back either (`returnToComposer`).
+    private func leaveWithoutKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        viewModel.isComposing = false
     }
 
     /// A fold or a turn rebuilt the screen while the composer had the keyboard: it gets it back, once the composer is
@@ -2125,9 +2138,7 @@ extension ChatConversationView {
                     }
                     return
                 }
-                // Leave without the keyboard up: coming back with it still raised
-                // hides the composer behind it.
-                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                leaveWithoutKeyboard()
                 onUseAIDraft(draft)
             },
             onOpenGig: openGigDetail,
