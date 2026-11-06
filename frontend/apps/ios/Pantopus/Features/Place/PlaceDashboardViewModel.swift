@@ -152,8 +152,11 @@ final class PlaceDashboardViewModel {
         await fetch(force: force)
         await claimRead
         await shortcuts
-        await refreshTasks()
-        await refreshChanges(again: false)
+        // Tasks and changes don't depend on each other.
+        async let tasksRead: Void = refreshTasks()
+        async let changesRead: Void = refreshChanges(again: false)
+        await tasksRead
+        await changesRead
     }
 
     /// Home tools can change the privacy projection while this view is
@@ -172,8 +175,10 @@ final class PlaceDashboardViewModel {
         await unread
         await claimRead
         await shortcuts
-        await refreshTasks()
-        await refreshChanges(again: true)
+        async let tasksRead: Void = refreshTasks()
+        async let changesRead: Void = refreshChanges(again: true)
+        await tasksRead
+        await changesRead
     }
 
     /// A visit is this dashboard showing loaded data, coming back within the
