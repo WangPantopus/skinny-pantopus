@@ -28,11 +28,19 @@ public struct MembersListView: View {
 
     private let homeId: String
     private let onAddGuest: () -> Void
+    /// A member's or requester's row: their profile.
+    private let onOpenProfile: (String) -> Void
 
     /// `initialTab` opens a notification's section (Requests); the model
     /// falls back to Members when the viewer can't review requests.
-    public init(homeId: String, initialTab: String = MembersTab.members, onAddGuest: @escaping () -> Void = {}) {
+    public init(
+        homeId: String,
+        initialTab: String = MembersTab.members,
+        onOpenProfile: @escaping (String) -> Void = { _ in },
+        onAddGuest: @escaping () -> Void = {}
+    ) {
         self.homeId = homeId
+        self.onOpenProfile = onOpenProfile
         self.onAddGuest = onAddGuest
         let model = MembersListViewModel(homeId: homeId)
         model.selectedTab = initialTab
@@ -161,6 +169,8 @@ public struct MembersListView: View {
             approveTarget = RequestTarget(requestId: requestId, name: name, identity: nil)
         case let .confirmDeclineRequest(requestId, name, identity):
             declineTarget = RequestTarget(requestId: requestId, name: name, identity: identity)
+        case let .openProfile(userId):
+            onOpenProfile(userId)
         }
         viewModel.pendingEvent = nil
     }

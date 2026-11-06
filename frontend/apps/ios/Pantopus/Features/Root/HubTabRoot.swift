@@ -2295,11 +2295,15 @@ public struct HubTabRoot: View {
             }
         case let .homeMembers(homeId):
             // Guests tab "Add a guest": the guest-pass manager, which lists the new pass on return.
-            MembersListView(homeId: homeId) {
+            MembersListView(homeId: homeId) { userId in
+                Task { @MainActor in push(.publicProfile(userId: userId)) }
+            } onAddGuest: {
                 Task { @MainActor in push(.guestPasses(homeId: homeId)) }
             }
         case let .homeMemberRequests(homeId):
-            MembersListView(homeId: homeId, initialTab: MembersTab.requests) {
+            MembersListView(homeId: homeId, initialTab: MembersTab.requests) { userId in
+                Task { @MainActor in push(.publicProfile(userId: userId)) }
+            } onAddGuest: {
                 Task { @MainActor in push(.guestPasses(homeId: homeId)) }
             }
         case let .homeOwners(homeId):
@@ -2660,6 +2664,14 @@ public struct HubTabRoot: View {
             FeedView(
                 onOpenPost: { postId in
                     Task { @MainActor in push(.pulsePost(postId: postId)) }
+                },
+                onOpenAuthor: { link in
+                    switch link {
+                    case let .person(userId):
+                        Task { @MainActor in push(.publicProfile(userId: userId)) }
+                    case let .business(businessId):
+                        Task { @MainActor in push(.businessProfile(businessId: businessId)) }
+                    }
                 },
                 onCompose: { intent in
                     Task { @MainActor in push(.composePost(intent: intent.rawValue)) }

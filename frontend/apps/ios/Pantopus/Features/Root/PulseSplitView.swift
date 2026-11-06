@@ -115,4 +115,16 @@ extension RouteStack where Route == PulseRoute {
         }
         replace(with: [route])
     }
+
+    /// Opens a feed card's author: a person's profile as a post opens, or a business's page, which the router opens
+    /// in the Hub tab's stack (as the post page's business header does).
+    @MainActor
+    mutating func open(_ author: PulseAuthorLink, sideBySide: Bool) {
+        switch author {
+        case let .person(userId):
+            open(.publicProfile(userId: userId), sideBySide: sideBySide)
+        case let .business(businessId):
+            DeepLinkRouter.shared.handle(path: "/business/\(businessId)")
+        }
+    }
 }
