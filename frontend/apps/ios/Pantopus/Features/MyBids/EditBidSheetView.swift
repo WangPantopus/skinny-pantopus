@@ -210,6 +210,7 @@ public struct EditBidSheetView: View {
                 Text("$")
                     .pantopusTextStyle(.body)
                     .foregroundStyle(Theme.Color.appTextSecondary)
+                    .allowsHitTesting(false)
                 TextField("0", text: $amount)
                     .keyboardType(.decimalPad)
                     .font(Theme.Font.body)
@@ -218,6 +219,7 @@ public struct EditBidSheetView: View {
             }
             .padding(.horizontal, Spacing.s3)
             .frame(minHeight: 44)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .overlay(
@@ -364,6 +366,7 @@ public struct EditBidSheetView: View {
                 .foregroundStyle(Theme.Color.appText)
                 .padding(.horizontal, Spacing.s3)
                 .frame(minHeight: 44)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 .overlay(
@@ -391,6 +394,7 @@ public struct EditBidSheetView: View {
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s2)
                 .frame(minHeight: 44, alignment: .topLeading)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                 .overlay(

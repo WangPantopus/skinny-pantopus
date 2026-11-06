@@ -5,10 +5,12 @@
 //
 //  Instagram-style "Add location" picker, shared by the Pulse composer
 //  and the Beacon broadcast composer. A searchable bottom sheet: nearby
-//  named POIs + the enclosing locality around the active anchor (media
-//  capture location when geotagged media is attached — switchable via
-//  the "Photo location" / "Near me" chips — the device fix otherwise),
-//  with a debounced place search on top. Chrome mirrors
+//  named venues (restaurants, cafés, schools, places of worship, parks,
+//  stadiums, …, each with its kind's icon) + the enclosing locality
+//  around the active anchor (media capture location when geotagged
+//  media is attached — switchable via the "Photo location" / "Near me"
+//  chips — the device fix otherwise), with a debounced place search on
+//  top and the venues' data credit under the list. Chrome mirrors
 //  `TimezoneSelectorSheet` (header w/ Done, sunken search field,
 //  overline section headers, bordered list card).
 //
@@ -103,6 +105,7 @@ public struct PlacePickerSheet: View {
     private var searchField: some View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 16, color: Theme.Color.appTextSecondary)
+                .allowsHitTesting(false)
             TextField("Search restaurants, cafés, landmarks…", text: $viewModel.searchText)
                 .font(Theme.Font.body)
                 .textInputAutocapitalization(.never)
@@ -111,6 +114,7 @@ public struct PlacePickerSheet: View {
             if !viewModel.searchText.isEmpty {
                 Button { viewModel.searchText = "" } label: {
                     Icon(.x, size: 16, color: Theme.Color.appTextMuted)
+                        .hitArea(horizontal: 8, vertical: 8)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
@@ -118,6 +122,7 @@ public struct PlacePickerSheet: View {
         }
         .padding(.horizontal, Spacing.s3)
         .padding(.vertical, Spacing.s2)
+        .typesInFieldOnTap()
         .background(Theme.Color.appSurfaceSunken)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
@@ -186,6 +191,7 @@ public struct PlacePickerSheet: View {
         case let .searchResults(places):
             sectionHeader("Results")
             listCard(places)
+            attributionFooter
         case .empty:
             EmptyState(
                 icon: .searchX,
@@ -212,6 +218,8 @@ public struct PlacePickerSheet: View {
     private func nearbySection(nearby: [GeoPlace], locality: GeoPlace?) -> some View {
         if viewModel.isSearchOnly {
             searchOnlyHint
+        } else if nearby.isEmpty, locality == nil, viewModel.isFindingPlaces {
+            skeletonRows
         } else if nearby.isEmpty, locality == nil {
             EmptyState(
                 icon: .mapPin,
@@ -222,8 +230,41 @@ public struct PlacePickerSheet: View {
             .padding(.top, Spacing.s4)
         } else {
             sectionHeader("Nearby")
-            listCard(nearby, locality: locality)
+            listCard(nearby, locality: locality, findingMore: viewModel.isFindingPlaces)
+            attributionFooter
         }
+    }
+
+    /// The venues' data credit ("© OpenStreetMap contributors"), under
+    /// the list whenever venue rows are on screen.
+    @ViewBuilder
+    private var attributionFooter: some View {
+        if let attribution = viewModel.attribution {
+            Text(attribution)
+                .pantopusTextStyle(.caption)
+                .foregroundStyle(Theme.Color.appTextMuted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, Spacing.s1)
+                .accessibilityIdentifier("placePickerAttribution")
+        }
+    }
+
+    /// Placeholder rows inside the list card while the server is still
+    /// gathering a new area's venues.
+    private var findingRows: some View {
+        VStack(spacing: Spacing.s0) {
+            ForEach(0..<3, id: \.self) { index in
+                Shimmer(height: 32, cornerRadius: Radii.sm)
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.vertical, Spacing.s3)
+                if index < 2 {
+                    divider
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Finding places nearby")
+        .accessibilityIdentifier("placePickerFindingRows")
     }
 
     /// No device fix — nudge toward the search field instead of showing
@@ -282,12 +323,23 @@ public struct PlacePickerSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Bordered list card: POI rows, then the locality row when present.
-    private func listCard(_ places: [GeoPlace], locality: GeoPlace? = nil) -> some View {
+    /// Bordered list card: venue rows, placeholder rows while more are on
+    /// their way, then the locality row when present.
+    private func listCard(
+        _ places: [GeoPlace],
+        locality: GeoPlace? = nil,
+        findingMore: Bool = false
+    ) -> some View {
         VStack(spacing: Spacing.s0) {
             ForEach(Array(places.enumerated()), id: \.element.id) { index, place in
                 row(for: place, identifier: "placePickerRow_\(index)")
-                if index < places.count - 1 || locality != nil {
+                if index < places.count - 1 || locality != nil || findingMore {
+                    divider
+                }
+            }
+            if findingMore {
+                findingRows
+                if locality != nil {
                     divider
                 }
             }
@@ -316,14 +368,14 @@ public struct PlacePickerSheet: View {
             onSelect(PostPlaceTag(place: place))
         } label: {
             HStack(spacing: Spacing.s3) {
-                Icon(.mapPin, size: 16, strokeWidth: 2, color: Theme.Color.appTextSecondary)
+                Icon(Self.icon(for: place), size: 16, strokeWidth: 2, color: Theme.Color.appTextSecondary)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(place.name)
                         .pantopusTextStyle(.small)
                         .fontWeight(.semibold)
                         .foregroundStyle(Theme.Color.appText)
                         .multilineTextAlignment(.leading)
-                    if let secondary = secondaryLine(for: place) {
+                    if let secondary = Self.secondaryLine(for: place) {
                         Text(secondary)
                             .pantopusTextStyle(.caption)
                             .foregroundStyle(Theme.Color.appTextSecondary)
@@ -331,7 +383,11 @@ public struct PlacePickerSheet: View {
                     }
                 }
                 Spacer(minLength: Spacing.s2)
-                if let distance = place.distanceM {
+                if place.contains == true {
+                    Text("Here")
+                        .pantopusTextStyle(.caption)
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                } else if let distance = place.distanceM {
                     Text(Self.distanceLabel(meters: distance))
                         .pantopusTextStyle(.caption)
                         .monospacedDigit()
@@ -349,13 +405,53 @@ public struct PlacePickerSheet: View {
         .accessibilityIdentifier(identifier)
     }
 
-    /// Address first, category fallback ("coffee shop, cafe"), locality
-    /// full line last.
-    private func secondaryLine(for place: GeoPlace) -> String? {
+    /// A venue: its kind and address ("Barbecue restaurant · 123 Elm St").
+    /// Otherwise address first, category fallback ("coffee shop, cafe"),
+    /// locality full line last.
+    static func secondaryLine(for place: GeoPlace) -> String? {
+        if place.icon != nil {
+            let parts = [place.category, place.address].compactMap { $0 }.filter { !$0.isEmpty }
+            if !parts.isEmpty { return parts.joined(separator: " · ") }
+        }
         if let address = place.address, !address.isEmpty { return address }
         if let category = place.category, !category.isEmpty { return category }
         if let full = place.fullAddress, !full.isEmpty, full != place.name { return full }
         return nil
+    }
+
+    /// Row icons by the server's venue `icon` key (as Android's
+    /// `PLACE_ICONS`): a house for a street address.
+    private static let icons: [String: PantopusIcon] = [
+        "restaurant": .utensils,
+        "bar": .utensils,
+        "cafe": .coffee,
+        "school": .graduationCap,
+        "worship": .landmark,
+        "museum": .landmark,
+        "government": .landmark,
+        "library": .landmark,
+        "park": .trees,
+        "stadium": .ticket,
+        "venue": .ticket,
+        "arts": .palette,
+        "sports": .activity,
+        "attraction": .camera,
+        "zoo": .pawPrint,
+        "pet": .pawPrint,
+        "shop": .shoppingBag,
+        "hotel": .building2,
+        "transit": .bus,
+        "airport": .plane,
+        "health": .stethoscope,
+        "community": .usersRound,
+        "water": .waves,
+        "address": .home
+    ]
+
+    /// The row's icon for a venue's kind; a pin for localities and
+    /// anything unknown.
+    static func icon(for place: GeoPlace) -> PantopusIcon {
+        place.icon.flatMap { icons[$0] } ?? .mapPin
     }
 
     /// "450 ft" under a tenth of a mile, "0.3 mi" beyond.

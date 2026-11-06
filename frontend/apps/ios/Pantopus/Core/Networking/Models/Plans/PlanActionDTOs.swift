@@ -239,6 +239,8 @@ public struct AcceptPlanRequestBody: Encodable, Sendable {
 
 /// Someone who asked, as the host sees them. Never an address.
 public struct PlanRequesterDTO: Decodable, Sendable, Hashable {
+    /// Whose profile the request opens.
+    public let userId: String?
     public let displayName: String
     public let avatarUrl: String?
     public let verifiedAddress: Bool
@@ -248,6 +250,7 @@ public struct PlanRequesterDTO: Decodable, Sendable, Hashable {
     public let hostedBefore: Bool
 
     enum CodingKeys: String, CodingKey {
+        case userId = "user_id"
         case displayName = "display_name"
         case avatarUrl = "avatar_url"
         case verifiedAddress = "verified_address"
@@ -259,6 +262,7 @@ public struct PlanRequesterDTO: Decodable, Sendable, Hashable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try container.decodeIfPresent(String.self, forKey: .userId)
         displayName = try container.decode(String.self, forKey: .displayName)
         avatarUrl = try container.decodeIfPresent(String.self, forKey: .avatarUrl)
         verifiedAddress = try container.decodeIfPresent(Bool.self, forKey: .verifiedAddress) ?? false

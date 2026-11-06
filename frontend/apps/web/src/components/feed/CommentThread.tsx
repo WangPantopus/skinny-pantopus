@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { ChevronDown, ChevronUp, Heart, ImagePlus, Smile, X } from 'lucide-react';
+import UserAvatarLink from '@/components/user/UserAvatarLink';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import EmojiPickerPopover from '@/components/chat/EmojiPickerPopover';
 import { confirmStore } from '@/components/ui/confirm-store';
@@ -217,22 +218,30 @@ export default function CommentThread({
           {/* P0.4: comment.author is always a serializer output now (handle / */}
           {/* displayName / avatarUrl). Legacy username / profile_picture_url */}
           {/* aliases are gone. */}
-          {avatarUrl && !failedAvatarUrls.has(avatarUrl) ? (
-            <Image
-              src={avatarUrl}
-              alt={authorName}
-              className="w-7 h-7 rounded-full object-cover flex-shrink-0 mt-0.5"
-              width={28}
-              height={28}
-              sizes="28px"
-              quality={75}
-              onError={() => setFailedAvatarUrls((previous) => new Set(previous).add(avatarUrl))}
-            />
-          ) : (
-            <div className="w-7 h-7 rounded-full bg-surface-muted text-app-muted flex items-center justify-center text-[10px] font-semibold flex-shrink-0 mt-0.5">
-              {authorInitial}
-            </div>
-          )}
+          {/* The photo opens the page the name links to. */}
+          <UserAvatarLink
+            href={comment.author?.type === 'persona'
+              ? comment.author.href || null
+              : comment.author?.id && comment.author.handle ? `/${comment.author.handle}` : null}
+            className="self-start"
+          >
+            {avatarUrl && !failedAvatarUrls.has(avatarUrl) ? (
+              <Image
+                src={avatarUrl}
+                alt={authorName}
+                className="w-7 h-7 rounded-full object-cover flex-shrink-0 mt-0.5"
+                width={28}
+                height={28}
+                sizes="28px"
+                quality={75}
+                onError={() => setFailedAvatarUrls((previous) => new Set(previous).add(avatarUrl))}
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-surface-muted text-app-muted flex items-center justify-center text-[10px] font-semibold flex-shrink-0 mt-0.5">
+                {authorInitial}
+              </div>
+            )}
+          </UserAvatarLink>
 
           <div className="flex-1 min-w-0">
             <div className="bg-surface-muted rounded-xl px-3 py-2 border border-app">

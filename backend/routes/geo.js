@@ -20,6 +20,7 @@ const logger = require('../utils/logger');
 const { geoCache } = require('../utils/geoCache');
 const geoProvider = require('../services/geo');
 const signedOutBudget = require('../services/geo/signedOutBudget');
+const venues = require('../services/geo/venues');
 const verifyToken = require('../middleware/verifyToken');
 const optionalAuth = require('../middleware/optionalAuth');
 const { geocodeLimiter } = require('../middleware/rateLimiter');
@@ -54,12 +55,23 @@ function logResponse(startTime, fields) {
   return responseTimeMs;
 }
 
-// ── GET /geo/autocomplete?q=... ──────────────────────────────
+// ── GET /geo/autocomplete?q=...[&lat=..&lng=..][&kind=address] ──
+// lat/lng (optional) favor suggestions near a point, e.g. the caller's own
+// home when they type a neighbor's address. They are rounded to about a
+// kilometer before they reach the cache key or the provider: a bias needs no
+// more, and the exact point stays here. kind=address (optional) keeps street
+// addresses only, for fields that hold a house number and street.
 
 router.get('/autocomplete', optionalAuth, geocodeLimiter, async (req, res) => {
   const startTime = process.hrtime.bigint();
   const ipHash = hashIp(req);
   const q = (req.query.q || '').toString().trim();
+  const lat = parseFloat(req.query.lat);
+  const lng = parseFloat(req.query.lng ?? req.query.lon);
+  const near = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
+    ? { lat: Number(lat.toFixed(2)), lng: Number(lng.toFixed(2)) }
+    : null;
+  const addressOnly = req.query.kind === 'address';
 
   logger.info('geo_request', {
     endpoint: '/geo/autocomplete',
@@ -81,7 +93,9 @@ router.get('/autocomplete', optionalAuth, geocodeLimiter, async (req, res) => {
     }
 
     // Check route-level cache
-    const cacheKey = 'ac:' + q.toLowerCase();
+    const cacheKey = 'ac:' + q.toLowerCase()
+      + (addressOnly ? ':address' : '')
+      + (near ? `:${near.lat.toFixed(2)},${near.lng.toFixed(2)}` : '');
     const cached = geoCache.get(cacheKey);
     if (cached) {
       logResponse(startTime, {
@@ -105,7 +119,12 @@ router.get('/autocomplete', optionalAuth, geocodeLimiter, async (req, res) => {
       return signedOutBudget.refuse(res, 'Address suggestions are busy right now. Please try again in a few minutes.');
     }
 
-    const result = await geoProvider.autocomplete(q, { limit: 6, country: 'us' });
+    const result = await geoProvider.autocomplete(q, {
+      limit: 6,
+      country: 'us',
+      ...(near ? { proximity: near } : {}),
+      ...(addressOnly ? { types: 'address' } : {}),
+    });
 
     // Back-compat: map NormalizedSuggestion → legacy shape so existing
     // clients that expect { place_id, label, center: [lng,lat], context, ... }
@@ -299,7 +318,9 @@ router.get('/reverse', verifyToken, geocodeLimiter, async (req, res) => {
 });
 
 // ── GET /geo/places/nearby?lat=..&lng=.. ─────────────────────
-// Named places (POIs) + locality around a point for the place-tag picker.
+// The place-tag picker's NEARBY list: named venues around the point (OpenStreetMap, services/geo/venues.js)
+// and the town or city it's in (Mapbox) as the fallback row. `loading: true` while a new area's venues are
+// still on their way (the app asks again); `attribution` is the credit the picker shows under OSM rows.
 
 router.get('/places/nearby', verifyToken, geocodeLimiter, async (req, res) => {
   const startTime = process.hrtime.bigint();
@@ -317,9 +338,8 @@ router.get('/places/nearby', verifyToken, geocodeLimiter, async (req, res) => {
     const lat = parseFloat(req.query.lat);
     const lng = parseFloat(rawLng);
 
-    // Range-check too: out-of-range coords would burn two billable Mapbox
-    // calls per request (this endpoint is unauthenticated) only to surface
-    // an upstream 422 as a 500.
+    // Range-check too: out-of-range coords would burn a billable Mapbox call
+    // and an Overpass query only to surface an upstream error as a 500.
     if (!Number.isFinite(lat) || !Number.isFinite(lng)
       || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
       logResponse(startTime, {
@@ -346,9 +366,28 @@ router.get('/places/nearby', verifyToken, geocodeLimiter, async (req, res) => {
       return res.json(cached);
     }
 
-    const result = await geoProvider.nearbyPlaces(lat, lng, { limit: 10 });
-    const responseBody = { places: result.places, locality: result.locality ?? null };
-    geoCache.set(cacheKey, responseBody, 120_000); // 120s TTL
+    const [found, town] = await Promise.allSettled([
+      venues.venuesNear({ latitude: lat, longitude: lng }),
+      geoProvider.localityAt(lat, lng),
+    ]);
+    // The provider's detail (a missing key, an upstream error) stays in the log.
+    if (found.status === 'rejected') {
+      logger.warn('geo_failure', { endpoint: '/geo/places/nearby', source: 'venues', error: found.reason?.message });
+    }
+    if (town.status === 'rejected') {
+      logger.warn('geo_failure', { endpoint: '/geo/places/nearby', source: 'locality', error: town.reason?.message });
+    }
+    if (found.status === 'rejected' && town.status === 'rejected') throw found.reason;
+
+    const nearby = found.status === 'fulfilled' ? found.value : { places: [], loading: false, attribution: null };
+    const responseBody = {
+      places: nearby.places,
+      locality: town.status === 'fulfilled' ? town.value ?? null : null,
+      loading: nearby.loading,
+      attribution: nearby.attribution,
+    };
+    // A list still loading is asked again in a moment and must not be served from the cache.
+    if (!nearby.loading) geoCache.set(cacheKey, responseBody, 120_000); // 120s TTL
 
     logResponse(startTime, {
       endpoint: '/geo/places/nearby',
@@ -367,14 +406,25 @@ router.get('/places/nearby', verifyToken, geocodeLimiter, async (req, res) => {
       provider: providerLabel,
       cache_hit: false,
     });
-    // The provider's detail (a missing key, an upstream error) stays in the log.
-    logger.warn('geo_failure', { endpoint: '/geo/places/nearby', error: e.message });
+    logger.warn('geo_failure', { endpoint: '/geo/places/nearby', error: e?.message });
     res.status(500).json({ error: 'Server error' });
   }
 });
 
 // ── GET /geo/places/search?q=..&lat=..&lng=.. ────────────────
-// Place-tag picker search; lat/lng are optional proximity hints.
+// Place-tag picker search: venues near the point whose name matches (services/geo/venues.js) first, then
+// Mapbox's towns, addresses and any points of interest it still has. lat/lng are optional proximity hints;
+// without them only Mapbox answers.
+
+const SAME_PLACE_M = 150;
+
+function metersApart(a, b) {
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
 
 router.get('/places/search', verifyToken, geocodeLimiter, async (req, res) => {
   const startTime = process.hrtime.bigint();
@@ -422,11 +472,28 @@ router.get('/places/search', verifyToken, geocodeLimiter, async (req, res) => {
       return res.json(cached);
     }
 
-    const result = await geoProvider.searchPlaces(
-      q,
-      hasProximity ? { lat, lng, limit: 8 } : { limit: 8 },
-    );
-    const responseBody = { places: result.places };
+    const [named, mapbox] = await Promise.allSettled([
+      hasProximity ? venues.searchVenues({ q, latitude: lat, longitude: lng }) : { places: [], attribution: null },
+      geoProvider.searchPlaces(q, hasProximity ? { lat, lng, limit: 8 } : { limit: 8 }),
+    ]);
+    if (named.status === 'rejected') {
+      logger.warn('geo_failure', { endpoint: '/geo/places/search', source: 'venues', error: named.reason?.message });
+    }
+    if (mapbox.status === 'rejected') {
+      logger.warn('geo_failure', { endpoint: '/geo/places/search', source: 'mapbox', error: mapbox.reason?.message });
+    }
+    // Mapbox failing is an error unless the venues search ran and answered.
+    if (mapbox.status === 'rejected' && (!hasProximity || named.status === 'rejected')) throw mapbox.reason;
+
+    const venueRows = named.status === 'fulfilled' ? named.value.places : [];
+    // A Mapbox point of interest the venues already list (same name, a few doors away) is shown once, and a
+    // street address reads as one ("Address · Portland, Oregon 97205", a house icon), never like a venue.
+    const mapboxRows = (mapbox.status === 'fulfilled' ? mapbox.value.places : []).filter((place) => !(
+      place.kind === 'poi' && venueRows.some((venue) => venue.name.toLowerCase() === String(place.name).toLowerCase()
+        && metersApart(venue.center, place.center) < SAME_PLACE_M)))
+      .map((place) => (place.kind === 'address' ? { ...place, category: 'Address', icon: 'address' } : place));
+    const responseBody = { places: [...venueRows, ...mapboxRows] };
+    if (venueRows.length > 0) responseBody.attribution = named.value.attribution;
     geoCache.set(cacheKey, responseBody, 60_000); // 60s TTL
 
     logResponse(startTime, {
@@ -447,7 +514,7 @@ router.get('/places/search', verifyToken, geocodeLimiter, async (req, res) => {
       cache_hit: false,
     });
     // The provider's detail (a missing key, an upstream error) stays in the log.
-    logger.warn('geo_failure', { endpoint: '/geo/places/search', error: e.message });
+    logger.warn('geo_failure', { endpoint: '/geo/places/search', error: e?.message });
     res.status(500).json({ error: 'Server error' });
   }
 });

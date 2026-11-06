@@ -66,6 +66,7 @@ struct HolidayCardToStep: View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
             HStack(spacing: 10) {
                 Icon(.search, size: 20, color: MailPaper.cardTextMuted)
+                    .allowsHitTesting(false)
                 TextField("", text: $viewModel.query, prompt: Text("Search by name").foregroundStyle(MailPaper.cardTextMuted))
                     .font(.system(size: 16))
                     .foregroundStyle(MailPaper.cardText)
@@ -78,6 +79,7 @@ struct HolidayCardToStep: View {
             }
             .padding(.horizontal, 14)
             .frame(minHeight: 48)
+            .typesInFieldOnTap($focused)
             .background(MailPaper.cardField, in: RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
@@ -207,6 +209,7 @@ struct HolidayCardToStep: View {
                 .focused($focused)
                 .padding(.horizontal, Spacing.s4)
                 .frame(minHeight: 48)
+                .typesInFieldOnTap($focused)
                 .background(MailPaper.cardField, in: RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)

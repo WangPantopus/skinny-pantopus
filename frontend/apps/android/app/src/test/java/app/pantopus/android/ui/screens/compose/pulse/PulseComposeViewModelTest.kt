@@ -10,6 +10,7 @@ import app.pantopus.android.data.api.models.posts.PostCreateResponse
 import app.pantopus.android.data.api.models.posts.PostCreateResponsePost
 import app.pantopus.android.data.api.models.posts.PostDetailDto
 import app.pantopus.android.data.api.models.posts.PostDetailResponse
+import app.pantopus.android.data.api.models.posts.PostMediaLocation
 import app.pantopus.android.data.api.models.posts.PostPrecheckResponse
 import app.pantopus.android.data.api.models.posts.PostUpdateRequest
 import app.pantopus.android.data.api.models.posts.PostUpdateResponse
@@ -334,7 +335,7 @@ class PulseComposeViewModelTest {
     }
 
     @Test fun placeTagOverridesFlowTargetLocationButNotGps() {
-        coEvery { repo.placeEligibility(any(), any(), any(), any(), any()) } returns
+        coEvery { repo.placeEligibility(any(), any(), any(), any(), any(), any(), any()) } returns
             NetworkResult.Success(PlaceEligibilityResponse(eligible = true))
         val vm = viewModel(PulseComposeIntent.Ask)
         vm.applyFlowContext(
@@ -432,9 +433,10 @@ class PulseComposeViewModelTest {
         assertNull(vm.mediaCaptureLocation)
     }
 
-    @Test fun mediaCaptureLocationNeverLandsOnTheRequest() {
-        // PRIVACY RULE — media GPS is a local picker anchor only; the
-        // request carries location fields only for an explicit pick.
+    @Test fun mediaCaptureLocationNeverBecomesThePlace() {
+        // PRIVACY RULE — media GPS never becomes the post's place on its own;
+        // the request carries location fields only for an explicit pick, and
+        // the capture point rides only as Place-check evidence.
         val vm = viewModel(PulseComposeIntent.Ask)
         vm.update(PulseComposeField.Title, "Coffee meetup?")
         vm.update(PulseComposeField.Body, "Anyone around?")
@@ -447,10 +449,11 @@ class PulseComposeViewModelTest {
         assertNull(request.locationName)
         assertNull(request.gpsLatitude)
         assertNull(request.gpsLongitude)
+        assertEquals(listOf(PostMediaLocation(latitude = 41.8781, longitude = -87.6298)), request.mediaLocations)
     }
 
     @Test fun headsUpRequestCarriesSafetyAlertKind() {
-        coEvery { repo.placeEligibility(any(), any(), any(), any(), any()) } returns
+        coEvery { repo.placeEligibility(any(), any(), any(), any(), any(), any(), any()) } returns
             NetworkResult.Success(PlaceEligibilityResponse(eligible = true))
         val vm = viewModel(PulseComposeIntent.Announce)
         vm.applyFlowContext(

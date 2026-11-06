@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { CommentThread, EditPostDialog } from '@/components/feed';
+import UserAvatarLink from '@/components/user/UserAvatarLink';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { PostMediaPreview, resolvePostMediaSlots } from '@/components/feed/PostMediaGrid';
 import PostMediaLightbox from '@/components/feed/PostMediaLightbox';
@@ -501,24 +502,29 @@ export default function PostDetailPage() {
 
           {/* Author row: on a phone the owner's actions wrap below the name instead of squeezing it */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-5 py-4">
-            {creatorAvatarUrl ? (
-              <Image
-                src={creatorAvatarUrl}
-                alt={creatorName || ''}
-                width={44}
-                height={44}
-                sizes="44px"
-                quality={75}
-                className="w-11 h-11 rounded-full object-cover ring-2 ring-app"
-              />
-            ) : (
-              <div
-                className="w-11 h-11 rounded-full flex items-center justify-center text-white text-sm font-semibold ring-2"
-                style={{ background: config.color }}
-              >
-                {creatorInitial}
-              </div>
-            )}
+            {/* The photo opens the page the name links to. */}
+            <UserAvatarLink
+              href={publicAuthor?.type === 'persona' ? publicAuthor.href || null : creatorHandle ? `/${creatorHandle}` : null}
+            >
+              {creatorAvatarUrl ? (
+                <Image
+                  src={creatorAvatarUrl}
+                  alt={creatorName || ''}
+                  width={44}
+                  height={44}
+                  sizes="44px"
+                  quality={75}
+                  className="w-11 h-11 rounded-full object-cover ring-2 ring-app"
+                />
+              ) : (
+                <div
+                  className="w-11 h-11 rounded-full flex items-center justify-center text-white text-sm font-semibold ring-2"
+                  style={{ background: config.color }}
+                >
+                  {creatorInitial}
+                </div>
+              )}
+            </UserAvatarLink>
             <div className="flex-1 min-w-[9rem]">
               <div className="flex items-center gap-1.5">
                 {publicAuthor?.type === 'persona' ? (

@@ -4472,14 +4472,8 @@ public final class ChatConversationViewModel {
                 continue
             }
             let side: ChatMessageSide = (message.userId == sendingIdentityId) ? .outgoing : .incoming
-            let previousSameSide =
-                index > 0 &&
-                combined[index - 1].userId == message.userId &&
-                Self.dayKey(for: combined[index - 1].createdAt) == dayKey
-            let nextSameSide =
-                index + 1 < combined.count &&
-                combined[index + 1].userId == message.userId &&
-                Self.dayKey(for: combined[index + 1].createdAt) == dayKey
+            let previousSameSide = index > 0 && Self.sharesBubbleGroup(message, combined[index - 1], dayKey: dayKey)
+            let nextSameSide = index + 1 < combined.count && Self.sharesBubbleGroup(message, combined[index + 1], dayKey: dayKey)
             let hasTail = !nextSameSide
             let deliveryState: ChatDeliveryState? = {
                 guard side == .outgoing else { return nil }
@@ -4498,7 +4492,6 @@ public final class ChatConversationViewModel {
             let showStamp = hasTail || deliveryState == .failed || deliveryState == .refused
                 || deliveryState == .sending
             let stamp: String? = showStamp ? Self.stampLabel(for: message, currentUserId: sendingIdentityId) : nil
-            let body = bubbleBody(for: message)
             let replyPreview = Self.replyPreview(for: message, in: messagesById, currentUserId: sendingIdentityId)
             let reactions = message.reactions.map {
                 ChatBubbleReaction(id: $0.reaction, reaction: $0.reaction, count: $0.count, reactedByMe: $0.includes(currentUserId))
@@ -4506,7 +4499,7 @@ public final class ChatConversationViewModel {
             rows.append(.bubble(ChatBubbleContent(
                 id: message.id,
                 side: side,
-                body: body,
+                body: bubbleBody(for: message),
                 replyPreview: replyPreview,
                 reactions: reactions,
                 hasTail: hasTail,
@@ -4516,6 +4509,7 @@ public final class ChatConversationViewModel {
                 lockedTier: Self.lockedTier(for: message),
                 sentSupportTier: Self.sentSupportTier(for: message),
                 senderName: side == .incoming ? roomSenderName(for: message) : nil,
+                senderUserId: side == .incoming ? roomSenderUserId(for: message) : nil,
                 aiLinks: message.messageType == "ai_reply" ? aiLinksByMessageId[message.id] ?? [] : [],
                 attachments: message.attachments
             )))
@@ -4566,6 +4560,13 @@ public final class ChatConversationViewModel {
     private func roomSenderName(for message: ChatMessageDTO) -> String? {
         guard case .room = mode else { return nil }
         return Self.senderName(of: message) ?? "Participant"
+    }
+
+    /// The person behind a room's message, for their profile; nil for a business's.
+    private func roomSenderUserId(for message: ChatMessageDTO) -> String? {
+        guard case .room = mode, (message.sender?.identityType ?? "local") == "local",
+              let userId = message.userId, !userId.isEmpty else { return nil }
+        return userId
     }
 
     /// The name a message's sender goes by: their identity's display name
@@ -4865,6 +4866,15 @@ public final class ChatConversationViewModel {
             subtitle: metadata?["subtitle"]?.stringValue ?? "This conversation started from a creator broadcast.",
             metric: metadata?["metric"]?.stringValue ?? "Audience update"
         )
+    }
+
+    /// A message joins its neighbor's bubble group when one person sent both on the same day.
+    /// System lines and broadcast references never join one, as on Android: a system line
+    /// carries the id of whoever caused it ("Ben let in Ava"), and the next message from that
+    /// person still shows their name and photo.
+    private static func sharesBubbleGroup(_ message: ChatMessageDTO, _ neighbor: ChatMessageDTO, dayKey: String) -> Bool {
+        neighbor.messageType != "system" && neighbor.messageType != "broadcast_reference" &&
+            neighbor.userId == message.userId && Self.dayKey(for: neighbor.createdAt) == dayKey
     }
 
     private static func dayKey(for iso: String) -> String {

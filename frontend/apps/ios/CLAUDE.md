@@ -101,6 +101,29 @@ so the offline strip auto-appears.
   screen or My homes) is chosen by `PlaceRootResolver` (`Features/Root/PlaceRoot.swift`)
   and rendered by `placeRootContent` in `HubTabRoot.swift`.
 
+## Keyboard
+
+`Core/Design/Components/KeyboardDismissal.swift` holds the app's keyboard rules.
+The app's root installs them in its window (`dismissesKeyboardOnTapOutside()`);
+a screen shown in a window of its own installs them on its root. While text is
+being typed, a tap outside it closes the keyboard (the tap still does its job,
+switches and segmented controls included), and so does a drag that starts to
+scroll the page, forms included; dragging inside a text box keeps it. The box
+drawn around a field uses `typesInFieldOnTap()` so a tap anywhere in it types in
+the field: put it after the box's padding and frame, before its background, and
+mark what is only drawn in the box (an icon, a "$", a counter)
+`.allowsHitTesting(false)`. A view that already follows the field with a Bool
+`@FocusState` passes it, `typesInFieldOnTap($focus)`. A field drawn as a bare
+line of text, in a card or a system `Form` row, uses `typesInFieldOnTap(reach:)`
+last in its chain. One with `.roundedBorder` needs nothing. A control inside the
+box (a clear button) does its job and keeps typing; it needs `.buttonStyle(.plain)`
+and a solid tap area on its label (`.contentShape(Rectangle())` or `.hitArea`),
+because a bare icon loses the tap to the box, and one that finishes the form
+calls `Keyboard.close()`. Composer controls and a chat thread that moves the
+keyboard itself are `keepsKeyboardOnTap()`; the results under a search box are
+`closesKeyboardFirst(_:)`. A Done above the keyboard calls `Keyboard.close()`,
+which closes it whichever field has it.
+
 ## Parity
 
 For every change, the Android counterpart must:

@@ -12,6 +12,7 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import * as api from '@pantopus/api';
 import CommentThread from './CommentThread';
+import UserAvatarLink from '@/components/user/UserAvatarLink';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { PostMediaPreview, resolvePostMediaSlots } from './PostMediaGrid';
 import PostMediaLightbox from './PostMediaLightbox';
@@ -391,24 +392,31 @@ export default function PostDetailPanel({
           ) : post ? (
             <div>
               <div className="flex items-center gap-3 px-5 py-4">
-                {creatorAvatarUrl ? (
-                  <Image
-                    src={creatorAvatarUrl}
-                    alt=""
-                    className="h-10 w-10 rounded-full object-cover ring-2 ring-gray-100"
-                    width={40}
-                    height={40}
-                    sizes="40px"
-                    quality={75}
-                  />
-                ) : (
-                  <div
-                    className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white"
-                    style={{ background: config.color }}
-                  >
-                    {creatorName[0]?.toUpperCase() || '?'}
-                  </div>
-                )}
+                {/* The photo opens the page the name links to. */}
+                <UserAvatarLink
+                  href={publicAuthor?.type === 'persona'
+                    ? (publicAuthor.href && launchFeatures.beacon && launchFeatures.personas ? publicAuthor.href : null)
+                    : creatorHandle ? `/${creatorHandle}` : null}
+                >
+                  {creatorAvatarUrl ? (
+                    <Image
+                      src={creatorAvatarUrl}
+                      alt=""
+                      className="h-10 w-10 rounded-full object-cover ring-2 ring-gray-100"
+                      width={40}
+                      height={40}
+                      sizes="40px"
+                      quality={75}
+                    />
+                  ) : (
+                    <div
+                      className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white"
+                      style={{ background: config.color }}
+                    >
+                      {creatorName[0]?.toUpperCase() || '?'}
+                    </div>
+                  )}
+                </UserAvatarLink>
                 <div className="min-w-0 flex-1">
                   {publicAuthor?.type === 'persona' ? (
                   // Launch cuts #1 + #2: no link to the hidden persona page.

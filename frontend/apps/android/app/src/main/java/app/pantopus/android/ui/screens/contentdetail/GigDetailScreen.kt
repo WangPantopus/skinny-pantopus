@@ -80,6 +80,8 @@ fun GigDetailScreen(
         asBusinessUserId: String?,
     ) -> Unit = { _, _, _, _, _ -> },
     onOpenPayouts: () -> Unit = {},
+    /** The poster's profile, from the Posted by card. */
+    onOpenProfile: ((String) -> Unit)? = null,
     viewModel: GigDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -344,6 +346,7 @@ fun GigDetailScreen(
         onSecondaryAction = openChat,
         onRetry = { viewModel.load() },
         onMessageCounterparty = openChat,
+        onOpenCounterparty = onOpenProfile,
         overflowItems = overflowItems,
         // P1.C — bookmark toggle in the top bar; optimistic flip with
         // revert + toast on failure.

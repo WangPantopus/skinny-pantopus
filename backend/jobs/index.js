@@ -106,6 +106,7 @@ const deliverGigStop = require('./deliverGigStop');
 const reconcileGigStop = require('./reconcileGigStop');
 const reconcileGigAcceptance = require('./reconcileGigAcceptance');
 const reconcilePaymentRefunds = require('./reconcilePaymentRefunds');
+const reconcileMailPieces = require('./reconcileMailPieces');
 // Persistent login registry housekeeping
 const authRegistryPrune = require('./authRegistryPrune');
 // Support Train reminders
@@ -145,6 +146,7 @@ const PGBOSS_BACKED_CRON_JOBS = new Set([
   'reconcileGigStop',
   'reconcileGigAcceptance',
   'reconcilePaymentRefunds',
+  'reconcileMailPieces',
   'computeReputation',
   'earnRiskReview',
   'processClaimWindows',
@@ -242,6 +244,7 @@ function startJobs(options = {}) {
   });
 
   scheduleCron('*/5 * * * *', wrapJob('reconcilePaymentRefunds', reconcilePaymentRefunds), { scheduled: true, timezone: 'UTC' });
+  scheduleCron('*/5 * * * *', wrapJob('reconcileMailPieces', reconcileMailPieces), { scheduled: true, timezone: 'UTC' });
 
   // ─── Retry Capture Failures ───
   // Runs every 15 minutes at :20/:35/:50/:05.
@@ -615,10 +618,11 @@ function startJobs(options = {}) {
   });
 
   // ─── Draft Business Reminders ───
-  // Runs daily at 10:00 AM UTC.
+  // Runs daily at 17:00 UTC: 9 or 10 AM Pacific, noon or 1 PM Eastern, 7 AM Hawaii. Its push used to
+  // go at 10:00 UTC, 2 or 3 AM on the West Coast.
   // Sends in-app and email reminders for draft businesses < 7 days old.
   // Max 3 reminders per business.
-  scheduleCron('0 10 * * *', wrapJob('draftBusinessReminder', draftBusinessReminder), {
+  scheduleCron('0 17 * * *', wrapJob('draftBusinessReminder', draftBusinessReminder), {
     scheduled: true,
     timezone: 'UTC',
   });

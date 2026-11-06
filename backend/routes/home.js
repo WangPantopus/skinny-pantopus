@@ -12,7 +12,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const { escapeIlike } = require('../utils/escapeIlike');
-const { computeAddressHash } = require('../utils/normalizeAddress');
+const { computeAddressHash, expandAbbreviations } = require('../utils/normalizeAddress');
 const homeAuthorityService = require('../services/homeAuthorityService');
 const homeListService = require('../services/homeListService');
 const homeCreateService = require('../services/homeCreateService');
@@ -41,6 +41,7 @@ const { unpublishedBusinessIds, isUnpublishedBusiness } = require('../utils/visi
 const homeClaimMergeService = require('../services/homeClaimMergeService');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
 const propertySuggestionsService = require('../services/ai/propertySuggestionsService');
+const recordVocabulary = require('../services/recordVocabulary');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
 const { encodeGeohash } = require('../utils/geohash');
 const { HOME_ISSUE_LIST, HOME_BILL_LIST, HOME_PACKAGE_LIST } = require('../utils/columns');
@@ -53,6 +54,7 @@ const {
   smartyProvider,
 } = require('../services/addressValidation');
 const addressVerificationObservability = require('../services/addressValidation/addressVerificationObservability');
+const { usesGooglePostal } = require('../services/addressValidation/postalAdapter');
 const { redactStreet, queryKnowsNumber } = require('../utils/addressRedaction');
 const { serializeHomeForViewer, serializeOwnerForViewer } = require('../serializers/homeProfileSerializer');
 const { displayNameFromUser } = require('../serializers/identitySerializers');
@@ -229,7 +231,12 @@ const parsePostGISPoint = require('../utils/parsePostGISPoint');
 const ALLOWED_HOME_VERDICT_STATUSES = new Set([
   AddressVerdictStatus.OK,
   AddressVerdictStatus.MIXED_USE,
+  // Google postal source only: the person continues, and mail proof still has to pass.
+  AddressVerdictStatus.UNIT_NOT_CONFIRMED,
+  AddressVerdictStatus.POSTAL_PENDING,
 ]);
+// An address the person just checked needs no second Google call to be saved.
+const POSTAL_ANSWER_REUSE_DAYS = 1;
 const STEP_UP_ELIGIBLE_HOME_VERDICT_STATUSES = new Set([
   AddressVerdictStatus.MIXED_USE,
   AddressVerdictStatus.LOW_CONFIDENCE,
@@ -573,15 +580,24 @@ const propertySuggestionsSchema = Joi.object({
 });
 
 /**
- * POST /api/homes/property-suggestions
+ * POST /api/homes/property-suggestions[?lookup=background|check]
  * Tiered hints for Add Home step 2: ATTOM → heuristics → optional LLM (PROPERTY_SUGGESTIONS_LLM=1).
  * Answers with the basics only. The county record stays on the server for the
  * new Home, where only its verified owners see it (GET /:id/property-details).
+ * Without `lookup` (app builds before November 2026) a validated address waits
+ * for ATTOM. `background` answers from the database at once and looks a
+ * missing record up meanwhile (`attom_lookup: 'pending'`); `check`, Add Home's
+ * follow-up, waits for that lookup and never asks ATTOM, so it isn't counted
+ * against the outbound limit. `vocabulary=2`: services/recordVocabulary.js.
  */
-router.post('/property-suggestions', verifyToken, homeOutboundLimiter, validate(propertySuggestionsSchema), async (req, res) => {
+const PROPERTY_LOOKUPS = new Set(['background', 'check']);
+router.post('/property-suggestions', verifyToken,
+  (req, res, next) => (req.query.lookup === 'check' ? next() : homeOutboundLimiter(req, res, next)),
+  validate(propertySuggestionsSchema), async (req, res) => {
   try {
-    const result = await propertySuggestionsService.getPropertySuggestions(req.body, supabaseAdmin);
-    res.json(result);
+    const lookup = PROPERTY_LOOKUPS.has(req.query.lookup) ? req.query.lookup : 'wait';
+    const result = await propertySuggestionsService.getPropertySuggestions(req.body, supabaseAdmin, { lookup });
+    res.json(recordVocabulary.suggestions(result, recordVocabulary.wantsRecordVocabulary(req)));
   } catch (err) {
     logger.error('property-suggestions error', { error: err.message });
     res.status(500).json({ error: 'Failed to load property suggestions' });
@@ -806,7 +822,8 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       }
     }
 
-    const canRunLiveValidation = googleProvider.isAvailable() && smartyProvider.isAvailable();
+    const googlePostal = usesGooglePostal();
+    const canRunLiveValidation = googleProvider.isAvailable() && (googlePostal || smartyProvider.isAvailable());
     let addressVerdict = null;
     let createHomeValidationPath = canRunLiveValidation ? 'live_provider' : 'provider_unavailable';
     const requestAddressInput = {
@@ -816,8 +833,27 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       state,
       zip: normalizedZip,
     };
+    const classifyStoredAddress = async (storedAddress, includeHousehold) => addressDecisionEngine.classify({
+      ...pipelineService.buildStoredDecisionInputs(storedAddress),
+      use_provider_place_for_business: getRolloutFlag('enforcePlaceProviderBusiness'),
+      use_provider_unit_intelligence: getRolloutFlag('enableSecondaryProvider'),
+      use_provider_parcel_for_classification: getRolloutFlag('enforceParcelProviderClassification'),
+      provider_parcel_max_age_days: addressConfig.parcelIntel.cacheDays,
+      household: includeHousehold
+        ? await pipelineService.lookupExistingHouseholdByHash(storedAddress.address_hash)
+        : null,
+    });
 
-    if (canRunLiveValidation) {
+    if (
+      googlePostal
+      && canonicalAddress?.validation_vendor === 'google'
+      && canonicalAddress.validation_raw_response?.postal_state !== 'pending'
+      && isFreshTimestamp(canonicalAddress.last_validated_at, POSTAL_ANSWER_REUSE_DAYS)
+      && matchesCanonicalAddress(canonicalAddress, requestAddressInput)
+    ) {
+      createHomeValidationPath = 'stored_postal_answer';
+      addressVerdict = await classifyStoredAddress(canonicalAddress, !selectAddress);
+    } else if (canRunLiveValidation) {
       const validationResult = await pipelineService.runValidationPipeline({
         line1: address,
         line2: unit_number || undefined,
@@ -833,7 +869,7 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       });
 
       addressVerdict = validationResult.verdict;
-      canonicalAddress = validationResult.canonical_address || null;
+      canonicalAddress = validationResult.canonical_address || (googlePostal ? canonicalAddress : null);
 
       if (requestedAddressId && validationResult.address_id && requestedAddressId !== validationResult.address_id) {
         await recordCreateHomeOutcomeSafe({
@@ -1658,6 +1694,12 @@ router.get('/discover', verifyToken, async (req, res) => {
     const normalizedQuery = queryText.toLowerCase();
     const tokens = normalizedQuery.split(/\s+/).filter(Boolean).slice(0, 6);
     const primaryToken = tokens[0] || normalizedQuery;
+    // A word also matches in its spelled-out form, so "NE 4th Ave" and
+    // "Northeast 4th Avenue" find each other: a picked address suggestion
+    // spells words out, a saved home may not. The typed form still counts
+    // too, so a half-typed "st" keeps matching "Stanley".
+    const expandedQuery = expandAbbreviations(normalizedQuery);
+    const expandedTokens = tokens.map((token) => expandAbbreviations(token));
     const safeLimit = Math.min(parseInt(limit) || 20, 50);
     const safeOffset = Math.max(parseInt(offset) || 0, 0);
 
@@ -1741,18 +1783,25 @@ router.get('/discover', verifyToken, async (req, res) => {
           .filter(Boolean)
           .join(' ')
           .toLowerCase();
+        const expandedSearchable = expandAbbreviations(searchable);
+        const knowsEveryWord = tokens.every((token, i) => searchable.includes(token)
+          || expandedSearchable.includes(expandedTokens[i]));
 
         const homeName = String(h.name || '').toLowerCase();
         const address = String(h.address || '').toLowerCase();
+        const expandedName = expandAbbreviations(homeName);
+        const expandedAddress = expandAbbreviations(address);
 
         let score = 4;
-        if (homeName === normalizedQuery || address === normalizedQuery) {
+        if (homeName === normalizedQuery || address === normalizedQuery
+          || expandedName === expandedQuery || expandedAddress === expandedQuery) {
           score = 0;
-        } else if (homeName.startsWith(normalizedQuery) || address.startsWith(normalizedQuery)) {
+        } else if (homeName.startsWith(normalizedQuery) || address.startsWith(normalizedQuery)
+          || expandedName.startsWith(expandedQuery) || expandedAddress.startsWith(expandedQuery)) {
           score = 1;
-        } else if (searchable.includes(normalizedQuery)) {
+        } else if (searchable.includes(normalizedQuery) || expandedSearchable.includes(expandedQuery)) {
           score = 2;
-        } else if (tokens.every((token) => searchable.includes(token))) {
+        } else if (knowsEveryWord) {
           score = 3;
         }
 
@@ -1776,10 +1825,10 @@ router.get('/discover', verifyToken, async (req, res) => {
           is_member: memberSet.has(h.id),
           claim_status: claimMap.get(h.id) || null,
           _score: score,
-          _searchable: searchable,
+          _knowsEveryWord: knowsEveryWord,
         };
       })
-      .filter((h) => tokens.every((token) => h._searchable.includes(token)))
+      .filter((h) => h._knowsEveryWord)
       .sort((a, b) => {
         if (a._score !== b._score) return a._score - b._score;
         return String(a.address || '').localeCompare(String(b.address || ''));
@@ -1787,7 +1836,7 @@ router.get('/discover', verifyToken, async (req, res) => {
 
     const result = ranked
       .slice(safeOffset, safeOffset + safeLimit)
-      .map(({ _score, _searchable, ...rest }) => rest);
+      .map(({ _score, _knowsEveryWord, ...rest }) => rest);
 
     res.json({ homes: result });
   } catch (err) {
@@ -1941,9 +1990,10 @@ router.post('/:id/household-access-requests/:requestId/reject', verifyToken, asy
       action: 'reject_request', payload: { request_id: req.params.requestId } });
     if (!result.replayed) {
       try {
+        // The address they asked to join; not the household's own name for it, nor who declined.
+        const { data: home } = await supabaseAdmin.from('Home').select('address').eq('id', req.params.id).maybeSingle();
         await require('../services/notificationService').notifyHouseholdAccessRequestRejected({
-          requesterUserId: result.target_id, homeLabel: result.home_label,
-          resolverName: await homeInvitationService.personName(req.user.id, 'A home manager'),
+          requesterUserId: result.target_id, homeLabel: home?.address || null,
         });
       } catch (err) { logger.error('Household rejection notification failed after commit', { errorCode: err.code }); }
     }
@@ -1972,7 +2022,7 @@ router.get('/:id', verifyToken, async (req, res) => {
 router.get('/:id/property-details', verifyToken, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
-  try { res.json(await homeDetailService.propertyDetail(req.params.id, req.user.id)); }
+  try { res.json(recordVocabulary.propertyDetail(await homeDetailService.propertyDetail(req.params.id, req.user.id), recordVocabulary.wantsRecordVocabulary(req))); }
   catch (err) { homeDetailService.sendError(res, err); }
 });
 
@@ -2621,7 +2671,8 @@ function registerHomeRecordRoutes(path, kind) {
       if (kind === 'task' && result.task_completed === true && result.record.created_by
         && result.record.created_by !== req.user.id) {
         await require('../services/notificationService').notifyTaskCompleted({ creatorUserId: result.record.created_by,
-          homeId: result.record.home_id, taskId: result.record.id, completedAt: result.record.completed_at });
+          homeId: result.record.home_id, taskId: result.record.id, completedAt: result.record.completed_at,
+          completedById: req.user.id });
       }
       res.json({ [kind]: result.record });
     } catch (error) { homeRecordService.sendError(res, error); }
@@ -5531,7 +5582,7 @@ router.get('/:id/property-value', verifyToken, async (req, res) => {
         };
       }
 
-      return {
+      return recordVocabulary.propertyValue({
         estimated_value: profile.estimated_value || null,
         value_range_low: profile.value_range_low || null,
         value_range_high: profile.value_range_high || null,
@@ -5539,9 +5590,10 @@ router.get('/:id/property-value', verifyToken, async (req, res) => {
         zip_median_sale_price_trend: profile.zip_median_sale_price_trend || null,
         year_built: profile.year_built || null,
         sqft: profile.sqft || null,
-        last_updated: profile.cached_at || null,
+        // A value estimate kept after a refresh found nothing newer says when ATTOM gave it.
+        last_updated: profile.value_as_of || profile.cached_at || null,
         source,
-      };
+      }, profile, recordVocabulary.wantsRecordVocabulary(req));
     });
     res.json(result);
   } catch (err) {

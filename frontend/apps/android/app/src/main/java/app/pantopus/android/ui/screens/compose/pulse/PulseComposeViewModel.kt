@@ -20,6 +20,7 @@ import app.pantopus.android.data.api.models.ai.AIPostSuggestionDto
 import app.pantopus.android.data.api.models.posts.EarlierPostDto
 import app.pantopus.android.data.api.models.posts.PostCreateRequest
 import app.pantopus.android.data.api.models.posts.PostDetailDto
+import app.pantopus.android.data.api.models.posts.PostMediaLocation
 import app.pantopus.android.data.api.models.posts.PostPrecheckFinding
 import app.pantopus.android.data.api.models.posts.PostPrecheckRequest
 import app.pantopus.android.data.api.models.posts.PostUpdateRequest
@@ -60,6 +61,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
+import java.util.UUID
 import javax.inject.Inject
 
 /**
@@ -189,10 +191,10 @@ enum class PulseAskCategory(val key: String, val label: String) {
 
 /**
  * One picked photo. Carries the bytes + a stable id for ForEach.
- * [capturedLatitude]/[capturedLongitude] are the EXIF capture
- * coordinates extracted at pick time (mirrors the iOS
- * `PulseComposePhoto` fields) — a LOCAL place-picker anchor input only,
- * never attached to the outgoing post body.
+ * [capturedLatitude]/[capturedLongitude]/[capturedAt] are where and when
+ * it was taken, from its own metadata or the device fix when the in-app
+ * camera took it (mirrors the iOS `PulseComposePhoto` fields). They
+ * anchor the place picker and ride a Place post as `mediaLocations`.
  */
 data class PulseComposePhoto(
     val id: String,
@@ -200,6 +202,7 @@ data class PulseComposePhoto(
     val capturedLatitude: Double? = null,
     val capturedLongitude: Double? = null,
     val mimeType: String = "image/jpeg",
+    val capturedAt: java.time.Instant? = null,
 ) {
     override fun equals(other: Any?): Boolean = other is PulseComposePhoto && other.id == id
 
@@ -312,9 +315,14 @@ class PulseComposeViewModel
             )
         val dealExpiresAt: StateFlow<LocalDateTime?> = _dealExpiresAt.asStateFlow()
 
-        /** Place-eligibility warning surfaced as a banner on the draft step. */
+        /** Place-eligibility warning surfaced as a banner on the draft step (in the Location section when a place is tagged). */
         private val _eligibilityWarning = MutableStateFlow<String?>(null)
         val eligibilityWarning: StateFlow<String?> = _eligibilityWarning.asStateFlow()
+
+        /** Which way in the check counted (`resident`, `business`, `gps` or `photo`) when the draft may post to its place. */
+        private val _eligibilityBasis = MutableStateFlow<String?>(null)
+        val eligibilityBasis: StateFlow<String?> = _eligibilityBasis.asStateFlow()
+        private var eligibilityJob: Job? = null
 
         // Pre-post safety precheck (`POST /api/posts/precheck`).
 
@@ -545,32 +553,69 @@ class PulseComposeViewModel
         }
 
         /**
-         * Check whether the signed-in user can post to the selected place.
-         * Surfaces a warning banner instead of letting the submit 403.
-         * Errors are non-blocking — the warning is simply cleared.
+         * Where a Place post would go: the tagged place when there is one (it
+         * wins in [buildRequest]), else a place target's own point. Null when
+         * the draft isn't going to a place.
+         */
+        private fun eligibilityPoint(): Pair<Double, Double>? {
+            val target = postingTarget
+            val goesToPlace =
+                !isEditing && !isBusinessAuthored && effectiveAudience() == "nearby" && (target == null || target.isPlaceTarget)
+            val tag = _selectedPlaceTag.value
+            val lat = tag?.latitude ?: target?.targetLatitude
+            val lon = tag?.longitude ?: target?.targetLongitude
+            return if (goesToPlace && lat != null && lon != null) lat to lon else null
+        }
+
+        /**
+         * Check whether the signed-in user can post to the selected place —
+         * the tagged place when there is one — counting where the draft's
+         * attachments were taken. Surfaces a warning instead of letting the
+         * submit 403. Errors are non-blocking — the warning is simply cleared.
+         * A newer check cancels an older one.
          */
         fun checkPlaceEligibility() {
-            val target = postingTarget ?: return
-            if (!target.isPlaceTarget) return
-            val lat = target.targetLatitude ?: return
-            val lon = target.targetLongitude ?: return
-            viewModelScope.launch {
-                val gps = gpsFields(target)
-                when (
-                    val result =
-                        repo.placeEligibility(
-                            latitude = lat,
-                            longitude = lon,
-                            gpsTimestamp = gps.timestamp,
-                            gpsLatitude = gps.latitude,
-                            gpsLongitude = gps.longitude,
-                        )
-                ) {
-                    is NetworkResult.Success ->
-                        _eligibilityWarning.value = if (result.data.eligible) null else result.data.reason
-                    is NetworkResult.Failure -> _eligibilityWarning.value = null
-                }
+            eligibilityJob?.cancel()
+            val point = eligibilityPoint()
+            if (point == null) {
+                _eligibilityWarning.value = null
+                _eligibilityBasis.value = null
+                return
             }
+            val (lat, lon) = point
+            eligibilityJob =
+                viewModelScope.launch {
+                    val gps = postingTarget?.let(::gpsFields) ?: GpsFields(null, null, null)
+                    when (
+                        val result =
+                            repo.placeEligibility(
+                                latitude = lat,
+                                longitude = lon,
+                                gpsTimestamp = gps.timestamp,
+                                gpsLatitude = gps.latitude,
+                                gpsLongitude = gps.longitude,
+                                media = nearestMediaLocation(lat, lon),
+                                postType = effectivePostType(),
+                            )
+                    ) {
+                        is NetworkResult.Success -> {
+                            _eligibilityWarning.value = if (result.data.eligible) null else result.data.reason
+                            _eligibilityBasis.value = if (result.data.eligible) result.data.basis else null
+                        }
+                        is NetworkResult.Failure -> {
+                            _eligibilityWarning.value = null
+                            _eligibilityBasis.value = null
+                        }
+                    }
+                }
+        }
+
+        /** The refused draft's way forward: share it with connections, which isn't a Place post. */
+        fun shareWithConnectionsInstead() {
+            eligibilityJob?.cancel()
+            _visibility.value = PulseComposeVisibility.Connections
+            _eligibilityWarning.value = null
+            _eligibilityBasis.value = null
         }
 
         /** True iff this view-model is wired to edit an existing post. */
@@ -733,8 +778,65 @@ class PulseComposeViewModel
                 _photos.value.firstNotNullOfOrNull { photo ->
                     val lat = photo.capturedLatitude
                     val lng = photo.capturedLongitude
-                    if (lat != null && lng != null) MediaCaptureLocation(latitude = lat, longitude = lng) else null
+                    if (lat != null && lng != null) {
+                        MediaCaptureLocation(latitude = lat, longitude = lng, capturedAt = photo.capturedAt)
+                    } else {
+                        null
+                    }
                 }
+
+        /** Every geotagged attachment's capture point, as `mediaLocations` sends it. */
+        internal fun draftMediaLocations(): List<PostMediaLocation> =
+            _photos.value.mapNotNull { photo ->
+                val lat = photo.capturedLatitude ?: return@mapNotNull null
+                val lng = photo.capturedLongitude ?: return@mapNotNull null
+                PostMediaLocation(
+                    latitude = lat,
+                    longitude = lng,
+                    capturedAt = photo.capturedAt?.truncatedTo(java.time.temporal.ChronoUnit.SECONDS)?.toString(),
+                )
+            }
+
+        /** The attachment taken nearest a point — what the precheck sends. */
+        private fun nearestMediaLocation(
+            latitude: Double,
+            longitude: Double,
+        ): PostMediaLocation? =
+            draftMediaLocations().minByOrNull { media ->
+                val dLat = media.latitude - latitude
+                val dLng = (media.longitude - longitude) * kotlin.math.cos(Math.toRadians(latitude))
+                dLat * dLat + dLng * dLng
+            }
+
+        /**
+         * A photo the in-app camera just took has no place of its own when the
+         * camera app wrote none: stamp it with the device fix, which is where it
+         * was taken. Never asks for permission (no fix → nothing changes). The
+         * stamped copy gets a new id: photos compare by id, so the draft's
+         * state must see a new photo to notice the change.
+         */
+        fun stampCameraPhoto(id: String) {
+            val takenAt = java.time.Instant.now()
+            viewModelScope.launch {
+                val photo = _photos.value.firstOrNull { it.id == id } ?: return@launch
+                if (photo.capturedLatitude != null) return@launch
+                // In the background, so it can wait for a fresh fix longer than the submit-time refresh does.
+                val fix = locationProvider.requestCurrent(timeoutMillis = CAMERA_FIX_TIMEOUT_MS) ?: return@launch
+                _photos.value =
+                    _photos.value.map {
+                        if (it.id != id) {
+                            it
+                        } else {
+                            it.copy(
+                                id = UUID.randomUUID().toString(),
+                                capturedLatitude = fix.latitude,
+                                capturedLongitude = fix.longitude,
+                                capturedAt = takenAt,
+                            )
+                        }
+                    }
+            }
+        }
 
         /** The camera permission was refused, so "Take photo" did nothing: say where to allow it. */
         fun cameraRefused() {
@@ -1788,7 +1890,14 @@ class PulseComposeViewModel
                         )
                     }
                 }
-            return applyPlaceTag(mergeTargetContext(base))
+            return withMediaLocations(applyPlaceTag(mergeTargetContext(base)))
+        }
+
+        /** A Place post carries where its attachments were taken: evidence that the author was there, like the GPS fix. */
+        private fun withMediaLocations(request: PostCreateRequest): PostCreateRequest {
+            val media = draftMediaLocations()
+            val placePost = !isBusinessAuthored && effectiveAudience() == "nearby"
+            return if (placePost && media.isNotEmpty()) request.copy(mediaLocations = media) else request
         }
 
         private fun effectivePostType(): String {
@@ -1953,6 +2062,7 @@ class PulseComposeViewModel
             private const val PHONE_MAX_DIGITS = 15
             private const val DEAL_DEFAULT_EXPIRY_DAYS = 7L
             private const val GPS_REFRESH_TIMEOUT_MS = 3_000L
+            private const val CAMERA_FIX_TIMEOUT_MS = 15_000L
             private const val EARLIER_ANSWERS_MIN_WORDS = 3
             private const val EARLIER_ANSWERS_DEBOUNCE_MS = 600L
             private const val POST_CHECK_TIMEOUT_MS = 10_000L

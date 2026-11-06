@@ -420,6 +420,11 @@ data class PropertySuggestionsResponse(
     @Json(name = "field_sources") val fieldSources: Map<String, String>? = null,
     @Json(name = "tiers_used") val tiersUsed: List<String>? = null,
     @Json(name = "llm_enabled") val llmEnabled: Boolean? = null,
+    /**
+     * Where the county-record lookup stands (servers since November 2026): `found`, `none`, `pending` (ask again
+     * with `lookup = "check"`) or `unavailable`.
+     */
+    @Json(name = "attom_lookup") val attomLookup: String? = null,
 ) {
     /**
      * True when ATTOM actually returned a public record for the address —

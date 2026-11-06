@@ -421,6 +421,7 @@ private struct RoleNoteEditor: View {
                     .frame(minHeight: 92)
                     .padding(Spacing.s1)
                     .scrollContentBackground(.hidden)
+                    .typesInFieldOnTap()
                     .background(Theme.Color.appSurface)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                     .overlay(

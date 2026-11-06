@@ -207,6 +207,7 @@ struct ChooseNeighborCard: View {
                 .focused($searchFocused)
                 .onSubmit(search)
                 .padding(12)
+                .typesInFieldOnTap($searchFocused)
                 .background(Theme.Color.appBg)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .accessibilityIdentifier("neighbor.recipientQuery")

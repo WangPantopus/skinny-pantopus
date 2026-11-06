@@ -1,15 +1,19 @@
-import { AUTH_SESSION_CHANGE_KEY, authSessionMarker, getApiBaseUrl, getAuthToken } from '@pantopus/api/client';
+import { getApiBaseUrl, getAuthToken } from '@pantopus/api/client';
 import { readTaskRecoveryValue, taskRecoveryEncryptionKey } from '@/components/home/tasks/TaskRecoveryStorage';
+import { HISTORY_TTL, activeChatStorageScope, beginChatStorageScope, chatAccountKey, chatHistoryMessageIds, chatHistoryRooms,
+  chatSessionMarker as sessionMarker, historyGenerations, isChatStorageCurrent,
+  isRetainedKind as isRetained, noteChatRetirement, openChatDatabase as open, publishHistoryRetirement, receivedHistoryGenerations,
+  type ChatRecordKind as Kind, type ChatRecordMetadata as Metadata, type ChatStorageScope, type HistoryRetirement } from './chatSession';
 
-const DATABASE = 'pantopus-private-chat-v1';
-const HISTORY_TTL = 7 * 24 * 60 * 60 * 1000;
+// The session's state (what a sign-out or an account switch must stop at once)
+// lives in chatSession.ts, which every page loads; it keeps its names here too.
+export { chatHistoryMessageIds, chatHistoryRooms, isChatStorageActiveFor, isChatStorageCurrent,
+  onChatHistoryRetired, suspendChatStorage, type ChatStorageScope } from './chatSession';
+
 const HISTORY_BYTES = 5 * 1024 * 1024;
 const RECEIVED_MEDIA_BYTES = 50 * 1024 * 1024;
 const OUTBOX_BYTES = 100 * 1024 * 1024;
 const OUTBOX_FULL = 'Your pending messages and drafts are full (100 items or 100 MB). Send or remove an item before adding more.';
-type Kind = 'history' | 'outbox' | 'media' | 'draft' | 'received-media';
-const isRetained = (kind: Kind) => kind === 'history' || kind === 'received-media';
-interface Metadata { id: string; account: string; kind: Kind; key: string; at: number; bytes: number; revision?: string; rooms?: string[]; mimeType?: string; historyGeneration?: number; messageIds?: string[]; inbox?: boolean }
 export interface ChatDraftCommit { key: string; revision: string; mediaKeys: string[] }
 export interface ChatRecordMutation {
   expectedDraft?: { key: string; revision: string | null };
@@ -21,91 +25,16 @@ export const consumeChatDraft = (draft?: ChatDraftCommit): ChatRecordMutation =>
 } : {};
 interface Envelope { iv: ArrayBuffer; ciphertext: ArrayBuffer }
 interface SessionBinding { account: string; sessionMarker: string; at: number }
-export interface ChatStorageScope { account: string; marker: string; generation: number }
-let database: Promise<IDBDatabase> | undefined;
-let generation = 0;
-let active: ChatStorageScope | null = null;
-const HISTORY_RETIREMENT = 'pantopus-chat-history-retired';
-type HistoryRetirement = { account: string; marker: string; generation: number; previousGeneration?: number; rooms: string[]; cleared?: boolean; mediaOnly?: boolean; messageIds?: string[] };
-const historyGenerations = new Map<string, number>();
-const receivedHistoryGenerations = new Map<string, number>();
-const historyListeners = new Set<(event: HistoryRetirement) => void>();
-let historyChannel: BroadcastChannel | null = null;
-let listeningForHistory = false;
 const HISTORY_FENCE = 'history-generation';
-type HistoryFence = { account: string; generation: number };
-// Retirements this tab has published or received, and clears.
-let retirementsSeen = 0;
-// The fence as read while the app booted, for the first inbox request only.
-let bootFence: { marker: string; retirements: number; at: number; read: Promise<HistoryFence | null | undefined> } | undefined;
-const BOOT_FENCE_MS = 10_000;
+// `at`: when it last advanced, by this browser's clock (fences an older version wrote don't have it).
+export type HistoryFence = { account: string; generation: number; at?: number };
 
-/** All routes containing a room share its access decision, including topic views. */
-export function chatHistoryRooms(value: unknown): string[] {
-  const snapshot = value as { roomIds?: string[]; resolvedRoomId?: string; messages?: Array<{ room_id?: string }> } | null;
-  return [...new Set([...(Array.isArray(snapshot?.roomIds) ? snapshot.roomIds : []), snapshot?.resolvedRoomId,
-    ...(Array.isArray(snapshot?.messages) ? snapshot.messages.map((message) => message.room_id) : [])]
-    .filter((room): room is string => typeof room === 'string' && room.length > 0))];
-}
-
-export function chatHistoryMessageIds(value: unknown): string[] {
-  const messages = (value as { messages?: Array<{ id?: string }> } | null)?.messages;
-  return Array.isArray(messages) ? messages.map((message) => String(message.id || '')).filter(Boolean) : [];
-}
-
-async function readHistoryFence(): Promise<HistoryFence | null> {
+export async function readChatHistoryFence(): Promise<HistoryFence | null> {
   return await readTaskRecoveryValue<HistoryFence>(await open(), 'metadata', HISTORY_FENCE) ?? null;
 }
 
-/** Capture before an inbox request, even before its profile query completes.
- * The first request may take the read made while the app booted, if it is in
- * the same session, soon after, and no retirement was seen since. Within a
- * session the fence only advances, so an earlier read can stop a raced
- * response from being retained, never let one through. */
-export async function captureChatHistoryFence(marker: string): Promise<HistoryFence | null> {
-  const boot = bootFence;
-  bootFence = undefined;
-  if (boot && boot.marker === marker && boot.retirements === retirementsSeen && performance.now() - boot.at < BOOT_FENCE_MS) {
-    const fence = await boot.read;
-    if (fence !== undefined && boot.retirements === retirementsSeen) return fence;
-  }
-  return await readHistoryFence();
-}
-
-function receiveHistoryRetirement(event: HistoryRetirement) {
-  retirementsSeen++;
-  if (!event || event.marker !== sessionMarker() || !getAuthToken() || typeof event.account !== 'string'
-    || !Number.isSafeInteger(event.generation) || !Array.isArray(event.rooms)) return;
-  if ((receivedHistoryGenerations.get(event.account) ?? -1) >= event.generation) return;
-  receivedHistoryGenerations.set(event.account, event.generation);
-  historyGenerations.set(event.account, Math.max(historyGenerations.get(event.account) ?? 0, event.generation));
-  historyListeners.forEach((listener) => listener(event));
-}
-
-function publishHistoryRetirement(event: HistoryRetirement) {
-  receiveHistoryRetirement(event);
-  try { historyChannel?.postMessage(event); } catch { /* Use the storage fallback. */ }
-  try { localStorage.setItem(HISTORY_RETIREMENT, JSON.stringify(event)); } catch { /* The encrypted fence still protects reloads and writes. */ }
-}
-
-export function onChatHistoryRetired(listener: (event: HistoryRetirement) => void): () => void {
-  if (!listeningForHistory && typeof window !== 'undefined') {
-    listeningForHistory = true;
-    try {
-      historyChannel = new BroadcastChannel(HISTORY_RETIREMENT);
-      historyChannel.onmessage = (event) => receiveHistoryRetirement(event.data);
-    } catch { /* The storage event below also reaches other same-origin tabs. */ }
-    window.addEventListener('storage', (event) => {
-      if (event.key !== HISTORY_RETIREMENT || !event.newValue) return;
-      try { receiveHistoryRetirement(JSON.parse(event.newValue)); } catch { /* Ignore invalid signals. */ }
-    });
-  }
-  historyListeners.add(listener);
-  return () => { historyListeners.delete(listener); };
-}
-
 export function isChatHistoryGenerationCurrent(accountId: string, value: number): boolean {
-  return (historyGenerations.get(JSON.stringify([getApiBaseUrl(), accountId])) ?? 0) === value;
+  return (historyGenerations.get(chatAccountKey(accountId)) ?? 0) === value;
 }
 
 export async function readChatHistoryGeneration(scope: ChatStorageScope): Promise<number> {
@@ -114,22 +43,6 @@ export async function readChatHistoryGeneration(scope: ChatStorageScope): Promis
   if (!isChatStorageCurrent(scope)) throw new Error('This chat session ended.');
   historyGenerations.set(scope.account, Math.max(historyGenerations.get(scope.account) ?? 0, value));
   return historyGenerations.get(scope.account)!;
-}
-
-function sessionMarker(): string { try { return localStorage.getItem(AUTH_SESSION_CHANGE_KEY) || ''; } catch { return ''; } }
-
-/** Existing cookie sessions can predate this origin's local marker. Call only
- * after a verified profile; never weaken the offline binding check below. */
-export function establishVerifiedChatSession(): boolean {
-  if (!getAuthToken() || sessionMarker()) return false;
-  try {
-    const marker = `${Date.now()}:chat-${crypto.randomUUID()}`;
-    localStorage.setItem(AUTH_SESSION_CHANGE_KEY, marker);
-    // Other tabs receive the browser's storage event. This tab must retire its
-    // pending reads too, then bind the profile under the established marker.
-    window.dispatchEvent(new StorageEvent('storage', { key: AUTH_SESSION_CHANGE_KEY, newValue: marker }));
-    return true;
-  } catch { return false; }
 }
 
 /** Only a previously verified account from this exact browser session may
@@ -144,43 +57,10 @@ export async function readCachedChatAccountId(): Promise<string | null> {
   return origin === getApiBaseUrl() && typeof actor === 'string' ? actor : null;
 }
 
-function open(): Promise<IDBDatabase> {
-  if (database) return database;
-  database = new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(DATABASE, 1);
-    request.onupgradeneeded = () => {
-      for (const store of ['keys', 'metadata', 'payloads']) request.result.createObjectStore(store);
-    };
-    request.onerror = () => reject(new Error('Chat storage is unavailable. Keep this page open and try again.'));
-    request.onblocked = () => reject(new Error('Close older Pantopus tabs to enable chat recovery.'));
-    request.onsuccess = () => {
-      request.result.onversionchange = () => { request.result.close(); database = undefined; };
-      resolve(request.result);
-    };
-  }).catch((error) => { database = undefined; throw error; });
-  return database;
-}
-
 // Start opening the store while the app loads. A browser's first open of it
 // takes tens of milliseconds, and saved conversations, the inbox, the outbox
-// and the inbox request's access fence all wait for it. With a session, read
-// that fence as soon as it opens, so a cold inbox request need not wait.
-if (typeof window !== 'undefined' && typeof indexedDB !== 'undefined') {
-  void open().catch(() => {});
-  if (getAuthToken()) bootFence = { marker: authSessionMarker(), retirements: retirementsSeen, at: performance.now(),
-    read: readHistoryFence().catch(() => undefined) };
-}
-
-export function isChatStorageCurrent(scope: ChatStorageScope): boolean {
-  return active === scope && scope.generation === generation && getAuthToken() !== null && authSessionMarker() === scope.marker;
-}
-
-export function suspendChatStorage(): void { generation++; active = null; }
-
-/** True while the active storage scope belongs to this account and is current. */
-export function isChatStorageActiveFor(accountId: string): boolean {
-  return !!active && active.account === JSON.stringify([getApiBaseUrl(), accountId]) && isChatStorageCurrent(active);
-}
+// and the inbox request's access fence all wait for it.
+if (typeof window !== 'undefined' && typeof indexedDB !== 'undefined') void open().catch(() => {});
 
 function metadata(db: IDBDatabase): Promise<Metadata[]> {
   return new Promise((resolve, reject) => {
@@ -204,12 +84,12 @@ function mutate(db: IDBDatabase, scope: ChatStorageScope | null, action: (transa
 }
 
 export async function activateChatStorage(accountId: string): Promise<ChatStorageScope> {
-  const account = JSON.stringify([getApiBaseUrl(), accountId]);
+  const account = chatAccountKey(accountId);
+  const active = activeChatStorageScope();
   if (active?.account === account && isChatStorageCurrent(active)) return active;
   for (const key of historyGenerations.keys()) if (key !== account) historyGenerations.delete(key);
   for (const key of receivedHistoryGenerations.keys()) if (key !== account) receivedHistoryGenerations.delete(key);
-  const scope = { account, marker: authSessionMarker(), generation: ++generation };
-  active = scope;
+  const scope = beginChatStorageScope(account);
   const db = await open();
   const entries = await metadata(db);
   await mutate(db, scope, (transaction) => {
@@ -230,31 +110,28 @@ export async function activateChatStorage(accountId: string): Promise<ChatStorag
   return scope;
 }
 
+/** Everything (as a sign-out does, chatDevice.ts, which the root layout has loaded), or only this account's saved history and media. */
 export async function clearChatStorage(historyOnly = false): Promise<void> {
-  retirementsSeen++;
-  if (!historyOnly) { suspendChatStorage(); historyGenerations.clear(); receivedHistoryGenerations.clear(); }
+  if (!historyOnly) return (await import('./chatDevice')).clearChatDevice();
+  noteChatRetirement();
   const db = await open();
-  const scope = historyOnly ? active : null;
+  const scope = activeChatStorageScope();
   let retired: HistoryRetirement | undefined;
   await mutate(db, scope, (transaction) => {
-    if (!historyOnly) {
-      for (const store of ['keys', 'metadata', 'payloads']) transaction.objectStore(store).clear();
-    } else {
-      const entries = transaction.objectStore('metadata').getAll();
-      entries.onsuccess = () => {
-        for (const entry of entries.result as Metadata[]) if (isRetained(entry.kind)) {
-          transaction.objectStore('metadata').delete(entry.id);
-          transaction.objectStore('payloads').delete(entry.id);
-        }
-      };
-      if (scope) {
-        const fence = transaction.objectStore('metadata').get(HISTORY_FENCE);
-        fence.onsuccess = () => {
-          const next = (fence.result?.account === scope.account ? Number(fence.result.generation) || 0 : 0) + 1;
-          transaction.objectStore('metadata').put({ account: scope.account, generation: next }, HISTORY_FENCE);
-          retired = { account: scope.account, marker: sessionMarker(), generation: next, rooms: [], cleared: true };
-        };
+    const entries = transaction.objectStore('metadata').getAll();
+    entries.onsuccess = () => {
+      for (const entry of entries.result as Metadata[]) if (isRetained(entry.kind)) {
+        transaction.objectStore('metadata').delete(entry.id);
+        transaction.objectStore('payloads').delete(entry.id);
       }
+    };
+    if (scope) {
+      const fence = transaction.objectStore('metadata').get(HISTORY_FENCE);
+      fence.onsuccess = () => {
+        const next = (fence.result?.account === scope.account ? Number(fence.result.generation) || 0 : 0) + 1;
+        transaction.objectStore('metadata').put({ account: scope.account, generation: next, at: Date.now() }, HISTORY_FENCE);
+        retired = { account: scope.account, marker: sessionMarker(), generation: next, rooms: [], cleared: true };
+      };
     }
   });
   if (retired && scope && isChatStorageCurrent(scope)) publishHistoryRetirement(retired);
@@ -331,7 +208,7 @@ export async function retireChatHistoryRooms(accountId: string, roomIds: string[
       if (!isChatStorageCurrent(scope)) { transaction.abort(); return; }
       const previousGeneration = fence.result?.account === scope.account ? Number(fence.result.generation) || 0 : 0;
       generation = previousGeneration + 1;
-      metas.put({ account: scope.account, generation }, HISTORY_FENCE);
+      metas.put({ account: scope.account, generation, at: Date.now() }, HISTORY_FENCE);
       for (const entry of request.result as Metadata[]) if (entry.account === scope.account && isRetained(entry.kind)) {
         const affectedMessage = !deletedMessages || entry.inbox || legacy.has(entry.id)
           || (entry.kind === 'received-media' && !entry.messageIds) || entry.messageIds?.some((id) => deletedMessages.has(id));

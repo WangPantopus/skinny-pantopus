@@ -66,7 +66,7 @@ struct ChallengeComposerSheet: View {
             if dynamicTypeSize.isAccessibilitySize {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    Button("Done") { questionFocused = false }
+                    Button("Done") { Keyboard.close() }
                 }
             }
         }
@@ -141,6 +141,7 @@ struct ChallengeComposerSheet: View {
             .scrollContentBackground(.hidden)
             .frame(minHeight: editorHeight)
             .padding(10)
+            .typesInFieldOnTap($questionFocused)
             .background(Theme.Color.appSurfaceMuted)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md))
             .overlay(
@@ -359,6 +360,7 @@ struct ReviewClaimNoteCaptureSheet: View {
                     .focused($noteFocused)
                     .frame(minHeight: editorHeight)
                     .padding(Spacing.s2)
+                    .typesInFieldOnTap($noteFocused)
                     .background(Theme.Color.appBg)
                     .overlay(
                         RoundedRectangle(cornerRadius: Radii.md)
@@ -404,7 +406,7 @@ struct ReviewClaimNoteCaptureSheet: View {
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("Done") { noteFocused = false }
+                Button("Done") { Keyboard.close() }
             }
         }
     }

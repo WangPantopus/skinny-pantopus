@@ -191,18 +191,22 @@ const RESOLVE_TTL = 300_000; // 5 minutes
 const mapboxProvider = {
   /**
    * @param {string} query
-   * @param {{ sessionToken?: string, limit?: number, country?: string }} [options]
+   * @param {{ sessionToken?: string, limit?: number, country?: string,
+   *   proximity?: { lat: number, lng: number }, types?: string }} [options]
    * @returns {Promise<{ suggestions: import('./geoProvider').NormalizedSuggestion[] }>}
    */
   async autocomplete(query, options = {}) {
-    const { limit = 6, country = 'us' } = options;
+    const { limit = 6, country = 'us', proximity, types = 'address,place,locality,postcode' } = options;
     const token = requireToken();
 
-    const url =
+    let url =
       `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json` +
       `?access_token=${encodeURIComponent(token)}` +
       `&autocomplete=true&limit=${limit}&country=${encodeURIComponent(country)}` +
-      `&types=address,place,locality,postcode`;
+      `&types=${encodeURIComponent(types)}`;
+    if (proximity && Number.isFinite(proximity.lat) && Number.isFinite(proximity.lng)) {
+      url += `&proximity=${encodeURIComponent(proximity.lng)},${encodeURIComponent(proximity.lat)}`;
+    }
 
     const r = await fetch(url, { signal: AbortSignal.timeout(MAPBOX_TIMEOUT_MS) });
     if (!r.ok) {
@@ -332,59 +336,35 @@ const mapboxProvider = {
   },
 
   /**
-   * Named places (POIs) around a coordinate, plus the enclosing locality —
-   * powers the Instagram-style place-tag picker.
+   * The locality (town or city) a coordinate is in, for the place-tag picker's
+   * fallback row under its venues (services/geo/venues.js), or null. Mapbox's
+   * geocoding no longer returns points of interest, so this is the only
+   * nearby question asked of it.
    *
    * @param {number} lat
    * @param {number} lng
-   * @param {{ limit?: number }} [options]
-   * @returns {Promise<{ places: object[], locality: object|null }>}
+   * @returns {Promise<object|null>}
    */
-  async nearbyPlaces(lat, lng, options = {}) {
-    const { limit = 10 } = options;
+  async localityAt(lat, lng) {
     const token = requireToken();
-
-    const base =
+    const url =
       `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(lng)},${encodeURIComponent(lat)}.json` +
-      `?access_token=${encodeURIComponent(token)}`;
-
-    // Reverse geocoding only honors limit > 1 with a single `types` value,
-    // so POIs and the locality come from two parallel calls.
-    const signal = AbortSignal.timeout(MAPBOX_TIMEOUT_MS);
-    const [poiData, localityData] = await Promise.all([
-      (async () => {
-        const res = await fetch(`${base}&types=poi&limit=${limit}`, { signal });
-        if (!res.ok) {
-          logger.warn('mapbox_nearby_places_error', { status: res.status });
-          throw new Error(`Mapbox nearby places failed: ${res.status}`);
-        }
-        return res.json();
-      })(),
-      (async () => {
-        // Locality is decorative. HTTP, network, timeout and malformed-body
-        // failures must all preserve a successful POI response.
-        try {
-          const res = await fetch(`${base}&types=place&limit=1`, { signal });
-          if (!res.ok) throw new Error(`Mapbox nearby locality failed: ${res.status}`);
-          return await res.json();
-        } catch (error) {
-          logger.warn('mapbox_nearby_locality_error', { error: error.message });
-          return { features: [] };
-        }
-      })(),
-    ]);
-    const places = (poiData.features || [])
-      .filter(hasCenter)
-      .map((f) => featureToPlace(f, lat, lng));
-    const localityFeature = (localityData.features || []).find(hasCenter);
-    const locality = localityFeature ? featureToPlace(localityFeature, lat, lng) : null;
-
-    return { places, locality };
+      `?access_token=${encodeURIComponent(token)}&types=place&limit=1`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(MAPBOX_TIMEOUT_MS) });
+    if (!res.ok) {
+      logger.warn('mapbox_locality_error', { status: res.status });
+      throw new Error(`Mapbox locality failed: ${res.status}`);
+    }
+    const data = await res.json();
+    const feature = (data.features || []).find(hasCenter);
+    return feature ? featureToPlace(feature, lat, lng) : null;
   },
 
   /**
-   * Autocomplete search over POIs, places, and addresses for the place-tag
-   * picker; proximity-biased when the caller's coordinates are known.
+   * Autocomplete search over places and addresses (and whatever points of
+   * interest Mapbox still has) for the place-tag picker, beside the venues
+   * search; proximity-biased when the caller's coordinates are known. Any
+   * country: a photo can be from a trip.
    *
    * @param {string} query
    * @param {{ lat?: number, lng?: number, limit?: number }} [options]
@@ -397,7 +377,7 @@ const mapboxProvider = {
     let url =
       `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json` +
       `?access_token=${encodeURIComponent(token)}` +
-      `&autocomplete=true&limit=${limit}&country=us&types=poi,place,address`;
+      `&autocomplete=true&limit=${limit}&types=poi,place,address`;
     const hasProximity = Number.isFinite(lat) && Number.isFinite(lng);
     if (hasProximity) {
       url += `&proximity=${encodeURIComponent(lng)},${encodeURIComponent(lat)}`;

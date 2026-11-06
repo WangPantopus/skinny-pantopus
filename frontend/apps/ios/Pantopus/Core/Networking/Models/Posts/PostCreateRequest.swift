@@ -71,6 +71,10 @@ public struct PostCreateRequest: Encodable, Sendable, Hashable {
     /// (`posts.js:1237`) and rendered as a "View task" ref card
     /// (`posts.js:654`).
     public var refTaskId: String?
+    /// Where each attachment was taken, read from its own metadata — evidence
+    /// for the Place check and the post's pin (`createPostSchema.mediaLocations`).
+    /// `var`: the composer stamps it after building, like `refTaskId`.
+    public var mediaLocations: [PostMediaLocation]?
 
     public init(
         content: String,
@@ -163,6 +167,7 @@ public struct PostCreateRequest: Encodable, Sendable, Hashable {
         case lostFoundType, contactPref, contactPhone
         case businessName, serviceCategory, audience, purpose
         case refTaskId
+        case mediaLocations
     }
 
     /// Encode dropping `nil` keys so optional fields aren't sent as
@@ -206,6 +211,32 @@ public struct PostCreateRequest: Encodable, Sendable, Hashable {
         try container.encodeIfPresent(audience, forKey: .audience)
         try container.encodeIfPresent(purpose, forKey: .purpose)
         try container.encodeIfPresent(refTaskId, forKey: .refTaskId)
+        try container.encodeIfPresent(mediaLocations, forKey: .mediaLocations)
+    }
+}
+
+/// One attachment's capture point (`mediaLocations[]` on `POST /api/posts`):
+/// where it was taken and, when its metadata says, when (ISO 8601).
+public struct PostMediaLocation: Encodable, Sendable, Hashable {
+    public let latitude: Double
+    public let longitude: Double
+    public let capturedAt: String?
+
+    public init(latitude: Double, longitude: Double, capturedAt: String? = nil) {
+        self.latitude = latitude
+        self.longitude = longitude
+        self.capturedAt = capturedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case latitude, longitude, capturedAt
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(latitude, forKey: .latitude)
+        try container.encode(longitude, forKey: .longitude)
+        try container.encodeIfPresent(capturedAt, forKey: .capturedAt)
     }
 }
 

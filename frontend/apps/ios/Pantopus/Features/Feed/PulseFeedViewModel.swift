@@ -1280,13 +1280,29 @@ public final class PulseFeedViewModel {
                 isPlanPost: post.isPlanPost
             ),
             chipLabel: intent.chipLabel(lostFoundType: post.lostFoundType),
-            isVisitor: post.isVisitorPost,
+            isVisitor: post.isVisitorPost && post.locationBasis != "photo",
             origin: post.origin,
             // Topics on cards are the redesign's (Pulse S4, launch cut #11).
             pulseTopic: LaunchFeatures.pulseRedesign ? PulseTopic(stored: post.topic) : nil,
             status: Self.status(of: post, solved: isSolved, going: likeCount, expiresAt: expiresAt),
-            repostedBy: Self.repostedByText(post.repostedBy)
+            repostedBy: Self.repostedByText(post.repostedBy),
+            authorLink: Self.authorLink(for: post)
         )
+    }
+
+    /// Where the author's photo and name lead, as on the post's page: a business's published page or a person's
+    /// profile. A tip, a creator persona (whose id is not the person's) and a post written as a home lead nowhere.
+    static func authorLink(for post: FeedPostDTO) -> PulseAuthorLink? {
+        guard !post.isSeeded, let creator = post.creator else { return nil }
+        switch creator.identityType {
+        case "business":
+            return creator.businessPageId.map { .business($0) }
+        case "persona", "home":
+            return nil
+        default:
+            guard post.businessAuthorId == nil, let userId = post.userId, !userId.isEmpty else { return nil }
+            return .person(userId: userId)
+        }
     }
 
     /// Connections: "Ben C. reposted", "Ben C. and Eve H. reposted", "Ben C. and 2 others reposted" (as on web).
@@ -1322,7 +1338,12 @@ public final class PulseFeedViewModel {
     private static func metaString(post: FeedPostDTO, intent _: PulseIntent) -> String {
         var parts = [relative(timestamp: post.createdAt)]
         // Ahead of the place so a long place name never truncates it; web draws the badge beside the time.
-        if post.isVisitorPost { parts.append("Visitor") }
+        // A post the author's own photo placed says so instead of Visitor.
+        if let photo = post.photoProvenanceLabel() {
+            parts.append(photo)
+        } else if post.isVisitorPost {
+            parts.append("Visitor")
+        }
         // The topic too (Pulse S4): "Mute this topic" names what the card shows.
         if LaunchFeatures.pulseRedesign, let topic = PulseTopic(stored: post.topic) { parts.append(topic.label) }
         if let locality = post.locationName, !locality.isEmpty { parts.append(locality) }

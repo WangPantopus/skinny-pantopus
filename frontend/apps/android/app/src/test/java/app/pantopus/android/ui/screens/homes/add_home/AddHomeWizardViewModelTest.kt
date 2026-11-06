@@ -77,7 +77,7 @@ class AddHomeWizardViewModelTest {
         // right after check-address clears. Stub it explicitly: a relaxed
         // mock would hand back a proxy that is neither `Success` nor
         // `Failure`, which the sealed `when` can't match.
-        coEvery { repo.propertySuggestions(any()) } returns
+        coEvery { repo.propertySuggestions(any(), any()) } returns
             NetworkResult.Success(PropertySuggestionsResponse())
     }
 

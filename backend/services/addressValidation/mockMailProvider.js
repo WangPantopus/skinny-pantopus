@@ -16,8 +16,30 @@ const logger = require('../../utils/logger');
 
 class MockMailProvider {
   constructor() {
+    this.name = 'mock';
     /** Stores every "sent" postcard for test assertions. */
     this.sentPostcards = [];
+  }
+
+  /** A repeat of the same reference returns the first piece, like a printer's repeat key. */
+  _repeat(metadata) {
+    if (!metadata) return null;
+    const [[key, value]] = Object.entries(metadata);
+    return this.sentPostcards.find((p) => p.metadata?.[key] === value) || null;
+  }
+
+  /** Dev-mode counterpart of LobMailProvider.findPieces. */
+  async findPieces(metadataKey, metadataValue) {
+    return this.sentPostcards
+      .filter((p) => p.metadata?.[metadataKey] === metadataValue)
+      .map((p) => ({ vendorJobId: p.vendorJobId, status: 'created' }));
+  }
+
+  /** Dev-mode counterpart of LobMailProvider.cancelPiece. */
+  async cancelPiece(vendorJobId) {
+    const before = this.sentPostcards.length;
+    this.sentPostcards = this.sentPostcards.filter((p) => p.vendorJobId !== vendorJobId);
+    return this.sentPostcards.length < before;
   }
 
   isAvailable() {
@@ -34,11 +56,15 @@ class MockMailProvider {
    * @returns {Promise<{vendorJobId: string, status: string}>}
    */
   /** Dev-mode counterpart of LobMailProvider.sendCustomPostcard. */
-  async sendCustomPostcard(address, card) {
+  async sendCustomPostcard(address, card, options = {}) {
+    const metadata = options.inviteId ? { pantopus_block_invite_id: options.inviteId } : null;
+    const repeat = this._repeat(metadata);
+    if (repeat) return { vendorJobId: repeat.vendorJobId, status: 'created' };
     const vendorJobId = `mock_psc_${crypto.randomBytes(8).toString('hex')}`;
     this.sentPostcards.push({
       vendorJobId,
       address,
+      metadata,
       description: (card && card.description) || 'Pantopus postcard',
       sentAt: new Date().toISOString(),
     });
@@ -49,12 +75,17 @@ class MockMailProvider {
     return { vendorJobId, status: 'created' };
   }
 
-  async sendPostcard(address, code, templateId) {
+  async sendPostcard(address, code, templateId, options = {}) {
+    const metadata = options.homePostcardId ? { pantopus_home_postcard_id: options.homePostcardId }
+      : options.jobId ? { pantopus_verification_job_id: options.jobId } : null;
+    const repeat = this._repeat(metadata);
+    if (repeat) return { vendorJobId: repeat.vendorJobId, status: 'sent' };
     const vendorJobId = `mock_psc_${crypto.randomBytes(8).toString('hex')}`;
 
     const record = {
       vendorJobId,
       address,
+      metadata,
       code,
       templateId: templateId || null,
       sentAt: new Date().toISOString(),

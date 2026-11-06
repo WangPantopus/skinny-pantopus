@@ -557,7 +557,9 @@ public final class ExploreMapViewModel {
         }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
-        return "\(kind) · \(formatter.localizedString(for: date, relativeTo: Date()))"
+        // A post its author's photo placed sits where the photo was taken.
+        let photo = marker.locationBasis == "photo" ? " · Photo taken here" : ""
+        return "\(kind) · \(formatter.localizedString(for: date, relativeTo: Date()))\(photo)"
     }
 
     // MARK: - Coordinate / distance helpers

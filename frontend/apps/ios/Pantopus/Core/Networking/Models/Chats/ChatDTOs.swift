@@ -368,10 +368,13 @@ public struct ChatMessageSender: Codable, Sendable, Hashable, Identifiable {
     /// `username` instead.
     public let displayName: String?
     public let handle: String?
+    /// The identity's kind (`type`): `local` for a person, `business` for a business.
+    public let identityType: String?
 
     private enum CodingKeys: String, CodingKey {
         case id, username, name, displayName, handle
         case profilePictureURL = "profile_picture_url"
+        case identityType = "type"
     }
 }
 

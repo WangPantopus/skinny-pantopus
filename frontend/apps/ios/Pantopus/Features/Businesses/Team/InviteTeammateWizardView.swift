@@ -172,6 +172,7 @@ private struct IdentifyStep: View {
                 ))
                 .frame(minHeight: 80)
                 .padding(Spacing.s2)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .overlay(
                     RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

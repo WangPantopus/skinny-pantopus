@@ -89,6 +89,8 @@ public struct FeedView: View {
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let onOpenPost: @MainActor (String) -> Void
+    /// Opens a card's author (their profile or business page); nil leaves authors plain.
+    private let onOpenAuthor: (@MainActor (PulseAuthorLink) -> Void)?
     private let onCompose: @MainActor (PulseIntent) -> Void
     private let onEmptyCTA: (@MainActor () -> Void)?
     private let onFollowing: (@MainActor () -> Void)?
@@ -113,6 +115,7 @@ public struct FeedView: View {
         contextBarViewModel: FeedContextBarViewModel? = nil,
         viewMode: Binding<FeedViewMode>? = nil,
         onOpenPost: @escaping @MainActor (String) -> Void = { _ in },
+        onOpenAuthor: (@MainActor (PulseAuthorLink) -> Void)? = nil,
         onCompose: @escaping @MainActor (PulseIntent) -> Void = { _ in },
         onEmptyCTA: (@MainActor () -> Void)? = nil,
         onFollowing: (@MainActor () -> Void)? = nil,
@@ -137,6 +140,7 @@ public struct FeedView: View {
         })
         heldViewMode = viewMode
         self.onOpenPost = onOpenPost
+        self.onOpenAuthor = onOpenAuthor
         self.onCompose = onCompose
         self.onEmptyCTA = onEmptyCTA
         self.onFollowing = onFollowing
@@ -743,6 +747,7 @@ public struct FeedView: View {
     private var searchField: some View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 14, color: Theme.Color.appTextMuted)
+                .allowsHitTesting(false)
             TextField(
                 "Search posts",
                 text: Binding(
@@ -761,6 +766,7 @@ public struct FeedView: View {
                 } label: {
                     Icon(.x, size: 13, color: Theme.Color.appTextMuted)
                         .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
@@ -768,14 +774,14 @@ public struct FeedView: View {
         }
         .padding(.horizontal, Spacing.s3)
         .frame(height: 36)
+        // Clearing the box keeps typing.
+        .typesInFieldOnTap($searchFieldFocused)
         .background(Theme.Color.appSurface)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.pill, style: .continuous)
                 .stroke(Theme.Color.appBorder, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: Radii.pill, style: .continuous))
-        // Clearing the box keeps typing.
-        .keepsKeyboardOnTap()
         .padding(.horizontal, Spacing.s4)
         .padding(.bottom, Spacing.s2)
         .background(Theme.Color.appBg)
@@ -1122,6 +1128,10 @@ public struct FeedView: View {
             onToggleSave = { @MainActor in run { await viewModel.toggleSave(postId: row.id) } }
             onToggleRepost = { @MainActor in run { await viewModel.toggleRepost(postId: row.id) } }
         }
+        var onOpenAuthorLink: (@MainActor () -> Void)?
+        if let link = row.authorLink, let onOpenAuthor {
+            onOpenAuthorLink = { onOpenAuthor(link) }
+        }
         return PulsePostCard(
             content: row,
             onTap: { onOpenPost(row.id) },
@@ -1130,7 +1140,8 @@ public struct FeedView: View {
             onOverflow: onOverflow,
             onDismissSeeded: onDismissSeeded,
             onToggleSave: onToggleSave,
-            onToggleRepost: onToggleRepost
+            onToggleRepost: onToggleRepost,
+            onOpenAuthor: onOpenAuthorLink
         )
         // The post opens out of this card and closes back into it.
         .itemZoomSource(.post, id: row.id)

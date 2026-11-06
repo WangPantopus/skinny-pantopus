@@ -73,6 +73,11 @@ export interface PropertySuggestionsResponse {
   /** Includes 'attom' when a county record was found for the address. */
   tiers_used: string[];
   llm_enabled: boolean;
+  /**
+   * Where the county-record lookup stands for a validated address (servers since November 2026):
+   * 'pending' means ask again with `lookup: 'check'` for the record.
+   */
+  attom_lookup?: 'found' | 'none' | 'pending' | 'unavailable';
 }
 
 /** One label / value row of a county record, worded and formatted by the server. */
@@ -105,14 +110,20 @@ export interface HomePropertyDetailResponse {
   /** The raw ATTOM bundle; verified owners only. */
   attom_property_detail: AttomPropertyDetailPayload | null;
   source: 'home' | 'cache' | 'attom' | 'unavailable' | string;
-  /** OWNER_ONLY: the viewer isn't a verified owner, so only the Home's own facts come. */
-  unavailable_reason?: 'NO_PROPERTY_FOUND' | 'ATTOM_UNAVAILABLE' | 'ATTOM_NOT_CONFIGURED' | 'OWNER_ONLY' | string | null;
+  /**
+   * OWNER_ONLY: the viewer isn't a verified owner, so only the Home's own facts come. LOOKUP_PENDING: the record
+   * is being looked up; its arrival on the Home sends the `home:<id>` change signal.
+   */
+  unavailable_reason?: 'NO_PROPERTY_FOUND' | 'ATTOM_UNAVAILABLE' | 'ATTOM_NOT_CONFIGURED' | 'OWNER_ONLY' | 'LOOKUP_PENDING' | string | null;
   /** The county record as labeled sections; verified owners only (older servers leave it out). */
   county_record?: CountyRecord | null;
 }
 
 /**
  * Tiered property field hints for Add Home (ATTOM → heuristics → optional LLM).
+ * `lookup: 'background'` answers at once and looks a missing county record up meanwhile
+ * (`attom_lookup: 'pending'`); `lookup: 'check'` is the one follow-up, answered when that lookup ends.
+ * Without it the server waits for ATTOM, as it does for older apps.
  */
 export async function getPropertySuggestions(data: {
   address: string;
@@ -126,8 +137,9 @@ export async function getPropertySuggestions(data: {
     parcel_type?: string;
     building_type?: string;
   };
-}): Promise<PropertySuggestionsResponse> {
-  return post<PropertySuggestionsResponse>('/api/homes/property-suggestions', data);
+}, options?: { lookup?: 'background' | 'check' }): Promise<PropertySuggestionsResponse> {
+  return post<PropertySuggestionsResponse>('/api/homes/property-suggestions', data,
+    options?.lookup ? { params: { lookup: options.lookup } } : undefined);
 }
 
 // ============ HOME CRUD ============

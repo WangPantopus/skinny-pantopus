@@ -46,6 +46,7 @@ import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
+import app.pantopus.android.ui.screens.plans.LocalPlanOpenProfile
 import app.pantopus.android.ui.screens.plans.components.PlanAvatar
 import app.pantopus.android.ui.screens.plans.components.PlanOverline
 import app.pantopus.android.ui.screens.plans.components.PlanScopeLine
@@ -56,6 +57,7 @@ import app.pantopus.android.ui.screens.plans.components.planCard
 import app.pantopus.android.ui.screens.plans.detail.PlanInfoLine
 import app.pantopus.android.ui.screens.plans.detail.PlanPlainScaffold
 import app.pantopus.android.ui.screens.plans.map.PlanRowsSkeleton
+import app.pantopus.android.ui.screens.plans.opensPlanProfile
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusTextStyle
@@ -232,7 +234,12 @@ private fun RequestCard(
         modifier = Modifier.fillMaxWidth().planCard().padding(Spacing.s4),
         verticalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+        // Who is asking: their photo and name open their profile, to see them before deciding.
+        Row(
+            modifier = Modifier.opensPlanProfile(user?.userId, LocalPlanOpenProfile.current),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+        ) {
             PlanAvatar(name = name, seed = user?.userId ?: request.id, avatarUrl = user?.avatarUrl)
             Column(modifier = Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {

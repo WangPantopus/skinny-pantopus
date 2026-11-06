@@ -7,10 +7,11 @@ import {
   MessageCircle, Star, CalendarDays, Search, Megaphone,
   AlertTriangle, PenLine, Pencil, Siren, Tag, Wrench, Newspaper, X,
   Trophy, Compass, User, Bookmark, Lightbulb, CalendarCheck, PartyPopper,
-  MapPin, Store, CheckCircle, Hammer, Plane, Bookmark as BookmarkIcon, Share, Repeat2,
+  MapPin, Store, CheckCircle, Hammer, Plane, Bookmark as BookmarkIcon, Share, Repeat2, Camera,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import * as api from '@pantopus/api';
+import UserAvatarLink from '@/components/user/UserAvatarLink';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { personColor, personInitials } from '@/lib/personColor';
 import { PostMediaPreview, resolvePostMediaSlots } from './PostMediaGrid';
@@ -77,6 +78,21 @@ function getTypeCtaIcon(type: string): ReactNode | null {
     service_offer: reply,
   };
   return map[type] || null;
+}
+
+/**
+ * "Photo taken here" for a post its author's own photo or video placed, with the day it was taken once that's more
+ * than a week ago (as on iOS and Android). The day reads the clock, so it waits for hydration.
+ */
+function photoProvenanceLabel(post: Post, hydrated: boolean): string | null {
+  if (post.location_basis !== 'photo') return null;
+  const taken = post.photo_taken_at ? new Date(post.photo_taken_at) : null;
+  if (!hydrated || !taken || Number.isNaN(taken.getTime()) || Date.now() - taken.getTime() < 7 * 86_400_000) {
+    return 'Photo taken here';
+  }
+  const sameYear = taken.getFullYear() === new Date().getFullYear();
+  const day = taken.toLocaleDateString(undefined, sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', year: 'numeric' });
+  return `Photo taken here ${sameYear ? 'on' : 'in'} ${day}`;
 }
 
 /** Connections: "Ben C. reposted", "Ben C. and Eve H. reposted", "Ben C. and 2 others reposted". */
@@ -187,6 +203,10 @@ function PostCard({
     post.creator?.profile_picture_url ||
     null;
   const creatorInitial = creatorName[0]?.toUpperCase() || '?';
+  // The author's photo opens the page their name links to (launch cuts #1 + #2: a Beacon author's links to none).
+  const hidesPersona = publicAuthor?.type === 'persona' && !(launchFeatures.beacon && launchFeatures.personas);
+  const authorHandle = publicAuthor?.handle || post.creator?.username || '';
+  const authorHref = hidesPersona ? null : publicAuthor?.href || (authorHandle ? `/${authorHandle}` : null);
   // City / state never lived on the typed author shape; the legacy reads
   // were always a User-row leak, gone after P0.3 narrowed the SELECT.
   const locationText = '';
@@ -219,7 +239,12 @@ function PostCard({
           <span className="flex-shrink-0">{typeIconNode}</span>
           {config.label}
         </span>
-        {post.is_visitor_post && (
+        {/* A post its author's own photo placed says so instead of Visitor. */}
+        {post.location_basis === 'photo' ? (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-50 text-green-700">
+            <Camera className="w-3 h-3" /> {photoProvenanceLabel(post, hydrated)}
+          </span>
+        ) : post.is_visitor_post && (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-50 text-green-700">
             <Plane className="w-3 h-3" /> Visitor
           </span>
@@ -251,24 +276,26 @@ function PostCard({
 
       {/* ─── Author row ──────────────────────────────── */}
       <div className="flex items-center gap-3 px-4 py-2">
-        {creatorAvatar ? (
-          <Image
-            src={creatorAvatar}
-            alt={creatorName}
-            className="w-9 h-9 rounded-full object-cover ring-2 ring-app"
-            width={36}
-            height={36}
-            sizes="36px"
-            quality={75}
-          />
-        ) : (
-          <div
-            className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold ring-2"
-            style={{ background: authorColorSeed ? personColor(authorColorSeed) : config.color }}
-          >
-            {authorColorSeed ? personInitials(creatorName) || creatorInitial : creatorInitial}
-          </div>
-        )}
+        <UserAvatarLink href={authorHref}>
+          {creatorAvatar ? (
+            <Image
+              src={creatorAvatar}
+              alt={creatorName}
+              className="w-9 h-9 rounded-full object-cover ring-2 ring-app"
+              width={36}
+              height={36}
+              sizes="36px"
+              quality={75}
+            />
+          ) : (
+            <div
+              className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold ring-2"
+              style={{ background: authorColorSeed ? personColor(authorColorSeed) : config.color }}
+            >
+              {authorColorSeed ? personInitials(creatorName) || creatorInitial : creatorInitial}
+            </div>
+          )}
+        </UserAvatarLink>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             {/* Launch cuts #1 + #2: a Beacon author's name does not link to the hidden persona page. */}

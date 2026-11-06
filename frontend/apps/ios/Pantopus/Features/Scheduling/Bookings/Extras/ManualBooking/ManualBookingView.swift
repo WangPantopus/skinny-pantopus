@@ -386,6 +386,7 @@ struct ManualBookingView: View {
     private func searchField(_ text: Binding<String>) -> some View {
         HStack(spacing: Spacing.s2 + 1) {
             Icon(.search, size: 16, color: Theme.Color.appTextMuted)
+                .allowsHitTesting(false)
             TextField("Search or enter a name", text: text)
                 .font(.system(size: 12.5, weight: .semibold))
                 .foregroundStyle(Theme.Color.appText)
@@ -393,6 +394,7 @@ struct ManualBookingView: View {
         }
         .padding(.horizontal, Spacing.s3)
         .frame(height: 42)
+        .typesInFieldOnTap()
         .background(Theme.Color.appSurfaceSunken)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
@@ -578,6 +580,7 @@ struct ManualBookingView: View {
             ExtrasOverline(text: label)
             HStack(spacing: Spacing.s2 + 1) {
                 Icon(icon, size: 16, color: Theme.Color.appTextMuted)
+                    .allowsHitTesting(false)
                 TextField(placeholder, text: text)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.Color.appText)
@@ -587,6 +590,7 @@ struct ManualBookingView: View {
             }
             .padding(.horizontal, Spacing.s3)
             .frame(height: 44)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurface)
             .overlay(
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

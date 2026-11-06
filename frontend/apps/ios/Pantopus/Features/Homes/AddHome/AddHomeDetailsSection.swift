@@ -21,7 +21,7 @@ struct AddHomeDetailsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             header
-            if viewModel.isLoadingPropertySuggestions {
+            if viewModel.isLoadingPropertySuggestions || viewModel.propertyLookupPending {
                 PublicRecordsSkeleton()
             } else if viewModel.propertyLookupComplete {
                 PublicRecordsCard(
@@ -68,12 +68,20 @@ struct AddHomeDetailsSection: View {
             return "We found public records for this address. Check the details, "
                 + "then edit anything that looks off."
         }
-        return viewModel.propertyLookupComplete
-            ? "Confirm the basic home details before continuing."
+        if viewModel.propertyLookupComplete {
+            return "Confirm the basic home details before continuing."
+        }
+        return viewModel.propertyLookupPending
+            ? "Looking up public records for this address. The details below fill in by themselves."
             : "All optional — you can always add these later."
     }
 
     // MARK: - Editable fields
+
+    /// While the county record is on its way, the fields it fills say so.
+    private var lookingUp: String? {
+        viewModel.propertyLookupPending ? "Looking up…" : nil
+    }
 
     private var editableFields: some View {
         VStack(alignment: .leading, spacing: Spacing.s3) {
@@ -95,7 +103,7 @@ struct AddHomeDetailsSection: View {
             HStack(alignment: .top, spacing: Spacing.s2) {
                 AddHomeTextField(
                     label: "Bedrooms",
-                    placeholder: "3",
+                    placeholder: lookingUp ?? "3",
                     text: Binding(
                         get: { viewModel.form.details.bedrooms },
                         set: { viewModel.updateBedrooms($0) }
@@ -105,7 +113,7 @@ struct AddHomeDetailsSection: View {
                 )
                 AddHomeTextField(
                     label: "Bathrooms",
-                    placeholder: "2",
+                    placeholder: lookingUp ?? "2",
                     text: Binding(
                         get: { viewModel.form.details.bathrooms },
                         set: { viewModel.updateBathrooms($0) }
@@ -118,7 +126,7 @@ struct AddHomeDetailsSection: View {
             HStack(alignment: .top, spacing: Spacing.s2) {
                 AddHomeTextField(
                     label: "Home size (sq ft)",
-                    placeholder: "e.g. 1200",
+                    placeholder: lookingUp ?? "e.g. 1200",
                     text: Binding(
                         get: { viewModel.form.details.sqFt },
                         set: { viewModel.updateSqFt($0) }
@@ -129,7 +137,7 @@ struct AddHomeDetailsSection: View {
                 )
                 AddHomeTextField(
                     label: "Lot size (sq ft)",
-                    placeholder: "e.g. 5000",
+                    placeholder: lookingUp ?? "e.g. 5000",
                     text: Binding(
                         get: { viewModel.form.details.lotSqFt },
                         set: { viewModel.updateLotSqFt($0) }
@@ -142,7 +150,7 @@ struct AddHomeDetailsSection: View {
 
             AddHomeTextField(
                 label: "Year built",
-                placeholder: "e.g. 2017",
+                placeholder: lookingUp ?? "e.g. 2017",
                 text: Binding(
                     get: { viewModel.form.details.yearBuilt },
                     set: { viewModel.updateYearBuilt($0) }
@@ -387,6 +395,7 @@ struct AddHomeTextField: View {
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, isMultiline ? Spacing.s2 : Spacing.s3)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .overlay {

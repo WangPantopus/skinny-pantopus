@@ -8,7 +8,8 @@
 //     plumbing applies) rather than talking to pushService directly,
 //   * exactly one push per user per mail day,
 //   * it defers rather than drops outside the local daytime window,
-//   * the copy never carries a sender or a category.
+//   * the copy names who the mail is from, never a category (rule 2,
+//     reversed November 5, 2026: it used to carry counts only).
 // ============================================================
 
 jest.mock('../services/notificationService', () => ({
@@ -122,13 +123,13 @@ describe('composeMailDayPush', () => {
     expect(composeMailDayPush([])).toBeNull();
   });
 
-  test('never leaks a sender or a category into the copy', () => {
+  test('names who the mail is from, never its category or subject', () => {
     const push = composeMailDayPush([
       { kind: 'bill', sender: 'Kaiser Permanente', label: 'Explanation of Benefits' },
       { kind: 'envelope', sender: 'Multnomah County Elections', label: 'Ballot' },
     ]);
-    const text = `${push.title} ${push.body}`;
-    expect(text).not.toMatch(/Kaiser|Multnomah|Benefits|Ballot|bill/i);
+    expect(push.body).toBe('2 pieces today from Kaiser Permanente and Multnomah County Elections — 1 needs you.');
+    expect(`${push.title} ${push.body}`).not.toMatch(/Benefits|Ballot|bill/i);
   });
 });
 

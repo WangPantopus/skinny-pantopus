@@ -367,7 +367,7 @@ private struct MagicDescribeCard: View {
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("Done") { isFocused = false }
+                Button("Done") { Keyboard.close() }
                     .font(.system(size: 16, weight: .semibold))
                     .accessibilityIdentifier("composeGigDescribeKeyboardDone")
             }
@@ -403,6 +403,7 @@ private struct MagicDescribeCard: View {
                 .padding(.horizontal, Spacing.s2)
                 .padding(.vertical, Spacing.s1)
                 .focused($isFocused)
+                .typesInFieldOnTap($isFocused)
                 .overlay(alignment: .topLeading) {
                     if describeText.isEmpty {
                         Text("e.g. Need someone to assemble an IKEA desk this Saturday morning…")

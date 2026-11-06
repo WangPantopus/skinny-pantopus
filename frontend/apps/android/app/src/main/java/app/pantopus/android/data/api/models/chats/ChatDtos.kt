@@ -151,6 +151,8 @@ data class ChatMessageSender(
     /** Current public identity projection; legacy servers still use name/username. */
     val displayName: String? = null,
     val handle: String? = null,
+    /** The identity's kind: `local` for a person, `business` for a business. */
+    val type: String? = null,
 ) {
     val displayLabel: String?
         get() = listOf(displayName, name, handle, username).firstOrNull { !it.isNullOrBlank() }
