@@ -150,9 +150,9 @@ import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.KeyboardResizeEffect
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.Shimmer
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.components.keepsKeyboardWhileScrolling
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiActionCard
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiCapabilityChip
 import app.pantopus.android.ui.screens.inbox.conversation.ai.AiContextStrip
@@ -4434,7 +4434,7 @@ private fun ChatReportUserSheet(
     var selectedReason by remember { mutableStateOf<String?>(null) }
     var details by remember { mutableStateOf("") }
     ModalBottomSheet(
-        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+        modifier = Modifier.sheetKeyboardRules(),
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = PantopusColors.appSurface,

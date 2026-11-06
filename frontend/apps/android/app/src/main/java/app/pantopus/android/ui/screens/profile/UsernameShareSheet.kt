@@ -27,7 +27,7 @@ import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.profile.ProfileRepository
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Spacing
@@ -140,7 +140,7 @@ fun UsernameShareSheet(
     ModalBottomSheet(
         onDismissRequest = model::close,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        modifier = Modifier.closesKeyboardOnTapOrScroll().testTag(UsernameShareTags.SHEET),
+        modifier = Modifier.sheetKeyboardRules().testTag(UsernameShareTags.SHEET),
     ) {
         Column(
             modifier =

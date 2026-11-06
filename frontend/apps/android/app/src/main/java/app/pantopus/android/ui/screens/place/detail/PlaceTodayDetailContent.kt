@@ -88,7 +88,7 @@ import app.pantopus.android.data.api.models.plans.PlanDto
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.homes.HomeTaskEditPatch
 import app.pantopus.android.ui.components.GhostButton
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.screens.ballot.BallotGovernmentsSheet
 import app.pantopus.android.ui.screens.ballot.BallotPlacement
 import app.pantopus.android.ui.screens.ballot.BallotTodayCard
@@ -1451,7 +1451,7 @@ private fun RadonTaskSheet(state: RadonTodayState) {
     ModalBottomSheet(
         onDismissRequest = { if (!state.busy) state.sheet = null },
         containerColor = PantopusColors.appSurface,
-        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+        modifier = Modifier.sheetKeyboardRules(),
     ) {
         Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(

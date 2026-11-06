@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.data.api.models.profile.ProfilePromptDto
 import app.pantopus.android.ui.components.PantopusTextField
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.screens.shared.form.FormFieldGroup
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
@@ -251,7 +251,7 @@ internal fun PromptAnswerSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = PantopusColors.appSurface,
-        modifier = Modifier.closesKeyboardOnTapOrScroll().testTag("editProfilePromptAnswer"),
+        modifier = Modifier.sheetKeyboardRules().testTag("editProfilePromptAnswer"),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(start = Spacing.s5, end = Spacing.s5, bottom = Spacing.s6),
