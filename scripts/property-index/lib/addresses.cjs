@@ -12,7 +12,8 @@ function houseNumbers(number) {
   const range = /^(\d+)\s*(?:-|\s)\s*(\d+)$/.exec(text);
   if (!range) return [text];
   const [first, last] = [Number(range[1]), Number(range[2])];
-  return last > first && last - first <= 40 && (last - first) % 2 === 0 ? [range[1], range[2]] : [text];
+  // The range as written too: some people's mail says "12-14".
+  return last > first && last - first <= 40 && (last - first) % 2 === 0 ? [range[1], range[2], `${range[1]}-${range[2]}`] : [text];
 }
 
 /** One parsed address per number the record's line holds. Empty when the line can't be read. */
@@ -49,6 +50,14 @@ function zipCode(value) {
   return /^\d{4}$/.test(text) ? `0${text}` : '';
 }
 
+/** What a full address column holds past its number and street: a unit, in files with no column of their own for it. */
+function unitAfterStreet(line, number, street) {
+  const clean = (text) => String(text ?? '').toUpperCase().replace(/\s+/g, ' ').trim();
+  const whole = clean(line);
+  const start = clean(`${number} ${street}`);
+  return whole.startsWith(`${start} `) ? whole.slice(start.length + 1) : '';
+}
+
 /** A unit column's value, or '': towns fill the column with zeros to mean there's no unit. */
 function realUnit(value) {
   const text = String(value ?? '').trim();
@@ -63,4 +72,4 @@ function onRecord(line, unit) {
   return /^[A-Z0-9-]{1,8}$/i.test(secondary) ? `${street} UNIT ${secondary}` : `${street} ${secondary}`;
 }
 
-module.exports = { houseNumbers, readAddresses, year, isoDate, zipCode, realUnit, onRecord };
+module.exports = { houseNumbers, readAddresses, year, isoDate, zipCode, realUnit, onRecord, unitAfterStreet };

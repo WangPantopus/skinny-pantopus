@@ -12,7 +12,7 @@ const { parse } = require('../../../backend/services/propertyRecords/addressKey'
 const { download } = require('../lib/tables.cjs');
 const { getJson, layerRows, cached } = require('../lib/services.cjs');
 const { csvRows } = require('../lib/csv.cjs');
-const { houseNumbers, readAddresses, year, isoDate, zipCode, realUnit, onRecord } = require('../lib/addresses.cjs');
+const { houseNumbers, readAddresses, year, isoDate, zipCode, realUnit, onRecord, unitAfterStreet } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
@@ -115,7 +115,8 @@ function fromMassGis(row, fips, county, town) {
   const [kind, homeType, useWord] = USES[code] || ['other', null, null];
   const facts = { parcel_number: row.PROP_ID, county, fips, municipality: town };
   const on = kind !== 'parcel' && kind !== 'other';
-  const unit = realUnit(row.LOCATION);
+  // A town's extract keeps the unit in LOCATION, or leaves it at the end of the site address.
+  const unit = realUnit(row.LOCATION) || realUnit(unitAfterStreet(row.SITE_ADDR, row.ADDR_NUM, row.FULL_STR));
   put(facts, 'address_on_record', onRecord(row.SITE_ADDR, unit));
   put(facts, 'year_built', on ? year(row.YEAR_BUILT) : null);
   // Several houses on one parcel: the area is theirs together, not this home's.
