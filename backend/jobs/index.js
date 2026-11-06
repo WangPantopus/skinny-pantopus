@@ -536,6 +536,11 @@ function startJobs(options = {}) {
   scheduleCron('3 4 * * *', wrapJob(
     'replaceExpiredCoordinates',
     () => replaceExpiredCoordinates(),
+  ), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
   // ─── Recheck Pending Postal Addresses ───
   // Runs every 5 minutes. Nothing to do unless Google is the postal source.
   // Homes finished while Google was down, or USPS gave no answer, wait on this for mail proof.
