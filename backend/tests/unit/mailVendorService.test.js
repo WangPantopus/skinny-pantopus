@@ -564,6 +564,7 @@ describe('MailVendorService', () => {
   // We need to mock the providers at the module level
   jest.mock('../../services/addressValidation/lobMailProvider', () => {
     const instance = {
+      name: 'lob',
       isAvailable: jest.fn(() => false),
       sendPostcard: jest.fn(),
       getJobStatus: jest.fn(),
@@ -576,6 +577,7 @@ describe('MailVendorService', () => {
 
   jest.mock('../../services/addressValidation/mockMailProvider', () => {
     const instance = {
+      name: 'mock',
       isAvailable: jest.fn(() => true),
       sendPostcard: jest.fn(),
       getJobStatus: jest.fn(),
