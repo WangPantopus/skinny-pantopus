@@ -164,17 +164,20 @@ function numberSort(number) {
  * A street's words into direction, name and type, wherever they sit. A word only counts as a direction or a type while
  * something is left to be the name: WEST ST is a street called West, AVENUE B one called Avenue B.
  */
-function readStreet(streetWords) {
+function readStreet(streetWords, columns = {}) {
   const words = [...streetWords];
+  // A publisher with its own direction and type columns has said what those are: a name's own words stay
+  // (LAKE VIEW with type DR is Lake View Drive), unless they only repeat the column.
+  const peels = (word, map, column) => (column ? map.get(word) === column : map.has(word));
   let pre = '';
   let post = '';
   let suffix = '';
   const isName = (word) => !SUFFIXES.has(word) && !DIRECTIONS.has(word);
   // AVENUE N and E AVENUE K are streets called Avenue; PARK AVE S is Park Avenue South.
   const lettered = words.length > 1 && SUFFIXES.has(words[words.length - 2]) && words.slice(0, -2).every((word) => DIRECTIONS.has(word));
-  if (words.length > 1 && DIRECTIONS.has(words[words.length - 1]) && !lettered) post = DIRECTIONS.get(words.pop());
-  if (words.length > 1 && SUFFIXES.has(words[words.length - 1])) suffix = SUFFIXES.get(words.pop());
-  if (words.length > 1 && DIRECTIONS.has(words[0]) && (suffix || post || words.length > 2 || words.slice(1).some(isName))) pre = DIRECTIONS.get(words.shift());
+  if (words.length > 1 && peels(words[words.length - 1], DIRECTIONS, columns.post) && !lettered) post = DIRECTIONS.get(words.pop());
+  if (words.length > 1 && peels(words[words.length - 1], SUFFIXES, columns.suffix)) suffix = SUFFIXES.get(words.pop());
+  if (words.length > 1 && peels(words[0], DIRECTIONS, columns.pre) && (suffix || post || columns.suffix || words.length > 2 || words.slice(1).some(isName))) pre = DIRECTIONS.get(words.shift());
   return { pre, name: normalName(words), suffix, post };
 }
 
@@ -183,17 +186,18 @@ function readStreet(streetWords) {
  * are read wherever the county put them; empty columns stay empty.
  */
 function parts({ number, numberSuffix = '', pre = '', name = '', suffix = '', post = '', unit = '', building = '', urbanization = '' }) {
-  const read = readStreet(clean(name).split(' ').filter(Boolean));
+  const columns = { pre: DIRECTIONS.get(clean(pre)), suffix: SUFFIXES.get(clean(suffix)), post: DIRECTIONS.get(clean(post)) };
+  const read = readStreet(clean(name).split(' ').filter(Boolean), columns);
   const street = read.name;
   const house = `${houseNumber(number)}${houseNumber(numberSuffix)}`;
   if (!house || !street) return null;
   const secondary = splitSecondary(clean(unit));
   return {
     number: house,
-    pre: DIRECTIONS.get(clean(pre)) || read.pre,
+    pre: columns.pre || read.pre,
     name: street,
-    suffix: SUFFIXES.get(clean(suffix)) || read.suffix,
-    post: DIRECTIONS.get(clean(post)) || read.post,
+    suffix: columns.suffix || read.suffix,
+    post: columns.post || read.post,
     unit: unitKey(secondary.unit),
     building: unitKey(building) || unitKey(secondary.building),
     ...(clean(urbanization) ? { urbanization: clean(urbanization) } : {}),
