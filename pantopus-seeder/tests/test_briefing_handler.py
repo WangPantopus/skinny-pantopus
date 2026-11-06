@@ -57,6 +57,7 @@ def _mock_supabase():
         chain.filter.return_value = chain
         chain.order.return_value = chain
         chain.limit.return_value = chain
+        chain.range.return_value = chain
         result = MagicMock()
         result.data = []
         result.count = 0
