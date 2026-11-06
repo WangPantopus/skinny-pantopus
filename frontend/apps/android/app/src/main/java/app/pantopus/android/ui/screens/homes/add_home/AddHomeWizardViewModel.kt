@@ -1665,8 +1665,7 @@ open class AddHomeWizardViewModel
             }
 
             /** "2.0" → "2", "2.5" → "2.5". */
-            fun trimTrailingZero(value: Double): String =
-                if (value == Math.floor(value)) value.toInt().toString() else value.toString()
+            fun trimTrailingZero(value: Double): String = if (value == Math.floor(value)) value.toInt().toString() else value.toString()
         }
     }
 
