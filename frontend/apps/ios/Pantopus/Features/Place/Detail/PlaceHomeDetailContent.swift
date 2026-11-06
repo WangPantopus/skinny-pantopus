@@ -27,6 +27,10 @@ struct PlaceHomeDetailContent: View {
         return env.yourHome
     }
 
+    private static func hasFacts(_ data: PlaceYourHomeData) -> Bool {
+        data.yearBuilt != nil || data.sqft != nil || data.bedrooms != nil || data.bathrooms != nil || data.lotSqft != nil
+    }
+
     private func factsSource(_ env: PlaceSectionEnvelope) -> String {
         if let source = env.source, !source.isEmpty { return source }
         return "County public records · estimate model"
@@ -37,7 +41,13 @@ struct PlaceHomeDetailContent: View {
             if let env = vm.section(.yourHome, in: intel) {
                 if let data = home {
                     PlaceDetailSectionLabel(text: "Property")
-                    FactsCard(data: data)
+                    // A home with only estimates has no facts to show: the empty grid would read as a record.
+                    if data.estimate == nil || Self.hasFacts(data) {
+                        FactsCard(data: data)
+                    }
+                    if let estimate = data.estimate {
+                        EstimateCard(estimate: estimate)
+                    }
                     // The server names where the facts came from: county records,
                     // or the details the household entered.
                     PlaceSourceNote(
@@ -141,6 +151,41 @@ private struct FactsCard: View {
         }
         let parts = [bd, ba].compactMap { $0 }
         return parts.isEmpty ? "—" : parts.joined(separator: " ")
+    }
+}
+
+// MARK: - Estimate card
+
+/// No record of this home: the server's labeled estimates, apart from the facts.
+private struct EstimateCard: View {
+    let estimate: PlaceHomeEstimate
+
+    var body: some View {
+        PlaceDetailCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(estimate.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.Color.appText)
+                ForEach(estimate.rows) { row in
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text(row.label)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.Color.appTextSecondary)
+                        Spacer(minLength: 0)
+                        Text(row.value)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Theme.Color.appText)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+                ForEach([estimate.note, estimate.footer].compactMap { $0 }, id: \.self) { line in
+                    Text(line)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                }
+            }
+        }
     }
 }
 

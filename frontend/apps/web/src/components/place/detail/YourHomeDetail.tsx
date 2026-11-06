@@ -76,6 +76,25 @@ function FactsCard({ data }: { data: PlaceYourHomeData }) {
   );
 }
 
+// No record of this home: the server's labeled estimates, apart from the facts above.
+function EstimateCard({ estimate }: { estimate: NonNullable<PlaceYourHomeData['estimate']> }) {
+  return (
+    <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm px-4 py-3.5">
+      <div className="text-[13px] font-semibold text-app-text">{estimate.title}</div>
+      <dl className="mt-1.5">
+        {estimate.rows.map((row) => (
+          <div key={row.id} className="flex items-baseline justify-between gap-3 py-1.5 border-b border-app-border-subtle last:border-b-0">
+            <dt className="text-[13px] text-app-text-secondary">{row.label}</dt>
+            <dd className="text-[14px] font-medium text-app-text text-right">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-2 text-[12px] leading-relaxed text-app-text-muted">{estimate.note}</p>
+      <p className="mt-1 text-[12px] leading-relaxed text-app-text-muted">{estimate.footer}</p>
+    </div>
+  );
+}
+
 function ValueCard({ data }: { data: PlaceYourHomeData }) {
   const value = usd(data.estimated_value);
   const low = usd(data.value_low);
@@ -417,7 +436,11 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
           <>
             <DetailSectionLabel>Property</DetailSectionLabel>
             {data ? (
-              <FactsCard data={data} />
+              <div className="flex flex-col gap-2.5">
+                {/* A home with only estimates has no facts to show: the empty grid would read as a record. */}
+                {data.estimate && !(data.year_built || data.sqft || data.bedrooms != null || data.bathrooms != null || data.lot_sqft) ? null : <FactsCard data={data} />}
+                {data.estimate ? <EstimateCard estimate={data.estimate} /> : null}
+              </div>
             ) : (
               <SectionCard icon={House} title="Property facts" state={home ? statusToState(home.status) : 'unavailable'} caption={home?.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
             )}

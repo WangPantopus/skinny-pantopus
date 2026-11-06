@@ -1030,6 +1030,24 @@ data class PlaceYourHomeData(
     @Json(name = "assessed_value") val assessedValue: Double? = null,
     /** The home's outline for the Today sky. Absent from older servers. */
     val house: PlaceHouseShape? = null,
+    /** No record of this home: labeled estimates, in their own slot and never in the fields above. */
+    val estimate: PlaceHomeEstimate? = null,
+)
+
+/** "Estimate for similar homes nearby": the server words and rounds every row. */
+@JsonClass(generateAdapter = true)
+data class PlaceHomeEstimate(
+    val title: String = "",
+    val rows: List<PlaceHomeEstimateRow> = emptyList(),
+    val note: String? = null,
+    val footer: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class PlaceHomeEstimateRow(
+    val id: String = "",
+    val label: String = "",
+    val value: String = "",
 )
 
 /**

@@ -1027,6 +1027,16 @@ export interface PlaceYourHomeData {
   assessed_value: number | null;
   /** The home's outline for the Today sky. Absent from older servers. */
   house?: PlaceHouseShape | null;
+  /** No record of this home: labeled estimates, in their own slot and never in the fields above. */
+  estimate?: PlaceHomeEstimate | null;
+}
+
+/** "Estimate for similar homes nearby": the server words and rounds every row. */
+export interface PlaceHomeEstimate {
+  title: string;
+  rows: { id: string; label: string; value: string }[];
+  note: string;
+  footer: string;
 }
 
 // ════════════════════════════════════════════════════════════

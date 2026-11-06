@@ -1162,9 +1162,11 @@ public struct PlaceYourHomeData: Decodable, Sendable, Hashable {
     public let assessedValue: Double?
     /// The home's outline for the Today sky. Absent from older servers.
     public let house: PlaceHouseShape?
+    /// No record of this home: labeled estimates, in their own slot and never in the fields above.
+    public let estimate: PlaceHomeEstimate?
 
     private enum CodingKeys: String, CodingKey {
-        case sqft, bedrooms, bathrooms, house
+        case sqft, bedrooms, bathrooms, house, estimate
         case yearBuilt = "year_built"
         case lotSqft = "lot_sqft"
         case homeType = "home_type"
@@ -1173,6 +1175,20 @@ public struct PlaceYourHomeData: Decodable, Sendable, Hashable {
         case valueHigh = "value_high"
         case assessedValue = "assessed_value"
     }
+}
+
+/// "Estimate for similar homes nearby": the server words and rounds every row.
+public struct PlaceHomeEstimate: Decodable, Sendable, Hashable {
+    public struct Row: Decodable, Sendable, Hashable, Identifiable {
+        public let id: String
+        public let label: String
+        public let value: String
+    }
+
+    public let title: String
+    public let rows: [Row]
+    public let note: String?
+    public let footer: String?
 }
 
 /// The home's outline for the Today sky: the county record (ATTOM) with the
