@@ -38,7 +38,7 @@ import app.pantopus.android.ui.theme.PantopusIconImage
  */
 enum class PlaceSectionCardState { LOADING, LOADED, EMPTY, UNAVAILABLE, STALE, ERROR }
 
-@Suppress("LongMethod", "CyclomaticComplexMethod")
+@Suppress("LongMethod", "CyclomaticComplexMethod", "LongParameterList")
 @Composable
 fun PlaceSectionCard(
     title: String,
