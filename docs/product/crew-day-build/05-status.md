@@ -160,15 +160,18 @@ None blocks a release; none is built.
 
 ## Release
 
-- `supabase/migrations/20261105100000_crew_day.sql` sorts before master's newest migration
-  (`20261105120000_pulse_user_home_area_context.sql`, November 6). Before `crew-day` merges into `master`, rename it
-  (`git mv`, same bytes) to a version after master's newest and check with
-  `MIGRATION_BASE_SHA=$(git rev-parse origin/master) node scripts/db/check-migrations.cjs`.
-- Bring `master` into `crew-day` before the release; master gains commits every day. On November 6 at 04:25 UTC
-  `master` was 98 commits ahead. Two files conflicted: the iOS and Android deep-link routers
-  (`DeepLinkRouter.swift`, `DeepLinkRouter.kt`). Master's 69566bc657 (business notices open their dashboard section)
-  added cases in the same place as Crew Day's links. Both sides only add cases, so keep both. Every other file merged
-  cleanly.
+- Master was brought into `crew-day` on November 6 (#3460), at 118 commits behind. Two files conflicted: the iOS and
+  Android deep-link routers (`DeepLinkRouter.swift`, `DeepLinkRouter.kt`). Master's 69566bc657 (business notices
+  open their dashboard section) had added cases in the same place as Crew Day's links; both are kept. Master's
+  13aa84cebf had moved every web page into `src/app/(site)`. Crew Day's pages moved there too. Left outside, they
+  lost the site layout and broke the production build. URLs are unchanged. If master moves on before the release,
+  bring it in again the same way.
+- The migration is renamed on the branch `claude/cd-release` (`crew-day` plus one commit, to
+  `20261106054000_crew_day.sql`, after master's newest), not on `crew-day`. CI's migration check treats
+  `crew-day`'s file as applied and refuses the rename on a PR into `crew-day`; on a PR into `master` it passes.
+  The founder chose this on November 6. A local database that applied the old name needs `supabase migration repair
+  --status reverted 20261105100000` and `--status applied 20261106054000`, or a reset.
+- The release is that branch's PR into `master`. If master gains a newer migration first, rename again.
 - Merging `crew-day` into `master` deploys the server and runs the migration on the production database (Deploy
   Backend), and deploys the web, all with Crew Day off. Turning it on is `crew_day` in `LAUNCH_FEATURES`,
   `NEXT_PUBLIC_LAUNCH_FEATURES` and the iOS and Android `PANTOPUS_LAUNCH_FEATURES`, then new app builds.

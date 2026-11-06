@@ -32,9 +32,12 @@ public struct BusinessTeamView: View {
     @State private var toast: String?
 
     private let businessId: String
+    /// A member's profile, from their photo and name.
+    private var onOpenProfile: (@MainActor (String) -> Void)?
 
-    public init(businessId: String) {
+    public init(businessId: String, onOpenProfile: (@MainActor (String) -> Void)? = nil) {
         self.businessId = businessId
+        self.onOpenProfile = onOpenProfile
         _viewModel = State(initialValue: BusinessTeamViewModel(businessId: businessId))
     }
 
@@ -165,7 +168,7 @@ public struct BusinessTeamView: View {
                         count: section.rows.count
                     ) {
                         ForEach(section.rows) { row in
-                            MemberRowCard(row: row) {
+                            MemberRowCard(row: row, onOpenProfile: onOpenProfile) {
                                 overflowTarget = row
                             }
                         }
@@ -306,9 +309,39 @@ private struct SectionBlock<Content: View>: View {
 
 private struct MemberRowCard: View {
     let row: BusinessTeamMemberRow
+    let onOpenProfile: (@MainActor (String) -> Void)?
     let onOverflow: () -> Void
 
     var body: some View {
+        HStack(alignment: .top, spacing: Spacing.s3) {
+            if let onOpenProfile {
+                // The member's photo and name open their profile; the role menu stays on its own button.
+                Button { onOpenProfile(row.userId) } label: {
+                    identity.contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityHint("Opens their profile")
+            } else {
+                identity
+            }
+            Spacer(minLength: Spacing.s2)
+            if row.canManage {
+                OverflowButton(label: row.name, action: onOverflow)
+            }
+        }
+        .padding(Spacing.s3)
+        .frame(minHeight: 60, alignment: .top)
+        .background(Theme.Color.appSurface)
+        .overlay(
+            RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
+                .stroke(Theme.Color.appBorder, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
+        .accessibilityIdentifier("businessTeam.row.\(row.userId)")
+    }
+
+    private var identity: some View {
         HStack(alignment: .top, spacing: Spacing.s3) {
             TeamAvatar(name: row.name, gradient: row.avatarGradient)
             VStack(alignment: .leading, spacing: 2) {
@@ -327,20 +360,7 @@ private struct MemberRowCard: View {
                     metaLine(text: joined, icon: .clock)
                 }
             }
-            Spacer(minLength: Spacing.s2)
-            if row.canManage {
-                OverflowButton(label: row.name, action: onOverflow)
-            }
         }
-        .padding(Spacing.s3)
-        .frame(minHeight: 60, alignment: .top)
-        .background(Theme.Color.appSurface)
-        .overlay(
-            RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
-                .stroke(Theme.Color.appBorder, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
-        .accessibilityIdentifier("businessTeam.row.\(row.userId)")
     }
 }
 

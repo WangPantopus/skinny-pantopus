@@ -28,6 +28,12 @@ const causeOf = error => ({
   errorName: error?.name || null, errorCode: error?.code || null,
   errorMessage: typeof error?.message === 'string' ? error.message.slice(0, 160) : null,
 });
+// A read started before it is known to be needed: its failure counts only where `used` takes its result.
+const settle = read => read.then(value => ({ value }), error => ({ error }));
+const used = ({ value, error }) => {
+  if (error) throw error;
+  return value;
+};
 async function checked(query) {
   let result;
   try { result = await query; } catch (err) { throw failure(false, causeOf(err)); }
@@ -96,13 +102,19 @@ async function readClaims(homeId, actorId) {
   return claims;
 }
 
-async function card(homeId, mode) {
+// The Home's card row, read alongside its opening state (see read()); card() projects it once the mode is known.
+function cardRow(homeId) {
+  return checked(db.from('Home').select(CARD_COLUMNS).eq('id', homeId).maybeSingle());
+}
+
+// `rowRead`, when given, is that row's read already under way (settled).
+async function card(homeId, mode, rowRead = null) {
   if (mode === 'verification') {
     // Personal progress is not shared Home access. The caller's submitted
     // evidence/address remains on its own authorized verification endpoint.
     return { id: homeId, name: 'Home verification', address: null, address2: null, city: null, state: null, zipcode: null, location: null };
   }
-  const row = await checked(db.from('Home').select(CARD_COLUMNS).eq('id', homeId).maybeSingle());
+  const row = rowRead ? used(await rowRead) : await cardRow(homeId);
   if (!object(row) || row.id !== homeId || typeof row.address !== 'string'
     || (row.address2 != null && typeof row.address2 !== 'string')) throw failure();
   const projected = Object.fromEntries(CARD_COLUMNS.split(', ').map(key => [key, row[key]]));
@@ -193,12 +205,19 @@ async function read(actorId, { primary = false, legacy = false } = {}) {
   // card has its own opening authority. Homes load a few at a time (each is a
   // chain of database round trips), and all entries are rechecked at the end.
   const opened = await bounded(ids, async (homeId) => {
+    // The person's own claims and the Home's card row are read in the same round trip as its opening state.
+    // Each is used only when that state lists the Home, and the recheck below still follows both reads.
+    const claimsRead = settle(readClaims(homeId, actorId));
+    const rowRead = settle(cardRow(homeId));
     const opening = await state(homeId, actorId);
     if (opening.mode === 'denied' || (primary && opening.mode !== 'shared')) return null;
-    const [claims, homeCard] = await Promise.all([readClaims(homeId, actorId), card(homeId, opening.mode)]);
+    const [claims, homeCard] = await Promise.all([claimsRead.then(used), card(homeId, opening.mode, rowRead)]);
     return { homeId, opening, claims, card: materialize(opening, claims, homeCard) };
   });
   const entries = opened.filter(Boolean);
+  const privateSetups = entries.filter(entry => entry.opening.mode === 'private_setup');
+  // Whether a private setup's claim is held doesn't depend on the recheck, so it's read alongside it.
+  const heldRead = heldClaims(actorId, privateSetups.map(entry => entry.homeId));
   await bounded(entries, async (entry) => {
     // Eligibility can change through records/history without a role change.
     const [eligibility, claims, current] = await Promise.all([deleteEligibility(entry.homeId, actorId),
@@ -207,8 +226,7 @@ async function read(actorId, { primary = false, legacy = false } = {}) {
     if (JSON.stringify(claims) !== JSON.stringify(entry.claims)
       || JSON.stringify(current) !== JSON.stringify(entry.opening)) throw failure(true);
   });
-  const privateSetups = entries.filter(entry => entry.opening.mode === 'private_setup');
-  const held = await heldClaims(actorId, privateSetups.map(entry => entry.homeId));
+  const held = await heldRead;
   for (const entry of privateSetups) entry.card.claim_held = held.has(entry.homeId);
   if (primary) {
     // Preserve the oldest-current-occupancy preference, then verified owners

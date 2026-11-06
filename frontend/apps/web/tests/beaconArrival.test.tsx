@@ -16,7 +16,7 @@ jest.mock('@pantopus/api', () => ({
 jest.mock('@/hooks/useFeatureFlag', () => ({ useFeatureFlag: () => flag }));
 jest.mock('@/lib/identityAnalytics', () => ({ trackIdentityEvent: jest.fn() }));
 jest.mock('@/components/public-share/OpenInAppButton', () => ({ children }: { children: React.ReactNode }) => <button>{children}</button>);
-import Beacon from '../src/app/persona/[personaHandle]/AudienceProfileClient';
+import Beacon from '../src/app/(site)/persona/[personaHandle]/AudienceProfileClient';
 function show() { return render(<Beacon initialPersona={persona} initialChannel={null} appUrl="/app/persona/garden" linkHref="/persona/garden" fallbackUrl={null} storeCta={null} />); }
 beforeEach(() => { token = null; flag = false; jest.clearAllMocks(); });
 

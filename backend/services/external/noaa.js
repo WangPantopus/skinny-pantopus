@@ -132,7 +132,7 @@ async function fetchAlerts(lat, lng) {
     const normalized = features.map(normaliseFeature);
 
     // 3. Cache the result
-    await setCache(PROVIDER, placeKey, { raw, normalized }, TTL_MINUTES);
+    void setCache(PROVIDER, placeKey, { raw, normalized }, TTL_MINUTES); // in the background (setCache never rejects)
 
     return {
       alerts: normalized,

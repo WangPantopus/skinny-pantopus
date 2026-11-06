@@ -103,13 +103,16 @@ let loggedActive = false;
 
 /**
  * Verify an access token. `authClient` is the Supabase client whose getUser decides when this server can't.
+ * `onLocalClaims(claims)`, when given, hears the claims of a token whose signature verified here, before the
+ * registry read, so a caller can start its own reads for that user alongside it. The token is not accepted yet.
  * @returns {Promise<{ok:true, via:'local'|'supabase', user:{id:string, email:string|null, emailConfirmed:boolean|null}}
  *   |{ok:false, reason:'invalid'|'busy', error?:object}>}
  */
-async function verifyAccessToken(token, { authClient, allowExpiredForRevocation = false }) {
+async function verifyAccessToken(token, { authClient, allowExpiredForRevocation = false, onLocalClaims = null }) {
   const local = await verifyLocally(token, { allowExpiredForRevocation });
   if (local.status === 'expired') return { ok: false, reason: 'invalid' };
   if (local.status === 'valid') {
+    if (onLocalClaims) onLocalClaims(local.claims);
     let state;
     try {
       state = await authSessionService.getSessionStateCached(local.claims.session_id);

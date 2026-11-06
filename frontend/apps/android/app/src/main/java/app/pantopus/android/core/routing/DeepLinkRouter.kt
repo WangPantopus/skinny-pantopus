@@ -39,6 +39,9 @@ object DeepLinkRouter {
     /** `businesses/<id>/crew-days/<crewDayId>`. */
     private const val BUSINESS_CREW_DAY_SEGMENTS = 4
 
+    /** The owner-view sections a business link's `?tab=` can name ([Destination.BusinessOwner.section]). */
+    private val BUSINESS_OWNER_SECTIONS = setOf("payments", "invoices", "legal")
+
     /**
      * How a resolved destination should be handled relative to auth.
      */
@@ -303,7 +306,15 @@ object DeepLinkRouter {
          * profile (A10.6) is the singular `pantopus://business/:username`,
          * routed to [BusinessProfile].
          */
-        data class BusinessOwner(val businessId: String) : Destination
+        data class BusinessOwner(
+            val businessId: String,
+            /**
+             * `payments`, `invoices` or `legal` from `/app/businesses/:id/dashboard?tab=`: a payment, invoice or
+             * verification notice opens that section over the owner view, as the web opens that tab. Mirrors iOS
+             * `businessOwnerSection`.
+             */
+            val section: String? = null,
+        ) : Destination
 
         /**
          * `/app/businesses/:id/chat/:roomId` — a conversation in the business's
@@ -1090,7 +1101,12 @@ object DeepLinkRouter {
                         Destination.CrewDayCrew(id, segments[3].lowercase())
                     trailing == "chat" && segments.size == BUSINESS_CONVERSATION_SEGMENTS && roomId != null && MAIL_UUID.matches(roomId) ->
                         Destination.BusinessConversation(id, roomId.lowercase())
-                    else -> Destination.BusinessOwner(id)
+                    else ->
+                        Destination.BusinessOwner(
+                            id,
+                            Paths.queryParam(queryPart, "tab")?.lowercase()
+                                ?.takeIf { (trailing == null || trailing == "dashboard") && it in BUSINESS_OWNER_SECTIONS },
+                        )
                 }
             }
             "business" -> {

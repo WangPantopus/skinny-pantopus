@@ -8,9 +8,9 @@ import UnitsTab from '@/components/landlord/UnitsTab';
 import LandlordVerificationFlow from '@/components/home/LandlordVerificationFlow';
 import VerificationCenter from '@/components/home/VerificationCenter';
 import { confirmStore } from '@/components/ui/confirm-store';
-import VerifyLandlordDetailsPage from '@/app/(app)/app/homes/[id]/verify-landlord/details/page';
+import VerifyLandlordDetailsPage from '@/app/(site)/(app)/app/homes/[id]/verify-landlord/details/page';
 import { toast } from '@/components/ui/toast-store';
-import InvitePage from '@/app/(app)/app/homes/invite/page';
+import InvitePage from '@/app/(site)/(app)/app/homes/invite/page';
 
 const mockPush = jest.fn();
 const mockRouter = { push: mockPush, back: jest.fn() };

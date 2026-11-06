@@ -109,7 +109,9 @@ async function userNames(userIds) {
 }
 
 function firstOf(name) {
-  return String(name || 'A neighbor').split(' ')[0];
+  const text = String(name || '').trim();
+  // Someone with no name is "A neighbor" (planService.displayName): kept whole, never "A asked to join…".
+  return !text || text === 'A neighbor' ? 'A neighbor' : text.split(' ')[0];
 }
 
 function partyLabel(name, partySize) {

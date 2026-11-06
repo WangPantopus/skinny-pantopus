@@ -2,7 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
-import PublicProfileClient from '@/app/[username]/PublicProfileClient';
+import PublicProfileClient from '@/app/(site)/[username]/PublicProfileClient';
 import { toast } from '@/components/ui/toast-store';
 import { confirmStore } from '@/components/ui/confirm-store';
 

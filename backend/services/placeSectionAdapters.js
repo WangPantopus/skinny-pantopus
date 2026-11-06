@@ -28,6 +28,7 @@ const { createHash } = require('crypto');
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
 const { encodeGeohash } = require('../utils/geohash');
+const { GeoCache } = require('../utils/geoCache');
 const { serializePlaceSection } = require('../serializers/placeIntelligenceSerializer');
 const { readThrough, writeRow } = require('./placeSectionCache');
 const { readResponse, hasData } = require('./external/cacheHelper');
@@ -118,6 +119,12 @@ async function fetchJsonLive(url, { headers } = {}) {
 // county of the same point at the same moment; one geocoder call serves
 // them all instead of three cache misses racing.
 const countyInFlight = new Map();
+// A point's county doesn't change, and Today, the address calendar and these
+// sections ask for the same few points on every load. Each ask was a cache-row
+// read, and the calendar's county rules waited for it, so a county this process
+// has resolved is also kept here for a day (not under Jest, which mocks the row).
+const COUNTY_MEMO_MS = 24 * 60 * 60 * 1000;
+const countyMemo = new GeoCache(2000);
 
 async function homeCountyFips(home) {
   // A caller that already resolved the tract (the anonymous preview shares
@@ -131,8 +138,15 @@ async function homeCountyFips(home) {
   const ll = homeLatLng(home);
   if (!ll) return null;
   const pointKey = `geo:${encodeGeohash(ll.lat, ll.lng, 7)}`;
+  const remembered = countyMemo.get(pointKey);
+  if (remembered) return remembered;
   if (countyInFlight.has(pointKey)) return countyInFlight.get(pointKey);
-  const run = lookupCountyFips(home, ll, pointKey).finally(() => countyInFlight.delete(pointKey));
+  const run = lookupCountyFips(home, ll, pointKey)
+    .then((fips) => {
+      if (fips && process.env.NODE_ENV !== 'test') countyMemo.set(pointKey, fips, COUNTY_MEMO_MS);
+      return fips;
+    })
+    .finally(() => countyInFlight.delete(pointKey));
   countyInFlight.set(pointKey, run);
   return run;
 }
@@ -1377,6 +1391,20 @@ async function composeBallotElection(home, ballot, deadline) {
   }
 }
 
+// The "Your ballot" card from the checked reference data alone, with no
+// boundary lookup, live count, database or network read: what a Place shows
+// when its civic_election section runs out of time, so the card (and "This
+// season" with it) doesn't disappear. Null where no card applies.
+function composeCivicElectionFromReference(home) {
+  try {
+    const data = ballotSummary.summaryFromReference(home);
+    return data ? [ballotElectionSection(data)] : null;
+  } catch (err) {
+    logger.warn('placeSections: ballot card from reference data failed', { homeId: home && home.id, error: err.message });
+    return null;
+  }
+}
+
 // `budgetMs`: the section's time budget on a Place, which the card's live
 // count must not run past (see ballot/summary.js withLiveResults).
 async function composeCivicElection(home, { ballot = false, budgetMs = null } = {}) {
@@ -1589,6 +1617,7 @@ module.exports = {
   composeEnvironmentalHazards,
   composeCivicDistricts,
   composeCivicElection,
+  composeCivicElectionFromReference,
   // The preview's election row for a point (placePreviewService).
   ballotElectionSection,
   composeSeismic,

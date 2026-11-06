@@ -355,7 +355,7 @@ public struct RootTabView: View {
              .notifications, .createBusiness, .businessProfile, .businessPage,
              .editBusinessPage,
              .wallet, .paymentsSettings, .securityDevices, .notificationSettings, .assistantMemory, .assistantRules,
-             .businessOwner, .businessConversation, .viewAs, .waitingRoom, .neighborMessage,
+             .businessOwner, .businessOwnerSection, .businessConversation, .viewAs, .waitingRoom, .neighborMessage,
              .bookingDetail, .myBookings,
              .invoiceDetail,
              // Crew Day (launch cut #13) opens in the Place stack, as the side menu's rows do.

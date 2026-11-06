@@ -100,7 +100,8 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
   const [queryClient, setQueryClient] = useState(createQueryClient);
   const [sessionGeneration, setSessionGeneration] = useState(0);
   // Set while rendering, so children's first effects already read this session's cache.
-  setActiveQueryClient(queryClient);
+  // Browser only: on the server one module serves every visitor's render at once.
+  if (typeof window !== 'undefined') setActiveQueryClient(queryClient);
 
   useEffect(() => onChatHistoryRetired((event) => {
     const { rooms, mediaOnly, messageIds } = event;

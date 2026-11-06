@@ -456,7 +456,7 @@ const AQI_STALE_MS = 3 * 60 * 60 * 1000;
 // anonymous point snapshot (that section then reads unavailable and the
 // preview simply does not list it).
 function buildTodayEnvelopes({
-  weather, aqi, aqiMissing = null, weatherMissing = null, alerts, alertsMissing = null,
+  weather, aqi, aqiMissing = null, weatherMissing = null, alerts, alertsMissing = null, goodDayMissing = null,
   weatherProvider, alertsProvider, asOf = null, alertsCheckedAt = null, hub = null, home = null,
 }) {
   const out = [];
@@ -566,7 +566,9 @@ function buildTodayEnvelopes({
   if (goodDay) {
     out.push(serializePlaceSection('good_day_to', { access: 'available', asOf, data: goodDay }));
   } else {
-    out.push(serializePlaceSection('good_day_to', { access: 'available', status: 'unavailable' }));
+    out.push(serializePlaceSection('good_day_to', {
+      access: 'available', status: goodDayMissing === 'error' ? 'error' : 'unavailable',
+    }));
   }
 
   return out;
@@ -575,19 +577,23 @@ function buildTodayEnvelopes({
 // The hub payload is fetched ONCE in composeHomeIntelligence and passed
 // down (it used to be re-fetched per composer; the memo never absorbed it).
 async function composeToday(userId, home, hub) {
+  const located = Boolean(hub) && !(hub.location && hub.location.source === 'none');
+  // A provider that failed or ran out of its time (getHubToday's providerBudgetMs) is a retryable error on its own
+  // card ("Couldn't load this · Try again"), as on the preview, never "not available for your area".
+  const failed = new Set(located ? (hub.meta && hub.meta.partial_failures) || [] : []);
   // An alerts list is only an all-clear when the alerts fetch worked. On a failed fetch the orchestrator still returns
   // `alerts: []` (with 'alerts' in meta.partial_failures), and its empty result (no location, or an unexpected error)
   // never asked a provider; both read as "No active alerts" before.
-  const alertsChecked = Boolean(hub)
-    && !(hub.location && hub.location.source === 'none')
-    && !((hub.meta && hub.meta.partial_failures) || []).includes('alerts');
-  const located = Boolean(hub) && !(hub.location && hub.location.source === 'none');
-  const aqiFailed = located && ((hub.meta && hub.meta.partial_failures) || []).includes('aqi');
+  const alertsChecked = located && !failed.has('alerts');
   return buildTodayEnvelopes({
     weather: hub && hub.weather ? hub.weather : null,
+    weatherMissing: failed.has('weather') ? 'error' : null,
+    // "Good day to…" is read from the same forecast.
+    goodDayMissing: failed.has('weather') ? 'error' : null,
     aqi: hub && hub.aqi ? hub.aqi : null,
-    aqiMissing: located ? (aqiFailed ? 'error' : 'no_reading') : null,
+    aqiMissing: located ? (failed.has('aqi') ? 'error' : 'no_reading') : null,
     alerts: alertsChecked ? (hub.alerts || []) : null,
+    alertsMissing: failed.has('alerts') ? 'error' : null,
     weatherProvider: hub?.meta?.section_providers?.weather,
     alertsProvider: hub?.meta?.section_providers?.alerts,
     asOf: (hub && hub.fetched_at) || null,
@@ -751,7 +757,7 @@ async function composeTodayForPoint(lat, lng, { budgetMs = null } = {}) {
 // The weather section's provider, as the Heat & cold card credits it.
 const WEATHER_SOURCE_LABELS = { WEATHERKIT: 'Apple Weather', OPEN_METEO: 'Open-Meteo' };
 
-function composeHeatCold(home, hubPromise) {
+async function composeHeatCold(home, hubPromise) {
   const forecast = Promise.resolve(hubPromise).then((hub) => {
     const provider = hub && hub.meta && hub.meta.section_providers && hub.meta.section_providers.weather;
     return hub && hub.weather
@@ -764,7 +770,15 @@ function composeHeatCold(home, hubPromise) {
       : null;
   });
 
-  return placeSectionAdapters.composeHeatCold(home, forecast);
+  const sections = await placeSectionAdapters.composeHeatCold(home, forecast);
+  // With no forecast because the weather provider failed or ran out of time,
+  // the card is a retryable error like the weather card, not "No temperature
+  // forecast for this area".
+  const hub = await hubPromise;
+  const weatherFailed = Boolean(hub && hub.meta && (hub.meta.partial_failures || []).includes('weather'));
+  return weatherFailed
+    ? sections.map((s) => (s.status === 'unavailable' ? { ...s, status: 'error', unavailable_reason: null } : s))
+    : sections;
 }
 
 // Wedge Phase 2 (D6) — the address calendar. Never throws; a home with no
@@ -966,7 +980,13 @@ function yourHomeProvenance(profile) {
   return {};
 }
 
-async function composeYourHome(home, tier) {
+// A first lookup runs in the background (it never holds Place); the card
+// fills in when the record lands, as the Home's change signal re-reads Place
+// on every app.
+const YOUR_HOME_LOOKING_UP = "Looking up this home's county record. It fills in here by itself.";
+const VALUE_FRESH_MS = propertyIntelligenceService.CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
+
+async function composeYourHome(home, tier, viewerAccess) {
   const access = bandAccess('B', tier);
   if (access === 'locked') {
     return [serializePlaceSection('your_home', {
@@ -995,13 +1015,28 @@ async function composeYourHome(home, tier) {
   if (!profile || result.source === 'error') {
     return [serializePlaceSection('your_home', { access, status: 'unavailable' })];
   }
+  // Nothing from the county yet and no facts the household entered (the kind
+  // of home alone is Add Home's default): say the record is on its way, or (a
+  // lookup that just failed) offer Try again.
+  const nothingYet = profile.source === 'fallback'
+    && !(profile.household_fields || []).some((field) => field !== 'property_type');
+  if (nothingYet && result.lookup === 'pending') {
+    return [serializePlaceSection('your_home', { access, status: 'unavailable', unavailableReason: YOUR_HOME_LOOKING_UP })];
+  }
+  if (nothingYet && result.lookup === 'failed') {
+    return [serializePlaceSection('your_home', { access, status: 'error' })];
+  }
+  // A value estimate past its 30 days (ATTOM had nothing newer, or the refresh
+  // is still running) is kept and shown with its own date, to whoever sees it.
+  const valueAge = Date.now() - Date.parse(profile.value_as_of);
+  const oldValue = Boolean(viewerAccess && viewerAccess.isOwner) && profile.estimated_value != null && valueAge >= VALUE_FRESH_MS;
 
   return [serializePlaceSection('your_home', {
     access,
-    asOf: profile.cached_at || null,
+    asOf: (oldValue ? profile.value_as_of : profile.cached_at) || null,
     // 'cache_stale' = ATTOM was unreachable and an expired row served
     // instead (database-first resilience) — surfaced as a stale envelope.
-    status: result.source === 'cache_stale' ? 'stale' : 'ready',
+    status: result.source === 'cache_stale' || oldValue ? 'stale' : 'ready',
     ...yourHomeProvenance(profile),
     data: {
       year_built: profile.year_built ?? null,
@@ -1219,6 +1254,7 @@ const EXEMPTION_UNAVAILABLE_COPY = {
   ATTOM_UNAVAILABLE: "County exemption records aren't reachable right now, so we can't tell what's on file.",
   NO_PARCEL_MATCH: "We couldn't match this address to a county parcel record, so we can't tell what's on file.",
   NO_PROPERTY_FOUND: "We couldn't match this address to a county parcel record, so we can't tell what's on file.",
+  LOOKUP_PENDING: "Checking the county's records for this parcel. This fills in by itself.",
 };
 
 // Real Rent Benchmark (Wave 3) — what verified neighbors on this
@@ -1320,9 +1356,11 @@ async function composeExemptionCheck(home, tier) {
     // row leaves niche_data out, so it's read here for this section only;
     // without it the check asked ATTOM again and rewrote the record on every load.
     const { data: stored, error } = await supabaseAdmin
-      .from('Home').select('niche_data').eq('id', home.id).maybeSingle();
+      .from('Home').select('niche_data, address_id').eq('id', home.id).maybeSingle();
     if (error) throw error;
-    const result = await exemptionCheckService.getExemptionCheck({ ...home, niche_data: stored ? stored.niche_data : null });
+    const result = await exemptionCheckService.getExemptionCheck({
+      ...home, niche_data: stored ? stored.niche_data : null, address_id: stored ? stored.address_id : null,
+    });
     if (result.status === 'partial') {
       // not_checked: only the state's program is shown, so it is the source.
       return [serializePlaceSection('exemption_check', {
@@ -1377,7 +1415,7 @@ const COMPOSER_SECTIONS = [
   { ids: ['drinking_water'], budget: true, run: ({ home }) => placeSectionAdapters.composeDrinkingWater(home) },
   { ids: ['environmental_hazards'], budget: true, run: ({ home }) => placeSectionAdapters.composeEnvironmentalHazards(home) },
   { ids: ['block_density'], run: ({ home }) => composeDensity(home) },
-  { ids: ['your_home'], budget: true, run: ({ home, tier }) => composeYourHome(home, tier) },
+  { ids: ['your_home'], budget: true, run: ({ home, tier, access }) => composeYourHome(home, tier, access) },
   { ids: ['home_systems'], run: ({ home, tier, access }) => composeHomeSystems(home, tier, access) },
   { ids: ['bill_benchmark'], run: ({ home, access, userId }) => composeBillBenchmark(home, access, userId) },
   { ids: ['exemption_check'], budget: true, run: ({ home, tier }) => composeExemptionCheck(home, tier) },
@@ -1486,6 +1524,11 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   //
   // The hub payload's calendar and the address calendar card are for the same
   // home: they share one read of its county rules (public data).
+  //
+  // These sections share one section budget (below), so each provider gets
+  // only part of it: one that runs past that (AirNow, WeatherKit, the Weather
+  // Service) fails its own card alone, as on the preview, rather than taking
+  // weather, air quality, alerts and "Good day to…" down together.
   const countyReads = new Map();
   const HUB_SECTIONS = ['weather', 'air_quality', 'alerts', 'good_day_to', 'heat_cold'];
   let hubPromise = Promise.resolve(null);
@@ -1497,6 +1540,7 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
           detail: true,
           atLocation: { latitude: ll.lat, longitude: ll.lng, label: home.address || home.name, homeId: claimant ? null : home.id },
           countyReads,
+          providerBudgetMs: supportingLookupMs(sectionBudgetMs()),
         })
         .catch((err) => {
           logger.warn('placeIntelligence: getHubToday failed', { userId, error: err.message });
@@ -1520,18 +1564,44 @@ async function composeHomeIntelligence({ homeId, userId, access, sectionIds, bal
   // cache for the next look.
   const budgetMs = sectionBudgetMs();
   const late = [];
+  // When the budget fallbacks ran (near budgetMs unless the process itself was
+  // held up) and when every section had answered, for the over-budget log.
+  const startedAt = Date.now();
+  let firedMs = 0;
   const [privacy, ...groups] = await Promise.all([
     getHomePrivacy(homeId).catch(() => ({ address_precision: true })),
     ...runs.map(({ ids, budget, run }) => {
       const compose = () => run({ home: subject, userId, tier, hubPromise, access, ballot: ballotOn, claimant, countyReads, budgetMs });
       if (!budget) return compose();
-      return withBudget(compose, budgetMs, () => {
+      let over = false;
+      // A section past its budget keeps running to fill its cache; its real
+      // time is logged when it ends, so the slow source can be named.
+      const timed = () => {
+        const attempt = Promise.resolve().then(compose);
+        attempt.then(
+          () => { if (over) logger.warn('placeIntelligence: late section finished', { homeId, sections: ids, ms: Date.now() - startedAt }); },
+          (err) => { if (over) logger.warn('placeIntelligence: late section failed', { homeId, sections: ids, ms: Date.now() - startedAt, error: err.message }); },
+        );
+        return attempt;
+      };
+      return withBudget(timed, budgetMs, () => {
+        over = true;
+        firedMs = Math.max(firedMs, Date.now() - startedAt);
         late.push(...ids);
-        return failedSections(ids, tier)();
+        // Past its budget the ballot card still comes, from the checked
+        // reference data alone (no boundary lookup or live count), so "This
+        // season" stays on the page; the next load has the rest.
+        const card = ballotOn && ids.includes('civic_election')
+          ? placeSectionAdapters.composeCivicElectionFromReference(subject) : null;
+        return card || failedSections(ids, tier)();
       });
     }),
   ]);
-  if (late.length) logger.warn('placeIntelligence: sections over budget', { homeId, sections: late, budgetMs });
+  if (late.length) {
+    logger.warn('placeIntelligence: sections over budget', {
+      homeId, sections: late, budgetMs, fired_ms: firedMs, total_ms: Date.now() - startedAt,
+    });
+  }
 
   const composed = {};
   for (const env of groups.flat()) composed[env.id] = env;

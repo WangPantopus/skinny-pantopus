@@ -16,7 +16,7 @@
 //  security code shows the "signed out for security" banner.
 //
 
-// swiftlint:disable file_length
+// swiftlint:disable file_length type_body_length
 
 import SwiftUI
 
@@ -41,6 +41,10 @@ struct LoginView: View {
     /// The address preview's Continue opens Create account first, with Log in under it. Its X closes back
     /// to the preview until Log in has shown; after that it goes back to Log in, as on Android.
     @State private var signUpIsFirst: Bool
+    /// The iPhone Duo's fold where it crosses the form's scroll view, in the scroll view's coordinates.
+    @State private var fold: CGRect?
+    /// Where the fields start in the form's column, measured from its top (the column as it rests, unscrolled).
+    @State private var fieldsTop: CGFloat = 0
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -108,6 +112,14 @@ struct LoginView: View {
                     if let info = viewModel.infoMessage {
                         LoginNote(icon: .mail, text: info, identifier: "loginInfoBanner")
                     }
+
+                    // Half folded like a laptop, the fold runs across the form: the heading stays above it and the
+                    // fields start below it, instead of a field or "Forgot password?" sitting on the crease.
+                    Color.clear
+                        .frame(height: fieldsGap)
+                        .onGeometryChange(for: CGFloat.self) { proxy in
+                            proxy.frame(in: .named(Self.column)).minY
+                        } action: { fieldsTop = $0 }
 
                     VStack(spacing: Spacing.s3) {
                         // `.username` (not `.emailAddress`) so Password AutoFill
@@ -247,7 +259,9 @@ struct LoginView: View {
                         .padding(.bottom, Spacing.s4)
                 }
                 .frame(maxWidth: .infinity)
+                .coordinateSpace(.named(Self.column))
             }
+            .readsActiveFold($fold)
             .modifier(LoginKeyboardReveal(isEditing: focusedField != nil))
             .background(Theme.Color.appSurface)
             .overlay(alignment: .topTrailing) {
@@ -262,6 +276,8 @@ struct LoginView: View {
                     .padding(.trailing, Spacing.s4)
                 }
             }
+            // Half folded like a book, the form keeps to one page instead of running its buttons across the crease.
+            .readableColumnBesideFold()
             .readableColumn()
             .navigationBarHidden(true)
             .swipesBackFromEdge()
@@ -391,6 +407,16 @@ struct LoginView: View {
 }
 
 private extension LoginView {
+    static let column = "loginColumn"
+
+    /// Room before the fields while the Duo's fold runs across the screen (tabletop), so they start just below it.
+    /// The fold is read on the scroll view, which doesn't move, and the fields' top in the column as it rests, so the
+    /// gap holds still while the form scrolls. None for a fold down the screen (book) or no fold.
+    var fieldsGap: CGFloat {
+        guard let fold, fold.width > fold.height, fieldsTop < fold.maxY else { return 0 }
+        return fold.maxY - fieldsTop
+    }
+
     /// Create account. A friend's link that arrives while it is open swaps the code on the screen already showing,
     /// which filled in its code and inviter only when it opened; one screen per code starts Create account over for
     /// the new link, as Android does.

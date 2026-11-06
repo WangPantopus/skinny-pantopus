@@ -57,7 +57,7 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
 - [x] The election feature is shelved until the 2027 Washington local elections. Its canvas and guide stay as they are. **Reversed October 6 (founder): Ballot ships for the November 3 general election, on web, iOS and Android, behind `ballot_p0`; see the Ballot section.**
 - [x] On a pickup evening the pickup leads the push; only a serious weather alert beats it. Nearby updates never lead an evening push.
 - [x] Task reminders arrive the morning of the due day in the household's time zone; Support Train reminders use the train's local time.
-- [x] The task-completed push doesn't name the task or the person on the lock screen.
+- [x] The task-completed push doesn't name the task or the person on the lock screen. **Reversed November 5 (founder): notifications show their content and the phone hides it while locked; the task-completed push names the person and the task (see November 5 below).**
 
 **Made by the founder on October 6.**
 
@@ -263,6 +263,15 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
   - Safari's install banner is off the friend-invite page and off plan invitation links, because installing from it drops the link.
   - No server change, no new tables.
 - [ ] Yours, with the next store builds: on a phone without Pantopus, open a friend's invite link, get the app from the page's button and open it. Android should open Create account with "<name> invited you". The iPhone should offer Paste, then do the same. Try a plan's "Text an invite" link the same way: the plan should open once you sign up or sign in. A store install can't be done on a simulator or an emulator, so this is the one step not checked yet.
+
+**Made by the founder on November 5 (notification previews).** You sent two iOS banners reading "New message — Open Pantopus to read it." and asked that notifications show their content "as long as they unlocked the screen ... just like how they see everything from other apps".
+
+- [x] Notifications show their content. A locked phone hides it by its own setting, as for other apps: iOS Show Previews (When Unlocked by default; chats then read "New message") and Android's sensitive-content setting (chats then read "New message", the rest "New notification"). No new in-app setting.
+  - Chat: the sender and the message, or a group's name with "Sender: message". A business-inbox notice says what its bell row says ("New message for <business>", "<sender>: <message>").
+  - Task assigned and task completed name the person and the task ("Sam R. completed a task", "Test for radon"); their bell rows stay generic, because a bell row outlives the reader's access to the Home. The Mail Day copy names who the mail is from (that job doesn't run today).
+  - Unchanged: people are named as the chat or the Home names them (never a staff member's or a private name), and blocks, mutes, read and deletion checks and deliberately anonymous notices stay.
+  - PRs: backend [3431](https://github.com/WangPantopus/skinny-pantopus/pull/3431), iOS [3429](https://github.com/WangPantopus/skinny-pantopus/pull/3429), Android [3430](https://github.com/WangPantopus/skinny-pantopus/pull/3430). The backend change reaches today's store apps at once; the iOS placeholder and the Android lock-screen stand-in come with the next store builds.
+- [ ] Optional hardening, yours if you want it: an iOS Notification Service Extension that drops a chat push meant for an account no longer signed in. It needs a new App ID and provisioning in Apple's console. Without it, a push already queued at Apple when someone signs out can still show once; sign-out already deletes the phone's push tokens and clears its delivered notifications.
 
 **Still open. The brief builds the default until you decide.**
 
@@ -805,13 +814,19 @@ status), and the 42 screens are on the [Crew Day designs canvas](https://claude.
   - Each scenario's steps and notes are in [04-scenarios.md](docs/product/crew-day-build/04-scenarios.md) and
     [05-status.md](docs/product/crew-day-build/05-status.md).
 - [ ] Yours, to release:
-  1. Rename the migration so it sorts after master's newest (`20261105120000_pulse_user_home_area_context.sql` on
-     November 6), and check it with `MIGRATION_BASE_SHA=$(git rev-parse origin/master) node scripts/db/check-migrations.cjs`.
-  2. Merge `crew-day` into `master`. That deploys the server, runs the migration on the production database and
-     deploys the web to pantopus.com, with Crew Day still off. Bring `master` into `crew-day` first. On November 6
-     `master` was 98 commits ahead, and only the iOS and Android deep-link routers conflicted: both sides add link
-     cases, so keep both.
-  3. To turn it on, add `crew_day` to `LAUNCH_FEATURES` (server), `NEXT_PUBLIC_LAUNCH_FEATURES` (Vercel) and
+  1. Master was brought into `crew-day` on November 6 ([#3460](https://github.com/WangPantopus/skinny-pantopus/pull/3460)).
+     Only the iOS and Android deep-link routers conflicted (both sides add link cases, both kept), and Crew Day's web
+     pages moved into `(site)` with master's other pages. If master moves on before the release, bring it in again
+     the same way.
+  2. Release from the branch `claude/cd-release`: `crew-day` plus one commit that renames the migration to sort after
+     master's newest (`20261106054000_crew_day.sql`). CI's migration check refuses that rename on a PR into
+     `crew-day` and passes on a PR into `master`. Open the branch's PR into `master` and merge it. If master gains a
+     newer migration first, rename again. A local database that applied the old name needs
+     `supabase migration repair --status reverted 20261105100000` and
+     `supabase migration repair --status applied 20261106054000`, or a reset.
+  3. That merge deploys the server, runs the migration on the production database and deploys the web to
+     pantopus.com, with Crew Day still off.
+  4. To turn it on, add `crew_day` to `LAUNCH_FEATURES` (server), `NEXT_PUBLIC_LAUNCH_FEATURES` (Vercel) and
      `PANTOPUS_LAUNCH_FEATURES` (the iOS and Android release builds), then ship app builds.
 
   Storage, scheduled jobs, email and Stripe need nothing new. The jobs ride the existing worker and skip while the key

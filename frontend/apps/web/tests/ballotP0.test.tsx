@@ -38,7 +38,7 @@ import GovernmentsSheet, { GovernmentsView, storyOverline } from '@/components/b
 import { asOfLabel, daysLeft, monthDay } from '@/components/ballot/format';
 import CivicDetail from '@/components/place/detail/CivicDetail';
 import PlaceDashboardView from '@/components/place/PlaceDashboardView';
-import HubTodayPage from '@/app/(app)/app/hub/today/page';
+import HubTodayPage from '@/app/(site)/(app)/app/hub/today/page';
 import { PreviewBody } from '@/components/place/StartFunnel';
 
 function deadline(key: string, label: string, date: string, days: number, extra: Partial<BallotDeadline> = {}): BallotDeadline {

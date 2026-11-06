@@ -1,7 +1,7 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import * as api from '@pantopus/api';
 import ResidencyClaimsPanel from '@/components/home/ResidencyClaimsPanel';
-import ReviewClaimPage from '@/app/(app)/app/homes/[id]/owners/review-claim/page';
+import ReviewClaimPage from '@/app/(site)/(app)/app/homes/[id]/owners/review-claim/page';
 import { useResidencyQueue } from '@/components/home/residency/queue/useResidencyQueue';
 import { QUEUE_SESSION_PATH, type QueueClaim } from '@/components/home/residency/queue/queueModel';
 

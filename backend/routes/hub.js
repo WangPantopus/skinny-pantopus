@@ -57,7 +57,15 @@ router.get('/', verifyToken, async (req, res) => {
 
   try {
     // ── Parallel batch 1: User-level data (no dependencies) ──
-    const [userResult, walletResult, earningsRpcResult, occupancyResult, bizTeamResult, skillsResult, stripeResult] =
+    // The BusinessTeam rows (used when the person has no seats) and the verified-owner fallback below are read
+    // in this batch too, rather than after it: neither depends on it.
+    const businessTeamRead = Promise.resolve(supabaseAdmin
+      .from('BusinessTeam')
+      .select('business_user_id, role_base, title, business:business_user_id(id, username, name, profile_picture_url)')
+      .eq('user_id', userId)
+      .eq('is_active', true)).then((value) => ({ value }), (error) => ({ error }));
+    const [userResult, walletResult, earningsRpcResult, occupancyResult, bizTeamResult, skillsResult, stripeResult,
+      ownerResult] =
       await Promise.all([
         supabaseAdmin
           .from('User')
@@ -96,11 +104,9 @@ router.get('/', verifyToken, async (req, res) => {
               },
             })) };
           }
-          return supabaseAdmin
-            .from('BusinessTeam')
-            .select('business_user_id, role_base, title, business:business_user_id(id, username, name, profile_picture_url)')
-            .eq('user_id', userId)
-            .eq('is_active', true);
+          const { value, error } = await businessTeamRead;
+          if (error) throw error;
+          return value;
         })(),
         supabaseAdmin
           .from('UserSkill')
@@ -113,6 +119,11 @@ router.get('/', verifyToken, async (req, res) => {
             .eq('user_id', userId)
             .maybeSingle()
         ).catch(() => ({ data: null })),
+        supabaseAdmin
+          .from('HomeOwner')
+          .select('home_id')
+          .eq('subject_id', userId)
+          .eq('owner_status', 'verified'),
       ]);
 
     const { data: user, error: userErr } = userResult;
@@ -122,15 +133,14 @@ router.get('/', verifyToken, async (req, res) => {
     }
 
     // What can be withdrawn: income held for an open payment dispute is not ready, and what is still owed for a
-    // refunded or disputed payment is paid first.
+    // refunded or disputed payment is paid first. Both are read alongside the Home states below.
     const walletService = require('../services/walletService');
-    const [disputeHoldCents, owedCents] = walletResult.data?.balance
-      ? await Promise.all([
+    const walletHoldsRead = walletResult.data?.balance
+      ? Promise.all([
         walletService.getDisputeHold(userId).then((hold) => hold.cents).catch(() => 0),
         walletService.getOpenDebt(userId).catch(() => 0),
       ])
-      : [0, 0];
-    const walletBalance = Math.max(0, (walletResult.data?.balance || 0) - disputeHoldCents - owedCents);
+      : Promise.resolve([0, 0]);
     const lifetimeReceived = walletResult.data?.lifetime_received ?? 0;
     const earningsFromPayments = (earningsRpcResult && typeof earningsRpcResult === 'object' && earningsRpcResult.total_earned != null)
       ? Number(earningsRpcResult.total_earned) || 0
@@ -166,20 +176,28 @@ router.get('/', verifyToken, async (req, res) => {
 
     // Include homes where user is a verified owner (in case occupancy is missing or out of sync after claim approval)
     const occupancyHomeIds = new Set(homes.map((h) => h.id));
-    const { data: ownerRows, error: ownerErr } = await supabaseAdmin
-      .from('HomeOwner')
-      .select('home_id')
-      .eq('subject_id', userId)
-      .eq('owner_status', 'verified');
+    const { data: ownerRows, error: ownerErr } = ownerResult;
     if (ownerErr) {
       logger.warn('Hub: HomeOwner fallback query failed', { userId, error: ownerErr.message });
     }
     const ownerHomeIds = [...new Set((ownerRows || []).map((r) => r.home_id).filter((id) => id && !occupancyHomeIds.has(id)))];
-    if (ownerHomeIds.length > 0) {
-      const { data: ownerHomes, error: homeErr } = await supabaseAdmin
-        .from('Home')
-        .select('id, name, address, city, state, zipcode, map_center_lat, map_center_lng')
-        .in('id', ownerHomeIds);
+    // Home data follows the Home list's access state (GET /api/homes/my-homes
+    // and /primary). The states are read in the same round as the owner-only
+    // Homes' rows; a state counts only for a Home that ends up in the list.
+    const stateReads = new Map([...homes.map((home) => home.id), ...ownerHomeIds].map((homeId) => [homeId,
+      homeListService.readAccessState(homeId, userId).then((value) => ({ value }), (error) => ({ error }))]));
+    const [ownerHomesResult, [disputeHoldCents, owedCents]] = await Promise.all([
+      ownerHomeIds.length > 0
+        ? supabaseAdmin
+          .from('Home')
+          .select('id, name, address, city, state, zipcode, map_center_lat, map_center_lng')
+          .in('id', ownerHomeIds)
+        : null,
+      walletHoldsRead,
+    ]);
+    const walletBalance = Math.max(0, (walletResult.data?.balance || 0) - disputeHoldCents - owedCents);
+    if (ownerHomesResult) {
+      const { data: ownerHomes, error: homeErr } = ownerHomesResult;
       if (homeErr) {
         logger.warn('Hub: Home fetch for owner fallback failed', { ownerHomeIds, error: homeErr.message });
       }
@@ -198,13 +216,16 @@ router.get('/', verifyToken, async (req, res) => {
       }
     }
 
-    // Home data follows the Home list's access state (GET /api/homes/my-homes
-    // and /primary). Only a Home the caller currently shares can be primary and
+    // Only a Home the caller currently shares can be primary and
     // feed the Home card. Any other entry (a pending application, ended or
     // fenced access) stays for the setup steps with the list's safe projection
     // instead of the Home's name, address and location; the caller's own
     // private setup keeps its details.
-    const homeStates = await Promise.all(homes.map((home) => homeListService.readAccessState(home.id, userId)));
+    const homeStates = await Promise.all(homes.map(async (home) => {
+      const { value, error } = await stateReads.get(home.id);
+      if (error) throw error;
+      return value;
+    }));
     homes.forEach((home, i) => {
       if (['shared', 'private_setup'].includes(homeStates[i].mode)) return;
       Object.assign(home, { name: 'Home verification', addressShort: '', city: null, state: null, latitude: null, longitude: null });

@@ -99,6 +99,7 @@ import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.feed.map.FeedMapQuery
 import app.pantopus.android.ui.screens.feed.map.FeedMapSection
 import app.pantopus.android.ui.screens.feed.map.FeedViewMode
+import app.pantopus.android.ui.screens.feed.pulse.PulseAuthorLink
 import app.pantopus.android.ui.screens.feed.pulse.PulseFeedUiState
 import app.pantopus.android.ui.screens.feed.pulse.PulseFeedViewModel
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
@@ -142,6 +143,8 @@ fun FeedScreen(
      */
     header: (@Composable () -> Unit)? = null,
     onOpenPost: (String) -> Unit = {},
+    /** Opens a card's author (their profile or business page); null leaves authors plain. */
+    onOpenAuthor: ((PulseAuthorLink) -> Unit)? = null,
     onCompose: (PulseIntent) -> Unit = {},
     onEmptyCta: (() -> Unit)? = null,
     onFollowing: (() -> Unit)? = null,
@@ -499,6 +502,7 @@ fun FeedScreen(
                                         onDismissSeeded = viewModel::dismissSeededFact,
                                         onToggleSave = viewModel::toggleSave,
                                         onToggleRepost = viewModel::toggleRepost,
+                                        onOpenAuthor = onOpenAuthor,
                                     ),
                             )
                         is PulseFeedUiState.Error ->
@@ -766,6 +770,7 @@ internal data class PulseFeedRowActions(
     val onDismissSeeded: (String) -> Unit = {},
     val onToggleSave: (String) -> Unit = {},
     val onToggleRepost: (String) -> Unit = {},
+    val onOpenAuthor: ((PulseAuthorLink) -> Unit)? = null,
 )
 
 /**
@@ -1622,5 +1627,6 @@ private fun FeedPostRow(
         onDismissSeeded = if (seeded) ({ rowActions.onDismissSeeded(row.id) }) else null,
         onToggleSave = if (seeded) null else ({ rowActions.onToggleSave(row.id) }),
         onToggleRepost = if (seeded) null else ({ rowActions.onToggleRepost(row.id) }),
+        onOpenAuthor = row.authorLink?.let { link -> rowActions.onOpenAuthor?.let { open -> { open(link) } } },
     )
 }

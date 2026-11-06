@@ -150,8 +150,9 @@ private struct FoldClearCentering: Layout {
     }
 }
 
-private extension View {
+extension View {
     /// Keeps `fold` at the iPhone Duo's fold while it is half folded and the fold crosses this view; nil otherwise.
+    /// `ReadableColumn` reads it too.
     @ViewBuilder
     func readsActiveFold(_ fold: Binding<CGRect?>) -> some View {
         #if compiler(>=6.4)

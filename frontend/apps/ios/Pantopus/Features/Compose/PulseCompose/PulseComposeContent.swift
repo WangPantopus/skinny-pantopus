@@ -637,16 +637,32 @@ public struct PulseComposeContent: View {
             Text("Category")
                 .pantopusTextStyle(.caption)
                 .foregroundStyle(Theme.Color.appTextSecondary)
-            HStack(spacing: Spacing.s2) {
-                ForEach(PulseAskCategory.allCases, id: \.rawValue) { cat in
-                    chipPill(
-                        label: cat.label,
-                        isActive: state.askCategory == cat,
-                        identifier: "composePulseAskCategory_\(cat.rawValue)"
-                    ) {
-                        actions.onSelectAskCategory(cat)
+            // One row of chips where they fit; where they don't (an SE, the iPhone Duo closed or half folded), two
+            // rows of whole chips rather than a label broken mid-word ("Handyma / n").
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Spacing.s2) {
+                    categoryChips(PulseAskCategory.allCases)
+                }
+                VStack(alignment: .leading, spacing: Spacing.s2) {
+                    HStack(spacing: Spacing.s2) {
+                        categoryChips(Array(PulseAskCategory.allCases.prefix(2)))
+                    }
+                    HStack(spacing: Spacing.s2) {
+                        categoryChips(Array(PulseAskCategory.allCases.dropFirst(2)))
                     }
                 }
+            }
+        }
+    }
+
+    private func categoryChips(_ categories: [PulseAskCategory]) -> some View {
+        ForEach(categories, id: \.rawValue) { cat in
+            chipPill(
+                label: cat.label,
+                isActive: state.askCategory == cat,
+                identifier: "composePulseAskCategory_\(cat.rawValue)"
+            ) {
+                actions.onSelectAskCategory(cat)
             }
         }
     }

@@ -167,12 +167,12 @@ const mockApi = {
 jest.mock('@pantopus/api', () => mockApi);
 
 const PostComposer = require('../src/components/feed/PostComposer').default;
-const IdentityCenterPage = require('../src/app/(app)/app/identity/page').default;
-const SettingsPage = require('../src/app/(app)/app/profile/settings/page').default;
-const AudienceProfileSettingsPage = require('../src/app/(app)/app/persona/page').default;
-const PersonaBroadcastPage = require('../src/app/(app)/app/persona/broadcast/page').default;
-const AudienceProfilePage = require('../src/app/persona/[personaHandle]/page').default;
-const LegacyPublicProfilePage = require('../src/app/[username]/page').default;
+const IdentityCenterPage = require('../src/app/(site)/(app)/app/identity/page').default;
+const SettingsPage = require('../src/app/(site)/(app)/app/profile/settings/page').default;
+const AudienceProfileSettingsPage = require('../src/app/(site)/(app)/app/persona/page').default;
+const PersonaBroadcastPage = require('../src/app/(site)/(app)/app/persona/broadcast/page').default;
+const AudienceProfilePage = require('../src/app/(site)/persona/[personaHandle]/page').default;
+const LegacyPublicProfilePage = require('../src/app/(site)/[username]/page').default;
 const { middleware } = require('../src/middleware');
 const { toast: mockToast } = require('@/components/ui/toast-store');
 
@@ -1109,7 +1109,7 @@ describe('Profiles & Privacy web pages', () => {
     expect(mockNotFound).not.toHaveBeenCalled();
 
     const profilePageSource = fs.readFileSync(
-      path.resolve(__dirname, '../src/app/(app)/app/profile/page.tsx'),
+      path.resolve(__dirname, '../src/app/(site)/(app)/app/profile/page.tsx'),
       'utf8',
     );
     // Your profile at /app/profile is the public profile page itself, in owner mode (PRF WEB-2).

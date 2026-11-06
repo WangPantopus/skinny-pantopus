@@ -1479,6 +1479,16 @@ public struct HubTabRoot: View {
         case let .businessOwner(businessId):
             path.append(.businessOwner(businessId: businessId))
             _ = router.consume()
+        case let .businessOwnerSection(businessId, section):
+            // A payment, invoice or verification notice: the owner view underneath, so Back lands on the
+            // business, then the section the notice is about (the web opens that dashboard tab).
+            path.append(.businessOwner(businessId: businessId))
+            switch section {
+            case .payments: path.append(.businessPaymentsOwner(businessId: businessId))
+            case .invoices: path.append(.businessInvoicesOwner(businessId: businessId))
+            case .legal: path.append(.businessLegal(businessId: businessId))
+            }
+            _ = router.consume()
         case let .businessConversation(businessId, roomId):
             // A business inbox notice: the owner view underneath, so Back
             // lands on the business, then the thread acting as the business.
@@ -2322,11 +2332,15 @@ public struct HubTabRoot: View {
             }
         case let .homeMembers(homeId):
             // Guests tab "Add a guest": the guest-pass manager, which lists the new pass on return.
-            MembersListView(homeId: homeId) {
+            MembersListView(homeId: homeId) { userId in
+                Task { @MainActor in push(.publicProfile(userId: userId)) }
+            } onAddGuest: {
                 Task { @MainActor in push(.guestPasses(homeId: homeId)) }
             }
         case let .homeMemberRequests(homeId):
-            MembersListView(homeId: homeId, initialTab: MembersTab.requests) {
+            MembersListView(homeId: homeId, initialTab: MembersTab.requests) { userId in
+                Task { @MainActor in push(.publicProfile(userId: userId)) }
+            } onAddGuest: {
                 Task { @MainActor in push(.guestPasses(homeId: homeId)) }
             }
         case let .homeOwners(homeId):
@@ -2688,6 +2702,14 @@ public struct HubTabRoot: View {
                 onOpenPost: { postId in
                     Task { @MainActor in push(.pulsePost(postId: postId)) }
                 },
+                onOpenAuthor: { link in
+                    switch link {
+                    case let .person(userId):
+                        Task { @MainActor in push(.publicProfile(userId: userId)) }
+                    case let .business(businessId):
+                        Task { @MainActor in push(.businessProfile(businessId: businessId)) }
+                    }
+                },
                 onCompose: { intent in
                     Task { @MainActor in push(.composePost(intent: intent.rawValue)) }
                 },
@@ -2837,6 +2859,9 @@ public struct HubTabRoot: View {
                     Task { @MainActor in
                         push(.chatConversation(destination))
                     }
+                },
+                onOpenProfile: { userId in
+                    Task { @MainActor in push(.publicProfile(userId: userId)) }
                 }
             )
         case let .composeGig(category, checklist):
@@ -3072,6 +3097,9 @@ public struct HubTabRoot: View {
                 },
                 onOpenChat: { destination in
                     Task { @MainActor in push(.chatConversation(destination)) }
+                },
+                onOpenProfile: { userId in
+                    Task { @MainActor in push(.publicProfile(userId: userId)) }
                 }
             )
         case let .reviewSignups(supportTrainId):
@@ -3755,7 +3783,7 @@ public struct HubTabRoot: View {
                 onOpenPost: { postId in Task { @MainActor in push(.pulsePost(postId: postId)) } }
             )
         case let .businessTeam(businessId):
-            BusinessTeamView(businessId: businessId)
+            BusinessTeamView(businessId: businessId) { push(.publicProfile(userId: $0)) }
         case let .businessPaymentsOwner(businessId):
             BusinessPaymentsView(businessId: businessId)
         case let .businessInvoicesOwner(businessId):

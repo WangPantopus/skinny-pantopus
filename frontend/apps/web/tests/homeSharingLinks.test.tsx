@@ -4,9 +4,9 @@ import * as api from '@pantopus/api';
 import CreateGuestPass from '../src/components/home/share/CreateGuestPass';
 import ScopedShareModal from '../src/components/home/share/ScopedShareModal';
 import ShareCenter from '../src/components/home/share/ShareCenter';
-import GuestViewPage from '../src/app/guest/[token]/page';
-import SharedResourcePage from '../src/app/shared/[token]/page';
-import SharePage from '../src/app/(app)/app/homes/[id]/share/page';
+import GuestViewPage from '../src/app/(site)/guest/[token]/page';
+import SharedResourcePage from '../src/app/(site)/shared/[token]/page';
+import SharePage from '../src/app/(site)/(app)/app/homes/[id]/share/page';
 
 jest.mock('@pantopus/api', () => ({ homeIam: {
   createGuestPass: jest.fn(), createScopedGrant: jest.fn(),

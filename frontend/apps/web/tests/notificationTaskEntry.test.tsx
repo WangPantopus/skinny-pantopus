@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import NotificationBell from '../src/components/NotificationBell';
-import NotificationsPage from '../src/app/(app)/app/notifications/page';
+import NotificationsPage from '../src/app/(site)/(app)/app/notifications/page';
 
 const push = jest.fn();
 const router = { push, replace: jest.fn() };

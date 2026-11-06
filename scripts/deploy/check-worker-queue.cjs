@@ -44,6 +44,8 @@ vm.runInNewContext(fs.readFileSync('/app/jobs/pgBossJobs.js', 'utf8'), {
   require: name => {
     if (name === '../utils/logger') return { info() {}, error() {} };
     if (name === '../config/householdClaims') return { jobs: { dryRun: true } };
+    // The job runner's database-time ledger (utils/dbTiming.js) is real; it has no side effects.
+    if (name === '../utils/dbTiming') return require('/app/utils/dbTiming');
     assert.match(name, /^\.\//);
     return async () => {
       const count = (calls.get(name) || 0) + 1;

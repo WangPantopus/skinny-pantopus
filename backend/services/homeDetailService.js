@@ -66,7 +66,7 @@ function localRef(ref, people) {
 
 async function readHome(homeId, access, { provider = false } = {}) {
   const fields = [...HOME_FIELDS, ...(access.permissions.includes('access.view_codes') ? INSTRUCTION_FIELDS : [])];
-  const raw = await checked(db.from('Home').select([...fields, ...(provider ? ['niche_data'] : [])].join(', ')).eq('id', homeId).maybeSingle());
+  const raw = await checked(db.from('Home').select([...fields, ...(provider ? ['niche_data', 'address_id'] : [])].join(', ')).eq('id', homeId).maybeSingle());
   if (!object(raw) || raw.id !== homeId || fields.some(key => !Object.hasOwn(raw, key))
     || ['address', 'city', 'state', 'zipcode', 'home_status', 'security_state'].some(key => typeof raw[key] !== 'string')) throw failure();
   for (const key of fields.filter(key => !['is_owner', 'location', 'bedrooms', 'bathrooms', 'sq_ft', 'lot_sq_ft', 'year_built'].includes(key))) {
@@ -201,7 +201,9 @@ async function propertyDetail(homeId, actorId) {
       const { home } = await readHome(homeId, access);
       return { home, attom_property_detail: null, source: 'unavailable', unavailable_reason: 'OWNER_ONLY', county_record: null };
     }
-    // ATTOM's value estimate comes from the cache only, read alongside the Home.
+    // ATTOM's value estimate comes from the cache only, read alongside the Home. A Home without its record gets it
+    // looked up in the background (LOOKUP_PENDING): this answer never waits for ATTOM, and the record's arrival on
+    // the Home tells the page to read again.
     const [{ home, raw }, avm] = await Promise.all([readHome(homeId, access, { provider: true }), property.getCachedAttomValue(homeId)]);
     const result = await property.getHomeAttomPropertyDetail(raw);
     if (!result || !['home', 'cache', 'attom', 'unavailable'].includes(result.source)

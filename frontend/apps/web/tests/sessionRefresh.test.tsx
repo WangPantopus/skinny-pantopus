@@ -158,7 +158,7 @@ describe('/session/refresh page', () => {
   });
 
   function loadPage() {
-    const Page = require('../src/app/session/refresh/page').default;
+    const Page = require('../src/app/(site)/session/refresh/page').default;
     return render(<Page />);
   }
 

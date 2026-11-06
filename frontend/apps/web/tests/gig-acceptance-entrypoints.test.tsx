@@ -3,9 +3,9 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import OffersPanel from '@/components/gig-detail/OffersPanel';
 import GigChatActions from '@/components/chat/GigChatActions';
-import MyGigsPage from '@/app/(app)/app/my-gigs/page';
-import MyGigsV2Page from '@/app/(app)/app/my-gigs-v2/page';
-import MyBidsPage from '@/app/(app)/app/my-bids/page';
+import MyGigsPage from '@/app/(site)/(app)/app/my-gigs/page';
+import MyGigsV2Page from '@/app/(site)/(app)/app/my-gigs-v2/page';
+import MyBidsPage from '@/app/(site)/(app)/app/my-bids/page';
 import ActiveTaskPanel from '@/components/gig-detail-v2/ActiveTaskPanel';
 import ETATracker from '@/components/gig-detail-v2/ETATracker';
 import { confirmStore } from '@/components/ui/confirm-store';

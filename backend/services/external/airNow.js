@@ -174,7 +174,8 @@ async function fetchAQI(lat, lng) {
   }
 
   const failed = async () => {
-    await setCache(PROVIDER, placeKey, { failed: true }, ERROR_TTL_MINUTES);
+    // Cache writes run in the background (setCache never rejects), off the reading caller's time.
+    void setCache(PROVIDER, placeKey, { failed: true }, ERROR_TTL_MINUTES);
     return { aqi: null, source: 'error', fetchedAt: new Date().toISOString() };
   };
 
@@ -215,7 +216,7 @@ async function fetchAQI(lat, lng) {
     const noObservations = raw && !Array.isArray(raw) && Array.isArray(raw.WebServiceError)
       && raw.WebServiceError.some((e) => /no observations/i.test(String((e && e.Message) || '')));
     if (noObservations) {
-      await setCache(PROVIDER, placeKey, { raw: [], normalized: null }, TTL_MINUTES);
+      void setCache(PROVIDER, placeKey, { raw: [], normalized: null }, TTL_MINUTES);
       return { aqi: null, source: 'live', fetchedAt: new Date().toISOString() };
     }
 
@@ -226,7 +227,7 @@ async function fetchAQI(lat, lng) {
     const normalized = pickPrimary(raw.map(normaliseObservation));
 
     // 3. Cache the result
-    await setCache(PROVIDER, placeKey, { raw, normalized }, TTL_MINUTES);
+    void setCache(PROVIDER, placeKey, { raw, normalized }, TTL_MINUTES);
 
     return {
       aqi: normalized,

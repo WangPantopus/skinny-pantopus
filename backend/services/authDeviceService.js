@@ -607,6 +607,24 @@ async function markDeviceSuspect(userId, deviceRow, reason) {
 }
 
 /**
+ * A session the server ended (inactivity, a device-key mismatch, refresh-token
+ * reuse) signs the phone out at its next request, with no logout call of its
+ * own, so the device's push tokens go here: otherwise the signed-out phone
+ * keeps showing this account's notifications until someone signs in on it.
+ * Kept when the person has signed in again on the device since (that newer
+ * session owns the token). The next sign-in registers the token again.
+ */
+async function dropPushForEndedSession(session, device) {
+  if (!session?.user_id || !device?.id || !device.device_id) return;
+  try {
+    if (await hasNewerSessionOnDevice(session.user_id, device.id, session)) return;
+    await pushService.removeTokensForDevice(session.user_id, device.device_id);
+  } catch (err) {
+    logger.warn('auth.session_end.push_cleanup_failed', { sessionId: session.id, error: err.message });
+  }
+}
+
+/**
  * Proof mismatch on a bound session: revoke the session, mark the device
  * suspect, event + security email/push.
  */
@@ -614,6 +632,7 @@ async function markMismatch({ session, device, req, reason = 'mismatch' }) {
   if (!session) return;
   const userId = session.user_id;
   await authSessionService.revokeSessionRow(session.id, 'mismatch', { userId });
+  await dropPushForEndedSession(session, device);
   await markDeviceSuspect(userId, device, reason);
   await authSessionService.recordSecurityEvent({
     userId,
@@ -639,6 +658,7 @@ async function markReuse({ session, req }) {
   const userId = session.user_id;
   const device = session.device_id ? await getDevice(session.device_id) : null;
   await authSessionService.revokeSessionRow(session.id, 'reuse', { userId });
+  await dropPushForEndedSession(session, device);
   await markDeviceSuspect(userId, device, 'reuse');
   await authSessionService.recordSecurityEvent({
     userId,
@@ -730,6 +750,7 @@ async function checkRefresh({ refreshToken, sessionId, accessToken, dpop, req, c
   if (isInactive(session, device)) {
     if (tokenResolved) {
       await authSessionService.revokeSessionRow(session.id, 'inactivity', { userId: session.user_id });
+      await dropPushForEndedSession(session, device);
       await authSessionService.recordSecurityEvent({
         userId: session.user_id,
         deviceRowId: device?.id || null,

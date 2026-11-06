@@ -18,6 +18,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { BusinessUser, BusinessProfile, BusinessLocation, BusinessHours, BusinessPage, CatalogItem, BusinessReview, PageBlock } from '@pantopus/types';
 import { PublicBlock } from './PublicBlockRenderer';
+import UserAvatarLink from '@/components/user/UserAvatarLink';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { EndorsementSummary, EndorsementButton } from '@/components/endorsement';
 import { toast } from '@/components/ui/toast-store';
@@ -684,9 +685,11 @@ function ReviewsTab({ business, reviews }: { business: BusinessUser; reviews: Bu
         reviews.map((review: BusinessReview) => (
           <div key={review.id} className="rounded-xl border border-app-border bg-app-surface p-5">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-full bg-app-surface-sunken flex items-center justify-center text-xs font-semibold text-app-text-secondary">
-                {(review.reviewer?.name || chosenUsername(review.reviewer?.username) || '?')[0].toUpperCase()}
-              </div>
+              <UserAvatarLink href={review.reviewer?.username ? `/${review.reviewer.username}` : null}>
+                <div className="w-8 h-8 rounded-full bg-app-surface-sunken flex items-center justify-center text-xs font-semibold text-app-text-secondary">
+                  {(review.reviewer?.name || chosenUsername(review.reviewer?.username) || '?')[0].toUpperCase()}
+                </div>
+              </UserAvatarLink>
               <div>
                 {review.reviewer?.username ? (
                   <UserIdentityLink

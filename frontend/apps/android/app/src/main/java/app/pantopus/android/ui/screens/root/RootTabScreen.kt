@@ -135,6 +135,7 @@ import app.pantopus.android.ui.screens.explore.ExploreMapScreen
 import app.pantopus.android.ui.screens.feed.FeedScreen
 import app.pantopus.android.ui.screens.feed.FeedTopMenu
 import app.pantopus.android.ui.screens.feed.beacons.BeaconsFeedScreen
+import app.pantopus.android.ui.screens.feed.pulse.PulseAuthorLink
 import app.pantopus.android.ui.screens.feed.pulse.PulseIntent
 import app.pantopus.android.ui.screens.feed.rememberTouchExplorationEnabled
 import app.pantopus.android.ui.screens.following.FollowingScreen
@@ -1538,6 +1539,13 @@ private object ChildRoutes {
     /** Build the concrete path for a public profile. */
     fun publicProfile(id: String): String = "users/$id"
 
+    /** A Pulse card's author: a person's profile, or a business's page (`/business/:key`, as the post page opens it). */
+    fun pulseAuthor(link: PulseAuthorLink): String =
+        when (link) {
+            is PulseAuthorLink.Person -> publicProfile(link.userId)
+            is PulseAuthorLink.Business -> businessProfile(link.businessId)
+        }
+
     /** Build the concrete path for a Pulse post detail. */
     fun pulsePost(id: String): String = "posts/$id"
 
@@ -2777,6 +2785,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             }
             is DeepLinkRouter.Destination.BusinessOwner -> {
                 navController.navigate(ChildRoutes.businessOwner(pending.businessId))
+                // A payment, invoice or verification notice: its section over the owner view, so Back lands on the
+                // business (the web opens that dashboard tab).
+                when (pending.section) {
+                    "payments" -> navController.navigate(ChildRoutes.businessPaymentsOwner(pending.businessId))
+                    "invoices" -> navController.navigate(ChildRoutes.businessInvoicesOwner(pending.businessId))
+                    "legal" -> navController.navigate(ChildRoutes.businessLegal(pending.businessId))
+                }
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.BusinessConversation -> {
@@ -3105,6 +3120,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                 FeedScreen(
                                     header = segmentRow,
                                     onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
+                                    onOpenAuthor = { link -> navController.navigate(ChildRoutes.pulseAuthor(link)) },
                                     onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
                                     onComposeStarter = { starter ->
                                         navController.navigate(
@@ -3189,6 +3205,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                             },
                             openNearby = { navController.navigateToRootTab(PantopusRoute.Plans) },
                             askPantopus = { context -> navController.navigate(ChildRoutes.askPantopus(context)) },
+                            openProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
                         ),
                 )
                 composable(PantopusRoute.Mail.path) {
@@ -3244,6 +3261,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         )
                     FeedScreen(
                         onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
+                        onOpenAuthor = { link -> navController.navigate(ChildRoutes.pulseAuthor(link)) },
                         onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
                         onComposeStarter = { starter ->
                             navController.navigate(
@@ -4926,6 +4944,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                         // Guests tab "Add a guest": the guest-pass manager, which lists the new pass on return.
                         onAddGuest = { navController.navigate(ChildRoutes.guestPasses(homeId)) },
                         onReviewResidency = { navController.navigate(ChildRoutes.homeClaimReview(homeId, residency = true)) },
+                        onOpenProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
                     )
                 }
                 composable(
@@ -5570,6 +5589,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                 composable(ChildRoutes.PULSE_FEED) {
                     FeedScreen(
                         onOpenPost = { postId -> navController.navigate(ChildRoutes.pulsePost(postId)) },
+                        onOpenAuthor = { link -> navController.navigate(ChildRoutes.pulseAuthor(link)) },
                         onCompose = { intent -> navController.navigate(ChildRoutes.composePost(intent.key)) },
                         onBack = { navController.popBackStack() },
                         onComposeStarter = { starter ->
@@ -5797,6 +5817,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     GigDetailScreen(
                         onBack = { navController.popBackStack() },
                         onOpenPayouts = { navController.navigate(ChildRoutes.SETTINGS_PAYMENTS) },
+                        onOpenProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
                         onOpenChat = { roomId, displayName, initials, verified, asBusinessUserId ->
                             navController.navigate(
                                 ChildRoutes.chatConversationRoom(
@@ -6588,6 +6609,7 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                                         ),
                                     )
                                 },
+                                onOpenProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
                                 // The train's group chat opens under the train's title.
                                 onOpenChat = { roomId, title ->
                                     val initials = title.split(" ").take(2).mapNotNull { it.firstOrNull()?.uppercase() }
@@ -7155,7 +7177,10 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     route = ChildRoutes.BUSINESS_TEAM,
                     arguments = listOf(navArgument(ChildRoutes.BUSINESS_OWNER_ID_KEY) { type = NavType.StringType }),
                 ) {
-                    BusinessTeamScreen(onBack = { navController.popBackStack() })
+                    BusinessTeamScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenProfile = { userId -> navController.navigate(ChildRoutes.publicProfile(userId)) },
+                    )
                 }
                 composable(
                     route = ChildRoutes.BUSINESS_PAYMENTS_OWNER,

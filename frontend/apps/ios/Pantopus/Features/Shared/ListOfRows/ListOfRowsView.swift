@@ -63,6 +63,9 @@ public struct ListOfRowsView<DataSource: ListOfRowsDataSource, Header: View>: Vi
                         tabs: dataSource.tabs,
                         selected: $dataSource.selectedTab
                     )
+                    // Half folded like a book, the tabs keep to the larger side of the fold and scroll there, as
+                    // on a phone, instead of putting a tab on the crease (Members' Audit Log).
+                    .besideFold()
                     .background(Theme.Color.appSurface)
                     Divider().background(Theme.Color.appBorderSubtle)
                 }
@@ -275,6 +278,7 @@ private struct TabStrip: View {
             }
             .padding(.horizontal, Spacing.s4)
         }
+        .stopsBeforeOcclusion()
     }
 }
 
@@ -356,7 +360,10 @@ private struct ChipStripRow: View {
             }
             .padding(.horizontal, Spacing.s4)
         }
+        // Half folded like a book, the chips keep to the larger side of the fold and scroll there, as the tabs do.
+        .besideFold()
         .padding(.vertical, Spacing.s2)
+        .stopsBeforeOcclusion()
         .background(Theme.Color.appSurface)
     }
 
@@ -374,6 +381,64 @@ private struct ChipStripRow: View {
 
     private func borderColor(for id: String) -> Color {
         isOn(id) ? Theme.Color.primary600 : Theme.Color.appBorder
+    }
+}
+
+// MARK: - Clear of the closed Duo's strip
+
+private extension View {
+    /// For a row that scrolls sideways: it runs into the room after it as before, up to where something covers the
+    /// screen across it. Closed, the iPhone Duo's strip beside the screen holds the clock and the Wi-Fi level with the
+    /// tabs and chips, which ran on under them; Apple reports what covers the screen as an occlusion region. Open
+    /// sideways the strip starts past the end of the row, and upright it sits above the row.
+    func stopsBeforeOcclusion() -> some View {
+        modifier(StopsBeforeOcclusion())
+    }
+}
+
+private struct StopsBeforeOcclusion: ViewModifier {
+    /// Where an active occlusion region across the row begins after it, in the row's coordinates; nil for none.
+    @State private var edge: CGFloat?
+
+    func body(content: Content) -> some View {
+        content
+            .clipShape(BeforeOcclusion(edge: edge))
+            .readsOcclusionEdge($edge)
+    }
+}
+
+/// The row's drawing, cut only where an occlusion region begins after it.
+private struct BeforeOcclusion: Shape {
+    let edge: CGFloat?
+
+    func path(in rect: CGRect) -> Path {
+        // Far past any screen: with no region, nothing is cut.
+        let far: CGFloat = 10000
+        let maxX = edge ?? rect.maxX + far
+        return Path(CGRect(x: rect.minX - far, y: rect.minY - far, width: maxX - rect.minX + far, height: rect.height + 2 * far))
+    }
+}
+
+private extension View {
+    /// Keeps `edge` at the nearest active occlusion region across this view's height after its trailing edge (iOS
+    /// 27.1 reports them); nil before.
+    @ViewBuilder
+    func readsOcclusionEdge(_ edge: Binding<CGFloat?>) -> some View {
+        #if compiler(>=6.4)
+        if #available(iOS 27.1, *) {
+            onGeometryChange(for: CGFloat?.self) { proxy in
+                proxy.reservedRegions(kind: .occlusion)
+                    .map(\.frame)
+                    .filter { $0.minX >= proxy.size.width - 0.5 && $0.maxY > 0 && $0.minY < proxy.size.height }
+                    .map(\.minX)
+                    .min()
+            } action: { edge.wrappedValue = $0 }
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
     }
 }
 

@@ -85,7 +85,7 @@ struct PlansSheetContent: View {
             }
             .plansSheetPeek(.list)
             ForEach(first.dropFirst(), id: \.id) { card in
-                peekRow(card, showsDivider: true)
+                peekRow(card, showsDivider: true).hiddenUnderPlansTabBar()
             }
         }
         // Whole lines even when the stop is too short for them (the largest
@@ -215,9 +215,10 @@ struct PlansListSheet: View {
                             .planFont(.small)
                             .foregroundStyle(Theme.Color.appTextSecondary)
                             .padding(.top, Spacing.s4)
+                            .hiddenUnderPlansTabBar()
                     }
                     if let openPulse = actions.openPulse, let openConnections = actions.openConnections {
-                        moreNearby(openPulse: openPulse, openConnections: openConnections)
+                        moreNearby(openPulse: openPulse, openConnections: openConnections).hiddenUnderPlansTabBar()
                     }
                 }
                 .padding(.bottom, Spacing.s6)
@@ -283,6 +284,7 @@ struct PlansListSheet: View {
             Text.planOverline(title)
                 .padding(.top, Spacing.s4)
                 .padding(.bottom, 2)
+                .hiddenUnderPlansTabBar()
             ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
                 PlanRow(
                     model: mine ? .mine(card, requestsCount: card.requestsCount) : .listed(card),
@@ -291,6 +293,7 @@ struct PlansListSheet: View {
                     actions.openPlan(card, card.id, .view)
                 }
                 .itemZoomSource(.plan, id: card.id)
+                .hiddenUnderPlansTabBar()
             }
         }
     }

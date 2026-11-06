@@ -13,7 +13,7 @@
  */
 
 const supabaseAdmin = require('../config/supabaseAdmin');
-const { isVerifiedOwner, isVerifiedResident } = require('./homePermissions');
+const { isVerifiedResident } = require('./homePermissions');
 
 /**
  * @param {string} userId - whose residency is being summarised
@@ -28,18 +28,27 @@ async function getPublicResidencySummary(userId, viewerId = null) {
   if (!viewerId) return empty;
 
   try {
-    const { data: occRows } = await supabaseAdmin
-      .from('HomeOccupancy')
-      .select(`
-        verification_status,
-        verification_source,
-        verified_at,
-        created_at,
-        home:home_id ( id, city, state )
-      `)
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .order('created_at', { ascending: true });
+    // The person's verified ownerships are read alongside their occupancies (one round trip, not two): they
+    // decide the badge when the occupancy alone doesn't, and the Home when there is no occupancy.
+    const [{ data: occRows }, ownersRead] = await Promise.all([
+      supabaseAdmin
+        .from('HomeOccupancy')
+        .select(`
+          verification_status,
+          verification_source,
+          verified_at,
+          created_at,
+          home:home_id ( id, city, state )
+        `)
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .order('created_at', { ascending: true }),
+      supabaseAdmin
+        .from('HomeOwner')
+        .select('home_id, subject_type')
+        .eq('subject_id', userId)
+        .eq('owner_status', 'verified'),
+    ]);
 
     const occ = (occRows || []).find((r) => r.home);
     if (occ && occ.home) {
@@ -49,8 +58,12 @@ async function getPublicResidencySummary(userId, viewerId = null) {
       // invitation grants household tools, not an address-verified badge.
       let verified = isVerifiedResident({ occupancy: occ });
       if (!verified) {
-        const ownerCheck = await isVerifiedOwner(homeId, userId);
-        verified = ownerCheck.isOwner;
+        // A verified ownership of this Home as a person (homePermissions.isVerifiedOwner). An unreadable
+        // ownership read, or more than one such row, leaves the summary empty, as that check's error did.
+        if (ownersRead.error) return empty;
+        const own = (ownersRead.data || []).filter((row) => row.home_id === homeId && row.subject_type === 'user');
+        if (own.length > 1) return empty;
+        verified = own.length === 1;
       }
       return {
         hasHome: true,
@@ -60,12 +73,7 @@ async function getPublicResidencySummary(userId, viewerId = null) {
       };
     }
 
-    const { data: ownerRows } = await supabaseAdmin
-      .from('HomeOwner')
-      .select('home_id')
-      .eq('subject_id', userId)
-      .eq('owner_status', 'verified')
-      .limit(1);
+    const ownerRows = ownersRead.data;
 
     if (ownerRows?.[0]?.home_id) {
       const { data: h } = await supabaseAdmin

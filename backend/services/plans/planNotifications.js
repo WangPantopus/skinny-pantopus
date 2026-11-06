@@ -81,14 +81,15 @@ function timeText(date, tz) {
 
 /**
  * "today 5:30 PM", "tomorrow 9:00 AM", "Sun 1:25 PM" (or "Sunday 1:25 PM" with long; "Sunday at 1:25 PM" with at);
- * a week or more out the date too, "Thu, Oct 22 5:15 PM", as the apps' rows say it.
+ * a week or more out the date too, "Thu, Oct 22 5:15 PM", as the apps' rows say it. `now` is the moment the words are
+ * for (heldPushText reads what a row said when it was written).
  */
-function whenText(startsAt, tz, { long = false, hideTime = false, dayPart = null, at = false } = {}) {
+function whenText(startsAt, tz, { long = false, hideTime = false, dayPart = null, at = false, now = new Date() } = {}) {
   const date = new Date(startsAt);
   if (Number.isNaN(date.getTime())) return '';
   const zone = tz || rules.DEFAULT_TIMEZONE;
-  const today = rules.localParts(new Date(), zone).date;
-  const tomorrow = rules.localParts(new Date(Date.now() + 24 * 60 * 60 * 1000), zone).date;
+  const today = rules.localParts(now, zone).date;
+  const tomorrow = rules.localParts(new Date(now.getTime() + 24 * 60 * 60 * 1000), zone).date;
   const day = rules.localParts(date, zone).date;
   const daysAhead = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / (24 * 60 * 60 * 1000));
   let dayText;
@@ -98,7 +99,11 @@ function whenText(startsAt, tz, { long = false, hideTime = false, dayPart = null
     dayText = new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: long ? 'long' : 'short' }).format(date);
     if (daysAhead >= 7) dayText += `, ${new Intl.DateTimeFormat('en-US', { timeZone: zone, month: 'short', day: 'numeric' }).format(date)}`;
   }
-  if (hideTime) return `${dayText} ${dayPart || ''}`.trim();
+  if (hideTime) {
+    // "this morning", "tonight", "tomorrow afternoon", "Sun evening".
+    if (dayText === 'today' && dayPart) return dayPart === 'night' ? 'tonight' : `this ${dayPart}`;
+    return `${dayText} ${dayPart || ''}`.trim();
+  }
   return `${dayText} ${at ? 'at ' : ''}${timeText(date, zone)}`;
 }
 
@@ -201,6 +206,34 @@ function isNearPlan(plan, now = Date.now()) {
 }
 
 // ── Sending ──────────────────────────────────────────────────
+
+// Every way a notice says when (whenText's options), longest first.
+const WHEN_FORMS = [{ long: true, at: true }, { at: true }, { long: true }, {}, { long: true, hideTime: true }, { hideTime: true }];
+
+/**
+ * A push held through quiet hours goes out with its row's words, written when the notice was made: "tomorrow 9:30 AM"
+ * written at 10:30 PM is "today 9:30 AM" after midnight. The title and body as of `now`, with each when the row says
+ * about `plan` read again; anything else stays as written.
+ */
+function heldPushText(row, plan, now = new Date()) {
+  const startsAt = plan?.post?.event_date;
+  const madeAt = new Date(row.created_at);
+  let { title, body } = row;
+  if (!startsAt || Number.isNaN(madeAt.getTime())) return { title, body };
+  const tz = rules.timezoneForPlan(plan);
+  const dayPart = rules.dayPart(startsAt, tz);
+  for (const form of WHEN_FORMS) {
+    const opts = form.hideTime ? { ...form, dayPart } : form;
+    const before = whenText(startsAt, tz, { ...opts, now: madeAt });
+    const after = whenText(startsAt, tz, { ...opts, now });
+    if (!before || before === after) continue;
+    for (const [from, to] of [[before, after], [capitalized(before), capitalized(after)]]) {
+      title = String(title || '').split(from).join(to);
+      if (body) body = body.split(from).join(to);
+    }
+  }
+  return { title, body };
+}
 
 async function sendPush(row) {
   const enabled = await notificationService.isPushEnabled(row.user_id);
@@ -416,17 +449,25 @@ async function spotOpened({ plan, request, hostFirst, nowIn }) {
     link: `/plans/${plan.post_id}`,
     plan,
     recipientIsIn: nowIn,
-    metadata: { request_id: request.id },
+    // now_in: a held push of this is out of date once the request is no longer what it said (planJobs isStale).
+    metadata: { request_id: request.id, now_in: Boolean(nowIn) },
   });
 }
 
 async function reminder({ plan, request, goingCount, band }) {
-  const time = timeText(new Date(plan.post.event_date), rules.timezoneForPlan(plan)).replace(/\s?[AP]M$/, '');
+  const tz = rules.timezoneForPlan(plan);
+  const startsAt = new Date(plan.post.event_date);
+  // Two hours before: "Pickup game at 5:00". A plan starting before 10 AM is reminded at 7 PM the evening before
+  // (planRules.reminderAt), where "at 7:00" would read as now: "Pickup game tomorrow at 7:00 AM".
+  const sameDay = rules.localParts(startsAt, tz).date === rules.localParts(new Date(), tz).date;
+  const when = sameDay
+    ? `at ${timeText(startsAt, tz).replace(/\s?[AP]M$/, '')}`
+    : whenText(plan.post.event_date, tz, { long: true, at: true });
   const parts = [band ? band.replace(/ away$/, '') : null, `${goingCount} going`].filter(Boolean);
   return notify({
     userId: request.user_id,
     type: 'plan_reminder',
-    title: `${capitalized(noun(plan))} at ${time}`,
+    title: `${capitalized(noun(plan))} ${when}`,
     body: parts.join(' · '),
     link: `/plans/${plan.post_id}`,
     plan,
@@ -608,6 +649,7 @@ module.exports = {
   BUNDLE_WINDOW_MS,
   noun,
   whenText,
+  heldPushText,
   bandText,
   areaPhrase,
   placePhrase,
