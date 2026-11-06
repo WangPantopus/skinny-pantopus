@@ -79,12 +79,14 @@ public struct PasswordEntryField: View {
             HStack(spacing: Spacing.s2) {
                 if let leftIcon {
                     Icon(leftIcon, size: 16, color: leftIconColor)
+                        .allowsHitTesting(false)
                 }
                 input
                 trailing
             }
             .padding(.horizontal, Spacing.s3)
             .frame(minHeight: 46)
+            .typesInFieldOnTap($isFocused)
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .overlay(
@@ -120,8 +122,8 @@ public struct PasswordEntryField: View {
     private var trailing: some View {
         HStack(spacing: Spacing.s2) {
             switch state {
-            case .valid: Icon(.checkCircle, size: 18, color: Theme.Color.success)
-            case .error: Icon(.alertCircle, size: 18, color: Theme.Color.error)
+            case .valid: Icon(.checkCircle, size: 18, color: Theme.Color.success).allowsHitTesting(false)
+            case .error: Icon(.alertCircle, size: 18, color: Theme.Color.error).allowsHitTesting(false)
             case .default: EmptyView()
             }
             Button {

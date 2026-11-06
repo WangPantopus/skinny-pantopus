@@ -138,6 +138,7 @@ private struct AccessItemCard: View {
                             strokeWidth: 2,
                             color: Theme.Color.appTextSecondary
                         )
+                        .hitArea(horizontal: 8, vertical: 8)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(item.isRevealed ? "Hide value" : "Show value")

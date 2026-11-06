@@ -18,6 +18,11 @@
  *  10. MULTIPLE_MATCHES         — multiple normalized candidates
  *  11. CONFLICT                 — existing household found at canonical address
  *  12. OK                       — all checks passed
+ *
+ * With Google as the postal source (`smarty.source === 'google'`) USPS's codes read as USPS defines
+ * them: D, N1 and C1 mean a required unit is missing (MISSING_UNIT, rule 6), S and CC mean a unit
+ * USPS can't confirm (UNIT_NOT_CONFIRMED, before rule 12), and no answer is POSTAL_PENDING (before
+ * rule 12). Neither reaches OK, and only a full USPS match on a known home can auto-verify a claim.
  */
 
 const { AddressVerdictStatus } = require('./types');
@@ -112,6 +117,9 @@ const PROVIDER_RESIDENTIAL_SAFE_PLACE_TYPES = new Set([
   'residential_building',
   'townhouse',
 ]);
+// Below the 0.8 a claim needs to auto-verify, so unknown or doubtful USPS answers still need proof.
+const NOT_AUTO_VERIFIABLE_CONFIDENCE = 0.75;
+const UNSETTLED_POSTAL_CONFIDENCE = 0.5;
 const PROVIDER_DENY_MIN_CONFIDENCE = 0.85;
 const PROVIDER_SECONDARY_MIN_CONFIDENCE = 0.85;
 const PROVIDER_PARCEL_MIN_CONFIDENCE = 0.85;
@@ -143,6 +151,7 @@ const LOW_GRANULARITY = new Set([
  * @property {number}                  [provider_parcel_max_age_days]   — freshness threshold for cached parcel data
  * @property {ExistingHousehold}       [household]                      — existing household at this address
  * @property {AddressCandidate[]}      [candidates]                     — alternate address candidates
+ * @property {string}                  [postal_source]                  — 'google' when Google is the postal source
  */
 
 function normalizeTypes(types) {
@@ -193,8 +202,10 @@ class AddressDecisionEngine {
       provider_parcel_max_age_days: providerParcelMaxAgeDays,
       household,
       candidates,
+      postal_source: postalSource,
     } = input || {};
 
+    const googlePostal = postalSource === 'google' || smarty?.source === 'google';
     const reasons = [];
     const nextActions = [];
     let confidence = 1.0;
@@ -207,7 +218,7 @@ class AddressDecisionEngine {
       const errorReasons = [];
       if (!google) errorReasons.push('Google validation result missing');
       if (smarty?.inconclusive) errorReasons.push('Smarty postal check was inconclusive');
-      if (!smarty) errorReasons.push('Smarty postal result missing');
+      if (!smarty && !googlePostal) errorReasons.push('Smarty postal result missing');
 
       return this._verdict({
         status: AddressVerdictStatus.SERVICE_ERROR,
@@ -220,7 +231,7 @@ class AddressDecisionEngine {
     }
 
     // ── Rule 2: UNDELIVERABLE ─────────────────────────────────
-    if (this._isUndeliverable(google, smarty)) {
+    if (googlePostal ? this._isUndeliverableByUsps(google, smarty) : this._isUndeliverable(google, smarty)) {
       const undeliverableReasons = [];
       if (smarty.dpv_match_code === 'N') undeliverableReasons.push('DPV_NO_MATCH');
       if (smarty.vacant_flag) undeliverableReasons.push('USPS_VACANT');
@@ -242,11 +253,13 @@ class AddressDecisionEngine {
     }
 
     // ── Rule 3: PO_BOX ────────────────────────────────────────
-    if (this._isPOBox(google, smarty)) {
+    if (googlePostal ? this._isPOBoxByUsps(google, smarty) : this._isPOBox(google, smarty)) {
       const poReasons = ['PO_BOX'];
-      if (google?.usps_data?.carrier_route_type === 'P') {
+      if (google?.usps_data?.carrier_route_type === 'P' || smarty.carrier_route_type === 'B') {
         poReasons.push('USPS_PO_BOX_ROUTE');
       }
+      if (smarty.record_type === 'P') poReasons.push('USPS_PO_BOX_RECORD');
+      if (smarty.po_box_only_zip) poReasons.push('USPS_PO_BOX_ONLY_ZIP');
       if (PO_BOX_PATTERN.test(google?.normalized?.line1 || '')) {
         poReasons.push('PO_BOX_PATTERN');
       }
@@ -263,7 +276,7 @@ class AddressDecisionEngine {
     }
 
     // ── Rule 4: MISSING_STREET_NUMBER ──────────────────────────
-    if (this._isMissingStreetNumber(google)) {
+    if (this._isMissingStreetNumber(google, googlePostal ? smarty : null)) {
       const streetReasons = ['MISSING_STREET_NUMBER'];
       if (google?.missing_component_types?.includes('street_number')) {
         streetReasons.push('GOOGLE_STREET_NUMBER_MISSING');
@@ -281,7 +294,7 @@ class AddressDecisionEngine {
     }
 
     // ── Rule 5: UNVERIFIED_STREET_NUMBER ───────────────────────
-    if (this._isUnverifiedStreetNumber(google)) {
+    if (this._isUnverifiedStreetNumber(google, googlePostal ? smarty : null)) {
       const unverifiedReasons = ['UNVERIFIED_STREET_NUMBER'];
       if (google?.verdict?.hasUnconfirmedComponents) {
         unverifiedReasons.push('GOOGLE_UNCONFIRMED_COMPONENTS');
@@ -302,12 +315,14 @@ class AddressDecisionEngine {
     }
 
     // ── Rule 6: MISSING_UNIT (hard rule) ──────────────────────
-    const missingUnit = this._evaluateMissingUnit(
-      google,
-      smarty,
-      unitIntelligence,
-      useProviderUnitIntelligence,
-    );
+    const missingUnit = googlePostal
+      ? this._evaluateUnitByUsps(google, smarty)
+      : this._evaluateMissingUnit(
+        google,
+        smarty,
+        unitIntelligence,
+        useProviderUnitIntelligence,
+      );
 
     if (missingUnit.isMissing) {
       reasons.push('MISSING_SECONDARY');
@@ -315,6 +330,7 @@ class AddressDecisionEngine {
       if (missingUnit.legacyFromGoogle) {
         reasons.push('GOOGLE_SUBPREMISE_MISSING');
       }
+      if (missingUnit.requiredByUsps) reasons.push('USPS_UNIT_REQUIRED');
 
       return this._verdict({
         status: AddressVerdictStatus.MISSING_UNIT,
@@ -411,7 +427,10 @@ class AddressDecisionEngine {
 
     // ── Rule 9: LOW_CONFIDENCE ────────────────────────────────
     const granularity = google?.granularity || '';
-    if (this._isLowGranularity(granularity)) {
+    // A rough map pin doesn't outweigh USPS confirming delivery: rural and military homes pass, and
+    // still can't auto-verify.
+    const confirmedByUsps = googlePostal && smarty.dpv_match_code === 'Y';
+    if (this._isLowGranularity(granularity) && !confirmedByUsps) {
       return this._verdict({
         status: AddressVerdictStatus.LOW_CONFIDENCE,
         reasons: [...baseReasons, ...heuristicPlaceReasons, `GEOCODE_GRANULARITY_${granularity}`],
@@ -449,6 +468,38 @@ class AddressDecisionEngine {
         classification: effectiveClassification,
         existing_household: household,
         next_actions: ['join_existing', 'dispute'],
+        candidates: candidates || [],
+      });
+    }
+
+    // ── Unit USPS can't confirm, or no USPS answer: never OK ──
+    if (missingUnit.isUnconfirmed) {
+      return this._verdict({
+        status: AddressVerdictStatus.UNIT_NOT_CONFIRMED,
+        reasons: [...baseReasons, ...heuristicPlaceReasons, 'USPS_UNIT_NOT_CONFIRMED'],
+        confidence: UNSETTLED_POSTAL_CONFIDENCE,
+        normalized,
+        deliverability: this._buildDeliverability(smarty),
+        classification: effectiveClassification,
+        next_actions: ['confirm_unit_by_mail'],
+        candidates: candidates || [],
+      });
+    }
+
+    if (googlePostal && smarty.dpv_match_code !== 'Y') {
+      return this._verdict({
+        status: AddressVerdictStatus.POSTAL_PENDING,
+        reasons: [
+          ...baseReasons,
+          ...heuristicPlaceReasons,
+          smarty.coming_soon ? 'USPS_COMING_SOON' : 'USPS_NO_ANSWER',
+          ...(smarty.usps_suspended ? ['USPS_CHECKS_SUSPENDED'] : []),
+        ],
+        confidence: UNSETTLED_POSTAL_CONFIDENCE,
+        normalized,
+        deliverability: this._buildDeliverability(smarty),
+        classification: effectiveClassification,
+        next_actions: ['recheck_postal'],
         candidates: candidates || [],
       });
     }
@@ -508,6 +559,41 @@ class AddressDecisionEngine {
   }
 
   /**
+   * Undeliverable when USPS says so. A street-number problem gets its own rule (4 or 5), so the
+   * person hears what's wrong, and an address USPS will have soon is pending, not refused.
+   *
+   * @param {GoogleValidationResult} google
+   * @param {import('./types').GooglePostalInput} postal
+   * @returns {boolean}
+   */
+  _isUndeliverableByUsps(google, postal) {
+    const dpv = postal.dpv_match_code;
+    const footnotes = postal.footnotes || [];
+
+    if (footnotes.includes('M1') || footnotes.includes('M3')) return false;
+    if (dpv === 'N') return !postal.coming_soon;
+    if (postal.vacant_flag === true && dpv !== 'Y' && dpv !== 'D') return true;
+
+    return !dpv && !!google.verdict?.hasUnconfirmedComponents && LOW_GRANULARITY.has(google.granularity);
+  }
+
+  /**
+   * PO Box by USPS's record, Google's flag or a box-section route. A military address is a box
+   * too, but it is where someone lives.
+   *
+   * @param {GoogleValidationResult} google
+   * @param {import('./types').GooglePostalInput} postal
+   * @returns {boolean}
+   */
+  _isPOBoxByUsps(google, postal) {
+    if ((postal.footnotes || []).includes('F1')) return false;
+    if (postal.record_type === 'P' || postal.po_box_flag === true) return true;
+    if (postal.carrier_route_type === 'B' || postal.po_box_only_zip === true) return true;
+
+    return PO_BOX_PATTERN.test(google?.normalized?.line1 || '');
+  }
+
+  /**
    * PO Box: USPS carrier route type starts with 'P', or normalized line1
    * matches PO Box patterns.
    *
@@ -530,13 +616,20 @@ class AddressDecisionEngine {
    * or the normalized line1 has no leading digits (route-only).
    *
    * @param {GoogleValidationResult|undefined} google
+   * @param {import('./types').GooglePostalInput|null} [postal] — Google postal source only
    * @returns {boolean}
    */
-  _isMissingStreetNumber(google) {
+  _isMissingStreetNumber(google, postal = null) {
     if (!google) return false;
 
     // Explicit signal from Google
     if (google.missing_component_types?.includes('street_number')) return true;
+
+    if (postal) {
+      if ((postal.footnotes || []).includes('M1')) return true;
+      // USPS confirmed the number: a rural route's line 1 starts with no digit.
+      if (postal.dpv_match_code === 'Y' || postal.record_type === 'R') return false;
+    }
 
     // Fallback: normalized line1 exists but has no leading street number.
     // Skip when line2 is populated — building-name addresses like
@@ -553,16 +646,21 @@ class AddressDecisionEngine {
    * confirm it (the exact number likely doesn't exist on this street).
    *
    * @param {GoogleValidationResult|undefined} google
+   * @param {import('./types').GooglePostalInput|null} [postal] — Google postal source only
    * @returns {boolean}
    */
-  _isUnverifiedStreetNumber(google) {
+  _isUnverifiedStreetNumber(google, postal = null) {
     if (!google) return false;
+    if (postal && (postal.footnotes || []).includes('M3')) return true;
     if (!google.components?.street_number) return false;
 
     const streetNum = google.components.street_number;
 
     // Street number was inferred by Google (not in the original input)
     if (streetNum.inferred) return true;
+
+    // USPS confirmed the number, whatever Google's map data says about it.
+    if (postal && ['Y', 'D', 'S'].includes(postal.dpv_match_code)) return false;
 
     // Street number is present but not confirmed by Google
     if (!streetNum.confirmed && google.verdict?.hasUnconfirmedComponents) return true;
@@ -618,6 +716,39 @@ class AddressDecisionEngine {
       isMissing: false,
       legacyFromSmarty: false,
       legacyFromGoogle: false,
+    };
+  }
+
+  /**
+   * The unit, as USPS defines its codes. With a unit typed, a code that doubts it means "not
+   * confirmed", whichever code USPS used; with none typed, a code that requires one means "missing".
+   *
+   * @param {GoogleValidationResult} google
+   * @param {import('./types').GooglePostalInput} postal
+   * @returns {{isMissing: boolean, isUnconfirmed: boolean, requiredByUsps: boolean, legacyFromGoogle: boolean}}
+   */
+  _evaluateUnitByUsps(google, postal) {
+    const dpv = postal.dpv_match_code;
+    const footnotes = postal.footnotes || [];
+    const required = dpv === 'D' || footnotes.includes('N1') || footnotes.includes('C1');
+    const unconfirmed = dpv === 'S' || footnotes.includes('CC');
+    const typedUnit = !!String(google?.normalized?.line2 || '').trim();
+    const googleExpectsUnit = !!google?.missing_component_types?.includes('subpremise');
+
+    if (typedUnit) {
+      return {
+        isMissing: false,
+        isUnconfirmed: required || unconfirmed,
+        requiredByUsps: false,
+        legacyFromGoogle: false,
+      };
+    }
+
+    return {
+      isMissing: required || dpv === 'S' || googleExpectsUnit,
+      isUnconfirmed: false,
+      requiredByUsps: required || dpv === 'S',
+      legacyFromGoogle: googleExpectsUnit,
     };
   }
 
@@ -901,6 +1032,7 @@ class AddressDecisionEngine {
 
   _buildBaseReasons(rdi, parcelType, buildingType, smarty) {
     const reasons = [];
+    if (smarty.no_stat === true) reasons.push('USPS_NO_STAT');
     if (rdi !== 'unknown') reasons.push(`RDI_${rdi.toUpperCase()}`);
     if (parcelType !== 'unknown') reasons.push(`PARCEL_${parcelType.toUpperCase()}`);
     if (buildingType !== 'unknown') reasons.push(`BUILDING_${buildingType.toUpperCase()}`);
@@ -1023,6 +1155,8 @@ class AddressDecisionEngine {
    * @returns {number}
    */
   _computeConfidence(google, smarty, granularity) {
+    if (smarty.source === 'google') return this._computeConfidenceByUsps(google, smarty, granularity);
+
     let score = 0.5; // baseline
 
     // DPV Y is a strong positive
@@ -1046,6 +1180,39 @@ class AddressDecisionEngine {
     if (smarty.vacant_flag) score -= 0.15;
 
     return this._clamp(score);
+  }
+
+  /**
+   * The same scoring, with credit only for what USPS confirmed. Anything short of a full match on
+   * a known home stays below what a claim needs to auto-verify, so it still needs proof.
+   *
+   * @param {GoogleValidationResult} google
+   * @param {import('./types').GooglePostalInput} postal
+   * @param {string} granularity
+   * @returns {number}
+   */
+  _computeConfidenceByUsps(google, postal, granularity) {
+    let score = 0.5;
+
+    if (postal.dpv_match_code === 'Y') score += 0.25;
+    if (postal.rdi_type === 'residential') score += 0.1;
+    else if (postal.rdi_type === 'commercial') score += 0.05;
+    if (granularity === 'PREMISE' || granularity === 'SUB_PREMISE' || granularity === 'ROOFTOP') score += 0.1;
+    if (google?.verdict && !google.verdict.hasUnconfirmedComponents) score += 0.05;
+    if (google?.verdict?.hasReplacedComponents) score -= 0.1;
+    if (google?.verdict?.hasInferredComponents) score -= 0.1;
+    if (postal.vacant_flag === true) score -= 0.15;
+
+    const autoVerifiable =
+      postal.dpv_match_code === 'Y' &&
+      !LOW_GRANULARITY.has(granularity) &&
+      postal.rdi_type === 'residential' &&
+      !postal.home_and_business &&
+      postal.commercial_mailbox === false &&
+      postal.vacant_flag === false &&
+      postal.no_stat !== true;
+
+    return this._clamp(autoVerifiable ? score : Math.min(score, NOT_AUTO_VERIFIABLE_CONFIDENCE));
   }
 
   // ── Helpers ────────────────────────────────────────────────────

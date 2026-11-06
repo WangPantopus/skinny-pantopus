@@ -283,6 +283,7 @@ private struct SecurePasswordField: View {
 
             HStack(spacing: Spacing.s2) {
                 Icon(.lock, size: 16, color: lockColor)
+                    .allowsHitTesting(false)
 
                 Group {
                     if isRevealed {
@@ -302,6 +303,7 @@ private struct SecurePasswordField: View {
 
                 if case .valid = state {
                     Icon(.check, size: 18, color: Theme.Color.success)
+                        .allowsHitTesting(false)
                 }
 
                 Button {
@@ -315,6 +317,7 @@ private struct SecurePasswordField: View {
             }
             .padding(.horizontal, Spacing.s3)
             .frame(minHeight: 44)
+            .typesInFieldOnTap($isFocused)
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .overlay(

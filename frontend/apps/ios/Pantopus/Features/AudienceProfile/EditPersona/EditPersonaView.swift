@@ -602,6 +602,7 @@ private struct PersonaHandleField: View {
             Text("@")
                 .font(.system(size: 14, weight: .bold, design: .monospaced))
                 .foregroundStyle(Theme.Color.primaryInk)
+                .allowsHitTesting(false)
             TextField("yourhandle", text: $handle)
                 .font(.system(size: 14, weight: .semibold, design: .monospaced))
                 .foregroundStyle(Theme.Color.appText)
@@ -611,6 +612,7 @@ private struct PersonaHandleField: View {
         }
         .padding(.horizontal, Spacing.s3)
         .frame(height: 44)
+        .typesInFieldOnTap()
         .background(Theme.Color.appSurface)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
@@ -632,6 +634,7 @@ private struct PersonaTextField: View {
             .foregroundStyle(Theme.Color.appText)
             .padding(.horizontal, Spacing.s3)
             .frame(height: 44)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurface)
             .overlay(
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
@@ -666,6 +669,7 @@ private struct PersonaBioEditor: View {
                 .accessibilityIdentifier("editPersonaBio")
                 .accessibilityLabel("Bio")
         }
+        .typesInFieldOnTap()
         .background(Theme.Color.appSurface)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
@@ -781,6 +785,7 @@ private struct PersonaLinkRow: View {
                 .foregroundStyle(Theme.Color.appText)
                 .padding(.horizontal, Spacing.s3)
                 .frame(height: 40)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .overlay(
                     RoundedRectangle(cornerRadius: Radii.sm, style: .continuous)
@@ -800,6 +805,7 @@ private struct PersonaLinkRow: View {
                 .keyboardType(.URL)
                 .padding(.horizontal, Spacing.s3)
                 .frame(height: 40)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .overlay(
                     RoundedRectangle(cornerRadius: Radii.sm, style: .continuous)

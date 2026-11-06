@@ -114,6 +114,7 @@ struct PlanInviteSheet: View {
     private var searchField: some View {
         HStack(spacing: 10) {
             Icon(.search, size: 18, color: Theme.Color.appTextMuted)
+                .allowsHitTesting(false)
             TextField("Name or email", text: $viewModel.query)
                 .planFont(.body)
                 .textInputAutocapitalization(.never)
@@ -127,6 +128,7 @@ struct PlanInviteSheet: View {
             if !viewModel.query.isEmpty {
                 Button { viewModel.query = "" } label: {
                     Icon(.xCircle, size: 18, color: Theme.Color.appTextMuted)
+                        .hitArea(horizontal: 8, vertical: 8)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear")
@@ -134,6 +136,7 @@ struct PlanInviteSheet: View {
         }
         .padding(.horizontal, 14)
         .frame(minHeight: 48)
+        .typesInFieldOnTap($searchFocused)
         .background(RoundedRectangle(cornerRadius: Radii.md, style: .continuous).fill(Theme.Color.appSurface))
         .overlay(RoundedRectangle(cornerRadius: Radii.md, style: .continuous).stroke(Theme.Color.appBorderStrong, lineWidth: 1))
     }

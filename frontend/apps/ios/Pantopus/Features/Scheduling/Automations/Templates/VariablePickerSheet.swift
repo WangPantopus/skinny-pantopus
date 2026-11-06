@@ -42,6 +42,7 @@ struct VariablePickerSheet: View {
     private var searchField: some View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 15, color: Theme.Color.appTextMuted)
+                .allowsHitTesting(false)
             TextField("Search variables", text: $query)
                 .font(Theme.Font.small)
                 .foregroundStyle(Theme.Color.appText)
@@ -49,6 +50,7 @@ struct VariablePickerSheet: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 42)
+        .typesInFieldOnTap()
         .background(Theme.Color.appSurface)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Theme.Color.appBorder, lineWidth: 1))

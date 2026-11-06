@@ -113,6 +113,7 @@ private struct CounterOfferSheet: View {
                     Text("$")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(Theme.Color.appText)
+                        .allowsHitTesting(false)
                     TextField("Amount", text: $amountText)
                         .keyboardType(.decimalPad)
                         .font(Theme.Font.body)
@@ -120,6 +121,7 @@ private struct CounterOfferSheet: View {
                         .accessibilityIdentifier("counter-amount")
                 }
                 .padding(Spacing.s3)
+                .typesInFieldOnTap()
                 .background(
                     RoundedRectangle(cornerRadius: Radii.md)
                         .stroke(Theme.Color.appBorder, lineWidth: 1)
@@ -135,6 +137,7 @@ private struct CounterOfferSheet: View {
                     .font(Theme.Font.small)
                     .foregroundStyle(Theme.Color.appText)
                     .padding(Spacing.s3)
+                    .typesInFieldOnTap()
                     .background(
                         RoundedRectangle(cornerRadius: Radii.md)
                             .stroke(Theme.Color.appBorder, lineWidth: 1)
