@@ -67,6 +67,7 @@ struct CancelBookingSheet: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 11)
                     .frame(minHeight: 64, alignment: .topLeading)
+                    .typesInFieldOnTap()
                     .background(Theme.Color.appSurface)
                     .overlay(
                         RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

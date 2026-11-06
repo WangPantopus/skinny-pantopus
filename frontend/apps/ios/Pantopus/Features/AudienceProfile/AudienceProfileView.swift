@@ -618,6 +618,7 @@ public struct AudienceProfileView: View {
                 .frame(minHeight: 80)
                 .scrollContentBackground(.hidden)
                 .accessibilityIdentifier("audienceProfileComposerInput")
+                .typesInFieldOnTap(reach: Spacing.s2)
             }
             if let error = viewModel.composer.error {
                 Text(error)
@@ -913,6 +914,7 @@ public struct AudienceProfileView: View {
     private var followerSearchField: some View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 15, color: Theme.Color.appTextMuted)
+                .allowsHitTesting(false)
             TextField(
                 "Search followers by name or handle",
                 text: Binding(
@@ -932,6 +934,7 @@ public struct AudienceProfileView: View {
                 } label: {
                     Icon(.x, size: 14, color: Theme.Color.appTextSecondary)
                         .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
@@ -940,6 +943,7 @@ public struct AudienceProfileView: View {
         }
         .padding(.horizontal, Spacing.s3)
         .frame(height: 40)
+        .typesInFieldOnTap()
         .background(Theme.Color.appSurface)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

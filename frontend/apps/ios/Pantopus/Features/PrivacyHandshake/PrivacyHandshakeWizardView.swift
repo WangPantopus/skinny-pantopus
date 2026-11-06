@@ -123,6 +123,7 @@ public struct PrivacyHandshakeWizardView: View {
                 Text("@")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.Color.appTextSecondary)
+                    .allowsHitTesting(false)
                 TextField("yourhandle", text: Binding(
                     get: { content.handle.value },
                     set: { viewModel.setHandle($0) }
@@ -135,10 +136,12 @@ public struct PrivacyHandshakeWizardView: View {
                 .accessibilityIdentifier("privacyHandshakeHandleField")
                 if content.handle.locked {
                     Icon(.lock, size: 14, color: Theme.Color.appTextSecondary)
+                        .allowsHitTesting(false)
                 }
             }
             .padding(.horizontal, Spacing.s3)
             .frame(height: 44)
+            .typesInFieldOnTap()
             .background(content.handle.locked ? Theme.Color.appSurfaceSunken : Theme.Color.appSurface)
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)

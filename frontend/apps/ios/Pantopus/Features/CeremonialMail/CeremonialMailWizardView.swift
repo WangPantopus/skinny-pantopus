@@ -105,6 +105,7 @@ public struct CeremonialMailWizardView: View {
                 .kerning(0.6)
             HStack {
                 Icon(.search, size: 14, color: Theme.Color.appTextSecondary)
+                    .allowsHitTesting(false)
                 TextField("Search by name or username", text: Binding(
                     get: { viewModel.recipientQuery },
                     set: { viewModel.updateRecipientQuery($0) }
@@ -112,11 +113,12 @@ public struct CeremonialMailWizardView: View {
                 .font(Theme.Font.small)
                 .accessibilityIdentifier("ceremonialRecipientField")
                 if viewModel.isSearchingRecipients {
-                    ProgressView().scaleEffect(0.7)
+                    ProgressView().scaleEffect(0.7).allowsHitTesting(false)
                 }
             }
             .padding(.horizontal, Spacing.s3)
             .frame(height: 44)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurface)
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -425,6 +427,7 @@ public struct CeremonialMailWizardView: View {
                         .foregroundStyle(Theme.Color.appTextMuted)
                         .padding(.top, Spacing.s2)
                         .padding(.leading, Spacing.s1)
+                        .allowsHitTesting(false)
                 }
                 TextEditor(text: Binding(
                     get: { viewModel.bodyText },
@@ -435,6 +438,7 @@ public struct CeremonialMailWizardView: View {
                 .accessibilityIdentifier("ceremonialBodyEditor")
             }
             .padding(Spacing.s2)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurface)
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)

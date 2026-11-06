@@ -141,6 +141,7 @@ struct ChallengeComposerSheet: View {
             .scrollContentBackground(.hidden)
             .frame(minHeight: editorHeight)
             .padding(10)
+            .typesInFieldOnTap($questionFocused)
             .background(Theme.Color.appSurfaceMuted)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md))
             .overlay(
@@ -359,6 +360,7 @@ struct ReviewClaimNoteCaptureSheet: View {
                     .focused($noteFocused)
                     .frame(minHeight: editorHeight)
                     .padding(Spacing.s2)
+                    .typesInFieldOnTap($noteFocused)
                     .background(Theme.Color.appBg)
                     .overlay(
                         RoundedRectangle(cornerRadius: Radii.md)

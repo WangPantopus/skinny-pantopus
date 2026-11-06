@@ -376,6 +376,7 @@ struct PkgTextField: View {
                 .foregroundStyle(Theme.Color.appText)
                 .padding(.horizontal, 11)
                 .frame(height: 40)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .overlay(
                     RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

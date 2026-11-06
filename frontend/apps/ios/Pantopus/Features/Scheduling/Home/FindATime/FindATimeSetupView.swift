@@ -177,6 +177,7 @@ struct FindATimeSetupView: View {
                     .textInputAutocapitalization(.sentences)
                     .padding(.horizontal, Spacing.s3)
                     .padding(.vertical, Spacing.s2)
+                    .typesInFieldOnTap()
                     .background(Theme.Color.appSurface)
                     .overlay {
                         RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

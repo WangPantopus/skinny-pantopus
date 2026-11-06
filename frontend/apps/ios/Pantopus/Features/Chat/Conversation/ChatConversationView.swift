@@ -4740,6 +4740,7 @@ private struct ChatComposer<AttachActions: View>: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .frame(minHeight: 36)
+            .typesInFieldOnTap(composerFocused)
             .background(Theme.Color.appSurfaceSunken)
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
