@@ -15,6 +15,7 @@ public struct HomeAddressValidationResponse: Decodable, Sendable {
 
     public struct Verdict: Decodable, Sendable {
         public let status: String
+        public let reasons: [String]?
         public let normalized: Address?
     }
 
