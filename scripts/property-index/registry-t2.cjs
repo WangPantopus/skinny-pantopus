@@ -23,7 +23,7 @@ const zlib = require('node:zlib');
 const crypto = require('node:crypto');
 const { answer } = require('../../backend/services/propertyRecords/registryLookup');
 const { releasePath, findBlock } = require('../../backend/services/propertyRecords/format');
-const { parts, stateOfCounty } = require('../../backend/services/propertyRecords/addressKey');
+const { parse, parts, stateOfCounty } = require('../../backend/services/propertyRecords/addressKey');
 const { USER_AGENT } = require('./lib/tables.cjs');
 const { log } = require('./lib/log.cjs');
 
@@ -223,8 +223,13 @@ async function controls(report, registry, state) {
         for (const [zip, group] of zips) {
           // A record with no direction or type is what a bare line means; every one of these needs one to tell them apart.
           const allSaySomething = group.every(({ address }) => address.pre || address.suffix || address.post);
-          if (zip && group.length > 1 && allSaySomething && !group.some((record) => record.address.urbanization) && counts.ambiguous < PER_PART_PER_COUNTY) {
-            const found = await answer({ line1: `${base.number} ${base.name}`, city: group[0].address.city, state, zip }, registry.read);
+          // Two towns in one ZIP: the city the person gave tells them apart, so that's not a line that must ask.
+          const oneTown = new Set(group.map((record) => record.address.city)).size === 1;
+          if (zip && group.length > 1 && allSaySomething && oneTown && !group.some((record) => record.address.urbanization) && counts.ambiguous < PER_PART_PER_COUNTY) {
+            const bare = `${base.number} ${base.name}`;
+            // A name ending in a street word reads as another street once its type is left off; that isn't this line.
+            if (parse(bare, '', { state, zip })?.name !== base.name) continue;
+            const found = await answer({ line1: bare, city: group[0].address.city, state, zip }, registry.read);
             counts.ambiguous += 1;
             report.ambiguous.n += 1;
             if (found.match === 'exact') report.ambiguous.wrong += 1;
