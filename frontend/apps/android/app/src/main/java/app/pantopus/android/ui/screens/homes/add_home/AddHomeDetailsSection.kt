@@ -63,6 +63,8 @@ internal fun AddHomeDetailsSection(
 ) {
     val suggestions = state.propertySuggestions
     val hasRecord = suggestions?.hasAttomRecord == true
+    // While the county record is on its way, the fields it fills say so.
+    val lookingUp = "Looking up…".takeIf { state.propertyLookupPending }
     Column(
         modifier = Modifier.fillMaxWidth().testTag("addHomeDetailsSection"),
         verticalArrangement = Arrangement.spacedBy(Spacing.s4),
@@ -87,6 +89,8 @@ internal fun AddHomeDetailsSection(
                                 "then edit anything that looks off."
                         state.propertyLookupComplete ->
                             "Confirm the basic home details before continuing."
+                        state.propertyLookupPending ->
+                            "Looking up public records for this address. The details below fill in by themselves."
                         else -> "All optional — you can always add these later."
                     },
                 style = PantopusTextStyle.caption,
@@ -95,7 +99,7 @@ internal fun AddHomeDetailsSection(
         }
 
         when {
-            state.isLoadingPropertySuggestions -> PublicRecordsSkeleton()
+            state.isLoadingPropertySuggestions || state.propertyLookupPending -> PublicRecordsSkeleton()
             state.propertyLookupComplete ->
                 PublicRecordsCard(
                     hasRecord = hasRecord,
@@ -148,7 +152,7 @@ internal fun AddHomeDetailsSection(
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 AddHomeTextField(
                     label = "Bedrooms",
-                    placeholder = "3",
+                    placeholder = lookingUp ?: "3",
                     value = state.form.details.bedrooms,
                     onValueChange = vm::updateBedrooms,
                     keyboardType = KeyboardType.Number,
@@ -157,7 +161,7 @@ internal fun AddHomeDetailsSection(
                 )
                 AddHomeTextField(
                     label = "Bathrooms",
-                    placeholder = "2",
+                    placeholder = lookingUp ?: "2",
                     value = state.form.details.bathrooms,
                     onValueChange = vm::updateBathrooms,
                     keyboardType = KeyboardType.Decimal,
@@ -168,7 +172,7 @@ internal fun AddHomeDetailsSection(
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 AddHomeTextField(
                     label = "Home size (sq ft)",
-                    placeholder = "e.g. 1200",
+                    placeholder = lookingUp ?: "e.g. 1200",
                     value = state.form.details.sqFt,
                     onValueChange = vm::updateSqFt,
                     optional = true,
@@ -178,7 +182,7 @@ internal fun AddHomeDetailsSection(
                 )
                 AddHomeTextField(
                     label = "Lot size (sq ft)",
-                    placeholder = "e.g. 5000",
+                    placeholder = lookingUp ?: "e.g. 5000",
                     value = state.form.details.lotSqFt,
                     onValueChange = vm::updateLotSqFt,
                     optional = true,
@@ -189,7 +193,7 @@ internal fun AddHomeDetailsSection(
             }
             AddHomeTextField(
                 label = "Year built",
-                placeholder = "e.g. 2017",
+                placeholder = lookingUp ?: "e.g. 2017",
                 value = state.form.details.yearBuilt,
                 onValueChange = vm::updateYearBuilt,
                 optional = true,

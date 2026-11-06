@@ -71,7 +71,7 @@ class AddHomeWizardScreenTest {
         // Unstubbed, the relaxed mock hands back an instance that is neither
         // Success nor Failure, and the exhaustive `when` in
         // `loadPropertySuggestions` throws NoWhenBranchMatchedException.
-        coEvery { repo.propertySuggestions(any<PropertySuggestionsRequest>()) } returns
+        coEvery { repo.propertySuggestions(any<PropertySuggestionsRequest>(), any()) } returns
             NetworkResult.Success(PropertySuggestionsResponse())
         val networkMonitor =
             mockk<NetworkMonitor>(relaxed = true).also {
