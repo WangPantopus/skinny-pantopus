@@ -147,6 +147,14 @@ class PlaceDashboardViewModel
             reloadPending = false
         }
 
+        /**
+         * A change signal: this Home's reads run again only when it concerns them, which marks its Place copy out of
+         * date. A chat or a plan changes nothing here. The bell has its own mark.
+         */
+        fun recheck(homeId: String) {
+            if (repo.placeIsCurrent(homeId)) refreshUnread() else load(homeId)
+        }
+
         /** Repeated pause/stop/disposal callbacks must not cancel a new screen's shared read. */
         fun suspendContent() {
             if (!active) return
