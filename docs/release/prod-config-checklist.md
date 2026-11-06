@@ -1389,8 +1389,13 @@ bundle exec fastlane listing
 
 The `release` lanes submit/promote builds and remain founder actions. The existing store links on the website already point to the correct original records.
 
-Android's `beta` and `listing` lanes disable Fastlane's automatic retry of a
-rejected `changes_not_sent_for_review` request. If Play rejects the hold, the
+Android's `beta` lane uploads a draft to the internal track without asking Play
+to hold changes back from review: Play refused that request ("Changes are sent
+for review automatically"), and on November 6 the founder chose to upload
+without it. Its upload may send other changes waiting in Play Console for
+review, so check Publishing overview before cutting a tag. The `listing` lane
+still asks for the hold and disables Fastlane's automatic retry of a rejected
+`changes_not_sent_for_review` request. If Play rejects the hold there, the
 command fails for founder review; do not retry without the flag as part of
 draft preparation.
 
