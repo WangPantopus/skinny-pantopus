@@ -11,6 +11,7 @@ import app.pantopus.android.data.observability.Observability
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.push.FcmTokenProvider
 import app.pantopus.android.push.NotificationDispatcher
+import app.pantopus.android.push.PushTokenSyncer
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -124,6 +125,8 @@ object AuthTestSupport {
         var token: String? = "fcm-token",
     ) : FcmTokenProvider {
         override suspend fun currentToken(): String? = token
+
+        override suspend fun deleteToken(): Boolean = true
     }
 
     /** Builds an [AuthRepository] with test doubles for everything not supplied. */
@@ -147,6 +150,7 @@ object AuthTestSupport {
         notifications: NotificationDispatcher = mockk(relaxed = true),
         accountDeviceData: AccountDeviceData = mockk(relaxed = true),
         network: NetworkMonitor = mockk { every { isOnline } returns MutableStateFlow(true) },
+        pushTokens: PushTokenSyncer = mockk(relaxed = true),
     ): AuthRepository =
         AuthRepository(
             api = api,
@@ -167,5 +171,6 @@ object AuthTestSupport {
             notifications = notifications,
             accountDeviceData = accountDeviceData,
             network = network,
+            pushTokens = dagger.Lazy { pushTokens },
         )
 }

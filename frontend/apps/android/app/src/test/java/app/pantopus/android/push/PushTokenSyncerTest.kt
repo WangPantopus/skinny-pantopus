@@ -6,6 +6,7 @@ import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.auth.AuthRepository
 import app.pantopus.android.data.auth.DeviceIdentity
+import app.pantopus.android.data.auth.TokenStorage
 import app.pantopus.android.data.notifications.NotificationsRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -29,11 +30,12 @@ class PushTokenSyncerTest {
     private val ackStore: PushTokenAckStore = mockk(relaxed = true)
     private val deviceIdentity: DeviceIdentity = mockk { every { deviceId() } returns DEVICE_ID }
     private val authRepository: AuthRepository = mockk { coEvery { registerDevice(any()) } returns true }
+    private val tokens: TokenStorage = mockk { coEvery { accessToken() } returns "access-token" }
     private lateinit var syncer: PushTokenSyncer
 
     @Before
     fun setUp() {
-        syncer = PushTokenSyncer(tokenProvider, repository, ackStore, deviceIdentity, dagger.Lazy { authRepository })
+        syncer = PushTokenSyncer(tokenProvider, repository, ackStore, deviceIdentity, dagger.Lazy { authRepository }, tokens)
     }
 
     @Test

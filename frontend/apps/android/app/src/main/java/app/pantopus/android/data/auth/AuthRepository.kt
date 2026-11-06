@@ -41,6 +41,7 @@ import app.pantopus.android.data.observability.Observability
 import app.pantopus.android.data.realtime.SocketManager
 import app.pantopus.android.push.FcmTokenProvider
 import app.pantopus.android.push.NotificationDispatcher
+import app.pantopus.android.push.PushTokenSyncer
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -211,6 +212,7 @@ class AuthRepository
         /** Images, widget snapshots and the account's other device-local state; sign-out clears them too. */
         private val accountDeviceData: AccountDeviceData,
         private val network: NetworkMonitor,
+        private val pushTokens: dagger.Lazy<PushTokenSyncer>,
     ) {
         /**
          * Outcome of a token refresh. The distinction matters: only
@@ -1290,8 +1292,9 @@ class AuthRepository
          *   is published for the UI banner.
          *
          * Either way tokens / expiresAt / sessionId are wiped, the Block Store
-         * grant is cleared, and the non-secret account hints are KEPT so the
-         * login screen can prefill (design §2.9).
+         * grant is cleared, this phone's FCM token is deleted, and the
+         * non-secret account hints are KEPT so the login screen can prefill
+         * (design §2.9).
          */
         suspend fun signOut(reason: SessionEndReason? = null) {
             finishLocalSignOut(reason, null)
@@ -1322,6 +1325,8 @@ class AuthRepository
                     tokenStorage.clear()
                     // The next person on this device must not read the last account's notifications.
                     notifications.clearDelivered()
+                    // Nor keep getting its pushes: the logout below may never reach the server.
+                    pushTokens.get().deleteTokenAfterSignOut()
                     accountDeviceData.clear()
                     deviceIdentity.clearRegistration()
                     observability.identify(userId = null)
