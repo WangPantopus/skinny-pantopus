@@ -22,6 +22,57 @@ async function finish(job, status, accepted = []) {
   });
 }
 
+// A chat push shows the conversation and the message, as other messaging apps do (founder, November 5): a direct or
+// task chat under the sender's name, any other chat under the name the Messages list gives it with the sender before
+// the message. People are named as the room names them (chatPeople), so a business goes by its name, never by the
+// staff member who wrote for it. Hiding this on a locked phone is the phone's setting, as for other apps: iOS Show
+// Previews (When Unlocked by default; the CHAT_MESSAGE category's placeholder stands in, apnsClient) and Android's
+// sensitive-content setting (NotificationDispatcher posts a generic public version).
+const PREVIEW_LIMIT = 300;
+const ATTACHMENT_LABEL = /^(?:photo|video|document|media|\[[^\]]*attachment\])$/i;
+
+function clip(text, limit = PREVIEW_LIMIT) {
+  const chars = Array.from(String(text || '').trim());
+  return chars.length > limit ? `${chars.slice(0, limit - 1).join('').trimEnd()}…` : chars.join('');
+}
+
+function attachmentLabel(attachments, type) {
+  const kinds = attachments.map((file) => String(file?.mime_type || file?.mimeType || '').toLowerCase().split('/')[0]);
+  const count = attachments.length;
+  const all = (kind) => (count ? kinds.every((k) => k === kind) : type === kind);
+  if (all('image')) return ['📷', count > 1 ? `${count} photos` : 'Photo'];
+  if (all('video')) return ['🎥', count > 1 ? `${count} videos` : 'Video'];
+  if (all('audio')) return ['🎤', count > 1 ? `${count} audio files` : 'Audio'];
+  if (count > 1) return ['📎', `${count} attachments`];
+  return ['📄', String(attachments[0]?.original_filename || attachments[0]?.filename || 'File')];
+}
+
+/** The message as a notification line: its text, or what was sent (photos, a file, a place, a task, a listing). */
+function messagePreview(message) {
+  const text = String(message?.message || '').trim();
+  const attachments = Array.isArray(message?.attachments) ? message.attachments : [];
+  const type = message?.type || 'text';
+  if (attachments.length || ['image', 'video', 'audio', 'file'].includes(type)) {
+    const [icon, label] = attachmentLabel(attachments, type);
+    // Text sent with an attachment is its caption; a bare attachment's stored text is only its label.
+    return clip(`${icon} ${text && !ATTACHMENT_LABEL.test(text) ? text : label}`);
+  }
+  const meta = message?.metadata || {};
+  if (type === 'location') return clip(`📍 ${meta.address || text || 'Location'}`);
+  if (type === 'gig_offer') return clip(`📋 ${meta.title || text || 'Task'}`);
+  if (type === 'listing_offer') return clip(`🏷️ ${meta.title || text || 'Listing'}`);
+  return clip(text) || 'New message';
+}
+
+/** A group, Home, plan or Support Train chat's name in the Messages list; null for a direct or task chat. */
+async function conversationName(roomId) {
+  const { data: room, error } = await db.from('ChatRoom')
+    .select('type, name, support_train:support_train_id(Activity(title))').eq('id', roomId).maybeSingle();
+  if (error) throw Object.assign(new Error('Chat room unavailable'), { code: error.code });
+  if (!room || ['direct', 'gig'].includes(room.type)) return null;
+  return room.support_train?.Activity?.title || room.name || 'Group';
+}
+
 async function deliver(job) {
   let accepted = [];
   let renewing = false;
@@ -38,17 +89,16 @@ async function deliver(job) {
     let current = await rpc('read_chat_push_delivery', { p_id: job.id, p_lease: job.lease_id });
     if (!current) return await finish(job, 'suppressed');
     const message = current.message;
-    const people = job.business_notice
-      ? await loadChatPeople([message.user_id, job.identity_user_id]) : new Map();
+    const [people, conversation] = await Promise.all([
+      loadChatPeople(job.business_notice ? [message.user_id, job.identity_user_id] : [message.user_id]),
+      job.business_notice ? null : conversationName(message.room_id),
+    ]);
     const senderName = people.get(String(message.user_id))?.displayName || 'Someone';
-    const preview = message.type === 'text'
-      ? String(message.message || '').slice(0, 100) + (String(message.message || '').length > 100 ? '…' : '')
-      : message.type === 'file' ? '📎 Sent an attachment' : '💬 New message';
+    const preview = messagePreview(message);
     let freshNotice = null;
     let payload = {
-      // A delayed alert may display after account switch before native code runs.
-      // Keep message content in authenticated chat/bell views, never the OS payload.
-      title: 'New message', body: 'Open Pantopus to read it.',
+      title: conversation || senderName,
+      body: conversation ? `${senderName}: ${preview}` : preview,
       data: { type: 'chat_message', recipient_user_id: job.recipient_user_id,
         room_id: message.room_id, message_id: message.id,
         notificationId: job.id, link: `/chat/${message.room_id}` },
@@ -63,7 +113,8 @@ async function deliver(job) {
         await notificationService.publishStoredNotification(result.notice);
         freshNotice = result.notice;
       }
-      payload = { title: 'New business message', body: 'Open Pantopus to read it.',
+      // The push says what the bell notice says: "New message for <business>", "<sender>: <message>".
+      payload = { title: result.notice.title, body: result.notice.body || preview,
         data: { type: 'business_message', notificationId: result.notice.id, link: result.notice.link,
           ...result.notice.metadata, recipient_user_id: job.recipient_user_id } };
     }
