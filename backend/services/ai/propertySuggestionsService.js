@@ -1,5 +1,6 @@
 /**
  * Tiered property field suggestions for Add Home step 2:
+ * 0) The county's own record, in a county that is live on it (services/propertyRecords): no ATTOM there
  * 1) ATTOM (structured US assessor-style data)
  * 2) Heuristics from HomeAddress + Places classification
  * 3) Optional LLM (PROPERTY_SUGGESTIONS_LLM=1, Claude) — fills gaps only; never overrides ATTOM
@@ -12,6 +13,8 @@ const {
   fetchAttomPropertyDetailBundle,
   fetchAttomPropertyDetailBundleForAddress,
 } = require('./propertyIntelligenceService');
+const propertyRecords = require('../propertyRecords');
+const homeRecords = require('../propertyRecords/homeRecord');
 
 const LLM_TIMEOUT_MS = 12000;
 // A leftover PROPERTY_SUGGESTIONS_LLM_MODEL naming another provider's model is ignored.
@@ -39,6 +42,29 @@ function mapAttomPropertyTypeToCanonical(raw) {
   if (/\bSTUDIO\b/.test(u)) return 'studio';
   if (/\bRV\b|\bRECREATIONAL VEHICLES?\b/.test(u)) return 'rv';
   return null;
+}
+
+/** Add Home's fields from a county record: a unit's or a home's own facts only on an exact match. */
+function fillFromRecord(copy, merged, sources, tags) {
+  const facts = copy.facts || {};
+  const building = copy.building || {};
+  const set = (field, value, tag) => {
+    if (value == null) return;
+    merged[field] = value;
+    sources[field] = 'record';
+    tags[field] = tag;
+  };
+  if (CANONICAL_HOME_TYPES.has(copy.home_type)) set('home_type', copy.home_type, copy.match === 'exact' ? 'County' : 'Building');
+  set('year_built', facts.year_built ?? building.year_built ?? null, copy.match === 'exact' ? 'County' : 'Building');
+  if (copy.match === 'exact') {
+    set('bedrooms', facts.bedrooms ?? null, 'County');
+    set('bathrooms', facts.bathrooms ?? null, 'County');
+    set('sq_ft', facts.living_sqft != null ? Math.round(facts.living_sqft) : null, 'County');
+  }
+  if (copy.match !== 'building_only') {
+    const lot = facts.lot_sqft ?? (facts.lot_acres ? facts.lot_acres * 43560 : null);
+    if (copy.subject?.kind !== 'unit') set('lot_sq_ft', lot != null ? Math.round(lot) : null, 'County');
+  }
 }
 
 /**
@@ -165,10 +191,24 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait' } 
   // asks a paid provider (ATTOM or the model) itself.
   const checkOnly = lookup === 'check';
 
-  // Tier 1 — ATTOM (strongest structured signal; one /property/detail call)
+  // Tier 0 — the county's own record. In a live county ATTOM isn't asked.
+  const recordAddress = homeAddressRow
+    ? { line1: homeAddressRow.address_line1_norm, unit: homeAddressRow.address_line2_norm, city: homeAddressRow.city_norm, state: homeAddressRow.state, zip: homeAddressRow.postal_code }
+    : { line1: address, unit: unitNumber, city, state, zip: zipCode };
+  propertyRecords.shadow(recordAddress);
+  const record = await homeRecords.forAddress(recordAddress);
+  const fieldTags = {};
+  let provenance = null;
   let attom = null;
   let attomLookup = null;
-  { // Stored responses remain available without a live provider credential.
+  if (record) {
+    attomLookup = record.lookup;
+    if (record.copy) {
+      tiersUsed.push('record');
+      fillFromRecord(record.copy, merged, sources, fieldTags);
+      provenance = homeRecords.provenanceOf(record.copy);
+    }
+  } else { // Tier 1 — ATTOM (strongest structured signal; one /property/detail call). Stored responses remain available without a live provider credential.
     try {
       // A validated address is looked up as validated, and the server keeps
       // the answer: creating the Home stores that copy, not the app's. The
@@ -296,6 +336,7 @@ async function getPropertySuggestions(input, supabaseAdmin, { lookup = 'wait' } 
     tiers_used: [...new Set(tiersUsed)],
     llm_enabled: isLlmEnabled(),
     ...(homeAddressRow && attomLookup ? { attom_lookup: attomLookup } : {}),
+    ...(provenance ? { provenance, field_tags: fieldTags } : {}),
   };
 }
 

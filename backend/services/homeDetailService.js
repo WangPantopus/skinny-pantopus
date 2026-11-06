@@ -5,7 +5,8 @@ const invitations = require('./homeInvitationService');
 const claimConfig = require('../config/householdClaims');
 const claimPolicy = require('./homeClaimRoutingService');
 const property = require('./ai/propertyIntelligenceService');
-const { serializeCountyRecord } = require('../serializers/countyRecordSerializer');
+const { serializeCountyRecord, serializePropertyRecord } = require('../serializers/countyRecordSerializer');
+const homeRecords = require('./propertyRecords/homeRecord');
 const { SAFE_CREATOR_SELECT } = require('../serializers/identitySerializers');
 const { currentOccupancy, resolveHomeRole, ROLE_RANK } = require('../utils/homeAccessPolicy');
 const parsePoint = require('../utils/parsePostGISPoint');
@@ -204,7 +205,16 @@ async function propertyDetail(homeId, actorId) {
     // ATTOM's value estimate comes from the cache only, read alongside the Home. A Home without its record gets it
     // looked up in the background (LOOKUP_PENDING): this answer never waits for ATTOM, and the record's arrival on
     // the Home tells the page to read again.
-    const [{ home, raw }, avm] = await Promise.all([readHome(homeId, access, { provider: true }), property.getCachedAttomValue(homeId)]);
+    const { home, raw } = await readHome(homeId, access, { provider: true });
+    // A Home with a county record answers from it; a live county never reads ATTOM's copies.
+    const record = await homeRecords.forHome(raw);
+    if (record) {
+      const county = record.copy ? serializePropertyRecord(record.copy) : null;
+      return { home, attom_property_detail: null, source: county ? 'cache' : 'unavailable',
+        unavailable_reason: county ? null : (record.lookup === 'pending' ? 'LOOKUP_PENDING' : 'NO_PROPERTY_FOUND'), county_record: county,
+        ...(county ? { provenance: homeRecords.provenanceOf(record.copy) } : {}) };
+    }
+    const avm = await property.getCachedAttomValue(homeId);
     const result = await property.getHomeAttomPropertyDetail(raw);
     if (!result || !['home', 'cache', 'attom', 'unavailable'].includes(result.source)
       || !(result.attomPayload === null || object(result.attomPayload))
