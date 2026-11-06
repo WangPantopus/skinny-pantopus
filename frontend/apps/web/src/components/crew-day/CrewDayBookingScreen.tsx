@@ -359,6 +359,9 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
   const tz = b.crew_day.timezone;
   const arrival = formatWindow(b.window_start, b.window_end);
   const price = b.price_cents != null ? formatPrice(b.price_cents) : null;
+  // What a failed charge still owes: the price less any amount Pantopus support took off ("$140" of $180).
+  const due =
+    b.price_cents != null ? formatPrice(Math.max(b.price_cents - (b.problem?.refunded_cents || b.charge.refunded_cents || 0), 0)) : null;
   const phase = dayPhase(b);
   const problemOpen = b.problem?.status === 'open';
   const ended = ['cancelled', 'declined', 'refunded'].includes(b.status);
@@ -386,7 +389,13 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
         </Link>
       </StateCard>
     );
-  } else if (b.problem?.status === 'resolved' && b.problem.resolution && !(b.problem.resolution === 'resolved' && b.status === 'done')) {
+  } else if (
+    b.problem?.status === 'resolved' &&
+    b.problem.resolution &&
+    !(b.problem.resolution === 'resolved' && b.status === 'done') &&
+    // After an amount off, a failed charge for the rest still needs Pay now, not the case's outcome.
+    b.status !== 'payment_failed'
+  ) {
     const r = b.problem;
     const total = b.price_cents ?? 0;
     const title =
@@ -553,7 +562,7 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
   } else if (b.status === 'payment_failed') {
     state = (
       <StateCard tone="error" icon={CircleAlert} title="Your card didn't go through">
-        <Body>{price ? `Pay ${price} to ${crew} in Pantopus.` : `Pay ${crew} in Pantopus.`}</Body>
+        <Body>{due ? `Pay ${due} to ${crew} in Pantopus.` : `Pay ${crew} in Pantopus.`}</Body>
         {b.invoice_id ? (
           <Link href={`/app/invoice/${encodeURIComponent(b.invoice_id)}`} className={CREW_DAY_PRIMARY_BUTTON}>
             Pay now
@@ -755,7 +764,7 @@ export default function CrewDayBookingScreen({ bookingId }: { bookingId: string 
                 <span className="text-sm leading-5 text-app-text-secondary">
                   {b.charge.refunded_cents >= b.price_cents
                     ? `Refunded in full`
-                    : `${formatPrice(b.charge.refunded_cents)} refunded · ${formatPrice(b.price_cents - b.charge.refunded_cents)} paid`}
+                    : `${formatPrice(b.charge.refunded_cents)} refunded · ${formatPrice(b.price_cents - b.charge.refunded_cents)} ${b.status === 'paid' ? 'paid' : 'due'}`}
                 </span>
               ) : null}
             </div>

@@ -553,7 +553,7 @@ private fun StateCard(
             CrewDayBookingCard.CardFailed -> {
                 StateText(
                     title = "Your card didn't go through",
-                    body = "Pay ${booking.priceWords.orEmpty()} to $crew in Pantopus.",
+                    body = "Pay ${booking.amountDueWords.orEmpty()} to $crew in Pantopus.",
                 )
                 booking.invoiceId?.let { invoice ->
                     PrimaryButton(

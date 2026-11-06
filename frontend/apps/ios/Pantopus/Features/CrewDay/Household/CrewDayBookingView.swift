@@ -295,7 +295,9 @@ private extension CrewDayBookingView {
     func refundLine(_ booking: CrewDayBookingDTO) -> String? {
         guard let refunded = booking.charge?.refundedCents, refunded > 0, let price = booking.priceCents else { return nil }
         if refunded >= price { return "Refunded in full" }
-        return "\(CrewDayFormat.price(refunded)) refunded · \(CrewDayFormat.price(price - refunded)) paid"
+        // The rest is paid only once its charge went through; after a failed one it is still due.
+        let rest = booking.status == "paid" ? "paid" : "due"
+        return "\(CrewDayFormat.price(refunded)) refunded · \(CrewDayFormat.price(price - refunded)) \(rest)"
     }
 
     // MARK: - For the crew
