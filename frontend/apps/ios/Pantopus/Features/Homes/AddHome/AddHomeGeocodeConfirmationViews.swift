@@ -247,7 +247,8 @@ struct AddHomePostalNotice: Equatable {
             message = "We couldn't confirm unit \(unit) with USPS. Check the number, or continue and we'll confirm it by mail."
             icon = .alertTriangle
         case "POSTAL_PENDING":
-            message = "We couldn't check this address with USPS yet. We'll try again shortly. You can finish now; your postcard waits for the check."
+            message = "We couldn't check this address with USPS yet. We'll try again shortly. "
+                + "You can finish now; your postcard waits for the check."
             icon = .clock
         default:
             return nil

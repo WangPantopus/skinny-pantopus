@@ -206,6 +206,7 @@ const AddressVerdictStatus = Object.freeze({
  * @property {?boolean} po_box_flag
  * @property {boolean}  po_box_only_zip
  * @property {boolean}  coming_soon       — USPS says this address will be in its file soon
+ * @property {boolean}  not_listed        — USPS has no such number but Google's map data confirms it
  * @property {?boolean} cass_processed
  * @property {boolean}  usps_suspended    — Google stopped USPS checks for this account
  * @property {string}   checked_at

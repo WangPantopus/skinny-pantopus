@@ -17,7 +17,8 @@ const SHAPES = {
   cass_not_processed: { usps: { cassProcessed: false, onlyFootnote: true }, metadata: { residential: true, business: false }, placeTypes: ['premise'], granularity: 'PREMISE' },
   usps_suspended: { usps: { errorMessage: 'USPS processing suspended', onlyFootnote: true }, metadata: { residential: true, business: false }, placeTypes: ['premise'], granularity: 'PREMISE' },
   undeliverable: { usps: { dpvConfirmation: 'N', dpvFootnote: 'AAA1', addressRecordType: 'S', carrierRoute: 'C012' }, metadata: { residential: true, business: false, poBox: false }, placeTypes: ['premise'], granularity: 'PREMISE' },
-  wrong_street_number: { usps: { dpvConfirmation: 'N', dpvFootnote: 'AAM3', addressRecordType: 'S', carrierRoute: 'C012' }, metadata: { residential: true, business: false, poBox: false }, placeTypes: ['premise'], granularity: 'PREMISE' },
+  wrong_street_number: { usps: { dpvConfirmation: 'N', dpvFootnote: 'AAM3' }, metadata: { residential: true, business: false, poBox: false }, placeTypes: ['premise'], granularity: 'PREMISE_PROXIMITY', unconfirmed: ['street_number'] },
+  not_listed_yet: { usps: { dpvConfirmation: 'N', dpvFootnote: 'AAM3' }, metadata: { residential: true, business: false, poBox: false }, placeTypes: ['premise'], granularity: 'PREMISE' },
   coming_soon: { usps: { dpvConfirmation: 'N', dpvFootnote: 'A1', ewsNoMatch: true }, metadata: { residential: true, business: false }, placeTypes: ['premise'], granularity: 'PREMISE' },
   po_box: { usps: { dpvConfirmation: 'Y', dpvFootnote: 'AABB', addressRecordType: 'P', carrierRoute: 'B001' }, metadata: { poBox: true }, placeTypes: ['postal_code'], granularity: 'OTHER' },
   mail_drop: { usps: { dpvConfirmation: 'Y', dpvFootnote: 'AABBR1', addressRecordType: 'H', carrierRoute: 'C012', dpvCmra: 'Y' }, metadata: { residential: false, business: true, poBox: false }, placeTypes: ['subpremise'], granularity: 'SUB_PREMISE', hasUnit: true },
@@ -74,7 +75,7 @@ function googleAnswer(shape, address, overrides = {}) {
   const hasUnit = !!line2 && (base.hasUnit !== false);
 
   const components = [
-    { componentName: { text: streetNumber }, componentType: 'street_number', confirmationLevel: 'CONFIRMED' },
+    { componentName: { text: streetNumber }, componentType: 'street_number', confirmationLevel: (base.unconfirmed || []).includes('street_number') ? 'UNCONFIRMED_BUT_PLAUSIBLE' : 'CONFIRMED' },
     { componentName: { text: route.join(' ') }, componentType: 'route', confirmationLevel: 'CONFIRMED' },
     { componentName: { text: city }, componentType: 'locality', confirmationLevel: 'CONFIRMED' },
     { componentName: { text: state }, componentType: 'administrative_area_level_1', confirmationLevel: 'CONFIRMED' },
