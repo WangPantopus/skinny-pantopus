@@ -41,6 +41,7 @@ const { unpublishedBusinessIds, isUnpublishedBusiness } = require('../utils/visi
 const homeClaimMergeService = require('../services/homeClaimMergeService');
 const homeClaimRoutingService = require('../services/homeClaimRoutingService');
 const propertySuggestionsService = require('../services/ai/propertySuggestionsService');
+const recordVocabulary = require('../services/recordVocabulary');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
 const { encodeGeohash } = require('../utils/geohash');
 const { HOME_ISSUE_LIST, HOME_BILL_LIST, HOME_PACKAGE_LIST } = require('../utils/columns');
@@ -587,7 +588,7 @@ const propertySuggestionsSchema = Joi.object({
  * for ATTOM. `background` answers from the database at once and looks a
  * missing record up meanwhile (`attom_lookup: 'pending'`); `check`, Add Home's
  * follow-up, waits for that lookup and never asks ATTOM, so it isn't counted
- * against the outbound limit.
+ * against the outbound limit. `vocabulary=2`: services/recordVocabulary.js.
  */
 const PROPERTY_LOOKUPS = new Set(['background', 'check']);
 router.post('/property-suggestions', verifyToken,
@@ -596,7 +597,7 @@ router.post('/property-suggestions', verifyToken,
   try {
     const lookup = PROPERTY_LOOKUPS.has(req.query.lookup) ? req.query.lookup : 'wait';
     const result = await propertySuggestionsService.getPropertySuggestions(req.body, supabaseAdmin, { lookup });
-    res.json(result);
+    res.json(recordVocabulary.suggestions(result, recordVocabulary.wantsRecordVocabulary(req)));
   } catch (err) {
     logger.error('property-suggestions error', { error: err.message });
     res.status(500).json({ error: 'Failed to load property suggestions' });
@@ -2008,7 +2009,7 @@ router.get('/:id', verifyToken, async (req, res) => {
 router.get('/:id/property-details', verifyToken, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   if (Joi.string().uuid().validate(req.params.id).error) return res.status(400).json({ error: 'Invalid Home id' });
-  try { res.json(await homeDetailService.propertyDetail(req.params.id, req.user.id)); }
+  try { res.json(recordVocabulary.propertyDetail(await homeDetailService.propertyDetail(req.params.id, req.user.id), recordVocabulary.wantsRecordVocabulary(req))); }
   catch (err) { homeDetailService.sendError(res, err); }
 });
 
@@ -5568,7 +5569,7 @@ router.get('/:id/property-value', verifyToken, async (req, res) => {
         };
       }
 
-      return {
+      return recordVocabulary.propertyValue({
         estimated_value: profile.estimated_value || null,
         value_range_low: profile.value_range_low || null,
         value_range_high: profile.value_range_high || null,
@@ -5579,7 +5580,7 @@ router.get('/:id/property-value', verifyToken, async (req, res) => {
         // A value estimate kept after a refresh found nothing newer says when ATTOM gave it.
         last_updated: profile.value_as_of || profile.cached_at || null,
         source,
-      };
+      }, profile, recordVocabulary.wantsRecordVocabulary(req));
     });
     res.json(result);
   } catch (err) {
