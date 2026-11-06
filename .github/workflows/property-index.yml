@@ -17,20 +17,33 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "build, or rollback one county to its previous release"
+        description: "build; rollback one county to its previous release; switch one county off, shadow or live"
         type: choice
-        options: [build, rollback]
+        options: [build, rollback, switch]
         default: build
       sources:
         description: "Connectors in scripts/property-index/sources, space separated (build)"
         required: false
         default: "wa-clark"
       county:
-        description: "County FIPS (rollback)"
+        description: "County FIPS (rollback, switch)"
         required: false
         default: ""
       state:
         description: "Its state, two letters (rollback)"
+        required: false
+        default: ""
+      target:
+        description: "The environment that follows the change (switch)"
+        type: choice
+        options: [staging, production]
+        default: staging
+      mode:
+        description: "off, shadow or live; blank keeps it (switch)"
+        required: false
+        default: ""
+      withhold:
+        description: "Facts to keep off its screens, comma separated; none brings them back; blank keeps them (switch)"
         required: false
         default: ""
   pull_request:
@@ -45,8 +58,9 @@ on:
 permissions:
   contents: read
 
+# A county's switch only writes its own file, so it never waits behind a build that takes hours.
 concurrency:
-  group: property-index-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
+  group: property-index-${{ github.event_name == 'pull_request' && github.ref || (inputs.action == 'switch' && 'switch') || 'publish' }}
   cancel-in-progress: false
 
 jobs:
@@ -73,9 +87,34 @@ jobs:
             node --disable-warning=ExperimentalWarning -e "require('./$source')"
           done
 
+  switch:
+    name: Switch a county
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'switch' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: property-index
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.PROPERTY_INDEX_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.PROPERTY_INDEX_AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ vars.PROPERTY_INDEX_REGION }}
+      PROPERTY_INDEX_BUCKET: ${{ vars.PROPERTY_INDEX_BUCKET }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: Change the county's line
+        env:
+          COUNTY: ${{ inputs.county }}
+          MODE: ${{ inputs.mode }}
+          TARGET: ${{ inputs.target }}
+          WITHHOLD: ${{ inputs.withhold }}
+        run: node scripts/property-index/switch-county.cjs --county "$COUNTY" --mode "$MODE" --target "$TARGET" --withhold "$WITHHOLD" --bucket "$PROPERTY_INDEX_BUCKET"
+
   publish:
     name: Build and publish
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master' && inputs.action != 'switch'
     runs-on: ubuntu-24.04
     timeout-minutes: 340
     environment: property-index

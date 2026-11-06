@@ -258,7 +258,7 @@ class NotificationDispatcher
         @Synchronized
         private fun postNotification(routing: Routing) {
             // Logout clears tokens before clearing notifications under this same lock.
-            if (routing.channel == Channel.CHAT && !chatRecipientMatches(routing)) return
+            if (!recipientAllowed(routing)) return
             ensureChannel(routing.channel)
             val stableTag = routing.chatNotificationKey?.takeIf { it.isNotBlank() }?.let { "chat:$it" }
             val notificationId = if (stableTag == null) Random.nextInt() else 0
@@ -319,9 +319,14 @@ class NotificationDispatcher
                     appContext.getString(if (channel == Channel.CHAT) R.string.notif_public_chat else R.string.notif_public_other),
                 ).build()
 
-        private fun chatRecipientMatches(routing: Routing): Boolean {
-            val recipient = routing.recipientUserId?.takeIf { it.isNotBlank() } ?: return false
-            return runCatching { runBlocking { tokens.userId() } == recipient }.getOrDefault(false)
+        /**
+         * A push naming an account shows only while that account is signed in here: one can arrive after a sign-out
+         * or an account change, when it was already on its way or the phone was offline at sign-out. A push naming
+         * no account shows whoever is signed in (security notices), except chat, which always names one.
+         */
+        private fun recipientAllowed(routing: Routing): Boolean {
+            val recipient = routing.recipientUserId?.takeIf { it.isNotBlank() } ?: return routing.channel != Channel.CHAT
+            return runCatching { runBlocking { tokens.userId() }.equals(recipient, ignoreCase = true) }.getOrDefault(false)
         }
 
         private fun ensureChannel(channel: Channel) {

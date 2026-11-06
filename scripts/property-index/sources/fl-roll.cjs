@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { parse, zip5 } = require('../../../backend/services/propertyRecords/addressKey');
-const { download, zipTable, USER_AGENT } = require('../lib/tables.cjs');
+const { download, zipDates, zipTable, USER_AGENT } = require('../lib/tables.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
@@ -126,13 +126,12 @@ async function buildCounty(work, year, [name, number, fips]) {
   const zip = path.join(work, 'fl-roll', `${number}.zip`);
   const { url, stage } = currentFile(name, number, year);
   download(url, zip);
-  const listing = execFileSync('unzip', ['-l', zip], { encoding: 'latin1' });
-  const stamp = /(\d{2})-(\d{2})-(\d{4})\s+\d{2}:\d{2}\s+(\S+\.csv)/i.exec(listing);
-  if (!stamp) throw new Error(`County ${number}\'s file has no table`);
+  const [table, asOf] = [...zipDates(zip)].find(([member]) => /\.csv$/i.test(member)) || [];
+  if (!table) throw new Error(`County ${number}\'s file has no table`);
   const county = COUNTY_NAMES[name] || `${name} County`;
   const records = [];
   let noAddress = 0;
-  for await (const row of zipTable(zip, stamp[4], COLUMNS)) {
+  for await (const row of zipTable(zip, table, COLUMNS)) {
     const use = String(row.DOR_UC || '').padStart(3, '0');
     const [kind, homeType] = USES[use] || ['other', null];
     const parsed = readAddress(row.PHY_ADDR1, row.PHY_ADDR2, kind);
@@ -177,7 +176,7 @@ async function buildCounty(work, year, [name, number, fips]) {
   records.push(...condoBuildings(records, { fips, county }));
   return {
     fips, state: 'FL', name: county, publisher: 'Florida Department of Revenue', dataset: stage === 'Final' ? `${year} tax roll` : `${year} preliminary tax roll`, method: 'state', source: 'fl-roll', title: 'State records',
-    as_of: `${stamp[3]}-${stamp[1]}-${stamp[2]}`, stale_after_days: 540, records,
+    as_of: asOf, stale_after_days: 540, records,
   };
 }
 

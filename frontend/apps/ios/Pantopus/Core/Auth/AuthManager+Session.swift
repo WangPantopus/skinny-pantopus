@@ -12,6 +12,7 @@
 
 import Foundation
 import Logging
+import UIKit
 import UserNotifications
 
 // MARK: - Presence gate
@@ -644,6 +645,13 @@ extension AuthManager {
         // notifications on the lock screen or in Notification Center.
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+        // Nor keep getting its pushes: the logout that deletes this phone's token
+        // on the server may never get there, and a session that ended some other
+        // way sends none. Dropping the token too means the next sign-in can't hand
+        // the server one that's dead (`registerForPushIfAllowed` gets a live one).
+        UIApplication.shared.unregisterForRemoteNotifications()
+        pendingPushToken = nil
+        logger.info("APNs registration dropped")
         guard hadSession else { return false }
         SocketClient.shared.disconnect()
         Observability.shared.identify(userId: nil)
