@@ -70,7 +70,7 @@ fun PlaceHomeDetailContent(
 
             PlaceDetailSectionLabel("Property")
             // A home with only estimates has no facts to show: the empty grid would read as a record.
-            val hasFacts = data.yearBuilt != null || data.sqft != null || data.bedrooms != null || data.bathrooms != null || data.lotSqft != null
+            val hasFacts = listOf(data.yearBuilt, data.sqft, data.bedrooms, data.bathrooms, data.lotSqft).any { it != null }
             if (data.estimate == null || hasFacts) FactsCard(data)
             data.estimate?.let { EstimateCard(it) }
             // The server names where the facts came from: county records, or
