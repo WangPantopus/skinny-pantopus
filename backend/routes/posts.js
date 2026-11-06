@@ -329,8 +329,8 @@ const createPostSchema = Joi.object({
   gpsLatitude: Joi.number().min(-90).max(90).optional(),
   gpsLongitude: Joi.number().min(-180).max(180).optional(),
   // Where the attachments were taken, read by the app from each one's own metadata (EXIF GPS, a video's location).
-  // Like the GPS fix it is evidence for the Place check (trustState.mediaCaptureNear) and sets the post's pin; the
-  // points themselves are never stored or shown.
+  // Like the GPS fix it is evidence for the Place check (trustState.mediaCaptureNear). The list isn't stored: at most
+  // one point becomes the post's own pin (a town tag pins where its photo was taken).
   mediaLocations: Joi.array().items(Joi.object({
     latitude: Joi.number().min(-90).max(90).required(),
     longitude: Joi.number().min(-180).max(180).required(),
