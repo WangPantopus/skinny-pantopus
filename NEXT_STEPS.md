@@ -798,9 +798,10 @@ status), and the 42 screens are on the [Crew Day designs canvas](https://claude.
   - A second day took rain dates and was then cancelled by the crew. Fran, outside the area, asked for a Crew Day on
     Oak Street, and Pantopus answered.
   - Privacy held throughout. With the key off, every route answered "not available".
-  - Four fixes came out of it and are merged (rain answers, same-day reminder words, the iPhone's out-of-area notice,
-    refund words). The iPhone was rebuilt from the final branch for a last check, and Android's code is the build
-    that was checked.
+  - Five fixes came out of it and are merged: rain answers, same-day reminder words, the iPhone's out-of-area notice,
+    the iPhone's refund words, and the money words on all three apps when support takes money off
+    ([#3455](https://github.com/WangPantopus/skinny-pantopus/pull/3455)). Each fix was checked in the apps it changes,
+    and Android's code is the build that was checked.
   - Each scenario's steps and notes are in [04-scenarios.md](docs/product/crew-day-build/04-scenarios.md) and
     [05-status.md](docs/product/crew-day-build/05-status.md).
 - [ ] Yours, to release:
@@ -820,6 +821,7 @@ status), and the 42 screens are on the [Crew Day designs canvas](https://claude.
   - Android's route doesn't refresh on its own.
   - A refund after the crew's payout isn't taken back from the crew; the existing invoice refunds work this way.
   - The Android app is light-only (app-wide, from before Crew Day).
+  - On the iPhone and Android, a case closed with nothing charged still offers "See receipt" (the void invoice).
 - [ ] Not checked: live card payments and bank payouts, physical phones, push delivery through Apple and Google,
   hosted services (production database, Vercel, the AWS worker), real email delivery, and store review.
 - [ ] Open with you: what the by-hand street days taught, and sharing the private Crew Day Kit document, so the app's

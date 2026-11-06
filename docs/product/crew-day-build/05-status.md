@@ -43,7 +43,10 @@ founder's ([Release](#release)).
 - 16:20–16:22: the Android CI memory fix (#3426) and Android APP-3 to APP-6 (#3403, #3408, #3409, #3410) merged; every
   slice is in. `crew-day` head `9f98fa7b9a`.
 - Evening: the coordinator's last checks on that head: the iPhone app rebuilt from it (#3413 and #3414 together), and
-  the Android code compared with the build used in the final pass ([below](#final-pass)).
+  the Android code compared with the build used in the final pass ([below](#final-pass)). Six money-wording gaps
+  remained where support takes money off. Some came from CDSRV-2's notes on #3407, which had reached only the iPhone;
+  the rest turned up in these checks. The coordinator fixed them in #3455 (web, iPhone, Android), checked in all three
+  apps.
 
 ## Sessions
 
@@ -54,7 +57,7 @@ founder's ([Release](#release)).
 | CDIOS → CDIOS-2 | complete | APP-1 … APP-6, #3413, #3414 |
 | CDAND → CDAND-2 | complete | APP-1 … APP-6, #3426 |
 | CDDESIGN | complete | 42 boards |
-| CDCOORD | complete | the kit, this page, the final pass |
+| CDCOORD | complete | the kit, this page, the final pass, #3455 |
 
 ## Slices
 
@@ -77,6 +80,7 @@ founder's ([Release](#release)).
 | Android APP-1 | #3393 | merged |
 | Android APP-2 … APP-6 | #3397, #3403, #3408, #3409, #3410 | merged |
 | Android CI memory: Kotlin compiles inside the Gradle process | #3426 | merged |
+| Last money words: after an amount off or a refund before the charge (web, iPhone, Android) | #3455 | merged |
 | Boards (5 groups) | canvas | done, 42 boards |
 | Final end-to-end pass | | passed |
 
@@ -118,6 +122,14 @@ Last checks on the head `9f98fa7b9a`:
     cancelled this booking. Nothing was charged." (#3414)
   - Drew's charge for the rest failed after $40 off, and Drew's page asks for $140 with Pay now (#3414).
   - Dana's finished day reads "Every home is done" (#3414).
+- #3455, checked on its own builds:
+  - Web: after $40 off and a failed charge for the rest, Drew sees "Your card didn't go through · Pay $140" with Pay
+    now, not the case's outcome.
+  - Web and iPhone: Drew's price row reads "$40 refunded · $140 due", not "$140 paid". Blair's paid home still reads
+    "$60 refunded · $80 paid".
+  - iPhone: Dana's finished day reads "Charged · 2 homes · $220", not "1 home".
+  - Android: a problem refunded in full before the charge reads "We cancelled the $180 charge. Nothing was charged.",
+    not "Refunded $180 to Visa ending 4242"; Drew's failed charge asks for $140, not $180.
 
 ## Coordinator decisions
 
@@ -143,6 +155,8 @@ None blocks a release; none is built.
 - A refund after the crew's payout isn't taken back from the crew. Alex's $180 was refunded after the $162 payout, and
   Pantopus covered it. This is how the existing invoice refunds work.
 - The Android app is light-only, app-wide, from before Crew Day.
+- On the iPhone and Android, a case closed with nothing charged still offers "See receipt", which opens the void
+  invoice; the web shows it only after a charge.
 
 ## Release
 
