@@ -47,6 +47,9 @@ public struct FeedTopMenu {
 
 /// Pulse tab entry point.
 public struct FeedView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isVisible = false
+    @State private var wasInBackground = false
     @State private var viewModel: PulseFeedViewModel
     /// Map-mode engine. Lazily activated the first time the Map segment
     /// is selected (`FeedMapView.task`).
@@ -204,12 +207,14 @@ public struct FeedView: View {
         .onChange(of: viewModel.activeTopic) { _, _ in showHeader() }
         .onChange(of: isSearchVisible) { _, _ in showHeader() }
         .onAppear {
+            isVisible = true
             showHeader()
             viewModel.screens.screenDidAppear()
         }
         // Back from a post or another tab, the search box isn't still typing:
         // the keyboard came back by itself (founder report 2026-10-29).
         .onDisappear {
+            isVisible = false
             searchFieldFocused = false
             viewModel.screens.screenDidDisappear()
         }
@@ -230,6 +235,19 @@ public struct FeedView: View {
         // Back on Nearby from Connections, or loaded after an error.
         .onChange(of: showsNearbyPosts) { _, shown in
             if shown { Task { await NearbyFeedSeen.feedShown() } }
+        }
+        // Back in the app, `.task` doesn't run again, and "Set an area" has nothing else that reads.
+        .onChange(of: scenePhase) { _, phase in
+            guard isVisible else { return }
+            switch phase {
+            case .background:
+                wasInBackground = true
+            case .active where wasInBackground:
+                wasInBackground = false
+                Task { await viewModel.cameBackToApp() }
+            default:
+                break
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .pulsePostsDidChange)) { _ in
             Task { await viewModel.refresh() }
