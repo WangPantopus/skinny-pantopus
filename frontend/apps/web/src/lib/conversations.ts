@@ -11,8 +11,9 @@ import { useQuery, useQueryClient, type QueryFunctionContext } from '@tanstack/r
 import type { UnifiedConversationItem } from '@pantopus/types';
 import { queryKeys } from '@/lib/query-keys';
 import { fetchMe } from '@/lib/me';
-import { activateChatStorage, captureChatHistoryFence, deleteChatRecords, readCachedChatAccountId,
-  readChatRecord } from '@/components/chat/chatStorage';
+import { activateChatStorage, deleteChatRecords, readCachedChatAccountId, readChatHistoryFence,
+  readChatRecord, type HistoryFence } from '@/components/chat/chatStorage';
+import { chatRetirementsSeen } from '@/components/chat/chatSession';
 
 import { CONVERSATIONS_LIMIT, INBOX_KEY, retainInbox as saveInbox, type ConversationsReply, type SavedInbox } from '@/lib/conversation-storage';
 import { compareConversationTime } from '@/lib/conversationOrder';
@@ -24,11 +25,38 @@ export { useConversationEvents } from '@/lib/conversationEvents';
 
 export const CONVERSATIONS_FRESH_MS = 30 * 1000;
 
-async function retainInbox(reply: ConversationsReply, accountId: string | undefined, marker: string,
-  fence: Awaited<ReturnType<typeof captureChatHistoryFence>> | undefined) {
+// The access fence as read while the app booted, for the first inbox request only:
+// read as soon as the store opens, so a cold inbox request need not wait.
+let bootFence: { marker: string; retirements: number; at: number; read: Promise<HistoryFence | null | undefined> } | undefined;
+const BOOT_FENCE_MS = 10_000;
+if (typeof window !== 'undefined' && typeof indexedDB !== 'undefined' && api.getAuthToken()) {
+  bootFence = { marker: api.authSessionMarker(), retirements: chatRetirementsSeen(), at: performance.now(),
+    read: readChatHistoryFence().catch(() => undefined) };
+}
+
+/** Capture before an inbox request, even before its profile query completes.
+ * The first request may take the read made while the app booted, if it is in
+ * the same session, soon after, and no retirement was seen since. Within a
+ * session the fence only advances, so an earlier read can stop a raced
+ * response from being retained, never let one through. */
+async function captureChatHistoryFence(marker: string): Promise<HistoryFence | null> {
+  const boot = bootFence;
+  bootFence = undefined;
+  if (boot && boot.marker === marker && boot.retirements === chatRetirementsSeen() && performance.now() - boot.at < BOOT_FENCE_MS) {
+    const fence = await boot.read;
+    if (fence !== undefined && boot.retirements === chatRetirementsSeen()) return fence;
+  }
+  return await readChatHistoryFence();
+}
+
+/** The boot read, while no inbox request has taken it. */
+export const inboxBootFence = () => bootFence;
+
+export async function retainInbox(reply: ConversationsReply, accountId: string | undefined, marker: string,
+  fence: HistoryFence | null | undefined, current?: () => boolean) {
   if (fence === undefined) return;
   const actor = accountId || await readCachedChatAccountId() || (await fetchMe()).id;
-  await saveInbox(reply, actor, marker, fence);
+  await saveInbox(reply, actor, marker, fence, current);
 }
 
 export function conversationsQuery(search = '') {
