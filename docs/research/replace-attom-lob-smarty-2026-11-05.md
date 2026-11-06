@@ -234,6 +234,8 @@ subscription is cancelled once the homes still relying on ATTOM are few enough. 
 today. The cutover bar (when to cancel) goes
 into the Phase 3 plan for the founder's OK.
 
+**Correction (Nov 5, late evening): Pantopus's ATTOM access is the free trial ($0).** The published trial terms (read for `docs/provider-data-persistence-2026-11-01.md` and PR #3433, not re-read today) restrict keeping ATTOM data past 24 hours and building a database from it. So the fallback above can't serve live users from stored copies without a paid plan, the copies the code keeps forever today conflict with those terms, and the default becomes PR #3433's $0 path: uncovered counties show labeled partial results and household entries. Open founder decisions: drop the ATTOM fallback (stay at $0) or price a paid plan for the transition; and how to bring today's stored ATTOM copies within the trial terms.
+
 ## 8. How the code uses ATTOM today (checked on master `4c0b685efa`, Nov 5)
 
 The founder's intended flow: look in our database first; if there is no record, ask ATTOM, save what it returns, and
