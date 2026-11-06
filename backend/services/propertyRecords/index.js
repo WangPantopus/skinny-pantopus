@@ -41,8 +41,8 @@ function countiesFor(stateFile, zip, city) {
  * @returns {Promise<object>} { match, jurisdiction, county, release, ... } (identity.js)
  */
 async function lookup(address, { serves = (fips) => config.modeFor(fips) === 'live' } = {}) {
-  const parsed = parse(address.line1, address.unit);
   const state = stateCode(address.state);
+  const parsed = parse(address.line1, address.unit, { state, zip: address.zip });
   if (!parsed) return { match: 'unsupported', reason: 'unreadable_address' };
   const stateFile = await reader.stateFile(state);
   if (!stateFile) return { match: 'unsupported', reason: 'no_release' };
