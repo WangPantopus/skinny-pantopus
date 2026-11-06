@@ -98,6 +98,7 @@ const FACTS = {
   // Last sale
   sale_price: { section: 'sale', label: 'Sale price', format: 'money', scope: 'unit', value: true },
   sale_date: { section: 'sale', label: 'Sale date', format: 'date', scope: 'unit', value: true },
+  sale_month: { section: 'sale', label: 'Sale date', format: 'raw', scope: 'unit', value: true },
   sale_document: { section: 'sale', label: 'Document number', format: 'code', scope: 'unit', value: true },
 };
 
