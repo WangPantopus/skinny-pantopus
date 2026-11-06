@@ -52,6 +52,8 @@ final class CreateBusinessWizardViewModel: WizardModel {
     var city: String = ""
     var state: String = ""
     var zip: String = ""
+    /// Suggestions under the Address field (`fillAddress` takes a pick).
+    let addressSuggestions: AddressSuggestions
     private(set) var locationSkipped: Bool = false
     private(set) var hoursSkipped: Bool = false
     private(set) var hours: [BusinessHoursDay] = BusinessHoursDay.defaultWeek()
@@ -80,6 +82,7 @@ final class CreateBusinessWizardViewModel: WizardModel {
     init(api: APIClient = .shared, uploader: MultipartUploader = .shared) {
         self.api = api
         self.uploader = uploader
+        addressSuggestions = AddressSuggestions(api: api)
     }
 
     // MARK: - WizardModel
@@ -219,6 +222,16 @@ final class CreateBusinessWizardViewModel: WizardModel {
     func setAddress(_ value: String) {
         address = value
         submitError = nil
+        addressSuggestions.textChanged(value)
+    }
+
+    /// A picked address suggestion fills the address, city, state and ZIP.
+    func chooseAddressSuggestion(_ suggestion: GeoSuggestion) async {
+        guard let picked = await addressSuggestions.choose(suggestion) else { return }
+        if let street = picked.address, !street.isEmpty { setAddress(street) }
+        if let city = picked.city, !city.isEmpty { setCity(city) }
+        if let state = picked.state, !state.isEmpty { setState(state) }
+        if let zip = picked.zipcode, !zip.isEmpty { setZip(zip) }
     }
 
     func setCity(_ value: String) {

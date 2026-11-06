@@ -13,6 +13,7 @@ public final class DeviceLocationProvider: NSObject, LocationProviding, CLLocati
     private var authorizations: [UUID: CheckedContinuation<Bool, Never>] = [:]
     private var locations: [UUID: CheckedContinuation<UserCoordinate?, Never>] = [:]
     private var deadlines: [UUID: Task<Void, Never>] = [:]
+    private var nextRequest: Task<Void, Never>?
 
     init(manager: CLLocationManager) {
         self.manager = manager
@@ -97,8 +98,24 @@ public final class DeviceLocationProvider: NSObject, LocationProviding, CLLocati
     private func completeLocation(_ id: UUID, coordinate: UserCoordinate?) {
         guard let continuation = locations.removeValue(forKey: id) else { return }
         deadlines.removeValue(forKey: id)?.cancel()
-        if locations.isEmpty { manager.stopUpdatingLocation() }
+        if locations.isEmpty {
+            nextRequest?.cancel()
+            nextRequest = nil
+            manager.stopUpdatingLocation()
+        }
         continuation.resume(returning: isAuthorized ? coordinate : nil)
+    }
+
+    /// A request ended without a usable fix: Core Location gives up on one by itself (after 10 s on the simulator),
+    /// and the fix may still come. Callers with time left stay, on a new request, until their own deadlines.
+    private func requestAgainSoon() {
+        guard !locations.isEmpty, nextRequest == nil else { return }
+        nextRequest = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            guard let self, !Task.isCancelled else { return }
+            nextRequest = nil
+            if !locations.isEmpty { manager.requestLocation() }
+        }
     }
 
     public nonisolated func locationManagerDidChangeAuthorization(_: CLLocationManager) {
@@ -126,6 +143,10 @@ public final class DeviceLocationProvider: NSObject, LocationProviding, CLLocati
                 remember(location)
             }
             let coordinate = isAuthorized ? cachedCoordinate() : nil
+            if isAuthorized, coordinate == nil {
+                requestAgainSoon()
+                return
+            }
             for id in Array(locations.keys) {
                 completeLocation(id, coordinate: coordinate)
             }
@@ -134,6 +155,10 @@ public final class DeviceLocationProvider: NSObject, LocationProviding, CLLocati
 
     public nonisolated func locationManager(_: CLLocationManager, didFailWithError error: any Error) {
         Task { @MainActor in
+            if (error as? CLError)?.code == .locationUnknown {
+                requestAgainSoon()
+                return
+            }
             if (error as? CLError)?.code == .denied {
                 accessRefused = true
                 cached = nil

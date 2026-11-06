@@ -17,6 +17,7 @@ import type { PostComposerSubmitData } from '@/components/feed/PostComposer';
 import { queryKeys } from '@/lib/query-keys';
 import { FEED_PAGE_SIZE, buildFeedKey, feedLocationKey } from '@/lib/feedKeys';
 import { useFirstPageRefresh } from '@/lib/firstPageRefresh';
+import { withFreshFix } from '@/lib/freshPostFix';
 import type { SportsMode, TopicKey } from '@/constants/feedTopics';
 import { fetchMe } from '@/lib/me';
 
@@ -382,7 +383,7 @@ export function useFeedData({
         if (userLat != null) postData.gpsLatitude = userLat;
         if (userLng != null) postData.gpsLongitude = userLng;
       }
-      const res = await api.posts.createPost(postData);
+      const res = await api.posts.createPost(await withFreshFix(postData));
       const newPost = res.post;
       if (typeof newPost?.id !== 'string' || !newPost.id.trim()) {
         throw new Error('Post could not be confirmed. Try again.');

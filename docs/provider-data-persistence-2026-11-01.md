@@ -4,6 +4,8 @@ The founder's November 1 direction is to reuse stored property and other stable
 reference facts before calling a third-party API. This change covers the backend;
 web, iOS and Android continue using the same Pantopus endpoints and response shapes.
 
+For the proposed independent property index, permitted retention, and vendor exit gates, see the [nationwide ATTOM, Smarty and Lob replacement design](research/provider-replacement/README.md).
+
 ## Storage and request flow
 
 No new table or migration is necessary. `ExternalFeedCache` already has a JSONB

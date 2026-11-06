@@ -104,6 +104,9 @@ function buildPayload({ title, body, data } = {}) {
     payload.aps.category = 'CHAT_MESSAGE';
     if (typeof data.room_id === 'string' && data.room_id) payload.aps['thread-id'] = `chat:${data.room_id}`;
   }
+  // iOS shows a push that names its recipient through PantopusNotificationService, which keeps the content off the
+  // screen unless that account is the one signed in on the phone. A build without the extension ignores this.
+  if (data?.recipient_user_id) payload.aps['mutable-content'] = 1;
   for (const [key, value] of Object.entries(data || {})) {
     if (value !== null && value !== undefined && key !== 'aps') {
       payload[key] = value;

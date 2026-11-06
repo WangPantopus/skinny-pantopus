@@ -65,12 +65,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.pantopus.android.ui.components.AddressSuggestionList
 import app.pantopus.android.ui.components.EmptyState
 import app.pantopus.android.ui.components.PantopusTextField
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
 import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.components.keepsKeyboard
+import app.pantopus.android.ui.components.rememberAddressSuggestions
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.businesses.catalog.BusinessCatalogScreen
 import app.pantopus.android.ui.screens.businesses.page_editor.components.EditBusinessBannerLogoEditor
@@ -655,6 +657,7 @@ private fun LocationSection(
     content: EditBusinessPageContent,
     onFieldChange: (EditBusinessPageFieldKey, String) -> Unit,
 ) {
+    val addressSuggestions = rememberAddressSuggestions()
     SectionWrapper(overline = "Location") {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
             BizField(
@@ -666,8 +669,17 @@ private fun LocationSection(
                         ?: BizFieldState.Valid,
                 trailing = BizFieldTrailing.MapPin,
                 testTag = "editBusinessPage.field.address",
-                onValueChange = { onFieldChange(EditBusinessPageFieldKey.Address, it) },
+                onValueChange = {
+                    onFieldChange(EditBusinessPageFieldKey.Address, it)
+                    addressSuggestions?.onTextChanged(it)
+                },
             )
+            AddressSuggestionList(addressSuggestions, testTagPrefix = "editBusinessPage.addressSuggestion") { picked ->
+                picked.address?.takeIf { it.isNotBlank() }?.let { onFieldChange(EditBusinessPageFieldKey.Address, it) }
+                picked.city?.takeIf { it.isNotBlank() }?.let { onFieldChange(EditBusinessPageFieldKey.City, it) }
+                picked.state?.takeIf { it.isNotBlank() }?.let { onFieldChange(EditBusinessPageFieldKey.State, it) }
+                picked.zipcode?.takeIf { it.isNotBlank() }?.let { onFieldChange(EditBusinessPageFieldKey.Zip, it) }
+            }
             BizField(
                 label = "City",
                 required = true,
