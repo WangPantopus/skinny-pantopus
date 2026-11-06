@@ -77,10 +77,10 @@ router.post('/:id/block-founders/invites', verifyToken, homeOutboundLimiter, asy
       ...gated,
       recipient: req.body && req.body.recipient,
     });
-    return res.status(201).json(result);
+    return res.status(result.pending ? 202 : 201).json(result);
   } catch (err) {
     if (err instanceof blockFoundersService.BlockFoundersError) {
-      const status = err.code === 'WEEKLY_CAP' ? 429 : err.code === 'SEND_FAILED' ? 502 : 400;
+      const status = err.code === 'WEEKLY_CAP' ? 429 : err.code === 'SEND_FAILED' ? 502 : err.code === 'INVITES_PAUSED' ? 503 : 400;
       return res.status(status).json({ error: err.message, code: err.code });
     }
     logger.error('blockFounders: invite failed', { homeId: req.params.id, error: err.message });

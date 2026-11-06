@@ -224,6 +224,9 @@ export async function createPost(data: {
   longitude?: number;
   locationName?: string;
   locationAddress?: string;
+  // The place picker's row: its id (`osm:…` records the post as OpenStreetMap's) and its kind.
+  geocodePlaceId?: string;
+  geocodeAccuracy?: string;
   radiusMiles?: number;
   tags?: string[];
   // Feed redesign fields

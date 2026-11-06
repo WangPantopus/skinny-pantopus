@@ -517,7 +517,7 @@ describe('Feed Canonical Contract', () => {
         targetLatitude: 45.6387,
         targetLongitude: -122.6615,
       });
-      expect(gate).toEqual({ eligible: true, readOnly: false });
+      expect(gate).toEqual({ eligible: true, readOnly: false, basis: 'gps' });
       expect(canPostToAudience({
         postAs: 'personal',
         audience: 'nearby',

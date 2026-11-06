@@ -66,6 +66,8 @@ data class PostsMapMarkerDto(
     @Json(name = "userHasSaved") val userHasSaved: Boolean? = null,
     @Json(name = "created_at") val createdAt: String? = null,
     @Json(name = "creator") val creator: PostsMapCreatorDto? = null,
+    /** `photo` when the author's own photo or video placed the post: the pin is where it was taken. */
+    @Json(name = "location_basis") val locationBasis: String? = null,
     // task / offer layers — backend/routes/posts.js:1730 and :1765
     @Json(name = "description") val description: String? = null,
     @Json(name = "status") val status: String? = null,

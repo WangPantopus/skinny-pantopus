@@ -1280,7 +1280,7 @@ public final class PulseFeedViewModel {
                 isPlanPost: post.isPlanPost
             ),
             chipLabel: intent.chipLabel(lostFoundType: post.lostFoundType),
-            isVisitor: post.isVisitorPost,
+            isVisitor: post.isVisitorPost && post.locationBasis != "photo",
             origin: post.origin,
             // Topics on cards are the redesign's (Pulse S4, launch cut #11).
             pulseTopic: LaunchFeatures.pulseRedesign ? PulseTopic(stored: post.topic) : nil,
@@ -1338,7 +1338,12 @@ public final class PulseFeedViewModel {
     private static func metaString(post: FeedPostDTO, intent _: PulseIntent) -> String {
         var parts = [relative(timestamp: post.createdAt)]
         // Ahead of the place so a long place name never truncates it; web draws the badge beside the time.
-        if post.isVisitorPost { parts.append("Visitor") }
+        // A post the author's own photo placed says so instead of Visitor.
+        if let photo = post.photoProvenanceLabel() {
+            parts.append(photo)
+        } else if post.isVisitorPost {
+            parts.append("Visitor")
+        }
         // The topic too (Pulse S4): "Mute this topic" names what the card shows.
         if LaunchFeatures.pulseRedesign, let topic = PulseTopic(stored: post.topic) { parts.append(topic.label) }
         if let locality = post.locationName, !locality.isEmpty { parts.append(locality) }
