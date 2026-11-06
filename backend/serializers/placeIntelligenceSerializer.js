@@ -202,6 +202,8 @@ function serializePlaceAddressRef(place) {
  * @param {string}  [options.unavailableReason=null]  Coverage gap or lock reason.
  * @param {string}  [options.band]               Override meta band (rare).
  * @param {string}  [options.group]              Override meta group (rare).
+ * @param {object}  [options.provenance]         Where a record came from, for builds that ask
+ *                                               (services/recordVocabulary.js).
  * @returns {object} The PlaceSectionEnvelope.
  */
 function serializePlaceSection(id, options = {}) {
@@ -222,6 +224,7 @@ function serializePlaceSection(id, options = {}) {
     unavailableReason = null,
     band,
     group,
+    provenance = null,
   } = options;
 
   assertOneOf(access, ACCESS_VALUES, 'access');
@@ -251,6 +254,7 @@ function serializePlaceSection(id, options = {}) {
     unavailable_reason: unavailableReason,
     data: includeData ? data : null,
     ...(scoped ? { scope: scoped.scope, evidence: scoped.evidence } : {}),
+    ...(includeData && provenance ? { provenance } : {}),
   };
 }
 
