@@ -22,7 +22,7 @@ test.each([
   expect(db.getTable('Notification')).toEqual([note]);
   if (suppressed) expect(push.sendToUserWithReceipt).not.toHaveBeenCalled();
   else expect(push.sendToUserWithReceipt).toHaveBeenCalledWith(note.user_id, expect.objectContaining({
-    data: { ...note.metadata, notificationId: note.id, type: note.type, link: note.link },
+    data: { ...note.metadata, notificationId: note.id, type: note.type, link: note.link, recipient_user_id: note.user_id },
   }));
 });
 test.each(['audience', 'business'])('foreign %s context cannot enter assignment transport', async context => {

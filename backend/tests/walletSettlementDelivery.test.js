@@ -27,7 +27,7 @@ describe('stored notification delivery', () => {
   test('delivers the exact stored notification and never inserts another row', async () => {
     expect(await notify.deliverStoredGigNotification(note)).toMatchObject({ acceptedCount: 1, suppressed: false });
     expect(push.sendToUserWithReceipt).toHaveBeenCalledWith('worker', expect.objectContaining({ data: {
-      notificationId: 'note', type: 'payout_sent', link: '/app/wallet', gig_id: 'gig',
+      notificationId: 'note', type: 'payout_sent', link: '/app/wallet', gig_id: 'gig', recipient_user_id: 'worker',
     } }));
     expect(db.getTable('Notification')).toEqual([note]);
   });
