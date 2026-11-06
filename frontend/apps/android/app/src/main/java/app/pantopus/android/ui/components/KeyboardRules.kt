@@ -5,6 +5,8 @@ import android.view.inputmethod.InputMethodManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequesterModifierNode
+import androidx.compose.ui.focus.requestFocus
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.toComposeRect
@@ -14,6 +16,7 @@ import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.changedToDown
 import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
+import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.PointerInputModifierNode
@@ -22,6 +25,7 @@ import androidx.compose.ui.node.currentValueOf
 import androidx.compose.ui.node.findNearestAncestor
 import androidx.compose.ui.node.requireLayoutCoordinates
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.unit.IntSize
@@ -29,21 +33,27 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.navigation.NavController
+import kotlin.math.abs
 
 /**
- * The app's keyboard rules (founder, 2026-10-29) for one window: the activity's, and each sheet or dialog that holds a
- * text field (pass it as the sheet's or dialog's `modifier`). While a text box has focus:
+ * The app's keyboard rules (founder, 2026-10-29 and 2026-11-05) for one window: the activity's, and each sheet or dialog
+ * that holds a text field (pass it as the sheet's or dialog's `modifier`). While a text box has focus:
  * - a tap anywhere outside it puts the keyboard away, and the tap still does what it does, so Save or Log in work on
  *   the first tap; a tap on another text box moves the keyboard there;
- * - a drag that starts outside it, scrolling a list or the page, puts the keyboard away too.
+ * - a drag that starts outside it, scrolling a list or the page, puts the keyboard away too, and so does one that
+ *   starts on a text box or a field's box once the page holding the text box moves under the finger.
  *
- * Composers mark the controls used while typing with [keepsKeyboard] (chat's Send), lists that move the keyboard
- * themselves with [keepsKeyboardWhileScrolling] (the chat thread), and the results under a search box with
- * [firstTapClosesKeyboard].
+ * Fields mark their whole box, and composers the controls used while typing, with [keepsKeyboard] (chat's Send); lists
+ * that move the keyboard themselves use [keepsKeyboardWhileScrolling] (the chat thread), and the results under a search
+ * box [firstTapClosesKeyboard].
  */
 fun Modifier.closesKeyboardOnTapOrScroll(): Modifier = this then KeyboardRulesElement
 
-/** A tap or a drag that starts here never puts the keyboard away: the controls of a composer, a code's boxes. */
+/**
+ * A tap here never puts the keyboard away: a field's box around its line of text, the controls of a composer, a code's
+ * boxes. A tap on the box's own space types in the field inside it, so the whole box is the text box. A drag from here
+ * puts the keyboard away only once the page holding the text box scrolls under it.
+ */
 fun Modifier.keepsKeyboard(): Modifier = this then KeepsKeyboardElement(whileScrollingOnly = false)
 
 /** Scrolling here leaves the keyboard alone (a list that moves it itself, the chat thread); a tap still closes it. */
@@ -102,6 +112,9 @@ private class KeyboardRulesNode :
     private var keepsOnTap = false
     private var keepsOnDrag = false
 
+    /** A drag from the text box or a field's box: it puts the keyboard away once the page moves the text box. */
+    private var followsPage = false
+
     /** Set by a [keepsKeyboard] region the finger went down in, before this node sees the down. */
     private var keptFinger: PointerId? = null
     private var keptOnlyWhileScrolling = false
@@ -139,6 +152,8 @@ private class KeyboardRulesNode :
         } else if (!dragged && (change.position - downAt).getDistance() > currentValueOf(LocalViewConfiguration).touchSlop) {
             dragged = true
             draggedOff()
+        } else if (followsPage) {
+            closeIfPageMoved()
         }
     }
 
@@ -153,8 +168,9 @@ private class KeyboardRulesNode :
         otherFingers = false
         textBox = focusedTextBox()
         startedInTextBox = textBox?.contains(requireLayoutCoordinates().localToRoot(down.position)) == true
-        keepsOnDrag = keptFinger == down.id
-        keepsOnTap = keepsOnDrag && !keptOnlyWhileScrolling
+        keepsOnTap = keptFinger == down.id && !keptOnlyWhileScrolling
+        keepsOnDrag = keptFinger == down.id && keptOnlyWhileScrolling
+        followsPage = false
     }
 
     private fun tapped() {
@@ -165,8 +181,20 @@ private class KeyboardRulesNode :
     }
 
     private fun draggedOff() {
-        val fromOutside = textBox != null && !startedInTextBox
-        if (fromOutside && !keepsOnDrag && focusedTextBox() != null) closeKeyboard()
+        if (textBox == null || keepsOnDrag || focusedTextBox() == null) return
+        // From the text box or a field's box the drag may be the text's own (its lines, the cursor, a selection):
+        // only the page moving the text box shows it's a scroll.
+        if (startedInTextBox || keepsOnTap) followsPage = true else closeKeyboard()
+    }
+
+    private fun closeIfPageMoved() {
+        val before = textBox ?: return
+        val now = focusedTextBox() ?: return
+        val slop = currentValueOf(LocalViewConfiguration).touchSlop
+        if (abs(now.top - before.top) > slop || abs(now.left - before.left) > slop) {
+            followsPage = false
+            closeKeyboard()
+        }
     }
 
     private fun focusedTextBox(): Rect? = currentValueOf(LocalView).focusedTextBox()
@@ -190,21 +218,54 @@ private data class KeepsKeyboardElement(
 private class KeepsKeyboardNode(
     var whileScrollingOnly: Boolean,
 ) : Modifier.Node(),
-    PointerInputModifierNode {
+    PointerInputModifierNode,
+    FocusRequesterModifierNode,
+    CompositionLocalConsumerModifierNode {
+    /** A finger on the box's own space (its padding, around the line of text), followed for a tap. */
+    private var tapFinger: PointerId? = null
+    private var tapDownAt = Offset.Zero
+
     override fun onPointerEvent(
         pointerEvent: PointerEvent,
         pass: PointerEventPass,
         bounds: IntSize,
     ) {
         // The initial pass runs before the window's rules read the down in their main pass.
-        if (pass != PointerEventPass.Initial) return
-        val rules = findNearestAncestor(KeyboardRulesKey) as? KeyboardRulesNode ?: return
-        pointerEvent.changes.forEach { change ->
-            if (change.changedToDownIgnoreConsumed()) rules.keep(change.id, whileScrollingOnly)
+        if (pass == PointerEventPass.Initial) {
+            val rules = findNearestAncestor(KeyboardRulesKey) as? KeyboardRulesNode ?: return
+            pointerEvent.changes.forEach { change ->
+                if (change.changedToDownIgnoreConsumed()) rules.keep(change.id, whileScrollingOnly)
+            }
+        } else if (pass == PointerEventPass.Main && !whileScrollingOnly) {
+            followTap(pointerEvent)
         }
     }
 
-    override fun onCancelPointerInput() = Unit
+    /**
+     * A tap on the box where nothing inside took it (the field takes its own taps, a button its own) types in the
+     * field inside the box, as a tap on its line of text would: the whole box is the text box.
+     */
+    private fun followTap(pointerEvent: PointerEvent) {
+        val change = pointerEvent.changes.singleOrNull()
+        if (change == null) {
+            tapFinger = null
+        } else if (change.changedToDown()) {
+            tapFinger = change.id
+            tapDownAt = change.position
+        } else if (change.id == tapFinger) {
+            val slop = currentValueOf(LocalViewConfiguration).touchSlop
+            if (change.isConsumed || (change.position - tapDownAt).getDistance() > slop) {
+                tapFinger = null
+            } else if (change.changedToUp()) {
+                tapFinger = null
+                if (requestFocus()) currentValueOf(LocalSoftwareKeyboardController)?.show()
+            }
+        }
+    }
+
+    override fun onCancelPointerInput() {
+        tapFinger = null
+    }
 }
 
 private data object FirstTapClosesKeyboardElement : ModifierNodeElement<FirstTapClosesKeyboardNode>() {
