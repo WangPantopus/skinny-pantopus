@@ -78,11 +78,11 @@ Verified:
 - The web feed badge.
 - iOS builds, and its unit tests and SwiftLint pass.
 
+**CI at handoff:** 7 checks passed and none had failed. Four were still running: Android lint and tests, Android instrumented tests, the iOS test build, and the Docker image.
+
 **Left to do:**
-1. Drive the iOS composer in the simulator. That needs the founder's one-time "Let Claude use it" for the simulator device "photo-location-posting", given in that session. The alternative is the founder's OK to merge without the iOS check.
-2. Mark the PR ready.
-3. Get CI green.
-4. Merge.
+1. Drive the iOS composer in the simulator. The simulator tool needs the founder's one-time "Let Claude use it" for a device. The session asked four times and got no answer. The founder can approve it the next time it's asked, or give an OK to merge without the iOS check.
+2. Once CI is green, run `gh pr ready 3461`, then merge.
 
 ## Open items found along the way (not started)
 
