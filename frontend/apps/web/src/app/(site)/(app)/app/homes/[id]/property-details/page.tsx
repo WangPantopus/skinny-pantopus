@@ -184,8 +184,12 @@ export default function HomePropertyDetailsPage() {
   const yearBuilt = property?.summary?.yearbuilt ?? home?.year_built ?? null;
   const subdivision = property?.area?.subdname ?? null;
 
+  // A first lookup runs on the server meanwhile; the record's arrival re-reads this page (sync signal).
+  const lookingUp = unavailableReason === 'LOOKUP_PENDING';
   const emptyDescription =
-    unavailableReason === 'ATTOM_UNAVAILABLE'
+    lookingUp
+      ? "Pantopus is reading this home's county record. It shows here by itself, usually within a few seconds."
+      : unavailableReason === 'ATTOM_UNAVAILABLE'
       ? 'Public records could not be loaded right now. Try again in a moment.'
       : unavailableReason === 'ATTOM_NOT_CONFIGURED'
         ? 'Property records are not configured in this environment yet.'
@@ -243,11 +247,13 @@ export default function HomePropertyDetailsPage() {
             <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
               <Home className="h-10 w-10" />
             </div>
-            <h2 className="text-2xl font-bold text-app-text">No Property Data Available</h2>
+            <h2 className="text-2xl font-bold text-app-text">{lookingUp ? 'Looking up county records' : 'No Property Data Available'}</h2>
             <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-app-text-secondary">
               {emptyDescription}
             </p>
-            <button type="button" onClick={() => void load()} className="mt-5 rounded-lg border border-app-border px-4 py-2 text-sm font-semibold">Retry property records</button>
+            {lookingUp ? null : (
+              <button type="button" onClick={() => void load()} className="mt-5 rounded-lg border border-app-border px-4 py-2 text-sm font-semibold">Retry property records</button>
+            )}
           </div>
         ) : (
           <div className="space-y-6">
