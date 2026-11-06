@@ -1,0 +1,150 @@
+1|A|V|County parcel map service has year built, main sq ft, bedrooms, bathrooms, last sale|LA County Parcel Map Service (lacounty_isd) + county open data
+2|A|V|Assessor open data: bedrooms, full/half baths, year built, building sq ft (updated 2026-11-01)|datacatalog.cookcountyil.gov
+3|A|D|Free public data files; codebook lists bedrooms, bathrooms, fireplaces, stories (no sale prices in Texas)|hcad.org public data (pdata)
+4|B|V|County GIS: year built, living area, stories, bath fixtures, pool, heat, sale price; no bedrooms. Full assessor data sold under Arizona commercial-purpose rules|gis.maricopa.gov Parcel service
+5|A|V|SanGIS parcels (county-city GIS agency, served by SANDAG; "legal recorded data provided by the County Recorders and Assessor"): living area on 975,365 of 1,088,570 parcels (90%), bedrooms, baths, effective year, garage, pool; SanGIS license applies|SanGIS parcels via geo.sandag.org
+6|P|D|No public bulk; Assessor points to ParcelQuest (paid)|ocassessor.gov
+7|A|V|County Property Point View: bedrooms on 796,593 of 944,411 points (84%), year built 92%, baths, heated area, sale price 88%|Miami-Dade County open data (PaGISView)
+8|A|V|Appraisal district's 2026 certified data files (all accounts): bedrooms on 529,857 of 539,442 houses (98.2%), baths, living area and year built on nearly all; condos carry bedrooms, baths and area together on 92.1% (measured in PR #3433's field test; no sale prices in Texas)|dallascad.org Data Products
+9|B|V|NY State public parcels: year built 96%, living sq ft; no bedrooms for NYC|NYS Tax Parcels Public + NYC PLUTO
+10|A|V|County open data: year built, living area, bedroom count, bath count|gis.countyofriverside.us Parcels
+11|P|D|Assessor sells residential extract (weekly); GIS subscription $7,500/yr|clarkcountynv.gov assessor data files
+12|A|V|Assessor's weekly data download, Residential Building file (Oct 31, 2026): bedrooms, full/three-quarter/half baths, year built, living sq ft, stories, grade, condition, heat; the download page requires acknowledging Washington's ban on commercial use of lists of individuals; license forbids redistribution without permission|King County Assessor Data Download
+13|B|V|NY State public parcels (year built, living sq ft; no bedrooms for NYC)|NYS Tax Parcels Public
+14|A|V|Appraisal district's free certified residential property data file: bedrooms, bathrooms, year built, living area, garage, pool, central heat/air (no sale prices in Texas)|tad.org Data Downloads (PropertyData Residential)
+15|P|D|Assessor data sale files and vendors; data for internal use|arc.sbcounty.gov
+16|B|V|County GIS parcels: year built, gross building area, stories, rooms; BCAD sells data (no sale prices in Texas)|maps.bexar.org Parcels
+17|A|V|County GIS layers: bedrooms, baths, year built, building sq ft|Broward County GIS (BCGIS)
+18|P|D|Assessor sells data files incl. property characteristics (order form)|sccassessor.org
+19|C|V|Detroit only: year built, floor area, sale price; rest of Wayne County not found|Detroit open data parcels
+20|B|V|MassGIS statewide: year built, living area, units, style, rooms, stories, last sale; some towns publish bedrooms too|MassGIS Property Tax Parcels
+21|B|V|NY State public parcels (no bedrooms for NYC)|NYS Tax Parcels Public
+22|P|D|Characteristics (incl. bed/bath) sold to the public for a fee|acgov.org assessor records
+23|N|D|No official bulk; county GIS parcel data restricted; vendors only|saccounty.gov
+24|B|D|State roll free; county data files for a fee|FL DOR NAL + pbcpao.gov
+25|B|D|State roll free; county bulk not found|FL DOR NAL
+26|A|V|City/county OPA properties dataset: bedrooms on 413,633 of 583,716 properties (71%), year built 93%, livable area 93%, sale price|OpenDataPhilly OPA properties (phl.carto.com)
+27|N|V|NY State public layer covers only ~14% of Suffolk parcels; county bulk not found|NYS Tax Parcels Public (partial)
+28|B|D|State roll free; county bulk not found|FL DOR NAL
+29|N|D|Lookup site only; not in NY State public layer|lrv.nassaucountyny.gov
+30|B|V|NY State public parcels (no bedrooms for NYC)|NYS Tax Parcels Public
+31|B|D|Whole appraisal roll export free (PACS layout with improvement detail); bedroom fields not confirmed (no sale prices in Texas)|traviscad.org
+32|A|V|County Auditor GIS: year built, building area, bedrooms, baths, sale price|gis.franklincountyohio.gov
+33|A|V|County Tax Parcel Plus: bedrooms, baths, living area (no year built)|gisservices.oakgov.com
+34|B|V|County parcels: year built, sale price/date, market value (no size)|gis.hennepin.us LAND_PROPERTY
+35|B|V|Collin CAD on Texas Open Data: year built, main area (no sale prices in Texas)|data.texas.gov Collin CAD
+36|B|V|County open data parcels: residential living area, rooms, sale amount (no year built in layer)|gis.cuyahogacounty.gov Open_Data_Parcels
+37|B|V|County parcels: year built, heated area, sale price|maps.wakegov.com Parcels
+38|A|V|County property assessments (updated Nov 2, 2026): bedrooms on 449,253 of 584,995 parcels (77%), year built 77%, full/half baths, finished area, sale price|WPRDC Allegheny County Property Assessments
+39|B|V|State LIR parcels: year built, building sq ft (no sale prices in Utah)|UGRC Parcels_SaltLake_LIR
+40|A|V|County's own CAMA parcel service: bedrooms on 361,112 of 449,593 parcels (80%), full/half baths, heated area, year built, sale price; separate all-buildings table|meckgis.mecklenburgcountync.gov TaxParcel_camadata
+41|B|V|County assessment parcels: year built, building sq ft|gis.cccounty.us CCMAP
+42|A|D|Real Estate Dwelling Data CSV: year built, bedrooms, bathrooms, style|Fairfax County open data
+43|N|V|Open tax parcels have no building facts|gismaps.fultoncountyga.gov
+44|B|V|Maryland SDAT statewide: year built (~92%), structure sq ft, stories, units, sale consideration|MD iMAP Property Data
+45|N|D|Parcels free; no building-facts bulk found|Pima County geospatial portal
+46|B|D|State roll free; county bulk not checked|FL DOR NAL
+47|A|V|Free certified appraisal export (yearly, PACS layout): improvement attributes include bedrooms, plumbing (bath count), fireplaces, foundation, roof; free nightly CSV has year built and main area (no sale prices in Texas)|dentoncad.com Data Downloads
+48|P|D|Assessor sells the Property Characteristics file at 5 cents per parcel ($15,492 for 309,837 parcels, Jan 2026), whole file only; quarterly sales file $25.10; free roll PDFs have no building facts|fresnocountyca.gov Assessor Data for Sale
+49|A|V|County tax parcels: year built, living sq ft, bedrooms, full baths|giswww.westchestergov.com
+50|N|D|Bulk file has ownership and values only|gwinnettcounty.com
+51|N|D|Weekly value/ownership tables; no building facts found|Honolulu HOLIS
+52|N|D|No official bulk; vendors only|-
+53|A|V|Connecticut statewide CAMA 2026: bedrooms, baths, year built, living area, sales|data.ct.gov
+54|B|D|Indiana DLGF statewide improvement files (year built, size) by email request|Indiana DLGF / Gateway
+55|B|V|NJ MOD-IV statewide: year built, sale price, values (no size, no bedrooms)|maps.nj.gov Cadastral
+56|B|V|Maryland SDAT + county property data: year built, structure sq ft, sale price|MD iMAP + county open data
+57|B|D|State roll free; county points to state files|FL DOR NAL
+58|B|V|County layer: year built, total living area (no sale prices in Texas)|Fort Bend County Residential Value Assessment
+59|A|V|NY State public parcels: year built 86%, bedrooms 81%|NYS Tax Parcels Public
+60|B|D|Free weekly pipe-delimited downloads; fields not confirmed|piercecountywa.gov Data Downloads
+61|P|D|County data requires written permission (FOIA-based use limits)|gis.dupageco.org
+62|C|V|City of Milwaukee only: year built, building area, bedrooms, baths|City of Milwaukee open data
+63|N|V|County GIS assessor layer has land only|KernGIS
+64|B|D|Appraisal district's free monthly shapefile export joined to appraisal data (same platform and export as Denton, whose export carries year built and main area); city layers show year built and living area (no sale prices in Texas)|hidalgoad.org Data Downloads
+65|P|D|County parcel services restricted to ReGIS participants; vendors|gis.shelbycountytn.gov
+66|B|V|NJ MOD-IV: year built, sale price (no size)|maps.nj.gov Cadastral
+67|N|D|County open data portal's tax parcel layer is no longer listed (its 2025 copy is not reachable); Michigan assessing is by city and township (per-parcel lookups); no county bulk building facts found|Macomb County MCMAP open data portal
+68|B|V|NJ MOD-IV: year built, sale price (no size)|maps.nj.gov Cadastral
+69|B|V|MassGIS statewide|MassGIS
+70|A|V|County parcels: year built, finished living area, bedrooms, baths|Montgomery County PA GIS (Montco_GIS)
+71|B|D|Free certified export files with published layouts; bedroom fields not confirmed (no sale prices in Texas)|epcad.org Open Government
+72|B|D|Assessment roll CSV free 3x/week; improvement file not confirmed|Snohomish County open data
+73|A|V|County parcels: bedrooms, bathrooms, heated area, year built, sale amounts|Lee County GIS
+74|B|D|State roll free; county bulk not checked|FL DOR NAL
+75|B|V|Maryland SDAT + county GIS: year built, structure sq ft|MD iMAP + bcgisdata
+76|B|V|County open data: year built, sq ft|CAGIS open data (Hamilton County Auditor)
+77|P|D|Characteristics sold: "real property characteristics ... available to non-assessees at a fee" (Auditor-Controller 2025-26); county GIS parcels carry APN only; assessor site has lookups and roll summaries|Ventura County Auditor-Controller + assessor.venturacounty.gov
+78|A|V|Assessor's secured property tax rolls, published yearly (latest roll 2025): bedrooms on 103,172 parcels in 2025, baths, year built, area|data.sf.gov Assessor Historical Secured Property Tax Rolls
+79|B|V|MassGIS statewide|MassGIS
+80|A|V|Assessor's own public map server: improvements table with bedrooms on 283,360 of 325,614 buildings (87%), bathrooms, year built, square feet, stories, roof, foundation, heat/AC; tax parcel layer has sale price|okassessor.oklahomacounty.org View_OKPublicRecord
+81|A|V|County parcel layer (assessor data, public map service): bedrooms on 209,924 of 253,737 parcels (83%), year built 85%, whole/half baths, living area, stories, pool, garage|San Joaquin County Public Works Parcels (ArcGIS Online)
+82|B|V|Taxlots: year built, building sq ft, sale price|Metro RLIS / county taxlots
+83|P|D|PVA commercial subscription billed monthly|jeffersonpva.ky.gov
+84|C|V|Boston only: year built, gross area, bedroom/bath fields; rest of county has MassGIS basics|BostonGIS Property Assessment FY25
+85|Q|D|County map services checked: parcels carry values and owners only (building sq ft on 321 of 279,996); county data-sales sheet says the assessor's tabular parcel data (ownership, appraisal, tax bill) is free on its GIS FTP site, building fields not confirmed; parcel polygons sold ($22,000 countywide)|gis.cobbcounty.org + GIS Data Sales sheet
+86|B|V|County tax parcels: year built, building area|DeKalb County GIS
+87|B|D|Assessor parcel and sales downloads free; bedroom fields not confirmed|assessor.elpasoco.com
+88|A|V|Monroe County Parcels: year built, living sq ft, bedrooms, full baths|Monroe County Parcels (PlanningDesign)
+89|B|V|County GIS MCAD view: year built, main area (no sale prices in Texas)|Montgomery County TX GIS
+90|B|V|State LIR parcels: year built, building sq ft (no sale prices in Utah)|UGRC LIR
+91|N|V|County open data (45 datasets) and county GIS have no building facts; two towns (Portola Valley, San Bruno) re-publish county assessor characteristics for their own parcels only; California assessors sell characteristics|data.smcgov.org + town copies
+92|B|V|MassGIS statewide|MassGIS
+93|B|V|NJ MOD-IV: year built, sale price (no size)|maps.nj.gov Cadastral
+94|B|V|Metro ownership parcels map service: finished area on 237,557 of 287,886 parcels (83%), sale price 66%, dwelling units, land use, appraised values; no year built or bedrooms|maps.nashville.gov Cadastral Layers (Ownership Parcels)
+95|A|V|City and County residential characteristics service: bedrooms on 204,403 of 212,970 residential records (96%), year built 97%, full/half baths, above-grade and basement area, stories|Denver open data (ODC real property residential characteristics)
+96|A|V|WCAD open data: bedrooms, plumbing, year built, main area (no sale prices in Texas)|data.wcad.org
+97|A|V|County's own parcel viewer service: bedrooms on 237,106 of 300,626 records (79%), effective year built, total sq ft, full baths (no sale prices in Missouri)|jcgis.jacksongov.org ParcelViewer (Ascend)
+98|B|D|Open data assessment by address (2022); fields not confirmed|Lake County IL open data
+99|C|V|County GIS services carry no building facts and county terms forbid redistribution without written permission; a City of Joliet layer re-publishes county year built and sq ft for Joliet only|gis.willcountyillinois.com + City of Joliet
+100|A|V|DC CAMA: year built, living area, bedrooms, bathrooms, sale price|DC GIS open data
+101|A|V|Regional council (INCOG) map service of Tulsa County Assessor data: year built on 238,723 of 284,813 parcels (84%), bath count 77%, gross sq ft 96%, sale price 59%, stories, quality; no bedroom field|INCOG Tulsa County Parcels (map11.incog.org)
+102|N|V|City of Providence open data has no current assessment file (a 2013 residential assessment is the latest); Rhode Island assessing is by city and town, mostly Vision lookup sites|data.providenceri.gov + town lookup sites
+103|N|V|County and Grand Rapids map layers carry parcels without building facts (one city analysis layer shows decade built); Michigan assessing is by city and township|Kent County + City of Grand Rapids ArcGIS
+104|B|V|Assessor parcel map service: dwelling year built on 208,800 of 257,286 parcels (81%), style, values; no size or bedrooms (no sale prices in New Mexico)|assessormap.bernco.gov Public Assessor Parcels
+105|B|D|Assessor's free weekly data export (official site): building characteristics table for each parcel, extra features and transfers (fields not opened; re-published layers show year built and building sq ft)|gis.arapahoegov.com Assessor Data Export
+106|B|V|NJ MOD-IV: year built, sale price (no size)|maps.nj.gov Cadastral
+107|N|V|County parcel map service carries parcel IDs and owners only; per-parcel lookups for building facts|jccgis.jccal.org Basemap Parcels
+108|B|D|State roll free|FL DOR NAL
+109|B|D|State roll free|FL DOR NAL
+110|N|D|County parcel file (PASDA, May 2026) carries values and land use only; a third-party copy with bedrooms and baths could not be traced to a current county source|PASDA Bucks County Parcels
+111|B|V|NJ MOD-IV: year built, sale price (no size)|maps.nj.gov Cadastral
+112|A|V|Connecticut statewide CAMA 2026|data.ct.gov
+113|P|D|Appraiser sells its whole property-record data file (SQL, excludes ownership, updated February and June) for $100 a year under the Kansas Open Records Act; city layers re-publish year built and area (no sale prices in Kansas)|jocogov.org Appraiser Data Requests and Pricing
+114|B|V|Taxlots: year built, building sq ft, sale price|Metro RLIS
+115|B|D|State roll free; county database download page exists (fields not confirmed)|FL DOR NAL + vcpa.vcgov.org
+116|B|V|Maryland SDAT statewide|MD iMAP
+117|B|V|County open-data parcels: building year built on 192,258 of 217,434 parcels (88%), building sq ft 88%, stories, quality, condition|data.dogis.org Parcels public (dcgis.org)
+118|B|V|NJ MOD-IV: year built, sale price (no size)|maps.nj.gov Cadastral
+119|B|V|MassGIS statewide|MassGIS
+120|C|V|City of Madison only: year built, living area, bedrooms, full baths|City of Madison open data
+121|A|V|County parcels: year built, main floor area, bedrooms, full baths|gis.nccde.org
+122|N|V|County GIS services carry parcels without building facts; Board of Assessment has per-parcel lookups|gis.delcopa.gov
+123|B|V|County parcels: year built, sq ft|mapservices2.jeffco.us
+124|A|V|Connecticut statewide CAMA 2026|data.ct.gov
+125|P|D|County GIS sells its full data set ($500 one-time; includes tax parcels and ownership); its public server exposes only a geocoder; re-published copies of the county tax parcel file show bedrooms, baths, sq ft and year built|gcgis.org GIS Data Products Order Form
+126|B|V|Maryland SDAT + city real property data|MD iMAP + baltegis
+127|P|D|Assessor sells monthly data packages: $500 package has structure file (year built, base area, style), structure attributes and last sale price; $50 basic file has values and last sale; free county parcel map service has no building facts|lancastercountypa.gov Property Assessment Data For Sale
+128|B|V|County parcels: sq ft, last sale price|Chester County PA GIS
+129|A|V|County's own GIS parcel service: bedrooms on 157,305 of 223,510 parcels (70%), year built 84%, full baths, sq ft, sale price|gcgis.guilfordcountync.gov AreaPlanViewer Parcels
+130|P|D|Assessor sells data subscriptions; the property characteristics database has bedrooms, bathrooms, year built, building size, pools and confirmed sale prices, licensed for the buyer's own use only (no transfer without the Assessor's consent)|stancounty.com Assessor data subscription definitions
+131|Q|D|County publishes free parcel data file downloads behind a commercial-purpose attestation (Washington bars commercial use of lists of individuals); not opened, so building fields unconfirmed; SCOUT lookups show characteristics; Washington statewide parcels carry values and land use only|Spokane County GIS Data Catalog (Parcel Data File Downloads)
+132|A|V|County Property Improvements: year built, sq ft, bedrooms, baths|Adams County CO GIS
+133|B|V|MassGIS statewide|MassGIS
+134|A|V|County assessor parcel data: bedrooms, full/half baths, year built, sale price|data.ramseycountymn.gov
+135|B|V|County fiscal office tax parcels: residential year built on 389,807 of 518,514 parcels (75%); building area field empty|Summit County TaxParcels public
+136|A|D|County treasurer's free file downloads include a CAMA characteristics file (layout: year built, total rooms, bedrooms, full/half baths, stories) plus weekly/monthly/yearly sales files|go.mcohio.org Treasurer File Downloads (Cama Characteristics)
+137|N|V|County GIS hub parcels carry IDs and lot size only; appraiser characteristics via per-parcel lookups only (no sale prices in Kansas)|Sedgwick County GIS (SedgwickCounty-GIS land records)
+138|N|V|County parcel layer and Idaho's statewide improvement table carry no building facts for Ada (180,120 improvement rows, year built, size and bedrooms all empty); only an older third-party copy showed year built (no sale prices in Idaho)|Ada County GIS + Public Idaho Parcels improvement table
+139|B|V|NJ MOD-IV: year built, sale price (no size)|maps.nj.gov Cadastral
+140|A|V|Full assessor ZIP checked: bedrooms, baths, heat, roof, walls, garage, sales history|Clark County WA PACS open data
+141|B|V|NJ MOD-IV: year built, sale price (no size)|maps.nj.gov Cadastral
+142|B|V|NJ MOD-IV: year built, sale price (no size)|maps.nj.gov Cadastral
+143|N|D|No county open data or bulk file found; Supervisor of Assessments answers FOIA requests; per-parcel lookups only|assessments.kanecountyil.gov
+144|A|V|Assessor's free residential inventory CSV (whole county, updated Sep 2026): bedrooms, bathrooms, year built, living area, basement, garage, heating/AC, condition; separate free sales downloads|assess.co.polk.ia.us Residential Downloads
+145|B|V|County GIS tax parcels: residential year built on 193,680 of 288,631 parcels (67%), building area 67%, sale price 53%|gis.pinal.gov TaxParcels
+146|A|V|County parcels: year built, sq ft, bedrooms, baths, sale price|Washoe County GIS
+147|P|D|KGIS (Knoxville, Knox County, KUB) licenses property data at $100 per 2,500 ft tile (volume discounts) under a license that forbids redistribution; per-parcel lookups otherwise|kgis.org Digital Data Purchase Information
+148|B|D|Indiana DLGF statewide improvement files by request|Indiana DLGF
+149|B|V|NY State public parcels (no bedrooms for NYC)|NYS Tax Parcels Public
+150|B|V|County Parcel CAMA Public: above-grade sq ft|gisweb.pwcva.gov
