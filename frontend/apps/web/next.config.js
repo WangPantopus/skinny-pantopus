@@ -7,37 +7,6 @@ const defaultApiUrl =
     ? 'http://127.0.0.1:8000'
     : 'http://localhost:8000');
 
-// The root layout's scripts load on every page. The modules they share with a layout's
-// or a page's scripts (the API client, React Query, chat storage...) go out once, in one
-// chunk the root layout loads, instead of also in those other chunks: webpack's default
-// split (shared groups of 20 KB or more, at most 25 requests per entry) left the smaller
-// shared groups copied into each, so a page loaded some modules twice. Every page loads
-// the root layout, so no page gets code it didn't load already. 'app/layout' and
-// 'main-app' are Next's names for the root layout's entry and the App Router's own;
-// modules in the latter (React, Next) keep Next's split.
-function shareRootLayoutModules(config) {
-  const splitChunks = config.optimization && config.optimization.splitChunks;
-  if (!splitChunks || !splitChunks.cacheGroups) return;
-  splitChunks.cacheGroups.rootLayoutShared = {
-    name: 'root-layout-shared',
-    chunks: 'all',
-    enforce: true,
-    // Above webpack's default groups (-10, -20), below Next's lib and framework groups (30, 40).
-    priority: 20,
-    test(module, { chunkGraph }) {
-      if (!module.type || !module.type.startsWith('javascript')) return false;
-      let inRootLayout = false;
-      let elsewhere = false;
-      for (const chunk of chunkGraph.getModuleChunksIterable(module)) {
-        if (chunk.name === 'main-app') return false;
-        if (chunk.name === 'app/layout') inRootLayout = true;
-        else elsewhere = true;
-      }
-      return inRootLayout && elsewhere;
-    },
-  };
-}
-
 /** @type {import('next').NextConfig} */
 const createNextConfig = (phase) => ({
   // Keep local dev output separate from production build output. Next build
@@ -60,11 +29,6 @@ const createNextConfig = (phase) => ({
     ignoreBuildErrors: false,
   },
   transpilePackages: ['@pantopus/api', '@pantopus/types', '@pantopus/utils', '@pantopus/ui-utils', '@pantopus/theme'],
-  webpack(config, { dev, isServer }) {
-    // Production browser bundles only (shareRootLayoutModules above).
-    if (!dev && !isServer) shareRootLayoutModules(config);
-    return config;
-  },
   images: {
     // Next.js 16+: every `quality` passed to <Image /> must appear here (dev warning today).
     // Repo uses 75 (avatars/thumbs) and 80 (larger media / posts / listings).
