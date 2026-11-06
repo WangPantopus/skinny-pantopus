@@ -111,9 +111,9 @@ const CHECKS = {
     map: [['year_built', 'YR_CONSTR'], ['assessed_value', 'NET_VALUE', moneyNear], ['assessed_land_value', 'LAND_VAL', moneyNear], ['assessed_building_value', 'IMPRVT_VAL', moneyNear], ['sale_price', 'SALE_PRICE', moneyNear]],
   },
   'tx-collin': {
-    county: '48085', rows: () => socrataRows('data.texas.gov', 'vffy-snc6', ['propid', 'imprvyearbuilt', 'currvalmarket', 'currvallandmarket', 'currvalimprv'], {}),
+    county: '48085', rows: () => socrataRows('data.texas.gov', 'vffy-snc6', ['propid', 'imprvyearbuilt', 'currvalmarket', 'currvalland', 'currvalimprv']),
     id: (row) => row.propid,
-    map: [['year_built', 'imprvyearbuilt'], ['market_value', 'currvalmarket', moneyNear]],
+    map: [['year_built', 'imprvyearbuilt'], ['market_value', 'currvalmarket', moneyNear], ['market_land_value', 'currvalland', moneyNear], ['market_building_value', 'currvalimprv', moneyNear]],
   },
   'mn-hennepin': {
     county: '27053', rows: () => layerRows('https://gis.hennepin.us/arcgis/rest/services/HennepinData/LAND_PROPERTY/MapServer/1', ['PID_TEXT', 'BUILD_YR', 'MKT_VAL_TOT', 'SALE_PRICE', 'PARCEL_AREA']),
