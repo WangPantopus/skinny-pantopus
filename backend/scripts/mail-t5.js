@@ -15,6 +15,10 @@
  * start the backend with scripts/mail-t5-faults.cjs preloaded on the same rules file.
  * The grace periods are stepped over by backdating rows in the local database.
  *
+ * --only paused checks the switch that stops invitations alone, on a backend started with
+ * BLOCK_FOUNDERS_MAIL_ENABLED=false. --only failover checks moving to a second printer,
+ * on a backend started with MAIL_PROVIDER=lob and MAIL_FAILOVER_PROVIDER=<printer>.
+ *
  * Prints one line per check and exits non-zero if any fails. The output describes a
  * printer's behavior: keep it out of Git and anywhere public.
  */
@@ -30,6 +34,7 @@ const opt = (name, fallback) => { const i = args.indexOf(name); return i >= 0 ? 
 const API = opt('--api', 'http://127.0.0.1:8000');
 const PRINTER = opt('--printer', 'lob');
 const FAULTS = opt('--faults', null);
+const ONLY = opt('--only', null);
 const WEBHOOK_PATH = opt('--webhook-path', PRINTER === 'lob' ? '/api/v1/webhooks/lob' : `/api/v1/webhooks/${PRINTER}`);
 const LOCAL = /^(https?|postgres(ql)?):\/\/([^@/]*@)?(127\.0\.0\.1|localhost)[:/]/;
 
@@ -132,8 +137,25 @@ async function addOccupant(homeId, person, kind) {
 
 // ── Delivery updates, signed the way the printer signs them ──
 
+// PostGrid sends one postcard.updated carrying a status. It has no signal for re-routed or failed cards.
+const POSTGRID_STATE = {
+  'postcard.mailed': { status: 'processed_for_delivery' },
+  'postcard.in_transit': { status: 'processed_for_delivery', imbStatus: 'entered_mail_stream' },
+  'postcard.delivered': { status: 'completed' },
+  'postcard.returned_to_sender': { status: 'processed_for_delivery', imbStatus: 'returned_to_sender' },
+};
+const hasSignal = (eventType) => PRINTER === 'lob' || !!POSTGRID_STATE[eventType];
+
 let eventCounter = 0;
 async function deliver(eventType, pieceId, metadata, id = `evt_t5_${Date.now()}_${eventCounter += 1}`) {
+  if (PRINTER === 'postgrid') {
+    const body = JSON.stringify({ id, object: 'event', type: 'postcard.updated',
+      data: { id: pieceId, object: 'postcard', metadata, updatedAt: new Date().toISOString(), ...POSTGRID_STATE[eventType] } });
+    const t = String(Date.now());
+    const v1 = crypto.createHmac('sha256', process.env.POSTGRID_WEBHOOK_SECRET).update(`${t}.${body}`).digest('hex');
+    const res = await fetch(API + WEBHOOK_PATH, { method: 'POST', headers: { 'Content-Type': 'application/json', 'postgrid-signature': `t=${t},v1=${v1}` }, body });
+    return { status: res.status, body: await res.json().catch(() => null), id };
+  }
   const body = JSON.stringify({ id, object: 'event', date_created: new Date().toISOString(), event_type: { id: eventType },
     body: { id: pieceId, object: 'postcard', metadata }, reference_id: pieceId });
   const timestamp = String(Date.now());
@@ -194,6 +216,7 @@ async function homeFlow() {
 
   section('Home postcard: returned, re-routed and failed end the attempt');
   for (const [type, state] of [['postcard.returned_to_sender', 'returned'], ['postcard.re-routed', 'rerouted'], ['postcard.failed', 'failed']]) {
+    if (!hasSignal(type)) { skip(`${state} on this printer`, 'it sends no such event'); continue; }
     home = await newHome(resident, 'resident');
     ({ row } = await requestCard(resident, home));
     await q('update "HomePostcardCode" set requested_at=requested_at-interval \'2 hours\' where user_id=$1', [resident.id]);
@@ -252,7 +275,7 @@ async function homeFlow() {
   res = await api(older, 'POST', `/api/homes/${home.id}/request-postcard`);
   check('returned: another can be requested', res.status === 201, res.body);
   [row] = await q(`select * from "HomePostcardCode" where home_id=$1 and status='pending'`, [home.id]);
-  await deliver('postcard.re-routed', row.vendor_job_id, homeRef(row));
+  await deliver('postcard.returned_to_sender', row.vendor_job_id, homeRef(row));
   await q('update "HomePostcardCode" set requested_at=requested_at-interval \'2 hours\' where user_id=$1', [older.id]);
   res = await api(older, 'POST', `/api/homes/${home.id}/request-postcard`);
   check('two cards back: a third is refused with a reason', res.status === 409 && res.body?.code === 'POSTCARD_RETURNED_LIMIT', { s: res.status, b: res.body });
@@ -346,13 +369,15 @@ async function addressFlow(faults) {
   await deliver('postcard.in_transit', job.vendor_job_id, ref(job));
   check('a late scan doesn\'t rewind the card', (await jobOf(attemptId)).vendor_status === 'returned');
 
-  person = await newPerson('address2');
-  res = await start(await newAddress());
-  const second = res.body?.verification_id;
-  job = await jobOf(second);
-  await deliver('postcard.re-routed', job.vendor_job_id, ref(job));
-  status = await statusFor(second);
-  check('re-routed: the attempt ends too', status.status === 'expired' && status.mail_outcome === 'rerouted', status);
+  if (hasSignal('postcard.re-routed')) {
+    person = await newPerson('address2');
+    res = await start(await newAddress());
+    const second = res.body?.verification_id;
+    job = await jobOf(second);
+    await deliver('postcard.re-routed', job.vendor_job_id, ref(job));
+    status = await statusFor(second);
+    check('re-routed: the attempt ends too', status.status === 'expired' && status.mail_outcome === 'rerouted', status);
+  } else skip('re-routed on this printer', 'it sends no such event');
 
   person = await newPerson('address3');
   res = await start(await newAddress(true));
@@ -474,12 +499,53 @@ async function inviteFlow(faults) {
   check('opted out meanwhile: the retry is dropped', !(await rowOf(n)) && (await piecesFor('pantopus_block_invite_id', row.id)).length === 0);
 }
 
+async function failover() {
+  section('Failover: new cards move, cards in flight stay');
+  if (!FAULTS) { skip('failover', 'run with --faults'); return; }
+  const second = mailVendorService.providerForPiece('postgrid');
+  const lob = mailVendorService.providerForPiece('lob');
+  const resident = await newPerson('failover');
+  const stuck = [];
+  const LOB_CARDS = '/v1/postcards';
+  setFaults([{ path: LOB_CARDS, mode: 'down' }]);
+  for (let i = 0; i < 3; i += 1) {
+    const home = await newHome(resident, 'resident');
+    const { row } = await requestCard(resident, home);
+    stuck.push(row);
+    await q('update "HomePostcardCode" set requested_at=requested_at-interval \'2 hours\' where user_id=$1', [resident.id]);
+  }
+  check('Lob down: cards wait with the printer they were given to', stuck.every((row) => row.mail_provider === 'lob' && row.dispatch_status === 'delivery_unknown'), stuck.map((row) => row.dispatch_status));
+  const moved = await requestCard(resident, await newHome(resident, 'resident'));
+  check('Lob still down: the next new card goes to the second printer', moved.row.mail_provider === second.name && moved.row.dispatch_status === 'accepted', { p: moved.row.mail_provider, d: moved.row.dispatch_status });
+  const wrong = await fetchWrongPrinterEvent(moved.row);
+  const [after] = await q('select status, mail_outcome from "HomePostcardCode" where id=$1', [moved.row.id]);
+  check('another printer\'s update can\'t touch that card', wrong.status === 200 && after.status === 'pending' && after.mail_outcome === null, { s: wrong.status, a: after });
+  await q(`update "HomePostcardCode" set updated_at=now()-interval '20 minutes' where id = any($1)`, [stuck.map((row) => row.id)]);
+  await runJob();
+  const unanswered = await q('select dispatch_status, mail_provider from "HomePostcardCode" where id = any($1)', [stuck.map((row) => row.id)]);
+  check('while Lob can\'t answer, those cards don\'t move', unanswered.every((row) => row.mail_provider === 'lob' && row.dispatch_status === 'delivery_unknown'), unanswered);
+  setFaults([]);
+  await q(`update "HomePostcardCode" set updated_at=now()-interval '20 minutes' where id = any($1)`, [stuck.map((row) => row.id)]);
+  await runJob();
+  for (const [i, row] of stuck.entries()) {
+    const [now] = await q('select dispatch_status, mail_provider from "HomePostcardCode" where id=$1', [row.id]);
+    const pieces = (await lob.findPieces('pantopus_home_postcard_id', row.id)).length + (await second.findPieces('pantopus_home_postcard_id', row.id)).length;
+    check(`Lob back, "no such piece": card ${i + 1} goes out once, across both printers`, now.dispatch_status === 'accepted' && pieces === 1, { d: now.dispatch_status, pieces });
+  }
+}
+
+// Lob's signature on a piece the second printer took.
+async function fetchWrongPrinterEvent(row) {
+  const body = JSON.stringify({ id: `evt_t5_wrong_${Date.now()}`, object: 'event', date_created: new Date().toISOString(), event_type: { id: 'postcard.returned_to_sender' },
+    body: { id: row.vendor_job_id, object: 'postcard', metadata: homeRef(row) }, reference_id: row.vendor_job_id });
+  const timestamp = String(Date.now());
+  const signature = crypto.createHmac('sha256', process.env.LOB_WEBHOOK_SECRET).update(`${timestamp}.${body}`).digest('hex');
+  const res = await fetch(`${API}/api/v1/webhooks/lob`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'lob-signature-timestamp': timestamp, 'lob-signature': signature }, body });
+  return { status: res.status };
+}
+
 async function pausedSwitch() {
   section('The switch that stops invitations alone');
-  if (String(process.env.BLOCK_FOUNDERS_MAIL_ENABLED).toLowerCase() !== 'false') {
-    skip('invitations paused', 'start the backend with BLOCK_FOUNDERS_MAIL_ENABLED=false to check it');
-    return;
-  }
   const owner = await newPerson('paused');
   const home = await newHome(owner, 'owner');
   const res = await api(owner, 'POST', `/api/homes/${home.id}/block-founders/invites`, { recipient: { line1: `415 W 6th St Suite ${nextSuite()}`, city: 'Vancouver', state: 'WA', zip: '98660' } });
@@ -495,11 +561,16 @@ async function pausedSwitch() {
   console.log(`T5 on printer ${PRINTER}, test mode${FAULTS ? ', with fault injection' : ''}. Keep this output out of Git and anywhere public.`);
   try {
     if (FAULTS) setFaults([]);
-    await homeFlow();
-    if (FAULTS) await homeFaults(); else skip('Home postcard timeouts', 'run with --faults');
-    await addressFlow(!!FAULTS);
-    await inviteFlow(!!FAULTS);
-    await pausedSwitch();
+    if (ONLY === 'paused') await pausedSwitch();
+    else if (ONLY === 'failover') await failover();
+    else {
+      await homeFlow();
+      if (FAULTS) await homeFaults(); else skip('Home postcard timeouts', 'run with --faults');
+      await addressFlow(!!FAULTS);
+      await inviteFlow(!!FAULTS);
+      skip('the switch that stops invitations alone', 'run with --only paused');
+      skip('moving to a second printer', 'run with --only failover');
+    }
   } finally {
     if (FAULTS) setFaults([]);
     await pg.end();

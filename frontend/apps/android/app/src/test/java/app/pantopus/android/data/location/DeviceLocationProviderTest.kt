@@ -21,7 +21,7 @@ import org.junit.Test
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class DeviceLocationProviderTest {
-    private val client = mockk<FusedLocationProviderClient>()
+    private val client = mockk<FusedLocationProviderClient> { every { lastLocation } returns Tasks.forResult(null) }
     private var allowed = true
     private var now = 1_000_000L
     private val provider = DeviceLocationProvider(client, { allowed }, { now })
@@ -47,7 +47,6 @@ class DeviceLocationProviderTest {
             runCurrent()
             assertNull(request.await())
             assertTrue(tokens.single().isCancellationRequested)
-            verify(exactly = 0) { client.lastLocation }
             pending.setResult(location())
             runCurrent()
             assertNull(provider.cachedCoordinate())

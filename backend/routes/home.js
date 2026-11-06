@@ -12,7 +12,7 @@ const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
 const { escapeIlike } = require('../utils/escapeIlike');
-const { computeAddressHash } = require('../utils/normalizeAddress');
+const { computeAddressHash, expandAbbreviations } = require('../utils/normalizeAddress');
 const homeAuthorityService = require('../services/homeAuthorityService');
 const homeListService = require('../services/homeListService');
 const homeCreateService = require('../services/homeCreateService');
@@ -43,6 +43,7 @@ const homeClaimRoutingService = require('../services/homeClaimRoutingService');
 const propertySuggestionsService = require('../services/ai/propertySuggestionsService');
 const recordVocabulary = require('../services/recordVocabulary');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
+const homeRecords = require('../services/propertyRecords/homeRecord');
 const { encodeGeohash } = require('../utils/geohash');
 const { HOME_ISSUE_LIST, HOME_BILL_LIST, HOME_PACKAGE_LIST } = require('../utils/columns');
 const { excludeHiddenHomeActivity } = require('../utils/featureFlags');
@@ -1155,7 +1156,10 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
 
     // A verified owner reads this record as the county's, so it is the
     // server's own lookup for this address, never the copy the app sends.
-    const attomPropertyDetail = await propertyIntelligenceService.getAddressAttomPropertyDetail(canonicalAddress.id);
+    const countyRecord = await homeRecords.forAddress({
+      line1: normalizedLine1, unit: normalizedLine2, city: normalizedCity, state: normalizedState, zip: normalizedZip,
+    }).catch(() => null);
+    const attomPropertyDetail = countyRecord ? null : await propertyIntelligenceService.getAddressAttomPropertyDetail(canonicalAddress.id);
 
     const homeData = {
       address: normalizedLine1,
@@ -1201,6 +1205,7 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       privacy_mask_level: 'normal',
       ownership_state: is_owner ? 'claim_pending' : 'unclaimed',
       ...(attomPropertyDetail ? { niche_data: { attom_property_detail: attomPropertyDetail } } : {}),
+      ...(countyRecord?.copy ? { niche_data: { property_record: countyRecord.copy } } : {}),
     };
 
     // Add location if provided.
@@ -1694,6 +1699,12 @@ router.get('/discover', verifyToken, async (req, res) => {
     const normalizedQuery = queryText.toLowerCase();
     const tokens = normalizedQuery.split(/\s+/).filter(Boolean).slice(0, 6);
     const primaryToken = tokens[0] || normalizedQuery;
+    // A word also matches in its spelled-out form, so "NE 4th Ave" and
+    // "Northeast 4th Avenue" find each other: a picked address suggestion
+    // spells words out, a saved home may not. The typed form still counts
+    // too, so a half-typed "st" keeps matching "Stanley".
+    const expandedQuery = expandAbbreviations(normalizedQuery);
+    const expandedTokens = tokens.map((token) => expandAbbreviations(token));
     const safeLimit = Math.min(parseInt(limit) || 20, 50);
     const safeOffset = Math.max(parseInt(offset) || 0, 0);
 
@@ -1777,18 +1788,25 @@ router.get('/discover', verifyToken, async (req, res) => {
           .filter(Boolean)
           .join(' ')
           .toLowerCase();
+        const expandedSearchable = expandAbbreviations(searchable);
+        const knowsEveryWord = tokens.every((token, i) => searchable.includes(token)
+          || expandedSearchable.includes(expandedTokens[i]));
 
         const homeName = String(h.name || '').toLowerCase();
         const address = String(h.address || '').toLowerCase();
+        const expandedName = expandAbbreviations(homeName);
+        const expandedAddress = expandAbbreviations(address);
 
         let score = 4;
-        if (homeName === normalizedQuery || address === normalizedQuery) {
+        if (homeName === normalizedQuery || address === normalizedQuery
+          || expandedName === expandedQuery || expandedAddress === expandedQuery) {
           score = 0;
-        } else if (homeName.startsWith(normalizedQuery) || address.startsWith(normalizedQuery)) {
+        } else if (homeName.startsWith(normalizedQuery) || address.startsWith(normalizedQuery)
+          || expandedName.startsWith(expandedQuery) || expandedAddress.startsWith(expandedQuery)) {
           score = 1;
-        } else if (searchable.includes(normalizedQuery)) {
+        } else if (searchable.includes(normalizedQuery) || expandedSearchable.includes(expandedQuery)) {
           score = 2;
-        } else if (tokens.every((token) => searchable.includes(token))) {
+        } else if (knowsEveryWord) {
           score = 3;
         }
 
@@ -1812,10 +1830,10 @@ router.get('/discover', verifyToken, async (req, res) => {
           is_member: memberSet.has(h.id),
           claim_status: claimMap.get(h.id) || null,
           _score: score,
-          _searchable: searchable,
+          _knowsEveryWord: knowsEveryWord,
         };
       })
-      .filter((h) => tokens.every((token) => h._searchable.includes(token)))
+      .filter((h) => h._knowsEveryWord)
       .sort((a, b) => {
         if (a._score !== b._score) return a._score - b._score;
         return String(a.address || '').localeCompare(String(b.address || ''));
@@ -1823,7 +1841,7 @@ router.get('/discover', verifyToken, async (req, res) => {
 
     const result = ranked
       .slice(safeOffset, safeOffset + safeLimit)
-      .map(({ _score, _searchable, ...rest }) => rest);
+      .map(({ _score, _knowsEveryWord, ...rest }) => rest);
 
     res.json({ homes: result });
   } catch (err) {
