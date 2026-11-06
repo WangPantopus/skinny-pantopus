@@ -96,7 +96,7 @@ const USE_WORDS = {
 };
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const COLUMNS = ['PARCEL_ID', 'ASMNT_YR', 'DOR_UC', 'PA_UC', 'JV', 'AV_SD', 'TV_SD', 'LND_VAL', 'LND_SQFOOT', 'IMP_QUAL', 'EFF_YR_BLT', 'ACT_YR_BLT', 'TOT_LVG_AREA', 'NO_BULDNG', 'NO_RES_UNTS',
-  'SALE_PRC1', 'SALE_YR1', 'SALE_MO1', 'S_LEGAL', 'TAX_AUTH_CD', 'PHY_ADDR1', 'PHY_ADDR2', 'PHY_CITY', 'PHY_ZIPCD', 'EXMPT_01', 'EXMPT_02', 'EXMPT_03', 'EXMPT_04', 'EXMPT_05'];
+  'SALE_PRC1', 'SALE_YR1', 'SALE_MO1', 'SALE_PRC2', 'SALE_YR2', 'SALE_MO2', 'S_LEGAL', 'TAX_AUTH_CD', 'PHY_ADDR1', 'PHY_ADDR2', 'PHY_CITY', 'PHY_ZIPCD', 'EXMPT_01', 'EXMPT_02', 'EXMPT_03', 'EXMPT_04', 'EXMPT_05'];
 
 // Roll addresses put a condo's unit after the street type with no marker: "100 MAIN ST 4B". A numbered road isn't one of those.
 const TRAILING_UNIT = /^(.*\b(?:ST|AVE|RD|DR|LN|CT|CIR|BLVD|WAY|PL|TER|TRL|PKWY|PT|LOOP|RUN))\s+([A-Z0-9-]{1,6})$/;
@@ -141,10 +141,14 @@ async function buildCounty(work, year, [name, number, fips, file]) {
     put(facts, 'assessed_value', positive(row.AV_SD));
     put(facts, 'taxable_value', positive(row.TV_SD));
     put(facts, 'market_land_value', positive(row.LND_VAL));
-    if (positive(row.SALE_PRC1) > 100 && positive(row.SALE_YR1)) {
-      facts.sale_price = positive(row.SALE_PRC1);
-      const month = positive(row.SALE_MO1);
-      facts.sale_month = month ? `${MONTHS[month - 1]} ${positive(row.SALE_YR1)}` : String(positive(row.SALE_YR1));
+    // The roll's two sales aren't in date order: the last sale is the later one with a real price.
+    const [sale] = [1, 2]
+      .map((n) => ({ price: positive(row[`SALE_PRC${n}`]), year: positive(row[`SALE_YR${n}`]), month: positive(row[`SALE_MO${n}`]) }))
+      .filter(({ price, year }) => price > 100 && year)
+      .sort((a, b) => (b.year * 100 + (b.month || 0)) - (a.year * 100 + (a.month || 0)));
+    if (sale) {
+      facts.sale_price = sale.price;
+      facts.sale_month = sale.month ? `${MONTHS[sale.month - 1]} ${sale.year}` : String(sale.year);
     }
     // A homestead is said by name. The others can say something about a person, so they aren't.
     const exemptions = [];

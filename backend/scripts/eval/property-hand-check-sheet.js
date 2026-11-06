@@ -22,7 +22,8 @@ const SKIP = new Set(['county', 'fips', 'value_history', 'tax_history', 'exempti
 
 const groups = new Map();
 for (const record of release.records()) {
-  if (!['property', 'unit'].includes(record.kind) || !record.facts.bedrooms) continue;
+  // A home with its building facts: Florida's roll has no bedrooms.
+  if (!['property', 'unit'].includes(record.kind) || !(record.facts.bedrooms || record.facts.year_built)) continue;
   if (!groups.has(record.home_type)) groups.set(record.home_type, []);
   groups.get(record.home_type).push(record);
 }
