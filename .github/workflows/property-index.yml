@@ -90,10 +90,12 @@ jobs:
         if: github.event_name != 'workflow_dispatch' || inputs.action == 'build'
         env:
           SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || 'tx-dallas fl-roll' }}
+          # A run someone started by hand may bring back a file that was rolled back; the schedule never does.
+          REPUBLISH: ${{ github.event_name == 'workflow_dispatch' && '--republish' || '' }}
         run: |
           for source in $SOURCES; do
             out="$RUNNER_TEMP/property-index/$source"
             node --max-old-space-size=12288 scripts/property-index/build.cjs --source "$source" --out "$out" --work "$RUNNER_TEMP/property-index-work"
-            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET"
+            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" $REPUBLISH
             rm -rf "$out" "$RUNNER_TEMP/property-index-work/$source"
           done

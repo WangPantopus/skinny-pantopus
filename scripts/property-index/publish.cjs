@@ -4,7 +4,8 @@
 // readers over, so a failed or refused import leaves the previous release serving. Run by
 // .github/workflows/property-index.yml with the AWS key of its master-only environment.
 //
-//   node scripts/property-index/publish.cjs --out <dir> --bucket <name> [--prefix index]
+//   node scripts/property-index/publish.cjs --out <dir> --bucket <name> [--prefix index] [--republish]
+//     --republish  someone decided: a file that was rolled back may serve again (a scheduled run never passes this)
 //   node scripts/property-index/publish.cjs --rollback <fips> --state <ST> --bucket <name> [--prefix index]
 'use strict';
 
@@ -33,6 +34,7 @@ function parseArgs(argv) {
     else if (argv[i] === '--prefix') opts.prefix = argv[++i];
     else if (argv[i] === '--rollback') opts.rollback = argv[++i];
     else if (argv[i] === '--state') opts.state = argv[++i];
+    else if (argv[i] === '--republish') opts.republish = true;
     else throw new Error('Unknown argument');
   }
   if (!opts.bucket || !(opts.out || (opts.rollback && opts.state))) throw new Error('usage: see the top of publish.cjs');
@@ -117,7 +119,7 @@ function readState(store, state) {
   return bytes ? JSON.parse(bytes.toString('utf8')) : emptyState(state);
 }
 
-function publish(store, out) {
+function publish(store, { out, republish }) {
   const dir = path.join(out, 'counties');
   const entries = fs.readdirSync(dir).filter((name) => name.endsWith('.json')).map((name) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')));
   const byState = new Map();
@@ -134,6 +136,11 @@ function publish(store, out) {
       // The source hasn't published anything new since the release serving.
       if (serving && serving.as_of === entry.as_of && serving.status === 'active') {
         log(`${entry.fips}: unchanged since ${entry.as_of}`);
+        continue;
+      }
+      // The file someone rolled back stays back until the source publishes a newer one or someone says otherwise.
+      if (serving?.rolled_back_as_of === entry.as_of && !republish) {
+        log(`${entry.fips}: ${entry.as_of} was rolled back, not publishing it again`);
         continue;
       }
       const found = problems(store, entry, serving, out);
@@ -167,6 +174,7 @@ function rollback(store, fips, state) {
     previous: null,
     previous_as_of: null,
     rolled_back_from: county.release,
+    rolled_back_as_of: county.as_of,
     rolled_back_at: new Date().toISOString(),
   };
   store.putJson(statePath(state), { ...stateFile, updated_at: new Date().toISOString() });
@@ -177,7 +185,7 @@ const opts = parseArgs(process.argv.slice(2));
 const store = createStore(opts);
 try {
   if (opts.rollback) rollback(store, opts.rollback, opts.state);
-  else publish(store, opts.out);
+  else publish(store, opts);
 } catch (err) {
   console.error(`Publishing failed: ${err.constructor === Error ? err.message : err.name}`);
   process.exit(1);
