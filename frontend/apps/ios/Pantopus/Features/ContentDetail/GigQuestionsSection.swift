@@ -116,8 +116,10 @@ struct GigQuestionsSection: View {
                 Text("\(viewModel.newQuestionText.count)/\(maxQuestionLength)")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.Color.appTextMuted)
+                    .allowsHitTesting(false)
                 Spacer()
                 Button {
+                    Keyboard.close()
                     Task {
                         if let message = await viewModel.submitQuestion() {
                             onError?(message)
@@ -138,6 +140,7 @@ struct GigQuestionsSection: View {
             }
         }
         .padding(Spacing.s3)
+        .typesInFieldOnTap()
         .background(Theme.Color.appSurface)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)
@@ -407,6 +410,7 @@ struct GigQuestionsSection: View {
                     .lineLimit(2...4)
                     .font(.system(size: 13.5))
                     .padding(Spacing.s2)
+                    .typesInFieldOnTap()
                     .background(Theme.Color.appSurfaceSunken)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                     .accessibilityIdentifier("gigQuestionsAnswerInput")

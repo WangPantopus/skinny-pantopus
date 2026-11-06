@@ -222,6 +222,7 @@ private struct DetailsStep: View {
                 ))
                 .frame(minHeight: 96)
                 .padding(Spacing.s2)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .overlay(
                     RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

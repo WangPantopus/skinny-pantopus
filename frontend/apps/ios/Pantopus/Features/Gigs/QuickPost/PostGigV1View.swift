@@ -323,6 +323,7 @@ private struct PostGigV1DescriptionField: View {
                     .frame(minHeight: 108)
                     .padding(Spacing.s2)
                     .scrollContentBackground(.hidden)
+                    .typesInFieldOnTap()
                     .background(Theme.Color.appSurface)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                     .overlay(
@@ -360,6 +361,7 @@ private struct PostGigV1PriceField: View {
                     .pantopusTextStyle(.body)
                     .fontWeight(.semibold)
                     .foregroundStyle(value.isEmpty ? Theme.Color.appTextMuted : Theme.Color.appTextStrong)
+                    .allowsHitTesting(false)
                 TextField(isDisabled ? "Helpers suggest a price" : "0", text: $value)
                     .keyboardType(.decimalPad)
                     .font(Theme.Font.body)
@@ -378,10 +380,12 @@ private struct PostGigV1PriceField: View {
                                 .fill(Theme.Color.appBorderSubtle)
                                 .frame(width: 1)
                         }
+                        .allowsHitTesting(false)
                 }
             }
             .frame(minHeight: 44)
             .padding(.horizontal, Spacing.s3)
+            .typesInFieldOnTap()
             .background(isDisabled ? Theme.Color.appSurfaceMuted : Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .overlay(

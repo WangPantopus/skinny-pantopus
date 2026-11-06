@@ -30,6 +30,7 @@ struct CommentComposer: View {
                 size: 28
             )
             field
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .overlay {
                     RoundedRectangle(cornerRadius: Radii.pill, style: .continuous)

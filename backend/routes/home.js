@@ -54,6 +54,7 @@ const {
   smartyProvider,
 } = require('../services/addressValidation');
 const addressVerificationObservability = require('../services/addressValidation/addressVerificationObservability');
+const { usesGooglePostal } = require('../services/addressValidation/postalAdapter');
 const { redactStreet, queryKnowsNumber } = require('../utils/addressRedaction');
 const { serializeHomeForViewer, serializeOwnerForViewer } = require('../serializers/homeProfileSerializer');
 const { displayNameFromUser } = require('../serializers/identitySerializers');
@@ -230,7 +231,12 @@ const parsePostGISPoint = require('../utils/parsePostGISPoint');
 const ALLOWED_HOME_VERDICT_STATUSES = new Set([
   AddressVerdictStatus.OK,
   AddressVerdictStatus.MIXED_USE,
+  // Google postal source only: the person continues, and mail proof still has to pass.
+  AddressVerdictStatus.UNIT_NOT_CONFIRMED,
+  AddressVerdictStatus.POSTAL_PENDING,
 ]);
+// An address the person just checked needs no second Google call to be saved.
+const POSTAL_ANSWER_REUSE_DAYS = 1;
 const STEP_UP_ELIGIBLE_HOME_VERDICT_STATUSES = new Set([
   AddressVerdictStatus.MIXED_USE,
   AddressVerdictStatus.LOW_CONFIDENCE,
@@ -816,7 +822,8 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       }
     }
 
-    const canRunLiveValidation = googleProvider.isAvailable() && smartyProvider.isAvailable();
+    const googlePostal = usesGooglePostal();
+    const canRunLiveValidation = googleProvider.isAvailable() && (googlePostal || smartyProvider.isAvailable());
     let addressVerdict = null;
     let createHomeValidationPath = canRunLiveValidation ? 'live_provider' : 'provider_unavailable';
     const requestAddressInput = {
@@ -826,8 +833,27 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       state,
       zip: normalizedZip,
     };
+    const classifyStoredAddress = async (storedAddress, includeHousehold) => addressDecisionEngine.classify({
+      ...pipelineService.buildStoredDecisionInputs(storedAddress),
+      use_provider_place_for_business: getRolloutFlag('enforcePlaceProviderBusiness'),
+      use_provider_unit_intelligence: getRolloutFlag('enableSecondaryProvider'),
+      use_provider_parcel_for_classification: getRolloutFlag('enforceParcelProviderClassification'),
+      provider_parcel_max_age_days: addressConfig.parcelIntel.cacheDays,
+      household: includeHousehold
+        ? await pipelineService.lookupExistingHouseholdByHash(storedAddress.address_hash)
+        : null,
+    });
 
-    if (canRunLiveValidation) {
+    if (
+      googlePostal
+      && canonicalAddress?.validation_vendor === 'google'
+      && canonicalAddress.validation_raw_response?.postal_state !== 'pending'
+      && isFreshTimestamp(canonicalAddress.last_validated_at, POSTAL_ANSWER_REUSE_DAYS)
+      && matchesCanonicalAddress(canonicalAddress, requestAddressInput)
+    ) {
+      createHomeValidationPath = 'stored_postal_answer';
+      addressVerdict = await classifyStoredAddress(canonicalAddress, !selectAddress);
+    } else if (canRunLiveValidation) {
       const validationResult = await pipelineService.runValidationPipeline({
         line1: address,
         line2: unit_number || undefined,
@@ -843,7 +869,7 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       });
 
       addressVerdict = validationResult.verdict;
-      canonicalAddress = validationResult.canonical_address || null;
+      canonicalAddress = validationResult.canonical_address || (googlePostal ? canonicalAddress : null);
 
       if (requestedAddressId && validationResult.address_id && requestedAddressId !== validationResult.address_id) {
         await recordCreateHomeOutcomeSafe({
