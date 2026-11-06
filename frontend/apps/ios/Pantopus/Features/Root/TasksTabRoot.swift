@@ -243,7 +243,8 @@ public struct TasksTabRoot: View {
             },
             onOpenChat: { destination in
                 path.append(.chatConversation(destination))
-            }
+            },
+            onOpenProfile: { path.append(.publicProfile(userId: $0)) }
         )
     }
 
@@ -356,11 +357,12 @@ public struct TasksTabRoot: View {
     }
 
     private func gigDetailDestination(gigId: String) -> some View {
-        GigDetailView(viewModel: GigDetailViewModel(gigId: gigId), onBack: pop) { destination in
-            Task { @MainActor in
-                path.append(.chatConversation(destination))
-            }
-        }
+        GigDetailView(
+            viewModel: GigDetailViewModel(gigId: gigId),
+            onBack: pop,
+            onOpenChat: { destination in Task { @MainActor in path.append(.chatConversation(destination)) } },
+            onOpenProfile: { path.append(.publicProfile(userId: $0)) }
+        )
         // A gig link that replaces the open gig (a deep link while a detail is shown) must build a new
         // detail; without its own identity SwiftUI keeps the previous gig's view and model on screen.
         .id(gigId)

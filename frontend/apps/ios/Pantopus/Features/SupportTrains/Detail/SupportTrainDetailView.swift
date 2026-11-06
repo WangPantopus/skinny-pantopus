@@ -27,6 +27,8 @@ public struct SupportTrainDetailView: View {
     private let onMessageHost: (@MainActor (HostedByFooter) -> Void)?
     /// Opens the train's group chat (shown only to people in it).
     private let onOpenChat: (@MainActor (InboxConversationDestination) -> Void)?
+    /// Opens a person's profile (the host's, from their photo).
+    private let onOpenProfile: (@MainActor (String) -> Void)?
     private let isOrganizer: Bool
 
     public init(
@@ -40,7 +42,8 @@ public struct SupportTrainDetailView: View {
         onSendCard: (@MainActor () -> Void)? = nil,
         onJoinAsBackup: (@MainActor () -> Void)? = nil,
         onMessageHost: (@MainActor (HostedByFooter) -> Void)? = nil,
-        onOpenChat: (@MainActor (InboxConversationDestination) -> Void)? = nil
+        onOpenChat: (@MainActor (InboxConversationDestination) -> Void)? = nil,
+        onOpenProfile: (@MainActor (String) -> Void)? = nil
     ) {
         _viewModel = State(initialValue: viewModel)
         self.isOrganizer = isOrganizer
@@ -53,6 +56,7 @@ public struct SupportTrainDetailView: View {
         self.onJoinAsBackup = onJoinAsBackup
         self.onMessageHost = onMessageHost
         self.onOpenChat = onOpenChat
+        self.onOpenProfile = onOpenProfile
     }
 
     /// Confirm target for "Leave this slot" — RN gates the cancel behind
@@ -263,7 +267,7 @@ public struct SupportTrainDetailView: View {
                             .padding(.top, Spacing.s3)
                     }
 
-                    HostedByRow(content: content.hostedBy, onMessageHost: messageHostAction(content))
+                    HostedByRow(content: content.hostedBy, onMessageHost: messageHostAction(content), onOpenProfile: hostProfile(content))
                         .padding(.top, Spacing.s3)
 
                     Spacer().frame(height: Spacing.s3)
@@ -286,6 +290,12 @@ public struct SupportTrainDetailView: View {
         if isOrganizer { return true }
         if case let .loaded(content) = viewModel.state { return content.viewerRole.isOrganizer }
         return false
+    }
+
+    /// The host's profile, from their photo, when the train names its organizer's account.
+    private func hostProfile(_ content: SupportTrainDetailContent) -> (@MainActor () -> Void)? {
+        guard let onOpenProfile, let userId = content.hostedBy.organizerUserId else { return nil }
+        return { onOpenProfile(userId) }
     }
 
     /// "Message the host": only for non-organizers, and only when the train
@@ -767,6 +777,8 @@ private struct CelebrationBanner: View {
 private struct HostedByRow: View {
     let content: HostedByFooter
     let onMessageHost: (@MainActor () -> Void)?
+    /// The host's photo opens their profile.
+    var onOpenProfile: (@MainActor () -> Void)?
 
     var body: some View {
         // Only the host's contact line is tappable, and only when it can open a chat.
@@ -776,12 +788,20 @@ private struct HostedByRow: View {
                 .buttonStyle(.plain)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(accessibilityText)
+                .accessibilityActions { profileAction }
                 .accessibilityIdentifier("supportTrainHostedBy")
         } else {
             row
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(accessibilityText)
+                .accessibilityActions { profileAction }
                 .accessibilityIdentifier("supportTrainHostedBy")
+        }
+    }
+
+    @ViewBuilder private var profileAction: some View {
+        if let onOpenProfile {
+            Button("Open \(content.organizerDisplayName)'s profile", action: onOpenProfile)
         }
     }
 
@@ -791,21 +811,16 @@ private struct HostedByRow: View {
 
     private var row: some View {
         HStack(spacing: Spacing.s2) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Theme.Color.errorLight, Theme.Color.error],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                Text(content.organizerInitials)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Theme.Color.appTextInverse)
+            if let onOpenProfile {
+                Button(action: onOpenProfile) {
+                    hostPhoto.hitArea(horizontal: 6, vertical: 10)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHidden(true)
+                .accessibilityIdentifier("supportTrainHostPhoto")
+            } else {
+                hostPhoto
             }
-            .frame(width: 24, height: 24)
-            .accessibilityHidden(true)
 
             HStack(spacing: Spacing.s1) {
                 Text("Hosted by ")
@@ -835,6 +850,24 @@ private struct HostedByRow: View {
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
                 .stroke(Theme.Color.appBorderSubtle, lineWidth: 1)
         )
+    }
+
+    private var hostPhoto: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Theme.Color.errorLight, Theme.Color.error],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            Text(content.organizerInitials)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(Theme.Color.appTextInverse)
+        }
+        .frame(width: 24, height: 24)
+        .accessibilityHidden(true)
     }
 }
 
