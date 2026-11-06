@@ -98,6 +98,8 @@ struct StepUpPasswordSheet: View {
             }
         }
         .accessibilityIdentifier("auth.stepUp.passwordSheet")
+        // The prompt has a window of its own: a tap on the card outside the password closes the keyboard there too.
+        .dismissesKeyboardOnTapOutside()
         .onAppear { isFocused = true }
     }
 

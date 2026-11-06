@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 // Builds the US public places index the Plans place picker reads (backend/services/plans/placesIndex.js, which
-// describes the format) from Geofabrik's OpenStreetMap extracts. For each extract in turn: download it (checked
-// against Geofabrik's md5), keep the elements the Overpass query asks for (osmium tags-filter), export them with
-// their geometry and put each element's middle in its geohash-4 area. Elements on both sides of a state line
-// are kept once. Writes <out>/manifest.json and <out>/places-<yyyymmdd>.bin.
+// describes the format) from Geofabrik's OpenStreetMap extracts, and in the same run the venues index the post
+// place-tag picker reads (backend/services/geo/venues.js; placesIndexFormat VENUES). For each extract in turn:
+// download it (checked against Geofabrik's md5), keep the elements either index asks for (one osmium
+// tags-filter), export them with their geometry and put each element's middle in its area (geohash 4 for the
+// Plans index, 5 for the venues). Elements on both sides of a state line are kept once. Writes
+// <out>/manifest.json and <out>/places-<yyyymmdd>.bin, and <out>/venues-manifest.json and
+// <out>/venues-<yyyymmdd>.bin.
 // .github/workflows/places-index.yml runs it monthly and publishes the result (scripts/places/publish-index.sh).
 //
 //   node scripts/places/build-index.cjs --out <dir> [--work <dir>] [--regions us/washington,us/oregon]
@@ -109,38 +112,101 @@ function middleOf(geometry) {
   };
 }
 
-/** Adds one extract's selected elements to `areas` (geohash-4 → elements); `seen` keeps each element once. */
-async function readExtract(pbf, work, areas, seen) {
+// The two indexes one run builds. The Plans one's files and manifest are as they were before the venues.
+const SETS = [
+  {
+    prefix: 'places',
+    manifest: 'manifest.json',
+    precision: placesIndex.PRECISION,
+    selectors: placesIndex.SELECTORS,
+    selected: placesIndex.selected,
+    tags: placesIndex.TAGS,
+    extra: {},
+  },
+  {
+    prefix: 'venues',
+    manifest: 'venues-manifest.json',
+    precision: placesIndex.VENUES.PRECISION,
+    selectors: placesIndex.VENUES.SELECTORS,
+    selected: placesIndex.venueSelected,
+    tags: placesIndex.VENUES.TAGS,
+    extra: { set: placesIndex.VENUES.NAME, version: placesIndex.VENUES.VERSION },
+  },
+].map((set) => ({ ...set, areas: new Map(), seen: new Set() }));
+
+const OSM_TYPES = { node: 'n', way: 'w', relation: 'r' };
+
+/** Osmium tags-filter expressions for every set's selectors ("*" values: the key with any value). */
+function filterExpressions() {
+  return SETS.flatMap((set) => set.selectors.map(([types, key, values]) => (values === '*'
+    ? `${types}/${key}` : `${types}/${key}=${values.join(',')}`)));
+}
+
+/** Adds one extract's selected elements to each set's `areas` (geohash → elements); its `seen` keeps each once. */
+async function readExtract(pbf, work) {
   const filtered = path.join(work, 'filtered.osm.pbf');
-  const expressions = placesIndex.SELECTORS.map(([types, key, values]) => `${types}/${key}=${values.join(',')}`);
-  run('osmium', ['tags-filter', pbf, ...expressions, '-o', filtered, '--overwrite', '--no-progress']);
+  run('osmium', ['tags-filter', pbf, ...filterExpressions(), '-o', filtered, '--overwrite', '--no-progress']);
   const exporter = spawn('osmium', ['export', filtered, '-f', 'geojsonseq', '-a', 'type,id',
     '-x', 'print_record_separator=false', '-o', '-', '--no-progress'], { stdio: ['ignore', 'pipe', 'inherit'] });
   const exited = new Promise((resolve, reject) => {
     exporter.on('error', reject);
     exporter.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`osmium export exited ${code}`))));
   });
-  let added = 0;
+  const added = SETS.map(() => 0);
   for await (const line of readline.createInterface({ input: exporter.stdout, crlfDelay: Infinity })) {
     if (!line.trim()) continue;
     const feature = JSON.parse(line);
     const props = feature.properties || {};
-    const type = props['@type'] === 'way' ? 'w' : props['@type'] === 'node' ? 'n' : null;
-    if (!type || !placesIndex.selected(type, props)) continue;
+    const type = OSM_TYPES[props['@type']];
+    if (!type) continue;
     const key = `${type}${props['@id']}`;
-    if (seen.has(key)) continue;
-    const middle = feature.geometry && middleOf(feature.geometry);
-    if (!middle) continue;
-    seen.add(key);
-    const area = encodeGeohash(middle.lat, middle.lng, placesIndex.PRECISION);
-    if (!areas.has(area)) areas.set(area, []);
-    areas.get(area).push(placesIndex.encodeElement(type, props['@id'], middle.lat, middle.lng, props,
-      middle.halfLat, middle.halfLng));
-    added += 1;
+    let middle;
+    SETS.forEach((set, i) => {
+      if (!set.selected(type, props) || set.seen.has(key)) return;
+      if (middle === undefined) middle = (feature.geometry && middleOf(feature.geometry)) || null;
+      if (!middle) return;
+      set.seen.add(key);
+      const area = encodeGeohash(middle.lat, middle.lng, set.precision);
+      if (!set.areas.has(area)) set.areas.set(area, []);
+      set.areas.get(area).push(placesIndex.encodeElement(type, props['@id'], middle.lat, middle.lng, props,
+        middle.halfLat, middle.halfLng, set.tags));
+      added[i] += 1;
+    });
   }
   await exited;
   fs.rmSync(filtered, { force: true });
   return added;
+}
+
+/** Writes one set's data file (each area's elements, gzip'd, back to back) and its manifest. */
+function writeIndex(set, out, built, sources, timestamps) {
+  const dataName = `${set.prefix}-${built.toISOString().slice(0, 10).replace(/-/g, '')}.bin`;
+  const fd = fs.openSync(path.join(out, dataName), 'w');
+  const regions = {};
+  let offset = 0;
+  for (const area of [...set.areas.keys()].sort()) {
+    const elements = set.areas.get(area).sort((a, b) => (a[0] === b[0] ? a[1] - b[1] : a[0] < b[0] ? -1 : 1));
+    const bytes = zlib.gzipSync(JSON.stringify(elements), { level: 9 });
+    fs.writeSync(fd, bytes);
+    regions[area] = [offset, bytes.length, elements.length];
+    offset += bytes.length;
+  }
+  fs.closeSync(fd);
+  const manifest = {
+    v: placesIndex.FORMAT,
+    ...set.extra,
+    precision: set.precision,
+    built_at: built.toISOString(),
+    osm_data_as_of: timestamps.sort()[0] || null,
+    sources: sources.map((s) => s.id),
+    data: dataName,
+    bytes: offset,
+    count: set.seen.size,
+    attribution: '© OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/copyright)',
+    regions,
+  };
+  fs.writeFileSync(path.join(out, set.manifest), JSON.stringify(manifest));
+  log(`wrote ${dataName}: ${set.seen.size} elements in ${set.areas.size} areas, ${(offset / 1e6).toFixed(1)} MB`);
 }
 
 async function main() {
@@ -153,48 +219,23 @@ async function main() {
     : await geofabrikRegions(opts.regions);
   log(`${sources.length} extracts`);
 
-  const areas = new Map();
-  const seen = new Set();
   const timestamps = [];
   for (const source of sources) {
     const pbf = source.file || path.join(work, 'extract.osm.pbf');
     if (!source.file) await download(source, pbf);
     const stamp = extractTimestamp(pbf);
     if (stamp) timestamps.push(stamp);
-    const added = await readExtract(pbf, work, areas, seen);
+    const added = await readExtract(pbf, work);
     if (!source.file) fs.rmSync(pbf, { force: true });
-    log(`${source.id}: ${added} elements (${seen.size} in all, ${areas.size} areas)`);
+    log(`${source.id}: ${SETS.map((set, i) => `${set.prefix} ${added[i]} (${set.seen.size} in all, ${set.areas.size} areas)`)
+      .join('; ')}`);
   }
-  if (seen.size === 0) throw new Error('No elements: nothing to publish');
+  for (const set of SETS) {
+    if (set.seen.size === 0) throw new Error(`No ${set.prefix} elements: nothing to publish`);
+  }
 
   const built = new Date();
-  const dataName = `places-${built.toISOString().slice(0, 10).replace(/-/g, '')}.bin`;
-  const dataFile = path.join(opts.out, dataName);
-  const fd = fs.openSync(dataFile, 'w');
-  const regions = {};
-  let offset = 0;
-  for (const area of [...areas.keys()].sort()) {
-    const elements = areas.get(area).sort((a, b) => (a[0] === b[0] ? a[1] - b[1] : a[0] < b[0] ? -1 : 1));
-    const bytes = zlib.gzipSync(JSON.stringify(elements), { level: 9 });
-    fs.writeSync(fd, bytes);
-    regions[area] = [offset, bytes.length, elements.length];
-    offset += bytes.length;
-  }
-  fs.closeSync(fd);
-  const manifest = {
-    v: placesIndex.FORMAT,
-    precision: placesIndex.PRECISION,
-    built_at: built.toISOString(),
-    osm_data_as_of: timestamps.sort()[0] || null,
-    sources: sources.map((s) => s.id),
-    data: dataName,
-    bytes: offset,
-    count: seen.size,
-    attribution: '© OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/copyright)',
-    regions,
-  };
-  fs.writeFileSync(path.join(opts.out, 'manifest.json'), JSON.stringify(manifest));
-  log(`wrote ${dataName}: ${seen.size} elements in ${areas.size} areas, ${(offset / 1e6).toFixed(1)} MB`);
+  for (const set of SETS) writeIndex(set, opts.out, built, sources, timestamps);
 }
 
 main().catch((err) => {
