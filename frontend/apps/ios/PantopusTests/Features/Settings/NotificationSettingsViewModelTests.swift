@@ -3,7 +3,8 @@
 //  PantopusTests
 //
 //  A14.5 — notification & briefing preferences backed by
-//  `GET/PUT /api/hub/preferences`. Covers the four-card projection, the
+//  `GET/PUT /api/hub/preferences`, with the account-wide Push switch from
+//  `GET /api/users/profile`. Covers the card projection, the
 //  conditional time-chip rows, the wire names + `HH:mm` format the
 //  backend's Joi schema demands, the merged debounced patch, and the
 //  re-fetch rollback after a failed save. Mirrored on Android.
@@ -17,6 +18,10 @@ final class NotificationSettingsViewModelTests: XCTestCase {
     override func setUp() {
         super.setUp()
         SequencedURLProtocol.reset()
+        // Loading also reads the account-wide Push switch; each test's sequence stays the preferences route's.
+        SequencedURLProtocol.routeResponses = [
+            "/api/users/profile": Array(repeating: SequencedURLProtocol.Response.status(200, body: Self.profileJSON), count: 8)
+        ]
         // The Beacon push toggle: every first-launch cut switched on.
         LaunchFeatures.overrideForTesting = Set(LaunchFeature.allCases)
     }
@@ -44,6 +49,13 @@ final class NotificationSettingsViewModelTests: XCTestCase {
         let identity: () -> String? = { "notification-settings-tests" }
         return NotificationSettingsViewModel(api: makeAPI(), saveDebounce: .seconds(60), identity: identity)
     }
+
+    private static let profileJSON = """
+    {"user":{
+      "id":"u_1","email":"a@example.com","username":"a","accountType":"individual","role":"user","verified":false,
+      "createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","push_notifications":true
+    }}
+    """
 
     private static func prefsJSON(
         dailyEnabled: Bool = true,
@@ -100,7 +112,7 @@ final class NotificationSettingsViewModelTests: XCTestCase {
 
     // MARK: - Loading
 
-    func testLoadProjectsFourCardsFromServerTruth() async {
+    func testLoadProjectsTheCardsFromServerTruth() async {
         SequencedURLProtocol.sequence = [.status(200, body: Self.prefsJSON())]
         let vm = makeViewModel()
         await vm.load()
@@ -108,9 +120,9 @@ final class NotificationSettingsViewModelTests: XCTestCase {
         let groups = loadedGroups(vm)
         XCTAssertEqual(
             groups.map(\.id),
-            [GroupID.briefings, GroupID.alerts, GroupID.quietHours, GroupID.briefingLocation]
+            [GroupID.push, GroupID.briefings, GroupID.alerts, GroupID.quietHours, GroupID.briefingLocation]
         )
-        XCTAssertEqual(groups.map(\.overline), ["Briefings", "Alert preferences", "Quiet hours", "Briefing location"])
+        XCTAssertEqual(groups.map(\.overline), ["Account", "Briefings", "Alert preferences", "Quiet hours", "Briefing location"])
         // The GET must go to the composed backend path.
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.first?.url?.path, "/api/hub/preferences")
         XCTAssertEqual(SequencedURLProtocol.capturedRequests.first?.httpMethod, "GET")
@@ -384,7 +396,10 @@ extension NotificationSettingsViewModelTests {
         // simulator and leave this request consuming the next test's stubs.
         await save.value
         await vm.flushPendingSaveNow()
-        XCTAssertEqual(SequencedURLProtocol.capturedRequests.map(\.httpMethod), ["GET", "PUT", "PUT"])
+        XCTAssertEqual(
+            SequencedURLProtocol.capturedRequests.filter { $0.url?.path == "/api/hub/preferences" }.map(\.httpMethod),
+            ["GET", "PUT", "PUT"]
+        )
         XCTAssertEqual(row(loadedGroups(vm), RowID.beaconPush)?.control, .toggle(isOn: false))
         XCTAssertEqual(vm.toast?.text, "Saved")
     }
