@@ -7,6 +7,7 @@ import { getAuthToken } from '@pantopus/api';
 import { Camera, MessageCircle } from 'lucide-react';
 import Image from 'next/image';
 import { formatTimestamp } from '@pantopus/ui-utils';
+import UserAvatarLink from '@/components/user/UserAvatarLink';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import type { ListingDetail, ListingMessage } from '@pantopus/types';
 import { fetchMe } from '@/lib/me';
@@ -190,22 +191,24 @@ function MessageRow({
   return (
     <div className="bg-app-surface rounded-xl border border-app-border p-4">
       <div className="flex gap-3">
-        {/* Avatar */}
-        {buyerAvatar ? (
-          <Image
-            src={buyerAvatar}
-            alt=""
-            width={40}
-            height={40}
-            sizes="40px"
-            quality={75}
-            className="w-10 h-10 rounded-full object-cover flex-shrink-0"
-          />
-        ) : (
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-            {buyerInitial}
-          </div>
-        )}
+        {/* Avatar: opens the profile the name links to */}
+        <UserAvatarLink href={buyerHandle ? `/${buyerHandle}` : null} className="self-start">
+          {buyerAvatar ? (
+            <Image
+              src={buyerAvatar}
+              alt=""
+              width={40}
+              height={40}
+              sizes="40px"
+              quality={75}
+              className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+              {buyerInitial}
+            </div>
+          )}
+        </UserAvatarLink>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
