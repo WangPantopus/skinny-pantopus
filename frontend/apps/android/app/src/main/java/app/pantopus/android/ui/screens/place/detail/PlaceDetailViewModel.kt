@@ -91,6 +91,7 @@ class PlaceDetailViewModel
     ) : ViewModel(),
         AddressCalendarActions {
         val savedPlaceId: String? = savedStateHandle[PLACE_DETAIL_SAVED_ID_KEY]
+
         /** The Home this Place shows (empty for a saved place); the invite form favors addresses near it. */
         val homeId: String = savedStateHandle.get<String>(PLACE_DETAIL_HOME_ID_KEY).orEmpty()
         private val calendarSession = sessionScopes.create(viewModelScope)

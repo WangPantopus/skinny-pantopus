@@ -29,8 +29,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.pantopus.android.data.api.models.geo.GeoSuggestion
 import app.pantopus.android.data.api.models.geo.GeoResolveRequest
+import app.pantopus.android.data.api.models.geo.GeoSuggestion
 import app.pantopus.android.data.api.models.geo.NormalizedAddress
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.safeApiCall
