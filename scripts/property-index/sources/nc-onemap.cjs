@@ -20,7 +20,7 @@ const { log } = require('../lib/log.cjs');
 
 const BUCKET = 'https://dit-cgia-gis-data.s3.amazonaws.com';
 const BUILDINGS = 'https://services1.arcgis.com/YBWrN5qiESVpqi92/arcgis/rest/services/NC_Risk_Building_Footprints/FeatureServer/0';
-const BUILDING_COLUMNS = ['PID', 'YEAR_BUILT', 'YRBUILTSRC', 'HTD_SQ_FT', 'HTDSQFTSRC', 'NUM_STORY', 'FOUND_TYPE', 'BUILD_TYPE'];
+const BUILDING_COLUMNS = ['PID', 'OCCUP_TYPE', 'YEAR_BUILT', 'YRBUILTSRC', 'HTD_SQ_FT', 'HTDSQFTSRC', 'NUM_STORY', 'FOUND_TYPE', 'BUILD_TYPE'];
 const COUNTY_SOURCED = new Set(['1000', '2000', '2010']);
 const COLUMNS = ['PARNO', 'GISACRES', 'IMPROVVAL', 'LANDVAL', 'PARVAL', 'PARVALTYPE', 'SITEADD', 'SUNIT', 'SCITY', 'SZIP', 'STRUCTYEAR', 'SALEDATE', 'SUBDIVISIO', 'PARUSEDESC', 'PARUSECODE', 'REVISEYEAR'];
 
@@ -36,14 +36,20 @@ const COUNTY_FILES = [
   'wake', 'warren', 'washington', 'watauga', 'wayne', 'wilkes', 'wilson', 'yadkin', 'yancey',
 ];
 
-function useOf(text, unit) {
+// Counties word their uses their own way, or use a letter of their own. What the building layer calls the building decides
+// when the words don't.
+function useOf(text, unit, occupancy) {
   const use = String(text ?? '').toUpperCase();
   if (/CONDO|TOWN ?H/.test(use)) return /CONDO/.test(use) || unit ? ['unit', 'condo'] : ['property', 'townhouse'];
   if (/MOBILE|MANUFACT/.test(use)) return ['property', 'mobile_home'];
   if (/DUPLEX|TRIPLEX|TWO FAM|2 FAM|MULTI/.test(use)) return ['building', 'multi_unit'];
-  if (/APART/.test(use)) return ['building', 'apartment'];
-  if (/VACANT|\bLAND\b|WOODED|FARM WITH NO/.test(use)) return ['parcel', null];
-  if (/SINGLE|RESID|DWELLING|HOUSE/.test(use)) return unit ? ['unit', 'condo'] : ['property', 'house'];
+  if (/APART|\bAPT\b/.test(use)) return ['building', 'apartment'];
+  if (/VACANT|\bVAC\b|\bLAND\b|WOODED|FARM WITH NO/.test(use)) return ['parcel', null];
+  if (/SINGLE|RESID|DWELLING|HOUSE|\bRHS\b/.test(use)) return unit ? ['unit', 'condo'] : ['property', 'house'];
+  if (occupancy === 'RES1') return unit ? ['unit', 'condo'] : ['property', 'house'];
+  if (occupancy === 'RES2') return ['property', 'mobile_home'];
+  if (/^RES3[A-C]$/.test(occupancy || '')) return ['building', 'multi_unit'];
+  if (/^RES3[D-F]$/.test(occupancy || '')) return ['building', 'apartment'];
   return ['other', null];
 }
 
@@ -55,6 +61,10 @@ function parcelWords(field) {
     if (match) words.set(String(code), match[1].trim());
   }
   return words;
+}
+/** Every occupancy code's class, whatever the layer says the class came from: "RES1 - HAZUS DERIVED" is RES1. */
+function occupancyWords(field) {
+  return new Map((field?.domain?.codedValues || []).map(({ code, name }) => [String(code), String(name).split(' ')[0]]));
 }
 const STORIES = { 1: 1, '1 1/2': 1.5, 2: 2, 3: 3, 4: 4, 5: 5 };
 const WALLS = { CONCRETE: 'Concrete', MANUFCHOME: 'Manufactured', MASONRY: 'Masonry', STEEL: 'Steel', WOOD: 'Wood' };
@@ -72,6 +82,7 @@ async function buildingsOf(work, fips, lists) {
     held.count += 1;
     const area = COUNTY_SOURCED.has(String(row.HTDSQFTSRC)) ? positive(row.HTD_SQ_FT) : null;
     if (held.count > 1 && !(area > (held.area || 0))) continue;
+    held.occupancy = lists.occupancy.get(String(row.OCCUP_TYPE)) || null;
     held.area = area;
     held.built = COUNTY_SOURCED.has(String(row.YRBUILTSRC)) ? year(row.YEAR_BUILT) : null;
     held.stories = STORIES[lists.stories.get(String(row.NUM_STORY))] || null;
@@ -86,13 +97,13 @@ function fromRow(row, fips, county, buildings) {
   const parsed = parse(row.SITEADD, unit);
   const parcel = word(row.PARNO);
   if (!parsed || !parcel) return null;
-  const [kind, homeType] = useOf(row.PARUSEDESC, parsed.unit);
+  const building = buildings.get(parcel);
+  const [kind, homeType] = useOf(`${row.PARUSEDESC || ''} ${row.PARUSECODE || ''}`, parsed.unit, building?.occupancy);
   const facts = { parcel_number: parcel, county, fips };
   const on = kind === 'property' || kind === 'unit' || kind === 'building';
   put(facts, 'address_on_record', onRecord(row.SITEADD, unit));
-  const building = on ? buildings.get(parcel) : null;
   put(facts, 'year_built', on ? (year(row.STRUCTYEAR) || building?.built || null) : null);
-  if (building) {
+  if (on && building) {
     put(facts, 'living_sqft', kind !== 'building' ? building.area : null);
     put(facts, 'gross_sqft', kind === 'building' ? building.area : null);
     put(facts, 'stories', building.stories);
@@ -102,7 +113,8 @@ function fromRow(row, fips, county, buildings) {
   }
   if (kind !== 'unit') put(facts, 'lot_acres', positive(row.GISACRES));
   put(facts, 'subdivision', word(row.SUBDIVISIO));
-  put(facts, 'land_use', word(row.PARUSEDESC));
+  // A bare letter is the county's own code, not a word for a screen.
+  put(facts, 'land_use', String(row.PARUSEDESC ?? '').trim().length > 2 ? word(row.PARUSEDESC) : null);
   put(facts, 'county_use_code', word(row.PARUSECODE));
   const valueType = String(row.PARVALTYPE ?? '').trim().toUpperCase();
   put(facts, valueType.startsWith('MARKET') || valueType.startsWith('APPRAIS') ? 'market_value' : 'assessed_value', positive(row.PARVAL));
@@ -137,7 +149,7 @@ async function* build({ work }) {
   log(`${files.size} county files listed`);
   const about = await getJson(`${BUILDINGS}?f=json`, 'The building layer\'s description');
   const field = (name) => (about.fields || []).find((entry) => entry.name === name);
-  const lists = { stories: parcelWords(field('NUM_STORY')), frame: parcelWords(field('BUILD_TYPE')), foundation: parcelWords(field('FOUND_TYPE')) };
+  const lists = { stories: parcelWords(field('NUM_STORY')), frame: parcelWords(field('BUILD_TYPE')), foundation: parcelWords(field('FOUND_TYPE')), occupancy: occupancyWords(field('OCCUP_TYPE')) };
   if (!lists.stories.size || !lists.frame.size) throw new Error('The building layer no longer says what its codes mean');
   if (files.size < 95) throw new Error(`Only ${files.size} county files are listed`);
   for (const [name, { key, date }] of [...files].sort()) {
