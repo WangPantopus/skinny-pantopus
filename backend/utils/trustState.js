@@ -467,23 +467,114 @@ function canPostToAudience({ postAs, audience, postType, trustLevel, homeId, rol
   return { allowed: true };
 }
 
+// A photo or video taken within GPS_PROXIMITY_METERS of a place counts as having been there, the distance a fresh
+// GPS fix gets, so any venue the place picker lists around the photo qualifies. The apps read where an attachment was
+// taken from its own metadata (a photo's EXIF GPS, a video's location) and send it with the post as mediaLocations:
+// like the GPS fix, it is the device's word, and it is used for this check and the post's pin only.
+// A post about what's happening now (a safety alert, a lost or found pet) counts only an attachment taken in the
+// last 48 hours: an old photo says where someone was, not what's going on there today.
+const MEDIA_RECENT_MS = 48 * 60 * 60 * 1000;
+const TIME_SENSITIVE_POST_TYPES = ['alert', 'lost_found'];
+// A capture time more than a day ahead of now is a wrong camera clock or a time zone read the wrong way, and one
+// before 2000 is a clock that was never set: either way the attachment has no usable time, though its place counts.
+const CAPTURE_CLOCK_SKEW_MS = 26 * 60 * 60 * 1000;
+const EARLIEST_CAPTURE_MS = Date.UTC(2000, 0, 1);
+// A pin this close to one of the person's own homes shows anyone looking at the map where they live.
+const OWN_HOME_GUARD_METERS = 150;
+
+/** The attachment's capture time as an ISO string, or null when it has none it can be trusted with. */
+function mediaCaptureTime(capturedAt) {
+  if (capturedAt == null || capturedAt === '') return null;
+  const ms = new Date(capturedAt).getTime();
+  if (!Number.isFinite(ms) || ms < EARLIEST_CAPTURE_MS || ms > Date.now() + CAPTURE_CLOCK_SKEW_MS) return null;
+  return new Date(Math.min(ms, Date.now())).toISOString();
+}
+
+/**
+ * The attachment taken closest to a place among those that count as having been there, or null.
+ *
+ * @param {Array<{ latitude: number, longitude: number, capturedAt?: string }>} [mediaLocations]
+ * @param {number} targetLatitude
+ * @param {number} targetLongitude
+ * @param {string} [postType] - alerts and Lost & Found count only attachments from the last 48 hours
+ * @returns {{ latitude: number, longitude: number, capturedAt: string|null, distance: number } | null}
+ */
+function mediaCaptureNear(mediaLocations, targetLatitude, targetLongitude, postType) {
+  if (!Array.isArray(mediaLocations) || targetLatitude == null || targetLongitude == null) return null;
+  const recentOnly = TIME_SENSITIVE_POST_TYPES.includes(postType);
+  let nearest = null;
+  for (const media of mediaLocations) {
+    const latitude = Number(media?.latitude);
+    const longitude = Number(media?.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)
+      || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) continue;
+    // 0, 0 is where a missing fix lands, not a photo taken in the Gulf of Guinea.
+    if (latitude === 0 && longitude === 0) continue;
+    const capturedAt = mediaCaptureTime(media.capturedAt);
+    if (recentOnly && (!capturedAt || Date.now() - new Date(capturedAt).getTime() > MEDIA_RECENT_MS)) continue;
+    const distance = haversineMeters(latitude, longitude, Number(targetLatitude), Number(targetLongitude));
+    if (distance > GPS_PROXIMITY_METERS) continue;
+    if (!nearest || distance < nearest.distance) {
+      nearest = { latitude, longitude, capturedAt, distance: Math.round(distance) };
+    }
+  }
+  return nearest;
+}
+
+/**
+ * True when a point is within OWN_HOME_GUARD_METERS of a home the person lives in, belongs to or has claimed. A
+ * failed read answers true: the caller then shows the approximate area, which can't give a home away.
+ */
+async function isNearOwnHome(userId, latitude, longitude) {
+  if (!userId || latitude == null || longitude == null) return true;
+  try {
+    const [occupancies, claims] = await Promise.all([
+      supabaseAdmin.from('HomeOccupancy').select('home_id').eq('user_id', userId).eq('is_active', true),
+      supabaseAdmin.from('HomeOwnershipClaim').select('home_id').eq('claimant_user_id', userId)
+        .in('state', ['submitted', 'needs_more_info', 'pending_review', 'pending_challenge_window', 'approved', 'disputed']),
+    ]);
+    if (occupancies.error || claims.error) throw occupancies.error || claims.error;
+    const homeIds = [...new Set([...(occupancies.data || []), ...(claims.data || [])]
+      .map((row) => row.home_id).filter(Boolean))];
+    if (homeIds.length === 0) return false;
+    const { data: homes, error } = await supabaseAdmin.from('Home').select('id, location').in('id', homeIds);
+    if (error) throw error;
+    return (homes || []).some((home) => {
+      const point = parsePostGISPoint(home.location);
+      return point && haversineMeters(latitude, longitude, point.latitude, point.longitude) <= OWN_HOME_GUARD_METERS;
+    });
+  } catch (err) {
+    logger.warn('Own-home check failed; showing the approximate area', { error: err.message, userId });
+    return true;
+  }
+}
+
+const PLACE_WAYS_IN = 'You can post to this place when you\'re there, live or work there, '
+  + 'or attach a photo or video you took there.';
+
 /**
  * v1.1: Check if a user is eligible to post to the Place feed surface.
  *
  * Eligible if:
- *   - Fresh GPS (gpsTimestamp ≤ 5 min ago) → visitor/resident
  *   - verified_resident trust level
  *   - verified_business trust level
+ *   - Fresh GPS (gpsTimestamp ≤ 5 min ago) within GPS_PROXIMITY_METERS → visitor/resident
+ *   - An attached photo or video taken within GPS_PROXIMITY_METERS (mediaCaptureNear)
  *
  * @param {object} params
  * @param {string} params.trustLevel   - Computed trust state level
  * @param {string} [params.gpsTimestamp] - ISO timestamp of last GPS fix
- * @returns {{ eligible: boolean, readOnly: boolean, reason?: string }}
+ * @param {Array} [params.mediaLocations] - where the post's attachments were taken
+ * @param {string} [params.postType]
+ * @returns {{ eligible: boolean, readOnly: boolean, basis?: 'resident'|'business'|'gps'|'photo', reason?: string }}
  */
-function canPostToPlace({ trustLevel, gpsTimestamp, gpsLatitude, gpsLongitude, targetLatitude, targetLongitude }) {
+function canPostToPlace({
+  trustLevel, gpsTimestamp, gpsLatitude, gpsLongitude, targetLatitude, targetLongitude,
+  mediaLocations = null, postType = null,
+}) {
   // Verified residents and businesses can always post
   if (trustLevel === 'verified_resident' || trustLevel === 'verified_business') {
-    return { eligible: true, readOnly: false };
+    return { eligible: true, readOnly: false, basis: trustLevel === 'verified_resident' ? 'resident' : 'business' };
   }
 
   // Check GPS freshness (≤ 5 minutes)
@@ -497,8 +588,13 @@ function canPostToPlace({ trustLevel, gpsTimestamp, gpsLatitude, gpsLongitude, t
       Number(targetLongitude)
     );
     if (ageMs <= fiveMinMs && distanceMeters <= GPS_PROXIMITY_METERS) {
-      return { eligible: true, readOnly: false };
+      return { eligible: true, readOnly: false, basis: 'gps' };
     }
+  }
+
+  // A photo or video the person took there
+  if (mediaCaptureNear(mediaLocations, targetLatitude, targetLongitude, postType)) {
+    return { eligible: true, readOnly: false, basis: 'photo' };
   }
 
   // Incoming residents can view but not post
@@ -510,12 +606,19 @@ function canPostToPlace({ trustLevel, gpsTimestamp, gpsLatitude, gpsLongitude, t
     };
   }
 
-  // Remote viewers are read-only
-  return {
-    eligible: false,
-    readOnly: true,
-    reason: 'You need to be physically present (fresh GPS) or be a verified resident/business to post to the Place feed.',
-  };
+  // Remote viewers are read-only. Say why the attachments didn't count when there were some.
+  const located = (Array.isArray(mediaLocations) ? mediaLocations : [])
+    .filter((media) => Number.isFinite(Number(media?.latitude)) && Number.isFinite(Number(media?.longitude)));
+  let reason = PLACE_WAYS_IN;
+  if (located.length > 0 && TIME_SENSITIVE_POST_TYPES.includes(postType)
+    && mediaCaptureNear(located.map(({ capturedAt: _ignored, ...point }) => point), targetLatitude, targetLongitude)) {
+    reason = 'For this kind of post, a photo or video counts only when you took it there in the last 2 days. '
+      + 'You can also post when you\'re there, or live or work there.';
+  } else if (located.length > 0) {
+    reason = `Your ${located.length === 1 ? 'attachment was' : 'attachments were'} taken more than 3 miles from this place. `
+      + PLACE_WAYS_IN;
+  }
+  return { eligible: false, readOnly: true, reason };
 }
 
 /**
@@ -558,6 +661,8 @@ module.exports = {
   canPostToAudience,
   canPostToPlace,
   canCommentOnPost,
+  mediaCaptureNear,
+  isNearOwnHome,
   haversineMeters,
   NEARBY_RADIUS_METERS,
 };

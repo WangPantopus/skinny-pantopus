@@ -8,7 +8,9 @@ const optionalAuth = require('../middleware/optionalAuth');
 const validate = require('../middleware/validate');
 const Joi = require('joi');
 const logger = require('../utils/logger');
-const { computeTrustState, getPostingIdentities, canPostToAudience, canPostToPlace } = require('../utils/trustState');
+const {
+  computeTrustState, getPostingIdentities, canPostToAudience, canPostToPlace, mediaCaptureNear, isNearOwnHome,
+} = require('../utils/trustState');
 const { canPostWithIdentityToAudience } = require('../utils/identityPolicy');
 const {
   ensureLocalProfile,
@@ -167,6 +169,21 @@ const POST_FORMATS = ['standard', 'quick_pulse', 'deep_dive', 'shout_out', 'show
 
 const LOCATION_PRECISIONS = ['exact_place', 'approx_area', 'neighborhood_only', 'none'];
 
+// What a place tag from the picker names, from its kind (geocodeAccuracy: Mapbox's "poi", "place", "address"…, or
+// an OpenStreetMap category such as "restaurant") or, failing that, its id's prefix ("poi.123"). A town or an area
+// is a big shape whose point is its middle, an address may be someone's home, and anything else is a venue.
+const AREA_PLACE_KINDS = new Set(['place', 'locality', 'neighborhood', 'district', 'region', 'postcode', 'country',
+  'city', 'town', 'village', 'hamlet', 'suburb', 'county', 'state']);
+const ADDRESS_PLACE_KINDS = new Set(['address', 'street', 'house']);
+function taggedPlaceKind(placeId, kind) {
+  if (!placeId) return null;
+  for (const name of [String(kind || '').toLowerCase(), String(placeId).split('.')[0].toLowerCase()]) {
+    if (ADDRESS_PLACE_KINDS.has(name)) return 'address';
+    if (AREA_PLACE_KINDS.has(name)) return 'area';
+  }
+  return 'venue';
+}
+
 const VISIBILITY_SCOPES = ['neighborhood', 'city', 'radius', 'global'];
 
 const SAFETY_ALERT_KINDS = [
@@ -311,6 +328,14 @@ const createPostSchema = Joi.object({
   gpsTimestamp: Joi.date().iso().optional(),
   gpsLatitude: Joi.number().min(-90).max(90).optional(),
   gpsLongitude: Joi.number().min(-180).max(180).optional(),
+  // Where the attachments were taken, read by the app from each one's own metadata (EXIF GPS, a video's location).
+  // Like the GPS fix it is evidence for the Place check (trustState.mediaCaptureNear) and sets the post's pin; the
+  // points themselves are never stored or shown.
+  mediaLocations: Joi.array().items(Joi.object({
+    latitude: Joi.number().min(-90).max(90).required(),
+    longitude: Joi.number().min(-180).max(180).required(),
+    capturedAt: Joi.date().iso().allow(null).optional(),
+  })).max(10).optional(),
   // v1.2: Social layer fields
   purpose: Joi.string().valid(
     'ask', 'offer', 'heads_up', 'recommend', 'lost_found', 'local_update',
@@ -718,13 +743,19 @@ const SIGNED_OUT_POST_FIELDS = ['id', 'title', 'content', 'post_type', 'state', 
 const READER_POST_FIELDS = [
   'id', 'user_id', 'author_user_id', 'author', 'creator', 'home', 'created_at', 'is_edited',
   'title', 'content', 'post_type', 'purpose', 'tags', 'media_urls', 'media_types', 'media_thumbnails', 'media_live_urls',
-  'location_name', 'latitude', 'longitude', 'locationUnlocked',
+  'location_name', 'latitude', 'longitude', 'locationUnlocked', 'location_basis', 'photo_taken_at',
   'state', 'resolution', 'expires_at', 'archived_at', 'archive_reason',
   'read_scope', 'visibility', 'audience', 'allow_external_share', 'moderation_state',
   'event_date', 'event_end_date', 'event_venue', 'safety_alert_kind', 'deal_business_name', 'deal_expires_at',
   'lost_found_type', 'lost_found_contact_pref', 'service_category', 'ref_task_id', 'ref_listing_id',
   'like_count', 'comment_count', 'share_count', 'userHasLiked', 'userHasSaved', 'userHasReposted', 'comments',
 ];
+
+// "Photo taken here": the author's own photo or video placed the post (set at posting, in post_metadata).
+function photoBasisFields(post) {
+  const photo = post?.post_metadata?.location_basis === 'photo';
+  return { location_basis: photo ? 'photo' : null, photo_taken_at: photo ? (post.post_metadata.photo_taken_at || null) : null };
+}
 
 function signedOutPostView(post) {
   const view = Object.fromEntries(SIGNED_OUT_POST_FIELDS.map((field) => [field, post[field] ?? null]));
@@ -1014,7 +1045,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       lostFoundType,
       serviceCategory, refListingId, refTaskId, radiusMiles,
       postAs: rawPostAs, audience, identityContextId, targetPlaceId, businessId, isStory,
-      distributionTargets, crossPostToConnections, gpsTimestamp, gpsLatitude, gpsLongitude,
+      distributionTargets, crossPostToConnections, gpsTimestamp, gpsLatitude, gpsLongitude, mediaLocations,
       purpose, profileVisibilityScope, showOnProfile,
       geocodeProvider, geocodeAccuracy, geocodePlaceId,
       topic, sportsScope, postMetadata, sourceUrl,
@@ -1298,6 +1329,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
     }
 
     // Curator accounts bypass place eligibility — platform-owned, not a real neighbor
+    let placeBasis = null;
     if (!isCurator && !pulse && isPlacePost && effectiveLatitude != null && effectiveLongitude != null) {
       const trustState = isHomeIdentityPost
         ? { level: 'verified_resident' }
@@ -1309,10 +1341,13 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
         gpsLongitude: gpsLongitude ?? null,
         targetLatitude: effectiveLatitude,
         targetLongitude: effectiveLongitude,
+        mediaLocations: mediaLocations || null,
+        postType: postType || 'general',
       });
       if (!eligibility.eligible) {
         return res.status(403).json({ error: eligibility.reason });
       }
+      placeBasis = eligibility.basis || null;
     }
 
     // ── v1.1: Post type enforcement for Place surface ──
@@ -1361,9 +1396,38 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       }
     }
 
-    // v1.1: Force approx_area precision for Home Place posts
-    const effectiveLocationPrecision =
-      (isPlacePost && postAs === 'home') ? 'approx_area' : (locationPrecision || 'approx_area');
+    // ── A photo or video taken at the place ──
+    // A post the person's own attachment places (mediaCaptureNear) shows on the map exactly where it was: at the
+    // tagged venue, or where the photo was taken when the tag is a town or an area. An address tag (often someone's
+    // home), an alert (it's about an area) and a pin within 150 m of one of the person's own homes keep the
+    // approximate area. Readers see "Photo taken here" (post_metadata.location_basis, photo_taken_at).
+    let photoPlace = null;
+    if (!isCurator && !pulse && isPlacePost && postAs === 'personal'
+      && effectiveLatitude != null && effectiveLongitude != null) {
+      const tagKind = taggedPlaceKind(geocodePlaceId, geocodeAccuracy);
+      const nearest = mediaCaptureNear(mediaLocations, effectiveLatitude, effectiveLongitude, postType);
+      if (nearest && (tagKind || placeBasis === 'photo')) {
+        const pin = tagKind === 'area'
+          ? { latitude: nearest.latitude, longitude: nearest.longitude }
+          : { latitude: Number(effectiveLatitude), longitude: Number(effectiveLongitude) };
+        const exact = (tagKind === 'venue' || tagKind === 'area') && postType !== 'alert'
+          && !['neighborhood_only', 'none'].includes(locationPrecision)
+          && !(await isNearOwnHome(userId, pin.latitude, pin.longitude));
+        photoPlace = { pin, exact, takenAt: nearest.capturedAt };
+        if (exact) {
+          effectiveLatitude = pin.latitude;
+          effectiveLongitude = pin.longitude;
+        }
+      }
+    }
+
+    // v1.1: Force approx_area precision for Home Place posts. Only a photo-placed post may be exact for others
+    // (feedService.applyPostLocationPrivacy), so any other request for exact_place stays as it was, and a photo-placed
+    // post that may not be exact is never stored as exact.
+    const effectiveLocationPrecision = (isPlacePost && postAs === 'home') ? 'approx_area'
+      : photoPlace?.exact ? 'exact_place'
+        : photoPlace && !['neighborhood_only', 'none'].includes(locationPrecision) ? 'approx_area'
+          : (locationPrecision || 'approx_area');
 
     const localProfile = postAs === 'personal' ? await ensureLocalProfile(userId) : null;
     const identityContextType = postAs === 'persona' ? 'persona'
@@ -1443,14 +1507,21 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
       topic: topic || null,
       sports_scope: sportsScope || null,
       // A source link comes only from sourceUrl on an Official or curator notice (below), a Pulse
-      // post's named place only from Pulse mode, and the plan mark only from Plans (planActions.js),
-      // since the apps read a plan's event times as real moments.
+      // post's named place only from Pulse mode, the plan mark only from Plans (planActions.js),
+      // since the apps read a plan's event times as real moments, and a photo's place only from the check above.
       post_metadata: Object.fromEntries(Object.entries(postMetadata || {})
-        .filter(([key]) => !['source_url', 'pulse_about', 'plan'].includes(key))),
+        .filter(([key]) => !['source_url', 'pulse_about', 'plan', 'location_basis', 'photo_taken_at'].includes(key))),
       origin,
     };
     if (postType === 'alert' && sourceUrl && SOURCED_ALERT_ACCOUNT_TYPES.includes(req.user.accountType)) {
       postData.post_metadata = { ...postData.post_metadata, source_url: sourceUrl };
+    }
+    if (photoPlace) {
+      postData.post_metadata = {
+        ...postData.post_metadata,
+        location_basis: 'photo',
+        ...(photoPlace.takenAt ? { photo_taken_at: photoPlace.takenAt } : {}),
+      };
     }
 
     // v1.1: Compute distribution_targets from audience + cross-post toggles
@@ -1972,6 +2043,8 @@ router.get('/map', verifyToken, async (req, res) => {
           audience: post.audience || 'nearby',
           content: post.content,
           location_name: post.location_name,
+          location_basis: post.location_basis || null,
+          photo_taken_at: post.photo_taken_at || null,
           home_address: post.home?.address || null,
           like_count: post.like_count || 0,
           comment_count: post.comment_count || 0,
@@ -2173,12 +2246,17 @@ router.get('/saved', verifyToken, async (req, res) => {
  */
 /**
  * GET /api/posts/place-eligibility — Check if user can post to Place feed
- * Query: latitude, longitude, gpsTimestamp, gpsLatitude, gpsLongitude
+ * Query: latitude, longitude, gpsTimestamp, gpsLatitude, gpsLongitude, postType, and the draft's attachment taken
+ * nearest the place (mediaLatitude, mediaLongitude, mediaCapturedAt). `basis` says which way in counted:
+ * resident, business, gps or photo.
  */
 router.get('/place-eligibility', verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { latitude, longitude, gpsTimestamp, gpsLatitude, gpsLongitude } = req.query;
+    const {
+      latitude, longitude, gpsTimestamp, gpsLatitude, gpsLongitude,
+      mediaLatitude, mediaLongitude, mediaCapturedAt, postType,
+    } = req.query;
 
     if (latitude == null || longitude == null) {
       return res.json({ eligible: false, readOnly: true, reason: 'Location required to check Place eligibility.' });
@@ -2192,12 +2270,17 @@ router.get('/place-eligibility', verifyToken, async (req, res) => {
       gpsLongitude: gpsLongitude != null ? parseFloat(gpsLongitude) : null,
       targetLatitude: parseFloat(latitude),
       targetLongitude: parseFloat(longitude),
+      mediaLocations: mediaLatitude != null && mediaLongitude != null
+        ? [{ latitude: parseFloat(mediaLatitude), longitude: parseFloat(mediaLongitude), capturedAt: mediaCapturedAt || null }]
+        : null,
+      postType: typeof postType === 'string' ? postType : null,
     });
 
     res.json({
       eligible: eligibility.eligible,
       readOnly: eligibility.readOnly,
       reason: eligibility.reason || null,
+      basis: eligibility.basis || null,
       trustLevel: trustState.level,
     });
   } catch (err) {
@@ -2821,6 +2904,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
     applyPostLocationPrivacy(post, userId);
     const responsePost = await serializePostForViewer({
       ...post,
+      ...photoBasisFields(post),
       media_urls: normalizeMediaUrls(post.media_urls),
       media_thumbnails: normalizeAlignedMediaUrls(post.media_thumbnails),
       media_live_urls: normalizeAlignedMediaUrls(post.media_live_urls),
@@ -2847,15 +2931,27 @@ router.get('/:id', optionalAuth, async (req, res) => {
 const isPlanPost = (post) => post?.post_metadata?.plan === true;
 const PLAN_POST_REFUSAL = { error: "This is your plan's post. Open the plan to change or cancel it.", code: 'PLAN_POST' };
 
+// True when an edit keeps at least one photo or video: the kept media (mediaUrls) by the types the edit sends, or by
+// the post's own types for the media it keeps.
+function keepsPhotoOrVideo(existing, updates) {
+  const kept = updates.media_urls || [];
+  const storedUrls = normalizeMediaUrls(existing.media_urls);
+  const storedTypes = Array.isArray(existing.media_types) ? existing.media_types : [];
+  return kept.some((url, index) => {
+    const type = Array.isArray(updates.media_types) ? updates.media_types[index] : storedTypes[storedUrls.indexOf(url)];
+    return ['image', 'video', 'live_photo'].includes(type);
+  });
+}
+
 router.patch('/:id', verifyToken, validate(updatePostSchema), async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
 
     const { data: existing } = await supabaseAdmin.from('Post')
-      .select(`user_id, media_urls, media_thumbnails, media_live_urls, safety_alert_kind, post_metadata,
+      .select(`user_id, media_urls, media_types, media_thumbnails, media_live_urls, safety_alert_kind, post_metadata,
         post_type, content, topic, area_id, read_scope, latitude, longitude, location_precision,
-        visibility, visibility_scope, radius_miles, event_date, event_end_date`)
+        visibility, visibility_scope, radius_miles, event_date, event_end_date, audience, distribution_targets`)
       .eq('id', id).single();
     if (!existing) return res.status(404).json({ error: 'Post not found' });
     if (existing.user_id !== userId) return res.status(403).json({ error: 'You can only edit your own posts' });
@@ -2906,6 +3002,38 @@ router.patch('/:id', verifyToken, validate(updatePostSchema), async (req, res) =
     // Map frontend safety kinds to valid DB enum values
     if (updates.safety_alert_kind) {
       updates.safety_alert_kind = toDbSafetyKind(updates.safety_alert_kind);
+    }
+    // An edit carries no GPS fix and no photo places, so a Place post moved to a new point needs its author to live or
+    // work there. A photo-placed post (location_basis) that moves, or keeps no photo or video, loses its exact pin and
+    // its "Photo taken here": nothing says where it was taken any more. Only a photo's place makes a post exact.
+    const isPlaceFeedPost = !existing.read_scope && (LOCAL_AUDIENCES.includes(existing.audience)
+      || (Array.isArray(existing.distribution_targets) && existing.distribution_targets.includes('place')));
+    const movedTo = ['latitude', 'longitude'].some((field) => updates[field] !== undefined
+      && Number(updates[field]) !== Number(existing[field]))
+      ? { latitude: updates.latitude !== undefined ? updates.latitude : existing.latitude,
+        longitude: updates.longitude !== undefined ? updates.longitude : existing.longitude }
+      : null;
+    if (movedTo && isPlaceFeedPost && req.user.accountType !== 'curator') {
+      if (movedTo.latitude == null || movedTo.longitude == null) {
+        return res.status(400).json({ error: 'Place posts require a target location or a verified home address.' });
+      }
+      const trust = await computeTrustState(userId, Number(movedTo.latitude), Number(movedTo.longitude));
+      const eligibility = canPostToPlace({
+        trustLevel: trust.level, targetLatitude: Number(movedTo.latitude), targetLongitude: Number(movedTo.longitude),
+      });
+      if (!eligibility.eligible) return res.status(403).json({ error: eligibility.reason });
+    }
+    if (updates.location_precision === 'exact_place' && existing.location_precision !== 'exact_place'
+      && req.user.accountType !== 'curator') {
+      delete updates.location_precision;
+    }
+    if (existing.post_metadata?.location_basis === 'photo'
+      && (movedTo || (Array.isArray(updates.media_urls) && !keepsPhotoOrVideo(existing, updates)))) {
+      const { location_basis: _basis, photo_taken_at: _takenAt, ...metadata } = existing.post_metadata;
+      updates.post_metadata = metadata;
+      if ((updates.location_precision ?? existing.location_precision) === 'exact_place') {
+        updates.location_precision = 'approx_area';
+      }
     }
     // A Pulse post keeps its type, place, audience and window; new text is checked again.
     if (existing.read_scope) {
