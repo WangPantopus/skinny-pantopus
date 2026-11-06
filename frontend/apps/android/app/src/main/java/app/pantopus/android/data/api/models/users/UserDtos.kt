@@ -100,6 +100,11 @@ data class UserProfile(
      * servers, which reads as false.
      */
     val usernameIsGenerated: Boolean? = null,
+    /**
+     * The account-wide Push switch (`MailPreferences.push_notifications`, `backend/routes/users.js:2845`). The server
+     * answers true for an account that never changed it, so null means only a reply without the key.
+     */
+    @Json(name = "push_notifications") val pushNotifications: Boolean? = null,
 )
 
 /** Envelope for `GET /api/users/profile`. Route: `backend/routes/users.js:1427`. */
@@ -149,6 +154,8 @@ data class ProfileUpdateRequest(
     val facebook: String? = null,
     /** PRF SRV-2: replaces your prompt answers (0–3, in this order); only sent when they changed. */
     @Json(name = "profile_prompts") val profilePrompts: List<ProfilePromptDto>? = null,
+    /** The account-wide Push switch; sent under the name the web sends it (`backend/routes/users.js:2949`). */
+    @Json(name = "push_notifications") val pushNotifications: Boolean? = null,
 )
 
 /** Envelope for `PATCH /api/users/profile`. Route: `backend/routes/users.js:1503`. */

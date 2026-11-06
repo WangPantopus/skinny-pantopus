@@ -5,7 +5,8 @@
 //  Notification preferences through the screen store (Instant Screens, You:
 //  fresh 10 minutes): the screen opens on the preferences as last read or
 //  saved. A save stores the server's reply as the copy, so reopening never
-//  shows a toggle where it was before the save.
+//  shows a toggle where it was before the save. The account-wide Push switch
+//  lives on the profile route, read and saved here too.
 //
 
 import Foundation
@@ -59,5 +60,42 @@ extension NotificationSettingsViewModel {
             showsBeforeRecheck: true
         )
         return response
+    }
+
+    // MARK: - The account-wide Push switch (the profile route, as on the web)
+
+    func storedAccountPush() -> Bool? {
+        guard preferencesScopeIsCurrent else { return nil }
+        return store.peek(UsersEndpoints.profile(), as: ProfileResponse.self)?.value.user.pushNotifications
+    }
+
+    /// Always the server's answer: the web can change the switch while this
+    /// phone hears nothing, and a fresh copy would keep showing the old value.
+    func readAccountPush() async throws -> Bool? {
+        let generation = store.generation
+        try requireCurrentPreferencesScope(generation: generation)
+        let response = try await store.load(
+            UsersEndpoints.profile(),
+            as: ProfileResponse.self,
+            kind: .you,
+            topics: [ScreenTopic.profileMe],
+            force: true
+        ).value
+        try requireCurrentPreferencesScope(generation: generation)
+        return response.user.pushNotifications
+    }
+
+    /// `PATCH /api/users/profile` with only the switch. The reply isn't the
+    /// read's shape (no invite progress), so it doesn't replace the store's
+    /// copy of your profile; that copy goes out of date instead.
+    func saveAccountPush(_ isOn: Bool, generation: Int) async throws -> Bool {
+        try requireCurrentPreferencesScope(generation: generation)
+        let endpoint = UsersEndpoints.updateProfile(ProfileUpdateRequest(pushNotifications: isOn)) { [self] in
+            try requireCurrentPreferencesScope(generation: generation)
+        }
+        let response: ProfileUpdateResponse = try await api.request(endpoint)
+        try requireCurrentPreferencesScope(generation: generation)
+        store.markStale(topics: [ScreenTopic.profileMe])
+        return response.user.pushNotifications ?? isOn
     }
 }

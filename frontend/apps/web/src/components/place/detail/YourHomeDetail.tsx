@@ -476,7 +476,8 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
 
         {valueAccess === 'shown' ? (
           <InfoNote>
-            Values are informational, drawn from public records and a pricing model. They aren&apos;t an appraisal, a guarantee, or an offer to buy or lend.
+            {/* A value that names its source is the county's own, with no model of ours in it. */}
+            Values are informational, drawn from public records{data?.value_source ? '' : ' and a pricing model'}. They aren&apos;t an appraisal, a guarantee, or an offer to buy or lend.
           </InfoNote>
         ) : null}
       </div>

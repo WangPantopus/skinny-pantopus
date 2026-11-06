@@ -59,7 +59,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         }
         registerReminderCategories()
         UNUserNotificationCenter.current().delegate = self
-        registerForPushIfAllowed()
+        MainActor.assumeIsolated { AuthManager.shared.registerForPushIfAllowed() }
         return true
     }
 
@@ -102,26 +102,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         UNUserNotificationCenter.current().setNotificationCategories(
             Set([pickup, task, taskDoneOnly, chat] + PlanPushActions.categories + AssistantPushActions.categories)
         )
-    }
-
-    /// Not asked at launch, before anyone has a reason or an account: the
-    /// briefings notice asks after sign-in, with the reason on screen
-    /// (`BriefingNoticeView`). A phone that already allows notifications
-    /// registers at every launch so its token stays current.
-    private func registerForPushIfAllowed() {
-        if ProcessInfo.processInfo.environment["UI_TESTS_DISABLE_NOTIFICATIONS"] == "1" {
-            return
-        }
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            switch settings.authorizationStatus {
-            case .authorized, .provisional, .ephemeral:
-                DispatchQueue.main.async {
-                    UIApplication.shared.registerForRemoteNotifications()
-                }
-            default:
-                break
-            }
-        }
     }
 
     func application(
