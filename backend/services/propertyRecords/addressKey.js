@@ -75,13 +75,8 @@ function clean(text) {
   return String(text ?? '').toUpperCase().replace(/[.,'"`]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-const SPELLED_ORDINALS = new Map(Object.entries({
-  FIRST: '1', SECOND: '2', THIRD: '3', FOURTH: '4', FIFTH: '5', SIXTH: '6', SEVENTH: '7', EIGHTH: '8', NINTH: '9', TENTH: '10', ELEVENTH: '11', TWELFTH: '12',
-}));
-
-/** Numbered streets compare without their ordinals: "45TH", "45" and, for the low ones, "FIRST" and "1ST" are one street. */
+/** Numbered streets compare without their ordinals: "45TH" and "45" are one street. */
 function nameWord(word) {
-  if (SPELLED_ORDINALS.has(word)) return SPELLED_ORDINALS.get(word);
   const ordinal = /^(\d+)(ST|ND|RD|TH)$/.exec(word);
   return ordinal ? ordinal[1] : word;
 }
