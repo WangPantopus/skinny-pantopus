@@ -164,11 +164,16 @@ const BOSTON_COLUMNS = ['PID', 'CM_ID', 'ST_NUM', 'ST_ALPHA', 'ST_NUM2', 'ST_NAM
   'HEAT_TYPE', 'HEAT_SYSTEM', 'AC_TYPE', 'FIREPLACES', 'NUM_PARKING'];
 
 // "A - Asphalt Shingl" is code and words; the file's column widths cut some words short, so those read whole here.
-const BOSTON_WORDS = { 'Asphalt Shingl': 'Asphalt shingle', 'Ht Water/Steam': 'Hot water or steam', 'Forced Hot Air': 'Forced hot air', 'Reinf Concr': 'Reinforced concrete', 'Brick/Concr': 'Brick or concrete', 'Struct Steel': 'Structural steel', 'Wood/Frame': 'Wood frame' };
+const BOSTON_WORDS = {
+  'Asphalt Shingl': 'Asphalt shingle', 'Ht Water/Steam': 'Hot water or steam', 'Forced Hot Air': 'Forced hot air', 'Reinf Concr': 'Reinforced concrete', 'Brick/Concr': 'Brick or concrete', 'Struct Steel': 'Structural steel', 'Wood/Frame': 'Wood frame',
+  'Semi-Det': 'Semi-detached', 'Two Fam Stack': 'Two-family, stacked', 'Frame/Clapbrd': 'Frame and clapboard', 'Brick/Stone': 'Brick or stone', 'Brck/Stn Venr': 'Brick or stone veneer', 'Poured Concr': 'Poured concrete', 'Alum/Vinyl': 'Aluminum or vinyl', 'Alum Siding': 'Aluminum siding', 'Conc Block': 'Concrete block',
+  'Precast Concr': 'Precast concrete', 'Concr & Glass': 'Concrete and glass', 'Corrug Siding': 'Corrugated siding', 'Br Sill/Sash': 'Brick sill and sash', 'Rubber Roof': 'Rubber', 'Central AC': 'Central air', 'Ductless AC': 'Ductless air', 'Town House': 'Townhouse',
+};
 function bostonWord(value) {
   const match = /^\s*\S{1,3}\s+-\s+(.+?)\s*$/.exec(String(value ?? ''));
   const text = match ? match[1] : null;
-  if (!text || /^(None|Other)$/i.test(text)) return null;
+  // Land use's own codes sit in the same column as a building's style for some records: those aren't a style.
+  if (!text || /^(None|Other|Vacant)$/i.test(text) || /^\d/.test(String(value)) && /\b(UNITS|RETAIL|OFFICE|CHURCH|GARAGE|WHSE|HOUSING)\b/i.test(text)) return null;
   return BOSTON_WORDS[text] || text;
 }
 
@@ -185,10 +190,10 @@ function fromBoston(row, fips, county) {
   put(facts, 'address_on_record', onRecord(`${first} ${street}`, row.UNIT_NUM));
   put(facts, 'year_built', kind !== 'parcel' && kind !== 'other' ? year(row.YR_BUILT) : null);
   put(facts, 'living_sqft', home ? positive(String(row.LIVING_AREA ?? '').replace(/,/g, '')) : null);
-  put(facts, 'gross_sqft', kind !== 'parcel' && kind !== 'other' ? positive(String(row.GROSS_AREA ?? '').replace(/,/g, '')) : null);
+  put(facts, 'gross_sqft', (kind === 'property' || kind === 'building') && code !== 'CM' ? positive(String(row.GROSS_AREA ?? '').replace(/,/g, '')) : null);
   put(facts, 'stories', kind !== 'parcel' && kind !== 'other' && kind !== 'unit' ? positive(row.RES_FLOOR) : null);
   put(facts, 'style', kind !== 'parcel' && kind !== 'other' ? bostonWord(row.BLDG_TYPE) : null);
-  if (building) put(facts, 'units', positive(row.RES_UNITS));
+  if (building && code !== 'CM') put(facts, 'units', positive(row.RES_UNITS));
   const money = (text) => positive(String(text ?? '').replace(/[$,\s]/g, ''));
   if (kind !== 'unit') put(facts, 'lot_sqft', money(row.LAND_SF));
   put(facts, 'buildings_on_parcel', kind !== 'unit' ? positive(row.NUM_BLDGS) : null);

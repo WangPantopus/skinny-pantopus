@@ -266,4 +266,18 @@ function resolveHouse(records, homeType) {
   };
 }
 
-module.exports = { houseFromAttomProperty, houseFromRecord, resolveHouse };
+/**
+ * The plain outline from FEMA's footprint and the modeled stories, for a home with no record. Only the shape the sky
+ * draws: nothing here is shown as a fact. Null when the structure could be anything: a building's outline isn't a home's.
+ */
+function houseFromEstimate(structure) {
+  if (!structure?.footprint_sqft || structure.structures_at_address !== 1 || structure.building_use === 'Multifamily') return null;
+  const kinds = { 'Single family': 'SFR', 'Manufactured home': 'MOBILE HOME' };
+  const shape = houseFromAttomProperty({
+    summary: { propertyType: kinds[structure.building_use] || null },
+    building: { summary: { levels: structure.modeled_stories ? Math.round(structure.modeled_stories) : null }, size: { groundFloorSize: structure.footprint_sqft } },
+  });
+  return shape;
+}
+
+module.exports = { houseFromAttomProperty, houseFromRecord, houseFromEstimate, resolveHouse };

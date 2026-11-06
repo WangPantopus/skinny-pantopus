@@ -119,4 +119,4 @@ function resolve(query, records) {
   return ambiguous(parcels, requested, 'several_parcels');
 }
 
-module.exports = { resolve };
+module.exports = { resolve, onStreet, inZip };

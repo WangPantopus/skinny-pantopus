@@ -591,4 +591,48 @@ function serializePropertyRecord(copy) {
   return { sections: shown, footer: recordFooter(copy), as_of: copy.as_of || null };
 }
 
-module.exports = { serializeCountyRecord, serializePropertyRecord };
+// ── The national floor ──────────────────────────────────────
+
+const ESTIMATE_TITLE = 'Estimate for similar homes nearby';
+const ESTIMATE_NOTE = 'Modeled figures, not a record of this home. Anything you enter yourself replaces them.';
+const roundTo = (value, step) => Math.round(value / step) * step;
+
+/**
+ * The estimate slot: one section with its own title, its own row ids and rounded
+ * figures, so it can't be read as a record or fill a record's field. A home's own
+ * entry replaces the matching row, a figure for a whole building isn't offered as a
+ * home's, and a home in a building with a unit gets only the area's figures.
+ *
+ * @param {object|null} estimate  services/propertyRecords/estimates.js
+ * @param {object} [home]         The Home's own columns
+ * @returns {{ sections: object[], footer: string, as_of: null, estimate: true }|null}
+ */
+function serializeEstimate(estimate, home = {}) {
+  if (!estimate) return null;
+  const rows = [];
+  const add = (id, label, value) => { if (value) rows.push({ id: `estimate_${id}`, label, value, mono: false }); };
+  const { structure, area } = estimate;
+  const oneHome = structure && !home.address2 && structure.building_use !== 'Multifamily' && structure.structures_at_address === 1;
+  if (oneHome) {
+    if (structure.modeled_sqft >= 200 && home.sq_ft == null) add('size', 'Size', `About ${roundTo(structure.modeled_sqft, 100).toLocaleString('en-US')} sq ft`);
+    if (structure.modeled_stories > 0) add('stories', 'Stories', `About ${grouped(Math.round(structure.modeled_stories), 0)}`);
+  }
+  if (area) {
+    const where = area.scope === 'zip' ? 'in this ZIP code' : 'nearby';
+    if (area.median_year_built && home.year_built == null) add('year', `Typical year built ${where}`, `Around ${area.median_year_built}`);
+    if (area.median_rooms) add('rooms', `Typical rooms ${where}`, `About ${Math.round(area.median_rooms)}`);
+    if (area.most_common_bedrooms != null && home.bedrooms == null) {
+      const count = area.most_common_bedrooms;
+      add('bedrooms', `Most common ${where}`, `${count === 5 ? '5 or more' : count === 0 ? 'No separate' : count} ${count === 1 ? 'bedroom' : 'bedrooms'}`);
+    }
+  }
+  if (!rows.length) return null;
+  return {
+    sections: [{ id: 'estimate', title: ESTIMATE_TITLE, rows, note: ESTIMATE_NOTE }],
+    footer: `Estimates from ${estimate.source}, not a public record of this home`,
+    as_of: null,
+    estimate: true,
+  };
+}
+
+module.exports = { serializeCountyRecord, serializePropertyRecord, serializeEstimate };
