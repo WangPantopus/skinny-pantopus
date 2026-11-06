@@ -174,7 +174,7 @@ fun AddHomeWizardScreen(
                         detailsSection = { AddHomeDetailsSection(state = state, vm = viewModel) },
                     )
                 AddHomeStep.Role -> RoleStep(state, viewModel)
-                AddHomeStep.Review -> ReviewStep(state)
+                AddHomeStep.Review -> ReviewStep(state, onReviewDetails = viewModel::reviewAddedDetails)
                 AddHomeStep.Success -> SuccessStep(opensYourPlace = state.completionOpensYourPlace)
             }
         }
@@ -504,6 +504,7 @@ private fun RoleStep(
 ) {
     HeadlineBlock("What's your role?")
     SubcopyBlock("This determines what verification we'll ask for next.")
+    if (state.lateDetailsAdded) AddedDetailsLine(onReview = vm::reviewAddedDetails)
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         AddHomeRole.entries.forEach { role ->
             RoleRow(
@@ -525,7 +526,10 @@ private fun RoleStep(
 // MARK: - Step 4
 
 @Composable
-private fun ReviewStep(state: AddHomeUiState) {
+private fun ReviewStep(
+    state: AddHomeUiState,
+    onReviewDetails: () -> Unit,
+) {
     HeadlineBlock("Review and submit")
     SubcopyBlock(
         if (state.isClaimingExistingHome && state.form.role != AddHomeRole.Owner) {
@@ -584,8 +588,27 @@ private fun ReviewStep(state: AddHomeUiState) {
                 )
             }
         }
+    if (state.lateDetailsAdded && !state.isClaimingExistingHome) AddedDetailsLine(onReview = onReviewDetails)
     ReviewSummaryBlock(rows = rows)
     if (!state.isClaimingExistingHome) SubcopyBlock("Saving starts your private Home setup. Residency and ownership require verification.")
+}
+
+/** County details that landed after the person left the details step, with a way back to check them. */
+@Composable
+private fun AddedDetailsLine(onReview: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().testTag("addHome_addedDetails"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+    ) {
+        Text(
+            text = "We added your home's details from public records.",
+            style = PantopusTextStyle.caption,
+            color = PantopusColors.success,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onReview, modifier = Modifier.testTag("addHome_reviewAddedDetails")) { Text("Review") }
+    }
 }
 
 @Composable

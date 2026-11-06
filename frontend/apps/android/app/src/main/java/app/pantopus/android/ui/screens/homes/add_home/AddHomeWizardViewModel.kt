@@ -104,6 +104,13 @@ data class AddHomeUiState(
     val propertyLookupMessage: String = "",
     /** True while the suggestions call is in flight. */
     val isLoadingPropertySuggestions: Boolean = false,
+    /**
+     * The county record is being looked up in the background (the server answered `attom_lookup: pending`): the
+     * step stays usable, the fields say "Looking up…", and the record fills what is still empty when it lands.
+     */
+    val propertyLookupPending: Boolean = false,
+    /** The record landed after the person left the details: the later steps say so, with a way back to check. */
+    val lateDetailsAdded: Boolean = false,
     /** Optional access joins the protected atomic command and never reaches SavedStateHandle. */
     val accessItems: List<AddHomeAccessItem> = listOf(AddHomeAccessItem(id = "access-0")),
     /** Non-null while the Wi-Fi QR scanner is open; carries the target row. */
@@ -218,6 +225,7 @@ open class AddHomeWizardViewModel
         private var creationRevision = 0L
         private var retainsDraft = true
         private var addressRevision = 0L
+        private var homeTypeChosen = false
         private var addressJob: Job? = null
 
         /** The search [applyInitialSearchQuery] ran: left untouched, it isn't progress to discard. */
@@ -296,6 +304,7 @@ open class AddHomeWizardViewModel
 
         private fun invalidateAddress() {
             addressRevision++
+            homeTypeChosen = false
             addressJob?.cancel()
             addressJob = null
             _state.update {
@@ -305,6 +314,7 @@ open class AddHomeWizardViewModel
                     showsClaimedModal = false, showsConfirmAddressSheet = false,
                     isCheckingAddress = false, isFindingAddress = false, propertySuggestions = null,
                     propertyLookupComplete = false, isLoadingPropertySuggestions = false,
+                    propertyLookupPending = false, lateDetailsAdded = false,
                     addressSearchError = null, canOpenLocationSettings = false, errorMessage = null,
                 )
             }
@@ -552,7 +562,15 @@ open class AddHomeWizardViewModel
         /** Wedge v2 D5 — "Just moved here" at claim. */
         fun setJustMoved(value: Boolean) = updateDetails { it.copy(justMoved = value) }
 
-        fun selectHomeType(value: AddHomeHomeType) = updateDetails { it.copy(homeType = value) }
+        fun selectHomeType(value: AddHomeHomeType) {
+            homeTypeChosen = true
+            updateDetails { it.copy(homeType = value) }
+        }
+
+        /** "Review" on the later steps' added-details line: back to the details to check them. */
+        fun reviewAddedDetails() {
+            if (_state.value.form.currentStep.ordinal0 > AddHomeStep.Confirm.ordinal0) transitionTo(AddHomeStep.Confirm)
+        }
 
         fun updateBedrooms(value: String) = updateDetails { it.copy(bedrooms = digitsOnly(value)) }
 
@@ -779,7 +797,11 @@ open class AddHomeWizardViewModel
         private fun transitionTo(step: AddHomeStep) {
             if (step == AddHomeStep.Address) invalidateAddress()
             _state.update {
-                it.copy(form = it.form.copy(step = step.ordinal0), errorMessage = null)
+                it.copy(
+                    form = it.form.copy(step = step.ordinal0),
+                    errorMessage = null,
+                    lateDetailsAdded = it.lateDetailsAdded && step.ordinal0 > AddHomeStep.Confirm.ordinal0,
+                )
             }
             persist()
             step.stepNumber?.let { number ->
@@ -929,17 +951,20 @@ open class AddHomeWizardViewModel
 
         /**
          * `POST /api/homes/property-suggestions` — route
-         * `backend/routes/home.js:540`. Fills the Details block from
-         * public records (ATTOM → heuristics → optional LLM). A failure is
-         * never fatal: the fields stay editable and the card says the
-         * lookup was unavailable, exactly as RN does
-         * (`useHomeForm.ts:657-662`).
+         * `backend/routes/home.js:587`. Fills the Details block from
+         * public records (ATTOM → heuristics → optional LLM). The server
+         * answers at once (`lookup = "background"`); a county record it
+         * doesn't have yet is looked up meanwhile and fills what is still
+         * empty when [finishPropertyLookup] gets it, so the step never
+         * waits for ATTOM. A failure is never fatal: the fields stay
+         * editable and the card says the lookup was unavailable, exactly
+         * as RN does (`useHomeForm.ts:657-662`).
          */
         suspend fun loadPropertySuggestions() {
             if (!session.isCurrent) return
             val addressId = _state.value.validatedAddressId ?: return
             val revision = addressRevision
-            _state.update { it.copy(isLoadingPropertySuggestions = true) }
+            _state.update { it.copy(isLoadingPropertySuggestions = true, propertyLookupPending = false, lateDetailsAdded = false) }
             val current = _state.value
             val source = current.geocodedAddress
             val fields = current.form.address
@@ -953,31 +978,72 @@ open class AddHomeWizardViewModel
                     zipCode = source?.zipCode ?: fields.zipCode,
                     addressId = addressId,
                 )
-            val result = repository.propertySuggestions(request)
+            val result = repository.propertySuggestions(request, LOOKUP_BACKGROUND)
             if (!addressIsCurrent(revision)) return
             when (result) {
-                is NetworkResult.Success ->
+                is NetworkResult.Success -> {
+                    val pending = result.data.attomLookup == LOOKUP_PENDING
                     _state.update {
                         it.copy(
                             isLoadingPropertySuggestions = false,
-                            propertySuggestions = result.data,
-                            propertyLookupComplete = true,
-                            propertyLookupMessage = lookupMessage(result.data),
+                            propertyLookupPending = pending,
+                            propertySuggestions = result.data.takeUnless { pending },
+                            propertyLookupComplete = !pending,
+                            propertyLookupMessage = if (pending) "" else lookupMessage(result.data),
                             form =
                                 it.form.copy(
-                                    details = applySuggestions(it.form.details, result.data.suggestions),
+                                    details = applySuggestions(it.form.details, result.data.suggestions, homeTypeChosen),
                                 ),
                         )
                     }
+                    if (pending) viewModelScope.launch { finishPropertyLookup(request, revision) }
+                }
                 is NetworkResult.Failure ->
                     _state.update {
                         it.copy(
                             isLoadingPropertySuggestions = false,
                             propertySuggestions = null,
                             propertyLookupComplete = true,
-                            propertyLookupMessage =
-                                "Public property records are unavailable right now. " +
-                                    "Confirm the details below.",
+                            propertyLookupMessage = RECORDS_UNAVAILABLE_MESSAGE,
+                        )
+                    }
+            }
+            persist()
+        }
+
+        /**
+         * The one follow-up while the county record is looked up (`lookup = "check"`): the server answers when the
+         * lookup ends. The record fills only what is still empty, wherever the person is in the wizard.
+         */
+        private suspend fun finishPropertyLookup(
+            request: PropertySuggestionsRequest,
+            revision: Long,
+        ) {
+            val result = repository.propertySuggestions(request, LOOKUP_CHECK)
+            if (!addressIsCurrent(revision) || !_state.value.propertyLookupPending) return
+            when (result) {
+                is NetworkResult.Success -> {
+                    val answered = result.data.attomLookup == LOOKUP_FOUND || result.data.attomLookup == LOOKUP_NONE
+                    _state.update {
+                        val details = applySuggestions(it.form.details, result.data.suggestions, homeTypeChosen)
+                        val movedOn = it.form.currentStep.ordinal0 > AddHomeStep.Confirm.ordinal0
+                        it.copy(
+                            propertyLookupPending = false,
+                            propertySuggestions = result.data,
+                            propertyLookupComplete = true,
+                            propertyLookupMessage = if (answered) lookupMessage(result.data) else RECORDS_UNAVAILABLE_MESSAGE,
+                            form = it.form.copy(details = details),
+                            lateDetailsAdded = it.lateDetailsAdded || (movedOn && details != it.form.details),
+                        )
+                    }
+                }
+                is NetworkResult.Failure ->
+                    _state.update {
+                        it.copy(
+                            propertyLookupPending = false,
+                            propertySuggestions = null,
+                            propertyLookupComplete = true,
+                            propertyLookupMessage = RECORDS_UNAVAILABLE_MESSAGE,
                         )
                     }
             }
@@ -1522,6 +1588,13 @@ open class AddHomeWizardViewModel
                 "This address has a private Home on Pantopus. Ask someone in that household to send you an invitation."
             private val REFUSAL_CODES = setOf(400, 422, 429)
             private const val MIN_SEARCH_CHARACTERS = 3
+            private const val LOOKUP_BACKGROUND = "background"
+            private const val LOOKUP_CHECK = "check"
+            private const val LOOKUP_PENDING = "pending"
+            private const val LOOKUP_FOUND = "found"
+            private const val LOOKUP_NONE = "none"
+            private const val RECORDS_UNAVAILABLE_MESSAGE =
+                "Public property records are unavailable right now. Confirm the details below."
             private const val SEARCH_DEBOUNCE_MILLIS = 300L
 
             /** Nav arg of `homes/add?address=…` ("Set up a Home" from a saved address). */
@@ -1558,15 +1631,16 @@ open class AddHomeWizardViewModel
                             "Confirm the details below."
                 }
 
-            /** Prefill only — never overwrite something the user already typed. */
+            /** Prefill only — never overwrite something the user already typed (or a home type they picked). */
             private fun applySuggestions(
                 current: AddHomeDetailsFields,
                 suggestions: PropertySuggestionsFields?,
+                keepHomeType: Boolean = false,
             ): AddHomeDetailsFields {
                 if (suggestions == null) return current
                 return current.copy(
                     homeType =
-                        AddHomeHomeType.fromCanonical(suggestions.homeType) ?: current.homeType,
+                        AddHomeHomeType.fromCanonical(suggestions.homeType)?.takeUnless { keepHomeType } ?: current.homeType,
                     bedrooms =
                         current.bedrooms.ifEmpty { suggestions.bedrooms?.toString().orEmpty() },
                     bathrooms =
