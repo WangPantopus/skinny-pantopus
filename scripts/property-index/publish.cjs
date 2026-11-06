@@ -5,7 +5,8 @@
 // .github/workflows/property-index.yml with the AWS key of its master-only environment.
 //
 //   node scripts/property-index/publish.cjs --out <dir> --bucket <name> [--prefix index] [--republish]
-//     --republish  someone decided: a file that was rolled back may serve again (a scheduled run never passes this)
+//     --republish  someone decided: a file that was rolled back may serve again, and a new build of the file serving
+//                  replaces it (a scheduled run never passes this)
 //   node scripts/property-index/publish.cjs --rollback <fips> --state <ST> --bucket <name> [--prefix index]
 'use strict';
 
@@ -134,7 +135,8 @@ function publish(store, { out, republish }) {
     for (const entry of built) {
       const serving = stateFile.jurisdictions[entry.fips];
       // The source hasn't published anything new since the release serving.
-      if (serving && serving.as_of === entry.as_of && serving.status === 'active') {
+      // A run someone starts by hand publishes anyway: a new build of the same file can hold new address keys.
+      if (serving && serving.as_of === entry.as_of && serving.status === 'active' && !republish) {
         log(`${entry.fips}: unchanged since ${entry.as_of}`);
         continue;
       }
