@@ -39,6 +39,7 @@ import app.pantopus.android.ui.screens.feed.FeedRadiusSuggestion
 import app.pantopus.android.ui.screens.feed.FeedSurface
 import app.pantopus.android.ui.screens.profile.ProfilePinCopy
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,6 +48,9 @@ import javax.inject.Inject
 
 /** Where a feed request looks: coordinates plus the viewing radius, when known. */
 private const val MAX_HELD_POSTS = 100
+
+/** How long "Set an area" keeps looking for a slow first fix, in the background, once a read has given up on it. */
+private const val LATE_FIX_TIMEOUT_MILLIS = 30_000L
 
 private data class FeedArea(
     val latitude: Double?,
@@ -286,6 +290,7 @@ class PulseFeedViewModel
         private var longitude: Double? = null
         private var resolvedLatitude: Double? = null
         private var resolvedLongitude: Double? = null
+        private var lateFix: Job? = null
 
         /** The last chosen-area read listed a Home, which Pulse falls back to when the feed sends no coordinates. */
         private var homeFallback = false
@@ -1147,6 +1152,7 @@ class PulseFeedViewModel
                                 reconcileActions(response.posts, revision)
                             }
                             applyFirstPage(response, area, query, inPlace = !isRefresh)
+                            if (response.requiresViewingLocation == true) keepLookingForFix()
                         }
                         failure.refusesStoredCopy -> {
                             loadedPosts = emptyList()
@@ -1420,6 +1426,22 @@ class PulseFeedViewModel
             resolvedLatitude = coordinate.latitude
             resolvedLongitude = coordinate.longitude
             return coordinate.latitude to coordinate.longitude
+        }
+
+        /**
+         * With location allowed, "Set an area" isn't the last word: a first fix can take longer than a read waits (GPS
+         * alone, or indoors), and the prompt has nothing that reads again. Keeps looking, and reads again if the prompt is
+         * still up when the fix comes. Without permission this ends at once.
+         */
+        private fun keepLookingForFix() {
+            if (lateFix?.isActive == true) return
+            lateFix =
+                viewModelScope.launch {
+                    val fix = locationProvider.requestCurrent(timeoutMillis = LATE_FIX_TIMEOUT_MILLIS) ?: return@launch
+                    resolvedLatitude = fix.latitude
+                    resolvedLongitude = fix.longitude
+                    if ((_state.value as? PulseFeedUiState.Empty)?.needsArea == true) fetch()
+                }
         }
 
         // ── Optimistic accessors ────────────────────────────────────────
