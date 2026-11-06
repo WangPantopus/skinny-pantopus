@@ -9,7 +9,8 @@ import Foundation
 /// Endpoint builders for `backend/routes/home.js`.
 public enum HomesEndpoints {
     public static func validateAddress(_ request: HomeAddressValidationRequest) -> Endpoint {
-        Endpoint(method: .post, path: "/api/v1/address/validate", body: request)
+        // `postal=2` asks for UNIT_NOT_CONFIRMED and POSTAL_PENDING; older servers ignore it.
+        Endpoint(method: .post, path: "/api/v1/address/validate", query: ["postal": "2"], body: request)
     }
 
     /// `GET /api/homes/my-homes` — route `backend/routes/home.js:1464`.

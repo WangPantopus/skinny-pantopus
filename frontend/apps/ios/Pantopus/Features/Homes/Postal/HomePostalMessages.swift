@@ -82,6 +82,11 @@ enum HomePostalMessages {
         case "POSTCARD_REVIEW_ALREADY_RECORDED": "You're already verified. Residency status shows your access."
         case "POSTCARD_HOME_UNAVAILABLE": "Mail verification is unavailable for this Home right now."
         case "POSTCARD_RESIDENCY_REQUEST_REQUIRED": "Submit your residency request before requesting a postcard."
+        case "POSTCARD_ADDRESS_PENDING":
+            "We couldn't check this address with USPS yet. We'll try again shortly, and your postcard can go out after that."
+        case "POSTCARD_ADDRESS_NOT_CONFIRMED":
+            "Please check this address. USPS couldn't confirm it, so we can't mail a postcard there. "
+                + "You can verify another way, or add your home again with the right details."
         default: availability(code)
         }
     }

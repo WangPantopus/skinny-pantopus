@@ -63,6 +63,11 @@ data class AddHomeUiState(
     val isSessionCurrent: Boolean = true,
     val addressCheck: CheckAddressResponse? = null,
     val geocodedAddress: AddHomeGeocodedAddress? = null,
+    /** USPS couldn't confirm the unit or hasn't answered: the person can continue, and mail proof still has to pass. */
+    val postalNotice: AddHomePostalNotice? = null,
+    /** USPS says this building needs a unit, and a home without one can say so. */
+    val offersNoUnitAttestation: Boolean = false,
+    val noUnitAttested: Boolean = false,
     val isCheckingAddress: Boolean = false,
     val isSubmitting: Boolean = false,
     val createdHomeId: String? = null,
@@ -313,6 +318,7 @@ open class AddHomeWizardViewModel
             addressJob = null
             _state.update {
                 it.copy(
+                    postalNotice = null, offersNoUnitAttestation = false, noUnitAttested = false,
                     validatedAddressId = null, addressCheck = null, geocodedAddress = null,
                     existingHomeId = null, isClaimingExistingHome = false,
                     showsClaimedModal = false, showsConfirmAddressSheet = false,
@@ -824,12 +830,17 @@ open class AddHomeWizardViewModel
             if (_state.value.form.currentStep == AddHomeStep.Confirm) viewModelScope.launch { runCheckAddress() }
         }
 
-        private suspend fun runCheckAddress() {
+        /** "My home doesn't have a unit number": the base address goes through, and mail proof still has to pass. */
+        fun attestNoUnit() {
+            if (_state.value.form.currentStep == AddHomeStep.Confirm) viewModelScope.launch { runCheckAddress(attestingNoUnit = true) }
+        }
+
+        private suspend fun runCheckAddress(attestingNoUnit: Boolean = false) {
             if (!session.isCurrent || !_state.value.form.address.isComplete || _state.value.isCheckingAddress) return
             invalidateAddress()
             val revision = addressRevision
             val fields = _state.value.form.address
-            _state.update { it.copy(isCheckingAddress = true) }
+            _state.update { it.copy(isCheckingAddress = true, noUnitAttested = attestingNoUnit) }
             try {
                 session.requireCurrent()
                 val validation =
@@ -845,8 +856,14 @@ open class AddHomeWizardViewModel
                         ),
                     )
                 if (!addressIsCurrent(revision)) return
-                if (validation.verdict.status !in listOf("OK", "MIXED_USE", "CONFLICT")) {
-                    _state.update { it.copy(errorMessage = addressValidationMessage(validation.verdict.status)) }
+                val verdictStatus = validation.verdict.status
+                if (verdictStatus !in CONTINUING_STATUSES && !(verdictStatus == "MISSING_UNIT" && attestingNoUnit)) {
+                    _state.update {
+                        it.copy(
+                            errorMessage = addressValidationMessage(verdictStatus, validation.verdict.reasons.orEmpty()),
+                            offersNoUnitAttestation = verdictStatus == "MISSING_UNIT",
+                        )
+                    }
                     return
                 }
                 val addressId = validation.addressId
@@ -887,6 +904,7 @@ open class AddHomeWizardViewModel
                         it.copy(
                             addressCheck = response,
                             validatedAddressId = addressId,
+                            postalNotice = AddHomePostalNotice.forStatus(verdictStatus, address.line2 ?: fields.unit),
                             geocodedAddress =
                                 AddHomeGeocodedAddress(
                                     street = response.residencyAddress?.line1 ?: address.line1,
@@ -938,9 +956,19 @@ open class AddHomeWizardViewModel
             }
         }
 
-        private fun addressValidationMessage(status: String): String =
+        private val CONTINUING_STATUSES = setOf("OK", "MIXED_USE", "CONFLICT", "UNIT_NOT_CONFIRMED", "POSTAL_PENDING")
+
+        private fun addressValidationMessage(
+            status: String,
+            reasons: List<String>,
+        ): String =
             when (status) {
-                "MISSING_UNIT" -> "Enter your unit or apartment number, then check this address again."
+                "MISSING_UNIT" ->
+                    if ("USPS_UNIT_REQUIRED" in reasons) {
+                        "This building needs a unit number. Which one is yours? Edit the address to add it."
+                    } else {
+                        "Enter your unit or apartment number, then check this address again."
+                    }
                 "MISSING_STREET_NUMBER", "UNVERIFIED_STREET_NUMBER" -> "Check the street number and try again."
                 "PO_BOX" -> "Enter a street address. A PO Box cannot be used as a Home."
                 "BUSINESS" -> "This appears to be a business address. Check your residential address."
@@ -1226,6 +1254,7 @@ open class AddHomeWizardViewModel
                     yearBuilt = details.yearBuilt.toIntOrNull(),
                     isOwner = role == AddHomeRole.Owner,
                     role = role.claimedRole,
+                    noUnitAttestation = if (_state.value.noUnitAttested) true else null,
                 )
             _state.update { it.copy(showsCreationRecovery = true) }
             try {

@@ -165,9 +165,11 @@ interface HomesApi {
         @Query("lookup") lookup: String? = null,
     ): PropertySuggestionsResponse
 
+    /** `postal=2` asks for UNIT_NOT_CONFIRMED and POSTAL_PENDING; older servers ignore it. */
     @POST("api/v1/address/validate")
     suspend fun validateAddress(
         @Body body: HomeAddressValidationRequest,
+        @Query("postal") postal: Int = 2,
     ): HomeAddressValidationResponse
 
     /** `POST /api/homes/check-address` — route `backend/routes/home.js:555`. */

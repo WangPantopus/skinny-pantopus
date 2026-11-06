@@ -3,6 +3,7 @@
 package app.pantopus.android.ui.screens.homes.add_home
 
 import app.pantopus.android.data.api.net.NetworkError
+import app.pantopus.android.ui.theme.PantopusIcon
 import org.json.JSONObject
 
 /**
@@ -127,5 +128,32 @@ enum class AddressVerificationError(
                     ?: return null
             return byCode[code]
         }
+    }
+}
+
+/** What USPS said about an address, when it isn't a yes and the person can still continue. */
+data class AddHomePostalNotice(
+    val message: String,
+    val icon: PantopusIcon,
+) {
+    companion object {
+        fun forStatus(
+            status: String,
+            unit: String,
+        ): AddHomePostalNotice? =
+            when (status) {
+                "UNIT_NOT_CONFIRMED" ->
+                    AddHomePostalNotice(
+                        "We couldn't confirm unit $unit with USPS. Check the number, or continue and we'll confirm it by mail.",
+                        PantopusIcon.AlertTriangle,
+                    )
+                "POSTAL_PENDING" ->
+                    AddHomePostalNotice(
+                        "We couldn't check this address with USPS yet. We'll try again shortly. " +
+                            "You can finish now; your postcard waits for the check.",
+                        PantopusIcon.Clock,
+                    )
+                else -> null
+            }
     }
 }
