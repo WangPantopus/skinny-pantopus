@@ -130,14 +130,11 @@ fun PlaceMoneyDetailContent(
         val data = env.exemptionCheck?.takeIf { env.isLive() || env.exemptionNotChecked }
         if (data != null) ExemptionCheckCard(data, reason = env.unavailableReason) else PlaceDetailFallbackCard(env)
         // not_checked links its state's page inside the card instead.
-        if (!env.exemptionNotChecked) SourceNoteUnlessLocked(env, exemptionSource(env))
+        if (!env.exemptionNotChecked) SourceNoteUnlessLocked(env, env.countyRecordSource)
     }
     // Rate watch, deed alerts and the property-tax check are the owner's, like the exemption check.
     if (intel.ownerTools) OwnerTools(intel, viewModel)
 }
-
-/** The exemption check's source, in the server's words. */
-private fun exemptionSource(env: PlaceSectionEnvelope): String = env.provenance?.label ?: env.source ?: "County records"
 
 /** A provider note under a section, left off a locked card (as on the web). */
 @Composable

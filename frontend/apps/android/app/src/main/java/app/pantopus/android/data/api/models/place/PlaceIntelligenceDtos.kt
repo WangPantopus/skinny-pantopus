@@ -1363,6 +1363,10 @@ data class PlaceSectionEnvelope(
     val provenance: RecordProvenanceDto? = null,
 ) {
     val sectionId: PlaceSectionId get() = PlaceSectionId.from(id)
+
+    /** A county-record section's source, in the server's words. */
+    val countyRecordSource: String get() = provenance?.label ?: source ?: "County records"
+
     val groupId: PlaceGroup get() = PlaceGroup.from(group)
 
     val weather: PlaceWeatherData? get() = (data as? PlaceSectionData.Weather)?.value
