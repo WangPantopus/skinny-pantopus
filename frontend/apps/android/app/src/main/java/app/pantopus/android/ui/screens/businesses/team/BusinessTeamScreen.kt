@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -89,6 +90,8 @@ private sealed interface TeamSheet {
 @Composable
 fun BusinessTeamScreen(
     onBack: () -> Unit,
+    /** A member's profile, from their photo and name. */
+    onOpenProfile: ((String) -> Unit)? = null,
     viewModel: BusinessTeamViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -124,6 +127,7 @@ fun BusinessTeamScreen(
                             onOverflowPermissions = { sheet = TeamSheet.Permissions(it) },
                             onOverflowRemove = { removeTarget = it },
                             onCancelPending = { cancelTarget = it },
+                            onOpenProfile = onOpenProfile,
                         )
                     is BusinessTeamUiState.Empty ->
                         EmptyState(
@@ -296,6 +300,7 @@ private fun TeamLoaded(
     onOverflowPermissions: (BusinessTeamMemberRow) -> Unit,
     onOverflowRemove: (BusinessTeamMemberRow) -> Unit,
     onCancelPending: (BusinessTeamPendingRow) -> Unit,
+    onOpenProfile: ((String) -> Unit)? = null,
 ) {
     Column(
         modifier =
@@ -317,6 +322,7 @@ private fun TeamLoaded(
                         onChangeRole = onOverflowChangeRole,
                         onPermissions = onOverflowPermissions,
                         onRemove = onOverflowRemove,
+                        onOpenProfile = onOpenProfile,
                     )
                 }
             }
@@ -368,6 +374,7 @@ private fun MemberRowCard(
     onChangeRole: (BusinessTeamMemberRow) -> Unit,
     onPermissions: (BusinessTeamMemberRow) -> Unit,
     onRemove: (BusinessTeamMemberRow) -> Unit,
+    onOpenProfile: ((String) -> Unit)? = null,
 ) {
     Row(
         modifier =
@@ -381,20 +388,34 @@ private fun MemberRowCard(
         horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
         verticalAlignment = Alignment.Top,
     ) {
-        TeamAvatar(name = row.name, gradient = row.avatarGradient)
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-                Text(
-                    text = row.name,
-                    style = PantopusTextStyle.body,
-                    color = PantopusColors.appText,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                )
-                RolePill(role = row.role)
+        // The member's photo and name open their profile; the role menu stays on its own button.
+        Row(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .then(
+                        onOpenProfile?.let { open ->
+                            Modifier.clickable(onClickLabel = "Open profile", role = Role.Button) { open(row.userId) }
+                        } ?: Modifier,
+                    ),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+            verticalAlignment = Alignment.Top,
+        ) {
+            TeamAvatar(name = row.name, gradient = row.avatarGradient)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+                    Text(
+                        text = row.name,
+                        style = PantopusTextStyle.body,
+                        color = PantopusColors.appText,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                    )
+                    RolePill(role = row.role)
+                }
+                row.email?.takeIf { it.isNotEmpty() }?.let { MetaLine(text = it, icon = PantopusIcon.Mail) }
+                row.joinedText?.let { MetaLine(text = it, icon = PantopusIcon.Clock) }
             }
-            row.email?.takeIf { it.isNotEmpty() }?.let { MetaLine(text = it, icon = PantopusIcon.Mail) }
-            row.joinedText?.let { MetaLine(text = it, icon = PantopusIcon.Clock) }
         }
         if (row.canManage) {
             OverflowButton(

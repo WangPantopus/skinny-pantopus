@@ -359,80 +359,42 @@ describe('MapboxProvider', () => {
     ],
   };
 
-  describe('nearbyPlaces', () => {
-    it('returns NormalizedPlace POIs plus the locality from two typed reverse calls', async () => {
-      mockFetchOk({ features: [MAPBOX_POI_FEATURE] });   // types=poi call
-      mockFetchOk({ features: [MAPBOX_LOCALITY_FEATURE] }); // types=place call
+  describe('localityAt', () => {
+    it('returns the town or city from one typed reverse call', async () => {
+      mockFetchOk({ features: [MAPBOX_LOCALITY_FEATURE] });
 
-      const result = await mapboxProvider.nearbyPlaces(45.52, -122.68);
+      const locality = await mapboxProvider.localityAt(45.52, -122.68);
 
-      expect(global.fetch).toHaveBeenCalledTimes(2);
-      const poiUrl = global.fetch.mock.calls[0][0];
-      const localityUrl = global.fetch.mock.calls[1][0];
-      expect(poiUrl).toContain('/mapbox.places/-122.68,45.52.json');
-      expect(poiUrl).toContain('types=poi');
-      expect(poiUrl).toContain('limit=10');
-      expect(localityUrl).toContain('types=place');
-      expect(localityUrl).toContain('limit=1');
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      const url = global.fetch.mock.calls[0][0];
+      expect(url).toContain('/mapbox.places/-122.68,45.52.json');
+      expect(url).toContain('types=place');
+      expect(url).toContain('limit=1');
+      expect(url).not.toContain('types=poi');
 
-      expect(result.places).toHaveLength(1);
-      const p = result.places[0];
-      expect(p.place_id).toBe('poi.111');
-      expect(p.name).toBe('Blue Star Donuts');
-      expect(p.category).toBe('donut shop, bakery');
-      expect(p.address).toBe('1237 SW Washington St');
-      expect(p.full_address).toContain('Blue Star Donuts');
-      expect(p.center).toEqual({ lat: 45.5219, lng: -122.6841 });
-      expect(p.kind).toBe('poi');
-      // Haversine from (45.52, -122.68) to the POI center is ~383m.
-      expect(p.distance_m).toBeGreaterThan(350);
-      expect(p.distance_m).toBeLessThan(420);
-      expect(Number.isInteger(p.distance_m)).toBe(true);
-
-      expect(result.locality).not.toBeNull();
-      expect(result.locality.name).toBe('Portland');
-      expect(result.locality.kind).toBe('place');
+      expect(locality.name).toBe('Portland');
+      expect(locality.kind).toBe('place');
+      expect(locality.center).toEqual({ lat: 45.5231, lng: -122.6765 });
+      expect(Number.isInteger(locality.distance_m)).toBe(true);
     });
 
-    it('returns locality null when no place feature is found', async () => {
-      mockFetchOk({ features: [] });
+    it('returns null when no place feature is found', async () => {
       mockFetchOk({ features: [] });
 
-      const result = await mapboxProvider.nearbyPlaces(45.52, -122.68);
-
-      expect(result.places).toEqual([]);
-      expect(result.locality).toBeNull();
+      await expect(mapboxProvider.localityAt(45.52, -122.68)).resolves.toBeNull();
     });
 
     it('throws on Mapbox failure', async () => {
-      mockFetchError(500, 'Internal Server Error');
-      mockFetchOk({ features: [] });
+      mockFetchError(429, 'Rate limited');
 
-      await expect(mapboxProvider.nearbyPlaces(45.52, -122.68))
-        .rejects.toThrow('Mapbox nearby places failed: 500');
+      await expect(mapboxProvider.localityAt(45.52, -122.68))
+        .rejects.toThrow('Mapbox locality failed: 429');
     });
 
-    it('degrades to locality null when only the locality call fails', async () => {
-      mockFetchOk({ features: [MAPBOX_POI_FEATURE] }); // types=poi ok
-      mockFetchError(429, 'Rate limited');             // types=place fails
-
-      const result = await mapboxProvider.nearbyPlaces(45.52, -122.68);
-
-      expect(result.places).toHaveLength(1);
-      expect(result.places[0].name).toBe('Blue Star Donuts');
-      expect(result.locality).toBeNull();
-    });
-
-    it('filters out features without a usable center instead of defaulting to {0,0}', async () => {
-      const centerless = { ...MAPBOX_POI_FEATURE, id: 'poi.222', center: undefined };
-      mockFetchOk({ features: [centerless, MAPBOX_POI_FEATURE] });
+    it('skips a feature without a usable center instead of defaulting to {0,0}', async () => {
       mockFetchOk({ features: [{ ...MAPBOX_LOCALITY_FEATURE, center: null }] });
 
-      const result = await mapboxProvider.nearbyPlaces(45.52, -122.68);
-
-      expect(result.places).toHaveLength(1);
-      expect(result.places[0].place_id).toBe('poi.111');
-      expect(result.locality).toBeNull();
+      await expect(mapboxProvider.localityAt(45.52, -122.68)).resolves.toBeNull();
     });
   });
 
@@ -446,7 +408,7 @@ describe('MapboxProvider', () => {
       expect(url).toContain('/mapbox.places/blue%20star.json');
       expect(url).toContain('autocomplete=true');
       expect(url).toContain('limit=8');
-      expect(url).toContain('country=us');
+      expect(url).not.toContain('country=');
       expect(url).toContain('types=poi,place,address');
       expect(url).toContain('proximity=-122.68,45.52');
 

@@ -457,6 +457,10 @@ photo rechecks are continuing; cold thumbnails still depend on original storage.
 
 ## Push account binding
 
+**Reversed November 5, 2026 (founder):** chat pushes carry the sender and the message, and the phone's own
+setting hides them while locked (iOS Show Previews, Android's sensitive-content setting); see NEXT_STEPS.md.
+The paragraph below records the earlier choice.
+
 The default lock-screen payload now uses generic chat text. iOS can display an
 already accepted background push before application account guards run, and the
 app has no Notification Service Extension. Generic title/body remove sender and

@@ -110,10 +110,16 @@ in the chrome stack so the strip auto-appears when offline.
 
 `ui/components/KeyboardRules.kt` holds the app's keyboard rules. The activity root uses
 `Modifier.closesKeyboardOnTapOrScroll()`: a tap or a drag outside the focused text box puts the keyboard away,
-and the tap still does its job. Each sheet or dialog that has a text field runs in its own window, so it passes
-the same modifier as its `modifier` (or on its content root). A text box drawn by a container around a
-`BasicTextField` marks that container `keepsKeyboard()`. Composer controls (Send) are marked the same way. The
-results under a search box are marked `firstTapClosesKeyboard()`.
+and the tap still does its job; a drag that starts on a text box or a field's box puts it away once the page
+moves under the finger. Each sheet or dialog that has a text field runs in its own window, so it passes
+the same modifier as its `modifier` (or on its content root), including a sheet wrapper whose content comes from
+its caller. A text box drawn by a container around a `BasicTextField` marks that container `keepsKeyboard()`; a tap
+on the container's own space then types in the field inside it, so the whole box is the text box. Composer controls
+(Send) are marked the same way; a thread that moves the keyboard itself is `keepsKeyboardWhileScrolling()`. The results under
+a search box are marked `firstTapClosesKeyboard()`. The keyboard's own action key puts it away unless the screen
+moves on or keeps typing on purpose (chat's Send): a Search key with nothing to submit uses
+`defaultKeyboardAction(ImeAction.Done)`, and a Done that adds an item (a tag, an email) puts the keyboard away
+after adding.
 
 ## Navigation
 

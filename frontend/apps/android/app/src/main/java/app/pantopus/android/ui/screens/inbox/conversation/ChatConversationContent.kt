@@ -509,6 +509,8 @@ data class ChatBubbleContent(
     val isContinuation: Boolean = false,
     /** Public sender label for multi-person rooms; never the room title. */
     val senderName: String? = null,
+    /** The person who sent an incoming message in such a room, whose profile the sender's name and photo open. */
+    val senderUserId: String? = null,
     val attachments: List<ChatAttachmentDto> = emptyList(),
 )
 

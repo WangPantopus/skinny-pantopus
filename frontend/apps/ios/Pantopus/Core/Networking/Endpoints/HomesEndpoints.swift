@@ -53,9 +53,17 @@ public enum HomesEndpoints {
         Endpoint(method: .post, path: "/api/homes", body: request)
     }
 
-    /// `POST /api/homes/property-suggestions` — route `backend/routes/home.js:540`.
-    public static func propertySuggestions(_ request: PropertySuggestionsRequest) -> Endpoint {
-        Endpoint(method: .post, path: "/api/homes/property-suggestions", body: request)
+    /// `POST /api/homes/property-suggestions` — route `backend/routes/home.js:587`.
+    /// `lookup: "background"` answers at once and looks a missing county record up
+    /// meanwhile (`attom_lookup: pending`); `"check"` is the one follow-up, answered
+    /// when that lookup ends. Without it the server waits for ATTOM, as for older builds.
+    public static func propertySuggestions(_ request: PropertySuggestionsRequest, lookup: String? = nil) -> Endpoint {
+        Endpoint(
+            method: .post,
+            path: "/api/homes/property-suggestions",
+            query: lookup.map { ["lookup": $0] } ?? [:],
+            body: request
+        )
     }
 
     /// `POST /api/homes/check-address` — route `backend/routes/home.js:555`.

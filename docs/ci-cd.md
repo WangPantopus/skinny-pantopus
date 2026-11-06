@@ -293,16 +293,22 @@ read-only repository permissions and keep deployment secrets out of PR jobs.
 
 `places-index.yml` rebuilds the public places the Plans place picker lists
 (parks, courts, playgrounds, libraries, community centers, cafés, bars,
-restaurants) for every US OpenStreetMap extract from Geofabrik, on the 3rd of
-each month and by hand (Actions → Places Index → Run workflow; `regions` limits
-a test build). It publishes `manifest.json` and `places-<yyyymmdd>.bin` on the
-`places-index` pre-release, with the ODbL credit. It needs no secrets: the
-job's own token writes the release. The backend reads the areas it needs with
-range requests (`backend/services/plans/placesIndex.js`; `PLACES_INDEX_URL`
-points elsewhere, and an empty value turns the index off), and asks the public
-Overpass servers only where the index can't answer. A build with under 80% of
-the published one's elements is not published. A pull request that changes the
-build runs it on two small extracts and publishes nothing.
+restaurants) and, in the same run, the named venues the post place-tag picker
+lists (restaurants, cafés, bars, schools, places of worship, parks, stadiums,
+theaters and other venues, museums, shops, hotels, stations and more) for every
+US OpenStreetMap extract from Geofabrik, on the 3rd of each month and by hand
+(Actions → Places Index → Run workflow; `regions` limits a test build). It
+publishes `manifest.json` and `places-<yyyymmdd>.bin`, and
+`venues-manifest.json` and `venues-<yyyymmdd>.bin`, on the `places-index`
+pre-release, with the ODbL credit. It needs no secrets: the job's own token
+writes the release. The backend reads the areas it needs with range requests
+(`backend/services/plans/placesIndex.js` and `backend/services/geo/venues.js`;
+`PLACES_INDEX_URL` and `VENUES_INDEX_URL` point elsewhere, and an empty value
+turns an index off), and asks the public Overpass servers only where an index
+can't answer. A venues index built from an older selector list
+(`placesIndexFormat` `VENUES.VERSION`) is never read. A build with under 80% of
+either published index's elements is not published. A pull request that
+changes the build runs it on two small extracts and publishes nothing.
 
 ## Runners and actions
 
