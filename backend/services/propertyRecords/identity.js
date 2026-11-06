@@ -14,7 +14,9 @@
  *   stale          the release is past its date (index.js decides that one)
  *
  * It never picks the first candidate, and a unit's private facts go out only on
- * `exact`. A wrong home's facts are worse than none.
+ * `exact`. A wrong home's facts are worse than none. Where it asks which one, it
+ * says what the choices are when they are few (`choices`): unit numbers and
+ * urbanizaciones, never anything about who lives there.
  */
 
 const same = (a, b) => (a || '') === (b || '');
@@ -29,10 +31,38 @@ function onStreet(query, records) {
   return here.filter(({ address }) => agrees(address.pre, query.pre) && agrees(address.suffix, query.suffix) && agrees(address.post, query.post));
 }
 
+/** The same number and street exist in several urbanizaciones of one Puerto Rico ZIP. Both sides have to say which. */
+function inUrbanization(query, records) {
+  if (!query.urbanization) return records;
+  return records.filter(({ address }) => !address.urbanization || address.urbanization === query.urbanization);
+}
+
+// More choices than this and the person types the number: a list that long is no help, and a tower's roster is its own business.
+const MAX_CHOICES = 12;
+const naturally = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
+
+/** A building's units, or several records' unit numbers, when they are few enough to offer. */
+function unitChoices(buildings, others) {
+  const units = new Set();
+  for (const building of buildings) for (const unit of building.roster || []) units.add(unit);
+  for (const record of others) if (record.address.unit) units.add(`${record.address.building || ''}${record.address.unit}`);
+  return { unit_count: units.size, ...(units.size && units.size <= MAX_CHOICES ? { choices: [...units].sort(naturally.compare) } : {}) };
+}
+
 /** ZIP decides when both sides have one: the same street line can exist in two towns of a county. */
 function inZip(query, records) {
   if (!query.zip) return records;
   return records.filter(({ address }) => !address.zip || address.zip === query.zip);
+}
+
+/**
+ * Sources with no property ZIP name a town instead: the same street line in two towns of a county is told apart by it,
+ * only when the person's town picks out exactly one record. A postal city that matches none stays ambiguous.
+ */
+function inTown(query, records) {
+  if (!query.city || records.length < 2 || records.some(({ address }) => address.zip)) return records;
+  const named = records.filter(({ address }) => address.city === query.city);
+  return named.length === 1 ? named : records;
 }
 
 function unitMatches(query, address) {
@@ -49,27 +79,47 @@ function subjectOf(record) {
 }
 
 function exact(record, requested, here) {
+  // One protected unit restricts that unit, not its neighbors.
+  if (record.restricted) return answer('restricted', { requested_subject: requested });
   const building = record.parent ? here.find((other) => other.kind === 'building' && other.id === record.parent) : null;
   return answer('exact', { subject: subjectOf(record), record, requested_subject: requested, ...(building ? { building } : {}) });
 }
 
 function buildingOnly(record, requested, reason) {
-  return answer('building_only', { subject: subjectOf(record), record, requested_subject: requested, reason });
+  if (record.restricted) return answer('restricted', { requested_subject: requested });
+  return answer('building_only', { subject: subjectOf(record), record, requested_subject: requested, reason, ...unitChoices([record], []) });
+}
+
+function parcelOnly(record, requested) {
+  if (record.restricted) return answer('restricted', { requested_subject: requested });
+  return answer('parcel_only', { subject: subjectOf(record), record, requested_subject: requested });
 }
 
 function ambiguous(candidates, requested, reason) {
-  return answer('ambiguous', { candidates: candidates.length, requested_subject: requested, reason });
+  return answer('ambiguous', {
+    candidates: candidates.length,
+    requested_subject: requested,
+    reason,
+    ...unitChoices(candidates.filter((record) => record.kind === 'building'), candidates.filter((record) => record.kind !== 'building')),
+  });
 }
 
 /**
- * @param {object} query   addressKey.parse()'s parts with `zip`
+ * @param {object} address addressKey.parse()'s parts with `zip`
  * @param {object[]} records  What the release holds at this street name and house number
  */
-function resolve(query, records) {
-  const here = inZip(query, onStreet(query, records));
+function resolve(address, records) {
+  // "BLDG A" with no unit under it: the building letter is what tells homes apart there.
+  const query = !address.unit && address.building ? { ...address, unit: address.building, building: '' } : address;
+  const here = inUrbanization(query, inTown(query, inZip(query, onStreet(query, records))));
   const requested = query.unit ? 'unit' : 'property';
   if (!here.length) return answer('unsupported', { reason: 'no_record', requested_subject: requested });
-  if (here.some((record) => record.restricted)) return answer('restricted', { requested_subject: requested });
+  if (!query.urbanization) {
+    const urbanizations = [...new Set(here.map((record) => record.address.urbanization).filter(Boolean))].sort();
+    if (urbanizations.length > 1) {
+      return answer('ambiguous', { candidates: urbanizations.length, requested_subject: requested, reason: 'several_urbanizations', urbanizations: urbanizations.slice(0, MAX_CHOICES) });
+    }
+  }
 
   const units = here.filter((record) => record.kind === 'unit');
   // A mobile home in a park is a property of its own with a space number.
@@ -92,7 +142,7 @@ function resolve(query, records) {
     // A house with an apartment in it: the record is the whole house, not this apartment.
     if (plain.length === 1 && !units.length) return buildingOnly(plain[0], requested, 'unit_not_recorded');
     if (units.length || plain.length) return ambiguous([...units, ...plain], requested, 'unit_not_found');
-    if (parcels.length === 1) return answer('parcel_only', { subject: subjectOf(parcels[0]), record: parcels[0], requested_subject: requested });
+    if (parcels.length === 1) return parcelOnly(parcels[0], requested);
     return ambiguous(parcels, requested, 'several_parcels');
   }
 
@@ -108,7 +158,7 @@ function resolve(query, records) {
     return ambiguous([...whole, ...others, ...withUnits], requested, 'several_homes');
   }
   if (withUnits.length) return ambiguous(withUnits, requested, 'unit_needed');
-  if (parcels.length === 1) return answer('parcel_only', { subject: subjectOf(parcels[0]), record: parcels[0], requested_subject: requested });
+  if (parcels.length === 1) return parcelOnly(parcels[0], requested);
   return ambiguous(parcels, requested, 'several_parcels');
 }
 

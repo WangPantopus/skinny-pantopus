@@ -4,15 +4,17 @@
  * sharp writes JPEG, PNG, WebP, AVIF and GIF (animation kept) back in their own format without it. sharp can't
  * decode an iPhone's HEIC (its HEVC codec isn't in sharp's build), so a HEIC is decoded in a worker thread
  * (heicDecodeWorker.js) and stored as a JPEG, which every browser and app can show. A photo that can't be cleaned
- * is refused: it is never stored as it was sent.
+ * is refused: it is never stored as it was sent. Videos follow the same rule, cleaned by videoMetadata.js.
  */
 const path = require('node:path');
 const { Worker } = require('node:worker_threads');
 const sharp = require('sharp');
 const logger = require('../utils/logger');
+const { UnreadableVideoError, removeVideoMetadata, removeVideoFileMetadata } = require('./videoMetadata');
 
 const UNREADABLE = "We couldn't read this photo, so we didn't save it. Try saving it as a JPEG or PNG and upload it again.";
 const TOO_LARGE = "This photo is too large for us to save. Try a smaller copy.";
+const UNREADABLE_VIDEO = "We couldn't read this video, so we didn't save it. Try saving it as an MP4 and upload it again.";
 
 // A 48-megapixel iPhone photo fits. Decoding one takes a few seconds and a few hundred MB, so conversions run one at
 // a time, each in a thread that is stopped afterwards (the decoder's memory goes with it).
@@ -22,11 +24,11 @@ const HEIC_TIMEOUT_MS = 60 * 1000;
 const TYPES = { jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' };
 const EXTENSIONS = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' };
 
-class PhotoNotCleanedError extends Error {
-  constructor(message, status, cause) {
+class MediaNotCleanedError extends Error {
+  constructor(message, status, code, cause) {
     super(message);
     this.status = status;
-    this.code = status === 413 ? 'PHOTO_TOO_LARGE' : 'PHOTO_UNREADABLE';
+    this.code = code;
     this.cause = cause;
   }
 }
@@ -79,7 +81,7 @@ function withColourProfile(jpeg, icc) {
 }
 
 async function heicToJpeg(buffer, info) {
-  if (info.width * info.height > MAX_HEIC_PIXELS) throw new PhotoNotCleanedError(TOO_LARGE, 413);
+  if (info.width * info.height > MAX_HEIC_PIXELS) throw new MediaNotCleanedError(TOO_LARGE, 413, 'PHOTO_TOO_LARGE');
   const { width, height, data } = await decodeHeic(buffer);
   const jpeg = await sharp(Buffer.from(data.buffer, data.byteOffset, data.byteLength), { raw: { width, height, channels: 4 } })
     .jpeg()
@@ -89,7 +91,7 @@ async function heicToJpeg(buffer, info) {
 
 /**
  * The photo without its metadata, by what the bytes are (not what the upload says they are): `{ buffer, mimetype }`.
- * Throws PhotoNotCleanedError when it can't be cleaned.
+ * Throws MediaNotCleanedError when it can't be cleaned.
  * @param {Buffer} buffer
  * @param {{ limitInputPixels?: number }} [options] passed to sharp
  */
@@ -105,8 +107,8 @@ async function removePhotoMetadata(buffer, options = {}) {
       : await sharp(buffer, options).rotate().toBuffer();
     return { buffer: cleaned, mimetype };
   } catch (error) {
-    if (error instanceof PhotoNotCleanedError) throw error;
-    throw new PhotoNotCleanedError(UNREADABLE, 415, error);
+    if (error instanceof MediaNotCleanedError) throw error;
+    throw new MediaNotCleanedError(UNREADABLE, 415, 'PHOTO_UNREADABLE', error);
   }
 }
 
@@ -135,18 +137,39 @@ async function cleanUploadedPhoto(file, options) {
 }
 
 /**
- * Express middleware after multer: cleans every uploaded photo (req.file, or req.files as an array or by field), or
- * answers the refusal.
+ * Cleans an uploaded photo or video (a multer file, held in memory or on disk at file.path) in place. A video keeps its
+ * size and type. Anything else is left alone. `options` go to the photo cleaner or, for a video on disk, its file cleaner.
  */
-async function removeUploadedPhotoMetadata(req, res, next) {
+async function cleanUploadedMedia(file, options) {
+  if (!file?.mimetype?.startsWith('video/')) return cleanUploadedPhoto(file, options);
+  try {
+    if (file.path) await removeVideoFileMetadata(file.path, options);
+    else await removeVideoMetadata(file.buffer);
+    return file;
+  } catch (error) {
+    if (!(error instanceof UnreadableVideoError)) throw error;
+    logger.warn('Video refused: its metadata could not be removed', {
+      originalname: file.originalname, declared: file.mimetype, error: error.message,
+    });
+    throw new MediaNotCleanedError(UNREADABLE_VIDEO, 415, 'VIDEO_UNREADABLE', error);
+  }
+}
+
+/**
+ * Express middleware after multer: cleans every uploaded photo and video (req.file, or req.files as an array or by
+ * field), or answers the refusal.
+ */
+async function removeUploadedMediaMetadata(req, res, next) {
   const files = req.file ? [req.file] : Array.isArray(req.files) ? req.files : Object.values(req.files || {}).flat();
   try {
-    for (const file of files) await cleanUploadedPhoto(file);
+    for (const file of files) await cleanUploadedMedia(file);
   } catch (error) {
-    if (!(error instanceof PhotoNotCleanedError)) return next(error);
+    if (!(error instanceof MediaNotCleanedError)) return next(error);
     return res.status(error.status).json({ error: error.message, code: error.code });
   }
   return next();
 }
 
-module.exports = { PhotoNotCleanedError, removePhotoMetadata, cleanUploadedPhoto, removeUploadedPhotoMetadata };
+module.exports = {
+  MediaNotCleanedError, removePhotoMetadata, cleanUploadedPhoto, cleanUploadedMedia, removeUploadedMediaMetadata,
+};

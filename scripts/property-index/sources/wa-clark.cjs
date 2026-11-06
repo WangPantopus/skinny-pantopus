@@ -236,6 +236,12 @@ async function readFacts(zip, records, today) {
     facts.sale_price = positive(row.SalePrice);
     put(facts, 'sale_document', word(row.deed_num));
   }
+  for (const record of records.values()) {
+    if (record.layerSale && !record.facts.sale_price) {
+      record.facts.sale_price = record.layerSale.price;
+      record.facts.sale_date = record.layerSale.date;
+    }
+  }
 }
 
 function addressOf(row) {
@@ -267,7 +273,7 @@ async function build({ work, today = new Date() }) {
   let noAddress = 0;
   for await (const row of cachedLayer(path.join(dir, 'taxlots.jsonl'), TAXLOTS_URL, [
     'OBJECTID', 'Prop_id', 'LandProp_id', 'Pt1', 'SitusHsNum', 'SitusHsSub', 'SitusBldgNum', 'SitusUnit', 'SitusStDir', 'SitusStName', 'SitusStType',
-    'SitusCity', 'SitusZip1', 'BldgEffYrBlt', 'BldgType', 'BldgPercentComp', 'BldgCount', 'Units', 'JurisDesc', 'SchoolDistrict', 'PropertyUseClass',
+    'SitusCity', 'SitusZip1', 'SaleDate', 'SaleAmount', 'BldgYrBlt', 'BldgEffYrBlt', 'BldgType', 'BldgPercentComp', 'BldgCount', 'Units', 'JurisDesc', 'SchoolDistrict', 'PropertyUseClass',
   ])) {
     const id = String(row.Prop_id);
     if (row.LandProp_id) landOf.set(id, String(row.LandProp_id));
@@ -279,6 +285,7 @@ async function build({ work, today = new Date() }) {
     const use = HOME_USES.get(row.Pt1);
     const [kind, homeType] = use || [VACANT_USES.has(row.Pt1) ? 'parcel' : 'other', null];
     const facts = { parcel_number: id, county: 'Clark County', fips: FIPS, address_on_record: recordLine(row) };
+    put(facts, 'year_built', positive(row.BldgYrBlt));
     put(facts, 'effective_year_built', positive(row.BldgEffYrBlt));
     put(facts, 'building_type', word(row.BldgType));
     const percent = positive(row.BldgPercentComp);
@@ -288,7 +295,9 @@ async function build({ work, today = new Date() }) {
     put(facts, 'municipality', word(row.JurisDesc));
     put(facts, 'school_district', word(row.SchoolDistrict));
     put(facts, 'property_class', word(row.PropertyUseClass));
-    records.set(id, { id: `pp:${kind}:${FIPS}:${id}`, kind, home_type: homeType, address, facts, sourceId: id });
+    // The layer keeps sales older than the file's first year (2016).
+    const layerSale = positive(row.SaleAmount) && row.SaleDate ? { price: positive(row.SaleAmount), date: new Date(row.SaleDate).toISOString().slice(0, 10) } : null;
+    records.set(id, { id: `pp:${kind}:${FIPS}:${id}`, kind, home_type: homeType, address, facts, sourceId: id, layerSale });
   }
   log(`accounts with an address: ${records.size}, without: ${noAddress}`);
 
@@ -363,7 +372,7 @@ async function build({ work, today = new Date() }) {
   }
 
   for (const record of records.values()) {
-    const { sourceId, taxAreaYear, isComplexLand, ...kept } = record;
+    const { sourceId, taxAreaYear, isComplexLand, layerSale, ...kept } = record;
     if (isComplexLand) continue;
     // A rental building's facts sit at every street number it has.
     if (record.kind === 'building') {

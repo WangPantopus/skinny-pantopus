@@ -93,7 +93,7 @@ track across apps/sites owned by other companies (always *No* here).
 
 | Field | Evidence | Apple type |
 |-------|----------|-----------|
-| Photos / videos | Camera + photo library (profile photos, listing images, mail capture). iOS `NSCameraUsageDescription` / `NSPhotoLibraryUsageDescription`; Android `CAMERA` / `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO`. Upload via `MultipartUploader`. | Photos or Videos |
+| Photos / videos | Camera + photo library (profile photos, listing images, mail capture). iOS `NSCameraUsageDescription` / `NSPhotoLibraryUsageDescription`; Android `CAMERA`; photos and videos come from the system pickers, which need no media permission (the manifest removes `READ_MEDIA_IMAGES` and `READ_MEDIA_VIDEO`). Upload via `MultipartUploader`. | Photos or Videos |
 | Audio (voice messages) | Chat voice messages. iOS `NSMicrophoneUsageDescription`; Android — recorded in-chat. | Audio Data |
 | Messages (direct / chat) | `Features/Chat`, Socket.IO realtime + `ChatEndpoints` | Emails or Text Messages |
 | Other user content (posts, gigs, listings, reviews, documents, profile bio, polls, home records) | Compose flows (`Features/Compose/**`), Homes documents (`UploadDocumentFormViewModel`), posts/listings/gigs/reviews endpoints | Other User Content |

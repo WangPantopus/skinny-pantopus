@@ -25,6 +25,7 @@ const FACTS = {
   rooms: { section: 'building', label: 'Total rooms', format: 'count', scope: 'unit' },
   bedrooms: { section: 'building', label: 'Bedrooms', format: 'count', scope: 'unit' },
   bathrooms: { section: 'building', label: 'Bathrooms', format: 'baths', scope: 'unit' },
+  kitchens: { section: 'building', label: 'Kitchens', format: 'count', scope: 'unit' },
   full_baths: { section: 'building', label: 'Full baths', format: 'count', scope: 'unit' },
   three_quarter_baths: { section: 'building', label: 'Three-quarter baths', format: 'count', scope: 'unit' },
   half_baths: { section: 'building', label: 'Half baths', format: 'count', scope: 'unit' },
@@ -53,6 +54,9 @@ const FACTS = {
   heating: { section: 'utilities', label: 'Heating', format: 'text', scope: 'unit' },
   heating_fuel: { section: 'utilities', label: 'Heating fuel', format: 'text', scope: 'unit' },
   cooling: { section: 'utilities', label: 'Cooling', format: 'text', scope: 'unit' },
+  water_source: { section: 'utilities', label: 'Water', format: 'text', scope: 'parcel' },
+  sewer: { section: 'utilities', label: 'Sewer', format: 'text', scope: 'parcel' },
+  utilities: { section: 'utilities', label: 'Utilities', format: 'text', scope: 'parcel' },
 
   // Parking
   garage: { section: 'parking', label: 'Garage', format: 'text', scope: 'unit' },
@@ -86,6 +90,8 @@ const FACTS = {
   market_land_value: { section: 'assessment', label: 'County market land value', format: 'money', scope: 'unit', value: true },
   market_building_value: { section: 'assessment', label: 'County market improvement value', format: 'money', scope: 'unit', value: true },
   assessed_value: { section: 'assessment', label: 'Assessed value', format: 'money', scope: 'unit', value: true },
+  assessed_land_value: { section: 'assessment', label: 'Assessed land value', format: 'money', scope: 'unit', value: true },
+  assessed_building_value: { section: 'assessment', label: 'Assessed improvement value', format: 'money', scope: 'unit', value: true },
   taxable_value: { section: 'assessment', label: 'Taxable value', format: 'money', scope: 'unit', value: true },
   value_year: { section: 'assessment', label: 'Value year', format: 'year', scope: 'unit', value: true },
   value_history: { section: 'assessment', format: 'history', scope: 'unit', value: true, owner: true },
@@ -98,6 +104,7 @@ const FACTS = {
   // Last sale
   sale_price: { section: 'sale', label: 'Sale price', format: 'money', scope: 'unit', value: true },
   sale_date: { section: 'sale', label: 'Sale date', format: 'date', scope: 'unit', value: true },
+  sale_month: { section: 'sale', label: 'Sale date', format: 'raw', scope: 'unit', value: true },
   sale_document: { section: 'sale', label: 'Document number', format: 'code', scope: 'unit', value: true },
 };
 

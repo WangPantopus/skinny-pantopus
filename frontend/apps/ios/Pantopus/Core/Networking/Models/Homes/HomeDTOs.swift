@@ -425,6 +425,8 @@ public struct CreateHomeRequest: Encodable, Sendable {
     /// `move_in_date` (YYYY-MM-DD). Set from the wizard's "Just moved in"
     /// switch; drives the first-week card. Web and Android write it too.
     public let moveInDate: String?
+    /// "My home doesn't have a unit number", said at the address step.
+    public let noUnitAttestation: Bool?
 
     public init(
         address: String,
@@ -446,6 +448,7 @@ public struct CreateHomeRequest: Encodable, Sendable {
         isOwner: Bool? = nil,
         role: String? = nil,
         moveInDate: String? = nil,
+        noUnitAttestation: Bool? = nil,
         addressId: String? = nil
     ) {
         self.addressId = addressId
@@ -468,9 +471,11 @@ public struct CreateHomeRequest: Encodable, Sendable {
         self.isOwner = isOwner
         self.role = role
         self.moveInDate = moveInDate
+        self.noUnitAttestation = noUnitAttestation
     }
 
     private enum CodingKeys: String, CodingKey {
+        case noUnitAttestation = "no_unit_attestation"
         case addressId = "address_id"
         case address
         case unitNumber = "unit_number"

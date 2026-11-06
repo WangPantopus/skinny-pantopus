@@ -36,6 +36,11 @@ function build() {
   records.at(-1).address.zip = '00002';
   // A record the source marks as protected.
   records.push({ ...home('property', 'house', 'P1', { number: '1200', name: 'EXAMPLE TRUST', suffix: 'LN' }, {}), facts: {}, restricted: true });
+  // The same number and street in two urbanizaciones of one Puerto Rico ZIP.
+  for (const urbanization of ['EJEMPLO ALTO', 'EJEMPLO BAJO']) {
+    records.push(home('property', 'house', `PR${urbanization.length}${urbanization[8]}`, { number: '150', name: 'CALLE EJEMPLO', urbanization }, { year_built: 1985 }));
+  }
+  records.push(home('property', 'house', 'PRL', { number: 'A1', name: 'CALLE EJEMPLO', urbanization: 'EJEMPLO ALTO' }, { year_built: 1986 }));
   return [{
     fips: FIPS, state: 'ZZ', name: 'Example County', publisher: 'Example County Assessor', dataset: 'test file', method: 'county', source: 'synthetic',
     as_of: '2026-11-03', stale_after_days: 90, records,

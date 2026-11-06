@@ -27,9 +27,10 @@ const { vendorStatusFor, outcomeFor, RECONCILE_GRACE_MS, RECONCILE_BATCH } = req
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const lobMailProvider = require('./lobMailProvider');
 const mockMailProvider = require('./mockMailProvider');
+const postgridMailProvider = require('./postgridMailProvider');
 const observability = require('./addressVerificationObservability');
 
-const PROVIDERS = { lob: lobMailProvider, mock: mockMailProvider };
+const PROVIDERS = { lob: lobMailProvider, mock: mockMailProvider, postgrid: postgridMailProvider };
 const FLOW_SETTINGS = {
   home_postcard: 'MAIL_PROVIDER_HOME_POSTCARD',
   address_verification: 'MAIL_PROVIDER_ADDRESS_VERIFICATION',
@@ -87,6 +88,7 @@ class MailVendorService {
   providerForPiece(name, vendorJobId) {
     if (name && PROVIDERS[name]) return PROVIDERS[name];
     if (typeof vendorJobId === 'string' && vendorJobId.startsWith('mock_')) return mockMailProvider;
+    if (typeof vendorJobId === 'string' && vendorJobId.startsWith('postcard_')) return postgridMailProvider;
     return typeof vendorJobId === 'string' && vendorJobId.startsWith('psc_') ? lobMailProvider : this._defaultProvider();
   }
 
