@@ -33,6 +33,12 @@ function* made() {
   for (const [urbanization, offset] of [['EJEMPLO ALTO', 0], ['EJEMPLO BAJO', 8]]) {
     yield { ...row('nad', { number: '150', name: 'CALLE EJEMPLO', urbanization }), state: 'PR', zip: '00926', city: 'EJEMPLOVILLE', lng: -66.1 + offset / 1000, lat: 18.4 + offset / 1000 };
   }
+  // The street the local rigs' address stand-ins answer for: a house, a small building, a tower.
+  const rig = { name: 'EXAMPLE TRUST', suffix: 'LN', city: 'VANCOUVER' };
+  yield row('nad', { ...rig, number: '5390', quality: 'rooftop', use: 'residential' }, 40);
+  yield row('nad', { ...rig, number: '5391', quality: 'structure' }, 41);
+  for (const unit of ['101', '102', '103']) yield row('nad', { ...rig, number: '5391', unit }, 41);
+  for (let i = 1; i <= 40; i += 1) yield row('nad', { ...rig, number: '5392', unit: `${1200 + i}` }, 42);
 }
 
 async function* rows() {

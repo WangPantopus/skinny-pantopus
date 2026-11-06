@@ -53,6 +53,7 @@ const {
   googleProvider,
   smartyProvider,
 } = require('../services/addressValidation');
+const registryUnits = require('../services/propertyRecords/registryUnits');
 const addressVerificationObservability = require('../services/addressValidation/addressVerificationObservability');
 const { usesGooglePostal } = require('../services/addressValidation/postalAdapter');
 const { redactStreet, queryKnowsNumber } = require('../utils/addressRedaction');
@@ -167,7 +168,8 @@ const createHomeSchema = Joi.object({
   // Require coordinates either in location or in latitude/longitude
   const hasNested = value.location && Number.isFinite(value.location.latitude) && Number.isFinite(value.location.longitude);
   const hasTop = Number.isFinite(value.latitude) && Number.isFinite(value.longitude);
-  if (!hasNested && !hasTop) {
+  // A validated address needn't have a point: military mail and some rural routes have none anywhere.
+  if (!hasNested && !hasTop && !value.address_id) {
     return helpers.message({ custom: 'latitude and longitude are required (as top-level numbers or nested location object)' });
   }
 
@@ -836,7 +838,7 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
     const classifyStoredAddress = async (storedAddress, includeHousehold) => addressDecisionEngine.classify({
       ...pipelineService.buildStoredDecisionInputs(storedAddress),
       use_provider_place_for_business: getRolloutFlag('enforcePlaceProviderBusiness'),
-      use_provider_unit_intelligence: getRolloutFlag('enableSecondaryProvider'),
+      use_provider_unit_intelligence: registryUnits.usesProviderUnits(storedAddress),
       use_provider_parcel_for_classification: getRolloutFlag('enforceParcelProviderClassification'),
       provider_parcel_max_age_days: addressConfig.parcelIntel.cacheDays,
       household: includeHousehold
@@ -959,7 +961,7 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       addressVerdict = addressDecisionEngine.classify({
         ...storedInputs,
         use_provider_place_for_business: getRolloutFlag('enforcePlaceProviderBusiness'),
-        use_provider_unit_intelligence: getRolloutFlag('enableSecondaryProvider'),
+        use_provider_unit_intelligence: registryUnits.usesProviderUnits(canonicalAddress),
         use_provider_parcel_for_classification: getRolloutFlag('enforceParcelProviderClassification'),
         provider_parcel_max_age_days: addressConfig.parcelIntel.cacheDays,
       });
@@ -1221,9 +1223,10 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       homeData.location = formatLocationForDB(coords.latitude, coords.longitude);
       homeData.map_center_lat = coords.latitude;
       homeData.map_center_lng = coords.longitude;
-      homeData.geocode_provider = coordsAreCanonical ? 'google_validation' : 'client';
+      const registryPoint = coordsAreCanonical && canonicalAddress.geocode_provider === 'pantopus_registry';
+      homeData.geocode_provider = registryPoint ? 'pantopus_registry' : coordsAreCanonical ? 'google_validation' : 'client';
       homeData.geocode_mode = coordsAreCanonical ? 'verified' : 'user_asserted';
-      homeData.geocode_accuracy = coordsAreCanonical ? 'rooftop' : null;
+      homeData.geocode_accuracy = registryPoint ? canonicalAddress.geocode_accuracy : coordsAreCanonical ? 'rooftop' : null;
       homeData.geocode_place_id = coordsAreCanonical ? (canonicalAddress.geocode_place_id || null) : null;
       homeData.geocode_source_flow = 'home_onboarding';
       homeData.geocode_created_at = new Date().toISOString();
@@ -1350,13 +1353,15 @@ router.post('/', verifyToken, (req, res, next) => {
         message: 'Home and private setup saved; verification remains required.' });
       // A home outside every content region starts one, as a new viewing area
       // does (location.js); in the background, so the response doesn't wait.
-      ensureRegionCoverage({
-        latitude: Number(prepared.home.map_center_lat),
-        longitude: Number(prepared.home.map_center_lng),
-        city: prepared.home.city,
-        state: prepared.home.state,
-        userId: actorId,
-      }).catch(() => {});
+      if (Number.isFinite(prepared.home.map_center_lat)) {
+        ensureRegionCoverage({
+          latitude: Number(prepared.home.map_center_lat),
+          longitude: Number(prepared.home.map_center_lng),
+          city: prepared.home.city,
+          state: prepared.home.state,
+          userId: actorId,
+        }).catch(() => {});
+      }
       if (result.ownership_claim_id) {
         try {
           const { notifyOwnershipVerificationNeeded } = require('../services/notificationService');

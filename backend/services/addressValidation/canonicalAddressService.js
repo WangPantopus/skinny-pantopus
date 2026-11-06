@@ -17,6 +17,7 @@
  */
 
 const logger = require('../../utils/logger');
+const addressRegistryConfig = require('../../config/addressRegistry');
 const supabaseAdmin = require('../../config/supabaseAdmin');
 const { computeAddressHash } = require('../../utils/normalizeAddress');
 
@@ -268,6 +269,12 @@ class CanonicalAddressService {
   _mergeStoredMetadata(existingAddress, nextFields) {
     const merged = { ...nextFields };
 
+    // A registry point isn't replaced by a passing Google answer: Google's would have to be deleted again in 30 days.
+    if (existingAddress?.geocode_provider === 'pantopus_registry' && nextFields.geocode_provider !== 'pantopus_registry') {
+      delete merged.geocode_lat;
+      delete merged.geocode_lng;
+    }
+
     if (existingAddress?.validation_raw_response || nextFields.validation_raw_response) {
       merged.validation_raw_response = {
         ...(existingAddress?.validation_raw_response || {}),
@@ -391,8 +398,17 @@ class CanonicalAddressService {
   _buildPostalFields(address, google, smarty, place, providerPlace, unitIntelligence, parcelIntel) {
     const fields = {};
 
-    // Geocode from Google (or from normalized address)
-    if (google?.geocode) {
+    // Pantopus's own point when the registry has one and its switch is on: it can be kept. Else from Google (or from normalized address)
+    const registryPoint = addressRegistryConfig.coordinatesMode() === 'on' ? unitIntelligence?.registry_point : null;
+    if (registryPoint) {
+      fields.geocode_lat = registryPoint.lat;
+      fields.geocode_lng = registryPoint.lng;
+      fields.geocode_provider = 'pantopus_registry';
+      fields.geocode_mode = 'verified';
+      fields.geocode_accuracy = registryPoint.accuracy;
+      fields.geocode_source_flow = 'address_validation';
+      fields.geocode_created_at = new Date().toISOString();
+    } else if (google?.geocode) {
       fields.geocode_lat = google.geocode.lat;
       fields.geocode_lng = google.geocode.lng;
     } else if (address.lat != null && address.lng != null) {
@@ -628,6 +644,9 @@ class CanonicalAddressService {
 
     if (Object.keys(rawResponse).length > 0) {
       fields.validation_raw_response = rawResponse;
+    }
+    if (registryPoint) {
+      fields.provider_versions = { ...(fields.provider_versions || {}), address_registry: { id: registryPoint.id, release: registryPoint.release } };
     }
 
     return fields;
