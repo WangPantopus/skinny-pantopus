@@ -153,7 +153,8 @@ function refreshSoon(home, copy) {
 async function forHome(home) {
   if (!config.enabled() || !home) return null;
   const stored = storedCopy(home);
-  if (stored) {
+  // Taking a county off its live list takes its copies off the screens too; they stay on the Home for when it comes back.
+  if (stored && config.modeFor(stored.jurisdiction) === 'live') {
     refreshSoon(home, stored);
     return { copy: stored, lookup: null };
   }
