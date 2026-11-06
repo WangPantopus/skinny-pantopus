@@ -138,6 +138,10 @@ data class AddHomeUiState(
     val showsAccessSetup: Boolean
         get() = !isClaimingExistingHome
 
+    /** The Review step's "We added your home's details" line; a claim on an existing Home reviews no details. */
+    val showsAddedDetailsOnReview: Boolean
+        get() = lateDetailsAdded && !isClaimingExistingHome
+
     /**
      * Address label rendered in the confirm sheet — the server's
      * `formatted_address` when present, else the typed fields.

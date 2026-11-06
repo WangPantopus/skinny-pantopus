@@ -588,7 +588,7 @@ private fun ReviewStep(
                 )
             }
         }
-    if (state.lateDetailsAdded && !state.isClaimingExistingHome) AddedDetailsLine(onReview = onReviewDetails)
+    if (state.showsAddedDetailsOnReview) AddedDetailsLine(onReview = onReviewDetails)
     ReviewSummaryBlock(rows = rows)
     if (!state.isClaimingExistingHome) SubcopyBlock("Saving starts your private Home setup. Residency and ownership require verification.")
 }
