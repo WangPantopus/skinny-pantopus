@@ -42,13 +42,37 @@ function withObjectCenters(res: { suggestions?: RawGeoSuggestion[] }): { suggest
   return { ...res, suggestions };
 }
 
-export async function autocomplete(q: string): Promise<{ suggestions: GeoSuggestion[] }> {
-  return withObjectCenters(await get<{ suggestions: RawGeoSuggestion[] }>(`/api/geo/autocomplete?q=${encodeURIComponent(q)}`));
+/**
+ * `near` favors suggestions close to a point (the server rounds it to about a
+ * kilometer); `streetOnly` keeps street addresses, for house-number-and-street
+ * fields. Both are optional; a server without them ignores them.
+ */
+export type AutocompleteOptions = {
+  near?: { lat: number; lng: number } | null;
+  streetOnly?: boolean;
+};
+
+function autocompletePath(q: string, options?: AutocompleteOptions): string {
+  let path = `/api/geo/autocomplete?q=${encodeURIComponent(q)}`;
+  const near = options?.near;
+  if (near && Number.isFinite(near.lat) && Number.isFinite(near.lng)) {
+    path += `&lat=${near.lat.toFixed(2)}&lng=${near.lng.toFixed(2)}`;
+  }
+  if (options?.streetOnly) path += '&kind=address';
+  return path;
 }
 
-export async function autocompleteWithAbort(q: string, signal: AbortSignal): Promise<{ suggestions: GeoSuggestion[] }> {
+export async function autocomplete(q: string, options?: AutocompleteOptions): Promise<{ suggestions: GeoSuggestion[] }> {
+  return withObjectCenters(await get<{ suggestions: RawGeoSuggestion[] }>(autocompletePath(q, options)));
+}
+
+export async function autocompleteWithAbort(
+  q: string,
+  signal: AbortSignal,
+  options?: AutocompleteOptions,
+): Promise<{ suggestions: GeoSuggestion[] }> {
   return withObjectCenters(
-    await apiRequest<{ suggestions: RawGeoSuggestion[] }>('GET', `/api/geo/autocomplete?q=${encodeURIComponent(q)}`, undefined, { signal }),
+    await apiRequest<{ suggestions: RawGeoSuggestion[] }>('GET', autocompletePath(q, options), undefined, { signal }),
   );
 }
 
