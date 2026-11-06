@@ -210,6 +210,14 @@ struct ChooseNeighborCard: View {
                 .background(Theme.Color.appBg)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .accessibilityIdentifier("neighbor.recipientQuery")
+                .onChange(of: viewModel.recipientQuery) { _, text in viewModel.addressSuggestions.textChanged(text) }
+            AddressSuggestionList(
+                suggestions: viewModel.addressSuggestions,
+                identifier: "neighbor.addressSuggestion"
+            ) { suggestion in
+                searchFocused = false
+                Task { await viewModel.chooseSuggestion(suggestion) }
+            }
             Button(viewModel.recipientSearchState == .loading ? "Searching…" : "Search homes", action: search)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Theme.Color.primaryInk)
