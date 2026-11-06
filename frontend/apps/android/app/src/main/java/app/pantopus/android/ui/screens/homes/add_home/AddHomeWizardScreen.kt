@@ -234,6 +234,13 @@ private fun AddressEntryError(
                 Text("Try again")
             }
             TextButton(onClick = viewModel::onLeading) { Text("Edit address") }
+            if (state.offersNoUnitAttestation) {
+                TextButton(
+                    onClick = viewModel::attestNoUnit,
+                    enabled = !state.isCheckingAddress && state.isSessionCurrent,
+                    modifier = Modifier.testTag("addHome_noUnitAttestation"),
+                ) { Text("My home doesn't have a unit number") }
+            }
         }
     }
 }
@@ -477,7 +484,7 @@ private fun ConfirmStep(
             ZipMismatchBanner(mismatch = mismatch, onApply = onApplyGeocodedZip)
         } ?: run {
             if (state.isGeocodeResolved) {
-                state.geocodedAddress?.let { GeocodeConfirmationBlock(it) }
+                state.geocodedAddress?.let { GeocodeConfirmationBlock(it, state.postalNotice) }
             }
         }
         AddressConfirmationFields(state)
@@ -943,10 +950,48 @@ private fun zipMismatchMessage(mismatch: AddHomeZipMismatch): String =
         "but ${mismatch.street} is in the ${mismatch.correctedZip} ZIP."
 
 @Composable
-private fun GeocodeConfirmationBlock(address: AddHomeGeocodedAddress) {
+private fun GeocodeConfirmationBlock(
+    address: AddHomeGeocodedAddress,
+    postalNotice: AddHomePostalNotice?,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         GeocodeMapStrip(address)
-        AddressRecognizedRow(address)
+        if (postalNotice != null) AddHomePostalNoticeRow(postalNotice) else AddressRecognizedRow(address)
+    }
+}
+
+/** What USPS said, when it isn't a yes and the person can still continue. */
+@Composable
+private fun AddHomePostalNoticeRow(notice: AddHomePostalNotice) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Radii.md))
+                .background(PantopusColors.warningBg)
+                .border(
+                    width = 1.dp,
+                    color = PantopusColors.warningLight,
+                    shape = RoundedCornerShape(Radii.md),
+                )
+                .padding(horizontal = Spacing.s3, vertical = Spacing.s2)
+                .testTag("addHome_postalNotice")
+                .semantics(mergeDescendants = true) { contentDescription = notice.message },
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2),
+        verticalAlignment = Alignment.Top,
+    ) {
+        PantopusIconImage(
+            icon = notice.icon,
+            contentDescription = null,
+            size = 18.dp,
+            tint = PantopusColors.warningStrong,
+        )
+        Text(
+            text = notice.message,
+            style = PantopusTextStyle.caption,
+            color = PantopusColors.warningDeep,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
