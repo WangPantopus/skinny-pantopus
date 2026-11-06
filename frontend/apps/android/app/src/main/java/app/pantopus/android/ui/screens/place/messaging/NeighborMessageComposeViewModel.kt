@@ -3,9 +3,11 @@ package app.pantopus.android.ui.screens.place.messaging
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.pantopus.android.data.api.models.homediscovery.DiscoveredHomeDto
 import app.pantopus.android.data.api.models.place.NeighborMessageTemplate
 import app.pantopus.android.data.api.models.place.SendNeighborMessageRequest
 import app.pantopus.android.data.api.net.NetworkResult
+import app.pantopus.android.data.homediscovery.HomeDiscoveryRepository
 import app.pantopus.android.data.place.PlaceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,18 +32,26 @@ class NeighborMessageComposeViewModel
     @Inject
     constructor(
         private val repo: PlaceRepository,
+        private val discovery: HomeDiscoveryRepository,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
-        private val homeId: String =
+        /** The sender's Home; address suggestions favor addresses near it. */
+        val homeId: String =
             requireNotNull(savedStateHandle[NEIGHBOR_COMPOSE_HOME_ID_KEY]) {
                 "NeighborMessageComposeViewModel requires a '$NEIGHBOR_COMPOSE_HOME_ID_KEY' nav arg."
             }
         val address: String = savedStateHandle[NEIGHBOR_COMPOSE_ADDRESS_KEY] ?: ""
 
-        // Native has no block-home picker yet (k-anon density hides
-        // membership), so the composer opens recipient-less; a future block
-        // deep-link would populate this.
-        val recipient: ComposeRecipient? = null
+        // Chosen on this screen (Choose a home): an address, never a name.
+        private val _recipient = MutableStateFlow<ComposeRecipient?>(null)
+        val recipient: StateFlow<ComposeRecipient?> = _recipient.asStateFlow()
+
+        private val _recipientQuery = MutableStateFlow("")
+        val recipientQuery: StateFlow<String> = _recipientQuery.asStateFlow()
+
+        private val _recipientSearch = MutableStateFlow<RecipientSearchState>(RecipientSearchState.Idle)
+        val recipientSearch: StateFlow<RecipientSearchState> = _recipientSearch.asStateFlow()
+        private var searchGeneration = 0
 
         private val _state = MutableStateFlow<NeighborComposeUiState>(NeighborComposeUiState.Loading)
         val state: StateFlow<NeighborComposeUiState> = _state.asStateFlow()
@@ -73,6 +83,66 @@ class NeighborMessageComposeViewModel
             }
         }
 
+        fun updateRecipientQuery(text: String) {
+            _recipientQuery.value = text
+            searchGeneration++
+            _recipientSearch.value = RecipientSearchState.Idle
+        }
+
+        /** A house number and a street: at least four characters with a digit and a letter. */
+        fun canSearch(text: String = _recipientQuery.value): Boolean {
+            val query = text.trim()
+            return query.length >= MIN_RECIPIENT_QUERY && query.any(Char::isDigit) && query.any(Char::isLetter) &&
+                _recipientSearch.value !is RecipientSearchState.Loading
+        }
+
+        /** Looks the typed (or picked) address up among discoverable homes. */
+        fun searchRecipients(text: String = _recipientQuery.value) {
+            if (!canSearch(text)) return
+            if (text != _recipientQuery.value) _recipientQuery.value = text
+            val generation = ++searchGeneration
+            val query = text.trim()
+            _recipientSearch.value = RecipientSearchState.Loading
+            viewModelScope.launch {
+                val result = discovery.discover(query)
+                if (generation != searchGeneration) return@launch
+                _recipientSearch.value =
+                    when (result) {
+                        // Discovery's privacy contract: never a redacted or ambiguous address, never your own
+                        // household, never a resident's name.
+                        is NetworkResult.Success ->
+                            RecipientSearchState.Loaded(
+                                result.data.homes.filter {
+                                    it.id != homeId && !it.isMember && it.addressRedacted == false &&
+                                        it.visibility == "public_preview" && !it.address.isNullOrBlank()
+                                },
+                            )
+                        is NetworkResult.Failure ->
+                            RecipientSearchState.Error("Couldn't search homes. Check your connection and try again.")
+                    }
+            }
+        }
+
+        fun selectRecipient(home: DiscoveredHomeDto) {
+            if (_sending.value) return
+            val homes = (_recipientSearch.value as? RecipientSearchState.Loaded)?.homes ?: return
+            val street = home.address
+            if (homes.none { it.id == home.id } || street.isNullOrBlank()) return
+            _recipient.value =
+                ComposeRecipient(
+                    homeId = home.id,
+                    address = street,
+                    relativeLabel = listOfNotNull(home.city, home.state).joinToString(", "),
+                )
+            _sendError.value = null
+        }
+
+        fun changeRecipient() {
+            if (_sending.value) return
+            _recipient.value = null
+            _sendError.value = null
+        }
+
         fun select(templateId: String) {
             _selectedTemplateId.value = templateId
         }
@@ -83,7 +153,7 @@ class NeighborMessageComposeViewModel
         }
 
         fun send() {
-            val recipientHome = recipient ?: return
+            val recipientHome = _recipient.value ?: return
             val template = selectedTemplate() ?: return
             if (_sending.value) return
             _sending.value = true
@@ -106,6 +176,19 @@ class NeighborMessageComposeViewModel
             }
         }
     }
+
+private const val MIN_RECIPIENT_QUERY = 4
+
+/** The Choose a home search. */
+sealed interface RecipientSearchState {
+    data object Idle : RecipientSearchState
+
+    data object Loading : RecipientSearchState
+
+    data class Loaded(val homes: List<DiscoveredHomeDto>) : RecipientSearchState
+
+    data class Error(val message: String) : RecipientSearchState
+}
 
 sealed interface NeighborComposeUiState {
     data object Loading : NeighborComposeUiState

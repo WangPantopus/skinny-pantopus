@@ -55,7 +55,6 @@ import app.pantopus.android.ui.theme.PantopusIconImage
 @Composable
 fun NeighborMessageComposeScreen(
     onBack: () -> Unit,
-    onChangeRecipient: () -> Unit,
     onDone: () -> Unit,
     viewModel: NeighborMessageComposeViewModel = hiltViewModel(),
 ) {
@@ -77,24 +76,22 @@ fun NeighborMessageComposeScreen(
                     message = (state as NeighborComposeUiState.Error).message,
                     onRetry = viewModel::load,
                 )
-            else -> Composer(viewModel = viewModel, onChangeRecipient = onChangeRecipient)
+            else -> Composer(viewModel = viewModel)
         }
     }
 }
 
 @Composable
 @Suppress("LongMethod")
-private fun Composer(
-    viewModel: NeighborMessageComposeViewModel,
-    onChangeRecipient: () -> Unit,
-) {
+private fun Composer(viewModel: NeighborMessageComposeViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val selectedId by viewModel.selectedTemplateId.collectAsStateWithLifecycle()
     val sending by viewModel.sending.collectAsStateWithLifecycle()
     val sendError by viewModel.sendError.collectAsStateWithLifecycle()
+    val recipient by viewModel.recipient.collectAsStateWithLifecycle()
     val templates = (state as? NeighborComposeUiState.Loaded)?.templates.orEmpty()
     val selected = templates.firstOrNull { it.id == selectedId }
-    val canSend = viewModel.recipient != null && selected != null && !sending
+    val canSend = recipient != null && selected != null && !sending
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -105,11 +102,11 @@ private fun Composer(
                     .padding(horizontal = 16.dp),
         ) {
             PlaceDetailSectionLabel(text = "To")
-            val recipient = viewModel.recipient
-            if (recipient != null) {
-                RecipientCard(recipient = recipient, onChange = onChangeRecipient)
+            val chosen = recipient
+            if (chosen != null) {
+                RecipientCard(recipient = chosen, onChange = viewModel::changeRecipient)
             } else {
-                ChooseNeighborCard(onBack = onChangeRecipient)
+                ChooseHomeCard(viewModel = viewModel)
             }
             PrivacyNote()
 
@@ -184,36 +181,6 @@ private fun RecipientCard(
             color = PantopusColors.primary600,
             modifier = Modifier.clickable(onClick = onChange),
         )
-    }
-}
-
-@Composable
-private fun ChooseNeighborCard(onBack: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().placeCard().padding(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        PlaceIconTile(icon = PantopusIcon.Home, tone = PlaceTileTone.MUTED, size = 38.dp)
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = "Choose a neighbor on your block",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.appText,
-            )
-            Text(
-                text = "Open a home on your block to send it a verified heads-up.",
-                fontSize = 13.sp,
-                color = PantopusColors.appTextMuted,
-            )
-            Text(
-                text = "Back to your block",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.primary600,
-                modifier = Modifier.padding(top = 4.dp).clickable(onClick = onBack),
-            )
-        }
     }
 }
 

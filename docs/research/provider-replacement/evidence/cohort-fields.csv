@@ -1,0 +1,1795 @@
+Source ID,Property type,Field,Accounts,Observed,Status
+FL,House,Year built,6111807,6107738,observed
+FL,House,Effective year built,6111807,6108294,observed
+FL,House,Living area,6111807,,unscored for source/subject
+FL,House,Gross area,6111807,,unscored for source/subject
+FL,House,Ground floor area,6111807,,unscored for source/subject
+FL,House,Stories,6111807,,unscored for source/subject
+FL,House,Bedrooms,6111807,,unscored for source/subject
+FL,House,Bathrooms,6111807,,unscored for source/subject
+FL,House,Full baths,6111807,,unscored for source/subject
+FL,House,Partial baths,6111807,,unscored for source/subject
+FL,House,Fireplaces,6111807,,unscored for source/subject
+FL,House,Architectural style,6111807,,unscored for source/subject
+FL,House,Condition,6111807,,unscored for source/subject
+FL,House,Quality,6111807,6103696,observed
+FL,House,Buildings on the parcel,6111807,6107958,observed
+FL,House,Exterior walls,6111807,,unscored for source/subject
+FL,House,Roof cover,6111807,,unscored for source/subject
+FL,House,Heating,6111807,,unscored for source/subject
+FL,House,Cooling,6111807,,unscored for source/subject
+FL,House,Garage,6111807,,unscored for source/subject
+FL,House,Parking type,6111807,,unscored for source/subject
+FL,House,Parking spaces,6111807,,unscored for source/subject
+FL,House,Parking area,6111807,,unscored for source/subject
+FL,House,Lot size,6111807,6059366,observed
+FL,House,Lot area,6111807,6059366,observed
+FL,House,Lot number,6111807,,unscored for source/subject
+FL,House,Address on record,6111807,6107940,observed
+FL,House,ZIP+4,6111807,0,measured zero
+FL,House,Parcel number (APN),6111807,6111807,observed
+FL,House,County,6111807,6111807,observed
+FL,House,County code (FIPS),6111807,6111807,observed
+FL,House,Municipality,6111807,,unscored for source/subject
+FL,House,Subdivision,6111807,,unscored for source/subject
+FL,House,Tax code area,6111807,6098331,observed
+FL,House,Property type,6111807,6111807,observed
+FL,House,Property class,6111807,6111807,observed
+FL,House,Property subtype,6111807,,unscored for source/subject
+FL,House,Land use,6111807,6111807,observed
+FL,House,County use code,6111807,1829850,observed
+FL,House,Occupancy,6111807,,unscored for source/subject
+FL,House,Legal description,6111807,6111784,observed
+FL,House,ATTOM ID,6111807,,unscored for source/subject
+FL,House,Estimated value,6111807,,unscored for source/subject
+FL,House,Estimate range,6111807,,unscored for source/subject
+FL,House,Confidence score,6111807,,unscored for source/subject
+FL,House,Estimate date,6111807,,unscored for source/subject
+FL,Condo,Year built,1616522,1613451,observed
+FL,Condo,Effective year built,1616522,1613472,observed
+FL,Condo,Living area,1616522,,unscored for source/subject
+FL,Condo,Gross area,1616522,,unscored for source/subject
+FL,Condo,Ground floor area,1616522,,unscored for source/subject
+FL,Condo,Stories,1616522,,unscored for source/subject
+FL,Condo,Bedrooms,1616522,,unscored for source/subject
+FL,Condo,Bathrooms,1616522,,unscored for source/subject
+FL,Condo,Full baths,1616522,,unscored for source/subject
+FL,Condo,Partial baths,1616522,,unscored for source/subject
+FL,Condo,Fireplaces,1616522,,unscored for source/subject
+FL,Condo,Architectural style,1616522,,unscored for source/subject
+FL,Condo,Condition,1616522,,unscored for source/subject
+FL,Condo,Quality,1616522,1606480,observed
+FL,Condo,Buildings on the parcel,1616522,,unscored for source/subject
+FL,Condo,Exterior walls,1616522,,unscored for source/subject
+FL,Condo,Roof cover,1616522,,unscored for source/subject
+FL,Condo,Heating,1616522,,unscored for source/subject
+FL,Condo,Cooling,1616522,,unscored for source/subject
+FL,Condo,Garage,1616522,,unscored for source/subject
+FL,Condo,Parking type,1616522,,unscored for source/subject
+FL,Condo,Parking spaces,1616522,,unscored for source/subject
+FL,Condo,Parking area,1616522,,unscored for source/subject
+FL,Condo,Lot size,1616522,,unscored for source/subject
+FL,Condo,Lot area,1616522,,unscored for source/subject
+FL,Condo,Lot number,1616522,,unscored for source/subject
+FL,Condo,Address on record,1616522,1611222,observed
+FL,Condo,ZIP+4,1616522,0,measured zero
+FL,Condo,Parcel number (APN),1616522,1616522,observed
+FL,Condo,County,1616522,1616522,observed
+FL,Condo,County code (FIPS),1616522,1616522,observed
+FL,Condo,Municipality,1616522,,unscored for source/subject
+FL,Condo,Subdivision,1616522,,unscored for source/subject
+FL,Condo,Tax code area,1616522,1616402,observed
+FL,Condo,Property type,1616522,1616522,observed
+FL,Condo,Property class,1616522,1616522,observed
+FL,Condo,Property subtype,1616522,,unscored for source/subject
+FL,Condo,Land use,1616522,1616522,observed
+FL,Condo,County use code,1616522,715793,observed
+FL,Condo,Occupancy,1616522,,unscored for source/subject
+FL,Condo,Legal description,1616522,1616522,observed
+FL,Condo,ATTOM ID,1616522,,unscored for source/subject
+FL,Condo,Estimated value,1616522,,unscored for source/subject
+FL,Condo,Estimate range,1616522,,unscored for source/subject
+FL,Condo,Confidence score,1616522,,unscored for source/subject
+FL,Condo,Estimate date,1616522,,unscored for source/subject
+FL,Apartment,Year built,18136,18080,observed
+FL,Apartment,Effective year built,18136,18082,observed
+FL,Apartment,Living area,18136,,unscored for source/subject
+FL,Apartment,Gross area,18136,,unscored for source/subject
+FL,Apartment,Ground floor area,18136,,unscored for source/subject
+FL,Apartment,Stories,18136,,unscored for source/subject
+FL,Apartment,Bedrooms,18136,,unscored for source/subject
+FL,Apartment,Bathrooms,18136,,unscored for source/subject
+FL,Apartment,Full baths,18136,,unscored for source/subject
+FL,Apartment,Partial baths,18136,,unscored for source/subject
+FL,Apartment,Fireplaces,18136,,unscored for source/subject
+FL,Apartment,Architectural style,18136,,unscored for source/subject
+FL,Apartment,Condition,18136,,unscored for source/subject
+FL,Apartment,Quality,18136,18079,observed
+FL,Apartment,Buildings on the parcel,18136,18081,observed
+FL,Apartment,Exterior walls,18136,,unscored for source/subject
+FL,Apartment,Roof cover,18136,,unscored for source/subject
+FL,Apartment,Heating,18136,,unscored for source/subject
+FL,Apartment,Cooling,18136,,unscored for source/subject
+FL,Apartment,Garage,18136,,unscored for source/subject
+FL,Apartment,Parking type,18136,,unscored for source/subject
+FL,Apartment,Parking spaces,18136,,unscored for source/subject
+FL,Apartment,Parking area,18136,,unscored for source/subject
+FL,Apartment,Lot size,18136,17189,observed
+FL,Apartment,Lot area,18136,17189,observed
+FL,Apartment,Lot number,18136,,unscored for source/subject
+FL,Apartment,Address on record,18136,17451,observed
+FL,Apartment,ZIP+4,18136,0,measured zero
+FL,Apartment,Parcel number (APN),18136,18136,observed
+FL,Apartment,County,18136,18136,observed
+FL,Apartment,County code (FIPS),18136,18136,observed
+FL,Apartment,Municipality,18136,,unscored for source/subject
+FL,Apartment,Subdivision,18136,,unscored for source/subject
+FL,Apartment,Tax code area,18136,18134,observed
+FL,Apartment,Property type,18136,18136,observed
+FL,Apartment,Property class,18136,18136,observed
+FL,Apartment,Property subtype,18136,,unscored for source/subject
+FL,Apartment,Land use,18136,18136,observed
+FL,Apartment,County use code,18136,10783,observed
+FL,Apartment,Occupancy,18136,,unscored for source/subject
+FL,Apartment,Legal description,18136,18136,observed
+FL,Apartment,ATTOM ID,18136,,unscored for source/subject
+FL,Apartment,Estimated value,18136,,unscored for source/subject
+FL,Apartment,Estimate range,18136,,unscored for source/subject
+FL,Apartment,Confidence score,18136,,unscored for source/subject
+FL,Apartment,Estimate date,18136,,unscored for source/subject
+FL,Office,Year built,59771,59623,observed
+FL,Office,Effective year built,59771,59630,observed
+FL,Office,Living area,59771,,unscored for source/subject
+FL,Office,Gross area,59771,,unscored for source/subject
+FL,Office,Ground floor area,59771,,unscored for source/subject
+FL,Office,Stories,59771,,unscored for source/subject
+FL,Office,Bedrooms,59771,,unscored for source/subject
+FL,Office,Bathrooms,59771,,unscored for source/subject
+FL,Office,Full baths,59771,,unscored for source/subject
+FL,Office,Partial baths,59771,,unscored for source/subject
+FL,Office,Fireplaces,59771,,unscored for source/subject
+FL,Office,Architectural style,59771,,unscored for source/subject
+FL,Office,Condition,59771,,unscored for source/subject
+FL,Office,Quality,59771,59543,observed
+FL,Office,Buildings on the parcel,59771,59582,observed
+FL,Office,Exterior walls,59771,,unscored for source/subject
+FL,Office,Roof cover,59771,,unscored for source/subject
+FL,Office,Heating,59771,,unscored for source/subject
+FL,Office,Cooling,59771,,unscored for source/subject
+FL,Office,Garage,59771,,unscored for source/subject
+FL,Office,Parking type,59771,,unscored for source/subject
+FL,Office,Parking spaces,59771,,unscored for source/subject
+FL,Office,Parking area,59771,,unscored for source/subject
+FL,Office,Lot size,59771,44452,observed
+FL,Office,Lot area,59771,44452,observed
+FL,Office,Lot number,59771,,unscored for source/subject
+FL,Office,Address on record,59771,58917,observed
+FL,Office,ZIP+4,59771,0,measured zero
+FL,Office,Parcel number (APN),59771,59771,observed
+FL,Office,County,59771,59771,observed
+FL,Office,County code (FIPS),59771,59771,observed
+FL,Office,Municipality,59771,,unscored for source/subject
+FL,Office,Subdivision,59771,,unscored for source/subject
+FL,Office,Tax code area,59771,59707,observed
+FL,Office,Property type,59771,59771,observed
+FL,Office,Property class,59771,59771,observed
+FL,Office,Property subtype,59771,59771,observed
+FL,Office,Land use,59771,59771,observed
+FL,Office,County use code,59771,33934,observed
+FL,Office,Occupancy,59771,,unscored for source/subject
+FL,Office,Legal description,59771,59770,observed
+FL,Office,ATTOM ID,59771,,unscored for source/subject
+FL,Office,Estimated value,59771,,unscored for source/subject
+FL,Office,Estimate range,59771,,unscored for source/subject
+FL,Office,Confidence score,59771,,unscored for source/subject
+FL,Office,Estimate date,59771,,unscored for source/subject
+MA,House,Year built,1414937,1411408,observed
+MA,House,Effective year built,1414937,,unscored for source/subject
+MA,House,Living area,1414937,1394153,observed
+MA,House,Gross area,1414937,,unscored for source/subject
+MA,House,Ground floor area,1414937,,unscored for source/subject
+MA,House,Stories,1414937,1346596,observed
+MA,House,Bedrooms,1414937,,unscored for source/subject
+MA,House,Bathrooms,1414937,,unscored for source/subject
+MA,House,Full baths,1414937,,unscored for source/subject
+MA,House,Partial baths,1414937,,unscored for source/subject
+MA,House,Fireplaces,1414937,,unscored for source/subject
+MA,House,Architectural style,1414937,1037488,observed
+MA,House,Condition,1414937,,unscored for source/subject
+MA,House,Quality,1414937,,unscored for source/subject
+MA,House,Buildings on the parcel,1414937,,unscored for source/subject
+MA,House,Exterior walls,1414937,,unscored for source/subject
+MA,House,Roof cover,1414937,,unscored for source/subject
+MA,House,Heating,1414937,,unscored for source/subject
+MA,House,Cooling,1414937,,unscored for source/subject
+MA,House,Garage,1414937,,unscored for source/subject
+MA,House,Parking type,1414937,,unscored for source/subject
+MA,House,Parking spaces,1414937,,unscored for source/subject
+MA,House,Parking area,1414937,,unscored for source/subject
+MA,House,Lot size,1414937,1409523,observed
+MA,House,Lot area,1414937,1409523,observed
+MA,House,Lot number,1414937,,unscored for source/subject
+MA,House,Address on record,1414937,1361175,observed
+MA,House,ZIP+4,1414937,4,observed
+MA,House,Parcel number (APN),1414937,1414937,observed
+MA,House,County,1414937,1414937,observed
+MA,House,County code (FIPS),1414937,1414937,observed
+MA,House,Municipality,1414937,1414937,observed
+MA,House,Subdivision,1414937,,unscored for source/subject
+MA,House,Tax code area,1414937,,unscored for source/subject
+MA,House,Property type,1414937,1414937,observed
+MA,House,Property class,1414937,1414937,observed
+MA,House,Property subtype,1414937,,unscored for source/subject
+MA,House,Land use,1414937,1414937,observed
+MA,House,County use code,1414937,1414937,observed
+MA,House,Occupancy,1414937,,unscored for source/subject
+MA,House,Legal description,1414937,,unscored for source/subject
+MA,House,ATTOM ID,1414937,,unscored for source/subject
+MA,House,Estimated value,1414937,,unscored for source/subject
+MA,House,Estimate range,1414937,,unscored for source/subject
+MA,House,Confidence score,1414937,,unscored for source/subject
+MA,House,Estimate date,1414937,,unscored for source/subject
+MA,Townhouse,Year built,700,700,observed
+MA,Townhouse,Effective year built,700,,unscored for source/subject
+MA,Townhouse,Living area,700,700,observed
+MA,Townhouse,Gross area,700,,unscored for source/subject
+MA,Townhouse,Ground floor area,700,,unscored for source/subject
+MA,Townhouse,Stories,700,698,observed
+MA,Townhouse,Bedrooms,700,,unscored for source/subject
+MA,Townhouse,Bathrooms,700,,unscored for source/subject
+MA,Townhouse,Full baths,700,,unscored for source/subject
+MA,Townhouse,Partial baths,700,,unscored for source/subject
+MA,Townhouse,Fireplaces,700,,unscored for source/subject
+MA,Townhouse,Architectural style,700,0,measured zero
+MA,Townhouse,Condition,700,,unscored for source/subject
+MA,Townhouse,Quality,700,,unscored for source/subject
+MA,Townhouse,Buildings on the parcel,700,,unscored for source/subject
+MA,Townhouse,Exterior walls,700,,unscored for source/subject
+MA,Townhouse,Roof cover,700,,unscored for source/subject
+MA,Townhouse,Heating,700,,unscored for source/subject
+MA,Townhouse,Cooling,700,,unscored for source/subject
+MA,Townhouse,Garage,700,,unscored for source/subject
+MA,Townhouse,Parking type,700,,unscored for source/subject
+MA,Townhouse,Parking spaces,700,,unscored for source/subject
+MA,Townhouse,Parking area,700,,unscored for source/subject
+MA,Townhouse,Lot size,700,699,observed
+MA,Townhouse,Lot area,700,699,observed
+MA,Townhouse,Lot number,700,,unscored for source/subject
+MA,Townhouse,Address on record,700,652,observed
+MA,Townhouse,ZIP+4,700,0,measured zero
+MA,Townhouse,Parcel number (APN),700,700,observed
+MA,Townhouse,County,700,700,observed
+MA,Townhouse,County code (FIPS),700,700,observed
+MA,Townhouse,Municipality,700,700,observed
+MA,Townhouse,Subdivision,700,,unscored for source/subject
+MA,Townhouse,Tax code area,700,,unscored for source/subject
+MA,Townhouse,Property type,700,700,observed
+MA,Townhouse,Property class,700,700,observed
+MA,Townhouse,Property subtype,700,,unscored for source/subject
+MA,Townhouse,Land use,700,700,observed
+MA,Townhouse,County use code,700,700,observed
+MA,Townhouse,Occupancy,700,,unscored for source/subject
+MA,Townhouse,Legal description,700,,unscored for source/subject
+MA,Townhouse,ATTOM ID,700,,unscored for source/subject
+MA,Townhouse,Estimated value,700,,unscored for source/subject
+MA,Townhouse,Estimate range,700,,unscored for source/subject
+MA,Townhouse,Confidence score,700,,unscored for source/subject
+MA,Townhouse,Estimate date,700,,unscored for source/subject
+MA,Condo,Year built,293085,290560,observed
+MA,Condo,Effective year built,293085,,unscored for source/subject
+MA,Condo,Living area,293085,287534,observed
+MA,Condo,Gross area,293085,,unscored for source/subject
+MA,Condo,Ground floor area,293085,,unscored for source/subject
+MA,Condo,Stories,293085,,unscored for source/subject
+MA,Condo,Bedrooms,293085,,unscored for source/subject
+MA,Condo,Bathrooms,293085,,unscored for source/subject
+MA,Condo,Full baths,293085,,unscored for source/subject
+MA,Condo,Partial baths,293085,,unscored for source/subject
+MA,Condo,Fireplaces,293085,,unscored for source/subject
+MA,Condo,Architectural style,293085,,unscored for source/subject
+MA,Condo,Condition,293085,,unscored for source/subject
+MA,Condo,Quality,293085,,unscored for source/subject
+MA,Condo,Buildings on the parcel,293085,,unscored for source/subject
+MA,Condo,Exterior walls,293085,,unscored for source/subject
+MA,Condo,Roof cover,293085,,unscored for source/subject
+MA,Condo,Heating,293085,,unscored for source/subject
+MA,Condo,Cooling,293085,,unscored for source/subject
+MA,Condo,Garage,293085,,unscored for source/subject
+MA,Condo,Parking type,293085,,unscored for source/subject
+MA,Condo,Parking spaces,293085,,unscored for source/subject
+MA,Condo,Parking area,293085,,unscored for source/subject
+MA,Condo,Lot size,293085,,unscored for source/subject
+MA,Condo,Lot area,293085,,unscored for source/subject
+MA,Condo,Lot number,293085,,unscored for source/subject
+MA,Condo,Address on record,293085,264051,observed
+MA,Condo,ZIP+4,293085,95,observed
+MA,Condo,Parcel number (APN),293085,293085,observed
+MA,Condo,County,293085,293085,observed
+MA,Condo,County code (FIPS),293085,293085,observed
+MA,Condo,Municipality,293085,293085,observed
+MA,Condo,Subdivision,293085,,unscored for source/subject
+MA,Condo,Tax code area,293085,,unscored for source/subject
+MA,Condo,Property type,293085,293085,observed
+MA,Condo,Property class,293085,293085,observed
+MA,Condo,Property subtype,293085,,unscored for source/subject
+MA,Condo,Land use,293085,293085,observed
+MA,Condo,County use code,293085,293085,observed
+MA,Condo,Occupancy,293085,,unscored for source/subject
+MA,Condo,Legal description,293085,,unscored for source/subject
+MA,Condo,ATTOM ID,293085,,unscored for source/subject
+MA,Condo,Estimated value,293085,,unscored for source/subject
+MA,Condo,Estimate range,293085,,unscored for source/subject
+MA,Condo,Confidence score,293085,,unscored for source/subject
+MA,Condo,Estimate date,293085,,unscored for source/subject
+MA,Apartment,Year built,5587,5370,observed
+MA,Apartment,Effective year built,5587,,unscored for source/subject
+MA,Apartment,Living area,5587,,unscored for source/subject
+MA,Apartment,Gross area,5587,,unscored for source/subject
+MA,Apartment,Ground floor area,5587,,unscored for source/subject
+MA,Apartment,Stories,5587,5035,observed
+MA,Apartment,Bedrooms,5587,,unscored for source/subject
+MA,Apartment,Bathrooms,5587,,unscored for source/subject
+MA,Apartment,Full baths,5587,,unscored for source/subject
+MA,Apartment,Partial baths,5587,,unscored for source/subject
+MA,Apartment,Fireplaces,5587,,unscored for source/subject
+MA,Apartment,Architectural style,5587,,unscored for source/subject
+MA,Apartment,Condition,5587,,unscored for source/subject
+MA,Apartment,Quality,5587,,unscored for source/subject
+MA,Apartment,Buildings on the parcel,5587,,unscored for source/subject
+MA,Apartment,Exterior walls,5587,,unscored for source/subject
+MA,Apartment,Roof cover,5587,,unscored for source/subject
+MA,Apartment,Heating,5587,,unscored for source/subject
+MA,Apartment,Cooling,5587,,unscored for source/subject
+MA,Apartment,Garage,5587,,unscored for source/subject
+MA,Apartment,Parking type,5587,,unscored for source/subject
+MA,Apartment,Parking spaces,5587,,unscored for source/subject
+MA,Apartment,Parking area,5587,,unscored for source/subject
+MA,Apartment,Lot size,5587,5298,observed
+MA,Apartment,Lot area,5587,5298,observed
+MA,Apartment,Lot number,5587,,unscored for source/subject
+MA,Apartment,Address on record,5587,5038,observed
+MA,Apartment,ZIP+4,5587,0,measured zero
+MA,Apartment,Parcel number (APN),5587,5587,observed
+MA,Apartment,County,5587,5587,observed
+MA,Apartment,County code (FIPS),5587,5587,observed
+MA,Apartment,Municipality,5587,5587,observed
+MA,Apartment,Subdivision,5587,,unscored for source/subject
+MA,Apartment,Tax code area,5587,,unscored for source/subject
+MA,Apartment,Property type,5587,5587,observed
+MA,Apartment,Property class,5587,5587,observed
+MA,Apartment,Property subtype,5587,,unscored for source/subject
+MA,Apartment,Land use,5587,5587,observed
+MA,Apartment,County use code,5587,5587,observed
+MA,Apartment,Occupancy,5587,,unscored for source/subject
+MA,Apartment,Legal description,5587,,unscored for source/subject
+MA,Apartment,ATTOM ID,5587,,unscored for source/subject
+MA,Apartment,Estimated value,5587,,unscored for source/subject
+MA,Apartment,Estimate range,5587,,unscored for source/subject
+MA,Apartment,Confidence score,5587,,unscored for source/subject
+MA,Apartment,Estimate date,5587,,unscored for source/subject
+MA,Office,Year built,12656,11845,observed
+MA,Office,Effective year built,12656,,unscored for source/subject
+MA,Office,Living area,12656,,unscored for source/subject
+MA,Office,Gross area,12656,,unscored for source/subject
+MA,Office,Ground floor area,12656,,unscored for source/subject
+MA,Office,Stories,12656,8376,observed
+MA,Office,Bedrooms,12656,,unscored for source/subject
+MA,Office,Bathrooms,12656,,unscored for source/subject
+MA,Office,Full baths,12656,,unscored for source/subject
+MA,Office,Partial baths,12656,,unscored for source/subject
+MA,Office,Fireplaces,12656,,unscored for source/subject
+MA,Office,Architectural style,12656,,unscored for source/subject
+MA,Office,Condition,12656,,unscored for source/subject
+MA,Office,Quality,12656,,unscored for source/subject
+MA,Office,Buildings on the parcel,12656,,unscored for source/subject
+MA,Office,Exterior walls,12656,,unscored for source/subject
+MA,Office,Roof cover,12656,,unscored for source/subject
+MA,Office,Heating,12656,,unscored for source/subject
+MA,Office,Cooling,12656,,unscored for source/subject
+MA,Office,Garage,12656,,unscored for source/subject
+MA,Office,Parking type,12656,,unscored for source/subject
+MA,Office,Parking spaces,12656,,unscored for source/subject
+MA,Office,Parking area,12656,,unscored for source/subject
+MA,Office,Lot size,12656,9681,observed
+MA,Office,Lot area,12656,9681,observed
+MA,Office,Lot number,12656,,unscored for source/subject
+MA,Office,Address on record,12656,11622,observed
+MA,Office,ZIP+4,12656,0,measured zero
+MA,Office,Parcel number (APN),12656,12656,observed
+MA,Office,County,12656,12656,observed
+MA,Office,County code (FIPS),12656,12656,observed
+MA,Office,Municipality,12656,12656,observed
+MA,Office,Subdivision,12656,,unscored for source/subject
+MA,Office,Tax code area,12656,,unscored for source/subject
+MA,Office,Property type,12656,12656,observed
+MA,Office,Property class,12656,12656,observed
+MA,Office,Property subtype,12656,2345,observed
+MA,Office,Land use,12656,12656,observed
+MA,Office,County use code,12656,12656,observed
+MA,Office,Occupancy,12656,,unscored for source/subject
+MA,Office,Legal description,12656,,unscored for source/subject
+MA,Office,ATTOM ID,12656,,unscored for source/subject
+MA,Office,Estimated value,12656,,unscored for source/subject
+MA,Office,Estimate range,12656,,unscored for source/subject
+MA,Office,Confidence score,12656,,unscored for source/subject
+MA,Office,Estimate date,12656,,unscored for source/subject
+BOS,House,Year built,27517,27500,observed
+BOS,House,Effective year built,27517,,unscored for source/subject
+BOS,House,Living area,27517,27517,observed
+BOS,House,Gross area,27517,27517,observed
+BOS,House,Ground floor area,27517,,unscored for source/subject
+BOS,House,Stories,27517,27517,observed
+BOS,House,Bedrooms,27517,27515,observed
+BOS,House,Bathrooms,27517,27510,observed
+BOS,House,Full baths,27517,27517,observed
+BOS,House,Partial baths,27517,27510,observed
+BOS,House,Fireplaces,27517,27517,observed
+BOS,House,Architectural style,27517,24454,observed
+BOS,House,Condition,27517,27517,observed
+BOS,House,Quality,27517,,unscored for source/subject
+BOS,House,Buildings on the parcel,27517,27517,observed
+BOS,House,Exterior walls,27517,27512,observed
+BOS,House,Roof cover,27517,27454,observed
+BOS,House,Heating,27517,27507,observed
+BOS,House,Cooling,27517,27516,observed
+BOS,House,Garage,27517,,unscored for source/subject
+BOS,House,Parking type,27517,,unscored for source/subject
+BOS,House,Parking spaces,27517,27515,observed
+BOS,House,Parking area,27517,,unscored for source/subject
+BOS,House,Lot size,27517,27517,observed
+BOS,House,Lot area,27517,27517,observed
+BOS,House,Lot number,27517,,unscored for source/subject
+BOS,House,Address on record,27517,27457,observed
+BOS,House,ZIP+4,27517,0,measured zero
+BOS,House,Parcel number (APN),27517,27517,observed
+BOS,House,County,27517,27517,observed
+BOS,House,County code (FIPS),27517,27517,observed
+BOS,House,Municipality,27517,27517,observed
+BOS,House,Subdivision,27517,,unscored for source/subject
+BOS,House,Tax code area,27517,,unscored for source/subject
+BOS,House,Property type,27517,27517,observed
+BOS,House,Property class,27517,27517,observed
+BOS,House,Property subtype,27517,,unscored for source/subject
+BOS,House,Land use,27517,27517,observed
+BOS,House,County use code,27517,27517,observed
+BOS,House,Occupancy,27517,23186,observed
+BOS,House,Legal description,27517,,unscored for source/subject
+BOS,House,ATTOM ID,27517,,unscored for source/subject
+BOS,House,Estimated value,27517,,unscored for source/subject
+BOS,House,Estimate range,27517,,unscored for source/subject
+BOS,House,Confidence score,27517,,unscored for source/subject
+BOS,House,Estimate date,27517,,unscored for source/subject
+BOS,Townhouse,Year built,2919,2917,observed
+BOS,Townhouse,Effective year built,2919,,unscored for source/subject
+BOS,Townhouse,Living area,2919,2919,observed
+BOS,Townhouse,Gross area,2919,2919,observed
+BOS,Townhouse,Ground floor area,2919,,unscored for source/subject
+BOS,Townhouse,Stories,2919,2919,observed
+BOS,Townhouse,Bedrooms,2919,2919,observed
+BOS,Townhouse,Bathrooms,2919,2919,observed
+BOS,Townhouse,Full baths,2919,2919,observed
+BOS,Townhouse,Partial baths,2919,2919,observed
+BOS,Townhouse,Fireplaces,2919,2919,observed
+BOS,Townhouse,Architectural style,2919,0,measured zero
+BOS,Townhouse,Condition,2919,2919,observed
+BOS,Townhouse,Quality,2919,,unscored for source/subject
+BOS,Townhouse,Buildings on the parcel,2919,2919,observed
+BOS,Townhouse,Exterior walls,2919,2918,observed
+BOS,Townhouse,Roof cover,2919,2892,observed
+BOS,Townhouse,Heating,2919,2915,observed
+BOS,Townhouse,Cooling,2919,2919,observed
+BOS,Townhouse,Garage,2919,,unscored for source/subject
+BOS,Townhouse,Parking type,2919,,unscored for source/subject
+BOS,Townhouse,Parking spaces,2919,2919,observed
+BOS,Townhouse,Parking area,2919,,unscored for source/subject
+BOS,Townhouse,Lot size,2919,2919,observed
+BOS,Townhouse,Lot area,2919,2919,observed
+BOS,Townhouse,Lot number,2919,,unscored for source/subject
+BOS,Townhouse,Address on record,2919,2913,observed
+BOS,Townhouse,ZIP+4,2919,0,measured zero
+BOS,Townhouse,Parcel number (APN),2919,2919,observed
+BOS,Townhouse,County,2919,2919,observed
+BOS,Townhouse,County code (FIPS),2919,2919,observed
+BOS,Townhouse,Municipality,2919,2919,observed
+BOS,Townhouse,Subdivision,2919,,unscored for source/subject
+BOS,Townhouse,Tax code area,2919,,unscored for source/subject
+BOS,Townhouse,Property type,2919,2919,observed
+BOS,Townhouse,Property class,2919,2919,observed
+BOS,Townhouse,Property subtype,2919,,unscored for source/subject
+BOS,Townhouse,Land use,2919,2919,observed
+BOS,Townhouse,County use code,2919,2919,observed
+BOS,Townhouse,Occupancy,2919,2056,observed
+BOS,Townhouse,Legal description,2919,,unscored for source/subject
+BOS,Townhouse,ATTOM ID,2919,,unscored for source/subject
+BOS,Townhouse,Estimated value,2919,,unscored for source/subject
+BOS,Townhouse,Estimate range,2919,,unscored for source/subject
+BOS,Townhouse,Confidence score,2919,,unscored for source/subject
+BOS,Townhouse,Estimate date,2919,,unscored for source/subject
+BOS,Condo,Year built,74229,74168,observed
+BOS,Condo,Effective year built,74229,,unscored for source/subject
+BOS,Condo,Living area,74229,74228,observed
+BOS,Condo,Gross area,74229,,unscored for source/subject
+BOS,Condo,Ground floor area,74229,,unscored for source/subject
+BOS,Condo,Stories,74229,,unscored for source/subject
+BOS,Condo,Bedrooms,74229,70972,observed
+BOS,Condo,Bathrooms,74229,74226,observed
+BOS,Condo,Full baths,74229,74229,observed
+BOS,Condo,Partial baths,74229,74226,observed
+BOS,Condo,Fireplaces,74229,74227,observed
+BOS,Condo,Architectural style,74229,,unscored for source/subject
+BOS,Condo,Condition,74229,67237,observed
+BOS,Condo,Quality,74229,,unscored for source/subject
+BOS,Condo,Buildings on the parcel,74229,,unscored for source/subject
+BOS,Condo,Exterior walls,74229,,unscored for source/subject
+BOS,Condo,Roof cover,74229,,unscored for source/subject
+BOS,Condo,Heating,74229,74219,observed
+BOS,Condo,Cooling,74229,74229,observed
+BOS,Condo,Garage,74229,,unscored for source/subject
+BOS,Condo,Parking type,74229,,unscored for source/subject
+BOS,Condo,Parking spaces,74229,74220,observed
+BOS,Condo,Parking area,74229,,unscored for source/subject
+BOS,Condo,Lot size,74229,,unscored for source/subject
+BOS,Condo,Lot area,74229,,unscored for source/subject
+BOS,Condo,Lot number,74229,,unscored for source/subject
+BOS,Condo,Address on record,74229,74155,observed
+BOS,Condo,ZIP+4,74229,0,measured zero
+BOS,Condo,Parcel number (APN),74229,74229,observed
+BOS,Condo,County,74229,74229,observed
+BOS,Condo,County code (FIPS),74229,74229,observed
+BOS,Condo,Municipality,74229,74229,observed
+BOS,Condo,Subdivision,74229,,unscored for source/subject
+BOS,Condo,Tax code area,74229,,unscored for source/subject
+BOS,Condo,Property type,74229,74229,observed
+BOS,Condo,Property class,74229,74229,observed
+BOS,Condo,Property subtype,74229,,unscored for source/subject
+BOS,Condo,Land use,74229,74229,observed
+BOS,Condo,County use code,74229,74229,observed
+BOS,Condo,Occupancy,74229,37323,observed
+BOS,Condo,Legal description,74229,,unscored for source/subject
+BOS,Condo,ATTOM ID,74229,,unscored for source/subject
+BOS,Condo,Estimated value,74229,,unscored for source/subject
+BOS,Condo,Estimate range,74229,,unscored for source/subject
+BOS,Condo,Confidence score,74229,,unscored for source/subject
+BOS,Condo,Estimate date,74229,,unscored for source/subject
+BOS,Apartment,Year built,1472,1405,observed
+BOS,Apartment,Effective year built,1472,,unscored for source/subject
+BOS,Apartment,Living area,1472,,unscored for source/subject
+BOS,Apartment,Gross area,1472,1371,observed
+BOS,Apartment,Ground floor area,1472,,unscored for source/subject
+BOS,Apartment,Stories,1472,,unscored for source/subject
+BOS,Apartment,Bedrooms,1472,,unscored for source/subject
+BOS,Apartment,Bathrooms,1472,,unscored for source/subject
+BOS,Apartment,Full baths,1472,,unscored for source/subject
+BOS,Apartment,Partial baths,1472,,unscored for source/subject
+BOS,Apartment,Fireplaces,1472,,unscored for source/subject
+BOS,Apartment,Architectural style,1472,,unscored for source/subject
+BOS,Apartment,Condition,1472,1460,observed
+BOS,Apartment,Quality,1472,,unscored for source/subject
+BOS,Apartment,Buildings on the parcel,1472,1472,observed
+BOS,Apartment,Exterior walls,1472,1389,observed
+BOS,Apartment,Roof cover,1472,41,observed
+BOS,Apartment,Heating,1472,31,observed
+BOS,Apartment,Cooling,1472,32,observed
+BOS,Apartment,Garage,1472,,unscored for source/subject
+BOS,Apartment,Parking type,1472,,unscored for source/subject
+BOS,Apartment,Parking spaces,1472,33,observed
+BOS,Apartment,Parking area,1472,,unscored for source/subject
+BOS,Apartment,Lot size,1472,1469,observed
+BOS,Apartment,Lot area,1472,1469,observed
+BOS,Apartment,Lot number,1472,,unscored for source/subject
+BOS,Apartment,Address on record,1472,1419,observed
+BOS,Apartment,ZIP+4,1472,0,measured zero
+BOS,Apartment,Parcel number (APN),1472,1472,observed
+BOS,Apartment,County,1472,1472,observed
+BOS,Apartment,County code (FIPS),1472,1472,observed
+BOS,Apartment,Municipality,1472,1472,observed
+BOS,Apartment,Subdivision,1472,,unscored for source/subject
+BOS,Apartment,Tax code area,1472,,unscored for source/subject
+BOS,Apartment,Property type,1472,1472,observed
+BOS,Apartment,Property class,1472,1472,observed
+BOS,Apartment,Property subtype,1472,1472,observed
+BOS,Apartment,Land use,1472,1472,observed
+BOS,Apartment,County use code,1472,1472,observed
+BOS,Apartment,Occupancy,1472,,unscored for source/subject
+BOS,Apartment,Legal description,1472,,unscored for source/subject
+BOS,Apartment,ATTOM ID,1472,,unscored for source/subject
+BOS,Apartment,Estimated value,1472,,unscored for source/subject
+BOS,Apartment,Estimate range,1472,,unscored for source/subject
+BOS,Apartment,Confidence score,1472,,unscored for source/subject
+BOS,Apartment,Estimate date,1472,,unscored for source/subject
+BOS,Office,Year built,873,688,observed
+BOS,Office,Effective year built,873,,unscored for source/subject
+BOS,Office,Living area,873,,unscored for source/subject
+BOS,Office,Gross area,873,675,observed
+BOS,Office,Ground floor area,873,,unscored for source/subject
+BOS,Office,Stories,873,,unscored for source/subject
+BOS,Office,Bedrooms,873,,unscored for source/subject
+BOS,Office,Bathrooms,873,,unscored for source/subject
+BOS,Office,Full baths,873,,unscored for source/subject
+BOS,Office,Partial baths,873,,unscored for source/subject
+BOS,Office,Fireplaces,873,,unscored for source/subject
+BOS,Office,Architectural style,873,,unscored for source/subject
+BOS,Office,Condition,873,868,observed
+BOS,Office,Quality,873,,unscored for source/subject
+BOS,Office,Buildings on the parcel,873,873,observed
+BOS,Office,Exterior walls,873,686,observed
+BOS,Office,Roof cover,873,2,observed
+BOS,Office,Heating,873,2,observed
+BOS,Office,Cooling,873,2,observed
+BOS,Office,Garage,873,,unscored for source/subject
+BOS,Office,Parking type,873,,unscored for source/subject
+BOS,Office,Parking spaces,873,3,observed
+BOS,Office,Parking area,873,,unscored for source/subject
+BOS,Office,Lot size,873,839,observed
+BOS,Office,Lot area,873,839,observed
+BOS,Office,Lot number,873,,unscored for source/subject
+BOS,Office,Address on record,873,831,observed
+BOS,Office,ZIP+4,873,0,measured zero
+BOS,Office,Parcel number (APN),873,873,observed
+BOS,Office,County,873,873,observed
+BOS,Office,County code (FIPS),873,873,observed
+BOS,Office,Municipality,873,873,observed
+BOS,Office,Subdivision,873,,unscored for source/subject
+BOS,Office,Tax code area,873,,unscored for source/subject
+BOS,Office,Property type,873,873,observed
+BOS,Office,Property class,873,873,observed
+BOS,Office,Property subtype,873,873,observed
+BOS,Office,Land use,873,873,observed
+BOS,Office,County use code,873,873,observed
+BOS,Office,Occupancy,873,,unscored for source/subject
+BOS,Office,Legal description,873,,unscored for source/subject
+BOS,Office,ATTOM ID,873,,unscored for source/subject
+BOS,Office,Estimated value,873,,unscored for source/subject
+BOS,Office,Estimate range,873,,unscored for source/subject
+BOS,Office,Confidence score,873,,unscored for source/subject
+BOS,Office,Estimate date,873,,unscored for source/subject
+IL,House,Year built,852245,852234,observed
+IL,House,Effective year built,852245,,unscored for source/subject
+IL,House,Living area,852245,,unscored for source/subject
+IL,House,Gross area,852245,,unscored for source/subject
+IL,House,Ground floor area,852245,,unscored for source/subject
+IL,House,Stories,852245,752363,observed
+IL,House,Bedrooms,852245,852230,observed
+IL,House,Bathrooms,852245,850366,observed
+IL,House,Full baths,852245,852221,observed
+IL,House,Partial baths,852245,850375,observed
+IL,House,Fireplaces,852245,,unscored for source/subject
+IL,House,Architectural style,852245,,unscored for source/subject
+IL,House,Condition,852245,852229,observed
+IL,House,Quality,852245,852105,observed
+IL,House,Buildings on the parcel,852245,852245,observed
+IL,House,Exterior walls,852245,852240,observed
+IL,House,Roof cover,852245,848693,observed
+IL,House,Heating,852245,852114,observed
+IL,House,Cooling,852245,471982,observed
+IL,House,Garage,852245,851812,observed
+IL,House,Parking type,852245,,unscored for source/subject
+IL,House,Parking spaces,852245,,unscored for source/subject
+IL,House,Parking area,852245,,unscored for source/subject
+IL,House,Lot size,852245,848889,observed
+IL,House,Lot area,852245,848889,observed
+IL,House,Lot number,852245,,unscored for source/subject
+IL,House,Address on record,852245,852194,observed
+IL,House,ZIP+4,852245,0,measured zero
+IL,House,Parcel number (APN),852245,852245,observed
+IL,House,County,852245,852245,observed
+IL,House,County code (FIPS),852245,852245,observed
+IL,House,Municipality,852245,832028,observed
+IL,House,Subdivision,852245,,unscored for source/subject
+IL,House,Tax code area,852245,852245,observed
+IL,House,Property type,852245,852245,observed
+IL,House,Property class,852245,852245,observed
+IL,House,Property subtype,852245,,unscored for source/subject
+IL,House,Land use,852245,852245,observed
+IL,House,County use code,852245,852245,observed
+IL,House,Occupancy,852245,,unscored for source/subject
+IL,House,Legal description,852245,,unscored for source/subject
+IL,House,ATTOM ID,852245,,unscored for source/subject
+IL,House,Estimated value,852245,,unscored for source/subject
+IL,House,Estimate range,852245,,unscored for source/subject
+IL,House,Confidence score,852245,,unscored for source/subject
+IL,House,Estimate date,852245,,unscored for source/subject
+IL,Townhouse,Year built,72621,72616,observed
+IL,Townhouse,Effective year built,72621,,unscored for source/subject
+IL,Townhouse,Living area,72621,,unscored for source/subject
+IL,Townhouse,Gross area,72621,,unscored for source/subject
+IL,Townhouse,Ground floor area,72621,,unscored for source/subject
+IL,Townhouse,Stories,72621,62134,observed
+IL,Townhouse,Bedrooms,72621,72612,observed
+IL,Townhouse,Bathrooms,72621,72248,observed
+IL,Townhouse,Full baths,72621,72612,observed
+IL,Townhouse,Partial baths,72621,72248,observed
+IL,Townhouse,Fireplaces,72621,,unscored for source/subject
+IL,Townhouse,Architectural style,72621,,unscored for source/subject
+IL,Townhouse,Condition,72621,72613,observed
+IL,Townhouse,Quality,72621,72607,observed
+IL,Townhouse,Buildings on the parcel,72621,72621,observed
+IL,Townhouse,Exterior walls,72621,72614,observed
+IL,Townhouse,Roof cover,72621,71724,observed
+IL,Townhouse,Heating,72621,72532,observed
+IL,Townhouse,Cooling,72621,57034,observed
+IL,Townhouse,Garage,72621,72599,observed
+IL,Townhouse,Parking type,72621,,unscored for source/subject
+IL,Townhouse,Parking spaces,72621,,unscored for source/subject
+IL,Townhouse,Parking area,72621,,unscored for source/subject
+IL,Townhouse,Lot size,72621,72449,observed
+IL,Townhouse,Lot area,72621,72449,observed
+IL,Townhouse,Lot number,72621,,unscored for source/subject
+IL,Townhouse,Address on record,72621,72562,observed
+IL,Townhouse,ZIP+4,72621,0,measured zero
+IL,Townhouse,Parcel number (APN),72621,72621,observed
+IL,Townhouse,County,72621,72621,observed
+IL,Townhouse,County code (FIPS),72621,72621,observed
+IL,Townhouse,Municipality,72621,70232,observed
+IL,Townhouse,Subdivision,72621,,unscored for source/subject
+IL,Townhouse,Tax code area,72621,72621,observed
+IL,Townhouse,Property type,72621,72621,observed
+IL,Townhouse,Property class,72621,72621,observed
+IL,Townhouse,Property subtype,72621,,unscored for source/subject
+IL,Townhouse,Land use,72621,72621,observed
+IL,Townhouse,County use code,72621,72621,observed
+IL,Townhouse,Occupancy,72621,,unscored for source/subject
+IL,Townhouse,Legal description,72621,,unscored for source/subject
+IL,Townhouse,ATTOM ID,72621,,unscored for source/subject
+IL,Townhouse,Estimated value,72621,,unscored for source/subject
+IL,Townhouse,Estimate range,72621,,unscored for source/subject
+IL,Townhouse,Confidence score,72621,,unscored for source/subject
+IL,Townhouse,Estimate date,72621,,unscored for source/subject
+IL,Condo,Year built,372656,372656,observed
+IL,Condo,Effective year built,372656,,unscored for source/subject
+IL,Condo,Living area,372656,146328,observed
+IL,Condo,Gross area,372656,,unscored for source/subject
+IL,Condo,Ground floor area,372656,,unscored for source/subject
+IL,Condo,Stories,372656,,unscored for source/subject
+IL,Condo,Bedrooms,372656,197966,observed
+IL,Condo,Bathrooms,372656,62567,observed
+IL,Condo,Full baths,372656,105081,observed
+IL,Condo,Partial baths,372656,62628,observed
+IL,Condo,Fireplaces,372656,,unscored for source/subject
+IL,Condo,Architectural style,372656,,unscored for source/subject
+IL,Condo,Condition,372656,,unscored for source/subject
+IL,Condo,Quality,372656,,unscored for source/subject
+IL,Condo,Buildings on the parcel,372656,,unscored for source/subject
+IL,Condo,Exterior walls,372656,,unscored for source/subject
+IL,Condo,Roof cover,372656,,unscored for source/subject
+IL,Condo,Heating,372656,,unscored for source/subject
+IL,Condo,Cooling,372656,,unscored for source/subject
+IL,Condo,Garage,372656,,unscored for source/subject
+IL,Condo,Parking type,372656,,unscored for source/subject
+IL,Condo,Parking spaces,372656,,unscored for source/subject
+IL,Condo,Parking area,372656,,unscored for source/subject
+IL,Condo,Lot size,372656,,unscored for source/subject
+IL,Condo,Lot area,372656,,unscored for source/subject
+IL,Condo,Lot number,372656,,unscored for source/subject
+IL,Condo,Address on record,372656,372149,observed
+IL,Condo,ZIP+4,372656,0,measured zero
+IL,Condo,Parcel number (APN),372656,372656,observed
+IL,Condo,County,372656,372656,observed
+IL,Condo,County code (FIPS),372656,372656,observed
+IL,Condo,Municipality,372656,364021,observed
+IL,Condo,Subdivision,372656,,unscored for source/subject
+IL,Condo,Tax code area,372656,372656,observed
+IL,Condo,Property type,372656,372656,observed
+IL,Condo,Property class,372656,372656,observed
+IL,Condo,Property subtype,372656,,unscored for source/subject
+IL,Condo,Land use,372656,372656,observed
+IL,Condo,County use code,372656,372656,observed
+IL,Condo,Occupancy,372656,,unscored for source/subject
+IL,Condo,Legal description,372656,,unscored for source/subject
+IL,Condo,ATTOM ID,372656,,unscored for source/subject
+IL,Condo,Estimated value,372656,,unscored for source/subject
+IL,Condo,Estimate range,372656,,unscored for source/subject
+IL,Condo,Confidence score,372656,,unscored for source/subject
+IL,Condo,Estimate date,372656,,unscored for source/subject
+NY,House,Year built,312722,312690,observed
+NY,House,Effective year built,312722,,unscored for source/subject
+NY,House,Living area,312722,,unscored for source/subject
+NY,House,Gross area,312722,312720,observed
+NY,House,Ground floor area,312722,,unscored for source/subject
+NY,House,Stories,312722,312440,observed
+NY,House,Bedrooms,312722,,unscored for source/subject
+NY,House,Bathrooms,312722,,unscored for source/subject
+NY,House,Full baths,312722,,unscored for source/subject
+NY,House,Partial baths,312722,,unscored for source/subject
+NY,House,Fireplaces,312722,,unscored for source/subject
+NY,House,Architectural style,312722,,unscored for source/subject
+NY,House,Condition,312722,,unscored for source/subject
+NY,House,Quality,312722,,unscored for source/subject
+NY,House,Buildings on the parcel,312722,312657,observed
+NY,House,Exterior walls,312722,,unscored for source/subject
+NY,House,Roof cover,312722,,unscored for source/subject
+NY,House,Heating,312722,,unscored for source/subject
+NY,House,Cooling,312722,,unscored for source/subject
+NY,House,Garage,312722,,unscored for source/subject
+NY,House,Parking type,312722,,unscored for source/subject
+NY,House,Parking spaces,312722,,unscored for source/subject
+NY,House,Parking area,312722,,unscored for source/subject
+NY,House,Lot size,312722,312722,observed
+NY,House,Lot area,312722,312722,observed
+NY,House,Lot number,312722,,unscored for source/subject
+NY,House,Address on record,312722,312721,observed
+NY,House,ZIP+4,312722,,unscored for source/subject
+NY,House,Parcel number (APN),312722,312722,observed
+NY,House,County,312722,312722,observed
+NY,House,County code (FIPS),312722,312722,observed
+NY,House,Municipality,312722,312722,observed
+NY,House,Subdivision,312722,,unscored for source/subject
+NY,House,Tax code area,312722,,unscored for source/subject
+NY,House,Property type,312722,312722,observed
+NY,House,Property class,312722,312722,observed
+NY,House,Property subtype,312722,293881,observed
+NY,House,Land use,312722,312722,observed
+NY,House,County use code,312722,312722,observed
+NY,House,Occupancy,312722,,unscored for source/subject
+NY,House,Legal description,312722,,unscored for source/subject
+NY,House,ATTOM ID,312722,,unscored for source/subject
+NY,House,Estimated value,312722,,unscored for source/subject
+NY,House,Estimate range,312722,,unscored for source/subject
+NY,House,Confidence score,312722,,unscored for source/subject
+NY,House,Estimate date,312722,,unscored for source/subject
+NY,Apartment,Year built,61726,61678,observed
+NY,Apartment,Effective year built,61726,,unscored for source/subject
+NY,Apartment,Living area,61726,,unscored for source/subject
+NY,Apartment,Gross area,61726,61723,observed
+NY,Apartment,Ground floor area,61726,,unscored for source/subject
+NY,Apartment,Stories,61726,61545,observed
+NY,Apartment,Bedrooms,61726,,unscored for source/subject
+NY,Apartment,Bathrooms,61726,,unscored for source/subject
+NY,Apartment,Full baths,61726,,unscored for source/subject
+NY,Apartment,Partial baths,61726,,unscored for source/subject
+NY,Apartment,Fireplaces,61726,,unscored for source/subject
+NY,Apartment,Architectural style,61726,,unscored for source/subject
+NY,Apartment,Condition,61726,,unscored for source/subject
+NY,Apartment,Quality,61726,,unscored for source/subject
+NY,Apartment,Buildings on the parcel,61726,61673,observed
+NY,Apartment,Exterior walls,61726,,unscored for source/subject
+NY,Apartment,Roof cover,61726,,unscored for source/subject
+NY,Apartment,Heating,61726,,unscored for source/subject
+NY,Apartment,Cooling,61726,,unscored for source/subject
+NY,Apartment,Garage,61726,,unscored for source/subject
+NY,Apartment,Parking type,61726,,unscored for source/subject
+NY,Apartment,Parking spaces,61726,,unscored for source/subject
+NY,Apartment,Parking area,61726,,unscored for source/subject
+NY,Apartment,Lot size,61726,61726,observed
+NY,Apartment,Lot area,61726,61726,observed
+NY,Apartment,Lot number,61726,,unscored for source/subject
+NY,Apartment,Address on record,61726,61726,observed
+NY,Apartment,ZIP+4,61726,,unscored for source/subject
+NY,Apartment,Parcel number (APN),61726,61726,observed
+NY,Apartment,County,61726,61726,observed
+NY,Apartment,County code (FIPS),61726,61726,observed
+NY,Apartment,Municipality,61726,61726,observed
+NY,Apartment,Subdivision,61726,,unscored for source/subject
+NY,Apartment,Tax code area,61726,,unscored for source/subject
+NY,Apartment,Property type,61726,61726,observed
+NY,Apartment,Property class,61726,61726,observed
+NY,Apartment,Property subtype,61726,60831,observed
+NY,Apartment,Land use,61726,61654,observed
+NY,Apartment,County use code,61726,61726,observed
+NY,Apartment,Occupancy,61726,,unscored for source/subject
+NY,Apartment,Legal description,61726,,unscored for source/subject
+NY,Apartment,ATTOM ID,61726,,unscored for source/subject
+NY,Apartment,Estimated value,61726,,unscored for source/subject
+NY,Apartment,Estimate range,61726,,unscored for source/subject
+NY,Apartment,Confidence score,61726,,unscored for source/subject
+NY,Apartment,Estimate date,61726,,unscored for source/subject
+NY,Office,Year built,7166,7158,observed
+NY,Office,Effective year built,7166,,unscored for source/subject
+NY,Office,Living area,7166,,unscored for source/subject
+NY,Office,Gross area,7166,7165,observed
+NY,Office,Ground floor area,7166,,unscored for source/subject
+NY,Office,Stories,7166,7155,observed
+NY,Office,Bedrooms,7166,,unscored for source/subject
+NY,Office,Bathrooms,7166,,unscored for source/subject
+NY,Office,Full baths,7166,,unscored for source/subject
+NY,Office,Partial baths,7166,,unscored for source/subject
+NY,Office,Fireplaces,7166,,unscored for source/subject
+NY,Office,Architectural style,7166,,unscored for source/subject
+NY,Office,Condition,7166,,unscored for source/subject
+NY,Office,Quality,7166,,unscored for source/subject
+NY,Office,Buildings on the parcel,7166,7156,observed
+NY,Office,Exterior walls,7166,,unscored for source/subject
+NY,Office,Roof cover,7166,,unscored for source/subject
+NY,Office,Heating,7166,,unscored for source/subject
+NY,Office,Cooling,7166,,unscored for source/subject
+NY,Office,Garage,7166,,unscored for source/subject
+NY,Office,Parking type,7166,,unscored for source/subject
+NY,Office,Parking spaces,7166,,unscored for source/subject
+NY,Office,Parking area,7166,,unscored for source/subject
+NY,Office,Lot size,7166,7166,observed
+NY,Office,Lot area,7166,7166,observed
+NY,Office,Lot number,7166,,unscored for source/subject
+NY,Office,Address on record,7166,7166,observed
+NY,Office,ZIP+4,7166,,unscored for source/subject
+NY,Office,Parcel number (APN),7166,7166,observed
+NY,Office,County,7166,7166,observed
+NY,Office,County code (FIPS),7166,7166,observed
+NY,Office,Municipality,7166,7166,observed
+NY,Office,Subdivision,7166,,unscored for source/subject
+NY,Office,Tax code area,7166,,unscored for source/subject
+NY,Office,Property type,7166,7166,observed
+NY,Office,Property class,7166,7166,observed
+NY,Office,Property subtype,7166,6983,observed
+NY,Office,Land use,7166,7166,observed
+NY,Office,County use code,7166,7166,observed
+NY,Office,Occupancy,7166,,unscored for source/subject
+NY,Office,Legal description,7166,,unscored for source/subject
+NY,Office,ATTOM ID,7166,,unscored for source/subject
+NY,Office,Estimated value,7166,,unscored for source/subject
+NY,Office,Estimate range,7166,,unscored for source/subject
+NY,Office,Confidence score,7166,,unscored for source/subject
+NY,Office,Estimate date,7166,,unscored for source/subject
+PA,House,Year built,27135,27126,observed
+PA,House,Effective year built,27135,,unscored for source/subject
+PA,House,Living area,27135,27131,observed
+PA,House,Gross area,27135,,unscored for source/subject
+PA,House,Ground floor area,27135,,unscored for source/subject
+PA,House,Stories,27135,27128,observed
+PA,House,Bedrooms,27135,12717,observed
+PA,House,Bathrooms,27135,,unscored for source/subject
+PA,House,Full baths,27135,,unscored for source/subject
+PA,House,Partial baths,27135,,unscored for source/subject
+PA,House,Fireplaces,27135,26950,observed
+PA,House,Architectural style,27135,,unscored for source/subject
+PA,House,Condition,27135,,unscored for source/subject
+PA,House,Quality,27135,26722,observed
+PA,House,Buildings on the parcel,27135,,unscored for source/subject
+PA,House,Exterior walls,27135,,unscored for source/subject
+PA,House,Roof cover,27135,,unscored for source/subject
+PA,House,Heating,27135,16027,observed
+PA,House,Cooling,27135,11247,observed
+PA,House,Garage,27135,3494,observed
+PA,House,Parking type,27135,3494,observed
+PA,House,Parking spaces,27135,,unscored for source/subject
+PA,House,Parking area,27135,,unscored for source/subject
+PA,House,Lot size,27135,27123,observed
+PA,House,Lot area,27135,27123,observed
+PA,House,Lot number,27135,,unscored for source/subject
+PA,House,Address on record,27135,25692,observed
+PA,House,ZIP+4,27135,0,measured zero
+PA,House,Parcel number (APN),27135,27135,observed
+PA,House,County,27135,27135,observed
+PA,House,County code (FIPS),27135,27135,observed
+PA,House,Municipality,27135,27135,observed
+PA,House,Subdivision,27135,,unscored for source/subject
+PA,House,Tax code area,27135,,unscored for source/subject
+PA,House,Property type,27135,27135,observed
+PA,House,Property class,27135,27135,observed
+PA,House,Property subtype,27135,,unscored for source/subject
+PA,House,Land use,27135,27135,observed
+PA,House,County use code,27135,27135,observed
+PA,House,Occupancy,27135,,unscored for source/subject
+PA,House,Legal description,27135,,unscored for source/subject
+PA,House,ATTOM ID,27135,,unscored for source/subject
+PA,House,Estimated value,27135,,unscored for source/subject
+PA,House,Estimate range,27135,,unscored for source/subject
+PA,House,Confidence score,27135,,unscored for source/subject
+PA,House,Estimate date,27135,,unscored for source/subject
+PA,Townhouse,Year built,328745,328711,observed
+PA,Townhouse,Effective year built,328745,,unscored for source/subject
+PA,Townhouse,Living area,328745,328711,observed
+PA,Townhouse,Gross area,328745,,unscored for source/subject
+PA,Townhouse,Ground floor area,328745,,unscored for source/subject
+PA,Townhouse,Stories,328745,328706,observed
+PA,Townhouse,Bedrooms,328745,306751,observed
+PA,Townhouse,Bathrooms,328745,,unscored for source/subject
+PA,Townhouse,Full baths,328745,,unscored for source/subject
+PA,Townhouse,Partial baths,328745,,unscored for source/subject
+PA,Townhouse,Fireplaces,328745,327888,observed
+PA,Townhouse,Architectural style,328745,,unscored for source/subject
+PA,Townhouse,Condition,328745,,unscored for source/subject
+PA,Townhouse,Quality,328745,327756,observed
+PA,Townhouse,Buildings on the parcel,328745,,unscored for source/subject
+PA,Townhouse,Exterior walls,328745,,unscored for source/subject
+PA,Townhouse,Roof cover,328745,,unscored for source/subject
+PA,Townhouse,Heating,328745,217243,observed
+PA,Townhouse,Cooling,328745,69893,observed
+PA,Townhouse,Garage,328745,13581,observed
+PA,Townhouse,Parking type,328745,13581,observed
+PA,Townhouse,Parking spaces,328745,,unscored for source/subject
+PA,Townhouse,Parking area,328745,,unscored for source/subject
+PA,Townhouse,Lot size,328745,328678,observed
+PA,Townhouse,Lot area,328745,328678,observed
+PA,Townhouse,Lot number,328745,,unscored for source/subject
+PA,Townhouse,Address on record,328745,327510,observed
+PA,Townhouse,ZIP+4,328745,0,measured zero
+PA,Townhouse,Parcel number (APN),328745,328745,observed
+PA,Townhouse,County,328745,328745,observed
+PA,Townhouse,County code (FIPS),328745,328745,observed
+PA,Townhouse,Municipality,328745,328745,observed
+PA,Townhouse,Subdivision,328745,,unscored for source/subject
+PA,Townhouse,Tax code area,328745,,unscored for source/subject
+PA,Townhouse,Property type,328745,328745,observed
+PA,Townhouse,Property class,328745,328745,observed
+PA,Townhouse,Property subtype,328745,,unscored for source/subject
+PA,Townhouse,Land use,328745,328745,observed
+PA,Townhouse,County use code,328745,328745,observed
+PA,Townhouse,Occupancy,328745,,unscored for source/subject
+PA,Townhouse,Legal description,328745,,unscored for source/subject
+PA,Townhouse,ATTOM ID,328745,,unscored for source/subject
+PA,Townhouse,Estimated value,328745,,unscored for source/subject
+PA,Townhouse,Estimate range,328745,,unscored for source/subject
+PA,Townhouse,Confidence score,328745,,unscored for source/subject
+PA,Townhouse,Estimate date,328745,,unscored for source/subject
+PA,Condo,Year built,31515,31512,observed
+PA,Condo,Effective year built,31515,,unscored for source/subject
+PA,Condo,Living area,31515,31512,observed
+PA,Condo,Gross area,31515,,unscored for source/subject
+PA,Condo,Ground floor area,31515,,unscored for source/subject
+PA,Condo,Stories,31515,,unscored for source/subject
+PA,Condo,Bedrooms,31515,27572,observed
+PA,Condo,Bathrooms,31515,,unscored for source/subject
+PA,Condo,Full baths,31515,,unscored for source/subject
+PA,Condo,Partial baths,31515,,unscored for source/subject
+PA,Condo,Fireplaces,31515,31471,observed
+PA,Condo,Architectural style,31515,,unscored for source/subject
+PA,Condo,Condition,31515,,unscored for source/subject
+PA,Condo,Quality,31515,29204,observed
+PA,Condo,Buildings on the parcel,31515,,unscored for source/subject
+PA,Condo,Exterior walls,31515,,unscored for source/subject
+PA,Condo,Roof cover,31515,,unscored for source/subject
+PA,Condo,Heating,31515,16483,observed
+PA,Condo,Cooling,31515,23130,observed
+PA,Condo,Garage,31515,713,observed
+PA,Condo,Parking type,31515,713,observed
+PA,Condo,Parking spaces,31515,,unscored for source/subject
+PA,Condo,Parking area,31515,,unscored for source/subject
+PA,Condo,Lot size,31515,,unscored for source/subject
+PA,Condo,Lot area,31515,,unscored for source/subject
+PA,Condo,Lot number,31515,,unscored for source/subject
+PA,Condo,Address on record,31515,22833,observed
+PA,Condo,ZIP+4,31515,0,measured zero
+PA,Condo,Parcel number (APN),31515,31515,observed
+PA,Condo,County,31515,31515,observed
+PA,Condo,County code (FIPS),31515,31515,observed
+PA,Condo,Municipality,31515,31515,observed
+PA,Condo,Subdivision,31515,,unscored for source/subject
+PA,Condo,Tax code area,31515,,unscored for source/subject
+PA,Condo,Property type,31515,31515,observed
+PA,Condo,Property class,31515,31515,observed
+PA,Condo,Property subtype,31515,,unscored for source/subject
+PA,Condo,Land use,31515,31515,observed
+PA,Condo,County use code,31515,31515,observed
+PA,Condo,Occupancy,31515,,unscored for source/subject
+PA,Condo,Legal description,31515,,unscored for source/subject
+PA,Condo,ATTOM ID,31515,,unscored for source/subject
+PA,Condo,Estimated value,31515,,unscored for source/subject
+PA,Condo,Estimate range,31515,,unscored for source/subject
+PA,Condo,Confidence score,31515,,unscored for source/subject
+PA,Condo,Estimate date,31515,,unscored for source/subject
+PA,Apartment,Year built,2679,2673,observed
+PA,Apartment,Effective year built,2679,,unscored for source/subject
+PA,Apartment,Living area,2679,,unscored for source/subject
+PA,Apartment,Gross area,2679,,unscored for source/subject
+PA,Apartment,Ground floor area,2679,,unscored for source/subject
+PA,Apartment,Stories,2679,2542,observed
+PA,Apartment,Bedrooms,2679,,unscored for source/subject
+PA,Apartment,Bathrooms,2679,,unscored for source/subject
+PA,Apartment,Full baths,2679,,unscored for source/subject
+PA,Apartment,Partial baths,2679,,unscored for source/subject
+PA,Apartment,Fireplaces,2679,,unscored for source/subject
+PA,Apartment,Architectural style,2679,,unscored for source/subject
+PA,Apartment,Condition,2679,,unscored for source/subject
+PA,Apartment,Quality,2679,2673,observed
+PA,Apartment,Buildings on the parcel,2679,,unscored for source/subject
+PA,Apartment,Exterior walls,2679,,unscored for source/subject
+PA,Apartment,Roof cover,2679,,unscored for source/subject
+PA,Apartment,Heating,2679,0,measured zero
+PA,Apartment,Cooling,2679,0,measured zero
+PA,Apartment,Garage,2679,0,measured zero
+PA,Apartment,Parking type,2679,0,measured zero
+PA,Apartment,Parking spaces,2679,,unscored for source/subject
+PA,Apartment,Parking area,2679,,unscored for source/subject
+PA,Apartment,Lot size,2679,2667,observed
+PA,Apartment,Lot area,2679,2667,observed
+PA,Apartment,Lot number,2679,,unscored for source/subject
+PA,Apartment,Address on record,2679,1711,observed
+PA,Apartment,ZIP+4,2679,0,measured zero
+PA,Apartment,Parcel number (APN),2679,2679,observed
+PA,Apartment,County,2679,2679,observed
+PA,Apartment,County code (FIPS),2679,2679,observed
+PA,Apartment,Municipality,2679,2679,observed
+PA,Apartment,Subdivision,2679,,unscored for source/subject
+PA,Apartment,Tax code area,2679,,unscored for source/subject
+PA,Apartment,Property type,2679,2679,observed
+PA,Apartment,Property class,2679,2679,observed
+PA,Apartment,Property subtype,2679,,unscored for source/subject
+PA,Apartment,Land use,2679,2679,observed
+PA,Apartment,County use code,2679,2679,observed
+PA,Apartment,Occupancy,2679,,unscored for source/subject
+PA,Apartment,Legal description,2679,,unscored for source/subject
+PA,Apartment,ATTOM ID,2679,,unscored for source/subject
+PA,Apartment,Estimated value,2679,,unscored for source/subject
+PA,Apartment,Estimate range,2679,,unscored for source/subject
+PA,Apartment,Confidence score,2679,,unscored for source/subject
+PA,Apartment,Estimate date,2679,,unscored for source/subject
+PA,Office,Year built,666,665,observed
+PA,Office,Effective year built,666,,unscored for source/subject
+PA,Office,Living area,666,,unscored for source/subject
+PA,Office,Gross area,666,,unscored for source/subject
+PA,Office,Ground floor area,666,,unscored for source/subject
+PA,Office,Stories,666,630,observed
+PA,Office,Bedrooms,666,,unscored for source/subject
+PA,Office,Bathrooms,666,,unscored for source/subject
+PA,Office,Full baths,666,,unscored for source/subject
+PA,Office,Partial baths,666,,unscored for source/subject
+PA,Office,Fireplaces,666,,unscored for source/subject
+PA,Office,Architectural style,666,,unscored for source/subject
+PA,Office,Condition,666,,unscored for source/subject
+PA,Office,Quality,666,655,observed
+PA,Office,Buildings on the parcel,666,,unscored for source/subject
+PA,Office,Exterior walls,666,,unscored for source/subject
+PA,Office,Roof cover,666,,unscored for source/subject
+PA,Office,Heating,666,0,measured zero
+PA,Office,Cooling,666,0,measured zero
+PA,Office,Garage,666,0,measured zero
+PA,Office,Parking type,666,0,measured zero
+PA,Office,Parking spaces,666,,unscored for source/subject
+PA,Office,Parking area,666,,unscored for source/subject
+PA,Office,Lot size,666,664,observed
+PA,Office,Lot area,666,664,observed
+PA,Office,Lot number,666,,unscored for source/subject
+PA,Office,Address on record,666,388,observed
+PA,Office,ZIP+4,666,0,measured zero
+PA,Office,Parcel number (APN),666,666,observed
+PA,Office,County,666,666,observed
+PA,Office,County code (FIPS),666,666,observed
+PA,Office,Municipality,666,666,observed
+PA,Office,Subdivision,666,,unscored for source/subject
+PA,Office,Tax code area,666,,unscored for source/subject
+PA,Office,Property type,666,666,observed
+PA,Office,Property class,666,666,observed
+PA,Office,Property subtype,666,,unscored for source/subject
+PA,Office,Land use,666,666,observed
+PA,Office,County use code,666,666,observed
+PA,Office,Occupancy,666,,unscored for source/subject
+PA,Office,Legal description,666,,unscored for source/subject
+PA,Office,ATTOM ID,666,,unscored for source/subject
+PA,Office,Estimated value,666,,unscored for source/subject
+PA,Office,Estimate range,666,,unscored for source/subject
+PA,Office,Confidence score,666,,unscored for source/subject
+PA,Office,Estimate date,666,,unscored for source/subject
+WA,House,Year built,470599,470599,observed
+WA,House,Effective year built,470599,,unscored for source/subject
+WA,House,Living area,470599,470598,observed
+WA,House,Gross area,470599,,unscored for source/subject
+WA,House,Ground floor area,470599,470599,observed
+WA,House,Stories,470599,470599,observed
+WA,House,Bedrooms,470599,470355,observed
+WA,House,Bathrooms,470599,470599,observed
+WA,House,Full baths,470599,470599,observed
+WA,House,Partial baths,470599,264310,observed
+WA,House,Fireplaces,470599,470599,observed
+WA,House,Architectural style,470599,,unscored for source/subject
+WA,House,Condition,470599,470599,observed
+WA,House,Quality,470599,470590,observed
+WA,House,Buildings on the parcel,470599,,unscored for source/subject
+WA,House,Exterior walls,470599,,unscored for source/subject
+WA,House,Roof cover,470599,,unscored for source/subject
+WA,House,Heating,470599,470198,observed
+WA,House,Cooling,470599,,unscored for source/subject
+WA,House,Garage,470599,333368,observed
+WA,House,Parking type,470599,333368,observed
+WA,House,Parking spaces,470599,,unscored for source/subject
+WA,House,Parking area,470599,,unscored for source/subject
+WA,House,Lot size,470599,470598,observed
+WA,House,Lot area,470599,470598,observed
+WA,House,Lot number,470599,415579,observed
+WA,House,Address on record,470599,470529,observed
+WA,House,ZIP+4,470599,,unscored for source/subject
+WA,House,Parcel number (APN),470599,470599,observed
+WA,House,County,470599,470599,observed
+WA,House,County code (FIPS),470599,470599,observed
+WA,House,Municipality,470599,,unscored for source/subject
+WA,House,Subdivision,470599,416260,observed
+WA,House,Tax code area,470599,470599,observed
+WA,House,Property type,470599,470599,observed
+WA,House,Property class,470599,470599,observed
+WA,House,Property subtype,470599,,unscored for source/subject
+WA,House,Land use,470599,470599,observed
+WA,House,County use code,470599,470599,observed
+WA,House,Occupancy,470599,,unscored for source/subject
+WA,House,Legal description,470599,,unscored for source/subject
+WA,House,ATTOM ID,470599,,unscored for source/subject
+WA,House,Estimated value,470599,,unscored for source/subject
+WA,House,Estimate range,470599,,unscored for source/subject
+WA,House,Confidence score,470599,,unscored for source/subject
+WA,House,Estimate date,470599,,unscored for source/subject
+WA,Townhouse,Year built,33466,33466,observed
+WA,Townhouse,Effective year built,33466,,unscored for source/subject
+WA,Townhouse,Living area,33466,33466,observed
+WA,Townhouse,Gross area,33466,,unscored for source/subject
+WA,Townhouse,Ground floor area,33466,33466,observed
+WA,Townhouse,Stories,33466,33466,observed
+WA,Townhouse,Bedrooms,33466,33443,observed
+WA,Townhouse,Bathrooms,33466,33466,observed
+WA,Townhouse,Full baths,33466,33466,observed
+WA,Townhouse,Partial baths,33466,14483,observed
+WA,Townhouse,Fireplaces,33466,33466,observed
+WA,Townhouse,Architectural style,33466,,unscored for source/subject
+WA,Townhouse,Condition,33466,33466,observed
+WA,Townhouse,Quality,33466,33466,observed
+WA,Townhouse,Buildings on the parcel,33466,,unscored for source/subject
+WA,Townhouse,Exterior walls,33466,,unscored for source/subject
+WA,Townhouse,Roof cover,33466,,unscored for source/subject
+WA,Townhouse,Heating,33466,33464,observed
+WA,Townhouse,Cooling,33466,,unscored for source/subject
+WA,Townhouse,Garage,33466,20563,observed
+WA,Townhouse,Parking type,33466,20563,observed
+WA,Townhouse,Parking spaces,33466,,unscored for source/subject
+WA,Townhouse,Parking area,33466,,unscored for source/subject
+WA,Townhouse,Lot size,33466,33466,observed
+WA,Townhouse,Lot area,33466,33466,observed
+WA,Townhouse,Lot number,33466,32468,observed
+WA,Townhouse,Address on record,33466,33410,observed
+WA,Townhouse,ZIP+4,33466,,unscored for source/subject
+WA,Townhouse,Parcel number (APN),33466,33466,observed
+WA,Townhouse,County,33466,33466,observed
+WA,Townhouse,County code (FIPS),33466,33466,observed
+WA,Townhouse,Municipality,33466,,unscored for source/subject
+WA,Townhouse,Subdivision,33466,32439,observed
+WA,Townhouse,Tax code area,33466,33466,observed
+WA,Townhouse,Property type,33466,33466,observed
+WA,Townhouse,Property class,33466,33466,observed
+WA,Townhouse,Property subtype,33466,,unscored for source/subject
+WA,Townhouse,Land use,33466,33466,observed
+WA,Townhouse,County use code,33466,33466,observed
+WA,Townhouse,Occupancy,33466,,unscored for source/subject
+WA,Townhouse,Legal description,33466,,unscored for source/subject
+WA,Townhouse,ATTOM ID,33466,,unscored for source/subject
+WA,Townhouse,Estimated value,33466,,unscored for source/subject
+WA,Townhouse,Estimate range,33466,,unscored for source/subject
+WA,Townhouse,Confidence score,33466,,unscored for source/subject
+WA,Townhouse,Estimate date,33466,,unscored for source/subject
+WA,Apartment,Year built,6995,6995,observed
+WA,Apartment,Effective year built,6995,6994,observed
+WA,Apartment,Living area,6995,,unscored for source/subject
+WA,Apartment,Gross area,6995,,unscored for source/subject
+WA,Apartment,Ground floor area,6995,,unscored for source/subject
+WA,Apartment,Stories,6995,6993,observed
+WA,Apartment,Bedrooms,6995,,unscored for source/subject
+WA,Apartment,Bathrooms,6995,,unscored for source/subject
+WA,Apartment,Full baths,6995,,unscored for source/subject
+WA,Apartment,Partial baths,6995,,unscored for source/subject
+WA,Apartment,Fireplaces,6995,,unscored for source/subject
+WA,Apartment,Architectural style,6995,,unscored for source/subject
+WA,Apartment,Condition,6995,6994,observed
+WA,Apartment,Quality,6995,6995,observed
+WA,Apartment,Buildings on the parcel,6995,6985,observed
+WA,Apartment,Exterior walls,6995,,unscored for source/subject
+WA,Apartment,Roof cover,6995,,unscored for source/subject
+WA,Apartment,Heating,6995,,unscored for source/subject
+WA,Apartment,Cooling,6995,,unscored for source/subject
+WA,Apartment,Garage,6995,,unscored for source/subject
+WA,Apartment,Parking type,6995,,unscored for source/subject
+WA,Apartment,Parking spaces,6995,,unscored for source/subject
+WA,Apartment,Parking area,6995,,unscored for source/subject
+WA,Apartment,Lot size,6995,6995,observed
+WA,Apartment,Lot area,6995,6995,observed
+WA,Apartment,Lot number,6995,5800,observed
+WA,Apartment,Address on record,6995,6965,observed
+WA,Apartment,ZIP+4,6995,,unscored for source/subject
+WA,Apartment,Parcel number (APN),6995,6995,observed
+WA,Apartment,County,6995,6995,observed
+WA,Apartment,County code (FIPS),6995,6995,observed
+WA,Apartment,Municipality,6995,,unscored for source/subject
+WA,Apartment,Subdivision,6995,5860,observed
+WA,Apartment,Tax code area,6995,6995,observed
+WA,Apartment,Property type,6995,6995,observed
+WA,Apartment,Property class,6995,6995,observed
+WA,Apartment,Property subtype,6995,,unscored for source/subject
+WA,Apartment,Land use,6995,6995,observed
+WA,Apartment,County use code,6995,6995,observed
+WA,Apartment,Occupancy,6995,,unscored for source/subject
+WA,Apartment,Legal description,6995,,unscored for source/subject
+WA,Apartment,ATTOM ID,6995,,unscored for source/subject
+WA,Apartment,Estimated value,6995,,unscored for source/subject
+WA,Apartment,Estimate range,6995,,unscored for source/subject
+WA,Apartment,Confidence score,6995,,unscored for source/subject
+WA,Apartment,Estimate date,6995,,unscored for source/subject
+WA,Office,Year built,3337,3337,observed
+WA,Office,Effective year built,3337,3337,observed
+WA,Office,Living area,3337,,unscored for source/subject
+WA,Office,Gross area,3337,3337,observed
+WA,Office,Ground floor area,3337,,unscored for source/subject
+WA,Office,Stories,3337,3337,observed
+WA,Office,Bedrooms,3337,,unscored for source/subject
+WA,Office,Bathrooms,3337,,unscored for source/subject
+WA,Office,Full baths,3337,,unscored for source/subject
+WA,Office,Partial baths,3337,,unscored for source/subject
+WA,Office,Fireplaces,3337,,unscored for source/subject
+WA,Office,Architectural style,3337,,unscored for source/subject
+WA,Office,Condition,3337,,unscored for source/subject
+WA,Office,Quality,3337,3337,observed
+WA,Office,Buildings on the parcel,3337,3336,observed
+WA,Office,Exterior walls,3337,,unscored for source/subject
+WA,Office,Roof cover,3337,,unscored for source/subject
+WA,Office,Heating,3337,3306,observed
+WA,Office,Cooling,3337,,unscored for source/subject
+WA,Office,Garage,3337,,unscored for source/subject
+WA,Office,Parking type,3337,,unscored for source/subject
+WA,Office,Parking spaces,3337,,unscored for source/subject
+WA,Office,Parking area,3337,,unscored for source/subject
+WA,Office,Lot size,3337,3337,observed
+WA,Office,Lot area,3337,3337,observed
+WA,Office,Lot number,3337,2458,observed
+WA,Office,Address on record,3337,3319,observed
+WA,Office,ZIP+4,3337,,unscored for source/subject
+WA,Office,Parcel number (APN),3337,3337,observed
+WA,Office,County,3337,3337,observed
+WA,Office,County code (FIPS),3337,3337,observed
+WA,Office,Municipality,3337,,unscored for source/subject
+WA,Office,Subdivision,3337,2518,observed
+WA,Office,Tax code area,3337,3337,observed
+WA,Office,Property type,3337,3337,observed
+WA,Office,Property class,3337,3337,observed
+WA,Office,Property subtype,3337,658,observed
+WA,Office,Land use,3337,3337,observed
+WA,Office,County use code,3337,3337,observed
+WA,Office,Occupancy,3337,,unscored for source/subject
+WA,Office,Legal description,3337,,unscored for source/subject
+WA,Office,ATTOM ID,3337,,unscored for source/subject
+WA,Office,Estimated value,3337,,unscored for source/subject
+WA,Office,Estimate range,3337,,unscored for source/subject
+WA,Office,Confidence score,3337,,unscored for source/subject
+WA,Office,Estimate date,3337,,unscored for source/subject
+TX,House,Year built,539442,538880,observed
+TX,House,Effective year built,539442,538878,observed
+TX,House,Living area,539442,538973,observed
+TX,House,Gross area,539442,,unscored for source/subject
+TX,House,Ground floor area,539442,,unscored for source/subject
+TX,House,Stories,539442,538886,observed
+TX,House,Bedrooms,539442,529857,observed
+TX,House,Bathrooms,539442,539442,observed
+TX,House,Full baths,539442,539442,observed
+TX,House,Partial baths,539442,539442,observed
+TX,House,Fireplaces,539442,539442,observed
+TX,House,Architectural style,539442,,unscored for source/subject
+TX,House,Condition,539442,,unscored for source/subject
+TX,House,Quality,539442,,unscored for source/subject
+TX,House,Buildings on the parcel,539442,,unscored for source/subject
+TX,House,Exterior walls,539442,538282,observed
+TX,House,Roof cover,539442,538558,observed
+TX,House,Heating,539442,538586,observed
+TX,House,Cooling,539442,538554,observed
+TX,House,Garage,539442,440425,observed
+TX,House,Parking type,539442,464221,observed
+TX,House,Parking spaces,539442,,unscored for source/subject
+TX,House,Parking area,539442,464151,observed
+TX,House,Lot size,539442,343328,observed
+TX,House,Lot area,539442,343328,observed
+TX,House,Lot number,539442,,unscored for source/subject
+TX,House,Address on record,539442,539442,observed
+TX,House,ZIP+4,539442,512113,observed
+TX,House,Parcel number (APN),539442,539442,observed
+TX,House,County,539442,539442,observed
+TX,House,County code (FIPS),539442,539442,observed
+TX,House,Municipality,539442,539442,observed
+TX,House,Subdivision,539442,,unscored for source/subject
+TX,House,Tax code area,539442,,unscored for source/subject
+TX,House,Property type,539442,539442,observed
+TX,House,Property class,539442,539442,observed
+TX,House,Property subtype,539442,,unscored for source/subject
+TX,House,Land use,539442,539442,observed
+TX,House,County use code,539442,539442,observed
+TX,House,Occupancy,539442,,unscored for source/subject
+TX,House,Legal description,539442,538179,observed
+TX,House,ATTOM ID,539442,,unscored for source/subject
+TX,House,Estimated value,539442,,unscored for source/subject
+TX,House,Estimate range,539442,,unscored for source/subject
+TX,House,Confidence score,539442,,unscored for source/subject
+TX,House,Estimate date,539442,,unscored for source/subject
+TX,Townhouse,Year built,21317,21286,observed
+TX,Townhouse,Effective year built,21317,21286,observed
+TX,Townhouse,Living area,21317,21289,observed
+TX,Townhouse,Gross area,21317,,unscored for source/subject
+TX,Townhouse,Ground floor area,21317,,unscored for source/subject
+TX,Townhouse,Stories,21317,21285,observed
+TX,Townhouse,Bedrooms,21317,20609,observed
+TX,Townhouse,Bathrooms,21317,21317,observed
+TX,Townhouse,Full baths,21317,21317,observed
+TX,Townhouse,Partial baths,21317,21317,observed
+TX,Townhouse,Fireplaces,21317,21317,observed
+TX,Townhouse,Architectural style,21317,,unscored for source/subject
+TX,Townhouse,Condition,21317,,unscored for source/subject
+TX,Townhouse,Quality,21317,,unscored for source/subject
+TX,Townhouse,Buildings on the parcel,21317,,unscored for source/subject
+TX,Townhouse,Exterior walls,21317,21222,observed
+TX,Townhouse,Roof cover,21317,21274,observed
+TX,Townhouse,Heating,21317,21263,observed
+TX,Townhouse,Cooling,21317,21260,observed
+TX,Townhouse,Garage,21317,17073,observed
+TX,Townhouse,Parking type,21317,19609,observed
+TX,Townhouse,Parking spaces,21317,,unscored for source/subject
+TX,Townhouse,Parking area,21317,19608,observed
+TX,Townhouse,Lot size,21317,12166,observed
+TX,Townhouse,Lot area,21317,12166,observed
+TX,Townhouse,Lot number,21317,,unscored for source/subject
+TX,Townhouse,Address on record,21317,21317,observed
+TX,Townhouse,ZIP+4,21317,16444,observed
+TX,Townhouse,Parcel number (APN),21317,21317,observed
+TX,Townhouse,County,21317,21317,observed
+TX,Townhouse,County code (FIPS),21317,21317,observed
+TX,Townhouse,Municipality,21317,21317,observed
+TX,Townhouse,Subdivision,21317,,unscored for source/subject
+TX,Townhouse,Tax code area,21317,,unscored for source/subject
+TX,Townhouse,Property type,21317,21317,observed
+TX,Townhouse,Property class,21317,21317,observed
+TX,Townhouse,Property subtype,21317,,unscored for source/subject
+TX,Townhouse,Land use,21317,21317,observed
+TX,Townhouse,County use code,21317,21317,observed
+TX,Townhouse,Occupancy,21317,,unscored for source/subject
+TX,Townhouse,Legal description,21317,21307,observed
+TX,Townhouse,ATTOM ID,21317,,unscored for source/subject
+TX,Townhouse,Estimated value,21317,,unscored for source/subject
+TX,Townhouse,Estimate range,21317,,unscored for source/subject
+TX,Townhouse,Confidence score,21317,,unscored for source/subject
+TX,Townhouse,Estimate date,21317,,unscored for source/subject
+TX,Condo,Year built,40930,40686,observed
+TX,Condo,Effective year built,40930,40686,observed
+TX,Condo,Living area,40930,40903,observed
+TX,Condo,Gross area,40930,,unscored for source/subject
+TX,Condo,Ground floor area,40930,,unscored for source/subject
+TX,Condo,Stories,40930,,unscored for source/subject
+TX,Condo,Bedrooms,40930,37731,observed
+TX,Condo,Bathrooms,40930,40930,observed
+TX,Condo,Full baths,40930,40930,observed
+TX,Condo,Partial baths,40930,40930,observed
+TX,Condo,Fireplaces,40930,40930,observed
+TX,Condo,Architectural style,40930,,unscored for source/subject
+TX,Condo,Condition,40930,,unscored for source/subject
+TX,Condo,Quality,40930,,unscored for source/subject
+TX,Condo,Buildings on the parcel,40930,,unscored for source/subject
+TX,Condo,Exterior walls,40930,,unscored for source/subject
+TX,Condo,Roof cover,40930,,unscored for source/subject
+TX,Condo,Heating,40930,40789,observed
+TX,Condo,Cooling,40930,40789,observed
+TX,Condo,Garage,40930,,unscored for source/subject
+TX,Condo,Parking type,40930,,unscored for source/subject
+TX,Condo,Parking spaces,40930,,unscored for source/subject
+TX,Condo,Parking area,40930,,unscored for source/subject
+TX,Condo,Lot size,40930,,unscored for source/subject
+TX,Condo,Lot area,40930,,unscored for source/subject
+TX,Condo,Lot number,40930,,unscored for source/subject
+TX,Condo,Address on record,40930,40930,observed
+TX,Condo,ZIP+4,40930,37467,observed
+TX,Condo,Parcel number (APN),40930,40930,observed
+TX,Condo,County,40930,40930,observed
+TX,Condo,County code (FIPS),40930,40930,observed
+TX,Condo,Municipality,40930,40930,observed
+TX,Condo,Subdivision,40930,,unscored for source/subject
+TX,Condo,Tax code area,40930,,unscored for source/subject
+TX,Condo,Property type,40930,40930,observed
+TX,Condo,Property class,40930,40930,observed
+TX,Condo,Property subtype,40930,,unscored for source/subject
+TX,Condo,Land use,40930,40930,observed
+TX,Condo,County use code,40930,40930,observed
+TX,Condo,Occupancy,40930,,unscored for source/subject
+TX,Condo,Legal description,40930,40927,observed
+TX,Condo,ATTOM ID,40930,,unscored for source/subject
+TX,Condo,Estimated value,40930,,unscored for source/subject
+TX,Condo,Estimate range,40930,,unscored for source/subject
+TX,Condo,Confidence score,40930,,unscored for source/subject
+TX,Condo,Estimate date,40930,,unscored for source/subject
+TX,Apartment,Year built,2599,2599,observed
+TX,Apartment,Effective year built,2599,,unscored for source/subject
+TX,Apartment,Living area,2599,,unscored for source/subject
+TX,Apartment,Gross area,2599,2599,observed
+TX,Apartment,Ground floor area,2599,,unscored for source/subject
+TX,Apartment,Stories,2599,2598,observed
+TX,Apartment,Bedrooms,2599,,unscored for source/subject
+TX,Apartment,Bathrooms,2599,,unscored for source/subject
+TX,Apartment,Full baths,2599,,unscored for source/subject
+TX,Apartment,Partial baths,2599,,unscored for source/subject
+TX,Apartment,Fireplaces,2599,,unscored for source/subject
+TX,Apartment,Architectural style,2599,,unscored for source/subject
+TX,Apartment,Condition,2599,2599,observed
+TX,Apartment,Quality,2599,2599,observed
+TX,Apartment,Buildings on the parcel,2599,,unscored for source/subject
+TX,Apartment,Exterior walls,2599,,unscored for source/subject
+TX,Apartment,Roof cover,2599,,unscored for source/subject
+TX,Apartment,Heating,2599,2518,observed
+TX,Apartment,Cooling,2599,2486,observed
+TX,Apartment,Garage,2599,,unscored for source/subject
+TX,Apartment,Parking type,2599,,unscored for source/subject
+TX,Apartment,Parking spaces,2599,,unscored for source/subject
+TX,Apartment,Parking area,2599,,unscored for source/subject
+TX,Apartment,Lot size,2599,2561,observed
+TX,Apartment,Lot area,2599,2561,observed
+TX,Apartment,Lot number,2599,,unscored for source/subject
+TX,Apartment,Address on record,2599,2599,observed
+TX,Apartment,ZIP+4,2599,2278,observed
+TX,Apartment,Parcel number (APN),2599,2599,observed
+TX,Apartment,County,2599,2599,observed
+TX,Apartment,County code (FIPS),2599,2599,observed
+TX,Apartment,Municipality,2599,2599,observed
+TX,Apartment,Subdivision,2599,,unscored for source/subject
+TX,Apartment,Tax code area,2599,,unscored for source/subject
+TX,Apartment,Property type,2599,2599,observed
+TX,Apartment,Property class,2599,2599,observed
+TX,Apartment,Property subtype,2599,,unscored for source/subject
+TX,Apartment,Land use,2599,2599,observed
+TX,Apartment,County use code,2599,2599,observed
+TX,Apartment,Occupancy,2599,,unscored for source/subject
+TX,Apartment,Legal description,2599,2595,observed
+TX,Apartment,ATTOM ID,2599,,unscored for source/subject
+TX,Apartment,Estimated value,2599,,unscored for source/subject
+TX,Apartment,Estimate range,2599,,unscored for source/subject
+TX,Apartment,Confidence score,2599,,unscored for source/subject
+TX,Apartment,Estimate date,2599,,unscored for source/subject
+TX,Office,Year built,3608,3607,observed
+TX,Office,Effective year built,3608,,unscored for source/subject
+TX,Office,Living area,3608,,unscored for source/subject
+TX,Office,Gross area,3608,3608,observed
+TX,Office,Ground floor area,3608,,unscored for source/subject
+TX,Office,Stories,3608,3605,observed
+TX,Office,Bedrooms,3608,,unscored for source/subject
+TX,Office,Bathrooms,3608,,unscored for source/subject
+TX,Office,Full baths,3608,,unscored for source/subject
+TX,Office,Partial baths,3608,,unscored for source/subject
+TX,Office,Fireplaces,3608,,unscored for source/subject
+TX,Office,Architectural style,3608,,unscored for source/subject
+TX,Office,Condition,3608,3608,observed
+TX,Office,Quality,3608,3608,observed
+TX,Office,Buildings on the parcel,3608,,unscored for source/subject
+TX,Office,Exterior walls,3608,,unscored for source/subject
+TX,Office,Roof cover,3608,,unscored for source/subject
+TX,Office,Heating,3608,3501,observed
+TX,Office,Cooling,3608,3496,observed
+TX,Office,Garage,3608,,unscored for source/subject
+TX,Office,Parking type,3608,,unscored for source/subject
+TX,Office,Parking spaces,3608,,unscored for source/subject
+TX,Office,Parking area,3608,,unscored for source/subject
+TX,Office,Lot size,3608,3480,observed
+TX,Office,Lot area,3608,3480,observed
+TX,Office,Lot number,3608,,unscored for source/subject
+TX,Office,Address on record,3608,3608,observed
+TX,Office,ZIP+4,3608,3046,observed
+TX,Office,Parcel number (APN),3608,3608,observed
+TX,Office,County,3608,3608,observed
+TX,Office,County code (FIPS),3608,3608,observed
+TX,Office,Municipality,3608,3608,observed
+TX,Office,Subdivision,3608,,unscored for source/subject
+TX,Office,Tax code area,3608,,unscored for source/subject
+TX,Office,Property type,3608,3608,observed
+TX,Office,Property class,3608,3608,observed
+TX,Office,Property subtype,3608,1038,observed
+TX,Office,Land use,3608,3608,observed
+TX,Office,County use code,3608,3608,observed
+TX,Office,Occupancy,3608,,unscored for source/subject
+TX,Office,Legal description,3608,3598,observed
+TX,Office,ATTOM ID,3608,,unscored for source/subject
+TX,Office,Estimated value,3608,,unscored for source/subject
+TX,Office,Estimate range,3608,,unscored for source/subject
+TX,Office,Confidence score,3608,,unscored for source/subject
+TX,Office,Estimate date,3608,,unscored for source/subject
+CA,House,Year built,1489004,1471906,observed
+CA,House,Effective year built,1489004,1472223,observed
+CA,House,Living area,1489004,,unscored for source/subject
+CA,House,Gross area,1489004,,unscored for source/subject
+CA,House,Ground floor area,1489004,,unscored for source/subject
+CA,House,Stories,1489004,0,measured zero
+CA,House,Bedrooms,1489004,1467368,observed
+CA,House,Bathrooms,1489004,,unscored for source/subject
+CA,House,Full baths,1489004,,unscored for source/subject
+CA,House,Partial baths,1489004,,unscored for source/subject
+CA,House,Fireplaces,1489004,,unscored for source/subject
+CA,House,Architectural style,1489004,,unscored for source/subject
+CA,House,Condition,1489004,,unscored for source/subject
+CA,House,Quality,1489004,,unscored for source/subject
+CA,House,Buildings on the parcel,1489004,,unscored for source/subject
+CA,House,Exterior walls,1489004,,unscored for source/subject
+CA,House,Roof cover,1489004,,unscored for source/subject
+CA,House,Heating,1489004,,unscored for source/subject
+CA,House,Cooling,1489004,,unscored for source/subject
+CA,House,Garage,1489004,,unscored for source/subject
+CA,House,Parking type,1489004,,unscored for source/subject
+CA,House,Parking spaces,1489004,,unscored for source/subject
+CA,House,Parking area,1489004,,unscored for source/subject
+CA,House,Lot size,1489004,,unscored for source/subject
+CA,House,Lot area,1489004,,unscored for source/subject
+CA,House,Lot number,1489004,,unscored for source/subject
+CA,House,Address on record,1489004,1481019,observed
+CA,House,ZIP+4,1489004,1468773,observed
+CA,House,Parcel number (APN),1489004,1489004,observed
+CA,House,County,1489004,1489004,observed
+CA,House,County code (FIPS),1489004,1489004,observed
+CA,House,Municipality,1489004,1300594,observed
+CA,House,Subdivision,1489004,,unscored for source/subject
+CA,House,Tax code area,1489004,1489004,observed
+CA,House,Property type,1489004,1489004,observed
+CA,House,Property class,1489004,1489004,observed
+CA,House,Property subtype,1489004,,unscored for source/subject
+CA,House,Land use,1489004,1489004,observed
+CA,House,County use code,1489004,1489004,observed
+CA,House,Occupancy,1489004,,unscored for source/subject
+CA,House,Legal description,1489004,1489004,observed
+CA,House,ATTOM ID,1489004,,unscored for source/subject
+CA,House,Estimated value,1489004,,unscored for source/subject
+CA,House,Estimate range,1489004,,unscored for source/subject
+CA,House,Confidence score,1489004,,unscored for source/subject
+CA,House,Estimate date,1489004,,unscored for source/subject
+CA,Townhouse,Year built,272,271,observed
+CA,Townhouse,Effective year built,272,271,observed
+CA,Townhouse,Living area,272,,unscored for source/subject
+CA,Townhouse,Gross area,272,,unscored for source/subject
+CA,Townhouse,Ground floor area,272,,unscored for source/subject
+CA,Townhouse,Stories,272,0,measured zero
+CA,Townhouse,Bedrooms,272,267,observed
+CA,Townhouse,Bathrooms,272,,unscored for source/subject
+CA,Townhouse,Full baths,272,,unscored for source/subject
+CA,Townhouse,Partial baths,272,,unscored for source/subject
+CA,Townhouse,Fireplaces,272,,unscored for source/subject
+CA,Townhouse,Architectural style,272,,unscored for source/subject
+CA,Townhouse,Condition,272,,unscored for source/subject
+CA,Townhouse,Quality,272,,unscored for source/subject
+CA,Townhouse,Buildings on the parcel,272,,unscored for source/subject
+CA,Townhouse,Exterior walls,272,,unscored for source/subject
+CA,Townhouse,Roof cover,272,,unscored for source/subject
+CA,Townhouse,Heating,272,,unscored for source/subject
+CA,Townhouse,Cooling,272,,unscored for source/subject
+CA,Townhouse,Garage,272,,unscored for source/subject
+CA,Townhouse,Parking type,272,,unscored for source/subject
+CA,Townhouse,Parking spaces,272,,unscored for source/subject
+CA,Townhouse,Parking area,272,,unscored for source/subject
+CA,Townhouse,Lot size,272,,unscored for source/subject
+CA,Townhouse,Lot area,272,,unscored for source/subject
+CA,Townhouse,Lot number,272,,unscored for source/subject
+CA,Townhouse,Address on record,272,271,observed
+CA,Townhouse,ZIP+4,272,257,observed
+CA,Townhouse,Parcel number (APN),272,272,observed
+CA,Townhouse,County,272,272,observed
+CA,Townhouse,County code (FIPS),272,272,observed
+CA,Townhouse,Municipality,272,270,observed
+CA,Townhouse,Subdivision,272,,unscored for source/subject
+CA,Townhouse,Tax code area,272,272,observed
+CA,Townhouse,Property type,272,272,observed
+CA,Townhouse,Property class,272,272,observed
+CA,Townhouse,Property subtype,272,,unscored for source/subject
+CA,Townhouse,Land use,272,272,observed
+CA,Townhouse,County use code,272,272,observed
+CA,Townhouse,Occupancy,272,,unscored for source/subject
+CA,Townhouse,Legal description,272,272,observed
+CA,Townhouse,ATTOM ID,272,,unscored for source/subject
+CA,Townhouse,Estimated value,272,,unscored for source/subject
+CA,Townhouse,Estimate range,272,,unscored for source/subject
+CA,Townhouse,Confidence score,272,,unscored for source/subject
+CA,Townhouse,Estimate date,272,,unscored for source/subject
+CA,Condo,Year built,256917,256150,observed
+CA,Condo,Effective year built,256917,256093,observed
+CA,Condo,Living area,256917,,unscored for source/subject
+CA,Condo,Gross area,256917,,unscored for source/subject
+CA,Condo,Ground floor area,256917,,unscored for source/subject
+CA,Condo,Stories,256917,,unscored for source/subject
+CA,Condo,Bedrooms,256917,251080,observed
+CA,Condo,Bathrooms,256917,,unscored for source/subject
+CA,Condo,Full baths,256917,,unscored for source/subject
+CA,Condo,Partial baths,256917,,unscored for source/subject
+CA,Condo,Fireplaces,256917,,unscored for source/subject
+CA,Condo,Architectural style,256917,,unscored for source/subject
+CA,Condo,Condition,256917,,unscored for source/subject
+CA,Condo,Quality,256917,,unscored for source/subject
+CA,Condo,Buildings on the parcel,256917,,unscored for source/subject
+CA,Condo,Exterior walls,256917,,unscored for source/subject
+CA,Condo,Roof cover,256917,,unscored for source/subject
+CA,Condo,Heating,256917,,unscored for source/subject
+CA,Condo,Cooling,256917,,unscored for source/subject
+CA,Condo,Garage,256917,,unscored for source/subject
+CA,Condo,Parking type,256917,,unscored for source/subject
+CA,Condo,Parking spaces,256917,,unscored for source/subject
+CA,Condo,Parking area,256917,,unscored for source/subject
+CA,Condo,Lot size,256917,,unscored for source/subject
+CA,Condo,Lot area,256917,,unscored for source/subject
+CA,Condo,Lot number,256917,,unscored for source/subject
+CA,Condo,Address on record,256917,256917,observed
+CA,Condo,ZIP+4,256917,244395,observed
+CA,Condo,Parcel number (APN),256917,256917,observed
+CA,Condo,County,256917,256917,observed
+CA,Condo,County code (FIPS),256917,256917,observed
+CA,Condo,Municipality,256917,248879,observed
+CA,Condo,Subdivision,256917,,unscored for source/subject
+CA,Condo,Tax code area,256917,256917,observed
+CA,Condo,Property type,256917,256917,observed
+CA,Condo,Property class,256917,256917,observed
+CA,Condo,Property subtype,256917,,unscored for source/subject
+CA,Condo,Land use,256917,256917,observed
+CA,Condo,County use code,256917,256917,observed
+CA,Condo,Occupancy,256917,,unscored for source/subject
+CA,Condo,Legal description,256917,256917,observed
+CA,Condo,ATTOM ID,256917,,unscored for source/subject
+CA,Condo,Estimated value,256917,,unscored for source/subject
+CA,Condo,Estimate range,256917,,unscored for source/subject
+CA,Condo,Confidence score,256917,,unscored for source/subject
+CA,Condo,Estimate date,256917,,unscored for source/subject
+CA,Apartment,Year built,67697,51301,observed
+CA,Apartment,Effective year built,67697,51219,observed
+CA,Apartment,Living area,67697,,unscored for source/subject
+CA,Apartment,Gross area,67697,,unscored for source/subject
+CA,Apartment,Ground floor area,67697,,unscored for source/subject
+CA,Apartment,Stories,67697,0,measured zero
+CA,Apartment,Bedrooms,67697,,unscored for source/subject
+CA,Apartment,Bathrooms,67697,,unscored for source/subject
+CA,Apartment,Full baths,67697,,unscored for source/subject
+CA,Apartment,Partial baths,67697,,unscored for source/subject
+CA,Apartment,Fireplaces,67697,,unscored for source/subject
+CA,Apartment,Architectural style,67697,,unscored for source/subject
+CA,Apartment,Condition,67697,,unscored for source/subject
+CA,Apartment,Quality,67697,,unscored for source/subject
+CA,Apartment,Buildings on the parcel,67697,,unscored for source/subject
+CA,Apartment,Exterior walls,67697,,unscored for source/subject
+CA,Apartment,Roof cover,67697,,unscored for source/subject
+CA,Apartment,Heating,67697,,unscored for source/subject
+CA,Apartment,Cooling,67697,,unscored for source/subject
+CA,Apartment,Garage,67697,,unscored for source/subject
+CA,Apartment,Parking type,67697,,unscored for source/subject
+CA,Apartment,Parking spaces,67697,,unscored for source/subject
+CA,Apartment,Parking area,67697,,unscored for source/subject
+CA,Apartment,Lot size,67697,,unscored for source/subject
+CA,Apartment,Lot area,67697,,unscored for source/subject
+CA,Apartment,Lot number,67697,,unscored for source/subject
+CA,Apartment,Address on record,67697,67638,observed
+CA,Apartment,ZIP+4,67697,67244,observed
+CA,Apartment,Parcel number (APN),67697,67697,observed
+CA,Apartment,County,67697,67697,observed
+CA,Apartment,County code (FIPS),67697,67697,observed
+CA,Apartment,Municipality,67697,65419,observed
+CA,Apartment,Subdivision,67697,,unscored for source/subject
+CA,Apartment,Tax code area,67697,67697,observed
+CA,Apartment,Property type,67697,67697,observed
+CA,Apartment,Property class,67697,67697,observed
+CA,Apartment,Property subtype,67697,,unscored for source/subject
+CA,Apartment,Land use,67697,67697,observed
+CA,Apartment,County use code,67697,67697,observed
+CA,Apartment,Occupancy,67697,,unscored for source/subject
+CA,Apartment,Legal description,67697,67697,observed
+CA,Apartment,ATTOM ID,67697,,unscored for source/subject
+CA,Apartment,Estimated value,67697,,unscored for source/subject
+CA,Apartment,Estimate range,67697,,unscored for source/subject
+CA,Apartment,Confidence score,67697,,unscored for source/subject
+CA,Apartment,Estimate date,67697,,unscored for source/subject
+CA,Office,Year built,13956,11512,observed
+CA,Office,Effective year built,13956,11508,observed
+CA,Office,Living area,13956,,unscored for source/subject
+CA,Office,Gross area,13956,,unscored for source/subject
+CA,Office,Ground floor area,13956,,unscored for source/subject
+CA,Office,Stories,13956,8268,observed
+CA,Office,Bedrooms,13956,,unscored for source/subject
+CA,Office,Bathrooms,13956,,unscored for source/subject
+CA,Office,Full baths,13956,,unscored for source/subject
+CA,Office,Partial baths,13956,,unscored for source/subject
+CA,Office,Fireplaces,13956,,unscored for source/subject
+CA,Office,Architectural style,13956,,unscored for source/subject
+CA,Office,Condition,13956,,unscored for source/subject
+CA,Office,Quality,13956,,unscored for source/subject
+CA,Office,Buildings on the parcel,13956,,unscored for source/subject
+CA,Office,Exterior walls,13956,,unscored for source/subject
+CA,Office,Roof cover,13956,,unscored for source/subject
+CA,Office,Heating,13956,,unscored for source/subject
+CA,Office,Cooling,13956,,unscored for source/subject
+CA,Office,Garage,13956,,unscored for source/subject
+CA,Office,Parking type,13956,,unscored for source/subject
+CA,Office,Parking spaces,13956,,unscored for source/subject
+CA,Office,Parking area,13956,,unscored for source/subject
+CA,Office,Lot size,13956,,unscored for source/subject
+CA,Office,Lot area,13956,,unscored for source/subject
+CA,Office,Lot number,13956,,unscored for source/subject
+CA,Office,Address on record,13956,13605,observed
+CA,Office,ZIP+4,13956,12993,observed
+CA,Office,Parcel number (APN),13956,13956,observed
+CA,Office,County,13956,13956,observed
+CA,Office,County code (FIPS),13956,13956,observed
+CA,Office,Municipality,13956,13294,observed
+CA,Office,Subdivision,13956,,unscored for source/subject
+CA,Office,Tax code area,13956,13956,observed
+CA,Office,Property type,13956,13956,observed
+CA,Office,Property class,13956,13956,observed
+CA,Office,Property subtype,13956,,unscored for source/subject
+CA,Office,Land use,13956,13956,observed
+CA,Office,County use code,13956,13956,observed
+CA,Office,Occupancy,13956,,unscored for source/subject
+CA,Office,Legal description,13956,13956,observed
+CA,Office,ATTOM ID,13956,,unscored for source/subject
+CA,Office,Estimated value,13956,,unscored for source/subject
+CA,Office,Estimate range,13956,,unscored for source/subject
+CA,Office,Confidence score,13956,,unscored for source/subject
+CA,Office,Estimate date,13956,,unscored for source/subject

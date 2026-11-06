@@ -105,10 +105,12 @@ function ambiguous(candidates, requested, reason) {
 }
 
 /**
- * @param {object} query   addressKey.parse()'s parts with `zip`
+ * @param {object} address addressKey.parse()'s parts with `zip`
  * @param {object[]} records  What the release holds at this street name and house number
  */
-function resolve(query, records) {
+function resolve(address, records) {
+  // "BLDG A" with no unit under it: the building letter is what tells homes apart there.
+  const query = !address.unit && address.building ? { ...address, unit: address.building, building: '' } : address;
   const here = inUrbanization(query, inTown(query, inZip(query, onStreet(query, records))));
   const requested = query.unit ? 'unit' : 'property';
   if (!here.length) return answer('unsupported', { reason: 'no_record', requested_subject: requested });

@@ -1,0 +1,101 @@
+rank,fips,name,state,pop,hits
+181,01089,Madison County,Alabama,423355,1
+374,01081,Lee County,Alabama,187847,1
+966,01071,Jackson County,Alabama,53780,1
+3112,02060,Bristol Bay Borough,Alaska,884,1
+189,05119,Pulaski County,Arkansas,401209,1
+1057,05035,Crittenden County,Arkansas,46633,1
+153,06107,Tulare County,California,483546,1
+170,06053,Monterey County,California,436251,1
+319,06113,Yolo County,California,225251,1
+671,06045,Mendocino County,California,89175,1
+208,08123,Weld County,Colorado,369745,1
+2630,08065,Lake County,Colorado,7369,1
+270,10005,Sussex County,Delaware,271134,1
+158,12097,Osceola County,Florida,468058,1
+183,12021,Collier County,Florida,416233,1
+252,12001,Alachua County,Florida,291782,1
+410,12017,Citrus County,Florida,170174,1
+1951,12029,Dixie County,Florida,17614,1
+321,13139,Hall County,Georgia,221745,1
+510,13045,Carroll County,Georgia,129911,1
+786,13255,Spalding County,Georgia,70292,1
+1641,13267,Tattnall County,Georgia,24275,1
+274,16027,Canyon County,Idaho,266892,1
+256,17201,Winnebago County,Illinois,283790,1
+476,17161,Rock Island County,Illinois,142731,1
+1382,17057,Fulton County,Illinois,32510,1
+268,18141,St. Joseph County,Indiana,273744,1
+514,18019,Clark County,Indiana,127479,1
+1218,18107,Montgomery County,Indiana,38633,1
+438,19103,Johnson County,Iowa,160080,1
+1966,19121,Madison County,Iowa,17161,1
+1347,20079,Harvey County,Kansas,33642,1
+568,21093,Hardin County,Kentucky,112826,1
+1488,21141,Logan County,Kentucky,28467,1
+165,22033,East Baton Rouge Parish,Louisiana,453022,1
+347,22019,Calcasieu Parish,Louisiana,206861,1
+1094,22117,Washington Parish,Louisiana,45090,1
+552,23001,Androscoggin County,Maine,115272,1
+400,24017,Charles County,Maryland,174478,1
+308,25001,Barnstable County,Massachusetts,232570,1
+253,26065,Ingham County,Michigan,290427,1
+492,26025,Calhoun County,Michigan,133785,1
+1158,26107,Mecosta County,Michigan,41947,1
+204,27003,Anoka County,Minnesota,376840,1
+800,27035,Crow Wing County,Minnesota,68642,1
+331,28047,Harrison County,Mississippi,213730,1
+1169,28151,Washington County,Mississippi,41181,1
+238,29077,Greene County,Missouri,307942,1
+588,29071,Franklin County,Missouri,107256,1
+1702,29141,Morgan County,Missouri,22399,1
+2318,30009,Carbon County,Montana,11498,1
+912,32510,Carson City,Nevada,58148,1
+1411,33007,Coos County,New Hampshire,31094,1
+263,34001,Atlantic County,New Jersey,279114,1
+751,35025,Lea County,New Mexico,75151,1
+216,36087,Rockland County,New York,348144,1
+362,36007,Broome County,New York,196397,1
+742,36019,Clinton County,New York,77871,1
+193,37067,Forsyth County,North Carolina,398143,1
+297,37025,Cabarrus County,North Carolina,244925,1
+419,37019,Brunswick County,North Carolina,167112,1
+636,37109,Lincoln County,North Carolina,97611,1
+1087,37059,Davie County,North Carolina,45383,1
+2103,38053,McKenzie County,North Dakota,14782,1
+231,39093,Lorain County,Ohio,322030,1
+377,39103,Medina County,Ohio,184625,1
+659,39157,Tuscarawas County,Ohio,92048,1
+1152,39051,Fulton County,Ohio,42028,1
+664,40145,Wagoner County,Oklahoma,91257,1
+2388,40069,Johnston County,Oklahoma,10293,1
+337,41017,Deschutes County,Oregon,211535,1
+156,42133,York County,Pennsylvania,471240,1
+229,42095,Northampton County,Pennsylvania,322989,1
+358,42019,Butler County,Pennsylvania,199341,1
+586,42001,Adams County,Pennsylvania,107914,1
+403,44003,Kent County,Rhode Island,172450,1
+184,45051,Horry County,South Carolina,413391,1
+352,45013,Beaufort County,South Carolina,201775,1
+1447,45089,Williamsburg County,South Carolina,29865,1
+203,47149,Rutherford County,Tennessee,376996,1
+561,47011,Bradley County,Tennessee,113782,1
+1106,47047,Fayette County,Tennessee,44476,1
+172,48061,Cameron County,Texas,431874,1
+228,48303,Lubbock County,Texas,327394,1
+295,48423,Smith County,Texas,249091,1
+411,48135,Ector County,Texas,170022,1
+662,48469,Victoria County,Texas,91949,1
+974,48013,Atascosa County,Texas,52783,1
+1831,48057,Calhoun County,Texas,19942,1
+344,49053,Washington County,Utah,207943,1
+163,51810,Virginia Beach city,Virginia,454808,1
+288,51550,Chesapeake city,Virginia,254997,1
+551,51085,Hanover County,Virginia,115309,1
+1098,51540,Charlottesville city,Virginia,44767,1
+2143,51113,Madison County,Virginia,14252,1
+496,53057,Skagit County,Washington,132736,1
+582,54061,Monongalia County,West Virginia,108697,1
+182,55133,Waukesha County,Wisconsin,417029,1
+531,55063,La Crosse County,Wisconsin,121060,1
+1109,55031,Douglas County,Wisconsin,44276,1

@@ -27,8 +27,21 @@ type Props = {
   placeholder?: string;
   /** Id of the visible <label> for this field, so the combobox is named. */
   labelId?: string;
-  hintText?: string;
+  /** The field's name when no visible label points at it. */
+  ariaLabel?: string;
+  /** Id for the input, so a <label htmlFor> elsewhere names it. */
+  id?: string;
+  /** null leaves the hint line out, for forms whose own copy explains the field. */
+  hintText?: string | null;
+  /** Classes for the input, so the field matches the form it sits in. */
+  inputClassName?: string;
+  /** Favor suggestions near this point, e.g. the person's own home. */
+  near?: { lat: number; lng: number } | null;
+  /** Street addresses only, for a house-number-and-street field. */
+  streetOnly?: boolean;
 };
+
+const DEFAULT_INPUT_CLASS = 'w-full px-4 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-secondary caret-gray-900 [color-scheme:light] focus:outline-none focus:ring-2 focus:ring-primary-500';
 
 function useDebounced<T>(value: T, delayMs: number) {
   const [v, setV] = useState(value);
@@ -64,6 +77,11 @@ export default function AddressAutocomplete({
   placeholder = '123 Main St',
   hintText = 'Start typing, then pick a suggestion to verify.',
   labelId,
+  ariaLabel,
+  id,
+  inputClassName = DEFAULT_INPUT_CLASS,
+  near = null,
+  streetOnly = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -80,6 +98,8 @@ export default function AddressAutocomplete({
   const optionId = (i: number) => `${reactId}-option-${i}`;
 
   const debounced = useDebounced(value, 300);
+  const searchOptions = useRef<geo.AutocompleteOptions>({ near, streetOnly });
+  searchOptions.current = { near, streetOnly };
   const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
   const revision = useRef(0);
@@ -115,7 +135,7 @@ export default function AddressAutocomplete({
     const run = async () => {
       setLoading(true);
       try {
-        const data = await geo.autocompleteWithAbort(debounced, ac.signal);
+        const data = await geo.autocompleteWithAbort(debounced, ac.signal, searchOptions.current);
         if (!current()) return;
         suggestedFor.current = debounced;
         setSuggestions(data.suggestions || []); setActiveIndex(-1); setOpen(true);
@@ -216,7 +236,7 @@ export default function AddressAutocomplete({
     }
   };
 
-  const describedBy = [hintId, error ? errorId : null].filter(Boolean).join(' ');
+  const describedBy = [hintText != null ? hintId : null, error ? errorId : null].filter(Boolean).join(' ');
 
   return (
     <div className="relative">
@@ -228,7 +248,9 @@ export default function AddressAutocomplete({
         aria-autocomplete="list"
         aria-activedescendant={activeIndex >= 0 ? optionId(activeIndex) : undefined}
         aria-labelledby={labelId}
+        aria-label={labelId ? undefined : ariaLabel}
         aria-describedby={describedBy || undefined}
+        id={id}
         aria-invalid={error ? true : undefined}
         value={value}
         onChange={(e) => {
@@ -249,7 +271,7 @@ export default function AddressAutocomplete({
           setActiveIndex(-1);
         }}
         onKeyDown={handleKeyDown}
-        className="w-full px-4 py-2 border border-app-border rounded-lg bg-app-surface text-app-text placeholder:text-app-text-secondary caret-gray-900 [color-scheme:light] focus:outline-none focus:ring-2 focus:ring-primary-500"
+        className={inputClassName}
         placeholder={placeholder}
         autoComplete="off"
         spellCheck={false}
@@ -309,9 +331,11 @@ export default function AddressAutocomplete({
           {error}
         </p>
       )}
-      <p id={hintId} className="mt-1 text-xs text-app-text-secondary">
-        {hintText}
-      </p>
+      {hintText != null && (
+        <p id={hintId} className="mt-1 text-xs text-app-text-secondary">
+          {hintText}
+        </p>
+      )}
     </div>
   );
 }
