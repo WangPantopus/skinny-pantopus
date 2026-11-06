@@ -103,6 +103,16 @@ final class AddHomeWizardViewModel: WizardModel {
     private(set) var propertyLookupMessage: String = ""
     /// True while the suggestions call is in flight.
     private(set) var isLoadingPropertySuggestions: Bool = false
+    /// The county record is being looked up in the background (the server answered
+    /// `attom_lookup: pending`): the step stays usable, the fields say "Looking up…",
+    /// and the record fills what is still empty when it lands.
+    private(set) var propertyLookupPending: Bool = false
+    /// The record landed after the person left the details: the later steps say so,
+    /// with a way back to check them.
+    private(set) var lateDetailsAdded: Bool = false
+    /// A home type the person picked is kept when the record lands later.
+    private var homeTypeChosen = false
+    private var propertyLookupTask: Task<Void, Never>?
 
     /// Result of `POST /api/homes/check-address`, populated when entering
     /// step 2.
@@ -395,6 +405,11 @@ final class AddHomeWizardViewModel: WizardModel {
         propertySuggestions = nil
         propertyLookupComplete = false
         isLoadingPropertySuggestions = false
+        propertyLookupPending = false
+        lateDetailsAdded = false
+        homeTypeChosen = false
+        propertyLookupTask?.cancel()
+        propertyLookupTask = nil
         addressSearchError = nil
         canOpenLocationSettings = false
         errorMessage = nil
@@ -577,7 +592,14 @@ final class AddHomeWizardViewModel: WizardModel {
     }
 
     func selectHomeType(_ value: AddHomeHomeType) {
+        homeTypeChosen = true
         form.details.homeType = value
+    }
+
+    /// "Review" on the later steps' added-details line: back to the details to check them.
+    func reviewAddedDetails() {
+        guard currentStep.rawValue > AddHomeStep.confirm.rawValue else { return }
+        transition(to: .confirm)
     }
 
     func updateBedrooms(_ value: String) {
@@ -794,6 +816,8 @@ final class AddHomeWizardViewModel: WizardModel {
         if step == .address { invalidateAddress() }
         form.step = step.rawValue
         errorMessage = nil
+        // Back on the details, the added details are in front of the person.
+        if step.rawValue <= AddHomeStep.confirm.rawValue { lateDetailsAdded = false }
         if let stepNumber = step.stepNumber {
             Analytics.track(
                 .screenAddHomeWizardStepViewed(
@@ -930,14 +954,19 @@ final class AddHomeWizardViewModel: WizardModel {
     }
 
     /// `POST /api/homes/property-suggestions` — route
-    /// `backend/routes/home.js:540`. Fills the Details block from public
-    /// records (ATTOM → heuristics → optional LLM). A failure is never
-    /// fatal: the fields stay editable and the card says the lookup was
-    /// unavailable, exactly as RN does (`useHomeForm.ts:657-662`).
+    /// `backend/routes/home.js:587`. Fills the Details block from public
+    /// records (ATTOM → heuristics → optional LLM). The server answers at
+    /// once (`lookup: "background"`); a county record it doesn't have yet is
+    /// looked up meanwhile and fills what is still empty when
+    /// `finishPropertyLookup` gets it, so the step never waits for ATTOM. A
+    /// failure is never fatal: the fields stay editable and the card says the
+    /// lookup was unavailable, exactly as RN does (`useHomeForm.ts:657-662`).
     func loadPropertySuggestions() async {
         guard isCurrent, let validatedAddressId else { return }
         let revision = addressRevision
         isLoadingPropertySuggestions = true
+        propertyLookupPending = false
+        lateDetailsAdded = false
         defer { if addressRevision == revision { isLoadingPropertySuggestions = false } }
         let source = geocodedAddress
         let request = PropertySuggestionsRequest(
@@ -953,21 +982,63 @@ final class AddHomeWizardViewModel: WizardModel {
         )
         do {
             let response: PropertySuggestionsResponse = try await api.request(
-                HomesEndpoints.propertySuggestions(request)
+                HomesEndpoints.propertySuggestions(request, lookup: Self.lookupBackground)
             )
             guard addressIsCurrent(revision) else { return }
-            propertySuggestions = response
-            propertyLookupComplete = true
-            propertyLookupMessage = Self.lookupMessage(for: response)
             apply(suggestions: response.suggestions)
+            if response.attomLookup == Self.lookupPending {
+                propertyLookupPending = true
+                propertyLookupTask?.cancel()
+                propertyLookupTask = Task { [weak self] in
+                    await self?.finishPropertyLookup(request, revision: revision)
+                }
+            } else {
+                propertySuggestions = response
+                propertyLookupComplete = true
+                propertyLookupMessage = Self.lookupMessage(for: response)
+            }
         } catch {
             guard addressIsCurrent(revision) else { return }
             propertySuggestions = nil
             propertyLookupComplete = true
-            propertyLookupMessage =
-                "Public property records are unavailable right now. Confirm the details below."
+            propertyLookupMessage = Self.recordsUnavailableMessage
         }
     }
+
+    /// The one follow-up while the county record is looked up (`lookup:
+    /// "check"`): the server answers when the lookup ends. The record fills
+    /// only what is still empty, wherever the person is in the wizard.
+    private func finishPropertyLookup(_ request: PropertySuggestionsRequest, revision: Int) async {
+        do {
+            let response: PropertySuggestionsResponse = try await api.request(
+                HomesEndpoints.propertySuggestions(request, lookup: Self.lookupCheck)
+            )
+            guard !Task.isCancelled, addressIsCurrent(revision), propertyLookupPending else { return }
+            let before = form.details
+            apply(suggestions: response.suggestions)
+            propertyLookupPending = false
+            propertySuggestions = response
+            propertyLookupComplete = true
+            propertyLookupMessage = [Self.lookupFound, Self.lookupNone].contains(response.attomLookup ?? "")
+                ? Self.lookupMessage(for: response)
+                : Self.recordsUnavailableMessage
+            if currentStep.rawValue > AddHomeStep.confirm.rawValue, form.details != before { lateDetailsAdded = true }
+        } catch {
+            guard !Task.isCancelled, addressIsCurrent(revision), propertyLookupPending else { return }
+            propertyLookupPending = false
+            propertySuggestions = nil
+            propertyLookupComplete = true
+            propertyLookupMessage = Self.recordsUnavailableMessage
+        }
+    }
+
+    private static let lookupBackground = "background"
+    private static let lookupCheck = "check"
+    private static let lookupPending = "pending"
+    private static let lookupFound = "found"
+    private static let lookupNone = "none"
+    private static let recordsUnavailableMessage =
+        "Public property records are unavailable right now. Confirm the details below."
 
     /// RN's three-way message (`useHomeForm.ts:641-647`).
     private static func lookupMessage(for response: PropertySuggestionsResponse) -> String {
@@ -981,10 +1052,10 @@ final class AddHomeWizardViewModel: WizardModel {
         return "No ATTOM property record was available for this address. Confirm the details below."
     }
 
-    /// Prefill only — never overwrite something the user already typed.
+    /// Prefill only — never overwrite something the user already typed (or a home type they picked).
     private func apply(suggestions: PropertySuggestionsFields?) {
         guard let suggestions else { return }
-        if let homeType = AddHomeHomeType.from(canonical: suggestions.homeType) {
+        if !homeTypeChosen, let homeType = AddHomeHomeType.from(canonical: suggestions.homeType) {
             form.details.homeType = homeType
         }
         if let bedrooms = suggestions.bedrooms, form.details.bedrooms.isEmpty {

@@ -6,6 +6,7 @@ import Image from 'next/image';
 import * as api from '@pantopus/api';
 import SearchInput from '@/components/SearchInput';
 import { BID_STATUS } from '@/components/statusColors';
+import UserAvatarLink from '@/components/user/UserAvatarLink';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { formatTimeAgo as timeAgo } from '@pantopus/ui-utils';
 import { Inbox, Send } from 'lucide-react';
@@ -195,13 +196,15 @@ function OfferCard({
           {/* Person (for received offers) */}
           {perspective === 'received' && offer.bidder && (
             <div className="flex items-center gap-2 mt-1.5">
-              {bidderAvatar ? (
-                <Image src={bidderAvatar} alt="" width={20} height={20} sizes="20px" quality={75} className="w-5 h-5 rounded-full object-cover" />
-              ) : (
-                <div className="w-5 h-5 rounded-full bg-gray-300 text-white text-[10px] font-bold flex items-center justify-center">
-                  {(personName || '?')[0].toUpperCase()}
-                </div>
-              )}
+              <UserAvatarLink href={bidderHandle ? `/${bidderHandle}` : null}>
+                {bidderAvatar ? (
+                  <Image src={bidderAvatar} alt="" width={20} height={20} sizes="20px" quality={75} className="w-5 h-5 rounded-full object-cover" />
+                ) : (
+                  <div className="w-5 h-5 rounded-full bg-gray-300 text-white text-[10px] font-bold flex items-center justify-center">
+                    {(personName || '?')[0].toUpperCase()}
+                  </div>
+                )}
+              </UserAvatarLink>
               {bidderHandle ? (
                 <UserIdentityLink
                   userId={offer.bidder.id}

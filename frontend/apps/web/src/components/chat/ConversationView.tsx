@@ -9,6 +9,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import { getInitials } from '@pantopus/ui-utils';
 import type { ConversationTopic } from '@pantopus/types';
+import UserAvatarLink from '@/components/user/UserAvatarLink';
 import { useChatMessages, CONVERSATION_NOT_READY, chatPersonAvatar, chatPersonHandle, chatPersonHref, chatPersonName } from '../../hooks/useChatMessages';
 import ChatMessageList from './ChatMessageList';
 import ChatSearch from './ChatSearch';
@@ -359,13 +360,16 @@ export default function ConversationView({
               </svg>
             </button>
             <div className="flex items-center gap-3 flex-1 min-w-0">
-              {avatarUrl ? (
-                <Image src={avatarUrl} alt={chatTitle} className="w-10 h-10 rounded-full object-cover flex-shrink-0 bg-surface-muted" width={40} height={40} sizes="40px" quality={75} />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
-                  {getInitials(chatTitle)}
-                </div>
-              )}
+              {/* The photo opens the profile the name links to. */}
+              <UserAvatarLink href={otherProfileHref}>
+                {avatarUrl ? (
+                  <Image src={avatarUrl} alt={chatTitle} className="w-10 h-10 rounded-full object-cover flex-shrink-0 bg-surface-muted" width={40} height={40} sizes="40px" quality={75} />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
+                    {getInitials(chatTitle)}
+                  </div>
+                )}
+              </UserAvatarLink>
               <div className="min-w-0">
                 {otherProfileHref ? (
                   <Link href={otherProfileHref} className="block font-semibold text-app truncate">
@@ -545,13 +549,15 @@ export default function ConversationView({
 
               {/* User info */}
               <div className="flex items-center gap-3 mb-6 pb-4 border-b border-app">
-                {avatarUrl ? (
-                  <Image src={avatarUrl} alt={chatTitle} className="w-12 h-12 rounded-full object-cover bg-surface-muted" width={48} height={48} sizes="48px" quality={75} />
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">
-                    {getInitials(chatTitle)}
-                  </div>
-                )}
+                <UserAvatarLink href={otherProfileHref}>
+                  {avatarUrl ? (
+                    <Image src={avatarUrl} alt={chatTitle} className="w-12 h-12 rounded-full object-cover bg-surface-muted" width={48} height={48} sizes="48px" quality={75} />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold">
+                      {getInitials(chatTitle)}
+                    </div>
+                  )}
+                </UserAvatarLink>
                 <div>
                   {otherProfileHref ? (
                     <Link href={otherProfileHref} className="font-semibold text-app">

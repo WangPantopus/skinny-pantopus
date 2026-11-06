@@ -222,9 +222,8 @@ public struct PulseTabRoot: View {
                 mapViewModel: feedMap,
                 contextBarViewModel: feedArea,
                 viewMode: $feedViewMode,
-                onOpenPost: { postId in
-                    path.open(.post(postId: postId), sideBySide: isSideBySide)
-                },
+                onOpenPost: { path.open(.post(postId: $0), sideBySide: isSideBySide) },
+                onOpenAuthor: { path.open($0, sideBySide: isSideBySide) },
                 onCompose: { intent in
                     path.append(.compose(intent: intent.rawValue))
                 },

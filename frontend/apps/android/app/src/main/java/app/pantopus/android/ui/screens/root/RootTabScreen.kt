@@ -2769,6 +2769,13 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
             }
             is DeepLinkRouter.Destination.BusinessOwner -> {
                 navController.navigate(ChildRoutes.businessOwner(pending.businessId))
+                // A payment, invoice or verification notice: its section over the owner view, so Back lands on the
+                // business (the web opens that dashboard tab).
+                when (pending.section) {
+                    "payments" -> navController.navigate(ChildRoutes.businessPaymentsOwner(pending.businessId))
+                    "invoices" -> navController.navigate(ChildRoutes.businessInvoicesOwner(pending.businessId))
+                    "legal" -> navController.navigate(ChildRoutes.businessLegal(pending.businessId))
+                }
                 DeepLinkRouter.consume()
             }
             is DeepLinkRouter.Destination.BusinessConversation -> {
