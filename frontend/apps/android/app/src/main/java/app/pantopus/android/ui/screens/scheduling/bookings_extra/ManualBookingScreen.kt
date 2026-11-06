@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -234,7 +235,7 @@ private fun EventTypeStep(
 ) {
     StepScaffold(title = "Pick an event type") {
         if (state.loadingEventTypes) {
-            SchedulingLoadingSkeleton(rows = 3)
+            SchedulingLoadingSkeleton(modifier = Modifier.heightIn(max = STEP_SKELETON_HEIGHT), rows = 3)
         } else {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 state.eventTypes.forEach { option ->
@@ -314,7 +315,7 @@ private fun TimeStep(
     StepScaffold(title = "Choose a time") {
         TzChip(label = state.tzLabel)
         when {
-            state.loadingSlots -> SchedulingLoadingSkeleton(rows = 3)
+            state.loadingSlots -> SchedulingLoadingSkeleton(modifier = Modifier.heightIn(max = STEP_SKELETON_HEIGHT), rows = 3)
             state.slotsError != null ->
                 Text(
                     text = state.slotsError.orEmpty(),
@@ -613,5 +614,7 @@ private fun InviteByRow(
     }
 }
 
+// The skeleton scrolls itself: inside a step's scrolling page it needs a height, or the screen crashes as it opens.
+private val STEP_SKELETON_HEIGHT = 260.dp
 private const val TILE_BG_ALPHA = 0.08f
 private const val TILE_ICON_ALPHA = 0.16f

@@ -22,8 +22,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -128,8 +130,14 @@ internal fun NudgeSheet(
             NudgeSuccess(sentCount = state.sentCount)
             return@ModalBottomSheet
         }
+        // Takes what the Send button leaves and scrolls, so the keyboard can't squeeze the button.
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4, vertical = Spacing.s2),
+            modifier =
+                Modifier
+                    .weight(1f, fill = false)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = Spacing.s4, vertical = Spacing.s2),
             verticalArrangement = Arrangement.spacedBy(Spacing.s4),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
