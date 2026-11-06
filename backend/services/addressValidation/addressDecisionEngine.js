@@ -117,6 +117,13 @@ const PROVIDER_RESIDENTIAL_SAFE_PLACE_TYPES = new Set([
   'residential_building',
   'townhouse',
 ]);
+// Places USPS serves whose addresses often have no street number ("Carr 176 Km 3"): without a USPS
+// answer they are pending, not "missing a street number".
+const TERRITORY_STATES = new Set([
+  'PR', 'VI', 'GU', 'AS', 'MP',
+  'PUERTO RICO', 'VIRGIN ISLANDS', 'U.S. VIRGIN ISLANDS', 'GUAM', 'AMERICAN SAMOA', 'NORTHERN MARIANA ISLANDS',
+]);
+
 // Below the 0.8 a claim needs to auto-verify, so unknown or doubtful USPS answers still need proof.
 const NOT_AUTO_VERIFIABLE_CONFIDENCE = 0.75;
 const UNSETTLED_POSTAL_CONFIDENCE = 0.5;
@@ -430,7 +437,8 @@ class AddressDecisionEngine {
     // A rough map pin doesn't outweigh USPS confirming delivery: rural and military homes pass, and
     // still can't auto-verify.
     const confirmedByUsps = googlePostal && smarty.dpv_match_code === 'Y';
-    if (this._isLowGranularity(granularity) && !confirmedByUsps) {
+    const territoryWithoutAnswer = googlePostal && this._isTerritoryWithoutAnswer(google, smarty);
+    if (this._isLowGranularity(granularity) && !confirmedByUsps && !territoryWithoutAnswer) {
       return this._verdict({
         status: AddressVerdictStatus.LOW_CONFIDENCE,
         reasons: [...baseReasons, ...heuristicPlaceReasons, `GEOCODE_GRANULARITY_${granularity}`],
@@ -492,7 +500,7 @@ class AddressDecisionEngine {
         reasons: [
           ...baseReasons,
           ...heuristicPlaceReasons,
-          smarty.coming_soon ? 'USPS_COMING_SOON' : 'USPS_NO_ANSWER',
+          smarty.coming_soon ? 'USPS_COMING_SOON' : smarty.not_listed ? 'USPS_NOT_LISTED_YET' : 'USPS_NO_ANSWER',
           ...(smarty.usps_suspended ? ['USPS_CHECKS_SUSPENDED'] : []),
         ],
         confidence: UNSETTLED_POSTAL_CONFIDENCE,
@@ -571,10 +579,15 @@ class AddressDecisionEngine {
     const footnotes = postal.footnotes || [];
 
     if (footnotes.includes('M1') || footnotes.includes('M3')) return false;
+    if (this._isTerritoryWithoutAnswer(google, postal)) return false;
     if (dpv === 'N') return !postal.coming_soon;
-    if (postal.vacant_flag === true && dpv !== 'Y' && dpv !== 'D') return true;
+    if (!dpv && postal.vacant_flag === true) return true;
 
     return !dpv && !!google.verdict?.hasUnconfirmedComponents && LOW_GRANULARITY.has(google.granularity);
+  }
+
+  _isTerritoryWithoutAnswer(google, postal) {
+    return !postal.dpv_match_code && TERRITORY_STATES.has(String(google?.normalized?.state || '').toUpperCase());
   }
 
   /**
@@ -622,6 +635,8 @@ class AddressDecisionEngine {
   _isMissingStreetNumber(google, postal = null) {
     if (!google) return false;
 
+    if (postal && this._isTerritoryWithoutAnswer(google, postal)) return false;
+
     // Explicit signal from Google
     if (google.missing_component_types?.includes('street_number')) return true;
 
@@ -651,7 +666,8 @@ class AddressDecisionEngine {
    */
   _isUnverifiedStreetNumber(google, postal = null) {
     if (!google) return false;
-    if (postal && (postal.footnotes || []).includes('M3')) return true;
+    if (postal && this._isTerritoryWithoutAnswer(google, postal)) return false;
+    if (postal && (postal.footnotes || []).includes('M3')) return !postal.not_listed;
     if (!google.components?.street_number) return false;
 
     const streetNum = google.components.street_number;
@@ -1203,8 +1219,11 @@ class AddressDecisionEngine {
     if (google?.verdict?.hasInferredComponents) score -= 0.1;
     if (postal.vacant_flag === true) score -= 0.15;
 
+    // USPS can confirm a whole apartment building as one delivery point (real answers do this).
+    const buildingWithoutUnit = postal.record_type === 'H' && !String(google?.normalized?.line2 || '').trim();
     const autoVerifiable =
       postal.dpv_match_code === 'Y' &&
+      !buildingWithoutUnit &&
       !LOW_GRANULARITY.has(granularity) &&
       postal.rdi_type === 'residential' &&
       !postal.home_and_business &&
