@@ -97,7 +97,8 @@ function InviteForm({ homeId, remaining, cap }: { homeId: string; remaining: num
     mutationFn: () => api.blockFounders.sendBlockInvite(homeId, { line1, city, state, zip }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.blockFounders(homeId) });
-      toast.success(`Postcard on its way — ${result.invites_remaining} invite${result.invites_remaining === 1 ? '' : 's'} left this week.`);
+      toast.success(result.pending && result.message ? result.message
+        : `Postcard on its way — ${result.invites_remaining} invite${result.invites_remaining === 1 ? '' : 's'} left this week.`);
       setLine1(''); setCity(''); setState(''); setZip('');
     },
     // Every refusal on this route is a CODED one the founder has to act

@@ -18,19 +18,20 @@ public enum PlaceEndpoints {
         Endpoint(method: .get, path: "/api/homes/\(homeId)/changes", query: ["since": since])
     }
 
-    /// `GET /api/homes/:id/intelligence?ballot=1[&sections=a,b,c]` — route
+    /// `GET /api/homes/:id/intelligence?ballot=1&vocabulary=2[&sections=a,b,c]` — route
     /// `backend/routes/placeIntelligence.js:37`. The grouped section
     /// envelopes for a saved/claimed/verified place (T1–T4; tier and
     /// per-section gating resolved server-side). Pass `sections` to
     /// lazy-load a subset (e.g. a detail page refreshing only its own
     /// group); omitted ⇒ the full launch set. `ballot=1` is this client's
     /// opt-in to the Ballot fields of `civic_election` (with `ballot_p0` on);
-    /// without it the server sends the plain election section.
+    /// without it the server sends the plain election section. `vocabulary=2`
+    /// asks for where a Home's record came from, once it says.
     public static func intelligence(
         homeId: String,
         sections: [PlaceSectionID]? = nil
     ) -> Endpoint {
-        var query: [String: String] = ["ballot": "1"]
+        var query: [String: String] = HomesEndpoints.recordVocabulary.merging(["ballot": "1"]) { $1 }
         if let sections, !sections.isEmpty {
             query["sections"] = sections.map(\.rawValue).joined(separator: ",")
         }

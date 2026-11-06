@@ -20,6 +20,14 @@
 
 const supabaseAdmin = require('../config/supabaseAdmin');
 const logger = require('../utils/logger');
+const addressConfig = require('../config/addressVerification');
+const { usesGooglePostal } = require('./addressValidation/postalAdapter');
+
+// A failed re-check waits this long before an open screen tries again.
+const RECHECK_RETRY_MS = 10 * 60 * 1000;
+// Google usually answers in under 200 ms, so a screen can open on the new answer.
+const RECHECK_WAIT_MS = 1500;
+const recheckTriedAt = new Map();
 
 // severity: ok < info < attention < problem
 const SEVERITY_RANK = { ok: 0, info: 1, attention: 2, problem: 3 };
@@ -48,12 +56,54 @@ function dpvFinding(dpv) {
   }
 }
 
+function uspsDataIsOld(addr) {
+  const checkedAt = Date.parse(addr.last_validated_at);
+  const maxAgeMs = (addressConfig.postal?.uspsDataDays || 30) * 24 * 60 * 60 * 1000;
+  return !Number.isFinite(checkedAt) || Date.now() - checkedAt > maxAgeMs;
+}
+
+function checkedOnSentence(iso) {
+  const when = new Date(iso);
+  if (Number.isNaN(when.getTime())) return '';
+  const date = when.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  return ` USPS was last checked on ${date}.`;
+}
+
 /**
- * Compose the diagnostic for a home from its stored HomeAddress
- * validation + the caller's recorded postcard (the physical leg).
- * @returns {Promise<object|null>} null when the home doesn't exist.
+ * Asks USPS again. A slow answer doesn't hold the screen: the check finishes in the background, and
+ * screens that listen for the Home row changing refresh themselves.
+ *
+ * @returns {Promise<boolean>} true when the stored answer changed in time for this response
  */
-async function getMailboxCheck({ homeId, userId }) {
+function recheckBriefly(addressId, homeId) {
+  const triedAt = recheckTriedAt.get(addressId);
+  if (triedAt && Date.now() - triedAt < RECHECK_RETRY_MS) return Promise.resolve(false);
+  recheckTriedAt.set(addressId, Date.now());
+
+  const recheck = (async () => {
+    const { data: address, error } = await supabaseAdmin
+      .from('HomeAddress')
+      .select('*')
+      .eq('id', addressId)
+      .maybeSingle();
+    if (error || !address) return false;
+    const { recheckAddress } = require('./addressValidation/postalRecheckService');
+    const outcome = await recheckAddress(address, [{ id: homeId, created_by_user_id: null }]);
+    if (outcome === 'unavailable') return false;
+    await supabaseAdmin.from('Home').update({ updated_at: new Date().toISOString() }).eq('id', homeId);
+    return true;
+  })().catch((err) => {
+    logger.warn('mailboxCheck: background re-check failed', { addressId, error: err.message });
+    return false;
+  });
+
+  const waited = new Promise((resolve) => {
+    setTimeout(resolve, RECHECK_WAIT_MS, false).unref();
+  });
+  return Promise.race([recheck, waited]);
+}
+
+async function loadHomeAndAddress(homeId) {
   const { data: home, error: homeErr } = await supabaseAdmin
     .from('Home')
     .select('id, address, address2, city, state, zipcode, country, address_id, address_hash')
@@ -79,10 +129,45 @@ async function getMailboxCheck({ homeId, userId }) {
     addr = data || null;
   }
 
+  return { home, addr };
+}
+
+/**
+ * Compose the diagnostic for a home from its stored HomeAddress
+ * validation + the caller's recorded postcard (the physical leg).
+ * @returns {Promise<object|null>} null when the home doesn't exist.
+ */
+async function getMailboxCheck({ homeId, userId }) {
+  let loaded = await loadHomeAndAddress(homeId);
+  if (!loaded) return null;
+
+  const googlePostal = usesGooglePostal();
+  // An address still pending belongs to the re-check job, which tells the person what it found.
+  const uspsAnswerIsOld = (row) => googlePostal && row && row.validation_raw_response?.postal_state !== 'pending'
+    && (uspsDataIsOld(row) || !!row.validation_raw_response?.postal_cleared_at);
+
+  if (uspsAnswerIsOld(loaded.addr) && await recheckBriefly(loaded.addr.id, homeId)) {
+    loaded = (await loadHomeAndAddress(homeId)) || loaded;
+  }
+  const { home, addr } = loaded;
+
   const findings = [];
 
   const dpv = addr ? addr.dpv_match_code : null;
-  findings.push(dpvFinding(dpv));
+  const postalState = addr?.validation_raw_response?.postal_state;
+
+  if (googlePostal && postalState === 'failed') {
+    findings.push(finding('attention', 'Please check this address',
+      'USPS couldn’t confirm it. You can verify another way, or add your home again with the right details.'));
+  } else if (googlePostal && postalState === 'pending') {
+    findings.push(finding('info', 'We couldn’t check this address with USPS yet',
+      'We’ll try again shortly. Your postcard can go out after that.'));
+  } else if (uspsAnswerIsOld(addr) && !dpv) {
+    findings.push(finding('info', 'Checking this address with USPS again',
+      'USPS answers are kept for 30 days, so a new check is running now. Check back soon.'));
+  } else {
+    findings.push(dpvFinding(dpv));
+  }
 
   // vacant_flag lives inside the Smarty blob the pipeline stores as
   // validation_raw_response (migration 066) — there is no raw_response column.
@@ -95,7 +180,7 @@ async function getMailboxCheck({ homeId, userId }) {
     findings.push(finding('info', 'This is a commercial mail receiving agency',
       'USPS classifies this address as a CMRA (a mailbox service). Some banks and agencies refuse CMRA addresses as proof of residence.'));
   }
-  if (addr && addr.rdi_type === 'commercial') {
+  if (addr && (addr.rdi_type === 'commercial' || addr.rdi_type === 'business')) {
     findings.push(finding('info', 'USPS classifies this address as commercial',
       'Residential-only delivery services may surcharge or refuse it, and some forms treat it differently from a home address.'));
   }
@@ -167,6 +252,12 @@ async function getMailboxCheck({ homeId, userId }) {
     if (title) {
       physical = { status: 'not_run', title, detail: 'Its code won\'t work. Check the address and send another, or verify another way.' };
     }
+  }
+
+  // Apps show a finding's own words, so the date reaches every build this way.
+  if (googlePostal && dpv && addr?.last_validated_at) {
+    const checkedOn = checkedOnSentence(addr.last_validated_at);
+    for (const item of findings) item.detail += checkedOn;
   }
 
   const worst = findings.reduce((acc, f) => (SEVERITY_RANK[f.severity] > SEVERITY_RANK[acc] ? f.severity : acc), 'ok');

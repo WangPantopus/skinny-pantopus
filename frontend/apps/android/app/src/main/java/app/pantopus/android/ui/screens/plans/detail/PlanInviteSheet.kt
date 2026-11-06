@@ -65,7 +65,7 @@ import app.pantopus.android.ui.components.PantopusCheckbox
 import app.pantopus.android.ui.components.PrimaryButton
 import app.pantopus.android.ui.components.ToastController
 import app.pantopus.android.ui.components.ToastHost
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.screens.plans.components.PlanAvatar
 import app.pantopus.android.ui.screens.plans.components.PlanIconTile
 import app.pantopus.android.ui.screens.plans.components.PlanOverline
@@ -115,7 +115,7 @@ internal fun PlanInviteSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = PantopusColors.appSurface,
-        modifier = Modifier.closesKeyboardOnTapOrScroll().testTag("planInviteSheet"),
+        modifier = Modifier.sheetKeyboardRules().testTag("planInviteSheet"),
     ) {
         Box {
             Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding()) {

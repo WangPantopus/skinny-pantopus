@@ -1,5 +1,6 @@
 package app.pantopus.android.data.api.models.place
 
+import app.pantopus.android.data.api.models.homes.RecordProvenanceDto
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
@@ -1030,6 +1031,8 @@ data class PlaceYourHomeData(
     @Json(name = "assessed_value") val assessedValue: Double? = null,
     /** The home's outline for the Today sky. Absent from older servers. */
     val house: PlaceHouseShape? = null,
+    /** Where the value came from, when the record names its source; the confirmed owner's, like the value. */
+    @Json(name = "value_source") val valueSource: String? = null,
 )
 
 /**
@@ -1356,8 +1359,14 @@ data class PlaceSectionEnvelope(
     val scope: PlaceSectionScope? = null,
     /** What kind of evidence the reading is (TPR contract §4): never a home measurement. */
     val evidence: PlaceSectionScope? = null,
+    /** Where a Home's record came from, once it names its source. */
+    val provenance: RecordProvenanceDto? = null,
 ) {
     val sectionId: PlaceSectionId get() = PlaceSectionId.from(id)
+
+    /** A county-record section's source, in the server's words. */
+    val countyRecordSource: String get() = provenance?.label ?: source ?: "County records"
+
     val groupId: PlaceGroup get() = PlaceGroup.from(group)
 
     val weather: PlaceWeatherData? get() = (data as? PlaceSectionData.Weather)?.value

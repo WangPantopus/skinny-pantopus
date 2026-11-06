@@ -12,7 +12,7 @@
 // wants narrative copy; these wrappers carry the structured contract.
 // ============================================================
 
-import { get, put } from '../client';
+import { get, put, RECORD_VOCABULARY } from '../client';
 import type {
   BallotTeaser,
   PlaceIntelligence,
@@ -162,14 +162,15 @@ export interface PlacePreview {
  * Every request carries `ballot=1`: the client's opt-in to the Ballot
  * fields (and the finished-election payload), so a build without Ballot
  * never receives them. Every web caller goes through this function.
+ * So does `vocabulary=2`: where a Home's record came from, once it says.
  *
- * GET /api/homes/:id/intelligence?ballot=1[&sections=a,b,c]
+ * GET /api/homes/:id/intelligence?ballot=1&vocabulary=2[&sections=a,b,c]
  */
 export async function getPlaceIntelligence(
   homeId: string,
   sections?: PlaceSectionId[],
 ): Promise<PlaceIntelligence> {
-  const params: { ballot: 1; sections?: string } = { ballot: 1 };
+  const params: { ballot: 1; vocabulary: string; sections?: string } = { ballot: 1, ...RECORD_VOCABULARY };
   if (sections && sections.length) params.sections = sections.join(',');
   return get<PlaceIntelligence>(`/api/homes/${homeId}/intelligence`, params);
 }

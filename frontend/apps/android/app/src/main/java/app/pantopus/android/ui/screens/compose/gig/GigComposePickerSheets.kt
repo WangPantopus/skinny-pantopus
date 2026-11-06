@@ -57,8 +57,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.PrimaryButton
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.components.keepsKeyboard
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -94,7 +94,7 @@ internal fun GigComposePickerSheetHost(
     val sheet = state.activeSheet ?: return
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
-        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+        modifier = Modifier.sheetKeyboardRules(),
         onDismissRequest = viewModel::dismissPicker,
         sheetState = sheetState,
         containerColor = PantopusColors.appSurface,

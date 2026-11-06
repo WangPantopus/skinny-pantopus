@@ -33,6 +33,8 @@ struct PlaceSectionCard: View {
     /// Main reading, e.g. "62° and clear".
     var value: String?
     var caption: String?
+    /// The unavailable state's own line, in place of "Not available for your area yet." (the server's reason).
+    var unavailableTitle: String?
     var chip: PlaceChipModel?
     /// Small colored dot before the inline value (status reading).
     var statusDot: Color?
@@ -174,12 +176,14 @@ struct PlaceSectionCard: View {
 
         case .unavailable:
             VStack(alignment: .leading, spacing: 3) {
-                Text("Not available for your area yet.")
+                Text(unavailableTitle ?? "Not available for your area yet.")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Theme.Color.appTextSecondary)
-                Text(caption ?? "Coverage is expanding. Check back later.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.Color.appTextMuted)
+                if unavailableTitle == nil {
+                    Text(caption ?? "Coverage is expanding. Check back later.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.Color.appTextMuted)
+                }
             }
 
         case .error:

@@ -30,7 +30,7 @@ const val PROPERTY_DETAILS_HOME_ID_KEY = "homeId"
  * property fields from `GET /api/homes/:id/property-details` (route
  * `backend/routes/home.js:1949`) and projects them into the clean state.
  * The property facts + address are backed for everyone who can open the
- * home; the county record (ATTOM) sections for its verified owners, whom
+ * home; the county record sections for its verified owners, whom
  * the server sends them to. The Verification (provenance) section + the
  * mismatch banner have no clean backend source. An injectable [loader]
  * seam (non-null) bypasses the network for previews + tests.
@@ -208,7 +208,13 @@ class PropertyDetailsViewModel
                     countyRecord?.sections.orEmpty().mapNotNull { section ->
                         val rows =
                             section.rows.map {
-                                PropertyFactRow(id = it.id, label = it.label, value = it.value, mono = it.mono == true)
+                                PropertyFactRow(
+                                    id = it.id,
+                                    label = it.label,
+                                    value = it.value,
+                                    sub = it.tag?.takeIf(String::isNotBlank),
+                                    mono = it.mono == true,
+                                )
                             }
                         rows.takeIf { it.isNotEmpty() }?.let {
                             PropertyRecordSection(id = section.id, title = section.title, rows = it, note = section.note)

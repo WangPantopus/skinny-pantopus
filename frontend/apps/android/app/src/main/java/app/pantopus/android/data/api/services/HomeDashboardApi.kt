@@ -113,13 +113,13 @@ interface HomeDashboardApi {
     ): SeasonalChecklistItemDto
 
     /** `GET /api/homes/:id/property-value` — route `backend/routes/home.js:7752`. */
-    @GET("api/homes/{id}/property-value")
+    @GET("api/homes/{id}/property-value?vocabulary=2")
     suspend fun propertyValue(
         @Path("id") homeId: String,
     ): HomePropertyValueDto
 
     /** [propertyValue] for the screens' store: a 304 means the stored copy is current. */
-    @GET("api/homes/{id}/property-value")
+    @GET("api/homes/{id}/property-value?vocabulary=2")
     suspend fun propertyValueConditional(
         @Path("id") homeId: String,
         @Header("If-None-Match") etag: String?,

@@ -136,7 +136,9 @@ struct PlaceDashboardView: View {
             }.value
         }
         .refreshable { await viewModel.refresh() }
-        .refreshesOnStoreChange(onBackground: viewModel.discardTemporaryCopy) { if isActive { await viewModel.load() } }
+        .refreshesOnStoreChange(affects: PlaceStoreReads.affects(homeId: viewModel.homeId), onBackground: viewModel.discardTemporaryCopy) {
+            if isActive { await viewModel.load() }
+        }
         .refreshFailureToast($viewModel.refreshFailureMessage)
         .askPantopus($askTopic)
         .sheet(isPresented: $showSwitcher) {

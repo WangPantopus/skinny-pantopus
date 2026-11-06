@@ -66,6 +66,9 @@ data class BlockInviteRequest(
 data class BlockInviteResult(
     val sent: Boolean = false,
     @Json(name = "invites_remaining") val invitesRemaining: Int = 0,
+    /** The printer hasn't answered yet. The invitation is saved and won't be mailed twice. */
+    val pending: Boolean = false,
+    val message: String? = null,
 )
 
 private const val MILLIS_PER_DAY = 86_400_000.0

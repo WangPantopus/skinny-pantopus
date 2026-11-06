@@ -141,7 +141,8 @@ export default function HomePropertyDetailsPage() {
     queryFn: async () => {
       if (!api.getAuthToken()) throw new Error('Sign in to view this Home.');
       const res = await api.homes.getHomePropertyDetail(homeId);
-      if (!res || res.home?.id !== homeId || !['home', 'cache', 'attom', 'unavailable'].includes(res.source)
+      // A record that names its source may answer in words this build doesn't know yet.
+      if (!res || res.home?.id !== homeId || !(res.provenance || ['home', 'cache', 'attom', 'unavailable'].includes(res.source))
         || !(res.attom_property_detail === null || (typeof res.attom_property_detail === 'object'
           && !Array.isArray(res.attom_property_detail)))
         || (res.source === 'unavailable' && res.attom_property_detail !== null)
@@ -186,13 +187,17 @@ export default function HomePropertyDetailsPage() {
 
   // A first lookup runs on the server meanwhile; the record's arrival re-reads this page (sync signal).
   const lookingUp = unavailableReason === 'LOOKUP_PENDING';
+  // No source of county records yet: trying again wouldn't change the answer.
+  const noRecordsYet = unavailableReason === 'ATTOM_NOT_CONFIGURED';
+  // With no record to wait for, an owner's page shows what the household entered, as everyone else's does.
+  const ownFactsOnly = !hasRecord && (noRecordsYet || unavailableReason === 'NO_PROPERTY_FOUND') && stats.length > 0;
   const emptyDescription =
     lookingUp
       ? "Pantopus is reading this home's county record. It shows here by itself, usually within a few seconds."
       : unavailableReason === 'ATTOM_UNAVAILABLE'
       ? 'Public records could not be loaded right now. Try again in a moment.'
-      : unavailableReason === 'ATTOM_NOT_CONFIGURED'
-        ? 'Property records are not configured in this environment yet.'
+      : noRecordsYet
+        ? "We can't read county property records yet, so exact details and value aren't shown here."
         : 'Property details from public records will appear here once available for this address.';
 
   if (loading) {
@@ -242,7 +247,7 @@ export default function HomePropertyDetailsPage() {
           </div>
         </div>
 
-        {!hasRecord && !ownerOnly ? (
+        {!hasRecord && !ownerOnly && !ownFactsOnly ? (
           <div className="rounded-[28px] border border-app-border bg-app-surface px-8 py-16 text-center shadow-sm">
             <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
               <Home className="h-10 w-10" />
@@ -251,7 +256,7 @@ export default function HomePropertyDetailsPage() {
             <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-app-text-secondary">
               {emptyDescription}
             </p>
-            {lookingUp ? null : (
+            {lookingUp || noRecordsYet ? null : (
               <button type="button" onClick={() => void load()} className="mt-5 rounded-lg border border-app-border px-4 py-2 text-sm font-semibold">Retry property records</button>
             )}
           </div>
@@ -316,11 +321,17 @@ export default function HomePropertyDetailsPage() {
               </section>
             ) : null}
 
+            {ownFactsOnly ? (
+              <p className="mx-auto max-w-lg text-center text-sm leading-6 text-app-text-secondary">
+                Details you entered. {emptyDescription}
+              </p>
+            ) : null}
+
             {hasRecord ? (
               <>
                 <div className="flex items-start justify-center gap-2 pl-4 pr-20 text-center text-sm font-semibold text-violet-600 sm:px-0">
                   <ShieldCheck className="h-4 w-4 shrink-0" />
-                  <span>{countyRecord?.footer || 'Data from public records via ATTOM'}</span>
+                  <span>{countyRecord?.footer || details?.provenance?.label || 'Data from public records'}</span>
                 </div>
 
                 <section className="rounded-[28px] border border-app-border bg-app-surface px-4 py-4 shadow-sm sm:px-6 sm:py-6">

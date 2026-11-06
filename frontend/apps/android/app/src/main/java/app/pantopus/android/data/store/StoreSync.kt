@@ -61,7 +61,11 @@ class StoreSync
                 }
             }
             scope.launch {
-                socket.eventsOf("badge:update").collect { store.markStale(StoreTopics.NOTIFICATIONS) }
+                // Sent on every connect and for every chat message: the bell reads again only when its count moved.
+                socket.eventsOf("badge:update").collect { payload ->
+                    val kept = store.peek(StoreKeys.notificationsUnreadCount).data?.count
+                    if (payload.optInt("notifications", -1) != kept) store.markStale(StoreTopics.NOTIFICATIONS)
+                }
             }
             scope.launch {
                 // A read that failed offline is not retried on its own, and a process that started offline gets no

@@ -40,8 +40,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.components.keepsKeyboard
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.Radii
@@ -72,7 +72,7 @@ internal fun ProfileConnectSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = PantopusColors.appSurface,
-        modifier = Modifier.closesKeyboardOnTapOrScroll().testTag("publicProfileConnectSheet"),
+        modifier = Modifier.sheetKeyboardRules().testTag("publicProfileConnectSheet"),
     ) {
         Column(
             modifier =

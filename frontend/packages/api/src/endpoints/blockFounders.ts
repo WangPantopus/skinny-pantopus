@@ -56,6 +56,9 @@ export interface BlockInviteRecipient {
 export interface BlockInviteResult {
   sent: boolean;
   invites_remaining: number;
+  /** The printer hasn't answered yet. The invitation is saved and won't be mailed twice. */
+  pending?: boolean;
+  message?: string;
 }
 
 /** GET /api/homes/:id/block-founders — verified occupants only. */

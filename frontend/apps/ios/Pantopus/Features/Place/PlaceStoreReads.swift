@@ -100,6 +100,18 @@ enum PlaceStoreReads {
         return topics
     }
 
+    /// Whether a change signal concerns a home's Place screen, or names no
+    /// topics (a reconnect). Plans and chats change nothing it shows, and
+    /// loading for them would only read its tasks and access again. The bell
+    /// has its own read.
+    static func affects(homeId: String) -> (Notification) -> Bool {
+        let shown = topics(homeId: homeId, savedPlaceId: nil).union([ScreenTopic.homes])
+        return { note in
+            guard let named = note.userInfo?["topics"] as? Set<String> else { return true }
+            return !named.isDisjoint(with: shown)
+        }
+    }
+
     /// Owners and household roles see the last copy while access is
     /// re-checked; guests and service providers ("nonresident") wait for the
     /// re-check (founder decision 3, 2026-10-09). An unknown role waits too.

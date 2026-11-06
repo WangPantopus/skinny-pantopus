@@ -29,6 +29,7 @@ import app.pantopus.android.data.api.models.place.PlaceBand
 import app.pantopus.android.data.api.models.place.PlaceIntelligence
 import app.pantopus.android.data.api.models.place.PlaceSectionAccess
 import app.pantopus.android.data.api.models.place.PlaceSectionEnvelope
+import app.pantopus.android.data.api.models.place.PlaceSectionId
 import app.pantopus.android.data.api.models.place.PlaceSectionStatus
 import app.pantopus.android.data.api.models.place.PlaceTier
 import app.pantopus.android.data.store.StoreKind
@@ -342,6 +343,8 @@ fun PlaceDetailFallbackCard(
         state = cardState,
         value = reading.value,
         caption = if (cardState == PlaceSectionCardState.UNAVAILABLE) env.unavailableReason else reading.caption,
+        // Your home's gap is ours (no county records yet), never the area's: the server's sentence is the card's line.
+        unavailableTitle = env.unavailableReason?.takeIf { env.sectionId == PlaceSectionId.YOUR_HOME },
         chip = reading.chip,
         statusDot = reading.statusDot,
         inline = false,

@@ -31,6 +31,8 @@ data class HomePostalStatus(
         val status: String,
         val delivery: String,
         @Json(name = "attempts_remaining") val attemptsRemaining: Int,
+        /** Newer than [delivery], which keeps its old words for apps in the stores. An unknown value reads as none. */
+        @Json(name = "mail_state") val mailState: String? = null,
     ) {
         @Suppress("MagicNumber")
         fun isValid(): Boolean =
