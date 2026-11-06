@@ -108,6 +108,6 @@ describe('Post creation home-place contract', () => {
       });
 
     expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/physically present|verified resident|verified business/i);
+    expect(res.body.error).toMatch(/when you're there, live or work there, or attach a photo or video you took there/i);
   });
 });
