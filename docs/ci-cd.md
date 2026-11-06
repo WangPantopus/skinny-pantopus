@@ -87,18 +87,50 @@ together when deciding compute size. Swap occupancy alone does not establish
 memory exhaustion, and the provider's disk-credit balance is not exposed by
 this scrape endpoint.
 
-1. CI succeeds on the current `master` (production) or `dev` (staging) commit.
+1. CI succeeds on a `master` (production) or `dev` (staging) commit.
 2. Deploy Backend verifies the exact commit against the latest CI run and branch
-   head. A manual dispatch has the same requirement; PR/fork runs cannot deploy.
+   head (or the overdue rule below). A manual dispatch has the same requirement;
+   PR/fork runs cannot deploy.
    GitHub's runs list can come back empty or behind during an Actions incident,
    so when it shows no finished CI run for the commit, each check reads it again
    after 5, 10 and 20 seconds before it fails. A failed or cancelled newest run
    fails at once.
    An automatic run skips quietly (no failure, no notification) when a newer merge
-   has superseded its commit, or when nothing in `backend/`, `scripts/deploy/`, the
-   root package files or this workflow changed since the environment's last
-   release: each rollout replaces the API and restarts the worker. A manual
-   dispatch always deploys the head.
+   has superseded its commit and the release isn't overdue, or when nothing in
+   `backend/`, `scripts/deploy/`, the root package files or this workflow changed
+   since the environment's last release: each rollout replaces the API and
+   restarts the worker. A manual dispatch deploys the head even when the backend
+   hasn't changed.
+
+   **A release is overdue** when the environment's last rollout finished over 2
+   hours ago (`RELEASE_OVERDUE_MS` in `scripts/deploy/require-ci.cjs`). Then a green
+   commit on the branch releases even though it isn't the head, as long as it is a
+   descendant of the commit that rollout released. Master CI runs one at a time and takes 13–60
+   minutes while merges can land every few minutes, so a commit is rarely still the
+   head when its CI goes green. Waiting for that held every merge back for over 3
+   hours on November 6, 2026. The rule is checked in the preflight and again just
+   before cutover, and keeps every other gate: green CI on that exact commit, the
+   unchanged-backend skip, the shared concurrency group, migrations before rollout.
+   Nothing starts a run on a timer: the next CI run to go green after the 2 hours
+   is the one that releases. What follows from the rule:
+
+   - Production can run a green commit that is older than the head, so it can carry
+     a bug a newer merge already fixes or reverts until the next release. To keep a
+     known-bad commit out, set `BACKEND_DEPLOY_ENABLED` to `false` until the fix is
+     green.
+   - A release never goes backwards. A rerun of an old run, or of old CI, whose
+     commit is no longer the head skips when that commit is the one released or older.
+   - The rule stays off while the last release is unknown: after a rollback or a
+     failed or cancelled rollout, or when about the last 10 release jobs have no
+     rollout. A superseded commit then skips as it did before the rule, and only a
+     green head releases. On a busy night that takes a merge gap longer than a CI
+     run. So rerunning a failed rollout releases only if its commit is still the
+     head; otherwise the run goes green with "Skipped: … last rollout: unknown" and
+     nothing ships.
+   - A release that fails before its rollout (a failed migration, say) leaves the
+     last rollout as it was, so each later green commit tries again and fails
+     visibly, until about 10 such jobs turn the rule off.
+   - A master with no green commit still releases nothing.
 
    GitHub lists every automatic run under `master`, because a `workflow_run` runs
    in the default branch's context; the run's name says what it releases, for
@@ -109,7 +141,8 @@ this scrape endpoint.
    they include jobs that stopped before the rollout (disabled, failed migration,
    superseded), and Vercel's web deployments land in `Production`, which GitHub
    treats as `production`. After a rollback, a failed rollout, or a release whose
-   run predates these names, the next automatic run deploys.
+   run predates these names, the next automatic run whose commit is still the head
+   deploys.
 3. The environment must explicitly enable deployment and provide all secrets.
 4. Build a frozen-lockfile image, push a commit tag, and use its immutable digest
    for the API and worker. No `prod`, `staging`, or `latest` tag is used at runtime.
@@ -117,7 +150,15 @@ this scrape endpoint.
    rollout. A migration failure stops deployment. Before adoption, migration
    files are frozen and no hosted SQL executes. If a newer commit reaches the
    branch while the release builds, the release stops before cutover and the newer
-   commit's run releases it.
+   commit's run releases it, unless the release is overdue by then. A release that
+   stops there has already applied its migrations, which the running application
+   tolerates because they are backward compatible. An overdue release applies its
+   own commit's migrations only; newer ones wait for their own release.
+   `supabase db push` refuses before any SQL runs, so the release fails before
+   cutover, when the database has a migration the commit's files lack (a rerun of an
+   old run can hit this) or when a file sorts before the last applied migration
+   (a pull request that was behind `master` can bring that in). Getting past that
+   one takes a person, because applied migrations can't be renamed.
 6. On EC2, start the new API beside the live one with background jobs disabled,
    reachable only on the loopback port the live one doesn't use (the target's
    port plus 100 or plus 200). Its `/health` probe must reach Supabase
