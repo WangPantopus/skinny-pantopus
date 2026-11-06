@@ -9,8 +9,9 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
-const { openRelease } = require('./lib/propertyRelease');
+const { openRelease, dallasRoll } = require('./lib/propertyRelease');
 const { zipTable } = require('../../../scripts/property-index/lib/tables.cjs');
+const { parts } = require('../../services/propertyRecords/addressKey');
 
 const opt = (name) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : null; };
 const out = opt('--out');
@@ -78,7 +79,44 @@ async function clark(release) {
   }
 }
 
-const CHECKS = { 53011: clark };
+// Dallas: the district's certified appraisal roll, published apart from the tables the release reads. The roll is July's
+// and the tables carry changes since, so a small share differs for that reason. It has no bedrooms, baths or year built:
+// those are for the person's check.
+async function dallas(release) {
+  const byAccount = new Map();
+  for (const record of release.records()) {
+    if (record.kind !== 'building') byAccount.set(record.id.split(':').pop(), record);
+  }
+  const seen = new Set();
+  const marked = { 'not in the release': 0, 'no facts in the release': 0, 'FACTS IN THE RELEASE': 0 };
+  const exact = (a, b) => a === b;
+  for await (const row of dallasRoll(path.join(work, 'tx-dallas', 'roll.zip'))) {
+    if (seen.has(row.account)) continue;
+    seen.add(row.account);
+    const record = byAccount.get(row.account);
+    if (row.privacy === 'Y') {
+      if (!record) marked['not in the release'] += 1;
+      else marked[record.restricted ? 'no facts in the release' : 'FACTS IN THE RELEASE'] += 1;
+    }
+    if (!record || record.restricted) continue;
+    const { facts, address } = record;
+    compare('market_value', facts.market_value, Number(row.market));
+    compare('market_land_value', facts.market_land_value, Number(row.land));
+    compare('market_building_value', facts.market_building_value, Number(row.improvement));
+    compare('taxable_value', facts.taxable_value, Number(row.taxable));
+    compare('lot, acres', facts.lot_acres ?? (facts.lot_sqft ? facts.lot_sqft / 43560 : null), Number(row.acres) / 1000, (a, b) => near(a, b, 0.01));
+    compare('county_use_code', facts.county_use_code, row.use, exact);
+    const theirs = parts({ number: row.number.replace(/^0+/, ''), pre: row.direction, name: row.name, suffix: row.suffix, unit: row.suite });
+    compare('house number', address.number, theirs?.number, exact);
+    compare('street name', address.name, theirs?.name, exact);
+    compare('street direction', address.pre, theirs?.pre, exact);
+    compare('street type', address.suffix, theirs?.suffix, exact);
+    compare('unit', address.unit, theirs?.unit, exact);
+  }
+  console.log(`Accounts the roll marks private: ${JSON.stringify(marked)}`);
+}
+
+const CHECKS = { 53011: clark, 48113: dallas };
 
 (async () => {
   if (!out || !county || !CHECKS[county]) throw new Error(`usage: --county ${Object.keys(CHECKS).join('|')} --out <build dir> --work <downloads>`);

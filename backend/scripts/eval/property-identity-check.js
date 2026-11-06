@@ -7,7 +7,7 @@
 'use strict';
 
 const path = require('path');
-const { openRelease } = require('./lib/propertyRelease');
+const { openRelease, dallasRoll } = require('./lib/propertyRelease');
 const { zipTable } = require('../../../scripts/property-index/lib/tables.cjs');
 const { parts, sortKey, zip5 } = require('../../services/propertyRecords/addressKey');
 const { resolve } = require('../../services/propertyRecords/identity');
@@ -53,6 +53,24 @@ async function clarkPositives() {
   }
 }
 
+async function dallasPositives() {
+  // Each account by the certified roll's own street columns, a different publication from the tables the release reads.
+  const seen = new Set();
+  for await (const row of dallasRoll(path.join(opt('--work'), 'tx-dallas', 'roll.zip'))) {
+    if (seen.has(row.account)) continue;
+    seen.add(row.account);
+    const record = byId.get(row.account);
+    if (!record || !['property', 'unit'].includes(record.kind)) continue;
+    const query = parts({ number: row.number.replace(/^0+/, ''), pre: row.direction, name: row.name, suffix: row.suffix, unit: row.suite });
+    if (!query) continue;
+    const answer = ask({ ...query, zip: record.address.zip });
+    const part = `Positives: ${record.kind}`;
+    if (answer.match !== 'exact') bump(part, label(answer));
+    else if (answer.record.facts.parcel_number === row.account) bump(part, 'exact, right account');
+    else bump(part, 'EXACT, WRONG ACCOUNT');
+  }
+}
+
 function controls() {
   // Neighbors: each condo unit by its own number must be that unit, not the one next door.
   for (const unit of units) {
@@ -83,7 +101,7 @@ function controls() {
   }
 }
 
-const POSITIVES = { 53011: clarkPositives };
+const POSITIVES = { 53011: clarkPositives, 48113: dallasPositives };
 
 (async () => {
   await POSITIVES[opt('--county')]?.();
