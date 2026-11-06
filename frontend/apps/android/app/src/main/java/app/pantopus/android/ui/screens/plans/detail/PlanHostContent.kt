@@ -62,6 +62,7 @@ import app.pantopus.android.ui.screens.plans.components.PlanWell
 import app.pantopus.android.ui.screens.plans.components.planCard
 import app.pantopus.android.ui.screens.plans.map.planH2
 import app.pantopus.android.ui.screens.plans.map.planH3
+import app.pantopus.android.ui.screens.plans.opensPlanProfile
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -369,12 +370,8 @@ private fun GuestRow(
             horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
         ) {
             // The guest's photo and name open their profile; the options stay on the button beside them.
-            val openProfile = person.userId?.let { id -> LocalPlanOpenProfile.current?.let { open -> { open(id) } } }
             Row(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .then(openProfile?.let { Modifier.clickable(onClickLabel = "Open profile", role = Role.Button, onClick = it) } ?: Modifier),
+                modifier = Modifier.weight(1f).opensPlanProfile(person.userId, LocalPlanOpenProfile.current),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
             ) {

@@ -846,7 +846,12 @@ private fun CounterpartyCard(
                     }
                     party.trailing?.let {
                         val prefix = if (party.rating != null) " · " else ""
-                        Text(text = "$prefix$it", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = PantopusColors.appTextSecondary)
+                        Text(
+                            text = "$prefix$it",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = PantopusColors.appTextSecondary,
+                        )
                     }
                 }
             }

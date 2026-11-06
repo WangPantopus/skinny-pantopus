@@ -1,8 +1,11 @@
 package app.pantopus.android.ui.screens.plans
 
 import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -79,6 +82,12 @@ data class PlansExternalRoutes(
 
 /** Opens a person's profile from the Plans pages; null leaves people plain. */
 val LocalPlanOpenProfile = staticCompositionLocalOf<((String) -> Unit)?> { null }
+
+/** A tap opens [userId]'s profile through [open] (the Plans pages' [LocalPlanOpenProfile]); no change when either is null. */
+fun Modifier.opensPlanProfile(
+    userId: String?,
+    open: ((String) -> Unit)?,
+): Modifier = if (userId != null && open != null) clickable(onClickLabel = "Open profile", role = Role.Button) { open(userId) } else this
 
 /** Registers every Plans page. Call inside the root `NavHost`. */
 fun NavGraphBuilder.plansRoutes(

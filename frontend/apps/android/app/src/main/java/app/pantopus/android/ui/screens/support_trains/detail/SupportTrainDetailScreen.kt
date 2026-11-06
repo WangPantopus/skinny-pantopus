@@ -1032,7 +1032,7 @@ private fun HostedByRow(
                     .size(24.dp)
                     .clip(CircleShape)
                     .background(Brush.linearGradient(listOf(PantopusColors.errorLight, PantopusColors.error)))
-                    .then(if (onOpenProfile != null) Modifier.clickable(onClick = onOpenProfile).testTag("supportTrainHostPhoto") else Modifier),
+                    .then(onOpenProfile?.let { Modifier.clickable(onClick = it).testTag("supportTrainHostPhoto") } ?: Modifier),
             contentAlignment = Alignment.Center,
         ) {
             Text(
