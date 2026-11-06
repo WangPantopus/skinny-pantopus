@@ -608,6 +608,9 @@ const earlyReadAdapter: HttpAdapter = async (config) => {
   return fetchAdapter(config);
 };
 
+// Which build is asking, so the server can count old ones (the apps send ios-2.0.7 and android-2.0.9).
+const WEB_BUILD = process.env.NEXT_PUBLIC_BUILD_SHA ? `web-${process.env.NEXT_PUBLIC_BUILD_SHA}` : 'web';
+
 // ============ REQUEST STEPS ============
 // Every request runs these before it is sent; a failure here is handled as a
 // failed request (handleRequestError), as is a retry's.
@@ -621,6 +624,7 @@ async function prepareRequest(config: SessionBoundRequest): Promise<SessionBound
     // Web: auth token is in httpOnly cookie, sent automatically via
     // same-origin proxy. Tell backend not to include tokens in JSON body.
     setHeader(headers, 'x-token-transport', 'cookie');
+    setHeader(headers, 'X-Client-Platform', WEB_BUILD);
     // Attach CSRF token for mutating requests.
     const method = (config.method || '').toUpperCase();
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
@@ -1072,6 +1076,12 @@ export async function apiRequest<T = any>(
   });
   return response.data;
 }
+
+/**
+ * Asks Add Home's suggestions, Property details, the Home's value and Place for the new record words
+ * (backend/services/recordVocabulary.js). Older servers ignore it, so readers take both vocabularies.
+ */
+export const RECORD_VOCABULARY = { vocabulary: '2' };
 
 export async function get<T = any>(
   url: string,
