@@ -343,6 +343,7 @@ The ordered steps, with exact values and checks, are in the [launch checklist](d
 - [ ] Verify Lob and USPS Every Door Direct Mail rate cards before budgeting any mail drop.
 - [ ] Agents' closing-gift kit (draft in PR 1499), the first homeowners association conversation, the business walk.
 - [ ] Optional: draw the radon card in Claude Design. Agents build it from the brief and existing components if it isn't ready.
+- [ ] Decide about videos stored before the server began cleaning them (November 6) that still say where they were taken. New uploads are clean. `node backend/scripts/clean-stored-video-locations.js` reports how many and changes nothing; `--rewrite` cleans them, and the CDN then needs those keys invalidated. Details are in the [photo-location handoff](docs/photo-location-place-picker-handoff-2026-11-05.md).
 
 ## 3. Build now: the mobile pilot (instructions in the brief)
 
