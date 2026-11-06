@@ -4498,7 +4498,6 @@ public final class ChatConversationViewModel {
             let showStamp = hasTail || deliveryState == .failed || deliveryState == .refused
                 || deliveryState == .sending
             let stamp: String? = showStamp ? Self.stampLabel(for: message, currentUserId: sendingIdentityId) : nil
-            let body = bubbleBody(for: message)
             let replyPreview = Self.replyPreview(for: message, in: messagesById, currentUserId: sendingIdentityId)
             let reactions = message.reactions.map {
                 ChatBubbleReaction(id: $0.reaction, reaction: $0.reaction, count: $0.count, reactedByMe: $0.includes(currentUserId))
@@ -4506,7 +4505,7 @@ public final class ChatConversationViewModel {
             rows.append(.bubble(ChatBubbleContent(
                 id: message.id,
                 side: side,
-                body: body,
+                body: bubbleBody(for: message),
                 replyPreview: replyPreview,
                 reactions: reactions,
                 hasTail: hasTail,
@@ -4516,6 +4515,7 @@ public final class ChatConversationViewModel {
                 lockedTier: Self.lockedTier(for: message),
                 sentSupportTier: Self.sentSupportTier(for: message),
                 senderName: side == .incoming ? roomSenderName(for: message) : nil,
+                senderUserId: side == .incoming ? roomSenderUserId(for: message) : nil,
                 aiLinks: message.messageType == "ai_reply" ? aiLinksByMessageId[message.id] ?? [] : [],
                 attachments: message.attachments
             )))
@@ -4566,6 +4566,13 @@ public final class ChatConversationViewModel {
     private func roomSenderName(for message: ChatMessageDTO) -> String? {
         guard case .room = mode else { return nil }
         return Self.senderName(of: message) ?? "Participant"
+    }
+
+    /// The person behind a room's message, for their profile; nil for a business's.
+    private func roomSenderUserId(for message: ChatMessageDTO) -> String? {
+        guard case .room = mode, (message.sender?.identityType ?? "local") == "local",
+              let userId = message.userId, !userId.isEmpty else { return nil }
+        return userId
     }
 
     /// The name a message's sender goes by: their identity's display name

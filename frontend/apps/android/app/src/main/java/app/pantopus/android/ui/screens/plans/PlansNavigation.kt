@@ -1,6 +1,11 @@
 package app.pantopus.android.ui.screens.plans
 
 import android.net.Uri
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -71,7 +76,18 @@ data class PlansExternalRoutes(
     val openNearby: () -> Unit,
     /** Ask Pantopus about a plan (AI assistant phase 1); null hides the button. */
     val askPantopus: ((AIScreenContext) -> Unit)? = null,
+    /** A person's profile: the host's, a guest's or a requester's, from their photo and name. */
+    val openProfile: ((userId: String) -> Unit)? = null,
 )
+
+/** Opens a person's profile from the Plans pages; null leaves people plain. */
+val LocalPlanOpenProfile = staticCompositionLocalOf<((String) -> Unit)?> { null }
+
+/** A tap opens [userId]'s profile through [open] (the Plans pages' [LocalPlanOpenProfile]); no change when either is null. */
+fun Modifier.opensPlanProfile(
+    userId: String?,
+    open: ((String) -> Unit)?,
+): Modifier = if (userId != null && open != null) clickable(onClickLabel = "Open profile", role = Role.Button) { open(userId) } else this
 
 /** Registers every Plans page. Call inside the root `NavHost`. */
 fun NavGraphBuilder.plansRoutes(
@@ -98,23 +114,27 @@ fun NavGraphBuilder.plansRoutes(
                 },
             ),
     ) {
-        PlanDetailScreen(
-            onBack = { if (!nav.popBackStack()) external.openNearby() },
-            onOpenPlan = { id -> nav.navigate(PlansRoutes.plan(id)) },
-            onOpenRequests = { id -> nav.navigate(PlansRoutes.requests(id)) },
-            onChange = { id -> nav.navigate(PlansRoutes.change(id)) },
-            onHost = { kind, again -> nav.navigate(PlansRoutes.host(kind = kind, again = again)) },
-            onOpenChat = external.openChat,
-            onOpenVerification = external.openVerification,
-            onSeeAllPlans = external.openNearby,
-            onAskPantopus = external.askPantopus,
-        )
+        CompositionLocalProvider(LocalPlanOpenProfile provides external.openProfile) {
+            PlanDetailScreen(
+                onBack = { if (!nav.popBackStack()) external.openNearby() },
+                onOpenPlan = { id -> nav.navigate(PlansRoutes.plan(id)) },
+                onOpenRequests = { id -> nav.navigate(PlansRoutes.requests(id)) },
+                onChange = { id -> nav.navigate(PlansRoutes.change(id)) },
+                onHost = { kind, again -> nav.navigate(PlansRoutes.host(kind = kind, again = again)) },
+                onOpenChat = external.openChat,
+                onOpenVerification = external.openVerification,
+                onSeeAllPlans = external.openNearby,
+                onAskPantopus = external.askPantopus,
+            )
+        }
     }
     composable(
         route = PlansRoutes.REQUESTS,
         arguments = listOf(navArgument(PlansRoutes.PLAN_ID_KEY) { type = NavType.StringType }),
     ) {
-        PlanRequestsScreen(onBack = { if (!nav.popBackStack()) external.openNearby() })
+        CompositionLocalProvider(LocalPlanOpenProfile provides external.openProfile) {
+            PlanRequestsScreen(onBack = { if (!nav.popBackStack()) external.openNearby() })
+        }
     }
     composable(
         route = PlansRoutes.CHANGE,

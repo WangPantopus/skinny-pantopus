@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.selected
@@ -152,12 +153,22 @@ data class PulsePostCardContent(
     val status: PostStatus? = null,
     /** Connections: "Ben C. and 2 others reposted", the line above the author; null when no connection reposted it. */
     val repostedBy: String? = null,
+    /** What the author's photo and name open; null when they open nothing. */
+    val authorLink: PulseAuthorLink? = null,
 ) {
     val isCurator: Boolean get() = origin == "curator"
 
     /** Thumbnail-preferring URL projection kept for test compatibility. */
     val mediaUrls: List<String>
         get() = media.map { it.thumbnailUrl ?: it.url }
+}
+
+/** Where a post's author leads, as the post page's header: a person's profile or a business's page. */
+@Immutable
+sealed interface PulseAuthorLink {
+    data class Person(val userId: String) : PulseAuthorLink
+
+    data class Business(val businessId: String) : PulseAuthorLink
 }
 
 /** Event card attendee strip — stacked avatars, "N going" and the Going button. */
@@ -187,6 +198,8 @@ fun PulsePostCard(
     onToggleSave: (() -> Unit)? = null,
     /** Repost toggle in the engagement strip. `null` hides it. */
     onToggleRepost: (() -> Unit)? = null,
+    /** Opens the author's profile or page from their photo and name. `null` leaves them plain. */
+    onOpenAuthor: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -208,6 +221,7 @@ fun PulsePostCard(
                 content = content,
                 onOverflow = onOverflow,
                 onDismissSeeded = onDismissSeeded,
+                onOpenAuthor = onOpenAuthor,
             )
             if (!content.title.isNullOrEmpty()) {
                 Text(
@@ -284,36 +298,57 @@ private fun CardHeader(
     content: PulsePostCardContent,
     onOverflow: (() -> Unit)?,
     onDismissSeeded: (() -> Unit)?,
+    onOpenAuthor: (() -> Unit)?,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(9.dp),
     ) {
-        FeedAvatar(
-            initials = content.authorInitials,
-            tint = content.avatarTint,
-            verified = content.authorVerified,
-            size = 32.dp,
-        )
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = content.authorName,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = PantopusColors.appText,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (content.isCurator) {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    CuratorChip(postId = content.id)
-                    CardMetadata(content.meta, Modifier.align(Alignment.CenterVertically))
+        // The author's photo and name, which open their profile (or page) when the card has somewhere to take them.
+        // The tap covers them only, not the space up to the chip.
+        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            Row(
+                modifier =
+                    if (onOpenAuthor != null) {
+                        Modifier
+                            .clickable(
+                                onClickLabel = if (content.authorLink is PulseAuthorLink.Business) "Open page" else "Open profile",
+                                role = Role.Button,
+                                onClick = onOpenAuthor,
+                            ).testTag("pulsePostAuthor_${content.id}")
+                    } else {
+                        Modifier
+                    },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
+                FeedAvatar(
+                    initials = content.authorInitials,
+                    tint = content.avatarTint,
+                    verified = content.authorVerified,
+                    size = 32.dp,
+                )
+                Column(modifier = Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = content.authorName,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = PantopusColors.appText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (content.isCurator) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            CuratorChip(postId = content.id)
+                            CardMetadata(content.meta, Modifier.align(Alignment.CenterVertically))
+                        }
+                    } else {
+                        CardMetadata(content.meta)
+                    }
                 }
-            } else {
-                CardMetadata(content.meta)
             }
         }
         PulseIntentChip(intent = content.intent, label = content.chipLabel)

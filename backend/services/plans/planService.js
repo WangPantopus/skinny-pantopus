@@ -73,7 +73,9 @@ function displayName(user) {
 }
 
 function firstName(user) {
-  return displayName(user).split(' ')[0];
+  const name = displayName(user);
+  // "A neighbor" stays whole ("A neighbor's place", not "A's place").
+  return name === 'A neighbor' ? name : name.split(' ')[0];
 }
 
 /**

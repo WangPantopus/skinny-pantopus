@@ -62,7 +62,7 @@ test.each([
   await handler(mail, 'patch', '/tasks/:id')({ ...request, params: { id: 'record' }, body: { status: 'completed' } }, res);
   expect(res.statusCode).toBe(200);
   if (shouldNotify) expect(notifications.notifyTaskCompleted).toHaveBeenCalledWith({ creatorUserId: 'creator',
-    homeId: 'home', taskId: 'record', completedAt: completed_at });
+    homeId: 'home', taskId: 'record', completedAt: completed_at, completedById: 'actor' });
   else expect(notifications.notifyTaskCompleted).not.toHaveBeenCalled();
 });
 test('a denied mail completion cannot notify the creator', async () => {
@@ -84,7 +84,7 @@ test.each([
   expect(res.statusCode).toBe(200);
   expect(res.body.task).toMatchObject({ id: 'record', home_id: 'home', status: 'done' });
   if (shouldNotify) expect(notifications.notifyTaskCompleted).toHaveBeenCalledWith({ creatorUserId: 'creator',
-    homeId: 'home', taskId: 'record', completedAt: completed_at });
+    homeId: 'home', taskId: 'record', completedAt: completed_at, completedById: 'actor' });
   else expect(notifications.notifyTaskCompleted).not.toHaveBeenCalled();
 });
 test('a denied home completion cannot notify the creator', async () => {

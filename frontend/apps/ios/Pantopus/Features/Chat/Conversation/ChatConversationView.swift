@@ -525,10 +525,10 @@ public struct ChatConversationView: View {
             // Ask on a screen: what the thread is about.
             if let topic = viewModel.aiTopic { AIAboutStrip(about: topic.about) }
             if mode == .creatorThread {
-                ChatCreatorAudienceStrip(
-                    context: resolvedCreatorContext,
-                    onOpenAudienceProfile: onOpenAudienceProfile
-                )
+                ChatCreatorAudienceStrip(context: resolvedCreatorContext) {
+                    leaveWithoutKeyboard()
+                    onOpenAudienceProfile()
+                }
                 if let quota = resolvedCreatorContext.quota {
                     ChatCreatorQuotaMeter(quota: quota)
                     if quota.isMaxed {
@@ -913,7 +913,10 @@ public struct ChatConversationView: View {
     private var headerProfileTap: (@MainActor () -> Void)? {
         guard mode == .dm, let userId = viewModel.profileUserId else { return nil }
         let open = onOpenProfile
-        return { open(userId) }
+        return {
+            leaveWithoutKeyboard()
+            open(userId)
+        }
     }
 
     private var composerPlaceholder: String {
@@ -1041,11 +1044,13 @@ public struct ChatConversationView: View {
 
     private func openGigDetail(gigId: String) {
         guard let url = URL(string: "pantopus://gigs/\(gigId)") else { return }
+        leaveWithoutKeyboard()
         DeepLinkRouter.shared.handle(url: url)
     }
 
     private func openListingDetail(listingId: String) {
         guard let url = URL(string: "pantopus://listings/\(listingId)") else { return }
+        leaveWithoutKeyboard()
         DeepLinkRouter.shared.handle(url: url)
     }
 
@@ -1101,6 +1106,14 @@ public struct ChatConversationView: View {
         composerFocused = false
         emojiPickerPresented = false
         emojiDragOffset = 0
+    }
+
+    /// Leaving the thread for another screen (a profile, a draft, a gig or a listing) puts the keyboard away first.
+    /// Raised again as the thread slides back in after Back, it hid the composer behind it; and coming back isn't a
+    /// fold or a turn, so the composer doesn't take it back either (`returnToComposer`).
+    private func leaveWithoutKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        viewModel.isComposing = false
     }
 
     /// A fold or a turn rebuilt the screen while the composer had the keyboard: it gets it back, once the composer is
@@ -2102,6 +2115,8 @@ extension ChatConversationView {
             rowWidth: rowWidth,
             incomingInitials: incomingInitials,
             aiStatus: viewModel.aiStatus,
+            // While messages are being picked, a tap picks the message instead.
+            onOpenSender: isSelecting ? nil : bubble.senderUserId.map { userId in { @MainActor in onOpenProfile(userId) } },
             canManage: viewModel.canManageMessage(bubble.id),
             canDiscard: viewModel.canDiscardMessage(bubble.id),
             onLockedAction: { upgradePromptPresented = true },
@@ -2125,9 +2140,7 @@ extension ChatConversationView {
                     }
                     return
                 }
-                // Leave without the keyboard up: coming back with it still raised
-                // hides the composer behind it.
-                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                leaveWithoutKeyboard()
                 onUseAIDraft(draft)
             },
             onOpenGig: openGigDetail,
@@ -3422,6 +3435,8 @@ private struct ChatBubbleRow: View {
     let incomingInitials: String?
     /// What the assistant is doing while a reply is pending ("Drafting your post…").
     var aiStatus: String?
+    /// Opens the profile of the person who sent a room's message, from their name and photo.
+    var onOpenSender: (@MainActor () -> Void)?
     let canManage: Bool
     let canDiscard: Bool
     let onLockedAction: @MainActor () -> Void
@@ -3453,7 +3468,15 @@ private struct ChatBubbleRow: View {
                 bubbleStack
             } else {
                 if let initials = senderInitials ?? incomingInitials, showsIncomingAvatarSlot {
-                    ChatMiniAvatar(initials: initials, hidden: content.isContinuation)
+                    // A tap, not a button: the row stays one VoiceOver element, with the profile as a named action.
+                    if let onOpenSender, !content.isContinuation {
+                        ChatMiniAvatar(initials: initials)
+                            .hitArea(horizontal: 4, vertical: 11)
+                            .onTapGesture(perform: onOpenSender)
+                            .accessibilityIdentifier("chatSenderAvatar_\(content.id)")
+                    } else {
+                        ChatMiniAvatar(initials: initials, hidden: content.isContinuation)
+                    }
                 }
                 bubbleStack
                 Spacer(minLength: 44)
@@ -3497,6 +3520,11 @@ private struct ChatBubbleRow: View {
         }
         // A reply with action cards or link buttons keeps each button its own element.
         .accessibilityElement(children: hasAIControls ? .contain : .combine)
+        .accessibilityActions {
+            if let onOpenSender {
+                Button(openSenderLabel, action: onOpenSender)
+            }
+        }
     }
 
     private var hasAIControls: Bool {
@@ -3531,14 +3559,26 @@ private struct ChatBubbleRow: View {
         return letters.isEmpty ? nil : letters.joined().uppercased()
     }
 
+    private var openSenderLabel: String {
+        "Open \(content.senderName ?? "the sender")'s profile"
+    }
+
     private var bubbleStack: some View {
         VStack(alignment: alignment, spacing: Spacing.s0) {
             if content.side == .incoming, !content.isContinuation, let name = content.senderName {
-                Text(name)
+                let label = Text(name)
                     .pantopusTextStyle(.caption)
                     .foregroundStyle(Theme.Color.appTextSecondary)
                     .lineLimit(1)
-                    .padding(.bottom, 2)
+                if let onOpenSender {
+                    label
+                        .hitArea(vertical: 8)
+                        .onTapGesture(perform: onOpenSender)
+                        .padding(.bottom, 2)
+                        .accessibilityIdentifier("chatSenderName_\(content.id)")
+                } else {
+                    label.padding(.bottom, 2)
+                }
             }
             bubbleBody
                 // A15 `.reaction` — pills float over the bubble's bottom

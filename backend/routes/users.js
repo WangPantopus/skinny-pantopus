@@ -4805,6 +4805,8 @@ router.post('/:id/follow', verifyToken, async (req, res) => {
       // By id: a username may be one the server made up (part of an email address), and it can change.
       link: `/${followerId}`,
       metadata: { follower_id: followerId },
+      // Once per follower: unfollowing and following again (or a repeated request) doesn't notify again.
+      idempotencyKey: `new-follower:${followerId}:${followingId}`,
     });
 
     // No username in the answer: it may be one the server made up (part of an email address).

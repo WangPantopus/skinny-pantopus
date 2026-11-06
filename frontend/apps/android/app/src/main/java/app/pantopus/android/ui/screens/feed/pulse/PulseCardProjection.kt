@@ -139,7 +139,24 @@ internal fun pulseCardContent(
             ),
         status = statusFor(post, live),
         repostedBy = repostedByText(post.repostedBy),
+        authorLink = pulseAuthorLink(post),
     )
+}
+
+/**
+ * Where the author's photo and name lead, as on the post's page: a business's published page or a person's profile. A
+ * tip, a creator persona (whose id is not the person's) and a post written as a home lead nowhere.
+ */
+internal fun pulseAuthorLink(post: FeedPost): PulseAuthorLink? {
+    val creator = post.creator?.takeUnless { post.isSeeded } ?: return null
+    return when (creator.type) {
+        "business" ->
+            creator.id
+                ?.takeIf { !(creator.handle ?: creator.username).isNullOrEmpty() }
+                ?.let { PulseAuthorLink.Business(it) }
+        "persona", "home" -> null
+        else -> post.userId?.takeIf { it.isNotEmpty() && post.businessAuthorId == null }?.let { PulseAuthorLink.Person(it) }
+    }
 }
 
 /** The viewer wrote this post (as themselves or as their business's writer). */

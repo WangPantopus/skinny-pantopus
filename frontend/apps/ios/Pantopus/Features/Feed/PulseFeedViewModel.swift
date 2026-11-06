@@ -1285,8 +1285,24 @@ public final class PulseFeedViewModel {
             // Topics on cards are the redesign's (Pulse S4, launch cut #11).
             pulseTopic: LaunchFeatures.pulseRedesign ? PulseTopic(stored: post.topic) : nil,
             status: Self.status(of: post, solved: isSolved, going: likeCount, expiresAt: expiresAt),
-            repostedBy: Self.repostedByText(post.repostedBy)
+            repostedBy: Self.repostedByText(post.repostedBy),
+            authorLink: Self.authorLink(for: post)
         )
+    }
+
+    /// Where the author's photo and name lead, as on the post's page: a business's published page or a person's
+    /// profile. A tip, a creator persona (whose id is not the person's) and a post written as a home lead nowhere.
+    static func authorLink(for post: FeedPostDTO) -> PulseAuthorLink? {
+        guard !post.isSeeded, let creator = post.creator else { return nil }
+        switch creator.identityType {
+        case "business":
+            return creator.businessPageId.map { .business($0) }
+        case "persona", "home":
+            return nil
+        default:
+            guard post.businessAuthorId == nil, let userId = post.userId, !userId.isEmpty else { return nil }
+            return .person(userId: userId)
+        }
     }
 
     /// Connections: "Ben C. reposted", "Ben C. and Eve H. reposted", "Ben C. and 2 others reposted" (as on web).

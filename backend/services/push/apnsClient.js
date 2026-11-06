@@ -98,6 +98,12 @@ function buildPayload({ title, body, data } = {}) {
   ].includes(data?.category)) {
     payload.aps.category = data.category;
   }
+  // Chat and business-inbox messages stack by conversation, and their category gives iOS the placeholder
+  // ("New message", AppDelegate) it shows instead of the sender and text while the phone hides previews.
+  if (['chat_message', 'business_message'].includes(data?.type)) {
+    payload.aps.category = 'CHAT_MESSAGE';
+    if (typeof data.room_id === 'string' && data.room_id) payload.aps['thread-id'] = `chat:${data.room_id}`;
+  }
   for (const [key, value] of Object.entries(data || {})) {
     if (value !== null && value !== undefined && key !== 'aps') {
       payload[key] = value;

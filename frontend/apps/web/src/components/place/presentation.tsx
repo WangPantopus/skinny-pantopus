@@ -539,11 +539,15 @@ export function renderSection(env: PlaceSection, opts?: PlaceSectionRenderOption
 
   const state = cardState(env, opts);
   const reading = (state === 'loaded' || state === 'stale') && env.data ? cfg.format?.(env.data, env) ?? {} : {};
+  // Your home's gap is ours (a record still being looked up, no county records yet), never the area's:
+  // the server's sentence is the card's line.
+  const ownGap = env.id === 'your_home' && state === 'unavailable' ? env.unavailable_reason ?? undefined : undefined;
 
   return (
     <SectionCard
       icon={cfg.icon}
       title={cfg.title}
+      unavailableTitle={ownGap}
       state={state}
       inline={cfg.inline}
       sparkline={cfg.sparkline && (state === 'loaded' || state === 'stale')}
