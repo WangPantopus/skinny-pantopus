@@ -1,11 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import type { AttomPropertyDetailPayload } from '@pantopus/api';
 import { buildAttomDisplaySections, type AttomDisplaySection } from '@pantopus/utils';
 
 type Section = Omit<AttomDisplaySection, 'rows'> & {
-  rows: (AttomDisplaySection['rows'][number] & { tag?: string | null })[];
+  rows: (AttomDisplaySection['rows'][number] & { tag?: string | null; note?: string | null })[];
   note?: string | null;
 };
 
@@ -13,16 +13,20 @@ type Props = {
   attomPropertyDetail?: AttomPropertyDetailPayload | null;
   /** Sections the server already labeled (a verified owner's county record); shown instead of the raw record. */
   sections?: Section[];
+  /** Drawn at the foot of a section (the household's "Is this right?"). */
+  sectionFooter?: (sectionId: string) => ReactNode;
 };
 
 function SectionBlock({
   section,
   expanded,
   onToggle,
+  footer,
 }: {
   section: Section;
   expanded: boolean;
   onToggle: () => void;
+  footer?: ReactNode;
 }) {
   if (section.rows.length === 0) return null;
 
@@ -44,19 +48,21 @@ function SectionBlock({
               <div className="text-app-text-strong font-medium leading-snug break-words">
                 {row.value}
                 {row.tag ? <div className="mt-0.5 text-[11px] font-normal text-app-text-muted">{row.tag}</div> : null}
+                {row.note ? <div className="mt-0.5 text-[11px] font-normal text-app-text-muted">{row.note}</div> : null}
               </div>
             </div>
           ))}
           {section.note ? (
             <p className="px-3 py-2 text-xs leading-snug text-app-text-secondary">{section.note}</p>
           ) : null}
+          {footer}
         </div>
       ) : null}
     </div>
   );
 }
 
-export default function AttomStructuredFields({ attomPropertyDetail, sections: labeled }: Props) {
+export default function AttomStructuredFields({ attomPropertyDetail, sections: labeled, sectionFooter }: Props) {
   const sections = useMemo(
     () => labeled ?? buildAttomDisplaySections(attomPropertyDetail ?? undefined),
     [labeled, attomPropertyDetail],
@@ -72,6 +78,7 @@ export default function AttomStructuredFields({ attomPropertyDetail, sections: l
           key={sec.id}
           section={sec}
           expanded={expanded[sec.id] ?? true}
+          footer={sectionFooter?.(sec.id)}
           onToggle={() =>
             setExpanded((prev) => ({
               ...prev,
