@@ -106,12 +106,12 @@ const CHECKS = {
     map: [['year_built', 'ayb'], ['living_sqft', 'living_area', near(2)], ['bedrooms', 'number_of_bedroom'], ['full_baths', 'number_of_baths'], ['half_baths', 'number_of_half_baths'], ['lot_acres', 'land_acres', near(0.02)], ['stories', 'stories']],
   },
   'md-imap': {
-    rows: () => layerRows('https://geodata.md.gov/imap/rest/services/PlanningCadastre/MD_PropertyData/MapServer/0', ['ACCTID', 'YEARBLT', 'SQFTSTRC', 'BLDG_UNITS', 'CONSIDR1', 'NFMLNDVL', 'NFMIMPVL']),
+    county: '24029', rows: () => layerRows('https://geodata.md.gov/imap/rest/services/PlanningCadastre/MD_PropertyData/MapServer/0', ['ACCTID', 'YEARBLT', 'SQFTSTRC', 'BLDG_UNITS', 'CONSIDR1', 'NFMLNDVL', 'NFMIMPVL'], { where: "JURSCODE = 'KENT'" }),
     id: (row) => row.ACCTID,
     map: [['year_built', 'YEARBLT'], ['living_sqft', 'SQFTSTRC'], ['sale_price', 'CONSIDR1', moneyNear], ['market_land_value', 'NFMLNDVL', moneyNear], ['market_building_value', 'NFMIMPVL', moneyNear]],
   },
   'nj-state-server': {
-    rows: () => layerRows('https://maps.nj.gov/arcgis/rest/services/Framework/Cadastral/MapServer/0', ['PAMS_PIN', 'YR_CONSTR', 'NET_VALUE', 'LAND_VAL', 'IMPRVT_VAL', 'SALE_PRICE']),
+    county: '34033', rows: () => layerRows('https://maps.nj.gov/arcgis/rest/services/Framework/Cadastral/MapServer/0', ['PAMS_PIN', 'YR_CONSTR', 'NET_VALUE', 'LAND_VAL', 'IMPRVT_VAL', 'SALE_PRICE'], { where: "COUNTY = 'SALEM'" }),
     id: (row) => row.PAMS_PIN,
     map: [['year_built', 'YR_CONSTR'], ['assessed_value', 'NET_VALUE', moneyNear], ['assessed_land_value', 'LAND_VAL', moneyNear], ['assessed_building_value', 'IMPRVT_VAL', moneyNear], ['sale_price', 'SALE_PRICE', moneyNear]],
   },

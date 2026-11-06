@@ -184,12 +184,13 @@ function fromBoston(row, fips, county) {
   const last = Number(row.ST_NUM2) > Number(row.ST_NUM) ? String(Number(row.ST_NUM2)) : null;
   put(facts, 'address_on_record', onRecord(`${first} ${street}`, row.UNIT_NUM));
   put(facts, 'year_built', kind !== 'parcel' && kind !== 'other' ? year(row.YR_BUILT) : null);
-  put(facts, 'living_sqft', home ? positive(row.LIVING_AREA) : null);
-  put(facts, 'gross_sqft', kind !== 'parcel' && kind !== 'other' ? positive(row.GROSS_AREA) : null);
+  put(facts, 'living_sqft', home ? positive(String(row.LIVING_AREA ?? '').replace(/,/g, '')) : null);
+  put(facts, 'gross_sqft', kind !== 'parcel' && kind !== 'other' ? positive(String(row.GROSS_AREA ?? '').replace(/,/g, '')) : null);
   put(facts, 'stories', kind !== 'parcel' && kind !== 'other' && kind !== 'unit' ? positive(row.RES_FLOOR) : null);
   put(facts, 'style', kind !== 'parcel' && kind !== 'other' ? bostonWord(row.BLDG_TYPE) : null);
   if (building) put(facts, 'units', positive(row.RES_UNITS));
-  if (kind !== 'unit') put(facts, 'lot_sqft', positive(row.LAND_SF));
+  const money = (text) => positive(String(text ?? '').replace(/[$,\s]/g, ''));
+  if (kind !== 'unit') put(facts, 'lot_sqft', money(row.LAND_SF));
   put(facts, 'buildings_on_parcel', kind !== 'unit' ? positive(row.NUM_BLDGS) : null);
   if (home) {
     put(facts, 'rooms', positive(row.TT_RMS));
@@ -213,7 +214,6 @@ function fromBoston(row, fips, county) {
   }
   facts.value_year = BOSTON_YEAR;
   facts.tax_year = BOSTON_YEAR;
-  const money = (text) => positive(String(text ?? '').replace(/[$,\s]/g, ''));
   put(facts, 'assessed_value', money(row.TOTAL_VALUE));
   put(facts, 'assessed_land_value', money(row.LAND_VALUE));
   put(facts, 'assessed_building_value', money(row.BLDG_VALUE));

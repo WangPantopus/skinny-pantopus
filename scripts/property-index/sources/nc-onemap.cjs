@@ -16,7 +16,19 @@ const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
 
 const BUCKET = 'https://dit-cgia-gis-data.s3.amazonaws.com';
-const COLUMNS = ['PARNO', 'CNTYFIPS', 'CNTYNAME', 'GISACRES', 'IMPROVVAL', 'LANDVAL', 'PARVAL', 'PARVALTYPE', 'SITEADD', 'SUNIT', 'SCITY', 'SZIP', 'STRUCTYEAR', 'SALEDATE', 'SUBDIVISIO', 'PARUSEDESC', 'PARUSECODE', 'REVISEYEAR'];
+const COLUMNS = ['PARNO', 'GISACRES', 'IMPROVVAL', 'LANDVAL', 'PARVAL', 'PARVALTYPE', 'SITEADD', 'SUNIT', 'SCITY', 'SZIP', 'STRUCTYEAR', 'SALEDATE', 'SUBDIVISIO', 'PARUSEDESC', 'PARUSECODE', 'REVISEYEAR'];
+
+// The state's counties in FIPS order: the file names, and each one's code is its place times two, minus one.
+const COUNTY_FILES = [
+  'alamance', 'alexander', 'alleghany', 'anson', 'ashe', 'avery', 'beaufort', 'bertie', 'bladen', 'brunswick', 'buncombe', 'burke', 'cabarrus',
+  'caldwell', 'camden', 'carteret', 'caswell', 'catawba', 'chatham', 'cherokee', 'chowan', 'clay', 'cleveland', 'columbus', 'craven', 'cumberland',
+  'currituck', 'dare', 'davidson', 'davie', 'duplin', 'durham', 'edgecombe', 'forsyth', 'franklin', 'gaston', 'gates', 'graham', 'granville',
+  'greene', 'guilford', 'halifax', 'harnett', 'haywood', 'henderson', 'hertford', 'hoke', 'hyde', 'iredell', 'jackson', 'johnston', 'jones', 'lee',
+  'lenoir', 'lincoln', 'mcdowell', 'macon', 'madison', 'martin', 'mecklenburg', 'mitchell', 'montgomery', 'moore', 'nash', 'new-hanover',
+  'northampton', 'onslow', 'orange', 'pamlico', 'pasquotank', 'pender', 'perquimans', 'person', 'pitt', 'polk', 'randolph', 'richmond', 'robeson',
+  'rockingham', 'rowan', 'rutherford', 'sampson', 'scotland', 'stanly', 'stokes', 'surry', 'swain', 'transylvania', 'tyrrell', 'union', 'vance',
+  'wake', 'warren', 'washington', 'watauga', 'wayne', 'wilkes', 'wilson', 'yadkin', 'yancey',
+];
 
 function useOf(text, unit) {
   const use = String(text ?? '').toUpperCase();
@@ -76,23 +88,22 @@ async function* build({ work }) {
   log(`${files.size} county files listed`);
   if (files.size < 95) throw new Error(`Only ${files.size} county files are listed`);
   for (const [name, { key, date }] of [...files].sort()) {
-    if (/cherokee.*indian|ebci/.test(name)) continue;
+    const place = COUNTY_FILES.indexOf(name);
+    if (place < 0) {
+      log('A file that is not one of the 100 counties isn\'t read');
+      continue;
+    }
+    const fips = `37${String(place * 2 + 1).padStart(3, '0')}`;
+    if (only.length && !only.includes(fips)) continue;
     const zip = path.join(work, 'nc-onemap', `${name}.zip`);
     download(`${BUCKET}/${key}`, zip);
     const member = execFileSync('unzip', ['-Z1', zip], { encoding: 'latin1', maxBuffer: 1e7 }).split('\n').find((entry) => /_pt\.dbf$/i.test(entry));
     if (!member) throw new Error(`The file for ${name} has no table`);
     const byCounty = [];
     const seen = new Set();
-    let fips = null;
-    let county = null;
+    const county = `${name.replace(/-/g, ' ').replace(/(^|\s)\S/g, (first) => first.toUpperCase()).replace(/^Mc(\w)/, (_, next) => `Mc${next.toUpperCase()}`)} County`;
     let noAddress = 0;
     for await (const row of dbfRows(zip, member, COLUMNS)) {
-      if (!fips) {
-        const code = String(row.CNTYFIPS ?? '').trim();
-        fips = code.length === 3 ? `37${code}` : null;
-        county = `${word(row.CNTYNAME)?.toLowerCase().replace(/(^|\s)\S/g, (first) => first.toUpperCase())} County`;
-      }
-      if (!fips) continue;
       const record = fromRow(row, fips, county);
       if (!record) noAddress += 1;
       else if (!seen.has(record.id)) {
@@ -101,7 +112,6 @@ async function* build({ work }) {
       }
     }
     fs.rmSync(zip, { force: true });
-    if (!fips || (only.length && !only.includes(fips))) continue;
     log(`${county}: ${byCounty.length} records, ${noAddress} without a street number`);
     for (const building of condoBuildings(byCounty, { fips, county })) byCounty.push(building);
     yield {
