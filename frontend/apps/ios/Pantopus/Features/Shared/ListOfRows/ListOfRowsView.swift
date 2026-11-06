@@ -292,6 +292,7 @@ private struct SearchBarRow: View {
     var body: some View {
         HStack(spacing: Spacing.s2) {
             Icon(PantopusIcon.search, size: 16, color: Theme.Color.appTextSecondary)
+                .allowsHitTesting(false)
             TextField(config.placeholder, text: Binding(
                 get: { localText.isEmpty ? config.text : localText },
                 set: { value in
@@ -311,9 +312,9 @@ private struct SearchBarRow: View {
         }
         .padding(.horizontal, Spacing.s3)
         .padding(.vertical, Spacing.s2)
+        .typesInFieldOnTap(focus)
         .background(Theme.Color.appSurfaceSunken)
         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
-        .keepsKeyboardOnTap()
         .padding(.horizontal, Spacing.s4)
         .padding(.vertical, Spacing.s2)
         .background(Theme.Color.appSurface)

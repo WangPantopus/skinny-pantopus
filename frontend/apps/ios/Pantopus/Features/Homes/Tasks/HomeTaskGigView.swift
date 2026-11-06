@@ -77,14 +77,20 @@ struct HomeTaskGigView: View {
         Group {
             Section("Public details") {
                 TextField("Public title", text: $model.title, axis: .vertical)
-                    .focused($fieldFocused).accessibilityIdentifier("homeTaskGig.title")
+                    .focused($fieldFocused)
+                    .accessibilityIdentifier("homeTaskGig.title")
+                    .typesInFieldOnTap(reach: Spacing.s2)
                 Button("Use household task title") { model.title = task.title }
                 TextField("Public description", text: $model.description, axis: .vertical)
-                    .lineLimit(3...8).focused($fieldFocused).accessibilityIdentifier("homeTaskGig.description")
+                    .lineLimit(3...8)
+                    .focused($fieldFocused)
+                    .accessibilityIdentifier("homeTaskGig.description")
+                    .typesInFieldOnTap(reach: Spacing.s2)
                 TextField("Budget (USD)", text: $model.budget)
                     .keyboardType(.decimalPad)
                     .focused($fieldFocused)
                     .accessibilityIdentifier("homeTaskGig.budget")
+                    .typesInFieldOnTap(reach: Spacing.s2)
                 Picker("Category", selection: $model.category) {
                     Text("General").tag("General")
                     ForEach(GigComposeCategory.allCases, id: \.self) { category in Text(category.label).tag(category.backendLabel) }
@@ -93,6 +99,7 @@ struct HomeTaskGigView: View {
             Section("Work location") {
                 TextField("Search an address", text: $model.addressText).focused($fieldFocused)
                     .accessibilityIdentifier("homeTaskGig.address")
+                    .typesInFieldOnTap(reach: Spacing.s2)
                 Button(model.findingAddress ? "Finding locations…" : "Find location") {
                     fieldFocused = false
                     Task { await model.searchAddress() }

@@ -403,6 +403,7 @@ private struct MagicDescribeCard: View {
                 .padding(.horizontal, Spacing.s2)
                 .padding(.vertical, Spacing.s1)
                 .focused($isFocused)
+                .typesInFieldOnTap($isFocused)
                 .overlay(alignment: .topLeading) {
                     if describeText.isEmpty {
                         Text("e.g. Need someone to assemble an IKEA desk this Saturday morning…")

@@ -168,10 +168,12 @@ public struct SavePlaceSheet: View {
                     .submitLabel(.done)
                     .accessibilityIdentifier("savePlace.nameField")
                 Icon(.pencil, size: 15, color: Theme.Color.appTextMuted)
+                    .allowsHitTesting(false)
             }
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, Spacing.s2)
             .frame(minHeight: 46)
+            .typesInFieldOnTap($nameFocused)
             .background(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous).fill(Theme.Color.appSurfaceSunken))
             .overlay(
                 RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)

@@ -45,6 +45,7 @@ struct ClaimStatement: View {
                 .foregroundStyle(Theme.Color.appText)
                 .padding(Spacing.s3)
                 .frame(minHeight: 64, alignment: .topLeading)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.lg, style: .continuous))
                 .overlay {

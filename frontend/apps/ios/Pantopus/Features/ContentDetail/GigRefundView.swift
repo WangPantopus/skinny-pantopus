@@ -90,6 +90,7 @@ struct GigRefundView: View {
                     .keyboardType(.decimalPad)
                     .accessibilityLabel("Refund amount in US dollars")
                     .accessibilityIdentifier("gigRefund.amount")
+                    .typesInFieldOnTap(reach: Spacing.s2)
                 Text("Up to \(PaymentRefundRequestDTO.money(model.remaining)) is available to request. "
                     + "Leave the amount blank to request all of it.")
             }

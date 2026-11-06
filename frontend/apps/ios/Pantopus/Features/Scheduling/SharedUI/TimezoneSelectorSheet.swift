@@ -92,6 +92,7 @@ public struct TimezoneSelectorSheet: View {
     private var searchField: some View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 16, color: Theme.Color.appTextSecondary)
+                .allowsHitTesting(false)
             TextField("Search city or time zone", text: $query)
                 .font(Theme.Font.body)
                 .textInputAutocapitalization(.never)
@@ -99,6 +100,7 @@ public struct TimezoneSelectorSheet: View {
             if !query.isEmpty {
                 Button { query = "" } label: {
                     Icon(.x, size: 16, color: Theme.Color.appTextMuted)
+                        .hitArea(horizontal: 8, vertical: 8)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
@@ -106,6 +108,7 @@ public struct TimezoneSelectorSheet: View {
         }
         .padding(.horizontal, Spacing.s3)
         .padding(.vertical, Spacing.s2)
+        .typesInFieldOnTap()
         .background(Theme.Color.appSurfaceSunken)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
