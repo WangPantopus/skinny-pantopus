@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const zlib = require('node:zlib');
 const { releasePath, findBlock } = require('../../backend/services/propertyRecords/format');
-const { parse, sortKey } = require('../../backend/services/propertyRecords/addressKey');
+const { parse, parts, sortKey } = require('../../backend/services/propertyRecords/addressKey');
 const { resolve } = require('../../backend/services/propertyRecords/identity');
 
 const out = process.argv[2];
@@ -102,5 +102,21 @@ for (const [name, lines, want, unit, where] of FORMS) {
     if (!right) failed += 1;
     console.log(`${right ? 'ok  ' : 'FAIL'} ${name}: ${right ? 'reads the same' : 'reads differently'}`);
   }
+}
+// A publisher's columns and a person's line reach the same key, whatever words the street's name holds.
+const COLUMNS = [
+  ['A street word ending the name', { number: '123', name: 'EXAMPLE VIEW', suffix: 'DR' }, '123 Example View Dr'],
+  ['A street word ending the name, no type column', { number: '123', name: 'EXAMPLE VIEW DR' }, '123 Example View Dr'],
+  ['A direction starting the name', { number: '123', pre: 'N', name: 'EAST EXAMPLE', suffix: 'AVE' }, '123 N East Example Ave'],
+  ['A direction ending the name', { number: '123', name: 'EXAMPLE NORTH', suffix: 'AVE', post: 'S' }, '123 Example North Ave S'],
+  ['A column repeated in the name', { number: '123', pre: 'N', name: 'N EXAMPLE ST', suffix: 'ST' }, '123 N Example St'],
+  ['Everything in the name', { number: '123', name: 'N EXAMPLE PARK AVE S' }, '123 N Example Park Ave S'],
+];
+for (const [name, columns, line] of COLUMNS) {
+  const a = parts(columns);
+  const b = parse(line);
+  const right = ['number', 'pre', 'name', 'suffix', 'post'].every((field) => a[field] === b[field]);
+  if (!right) failed += 1;
+  console.log(`${right ? 'ok  ' : 'FAIL'} ${name}`);
 }
 if (failed) process.exit(1);

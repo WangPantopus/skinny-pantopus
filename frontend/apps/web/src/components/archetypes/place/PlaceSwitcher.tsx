@@ -16,7 +16,9 @@
 'use client';
 
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { House, Plus, ShieldCheck, Home as HomeIcon, X } from 'lucide-react';
+import { useDialogFocusTrap } from '@/lib/useDialogFocusTrap';
 import Chip from '../primitives/Chip';
 import { Chevron } from './primitives';
 
@@ -95,26 +97,27 @@ function PlaceRow({
 }
 
 export default function PlaceSwitcher({ open, onClose, homes, activeId, onPick, onAddPlace }: PlaceSwitcherProps) {
-  // ESC to close + lock body scroll while open (the shared sheet behavior).
+  // Lock body scroll while open (the shared sheet behavior).
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
-      document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
     };
-  }, [open, onClose]);
+  }, [open]);
 
-  if (!open) return null;
+  // ESC to close, and Tab stays inside: on document.body the sheet comes last in the Tab order.
+  const dialogRef = useDialogFocusTrap<HTMLDivElement>(onClose, null, open);
 
-  return (
+  if (!open || typeof document === 'undefined') return null;
+
+  // Rendered into document.body: inside the app's <main> (its own stacking context) the + button sat on the
+  // rows and the phone tab bar cut off "Add a place".
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      ref={dialogRef}
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center"
       role="dialog"
       aria-modal="true"
       aria-label="Switch place"
@@ -171,6 +174,7 @@ export default function PlaceSwitcher({ open, onClose, homes, activeId, onPick, 
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

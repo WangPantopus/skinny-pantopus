@@ -2,6 +2,7 @@
 
 /**
  * One-off: videos stored before uploads were cleaned (services/videoMetadata.js) can still say where they were taken.
+ * That includes Live Photos: each is stored as a photo and a short video clip, and this counts the clip.
  *
  *   node backend/scripts/clean-stored-video-locations.js                reports how many do; changes nothing
  *   node backend/scripts/clean-stored-video-locations.js --rewrite      overwrites those, using the same cleaner
@@ -14,7 +15,8 @@
  * hash of the file, which reads check, so changing the bytes would break them. Both are private.
  *
  * After a rewrite: the CDN and viewers' devices may keep the old bytes, because these objects are marked immutable for
- * a year. The script writes the rewritten keys to a file outside the repo; invalidate them in CloudFront to finish.
+ * a year. The script writes the rewritten keys to a file outside the repo. Download one through its public link, and if
+ * the old bytes come back, purge those keys in the CDN behind AWS_CLOUDFRONT_URL, which need not be CloudFront.
  */
 
 require('dotenv').config({ path: require('node:path').resolve(__dirname, '../.env') });
@@ -204,7 +206,7 @@ async function main() {
     }
   }
 
-  console.log('Stored videos:');
+  console.log('Stored videos, including Live Photo clips:');
   line('carry a location', counts.location);
   line('other metadata only', counts.metadata);
   line('already clean', counts.clean);
@@ -219,7 +221,8 @@ async function main() {
   if (rewritten.length) {
     const list = path.join(os.tmpdir(), `video-location-rewrites-${Date.now()}.txt`);
     fs.writeFileSync(list, `${rewritten.join('\n')}\n`, { mode: 0o600 });
-    console.log(`\nRewritten keys are in ${list}. The CDN keeps serving the old bytes until these are invalidated.`);
+    console.log(`\nRewritten keys are in ${list}.`);
+    console.log('The CDN may still serve the old bytes: download one through its public link, and purge these keys if it does.');
   } else if (!rewrite) {
     console.log('\nNothing changed. Run with --rewrite to overwrite the videos that carry a location.');
   }

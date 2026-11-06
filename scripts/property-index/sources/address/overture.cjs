@@ -24,13 +24,18 @@ TO '/dev/stdout' (FORMAT CSV, HEADER);`;
 
 const asOf = () => RELEASE.slice(0, 10);
 
+/** Overture's bucket is public. The workflow's storage key isn't Overture's to see, and DuckDB would sign with it and be refused. */
+function anonymous() {
+  return Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('AWS_')));
+}
+
 /** Yields the rows a county's connector would: see nad.cjs. */
 async function* rows({ states = null }) {
   // Through a shell pipe: on Linux a child can't open /dev/stdout when it's the socket Node gives it. DuckDB's own errors name
   // files and SQL, not rows, so the first of them goes in the log.
   const duck = spawn('bash', ['-c', 'set -o pipefail; "$DUCKDB_BIN" -c "$DUCKDB_QUERY" | cat'], {
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, DUCKDB_BIN: process.env.DUCKDB || 'duckdb', DUCKDB_QUERY: query() },
+    env: { ...anonymous(), DUCKDB_BIN: process.env.DUCKDB || 'duckdb', DUCKDB_QUERY: query() },
   });
   let complaint = '';
   duck.stderr.setEncoding('utf8');

@@ -382,8 +382,10 @@ export default function AdminReviewClaimsPage() {
       </div>
     );
 
+    // A full screen on a phone and a column of this page from lg up, so it stays in <main>. data-covers-shell (AppShell)
+    // lets it cover the header and phone tab bar, which otherwise hid its Back button and its Approve and Reject buttons.
     return (
-      <div className={`${selectedClaim ? 'fixed inset-0 z-50 bg-app-surface lg:static lg:z-auto' : 'hidden lg:block'} flex flex-col flex-1 overflow-hidden`}>
+      <div data-covers-shell className={`${selectedClaim ? 'fixed inset-0 z-[60] bg-app-surface lg:static lg:z-auto' : 'hidden lg:block'} flex flex-col flex-1 overflow-hidden`}>
         {/* Detail header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-app-border flex-shrink-0">
           <button aria-label="Back" onClick={closeDetail} className="lg:hidden p-1.5 hover:bg-app-hover rounded-lg"><ArrowLeft className="w-5 h-5" /></button>
@@ -588,7 +590,7 @@ export default function AdminReviewClaimsPage() {
 
       {/* Request info modal */}
       {showInfoModal && claimDetail && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center">
           <div className="w-full max-w-md mx-4 bg-app-surface rounded-xl shadow-2xl border border-app-border p-6">
             <h3 className="text-lg font-bold text-app-text mb-2">Request info</h3>
             <p className="text-sm text-app-text-secondary mb-3">Tell them what you need. They see this note in their notification and on their claim.</p>
@@ -609,7 +611,7 @@ export default function AdminReviewClaimsPage() {
 
       {/* Reject reason modal */}
       {showRejectModal && claimDetail && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center">
           <div className="w-full max-w-md mx-4 bg-app-surface rounded-xl shadow-2xl border border-app-border p-6">
             <h3 className="text-lg font-bold text-app-text mb-2">Reject Claim</h3>
             <p className="text-sm text-app-text-secondary mb-3">Optionally provide a reason for rejection:</p>

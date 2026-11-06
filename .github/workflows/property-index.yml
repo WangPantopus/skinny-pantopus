@@ -100,10 +100,15 @@ jobs:
         if: github.event_name != 'workflow_dispatch' || inputs.action == 'build'
         env:
           SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-stratmap tx-harris tx-tarrant ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels nc-onemap wv-parcels me-parcels mt-cadastral') || 'tx-dallas fl-roll' }}
+          # A run someone started by hand may bring back a file that was rolled back; the schedule never does.
+          REPUBLISH: ${{ github.event_name == 'workflow_dispatch' && '--republish' || '' }}
         run: |
+          status=0
           for source in $SOURCES; do
             out="$RUNNER_TEMP/property-index/$source"
-            node --max-old-space-size=12288 scripts/property-index/build.cjs --source "$source" --out "$out" --work "$RUNNER_TEMP/property-index-work"
-            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET"
+            # What built still publishes; the run ends failed so someone looks.
+            node --max-old-space-size=12288 scripts/property-index/build.cjs --source "$source" --out "$out" --work "$RUNNER_TEMP/property-index-work" || status=1
+            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" $REPUBLISH || status=1
             rm -rf "$out" "$RUNNER_TEMP/property-index-work/$source"
           done
+          exit $status

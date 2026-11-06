@@ -43,6 +43,7 @@ const homeClaimRoutingService = require('../services/homeClaimRoutingService');
 const propertySuggestionsService = require('../services/ai/propertySuggestionsService');
 const recordVocabulary = require('../services/recordVocabulary');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
+const homeRecords = require('../services/propertyRecords/homeRecord');
 const { encodeGeohash } = require('../utils/geohash');
 const { HOME_ISSUE_LIST, HOME_BILL_LIST, HOME_PACKAGE_LIST } = require('../utils/columns');
 const { excludeHiddenHomeActivity } = require('../utils/featureFlags');
@@ -1178,7 +1179,10 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
 
     // A verified owner reads this record as the county's, so it is the
     // server's own lookup for this address, never the copy the app sends.
-    const attomPropertyDetail = await propertyIntelligenceService.getAddressAttomPropertyDetail(canonicalAddress.id);
+    const countyRecord = await homeRecords.forAddress({
+      line1: normalizedLine1, unit: normalizedLine2, city: normalizedCity, state: normalizedState, zip: normalizedZip,
+    }).catch(() => null);
+    const attomPropertyDetail = countyRecord ? null : await propertyIntelligenceService.getAddressAttomPropertyDetail(canonicalAddress.id);
 
     const homeData = {
       address: normalizedLine1,
@@ -1224,6 +1228,7 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       privacy_mask_level: 'normal',
       ownership_state: is_owner ? 'claim_pending' : 'unclaimed',
       ...(attomPropertyDetail ? { niche_data: { attom_property_detail: attomPropertyDetail } } : {}),
+      ...(countyRecord?.copy ? { niche_data: { property_record: countyRecord.copy } } : {}),
     };
 
     // Add location if provided.

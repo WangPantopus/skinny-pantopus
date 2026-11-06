@@ -14,7 +14,16 @@
 // here still shows under a readable name, so a field ATTOM adds later
 // isn't lost. Only ATTOM's plumbing (match codes, geo-ID lists, internal
 // codes, coordinates) stays out; the map shows where the home is.
+//
+// serializePropertyRecord does the same from a Home's own copy of its
+// county record (services/propertyRecords), with an allowlist instead:
+// only the facts in propertyRecords/facts.js exist. A condo gets "Your
+// unit" and "Building" groups, and a building's figures never read as a
+// unit's. The apps draw whatever sections come, so this reaches the
+// builds already in the stores.
 // ============================================================
+
+const { FACTS, SECTIONS: RECORD_SECTIONS } = require('../services/propertyRecords/facts');
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 // A record is vendor data (and, for older Homes, whatever the app sent at
@@ -25,7 +34,7 @@ const MAX_DEPTH = 4;
 // ATTOM's words for "not recorded".
 const UNKNOWN = new Set(['', 'TYPE UNKNOWN', 'UNKNOWN', 'UNK', 'N/A', 'NA', 'NOT AVAILABLE']);
 // Abbreviations that stay capitalized when ATTOM's capitals are lowered.
-const ACRONYMS = new Set(['AC', 'HVAC', 'SFR', 'MFR', 'PUD', 'HOA', 'REO', 'LPG', 'PVC', 'II', 'III', 'IV']);
+const ACRONYMS = new Set(['AC', 'HVAC', 'SFR', 'MFR', 'PUD', 'HOA', 'REO', 'LPG', 'PVC', 'II', 'III', 'IV', 'ISD', 'CISD']);
 
 const SECTIONS = [
   ['building', 'Building'],
@@ -220,7 +229,7 @@ function cleanText(value) {
   return UNKNOWN.has(text.toUpperCase()) ? null : text;
 }
 
-const keepAcronyms = (text) => text.replace(/\b[A-Za-z]+\b/g, (word) => (ACRONYMS.has(word.toUpperCase()) ? word.toUpperCase() : word));
+const keepAcronyms = (text) => text.replace(/\b[A-Za-z]+\b/g, (word) => (ACRONYMS.has(word.toUpperCase()) ? word.toUpperCase() : word)).replace(/\ba\/c\b/g, 'A/C');
 
 // "COMPOSITION SHINGLE" → "Composition shingle", "CENTRAL AC" → "Central AC";
 // words ATTOM already cased stay as they are.
@@ -485,4 +494,101 @@ function serializeCountyRecord(attomPayload, avm = null) {
   return { sections, footer, as_of: asOf };
 }
 
-module.exports = { serializeCountyRecord };
+// ── A Home's own copy of its county record ──────────────────
+
+function factValue(kind, value) {
+  if (kind === 'stories') {
+    const n = positive(value);
+    return n === null ? null : grouped(n, 1);
+  }
+  return format(kind, value);
+}
+
+/** Adds the facts of these table groups that `keep` allows, in the table's order. */
+function addFacts(section, facts, groups, keep = () => true) {
+  for (const [name, fact] of Object.entries(FACTS)) {
+    if (!groups.includes(fact.section) || !fact.label || facts?.[name] === undefined || !keep(fact)) continue;
+    section.add(name, fact.label, factValue(fact.format, facts[name]), MONO.has(fact.format));
+  }
+}
+
+// "County market value, 2026" and the years before it; "Property tax, 2026" and the years before it.
+function addAssessment(section, facts) {
+  const withYear = (label, year) => (year ? `${label}, ${year}` : label);
+  section.add('market_value', withYear(FACTS.market_value.label, facts.value_year), format('money', facts.market_value), true);
+  for (const [year, value] of facts.value_history || []) {
+    section.add(`market_value_${year}`, `${FACTS.market_value.label}, ${year}`, format('money', value), true);
+  }
+  addFacts(section, facts, ['assessment'], (fact) => !['County market value', 'Value year', 'Property tax', 'Tax year'].includes(fact.label));
+  section.add('tax_amount', withYear(FACTS.tax_amount.label, facts.tax_year), format('money', facts.tax_amount), true);
+  for (const [year, value] of facts.tax_history || []) {
+    section.add(`tax_amount_${year}`, `${FACTS.tax_amount.label}, ${year}`, format('money', value), true);
+  }
+}
+
+const BUILDING_NOTES = {
+  unit_needed: 'These are the building\u2019s facts. Add your unit to see your home\u2019s own details.',
+  unit_not_recorded: 'These are the building\u2019s facts. The county doesn\u2019t keep a record for each apartment.',
+  unit_not_found: 'These are the building\u2019s facts. We couldn\u2019t find your unit in the county\u2019s list.',
+};
+
+function recordFooter(copy) {
+  const date = dateLabel(copy.as_of);
+  const source = `From ${copy.publisher}\u2019s ${copy.dataset}`;
+  return date ? `${source} \u00b7 updated ${date}` : source;
+}
+
+/**
+ * A verified owner's county record for Property details, from the Home's copy
+ * (services/propertyRecords/homeRecord.js). Null when it holds nothing to show.
+ *
+ * @returns {{ sections: object[], footer: string|null, as_of: string|null }|null}
+ */
+function serializePropertyRecord(copy) {
+  if (!copy || typeof copy !== 'object') return null;
+  const facts = copy.facts || {};
+  const titled = (id) => new Section(id, RECORD_SECTIONS.find(([key]) => key === id)[1]);
+  const sections = [];
+  const house = copy.match === 'exact' && copy.subject?.kind !== 'unit';
+
+  if (copy.match === 'exact' && copy.subject?.kind === 'unit') {
+    const unit = new Section('unit', 'Your unit');
+    addFacts(unit, facts, ['building', 'utilities', 'parking', 'construction'], (fact) => fact.scope === 'unit');
+    const building = new Section('building', 'Building');
+    addFacts(building, { ...copy.building, ...facts }, ['building', 'construction'], (fact) => fact.scope === 'building');
+    sections.push(unit, building);
+  } else if (copy.match === 'building_only') {
+    const building = new Section('building', 'Building');
+    addFacts(building, facts, ['building', 'construction'], (fact) => fact.scope === 'building');
+    building.note = BUILDING_NOTES[copy.reason] || BUILDING_NOTES.unit_not_recorded;
+    sections.push(building);
+  } else if (house) {
+    for (const id of ['building', 'construction', 'utilities', 'parking']) {
+      const section = titled(id);
+      addFacts(section, facts, [id]);
+      sections.push(section);
+    }
+  }
+
+  const lot = titled('lot');
+  // A condo's account lists the complex's common land: never the unit's lot.
+  const commonLand = copy.subject?.kind === 'unit' || copy.match === 'building_only';
+  addFacts(lot, { ...copy.building, ...facts }, ['lot'], (fact) => !(commonLand && fact.label !== 'Zoning' && fact.scope === 'parcel'));
+  const records = titled('records');
+  addFacts(records, { ...copy.building, ...facts }, ['records'], (fact) => copy.match !== 'building_only' || fact.scope === 'parcel');
+  sections.push(lot, records);
+
+  if (copy.match !== 'building_only') {
+    const assessment = titled('assessment');
+    addAssessment(assessment, facts);
+    const sale = titled('sale');
+    addFacts(sale, facts, ['sale']);
+    sections.push(assessment, sale);
+  }
+
+  const shown = sections.filter((section) => section.rows.length > 0).map(({ id, title, rows, note }) => ({ id, title, rows, note }));
+  if (!shown.length) return null;
+  return { sections: shown, footer: recordFooter(copy), as_of: copy.as_of || null };
+}
+
+module.exports = { serializeCountyRecord, serializePropertyRecord };

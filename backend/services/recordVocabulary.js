@@ -38,11 +38,11 @@ function lookupMessage(tiers, lookup, provenance) {
 
 /** POST /api/homes/property-suggestions: the new words sit beside today's, so `tiers_used` still says `attom` for ATTOM. */
 function suggestions(result, wanted) {
-  const { provenance = null, field_tags: fieldTags = null, ...legacy } = result;
+  const { provenance = null, field_tags: fieldTags = null, lookup_note: note = null, ...legacy } = result;
   if (!wanted) return legacy;
   const tiers = legacy.tiers_used || [];
   const lookup = legacy.attom_lookup;
-  const message = lookupMessage(tiers, lookup, provenance);
+  const message = note || lookupMessage(tiers, lookup, provenance);
   return {
     ...legacy,
     tiers_used: tiers.includes('attom') && !tiers.includes(RECORD_TIER) ? [...tiers, RECORD_TIER] : tiers,
