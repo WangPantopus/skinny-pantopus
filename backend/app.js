@@ -241,6 +241,11 @@ app.use(
   express.raw({ type: 'application/json' }),
   lobWebhookRouter
 );
+app.use(
+  '/api/v1/webhooks/postgrid',
+  express.raw({ type: 'application/json' }),
+  lobWebhookRouter.postgridWebhookRouter
+);
 
 // Internal email-inbound webhook (P2.9 / §17 #8). The Lambda signs the
 // raw body, so this route MUST receive the raw bytes — mount before
