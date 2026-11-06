@@ -119,7 +119,8 @@ Verified:
    - Changing that needs a new permission prompt and a Google Play policy review. That's the founder's call.
 4. **The web composer's place picker.**
    - Update, November 6: it now lists nearby venues and searches them by name, like iOS and Android, and a post records the venue as OpenStreetMap's. With no device fix, the list comes from the saved viewing area.
-   - Not started: sending `mediaLocations`, so a photo can place a web post.
+   - Update, November 6: the web composer now places a post by its photo or video, as the apps do. It reads the capture point in the browser, with no new dependency, sends `mediaLocations`, and runs the check on the tagged place with the nearest attachment. The list opens on "Photo location", with "Near me" beside it. PNG and WebP aren't read, because cameras don't write them.
+   - Not verified: browsers on phones. iOS Safari and Android Chrome can remove a photo's location before the page sees the file, so on a phone the photo may simply not count.
 
 ## Sessions and branches
 

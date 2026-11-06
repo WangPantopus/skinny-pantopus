@@ -1,8 +1,7 @@
 name: Property Index
 
 # Pantopus's own index of public county property records (backend/services/propertyRecords, scripts/property-index),
-# published to private storage. Weekly for Clark County's weekly file, monthly for the rest, and by hand, with the
-# labeled national estimates in their own index beside it, by hand (they change yearly). This
+# published to private storage. Weekly for Clark County's weekly file, monthly for the rest, and by hand. This
 # repository is public, so its logs and uploaded artifacts are too: a real county's run prints counts only and uploads
 # nothing here, and only master can reach the storage key. A pull request builds a made-up county and publishes nothing.
 
@@ -18,12 +17,12 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "build, rollback one county to its previous release, or estimates (sources are state codes)"
+        description: "build, or rollback one county to its previous release"
         type: choice
-        options: [build, rollback, estimates]
+        options: [build, rollback]
         default: build
       sources:
-        description: "Connectors in scripts/property-index/sources, space separated (build), or state codes (estimates)"
+        description: "Connectors in scripts/property-index/sources, space separated (build)"
         required: false
         default: "wa-clark"
       county:
@@ -38,7 +37,6 @@ on:
     paths:
       - scripts/property-index/**
       - backend/services/propertyRecords/addressKey.js
-      - backend/services/propertyRecords/estimateFacts.js
       - backend/services/propertyRecords/facts.js
       - backend/services/propertyRecords/format.js
       - backend/services/propertyRecords/identity.js
@@ -101,33 +99,11 @@ jobs:
       - name: Build and publish
         if: github.event_name != 'workflow_dispatch' || inputs.action == 'build'
         env:
-          SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-stratmap tx-harris tx-tarrant ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels nc-onemap wv-parcels me-parcels mt-cadastral') || 'tx-dallas fl-roll' }}
-          # A run someone started by hand may bring back a file that was rolled back; the schedule never does.
-          REPUBLISH: ${{ github.event_name == 'workflow_dispatch' && '--republish' || '' }}
+          SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-stratmap tx-harris tx-tarrant tx-williamson ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels nc-onemap wv-parcels me-parcels mt-cadastral') || 'tx-dallas fl-roll' }}
         run: |
-          status=0
           for source in $SOURCES; do
             out="$RUNNER_TEMP/property-index/$source"
-            # What built still publishes; the run ends failed so someone looks.
-            node --max-old-space-size=12288 scripts/property-index/build.cjs --source "$source" --out "$out" --work "$RUNNER_TEMP/property-index-work" || status=1
-            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" $REPUBLISH || status=1
+            node --max-old-space-size=12288 scripts/property-index/build.cjs --source "$source" --out "$out" --work "$RUNNER_TEMP/property-index-work"
+            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET"
             rm -rf "$out" "$RUNNER_TEMP/property-index-work/$source"
-          done
-          exit $status
-      # The national floor's own index, under its own prefix. Large states need room: the runner's unused tools go first.
-      - name: Build and publish estimates
-        if: github.event_name == 'workflow_dispatch' && inputs.action == 'estimates'
-        env:
-          STATES: ${{ inputs.sources }}
-        run: |
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL
-          out="$RUNNER_TEMP/estimates"
-          work="$RUNNER_TEMP/estimates-work"
-          node scripts/property-index/build-estimates.cjs --areas --out "$out" --work "$work"
-          aws s3 cp "$out/areas" "s3://$PROPERTY_INDEX_BUCKET/index/estimates/areas" --recursive --only-show-errors
-          for state in $STATES; do
-            rm -rf "$out"
-            node --disable-warning=ExperimentalWarning --max-old-space-size=12288 scripts/property-index/build-estimates.cjs --states "$state" --out "$out" --work "$work"
-            node scripts/property-index/publish.cjs --out "$out" --bucket "$PROPERTY_INDEX_BUCKET" --prefix index/estimates
-            rm -rf "$work/us-structures/$state"
           done

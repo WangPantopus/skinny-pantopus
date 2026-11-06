@@ -18,7 +18,7 @@ const { writeRelease } = require('./lib/release.cjs');
 const { log } = require('./lib/log.cjs');
 
 const RECORD_KEYS = new Set(['id', 'kind', 'home_type', 'address', 'facts', 'parent', 'roster', 'restricted', 'key']);
-const ADDRESS_KEYS = new Set(['number', 'pre', 'name', 'suffix', 'post', 'unit', 'building', 'city', 'zip']);
+const ADDRESS_KEYS = new Set(['number', 'pre', 'name', 'suffix', 'post', 'unit', 'building', 'urbanization', 'city', 'zip']);
 
 function parseArgs(argv) {
   const opts = {};
@@ -64,6 +64,7 @@ async function main() {
     assertAllowed(records);
     const release = releaseId(about.as_of, built);
     const report = writeRelease(opts.out, { fips: about.fips, release }, records);
+    // A source with no property ZIP says which ZIP codes reach its county (lib/zcta.cjs).
     const zips = new Set(extraZips);
     const cities = new Set();
     for (const { address } of records) {
