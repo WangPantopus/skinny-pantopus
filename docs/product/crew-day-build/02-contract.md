@@ -20,7 +20,7 @@ in the PR that implements it, with a line in the notes folder's `CHANGES.md`. Ap
 
 ## 2. Tables
 
-Three new tables, approved by the founder on November 5, in `supabase/migrations/20261105100000_crew_day.sql` (SRV-1).
+Three new tables, approved by the founder on November 5, in `supabase/migrations/20261106054000_crew_day.sql` (SRV-1).
 RLS enabled with no client policies or grants: only the server (service role) reads and writes them, like the Plans
 tables. A trigger (`crew_day_booking_admit`) refuses a new active booking when the day isn't `open`/`in_progress`
 (`CREW_DAY_NOT_OPEN`) or its active bookings already fill `capacity` (`CREW_DAY_FULL`); it locks the day's row while
