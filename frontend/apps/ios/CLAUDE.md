@@ -101,6 +101,20 @@ so the offline strip auto-appears.
   screen or My homes) is chosen by `PlaceRootResolver` (`Features/Root/PlaceRoot.swift`)
   and rendered by `placeRootContent` in `HubTabRoot.swift`.
 
+## Keyboard
+
+`Core/Design/Components/KeyboardDismissal.swift` holds the app's keyboard rules.
+The app's root installs them in its window (`dismissesKeyboardOnTapOutside()`);
+a screen shown in a window of its own installs them on its root. While text is
+being typed, a tap outside it closes the keyboard (the tap still does its job,
+switches and segmented controls included), and so does a drag that starts to
+scroll the page, forms included; dragging inside a text box keeps it. The box
+drawn around a field uses `typesInFieldOnTap($focus)` so a tap anywhere in it
+types in the field. Composer controls and a chat thread that moves the keyboard
+itself are `keepsKeyboardOnTap()`; the results under a search box are
+`closesKeyboardFirst(_:)`. A Done above the keyboard calls `Keyboard.close()`,
+which closes it whichever field has it.
+
 ## Parity
 
 For every change, the Android counterpart must:

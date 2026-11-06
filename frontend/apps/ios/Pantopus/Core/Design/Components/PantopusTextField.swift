@@ -86,9 +86,12 @@ public struct PantopusTextField: View {
             HStack(spacing: Spacing.s2) {
                 input
                 trailingIcon
+                    .allowsHitTesting(false)
             }
             .padding(.horizontal, Spacing.s3)
             .frame(minHeight: 44)
+            // A tap anywhere in the box types in the field, not only on its line of text.
+            .typesInFieldOnTap($isFocused)
             .background(containerColor)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .overlay(
