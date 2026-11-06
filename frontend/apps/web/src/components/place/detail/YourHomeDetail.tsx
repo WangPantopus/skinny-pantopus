@@ -2,7 +2,7 @@
 // Place — Your Home detail (C4).
 // Property facts, the value estimate with its range, and the
 // assessment — all from the Band-B `your_home` section, which is the
-// same ATTOM record behind /app/homes/[id]/property-details (linked
+// same county record behind /app/homes/[id]/property-details (linked
 // below for the full public record). A private, device-local mortgage
 // input turns into an equity figure only the resident can see.
 // The value, assessment and equity are the confirmed owner's; renters and
@@ -82,7 +82,7 @@ function ValueCard({ data }: { data: PlaceYourHomeData }) {
   const high = usd(data.value_high);
   return (
     <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-[18px]">
-      <div className="text-[13px] font-semibold text-app-text-secondary">Estimated market value</div>
+      <div className="text-[13px] font-semibold text-app-text-secondary">{data.value_title || 'Estimated market value'}</div>
       <div className="text-[34px] leading-10 font-bold -tracking-[0.02em] text-app-text mt-1">{value ?? 'Not estimated yet'}</div>
       {/* The value and its range only: there is no value history or block series to chart. */}
       {low && high ? <div className="text-[13px] text-app-text-muted">Range {low}–{high}</div> : null}
@@ -421,6 +421,7 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
             ) : (
               <SectionCard icon={House} title="Property facts" state={home ? statusToState(home.status) : 'unavailable'} caption={home?.unavailable_reason ?? undefined} onRetry={() => window.location.reload()} />
             )}
+            {home?.provenance ? <SourceNote name={home.provenance.label} /> : null}
 
             {valueAccess === 'shown' ? (
               <>
@@ -440,7 +441,9 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
                 <LockedCard icon={Landmark} title="Estimated value" reason="Available once your ownership is confirmed." cta="Confirm ownership" />
               </>
             ) : null}
-            {home?.source ? <SourceNote name={home.source} asOf={fmtMonthYear(home.as_of) ? `as of ${fmtMonthYear(home.as_of)}` : undefined} /> : null}
+            {home?.provenance ? (
+              valueAccess === 'shown' && data?.value_source ? <SourceNote name={data.value_source} /> : null
+            ) : home?.source ? <SourceNote name={home.source} asOf={fmtMonthYear(home.as_of) ? `as of ${fmtMonthYear(home.as_of)}` : undefined} /> : null}
 
             {homeId ? (
               <>

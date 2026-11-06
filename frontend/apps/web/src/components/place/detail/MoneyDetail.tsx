@@ -1052,7 +1052,7 @@ export default function MoneyDetail({ intelligence, homeId }: { intelligence: Pl
               />
             )}
             {/* not_checked links its state's page inside the card instead. */}
-            {exemption.source && exemptionReady && exemption.status !== 'partial' ? <SourceNote name={exemption.source} /> : null}
+            {exemption.source && exemptionReady && exemption.status !== 'partial' ? <SourceNote name={exemption.provenance?.label ?? exemption.source} /> : null}
           </>
         ) : null}
 

@@ -54,6 +54,7 @@ const createNextConfig = (phase) => ({
   env: {
     NEXT_PUBLIC_API_URL: defaultApiUrl,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || 'https://www.pantopus.com',
+    NEXT_PUBLIC_BUILD_SHA: (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 10),
   },
   // Serve .well-known files with correct Content-Type for Universal Links / App Links.
   // Deploy this app on BOTH https://www.pantopus.com and https://pantopus.com (or ensure

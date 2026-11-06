@@ -141,7 +141,8 @@ export default function HomePropertyDetailsPage() {
     queryFn: async () => {
       if (!api.getAuthToken()) throw new Error('Sign in to view this Home.');
       const res = await api.homes.getHomePropertyDetail(homeId);
-      if (!res || res.home?.id !== homeId || !['home', 'cache', 'attom', 'unavailable'].includes(res.source)
+      // A record that names its source may answer in words this build doesn't know yet.
+      if (!res || res.home?.id !== homeId || !(res.provenance || ['home', 'cache', 'attom', 'unavailable'].includes(res.source))
         || !(res.attom_property_detail === null || (typeof res.attom_property_detail === 'object'
           && !Array.isArray(res.attom_property_detail)))
         || (res.source === 'unavailable' && res.attom_property_detail !== null)
@@ -320,7 +321,7 @@ export default function HomePropertyDetailsPage() {
               <>
                 <div className="flex items-start justify-center gap-2 pl-4 pr-20 text-center text-sm font-semibold text-violet-600 sm:px-0">
                   <ShieldCheck className="h-4 w-4 shrink-0" />
-                  <span>{countyRecord?.footer || 'Data from public records via ATTOM'}</span>
+                  <span>{countyRecord?.footer || details?.provenance?.label || 'Data from public records'}</span>
                 </div>
 
                 <section className="rounded-[28px] border border-app-border bg-app-surface px-4 py-4 shadow-sm sm:px-6 sm:py-6">
