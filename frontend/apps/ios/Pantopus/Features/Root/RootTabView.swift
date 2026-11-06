@@ -126,6 +126,8 @@ public final class RootTabModel {
     public var placeReselectedAtRoot: UUID?
     /// Changes each time the Today tab is tapped again: its page scrolls back to the top.
     public var todayReselected: UUID?
+    /// Changes each time the tab with the feed (Nearby, or Pulse) is tapped again.
+    public var pulseHomeReselected: UUID?
     /// "Open your ballot" (Today, or Place's Today page): this Home's Your
     /// Place scrolls to its ballot card once, then clears it (as on Android).
     public var placeBallotHomeId: String?
@@ -521,6 +523,7 @@ public struct RootTabView: View {
                     model.placeReselectedAtRoot = UUID()
                 }
                 if tab == .today, model.selected == .today { model.todayReselected = UUID() }
+                if tab == RootTab.pulseHome, model.selected == tab { model.pulseHomeReselected = UUID() }
                 model.selected = tab
             }
         )
@@ -661,7 +664,7 @@ extension RootTabView {
     }
 
     /// A tap on the drawn bar. Tapping the tab you're on takes its stack back
-    /// to its root; on Place's root it scrolls to the top.
+    /// to its root; on Place's root, or the feed, it scrolls to the top.
     private func select(_ tab: RootTab) {
         guard tab == model.selected else {
             model.selected = tab
@@ -669,6 +672,7 @@ extension RootTabView {
         }
         if tab == .place, model.placeAtRoot { model.placeReselectedAtRoot = UUID() }
         if tab == .today { model.todayReselected = UUID() }
+        if tab == RootTab.pulseHome { model.pulseHomeReselected = UUID() }
         model.reselection = RootTabReselection(tab: tab)
     }
 

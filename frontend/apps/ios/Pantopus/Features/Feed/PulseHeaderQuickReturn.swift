@@ -2,10 +2,11 @@
 //  PulseHeaderQuickReturn.swift
 //  Pantopus
 //
-//  The Pulse header's quick return (founder request 2026-10-22): as in
-//  Facebook, scrolling down far enough slides the header away and
-//  scrolling up brings it back. Dragging the map counts as scrolling, and
-//  over the map the header itself can be flicked up out of the way.
+//  When the Pulse header shows. Over the list, only at the top of the feed
+//  (founder request 2026-11-06): scrolling down far enough slides it away,
+//  and it stays away until the reader is back at the top. Over the map it
+//  returns quickly (founder request 2026-10-22): dragging the map down
+//  brings it back, and the header itself can be flicked up out of the way.
 //
 
 import CoreGraphics
@@ -26,10 +27,13 @@ final class PulseHeaderQuickReturn {
     /// How long after a flick a chip's tap is taken to be the flick's.
     static let flickTapGuard: TimeInterval = 0.6
 
+    /// How far past the top the list goes before the header slides away, so
+    /// a finger resting at the line doesn't flap it.
+    static let listHideMargin: CGFloat = 12
+
     private(set) var isHidden = false
-    /// Travel in the current direction: > 0 scrolling down, < 0 up.
+    /// Map travel in the current direction: > 0 scrolling down, < 0 up.
     private var travel: CGFloat = 0
-    private var lastListOffset: CGFloat?
     /// The drag on the header under way: where it started (a new start is
     /// a new drag) and whether it went up or down rather than sideways.
     private var headerDragStart: CGPoint?
@@ -44,8 +48,8 @@ final class PulseHeaderQuickReturn {
         return Date().timeIntervalSince(flickedAt) < Self.flickTapGuard
     }
 
-    /// The content moved `delta` points up (negative: down). Returns the new
-    /// hidden state when this move changes it.
+    /// The map's content moved `delta` points up (negative: down). Returns the
+    /// new hidden state when this move changes it.
     func scroll(by delta: CGFloat, hideAfter: CGFloat, showAfter: CGFloat) -> Bool? {
         guard delta != 0 else { return nil }
         if (delta > 0) != (travel > 0) { travel = 0 }
@@ -59,15 +63,14 @@ final class PulseHeaderQuickReturn {
         return nil
     }
 
-    /// The list scrolled to `offset` (0 at the top). Near the top the
-    /// header always shows.
+    /// The list scrolled to `offset` (0 at the top). Its top leaves `nearTop`
+    /// points of room for the header, which shows there and nowhere else.
+    /// Returns the new hidden state when this changes it.
     func listScrolled(to offset: CGFloat, nearTop: CGFloat) -> Bool? {
-        defer { lastListOffset = offset }
-        guard let last = lastListOffset else { return nil }
         if offset < nearTop {
             return isHidden ? set(hidden: false) : nil
         }
-        return scroll(by: offset - last, hideAfter: 12, showAfter: 12)
+        return !isHidden && offset >= nearTop + Self.listHideMargin ? set(hidden: true) : nil
     }
 
     /// The header itself is being dragged (Map mode): the finger has moved
@@ -102,7 +105,6 @@ final class PulseHeaderQuickReturn {
     func reset() {
         isHidden = false
         travel = 0
-        lastListOffset = nil
         headerDragStart = nil
     }
 

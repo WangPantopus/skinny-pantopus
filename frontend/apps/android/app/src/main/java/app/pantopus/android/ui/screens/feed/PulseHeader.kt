@@ -38,6 +38,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -47,8 +49,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.PointerInputChange
@@ -78,6 +78,7 @@ import app.pantopus.android.ui.theme.Radii
 import app.pantopus.android.ui.theme.Spacing
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.min
@@ -95,7 +96,7 @@ import kotlin.math.roundToInt
 /** How long the header takes to slide (or, with Reduce motion, fade) in or out. */
 internal const val PULSE_HEADER_MS = 220
 
-/** A scroll has to keep one direction this far before the header follows it. */
+/** How far past its top a list goes before the header slides away, so a finger resting at the line doesn't flap it. */
 internal val PULSE_HEADER_HYSTERESIS = 12.dp
 
 /** A drag on the header this far up tucks it away… */
@@ -111,12 +112,20 @@ private val REVEAL_PULL_DISTANCE = 16.dp
 /** The reveal capsule's height, until it has been measured. */
 private val REVEAL_HEIGHT = 36.dp
 
-/** Whether the header shows, its measured height, and the quick-return rules that move it. */
+/** Whether the header shows, its measured height, and the rules that move it. */
 @Stable
 internal class PulseHeaderState {
+    /** A drag or a flick up on the map sent it away ([show] brings it back). */
+    private var hiddenOnMap by mutableStateOf(false)
+
+    /** The list is away from its top; the header shows over a list only there ([PulseHeaderFollowsList]). */
+    var awayFromListTop by mutableStateOf(false)
+
+    private var hidingAllowed by mutableStateOf(true)
+
     /** True while the header is out of view. */
-    var isHidden by mutableStateOf(false)
-        private set
+    val isHidden: Boolean
+        get() = hidingAllowed && (hiddenOnMap || awayFromListTop)
 
     /** The header block's height, in px. */
     var heightPx by mutableIntStateOf(0)
@@ -128,47 +137,21 @@ internal class PulseHeaderState {
      * False keeps the header in view: a screen reader is on, the search field has focus, or there is nothing to
      * scroll (loading, empty, error, Beacons). Turning it off shows the header.
      */
-    var canHide: Boolean = true
+    var canHide: Boolean
+        get() = hidingAllowed
         set(value) {
-            field = value
+            hidingAllowed = value
             if (!value) show()
         }
 
-    /** Travel in the current scroll direction, in px: negative while the content moves up. */
-    private var travel = 0f
-
+    /** Brings the header back over the map. Over a list, where the list is decides. */
     fun show() {
-        travel = 0f
-        isHidden = false
+        hiddenOnMap = false
     }
 
+    /** Sends the header away over the map. */
     fun hide() {
-        travel = 0f
-        if (canHide) isHidden = true
-    }
-
-    /**
-     * The list scrolled by [delta] px (negative: its content moved up, the person reading on). A direction toggles the
-     * header once it has kept going for [thresholdPx]; turning back starts the count again. Near the top of the list
-     * ([nearTop]) the header always shows.
-     */
-    fun onListScroll(
-        delta: Float,
-        nearTop: Boolean,
-        thresholdPx: Float,
-    ) {
-        if (nearTop) {
-            show()
-            return
-        }
-        if (delta == 0f) return
-        if (travel != 0f && (travel < 0f) != (delta < 0f)) travel = 0f
-        travel += delta
-        if (travel <= -thresholdPx) {
-            hide()
-        } else if (travel >= thresholdPx) {
-            show()
-        }
+        if (canHide) hiddenOnMap = true
     }
 
     /** Where the header's bottom edge is drawn at [progress] (0 shown, 1 hidden), in px. */
@@ -199,7 +182,11 @@ internal class PulseHeaderState {
 }
 
 @Composable
-internal fun rememberPulseHeaderState(): PulseHeaderState = remember { PulseHeaderState() }
+internal fun rememberPulseHeaderState(): PulseHeaderState =
+    // Saved, so coming back to a list scrolled down from a post doesn't slide the header away all over again.
+    rememberSaveable(
+        saver = Saver(save = { it.awayFromListTop }, restore = { away -> PulseHeaderState().apply { awayFromListTop = away } }),
+    ) { PulseHeaderState() }
 
 /**
  * True while the list has scrolled less than [headerHeightPx] from its top: its top inset still shows, and would be a
@@ -216,33 +203,25 @@ internal fun LazyListState.isNearTop(headerHeightPx: Int): Boolean {
 }
 
 /**
- * Quick return for a list under the header: the connection its container installs (`Modifier.nestedScroll`) hides
- * the header once the posts have scrolled up [PULSE_HEADER_HYSTERESIS] and brings it back after as much down, and
- * near the top (however the list got there) the header shows. A null [state] (no collapsible header) does nothing.
+ * A list under the header: the header shows only at the list's top (founder request 2026-11-06), where the top inset
+ * would otherwise be a blank band. [PULSE_HEADER_HYSTERESIS] past that it goes, however the list got there, and it
+ * stays away until the list is back at its top. A null [state] (no collapsible header) does nothing.
  */
 @Composable
-internal fun rememberPulseHeaderScroll(
+internal fun PulseHeaderFollowsList(
     state: PulseHeaderState?,
     listState: LazyListState,
-): NestedScrollConnection {
-    val thresholdPx = with(LocalDensity.current) { PULSE_HEADER_HYSTERESIS.toPx() }
-    LaunchedEffect(state, listState) {
+) {
+    val marginPx = with(LocalDensity.current) { PULSE_HEADER_HYSTERESIS.roundToPx() }
+    LaunchedEffect(state, listState, marginPx) {
         if (state == null) return@LaunchedEffect
-        snapshotFlow { listState.isNearTop(state.heightPx) }
-            .distinctUntilChanged()
-            .collect { nearTop -> if (nearTop) state.show() }
-    }
-    return remember(state, listState, thresholdPx) {
-        object : NestedScrollConnection {
-            override fun onPostScroll(
-                consumed: Offset,
-                available: Offset,
-                source: NestedScrollSource,
-            ): Offset {
-                if (state != null) state.onListScroll(consumed.y, listState.isNearTop(state.heightPx), thresholdPx)
-                return Offset.Zero
+        snapshotFlow {
+            when {
+                listState.isNearTop(state.heightPx) -> false
+                listState.isNearTop(state.heightPx + marginPx) -> null
+                else -> true
             }
-        }
+        }.filterNotNull().distinctUntilChanged().collect { state.awayFromListTop = it }
     }
 }
 
