@@ -14,7 +14,9 @@
  *   stale          the release is past its date (index.js decides that one)
  *
  * It never picks the first candidate, and a unit's private facts go out only on
- * `exact`. A wrong home's facts are worse than none.
+ * `exact`. A wrong home's facts are worse than none. Where it asks which one, it
+ * says what the choices are when they are few (`choices`): unit numbers and
+ * urbanizaciones, never anything about who lives there.
  */
 
 const same = (a, b) => (a || '') === (b || '');
@@ -27,6 +29,24 @@ function onStreet(query, records) {
   const strict = here.filter(({ address }) => same(address.pre, query.pre) && same(address.suffix, query.suffix) && same(address.post, query.post));
   if (strict.length) return strict;
   return here.filter(({ address }) => agrees(address.pre, query.pre) && agrees(address.suffix, query.suffix) && agrees(address.post, query.post));
+}
+
+/** The same number and street exist in several urbanizaciones of one Puerto Rico ZIP. Both sides have to say which. */
+function inUrbanization(query, records) {
+  if (!query.urbanization) return records;
+  return records.filter(({ address }) => !address.urbanization || address.urbanization === query.urbanization);
+}
+
+// More choices than this and the person types the number: a list that long is no help, and a tower's roster is its own business.
+const MAX_CHOICES = 12;
+const naturally = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
+
+/** A building's units, or several records' unit numbers, when they are few enough to offer. */
+function unitChoices(buildings, others) {
+  const units = new Set();
+  for (const building of buildings) for (const unit of building.roster || []) units.add(unit);
+  for (const record of others) if (record.address.unit) units.add(`${record.address.building || ''}${record.address.unit}`);
+  return { unit_count: units.size, ...(units.size && units.size <= MAX_CHOICES ? { choices: [...units].sort(naturally.compare) } : {}) };
 }
 
 /** ZIP decides when both sides have one: the same street line can exist in two towns of a county. */
@@ -64,7 +84,7 @@ function exact(record, requested, here) {
 
 function buildingOnly(record, requested, reason) {
   if (record.restricted) return answer('restricted', { requested_subject: requested });
-  return answer('building_only', { subject: subjectOf(record), record, requested_subject: requested, reason });
+  return answer('building_only', { subject: subjectOf(record), record, requested_subject: requested, reason, ...unitChoices([record], []) });
 }
 
 function parcelOnly(record, requested) {
@@ -73,7 +93,12 @@ function parcelOnly(record, requested) {
 }
 
 function ambiguous(candidates, requested, reason) {
-  return answer('ambiguous', { candidates: candidates.length, requested_subject: requested, reason });
+  return answer('ambiguous', {
+    candidates: candidates.length,
+    requested_subject: requested,
+    reason,
+    ...unitChoices(candidates.filter((record) => record.kind === 'building'), candidates.filter((record) => record.kind !== 'building')),
+  });
 }
 
 /**
@@ -81,9 +106,15 @@ function ambiguous(candidates, requested, reason) {
  * @param {object[]} records  What the release holds at this street name and house number
  */
 function resolve(query, records) {
-  const here = inTown(query, inZip(query, onStreet(query, records)));
+  const here = inUrbanization(query, inTown(query, inZip(query, onStreet(query, records))));
   const requested = query.unit ? 'unit' : 'property';
   if (!here.length) return answer('unsupported', { reason: 'no_record', requested_subject: requested });
+  if (!query.urbanization) {
+    const urbanizations = [...new Set(here.map((record) => record.address.urbanization).filter(Boolean))].sort();
+    if (urbanizations.length > 1) {
+      return answer('ambiguous', { candidates: urbanizations.length, requested_subject: requested, reason: 'several_urbanizations', urbanizations: urbanizations.slice(0, MAX_CHOICES) });
+    }
+  }
 
   const units = here.filter((record) => record.kind === 'unit');
   // A mobile home in a park is a property of its own with a space number.
