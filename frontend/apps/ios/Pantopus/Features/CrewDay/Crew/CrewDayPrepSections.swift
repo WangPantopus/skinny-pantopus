@@ -246,7 +246,8 @@ struct CrewDayPrepSections: View {
                 moneyRow(
                     "Charged",
                     money?.chargedCents,
-                    line: CrewDayPrepCopy.homesLine(page.bookings, states: ["charged"]),
+                    // A home Pantopus support took money off was still charged for the rest (as on the web and Android).
+                    line: CrewDayPrepCopy.homesLine(page.bookings, states: ["charged", "partially_refunded"]),
                     id: "crewDayAfterCharged"
                 )
                 moneyRow(

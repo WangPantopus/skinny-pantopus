@@ -67,6 +67,13 @@ val CrewDayBookingDto.crewName: String get() = crewDay?.crew?.name?.takeIf { it.
 /** "$180" or null while the price waits on the crew. */
 val CrewDayBookingDto.priceWords: String? get() = priceCents?.let(CrewDayFormat::price)
 
+/** What a failed charge still owes: the price less any amount Pantopus support took off ("$140" of $180). */
+val CrewDayBookingDto.amountDueWords: String?
+    get() {
+        val off = problem?.refundedCents?.takeIf { it > 0 } ?: charge?.refundedCents ?: 0
+        return priceCents?.let { CrewDayFormat.price((it - off).coerceAtLeast(0)) }
+    }
+
 /** "Visa ending 4242". */
 val CrewDayBookingDto.cardWords: String?
     get() =
@@ -103,7 +110,13 @@ fun CrewDayBookingDto.resolutionWords(): String {
     val refunded = problem?.refundedCents?.takeIf { it > 0 } ?: charge?.refundedCents?.takeIf { it > 0 }
     return when (problem?.resolution) {
         "released" -> "Charge released: $total paid"
-        "refunded" -> "Refunded $total${cardWords?.let { " to $it" }.orEmpty()}"
+        // Refunded in full before the charge: the booking ended and no money moved.
+        "refunded" ->
+            if (status == "cancelled") {
+                "We cancelled the $total charge. Nothing was charged."
+            } else {
+                "Refunded $total${cardWords?.let { " to $it" }.orEmpty()}"
+            }
         "partial_refund" -> "Refunded ${CrewDayFormat.price(refunded)} of $total"
         else -> if (refunded != null) "Refunded ${CrewDayFormat.price(refunded)} of $total" else "Pantopus support resolved this"
     }
