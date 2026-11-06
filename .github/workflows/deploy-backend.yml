@@ -41,7 +41,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
-      - name: Require CI on the current branch head
+      - name: Require CI on the current branch head or an overdue commit
         id: ci
         uses: actions/github-script@v8
         with:
@@ -147,6 +147,7 @@ jobs:
           fi
           supabase db push "${db_flags[@]}" --dry-run --skip-vault
           supabase db push "${db_flags[@]}" --yes
+      # A release that's overdue by now goes out anyway (scripts/deploy/require-ci.cjs).
       - name: Reject a superseded release before cutover
         id: cutover
         if: steps.configuration.outputs.enabled == 'true'
