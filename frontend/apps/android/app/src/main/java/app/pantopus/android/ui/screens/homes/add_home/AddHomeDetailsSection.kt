@@ -20,9 +20,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -38,6 +41,8 @@ import app.pantopus.android.data.api.models.homes.PropertySuggestionsFields
 import app.pantopus.android.data.api.models.homes.PropertySuggestionsResponse
 import app.pantopus.android.data.api.models.homes.RecordProvenanceDto
 import app.pantopus.android.ui.components.Shimmer
+import app.pantopus.android.ui.screens.homes.property_details.HouseholdCountyPageLink
+import app.pantopus.android.ui.screens.homes.property_details.HouseholdQuestionRow
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusTextStyle
 import app.pantopus.android.ui.theme.Radii
@@ -68,6 +73,8 @@ internal fun AddHomeDetailsSection(
     // While the county record is on its way, the fields it fills say so.
     val lookingUp = "Looking up…".takeIf { state.propertyLookupPending }
     val recorded = suggestions?.suggestions
+    val bedroomsFocus = remember { FocusRequester() }
+    val bathroomsFocus = remember { FocusRequester() }
     val ownEntry = { value: String, record: String? -> ownEntryTag(suggestions, value, record) }
     Column(
         modifier = Modifier.fillMaxWidth().testTag("addHomeDetailsSection"),
@@ -128,6 +135,24 @@ internal fun AddHomeDetailsSection(
                 }
                 Switch(checked = state.form.details.justMoved, onCheckedChange = vm::setJustMoved)
             }
+            // One-tap answers for what the record lacks, when the server sends them. A tap fills the field below.
+            suggestions?.questions?.takeIf { it.isNotEmpty() && !state.propertyLookupPending }?.let { questions ->
+                Column(
+                    modifier = Modifier.testTag("addHome_factQuestions"),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.s3),
+                ) {
+                    questions.forEach { question ->
+                        val bedrooms = question.key == "bedrooms"
+                        HouseholdQuestionRow(
+                            question = question,
+                            value = if (bedrooms) state.form.details.bedrooms else state.form.details.bathrooms,
+                            onAnswer = { if (bedrooms) vm.updateBedrooms(it) else vm.updateBathrooms(it) },
+                            onOther = { (if (bedrooms) bedroomsFocus else bathroomsFocus).requestFocus() },
+                        )
+                    }
+                    suggestions?.countyPage?.let { HouseholdCountyPageLink(it) }
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 AddHomeTextField(
                     label = "Bedrooms",
@@ -136,7 +161,7 @@ internal fun AddHomeDetailsSection(
                     onValueChange = vm::updateBedrooms,
                     tag = ownEntry(state.form.details.bedrooms, recorded?.bedrooms?.toString()),
                     keyboardType = KeyboardType.Number,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).focusRequester(bedroomsFocus),
                     testTag = "addHome_bedrooms",
                 )
                 AddHomeTextField(
@@ -146,7 +171,7 @@ internal fun AddHomeDetailsSection(
                     onValueChange = vm::updateBathrooms,
                     tag = ownEntry(state.form.details.bathrooms, recorded?.bathrooms?.let(AddHomeWizardViewModel::trimTrailingZero)),
                     keyboardType = KeyboardType.Decimal,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).focusRequester(bathroomsFocus),
                     testTag = "addHome_bathrooms",
                 )
             }
