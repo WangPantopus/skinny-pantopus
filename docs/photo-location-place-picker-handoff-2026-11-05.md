@@ -19,7 +19,7 @@ Everything after this section is the state at handoff, apart from the open items
   - Android and web were checked again on later code: Android in #3515 (a personal post with a far tag and an in-app camera photo taken there got an exact pin), and web in #3493.
   - Not verified: any of this against production, and physical phones.
   - The composers' changes reach people only with the next iOS and Android store builds, which only the founder submits.
-- **Where the open items below stand:** new video uploads are clean and stored videos wait on the founder (item 1), the Home limit is done and released (item 2), the Android prompt was measured and waits on the founder (item 3), and the web picker is done (item 4).
+- **Where the open items below stand:** new video uploads are clean and stored videos wait on the founder (item 1), the Home limit is done and released (item 2), the Android prompt is built and needs the founder's Play Console steps before the next Android submission (item 3), and the web picker is done (item 4).
 
 ## What the founder asked for
 
@@ -121,15 +121,20 @@ Verified:
    - `GET /api/posts/place-eligibility` takes an optional `homeId`, so the iOS and Android composers' inline note matches what Post does. Older app versions get the refusal when they tap Post.
    - Moving a Home post follows the same limit, which closes a direct API path.
    - Not verified: hosted services and physical phones.
-3. **Android gallery photos: asking for `ACCESS_MEDIA_LOCATION` is the founder's call.**
-   - Update, November 6: measured on emulators with a small test app, the composer's own picker intent and synthetic files. "Android 10 and later" was too broad, and the Android post composer uses the document picker (`OpenMultipleDocuments`), not the system photo picker.
-     - On the Android 13 and 16 images, the location of a gallery photo or video comes through with no permission.
-     - On the Android 17 image, it's hidden (photo GPS zeroed, video `©xyz` removed), so only in-app camera photos and files from the picker's Downloads root qualify.
-   - The permission works, but the prompt asks for more than it gives. Android grants it with no media-read permission, and the prompt reads "Allow Pantopus to access photos and videos on this device?", with Allow limited access / Allow all / Don't allow on Android 16 and 17, and Allow / Don't allow on 13. After "Allow all", the app's gallery queries returned 0 rows on 16 and 17. On 17, it also couldn't open files by path or by direct URI, so it reads the location only in what the person picks.
-   - `setRequireOriginal` isn't the way in: it throws `SecurityException` on a picked file, granted or not. Once granted, the plain document URI gives the original, so the existing readers work unchanged. But uploads would then carry the GPS, unless they read through `getRedactedUri`, which returned today's exact photo bytes on Android 16 and 17 (videos not checked with the grant).
-   - The options: hold and check one real phone first (the recommendation, and a row in `NEXT_STEPS.md`), ask only when a photo's zeroed GPS tags show a hidden location, ask on the first photo or video attached, or leave it.
-   - [Google Play's photo and video policy](https://support.google.com/googleplay/android-developer/answer/14115180) names only `READ_MEDIA_IMAGES` and `READ_MEDIA_VIDEO`. We found nothing saying whether this permission needs a declaration.
-   - Not measured: physical phones, Android 10–12 and 14–15, and real camera files. Phones are the key unknown, because Google Play system updates replace the media module and these images carry old ones.
+3. **Android gallery photos: the post composer asks for `ACCESS_MEDIA_LOCATION`, only when it helps. Built in PR_LINK.**
+   - The founder's decision, November 6: "Build it now". Before that, the Android 17 image showed the problem and the prompt's wording made it the founder's call.
+   - Measured on emulators with synthetic files. The Android post composer uses the document picker (`OpenMultipleDocuments`), not the system photo picker, and "Android 10 and later" was too broad.
+     - On the Android 11, 12, 13 and 16 images, the location of a gallery photo or video comes through with no permission.
+     - On the Android 17 image, it's hidden (photo GPS zeroed, video `©xyz` removed), except from the picker's Downloads root.
+     - Android grants the permission with no media-read permission. The prompt reads "Allow Pantopus to access photos and videos on this device?", with Allow limited access / Allow all / Don't allow on Android 16 and 17, and Allow / Don't allow on 13. Android 11 and 12 say "photos and media on your device". After "Allow all", the app's gallery queries returned 0 rows on 16 and 17, and on 17 it still couldn't open files by path or by direct URI.
+     - `setRequireOriginal` isn't the way in: it throws `SecurityException` on a picked file, granted or not. Once granted, the plain document URI gives the original, so the existing readers work unchanged.
+   - What the app does now:
+     - It asks only after someone attaches a photo whose GPS tags read as zero, which is how Android hides a location. One line of Pantopus's own words comes first, then Android's prompt. It's asked once on a phone. A screenshot, a photo that never had a location, and a phone that doesn't hide it never trigger it.
+     - A video's hidden location leaves no mark, so a video alone doesn't ask. Once a photo's ask is allowed, videos already in the draft count too, and later ones read normally.
+     - Allowing makes what's already attached count, with no need to attach it again. Declining changes nothing, and a far tag gets the existing inline note.
+   - Uploads: the composer uploads Android's copy without the location (`MediaStore.getRedactedUri`) from Android 12 on. Measured in the real app, the file a client sent had no coordinates on Android 13, 16 and 17, photo and video. Where Android can't give that copy (Android 10 and 11, the picker's Downloads root, other document providers), it falls back to the file as picked, so the coordinates can be in the upload on the way to the server, which removes them before storing (#3484).
+   - Checked in the real app against a local backend, with synthetic media: see PR_LINK. The Android map can't draw without a Maps key locally, so the marker was checked in `/api/posts/map`, not on screen.
+   - Not verified: physical phones and current Google Play system updates (they replace the media module, and these images carry old ones, so a real phone may hide the location on older Android versions too), Android 10, 14 and 15, real camera files, and Play review. The founder's Play Console steps and the real-phone check are a row in `NEXT_STEPS.md`.
 4. **The web composer's place picker. Done: [#3479](https://github.com/WangPantopus/skinny-pantopus/pull/3479) and [#3493](https://github.com/WangPantopus/skinny-pantopus/pull/3493).**
    - Update, November 6: it now lists nearby venues and searches them by name, like iOS and Android, and a post records the venue as OpenStreetMap's. With no device fix, the list comes from the saved viewing area.
    - Update, November 6: the web composer now places a post by its photo or video, as the apps do. It reads the capture point in the browser, with no new dependency, sends `mediaLocations`, and runs the check on the tagged place with the nearest attachment. The list opens on "Photo location", with "Near me" beside it. PNG and WebP aren't read, because cameras don't write them.
