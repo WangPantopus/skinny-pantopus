@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.keepsKeyboard
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -189,6 +190,7 @@ private fun NameField(
     Row(
         modifier =
             Modifier
+                .keepsKeyboard()
                 .fillMaxWidth()
                 .height(46.dp)
                 .clip(RoundedCornerShape(Radii.lg))
