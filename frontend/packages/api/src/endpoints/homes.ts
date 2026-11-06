@@ -193,8 +193,8 @@ export async function createHome(data: {
   state: string;
   zip_code: string;
   country?: string;
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
   home_type?: 'apartment' | 'house' | 'condo' | 'townhouse' | 'studio' | 'rv' | 'mobile_home' | 'trailer' | 'multi_unit' | 'other';
   bedrooms?: number;
   bathrooms?: number;
