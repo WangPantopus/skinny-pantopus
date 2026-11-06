@@ -141,6 +141,7 @@ struct MarkNoShowDialog: View {
             .padding(.horizontal, Spacing.s3)
             .padding(.vertical, 9)
             .frame(maxWidth: .infinity, minHeight: 38, alignment: .topLeading)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurfaceSunken)
             .overlay(
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

@@ -105,6 +105,7 @@ public struct PlacePickerSheet: View {
     private var searchField: some View {
         HStack(spacing: Spacing.s2) {
             Icon(.search, size: 16, color: Theme.Color.appTextSecondary)
+                .allowsHitTesting(false)
             TextField("Search restaurants, cafés, landmarks…", text: $viewModel.searchText)
                 .font(Theme.Font.body)
                 .textInputAutocapitalization(.never)
@@ -113,6 +114,7 @@ public struct PlacePickerSheet: View {
             if !viewModel.searchText.isEmpty {
                 Button { viewModel.searchText = "" } label: {
                     Icon(.x, size: 16, color: Theme.Color.appTextMuted)
+                        .hitArea(horizontal: 8, vertical: 8)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
@@ -120,6 +122,7 @@ public struct PlacePickerSheet: View {
         }
         .padding(.horizontal, Spacing.s3)
         .padding(.vertical, Spacing.s2)
+        .typesInFieldOnTap()
         .background(Theme.Color.appSurfaceSunken)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

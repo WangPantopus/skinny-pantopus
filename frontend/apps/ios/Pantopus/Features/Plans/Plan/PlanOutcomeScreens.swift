@@ -196,6 +196,7 @@ struct PlanCancelSheet: View {
                         .lineLimit(2...4)
                         .padding(.horizontal, 14)
                         .padding(.vertical, Spacing.s3)
+                        .typesInFieldOnTap()
                         .background(RoundedRectangle(cornerRadius: Radii.md, style: .continuous).fill(Theme.Color.appSurface))
                         .overlay(RoundedRectangle(cornerRadius: Radii.md, style: .continuous).stroke(
                             Theme.Color.appBorderStrong,

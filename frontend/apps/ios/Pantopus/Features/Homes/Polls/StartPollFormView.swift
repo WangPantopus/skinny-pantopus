@@ -313,6 +313,7 @@ private struct OptionRow: View {
                     .pantopusTextStyle(.body)
                     .foregroundStyle(Theme.Color.appText)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .allowsHitTesting(false)
             } else {
                 TextField("Option \(index + 1)", text: $label)
                     .font(Theme.Font.body)
@@ -321,6 +322,7 @@ private struct OptionRow: View {
         }
         .padding(.horizontal, Spacing.s3)
         .frame(minHeight: 44)
+        .typesInFieldOnTap()
         .background(isLocked ? Theme.Color.appSurfaceSunken : Theme.Color.appSurface)
         .clipShape(RoundedRectangle(cornerRadius: Radii.md))
         .overlay(

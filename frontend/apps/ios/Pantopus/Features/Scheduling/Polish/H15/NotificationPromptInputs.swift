@@ -41,8 +41,7 @@ struct CodeBoxField: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
-        .contentShape(Rectangle())
-        .onTapGesture { focused = true }
+        .typesInFieldOnTap($focused)
     }
 
     private func box(at index: Int) -> some View {
@@ -89,6 +88,7 @@ struct PhoneEntryField: View {
                 .padding(.horizontal, Spacing.s3)
                 .frame(minHeight: 44)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurfaceSunken)
                 .overlay(
                     RoundedRectangle(cornerRadius: Radii.sm, style: .continuous)

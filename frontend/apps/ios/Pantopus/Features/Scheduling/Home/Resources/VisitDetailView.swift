@@ -427,6 +427,7 @@ private struct VisitEditSheet: View {
                     TextField("Visit title", text: $viewModel.editTitle)
                         .font(Theme.Font.body)
                         .foregroundStyle(Theme.Color.appText)
+                        .typesInFieldOnTap(reach: Spacing.s2)
                     Divider().background(Theme.Color.appBorderSubtle)
                     Text("Visit type")
                         .font(.system(size: 11, weight: .semibold))
@@ -471,6 +472,7 @@ private struct VisitEditSheet: View {
                     TextField("Entry note for the visitor", text: $viewModel.editNote)
                         .font(Theme.Font.body)
                         .foregroundStyle(Theme.Color.appText)
+                        .typesInFieldOnTap(reach: Spacing.s2)
                 }
             }
         )

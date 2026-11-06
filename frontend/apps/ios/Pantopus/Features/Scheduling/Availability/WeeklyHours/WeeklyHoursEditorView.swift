@@ -137,6 +137,7 @@ struct WeeklyHoursEditorView: View {
                     .textInputAutocapitalization(.words)
                     .disabled(viewModel.isSaving)
                     .accessibilityIdentifier("scheduling.weeklyHours.nameField")
+                    .typesInFieldOnTap(reach: Spacing.s2)
             }
         }
     }

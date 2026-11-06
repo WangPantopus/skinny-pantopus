@@ -191,6 +191,7 @@ public struct SendUpdateForm: View {
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, Spacing.s2)
                     .padding(.vertical, Spacing.s2)
+                    .typesInFieldOnTap()
                     .font(.system(size: 13.5))
                     .foregroundStyle(Theme.Color.appText)
                     .accessibilityLabel("Update message")

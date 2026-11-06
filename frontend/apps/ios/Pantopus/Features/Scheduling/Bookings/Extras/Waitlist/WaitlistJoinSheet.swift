@@ -121,7 +121,7 @@ struct WaitlistJoinSheet: View {
         VStack(alignment: .leading, spacing: Spacing.s2 - 2) {
             ExtrasOverline(text: label)
             HStack(spacing: Spacing.s2 + 1) {
-                if let icon { Icon(icon, size: 16, color: Theme.Color.appTextMuted) }
+                if let icon { Icon(icon, size: 16, color: Theme.Color.appTextMuted).allowsHitTesting(false) }
                 TextField(placeholder, text: text)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.Color.appText)
@@ -131,6 +131,7 @@ struct WaitlistJoinSheet: View {
             }
             .padding(.horizontal, Spacing.s3)
             .frame(height: 44)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurfaceSunken)
             .overlay(
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)

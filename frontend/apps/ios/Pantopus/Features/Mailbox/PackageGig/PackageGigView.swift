@@ -124,6 +124,7 @@ public struct PackageGigView: View {
                             .textFieldStyle(.plain)
                             .font(.system(size: 13))
                             .padding(Spacing.s3)
+                            .typesInFieldOnTap()
                             .background(Theme.Color.appSurfaceSunken)
                             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                             .accessibilityIdentifier("packageGig_field_title")
@@ -136,6 +137,7 @@ public struct PackageGigView: View {
                             .frame(height: 76)
                             .scrollContentBackground(.hidden)
                             .padding(Spacing.s2)
+                            .typesInFieldOnTap()
                             .background(Theme.Color.appSurfaceSunken)
                             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                             .accessibilityIdentifier("packageGig_field_description")
@@ -230,6 +232,7 @@ public struct PackageGigView: View {
                 Text("$")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.Color.appTextSecondary)
+                    .allowsHitTesting(false)
                 TextField("0", text: Binding(
                     get: { viewModel.draftCompensation },
                     set: { viewModel.draftCompensation = $0 }
@@ -243,6 +246,7 @@ public struct PackageGigView: View {
             .padding(.horizontal, Spacing.s2)
             .padding(.vertical, Spacing.s2)
             .frame(width: 110)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurfaceSunken)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
         }
