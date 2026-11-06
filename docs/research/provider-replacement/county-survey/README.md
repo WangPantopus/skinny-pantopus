@@ -1,6 +1,6 @@
-# County property data survey (November 5, 2026)
+# County survey kit (November 5, 2026)
 
-Scripts and inputs behind [../county-property-data-2026-11-05.md](../county-property-data-2026-11-05.md).
+Scripts and inputs behind [../county-survey.md](../county-survey.md); its CSVs are in [../evidence/](../evidence/).
 Public data only; no keys. Run every script with `python3 -I`.
 
 - `data/counties/top200.csv`: counties ranked by Census 2024 estimates (`tools/topcounties.py` on
@@ -22,8 +22,9 @@ Public data only; no keys. Run every script with `python3 -I`.
 - `tools/restscan.py <https://host/.../rest/services> [name regex]`: walk one ArcGIS Server a folder deep and score every
   service's columns (second pass: county servers that ArcGIS Online search does not list).
 - `tools/estimate.py <data dir>`: national estimate with 95% Wilson ranges.
-- `tools/tables.py <data dir> <out dir>`: rebuild both survey CSVs and the two markdown tables from the classes files
-  (copy the CSVs to `docs/research/`, paste the tables into the survey file).
+- `tools/tables.py <data dir> <out dir>`: rebuild both survey CSVs (`county-survey-top150.csv`, `county-survey-sample.csv`)
+  and the two markdown tables from the classes files (copy the CSVs to `../evidence/`, paste the tables into
+  `../county-survey.md`).
 - `tools/agolurls.py "<query>" [n]`: ArcGIS Online search printing each item's owner, type and service URL.
 - `tools/fields.py <layer url> [where ...]`: a layer's columns and record counts per filter (fill rates).
 - `tools/socdomain.py <socrata domain> [query]`: one Socrata portal's datasets that carry building-fact columns.
@@ -37,3 +38,7 @@ Public data only; no keys. Run every script with `python3 -I`.
 Second pass (November 5, evening): the 23 unchecked counties, the unopened sample files and every re-published or
 known-dataset row were checked at the county or state source; `classes.txt` rows carry the result and evidence. No
 category U rows remain; category Q (free download, fields unconfirmed) now also appears in the top 150.
+
+Dallas correction (November 5, late): row 8 of `data/counties/classes.txt` moved to category A on PR #3433's
+measured counts; `tools/estimate.py data` now gives 23.2% (21.1-26.7%) with bedrooms or baths and 55.7% (51.5-60.5%)
+with free building facts.

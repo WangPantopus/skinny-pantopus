@@ -1,15 +1,15 @@
-# Free property data in US counties
+# County survey: free property data in US counties
 
-Measured November 5, 2026, to answer: can Pantopus show ATTOM-style property details from public sources nationwide? The 150 largest counties (172.9 million people, 50.8% of the US, Census 2024 estimates) were checked one by one; the rest of the country is estimated from a 100-county population-weighted sample (see "National estimate" below). A second pass the same evening finished the 23 counties left unchecked, the sampled counties whose files had not been opened, and every county classified only from a re-published copy or a known dataset, at the county or state source (see "Second pass" below).
+Measured November 5, 2026 (PR #3418), to answer: can Pantopus show ATTOM-style property details from public sources nationwide? The 150 largest counties (172.9 million people, 50.8% of the US, Census 2024 estimates) were checked one by one; the rest of the country is estimated from a 100-county population-weighted sample (see "National estimate" below). A second pass the same evening finished the 23 counties left unchecked, the sampled counties whose files had not been opened, and every county classified only from a re-published copy or a known dataset, at the county or state source (see "Second pass" below).
 
-**Nationally:** about 56% of Americans (range 52-61%) live where the county or state publishes building facts free in bulk, and about 22% (range 20-26%) where that free data includes bedrooms or bathrooms. About 36% live where only per-property lookup sites exist and resellers sell the county file, and about 6% where the county sells its file or requires permission.
+**Nationally:** about 56% of Americans (range 52-61%) live where the county or state publishes building facts free in bulk, and about 23% (range 21-27%) where that free data includes bedrooms or bathrooms. About 36% live where only per-property lookup sites exist and resellers sell the county file, and about 6% where the county sells its file or requires permission.
 
 ## Result
 
 | Category | Counties | People | Share of these counties' people |
 |---|---:|---:|---:|
-| Free, with bedrooms/baths | 40 | 61.1M | 35.3% |
-| Free, basics only | 69 | 69.9M | 40.4% |
+| Free, with bedrooms/baths | 41 | 63.8M | 36.9% |
+| Free, basics only | 68 | 67.2M | 38.9% |
 | Free download, building fields not confirmed | 2 | 1.3M | 0.8% |
 | One city only | 5 | 4.8M | 2.8% |
 | Paid or permission | 15 | 18.7M | 10.8% |
@@ -24,7 +24,9 @@ Measured November 5, 2026, to answer: can Pantopus show ATTOM-style property det
 
 Every one of the 150 counties is now classified.
 
-Evidence levels: *Checked in the data* = column names (and for most, fill counts) read from the live service or file; *Official page* = the publisher's own page or file layout describes the fields; *Seen in a re-published copy* = a city or regional layer re-publishing the county's data shows the fields (the county source itself could not be confirmed); *Known dataset* = an existing dataset not opened. After the second pass, 101 of the 150 rest on the data itself and 49 on the publisher's own page or layout; none rests only on a copy.
+**Correction (November 5, late, accepted from the #3433 review):** Dallas County (row 8) moved from basics to bedrooms/baths. #3433 measured the appraisal district's 2026 certified files directly: bedrooms on 529,857 of 539,442 houses (98.2%), baths and living area on nearly all, and bedrooms, baths and area together on 92.1% of condos. The tables, CSVs and national estimate below include it.
+
+Evidence levels: *Checked in the data* = column names (and for most, fill counts) read from the live service or file; *Official page* = the publisher's own page or file layout describes the fields; *Seen in a re-published copy* = a city or regional layer re-publishing the county's data shows the fields (the county source itself could not be confirmed); *Known dataset* = an existing dataset not opened. After the second pass and the Dallas correction, 102 of the 150 rest on the data itself and 48 on the publisher's own page or layout; none rests only on a copy.
 
 ## Statewide sources
 
@@ -55,7 +57,7 @@ States where sale prices are not public: Texas, Utah, Idaho, New Mexico, Kansas,
 | 5 | San Diego County | California | 3.30M | Free, with bedrooms/baths | Checked in the data | SanGIS parcels (county-city GIS agency, served by SANDAG; "legal recorded data provided by the County Recorders and Assessor"): living area on 975,365 of 1,088,570 parcels (90%), bedrooms, baths, effective year, garage, pool; SanGIS license applies | SanGIS parcels via geo.sandag.org |
 | 6 | Orange County | California | 3.17M | Paid or permission | Official page | No public bulk; Assessor points to ParcelQuest (paid) | ocassessor.gov |
 | 7 | Miami-Dade County | Florida | 2.84M | Free, with bedrooms/baths | Checked in the data | County Property Point View: bedrooms on 796,593 of 944,411 points (84%), year built 92%, baths, heated area, sale price 88% | Miami-Dade County open data (PaGISView) |
-| 8 | Dallas County | Texas | 2.66M | Free, basics only | Official page | Free DCAD data files for all accounts; bedroom fields not confirmed (no sale prices in Texas) | dallascad.org Data Products |
+| 8 | Dallas County | Texas | 2.66M | Free, with bedrooms/baths | Checked in the data | Appraisal district's 2026 certified data files (all accounts): bedrooms on 529,857 of 539,442 houses (98.2%), baths, living area and year built on nearly all; condos carry bedrooms, baths and area together on 92.1% (measured in PR #3433's field test; no sale prices in Texas) | dallascad.org Data Products |
 | 9 | Kings County | New York | 2.62M | Free, basics only | Checked in the data | NY State public parcels: year built 96%, living sq ft; no bedrooms for NYC | NYS Tax Parcels Public + NYC PLUTO |
 | 10 | Riverside County | California | 2.53M | Free, with bedrooms/baths | Checked in the data | County open data: year built, living area, bedroom count, bath count | gis.countyofriverside.us Parcels |
 | 11 | Clark County | Nevada | 2.40M | Paid or permission | Official page | Assessor sells residential extract (weekly); GIS subscription $7,500/yr | clarkcountynv.gov assessor data files |
@@ -203,7 +205,7 @@ States where sale prices are not public: Texas, Utah, Idaho, New Mexico, Kansas,
 
 - Counties ranked by Census 2024 population estimates.
 - Automated scans of Socrata (4,197 datasets) and ArcGIS Online (2,009 services intersecting the counties), reading each dataset's column names; then targeted web searches and direct reads of county map services and assessor downloads.
-- Second pass: walks of each county's own ArcGIS server (`tools/restscan.py`), statewide layers, file headers read from remote ZIPs with range requests (`tools/zipls.py`, `tools/zipmember.py`), and published file layouts. Two files were left unopened on purpose: Spokane's downloads sit behind a commercial-use attestation, and Medina OH's site has an expired certificate.
+- Second pass: walks of each county's own ArcGIS server (`county-survey/tools/restscan.py`), statewide layers, file headers read from remote ZIPs with range requests (`county-survey/tools/zipls.py`, `county-survey/tools/zipmember.py`), and published file layouts. Two files were left unopened on purpose: Spokane's downloads sit behind a commercial-use attestation, and Medina OH's site has an expired certificate.
 - A column existing is not proof it is filled. Fill counts were taken for most services checked in the second pass (shown in the table) and for New York, Maryland, Idaho, North Carolina, West Virginia and Clark County WA.
 - Free does not mean unrestricted. King County forbids redistribution without permission; SanGIS has its own license; DuPage requires written permission; Will County forbids redistribution without written permission; Stanislaus and KGIS (Knox) license data for the buyer's own use only; Arizona requires a commercial-purpose declaration for records requests; Washington bars commercial use of lists of individuals (owner names), and King and Spokane ask for that acknowledgement before download. Many files also carry owner names, which Pantopus would drop. Each source needs a terms check before use.
 - The other 2,994 counties are estimated from a 100-county sample in the section below.
@@ -214,8 +216,8 @@ The other 2994 counties hold 167.2 million people (49.2% of the US). I drew 100 
 
 | Category | Rest of the US (sample of 100) | 95% range | Whole US (top 150 measured + sample) |
 |---|---:|---:|---:|
-| Free, with bedrooms/baths | 9% | 5-16% | 22.4% (76M people) |
-| Free, basics only | 26% | 18-35% | 33.3% (113M people) |
+| Free, with bedrooms/baths | 9% | 5-16% | 23.2% (79M people) |
+| Free, basics only | 26% | 18-35% | 32.5% (111M people) |
 | Free download, building fields not confirmed | 0% | 0-4% | 0.4% (1M people) |
 | Partial (one city or sold homes only) | 1% | 0-5% | 1.9% (6M people) |
 | Paid or permission | 2% | 1-7% | 6.5% (22M people) |
@@ -234,7 +236,7 @@ What the smaller counties look like:
 - **The 23 unchecked top-150 counties:** 5 free with bedrooms or baths (Denton TX certified export, Oklahoma County's assessor server, San Joaquin CA's county layer, Tulsa via INCOG, Polk IA's residential CSV); 2 free basics (Davidson TN finished area and sale price, Bernalillo NM year built); 2 free downloads not confirmed (Cobb GA tabular file on its FTP site, Spokane WA behind an attestation); 6 paid (Fresno $15,492 for the characteristics file, Ventura at a fee, Greenville SC $500 GIS set, Lancaster PA $50 or $500 packages, Stanislaus subscription for own use only, Knox TN at $100 per map tile); 8 not found (Macomb, Kent MI, San Mateo, Providence, Jefferson AL, Delaware PA, Sedgwick KS, Kane IL).
 - **Re-published copies and known datasets, checked at the source:** confirmed with bedrooms (San Diego via SanGIS, Miami-Dade, King, Tarrant, Mecklenburg, Guilford, Jackson MO, Montgomery OH's CAMA file, Philadelphia, Allegheny, San Francisco, Denver) and with basics (Summit OH, Douglas NE, Pinal AZ, Hidalgo TX, Arapahoe CO). Four were weaker at the source: Will IL becomes one city only (the county forbids redistribution; only Joliet's layer carries the facts), Johnson KS becomes paid (whole file $100 a year), Bucks PA and Ada ID become not found (the county files carry no building facts).
 - **Sample:** Lincoln NC moves to bedrooms/baths (free county CSVs); Medina OH to basics (free CAMA file, unopened); Forsyth NC to basics through North Carolina's statewide building layer; Cabarrus NC, Davie NC and Waukesha WI to not found (their files carry values only). Skagit WA and Monongalia WV were confirmed at the county or state source; Northampton PA and Madison VA remain re-published copies because no county file was found.
-- **Net effect:** free building facts 53.4% to 55.7% of Americans; with bedrooms or baths 20.9% to 22.4%; paid or permission 5.1% to 6.5%; not found 32.6% to 35.5%; unchecked 4.7% to 0.
+- **Net effect:** free building facts 53.4% to 55.7% of Americans; with bedrooms or baths 20.9% to 22.4% (23.2% after the later Dallas correction); paid or permission 5.1% to 6.5%; not found 32.6% to 35.5%; unchecked 4.7% to 0.
 
 ## Sampled counties
 

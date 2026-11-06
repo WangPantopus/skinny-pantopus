@@ -1,59 +1,254 @@
-# Nationwide sourcing and the public-record test
+# Sourcing: what public data exists nationwide, and where each fact comes from
 
-## Acquisition order
+November 5, 2026. Two studies feed this page, measured the same day with no paid data, no vendor calls and no
+Pantopus records:
 
-1. **Accept an address nationwide.** Use independently permitted address points, street aliases, boundaries and building footprints for physical candidates. Start with USDOT’s National Address Database and evaluate Overture and state/local sources per release. Census TIGER supports geographic indexing. Record rooftop/parcel/street precision explicitly. Sparse rural areas, tribal lands, territories, Puerto Rican urbanizations, PO boxes and military addresses need input and recovery paths even where a street point or parcel is absent. A footprint does not supply verified bedrooms, a suite, or postal deliverability. [USDOT National Address Database](https://www.transportation.gov/gis/national-address-database) · [Overture attribution and licensing](https://docs.overturemaps.org/attribution/) · [Census TIGER/Line](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html)
-2. **Register all custodians.** The [56 jurisdiction routes](evidence/state-routes.csv) and the [3,235 county/equivalent identifiers](evidence/national-jurisdictions.csv) are an acquisition queue. The actual custodian can be a city, town, borough, parish, appraisal district, state, territory or tribal authority. Record coverage and rights at that level. An entry in a directory is a lead, not production field coverage. [Census geographic inventory](https://www.census.gov/geographies/reference-files/time-series/geo/county-adjacency.html)
-3. **Acquire statewide assessment rolls before one-off connectors.** Florida and Massachusetts proved that large, diverse areas can be measured this way. Then seek official assessor building/unit tables, recorder deeds and sales, parcel/address mapping tables, and data dictionaries. Favor file releases or bulk endpoints with stable IDs, documented semantics, effective dates and consumer-display rights. If bulk access costs money, retain a public link, ask about permitted terms if authorized, or leave the field unavailable. A public lookup page alone is insufficient for a mirroring decision.
-4. **Source the missing subject.** For unit facts, pursue condo declarations/unit rolls, authorized manager feeds or a resident’s own private corrections. For office buildings, use assessor improvement cards and permitted commercial records. For office suites, use authorized tenancy or suite-level feeds. For sales, recorder and transfer-disclosure rules differ by market. For valuations, qualify a model for a defined asset class. Disable automatic paid fallback. [Zillow rental listing feeds](https://www.zillow.com/rentals-network/listing-feeds/) · [Redfin listing and public-source explanations](https://support.redfin.com/hc/en-us/articles/360004496791-Listing-Details) · [Freddie Mac multifamily valuation guidance](https://mf.freddiemac.com/docs/capitalization_rate_guidance.pdf)
-5. **Publish a field/subject coverage report.** Per source, jurisdiction, property type and version, count the eligible accounts, unique identities, present fields, multi-field intersections, ambiguity, age, suppressed records and unresolved rights. Measure ingest lag separately from source effective date. Prioritize the next connector by actual unanswered searches and value of correct fields, not number of parcels bought.
+| Study | Question | What it counts | Headline | Detail |
+|---|---|---|---|---|
+| County survey (#3418) | Where do Americans live with free bulk building facts? | People, by county (Census 2024) | 55.7% (range 52-61%) have free building facts; 23.2% (21-27%) with bedrooms or baths | [county-survey.md](county-survey.md) |
+| Field test (#3433) | Which of Property details' 46 fields can public records fill, by property type? | Assessment records in 8 states | 14,660,226 records; 41 of 46 fields found; 16.3 fields per record on average | [property-fields.md](property-fields.md) |
 
-## What was tested, November 5, 2026
+The two denominators differ (people versus records), so the numbers are not comparable with each other. The field
+test's sample was chosen on purpose and can't be projected onto the country; the survey's sample was drawn at random
+for exactly that.
 
-| Source and roll | Selected accounts | Scope and deliberate limits |
-| --- | ---: | --- |
-| [Florida DOR](https://www.floridarevenue.com/property/Pages/DataPortal_RequestAssessmentRollGISData.aspx), 2026 | 7,806,236 | All 67 county rolls, 64 final and 3 preliminary. Checked 11,112,124 input rows. Single-family can include attached forms. Separate residential condos, multifamily 10+ and office use codes. No duplicate eligible parcel ID within a county. |
-| [MassGIS](https://www.mass.gov/info-details/massgis-data-property-tax-parcels), latest available municipal files | 1,726,965 | 350 municipalities, with one current assessor table per town. Unique nonblank local property ID. Roll years ranged from FY2018 to FY2027. Single-family, identifiable townhouse style, condo, 9+ unit apartment and office codes. |
-| [Boston](https://gisportal.boston.gov/arcgis/rest/services/Assessing/properties_boston_gov/FeatureServer/0), FY2026 | 107,010 | Separate city assessor layer completes the Massachusetts geographic inventory. Distinct PIDs. Condos must carry a unit number. Includes measured parking counts and affirmative owner-occupancy flags. |
-| [Cook County](https://datacatalog.cookcountyil.gov/Property-Taxation/Assessor-Residential-Condominium-Unit-Characterist/3r7i-mrz4), 2026 | 1,297,522 | Single-card houses and town/rowhouses, residential condo class 299 excluding flagged shared or parking/storage parcels. Same-year PIN joins to the situs-address and parcel-universe files. |
-| [NYC PLUTO](https://data.cityofnewyork.us/City-Government/Primary-Land-Use-Tax-Lot-Output-PLUTO-/64uk-42ks), 26v2 | 381,614 | One BBL per account. Class A houses may be attached. Non-condo class C/D apartment candidates require at least five residences. Office class O. Billing lots cannot stand in for condo units. |
-| [Philadelphia OPA](https://data.phila.gov/visualizations/property-assessments/), current snapshot | 390,740 | Distinct accounts. Separately classified detached houses, single-family rowhouses, residential condo accounts with a unit, apartment 5+ and office classes. Conflicting classifications excluded. |
-| [King County](https://info.kingcounty.gov/assessor/DataDownload/default.aspx), October 30, 2026 files | 514,397 | Join parcel to residential building, apartment-complex or commercial extract. House/townhouse require one dwelling and one building record. Complexes require at least five units. Office group includes qualified single-record office buildings, medical offices and office parks. Publication of source data needs its own terms review. |
-| [Dallas CAD](https://www.dallascad.org/DataProducts.aspx), 2026 certified with supplement | 607,896 | Dallas County jurisdiction, one principal improvement. A11 house, A12 townhouse, A13 condo with unit ID, B11 apartments with 5+ units, F10 general/medical offices. |
-| [Los Angeles County](https://www.arcgis.com/home/item.html?id=70d93266f45a4080a97b285a471493cd), 2025 | 1,827,846 | Isolated the 2025 roll from the multiyear file. Unique AIN; explicit townhouse format for the single-family townhouse subset. Condo legal class takes precedence. Building characteristics credited only on single improvement lines. [Source terms](https://egis-lacounty.hub.arcgis.com/pages/terms-of-use) |
-| **Total** | **14,660,226** | Eight states, nine source groups, 39 subject/source cohorts. No transaction counted repeatedly as a property. |
+A field being present is not proof it is right, and a free download is not a right to show it to users: every source
+passes a rights check before use ([cost-and-rights.md](cost-and-rights.md#rights-register)).
 
-The counted unit is a unique assessment record in a deliberately selected cohort. The trial used no paid API, provider cache, production database or paid display license. Aggregate queries and file counts measure recoverability, not surveyed truth. Some records classified as houses include attached homes where the publisher cannot distinguish their legal form. Reported “field count” includes deterministic conversions such as lot acres and square feet. Unsupported subjects, unscored definitions and real zero fill are distinguished in the [evidence](evidence/README.md).
+## 1. Nationwide coverage of free building facts
 
-## Property coverage by subject
+| Where people live | Share of Americans | People |
+|---|---:|---:|
+| County or state publishes building facts with bedrooms or baths | 23.2% (21.1-26.7%) | 78.8M |
+| Basics only (year built, size, value, sales) | 32.5% | 110.7M |
+| **Free building facts of either kind** | **55.7% (51.5-60.5%)** | 189.5M |
+| Free file whose building fields could not be opened | 0.4% | 1.3M |
+| One city only, or sold homes only | 1.9% | 6.5M |
+| The county sells its file or requires permission | 6.5% | 22.0M |
+| Only per-property lookup sites (resellers sell the files) | 35.5% | 120.8M |
 
-| Subject | What can reasonably be displayed | Boundary for filling gaps |
-| --- | --- | --- |
-| Houses | Assessor identity, year, lot, structure and locally measured rooms, construction, systems and parking. | Distinguish living, gross and assessed effective area. Outbuildings or accessory units can change the correct subject. |
-| Townhouses/rowhouses | Building form, rooms and land where the interest is individually assessed. Dallas, King and Cook supply explicit classes. | Attached form and condominium legal ownership can overlap. Avoid counting the same assessed interest twice. |
-| Condominiums | Exact legal unit identity, and sometimes its rooms, area, parking and building construction year. | Keep common land, structures, basement parking accounts and shared assessments separately identified. A condo’s recorded spaces may still require proof of assignment. |
-| Rental apartments | Address, building/complex identity, building count, gross area, apartment count, and average size where documented. | A rentable unit often has no separate taxable parcel. Match the literal unit to an authorized unit roster or effective floor plan before showing private unit dimensions or availability. |
-| Office buildings, campuses, mixed use | Site/parcel, use, year, building improvements, gross or separately labeled rentable area, systems and assessment where available. | One parcel can contain multiple structures. A development-level aggregate or a building with shared parking does not describe every office. |
-| Leased suites and other buildings | Recognized suite or specialized building facts if published for that specific subject. | No separate suite cohort was certified. Beds/baths hero cards, residential AVMs and whole-parcel land are inappropriate defaults. Show type-appropriate rows or explicit unavailable status. |
+The 150 largest counties (50.8% of Americans) were classified one by one; the other 2,994 are estimated from a
+100-county sample drawn with probability proportional to population. Ranges are 95% sampling ranges. Method, all 250
+county rows and the scripts: [county-survey.md](county-survey.md) and [county-survey/](county-survey/).
 
-### What the unit experiment establishes
+**Correction (accepted from the #3433 review, November 5):** Dallas County moved from "basics" to "with bedrooms or
+baths". #3433 measured the appraisal district's 2026 certified files: bedrooms on 529,857 of 539,442 houses (98.2%),
+baths and living area on nearly all, and bedrooms, baths and area together on 92.1% of condos. That moved 2.66M people
+and raised the national "with bedrooms or baths" share from 22.4% to 23.2%; the total with free building facts is
+unchanged.
 
-For a user-supplied Chicago condo, the county identified the exact unit and its building year. Two neighboring units mapped to different PINs and a deliberately out-of-range unit had no match. The assessor omitted the unit’s area and rooms. The listing showed them and attributed them to its listing supplier. This comparison used a single listing to explain provenance. No listing values entered the public-field counts. Independently, the county explains that it began gathering interior condominium characteristics from sources including listings in 2021. [Cook County condo characteristics](https://datacatalog.cookcountyil.gov/Property-Taxation/Assessor-Residential-Condominium-Unit-Characterist/3r7i-mrz4) · [Cook situs records](https://datacatalog.cookcountyil.gov/Property-Taxation/Assessor-Parcel-Addresses/3723-97qp) · [Redfin’s source explanation](https://support.redfin.com/hc/en-us/articles/360004496791-Listing-Details)
+Statewide files do most of the work outside the largest counties: Connecticut (CAMA with bedrooms and baths), New York
+(parcels with bedrooms where counties share them), Maryland, Massachusetts (MassGIS; Boston and Cambridge add
+bedrooms), New Jersey (year built and sale price only), Florida (every county's roll), Utah, Texas (year built
+statewide; appraisal districts publish more), Minnesota, North Carolina (only the parcel-derived half counts), West
+Virginia, Maine, Montana and Indiana (by request). Sale prices are not public in Texas, Utah, Idaho, New Mexico, Kansas
+and Missouri.
 
-| Condo source | Both bedrooms and calculable total baths **and** unit living area | Share |
-| --- | ---: | ---: |
-| Cook County | 53,073 / 372,656 | 14.2% |
-| Dallas | 37,705 / 40,930 | 92.1% |
-| Boston | 70,968 / 74,229 | 95.6% |
+## 2. The counties without free building facts
 
-King County reported both unit count and **average** unit area on 6,995 matched apartment complexes. Los Angeles reported **main square footage** on 256,456 of 256,917 condo accounts. Florida supplied **effective improvement area** on 1,611,419 of 1,616,522 condo accounts. Those useful facts can each be shown under the correct label. They did not fill a strict unit-living-area field. For single-family homes, all six screenshot tiles co-occurred on 470,353 of 470,599 King accounts, 27,491 of 27,517 Boston accounts and 336,866 of 539,442 Dallas accounts. These are intersections on actual records, not products of independent percentages. [Detailed source counts](evidence/cohort-fields.csv) · [Other measured facts](evidence/additional-measures.csv)
+41 of the 150 largest counties (41.9M people) have no free building facts: 19 not found, 15 sell their files or need
+permission, 5 publish for one city only, and 2 offer a free file whose fields could not be confirmed. Every row, with
+the next step: [evidence/uncovered-counties.csv](evidence/uncovered-counties.csv).
 
-### Identity and latency check
+Prices found so far (one-time unless noted): Fresno CA $15,492 for the characteristics file (5 cents a parcel);
+Greenville SC $500 for the county GIS set; Lancaster PA $50 basic or $500 with the structure file; Johnson KS $100 a
+year; Knox TN (KGIS) $100 per map tile, own use only; Clark NV a $7,500-a-year GIS subscription; Cobb GA's tabular file
+is free on its FTP site (fields unopened) while its parcel shapes cost $22,000. Across the smaller "not found"
+counties, resellers sell the county file for about $200-300 each. Many of these files can also be requested under
+public-records laws, at copying cost; commercial-use terms vary by state.
 
-A temporary local index processed 1,864,469 Cook County situs rows. A numbered street, city and ZIP qualified 1,814,527 rows, yielding 1,700,036 distinct normalized search keys. Of those, **69,070** matched multiple parcels. Returning the first result would be unsafe for those keys. Across 5,000 sampled existing-record probes and 500 synthetic misses, the warm local SQL lookup p95 was **0.010875 ms**. The index held salted digests and was discarded. This is a local lookup measurement only. Network, parsing/ranking beyond that exact key, authorization, rendering, cold starts and hosted availability remain to be measured.
+The founder has not chosen how to fill these places (decision D2 in [decisions.md](decisions.md)). The recommended
+floor is household entries plus labeled estimates, and pricing public-records requests for the 20 largest uncovered
+counties as research only.
 
-### What still requires rights, money or validation
+## 3. Field fill by property type
 
-Use an independent jurisdiction ID in place of vendor identity. Record ZIP+4 when a permitted roll explicitly supplies it; postal delivery evidence requires an authorized service. For transactions, ownership, restricted jurisdictions, rents, exact apartment/suite rosters and model outputs, define the missing capability before considering a license. Negotiate audience (consumer display versus internal analysis), retention, refresh, exports, suppression and exit terms. An approved manager feed or a private household correction can address a small gap without buying a national subscription. A listing portal is a product example, not an ingestion source. Geographic estimates, assessed values and FHFA trends each carry their own labels. [USPS ZIP+4](https://postalpro.usps.com/address-quality-solutions/zip-4-product) · [FHFA HPI](https://www.fhfa.gov/data/hpi) · [Costs and optional licenses](delivery-and-cost.md)
+From #3433's field test across eight states (Florida's 67 county rolls, Massachusetts' 350 town files plus Boston, Los
+Angeles, Cook, Dallas, King, New York City, Philadelphia):
 
-The test neither cleared jurisdictions for public redistribution nor benchmarked production. The next proof should stratify all states and D.C., track territories separately, and sample rural/urban, new construction, condos, mixed-use, office/campus and leased-unit cases against authorized ground truth. Include ambiguous addresses, restricted records and misses in the denominator. Record confidence bounds by cohort and show counts where a cohort is too small for a percentage.
+| Property type | Records | Fields of 46 found, on average |
+|---|---:|---:|
+| House | 11,245,408 | 17.0 |
+| Townhouse or rowhouse | 460,040 | 20.2 |
+| Condo | 2,685,854 | 12.9 |
+| Apartment building or complex | 166,891 | 14.9 |
+| Office property | 102,033 | 15.5 |
+
+41 of the 46 fields had a usable direct, derived or explicitly qualified value somewhere. The five never found: the
+ATTOM ID and the four value-estimate fields (estimate, range, confidence, date). Every field by type, with the scoring
+rules: [property-fields.md](property-fields.md).
+
+**Condo interiors vary by county** (this replaces the earlier "county records rarely hold condo interiors", which was
+wrong as stated). Bedrooms, total baths **and** unit living area on the same record:
+
+| County source | Condos with all three | Share |
+|---|---:|---:|
+| Dallas | 37,705 of 40,930 | 92.1% |
+| Boston | 70,968 of 74,229 | 95.6% |
+| Cook | 53,073 of 372,656 | 14.2% |
+
+Cook's condo file holds bedrooms alone for 53% of units and size for 39% (#3418's count, parking and common areas
+excluded). New York City's tax lots aggregate condo units to a billing lot, so no unit facts come from there. Where a
+county doesn't record a unit's interior, county-based sources (ATTOM included) have nothing to give; that is where
+listing sites use MLS and rental feeds ([unit-facts.md](unit-facts.md)).
+
+Facts that are useful but mean something else stay under their own labels and never fill a unit's field: King County's
+**average** unit area on 6,995 apartment complexes, Los Angeles' **main square footage** on 256,456 of 256,917 condos,
+Florida's **effective improvement area** on 1,611,419 of 1,616,522 condos
+([evidence/additional-measures.csv](evidence/additional-measures.csv)). For houses, all six headline tiles appear on
+the same record for 470,353 of 470,599 King accounts, 27,491 of 27,517 Boston accounts and 336,866 of 539,442 Dallas
+accounts.
+
+## 4. What each property type can show
+
+| Subject | What public records can show | The boundary |
+|---|---|---|
+| House | Assessor identity, year built, lot, structure, rooms where measured, construction, systems, parking | Living, gross and effective area are different facts; accessory units and outbuildings can change the subject |
+| Townhouse or rowhouse | Building form, rooms and land where the unit is assessed separately (Dallas, King and Cook have explicit classes) | Attached form and condo ownership overlap; never count one assessed interest twice |
+| Condo | The exact legal unit, sometimes its rooms, area and parking, and the building's year | Common land, shared structures and parking accounts stay separate; a recorded parking space may still need proof of assignment |
+| Rental apartment | Address, building or complex, building count, gross area, apartment count, average size where documented | A rented unit usually has no taxable parcel; show its dimensions only from a unit roster or a floor-plan mapping for that unit |
+| Office, campus, mixed use | Site, use, year, improvements, gross or rentable area (labeled), systems, assessment | One parcel can hold several buildings; a development total doesn't describe each office |
+| Leased suite, other | Facts published for that suite only | No suite cohort was certified; no bedroom tiles or home value defaults |
+
+## 5. Identity: the right unit, or an honest "which one?"
+
+- **Ambiguity is common.** A temporary local index of Cook County's 1,864,469 address rows qualified 1,814,527 with a
+  street number, city and ZIP, giving 1,700,036 distinct normalized keys; 69,070 keys matched more than one parcel.
+  Taking the first result would show the wrong home's facts for those.
+- **The county can pin the exact unit.** For a downtown Chicago condo the founder supplied, Cook's records identified
+  the exact unit and its building year; two neighboring units mapped to different parcel numbers; an out-of-range unit
+  number matched nothing. The record omitted the unit's rooms and area, which the listing site showed from the MLS.
+- **Lookups are fast.** Across 5,000 existing-record probes and 500 misses, the warm local lookup's p95 was 0.011 ms.
+  That excludes network, ranking, authorization and rendering; production latency still has to be measured.
+
+These findings set the identity contract in [architecture.md](architecture.md#identity-contract).
+
+## 6. How coverage gets built
+
+The order, from #3433, with the founder's no-subscription direction applied:
+
+1. **Accept every US address.** Address points from the U.S. DOT National Address Database (99.2M features, queried
+   November 5), then Overture, OpenAddresses and state and county address points, each license-checked; Census TIGER for
+   geography. Every place gets an entry and recovery path even where no point or parcel exists: rural routes, tribal
+   lands, territories, Puerto Rico urbanizaciones, PO boxes, military addresses.
+2. **Register every custodian.** 56 state and territory routes ([evidence/state-routes.csv](evidence/state-routes.csv))
+   and 3,235 county-equivalents ([evidence/national-jurisdictions.csv](evidence/national-jurisdictions.csv)). The real
+   custodian may be a city, town, parish, appraisal district, state or tribal authority. A directory entry is a lead,
+   not coverage.
+3. **Statewide rolls before county connectors.** Florida and Massachusetts proved one connector can cover many
+   jurisdictions. Then county assessor tables, recorder sales, address-to-parcel tables and data dictionaries. Prefer
+   bulk files with stable IDs, documented meanings, dates and display rights. Where a file costs money, record the
+   price and leave the field unavailable until the founder decides.
+4. **Fill the missing subject.** Units: floor-plan sheets from building managers and residents' own entries
+   ([unit-facts.md](unit-facts.md)). Offices: assessor improvement cards. Sales: recorder rules by state. Values: only a
+   model measured for that market. Never an automatic paid fallback.
+5. **Publish a coverage report** per source, jurisdiction, property type and release: eligible records, unique
+   identities, fill by field, same-record intersections, ambiguity, age, suppressed records, unresolved rights. Choose
+   the next connector by **unanswered searches from Pantopus users**, not by parcel counts.
+
+## 7. Data source catalog by job
+
+Status words: **in use** (the code calls it today), **checked** (opened in this research), **planned** (in the design,
+terms still to verify), **founder decision** (costs money or needs an agreement). Never seed Pantopus's record from
+ATTOM, Smarty or Google output; owner names are dropped when any file is read.
+
+### Can mail arrive here? (replaces Smarty)
+
+| Source | Gives | Terms and cost | Status |
+|---|---|---|---|
+| Google Address Validation with USPS CASS (already requested) | Standardized address, DPV, footnotes, vacancy, CMRA, no-stat, record type, carrier route, ZIP+4; home, business and PO-box flags | Per request (billing SKU is a founder-only fact); results kept at most 30 days; no made-up addresses | In use; Phase 1 makes it the only check |
+| USPS Address Management System license | The USPS database on Pantopus's own server | About $7,570 a year (first pass); worth it past about 40,000 checks a month | Founder decision, later |
+| Redeemed and returned postcards | Proof that mail reaches an address and unit, or doesn't | Ours | In use |
+
+### Does the address exist, and which units?
+
+| Source | Gives | Terms and cost | Status |
+|---|---|---|---|
+| U.S. DOT National Address Database | Address points from states and counties | Free; coverage varies by state | Planned |
+| OpenAddresses | Address points from local governments | Free; per-source licenses, checked one by one | Planned |
+| Overture Maps addresses | Address points (126.3M US points listed; coverage described as partial) | Free; per-source licenses; anything derived from OpenStreetMap stays out | Planned |
+| State and county address points | Official points, often with unit numbers (Clark County WA: 250,271 points, 70,569 with a unit) | Free; per-source terms | Planned, per county |
+| Pantopus postcards | Proven units | Ours | In use |
+
+### Home or business?
+
+| Source | Gives | Status |
+|---|---|---|
+| Google's `metadata.residential` / `business` / `poBox` (same request) | Yes, no, or unknown | In use after Phase 1; unknown handled by the rule in decision D1 |
+| County land-use codes | The parcel's legal use | Planned |
+| USACE National Structure Inventory occupancy | A **modeled** occupancy type per structure | Planned, advisory only |
+
+### Building facts (replaces ATTOM `/property/detail`)
+
+| Source | Gives | Coverage | Status |
+|---|---|---|---|
+| County assessor files and services | Year built, size, stories, bedrooms, baths, heat, roof, garage, sales, values (varies) | 23.2% of Americans with bedrooms or baths; 32.5% basics | Checked (survey and field test) |
+| Statewide files (section 1) | As listed | Whole states | Checked |
+| Cook County condo and commercial files | Condo bedrooms (53%) and size (39%); rental towers' unit mix by bedroom count | Cook County | Checked |
+| USACE National Structure Inventory | **Modeled** size, stories, year built and value per structure | Nationwide | Planned; shown only as a labeled estimate, never in a record field, until measured against county records |
+| FEMA USA Structures | Footprints with height and use, for the Today house outline | Nationwide | Planned; terms to verify |
+| Census ACS (block groups) | Median year built, rooms, bedroom mix | Nationwide | Planned; neighborhood statistics only, never a home's fact |
+| Verified households | Their own home's facts and corrections | Every verified household | Planned ([architecture.md](architecture.md#fact-precedence-field-by-field)) |
+| Building floor-plan sheets | Unit number to plan (bedrooms, baths, size) | Buildings whose managers share them | Planned ([unit-facts.md](unit-facts.md)) |
+| County files bought or requested | Full assessor files where nothing is free (section 2) | 41.9M people in the largest counties alone | Founder decision |
+
+### Value and price trend (replaces ATTOM `/attomavm/detail` and `/salestrend/snapshot`)
+
+| Source | Gives | Limits | Status |
+|---|---|---|---|
+| County assessed and market values | The assessor's value with its tax year (Washington assesses at 100% of market) | Assessment practice varies by state | Planned |
+| County and state recorded sales | Sale price and date where public | Not public in TX, UT, ID, NM, KS, MO | Planned |
+| FHFA House Price Index (ZIP and tract, annual) | **Price change** for an area | Not a home's value and not a ZIP median sale price; labeled as an area index | Planned |
+| Pantopus estimate | A value from the three above | Shown only where its error has been measured on held-out sales | Planned, optional (decision D9) |
+
+### Mail (Lob)
+
+| Source | Gives | Terms and cost | Status |
+|---|---|---|---|
+| Lob | Prints and mails verification and Block Founders cards; delivery events | Developer plan, no monthly fee; about $0.87-0.91 per 4x6 postcard with postage (first pass); live key and return address are founder-only | In use |
+| A second print-and-mail provider (PostGrid is one candidate) or a local printer with USPS induction | The same cards | Per piece; not chosen or priced | Founder decision (D5) |
+
+### Apartment and condo units
+
+| Source | Gives | Status |
+|---|---|---|
+| Building floor-plan sheets | Every unit number mapped to a plan | Planned; free with the building's permission |
+| Residents | Their own unit | Planned |
+| Rental listing feeds | Unit facts, rents, plans | Later, only if Pantopus shows rentals; needs partner agreements |
+| MLS (IDX, VOW or back-office license) | Facts and photos for homes listed in recent years | Not recommended now: a broker relationship and fees per MLS (for example $1,000 setup plus $1,200 a quarter at one MLS) |
+
+### Never used as a source
+
+ATTOM, Smarty and Google output (never copied into Pantopus's record or used as evaluation truth); OpenStreetMap and
+other share-alike (ODbL) data; listing sites (not scraped).
+
+## 8. Registers and evidence
+
+| File | What it holds |
+|---|---|
+| [evidence/property-data-sources.csv](evidence/property-data-sources.csv) | The 58 county (53) and state (5) sources opened in the survey's second pass: link, contents, terms caveat |
+| [evidence/source-register.csv](evidence/source-register.csv) | 37 government field definitions, candidate providers, licensing pages and dated price references (#3433) |
+| [evidence/county-survey-top150.csv](evidence/county-survey-top150.csv), [evidence/county-survey-sample.csv](evidence/county-survey-sample.csv) | Every surveyed county with category, evidence and source |
+| [evidence/uncovered-counties.csv](evidence/uncovered-counties.csv) | The 41 large counties without free building facts, prices and next steps |
+| [evidence/government-files.csv](evidence/government-files.csv), [evidence/jurisdiction-fields.csv](evidence/jurisdiction-fields.csv) | The 417 official files read in the field test and 1,476 local cohorts |
+| [evidence/README.md](evidence/README.md) | How to audit any number; `verify.py` reconciles the field test offline |
+
+## 9. Beyond today's scope
+
+ATTOM also sells deeds and mortgages, foreclosures, permits, parcel boundaries, schools, hazards and rental values.
+Pantopus calls none of them. If a feature ever needs one: deeds and sales from recorder and transfer files; liens from
+recorder and court sources; permits from permit offices; boundaries from state and local GIS; neighborhood and hazard
+facts from Census and official layers. Each needs its own coverage, rights and accuracy check, and area-level facts
+never fill a home's fields.
+
+## 10. Not verified yet
+
+- License terms for each free source (King County and Will County forbid redistribution without permission; KGIS and
+  Stanislaus are own-use only; SanGIS has its own license; Arizona requires a commercial-purpose declaration).
+- Spokane WA's free files sit behind Washington's commercial-use attestation (opening them needs the founder's OK,
+  D8); Cobb GA's FTP file and Medina OH's file (expired certificate) are unopened; Northampton PA and Madison VA rest on
+  re-published copies.
+- North Carolina's statewide building layer mixes county data with model estimates; only the parcel-derived share
+  counts.
+- Correctness: presence was measured, accuracy was not (see [parity-and-acceptance.md](parity-and-acceptance.md)).
+- A per-state inventory of statewide files beyond those found.
