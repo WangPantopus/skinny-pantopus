@@ -41,8 +41,8 @@ import app.pantopus.android.ui.components.DestructiveButton
 import app.pantopus.android.ui.components.ErrorState
 import app.pantopus.android.ui.components.GhostButton
 import app.pantopus.android.ui.components.PrimaryButton
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.components.keepsKeyboard
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingLoadingSkeleton
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingPillar
 import app.pantopus.android.ui.screens.scheduling._shared.SchedulingStatusPill
@@ -463,7 +463,7 @@ private fun RescheduleSheet(
         onDismissRequest = onDismiss,
         sheetState = sheet,
         containerColor = PantopusColors.appSurface,
-        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+        modifier = Modifier.sheetKeyboardRules(),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4).padding(bottom = Spacing.s6),
@@ -516,7 +516,7 @@ private fun CancelSheet(
         onDismissRequest = onDismiss,
         sheetState = sheet,
         containerColor = PantopusColors.appSurface,
-        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+        modifier = Modifier.sheetKeyboardRules(),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4).padding(bottom = Spacing.s6),

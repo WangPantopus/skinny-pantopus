@@ -35,9 +35,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
 import app.pantopus.android.ui.components.firstTapClosesKeyboard
 import app.pantopus.android.ui.components.keepsKeyboard
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.theme.PantopusColors
 import app.pantopus.android.ui.theme.PantopusIcon
 import app.pantopus.android.ui.theme.PantopusIconImage
@@ -64,7 +64,7 @@ fun VariablePickerSheet(
     val groups = remember(query) { TemplateVariableCatalog.grouped(query) }
 
     ModalBottomSheet(
-        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+        modifier = Modifier.sheetKeyboardRules(),
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = PantopusColors.appBg,

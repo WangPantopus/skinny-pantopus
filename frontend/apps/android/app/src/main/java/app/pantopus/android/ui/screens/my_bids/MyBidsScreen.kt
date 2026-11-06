@@ -37,7 +37,7 @@ import app.pantopus.android.data.api.models.offers.BidDto
 import app.pantopus.android.data.api.models.offers.WithdrawBidReason
 import app.pantopus.android.ui.components.Toast
 import app.pantopus.android.ui.components.ToastAppearance
-import app.pantopus.android.ui.components.closesKeyboardOnTapOrScroll
+import app.pantopus.android.ui.components.sheetKeyboardRules
 import app.pantopus.android.ui.components.toastDurationMillis
 import app.pantopus.android.ui.screens.shared.activity_filter_sheet.ActivityFilterSheet
 import app.pantopus.android.ui.screens.shared.list_of_rows.ListOfRowsScreen
@@ -202,7 +202,7 @@ private fun EditBidSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val failure = remember(target.id) { EditBidFailure() }
     ModalBottomSheet(
-        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+        modifier = Modifier.sheetKeyboardRules(),
         onDismissRequest = onCancel,
         sheetState = sheetState,
     ) {
@@ -225,7 +225,7 @@ private fun LeaveReviewSheet(
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
-        modifier = Modifier.closesKeyboardOnTapOrScroll(),
+        modifier = Modifier.sheetKeyboardRules(),
         onDismissRequest = onCancel,
         sheetState = sheetState,
     ) {
