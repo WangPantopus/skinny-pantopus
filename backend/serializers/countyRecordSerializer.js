@@ -34,7 +34,7 @@ const MAX_DEPTH = 4;
 // ATTOM's words for "not recorded".
 const UNKNOWN = new Set(['', 'TYPE UNKNOWN', 'UNKNOWN', 'UNK', 'N/A', 'NA', 'NOT AVAILABLE']);
 // Abbreviations that stay capitalized when ATTOM's capitals are lowered.
-const ACRONYMS = new Set(['AC', 'HVAC', 'SFR', 'MFR', 'PUD', 'HOA', 'REO', 'LPG', 'PVC', 'II', 'III', 'IV']);
+const ACRONYMS = new Set(['AC', 'HVAC', 'SFR', 'MFR', 'PUD', 'HOA', 'REO', 'LPG', 'PVC', 'II', 'III', 'IV', 'ISD', 'CISD']);
 
 const SECTIONS = [
   ['building', 'Building'],
@@ -229,7 +229,7 @@ function cleanText(value) {
   return UNKNOWN.has(text.toUpperCase()) ? null : text;
 }
 
-const keepAcronyms = (text) => text.replace(/\b[A-Za-z]+\b/g, (word) => (ACRONYMS.has(word.toUpperCase()) ? word.toUpperCase() : word));
+const keepAcronyms = (text) => text.replace(/\b[A-Za-z]+\b/g, (word) => (ACRONYMS.has(word.toUpperCase()) ? word.toUpperCase() : word)).replace(/\ba\/c\b/g, 'A/C');
 
 // "COMPOSITION SHINGLE" → "Composition shingle", "CENTRAL AC" → "Central AC";
 // words ATTOM already cased stay as they are.
