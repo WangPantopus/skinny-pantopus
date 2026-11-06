@@ -592,6 +592,35 @@ function canPostToPlace({
 }
 
 /**
+ * A Home speaks for its own area: a Home post goes only to places within NEARBY_RADIUS_METERS of the Home, the distance
+ * that counts someone as a resident when they post as themselves. Where its author is and where a photo was taken don't
+ * come into it, so near the Home this works from anywhere and far from it nothing gets it through.
+ *
+ * @param {object} params
+ * @param {{ latitude: number|null, longitude: number|null }} params.home - the Home's own location
+ * @param {number} params.targetLatitude
+ * @param {number} params.targetLongitude
+ * @returns {{ eligible: boolean, readOnly: boolean, basis?: 'resident', reason?: string }}
+ */
+function canHomePostToPlace({ home, targetLatitude, targetLongitude }) {
+  if (home.latitude == null || home.longitude == null) {
+    return {
+      eligible: false,
+      readOnly: true,
+      reason: 'We don\'t have a location for this Home, so it can\'t post to a place you pick. You can post here as yourself.',
+    };
+  }
+  const distance = haversineMeters(home.latitude, home.longitude, Number(targetLatitude), Number(targetLongitude));
+  if (distance <= NEARBY_RADIUS_METERS) return { eligible: true, readOnly: false, basis: 'resident' };
+  return {
+    eligible: false,
+    readOnly: true,
+    reason: 'This place is too far from your Home. A Home can post only to places within about 10 miles of it. '
+      + 'You can post here as yourself.',
+  };
+}
+
+/**
  * Check if a remote viewer can comment on a Nearby post.
  * Remote viewers are read-only on Nearby posts.
  *
@@ -630,6 +659,7 @@ module.exports = {
   getPostingIdentities,
   canPostToAudience,
   canPostToPlace,
+  canHomePostToPlace,
   canCommentOnPost,
   mediaCaptureNear,
   haversineMeters,

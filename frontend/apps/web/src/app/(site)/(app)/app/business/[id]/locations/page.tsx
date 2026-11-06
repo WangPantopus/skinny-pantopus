@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { BusinessLocation } from '@pantopus/types';
 import { confirmStore } from '@/components/ui/confirm-store';
+import AddressField from '@/components/business/shared/AddressField';
 
 export default function BusinessLocationsPage() {
   const params = useParams();
@@ -93,7 +94,14 @@ export default function BusinessLocationsPage() {
         <h2 className="text-sm font-semibold text-app-text">Add Location</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Label" value={form.label} onChange={(v) => setForm((f) => ({ ...f, label: v }))} />
-          <Field label="Address *" value={form.address} onChange={(v) => setForm((f) => ({ ...f, address: v }))} />
+          <AddressField
+            label="Address *"
+            value={form.address}
+            onChange={(v) => setForm((f) => ({ ...f, address: v }))}
+            onPick={(n) => setForm((f) => ({ ...f, city: n.city || f.city, state: n.state || f.state, zipcode: n.zipcode || f.zipcode }))}
+            labelClassName="block text-sm font-medium text-app-text-strong mb-1"
+            inputClassName="w-full rounded-lg border border-app-border px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+          />
           <Field label="City *" value={form.city} onChange={(v) => setForm((f) => ({ ...f, city: v }))} />
           <Field label="State" value={form.state} onChange={(v) => setForm((f) => ({ ...f, state: v }))} />
           <Field label="Zipcode" value={form.zipcode} onChange={(v) => setForm((f) => ({ ...f, zipcode: v }))} />

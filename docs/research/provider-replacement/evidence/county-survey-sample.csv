@@ -1,0 +1,101 @@
+size_rank,county,state,fips,population_2024,category,evidence,what_is_there,source
+181,Madison County,Alabama,01089,423355,"Not found (lookup sites, resellers)",Official page or search,Assessor viewer only (kcsgis); no bulk found,Madison County AL
+374,Lee County,Alabama,01081,187847,"Not found (lookup sites, resellers)",Official page or search,Revenue Commissioner property search only; vendors sell files,Lee County AL
+966,Jackson County,Alabama,01071,53780,"Not found (lookup sites, resellers)",Official page or search,Revenue Commissioner parcel viewer only,Jackson County AL
+3112,Bristol Bay Borough,Alaska,02060,884,"Not found (lookup sites, resellers)",Official page or search,Borough assessor office; state copy is an archive; vendors,Bristol Bay Borough AK
+189,Pulaski County,Arkansas,05119,401209,"Not found (lookup sites, resellers)",Official page or search,No official bulk found; vendors,Pulaski County AR
+1057,Crittenden County,Arkansas,05035,46633,"Not found (lookup sites, resellers)",Official page or search,Assessor records and state map viewer only,Crittenden County AR
+153,Tulare County,California,06107,483546,"Not found (lookup sites, resellers)",Official page or search,No official bulk found (California assessors usually sell),Tulare County CA
+170,Monterey County,California,06053,436251,"Not found (lookup sites, resellers)",Checked in the data,County GIS parcels have only parcel area; no official bulk found,Monterey County CA
+319,Yolo County,California,06113,225251,Paid or permission,Official page or search,Residential characteristics sold per parcel at the assessor's office (fee),Yolo County CA assessor
+671,Mendocino County,California,06045,89175,"Not found (lookup sites, resellers)",Official page or search,County parcel GIS is ownership only; no characteristics found,Mendocino County CA
+208,Weld County,Colorado,08123,369745,"Not found (lookup sites, resellers)",Official page or search,Lookup tool only; statewide composite has no building facts,Weld County CO
+2630,Lake County,Colorado,08065,7369,"Not found (lookup sites, resellers)",Official page or search,EagleWeb lookups and parcel viewer only,Lake County CO
+270,Sussex County,Delaware,10005,271134,"Not found (lookup sites, resellers)",Official page or search,County's own assessment download not found; vendors only,Sussex County DE
+158,Osceola County,Florida,12097,468058,"Free, basics only",Checked in the data,"Florida DOR statewide roll: year built, living area, sale prices",FL DOR NAL
+183,Collier County,Florida,12021,416233,"Free, basics only",Checked in the data,Florida DOR statewide roll,FL DOR NAL
+252,Alachua County,Florida,12001,291782,"Free, basics only",Official page or search,Florida DOR statewide roll,FL DOR NAL
+410,Citrus County,Florida,12017,170174,"Free, basics only",Official page or search,Florida DOR statewide roll,FL DOR NAL
+1951,Dixie County,Florida,12029,17614,"Free, basics only",Official page or search,Florida DOR statewide roll,FL DOR NAL
+321,Hall County,Georgia,13139,221745,"Not found (lookup sites, resellers)",Official page or search,Tax portal and GIS viewer only; vendors,Hall County GA
+510,Carroll County,Georgia,13045,129911,"Not found (lookup sites, resellers)",Official page or search,qPublic lookups only; vendors,Carroll County GA
+786,Spalding County,Georgia,13255,70292,"Not found (lookup sites, resellers)",Official page or search,qPublic lookups only; vendors,Spalding County GA
+1641,Tattnall County,Georgia,13267,24275,"Not found (lookup sites, resellers)",Official page or search,qPublic lookups only; vendors,Tattnall County GA
+274,Canyon County,Idaho,16027,266892,"Not found (lookup sites, resellers)",Official page or search,Free GIS FTP has parcels and ownership; characteristics only via per-parcel search,Canyon County ID
+256,Winnebago County,Illinois,17201,283790,"Not found (lookup sites, resellers)",Official page or search,No county bulk found; vendors,Winnebago County IL
+476,Rock Island County,Illinois,17161,142731,"Not found (lookup sites, resellers)",Official page or search,Assessment search only; automated retrieval prohibited,Rock Island County IL
+1382,Fulton County,Illinois,17057,32510,"Not found (lookup sites, resellers)",Official page or search,No county bulk found; vendors,Fulton County IL
+268,St. Joseph County,Indiana,18141,273744,"Free, basics only",Official page or search,Indiana DLGF statewide improvement files by request (county site has lookups only),Indiana DLGF
+514,Clark County,Indiana,18019,127479,"Free, basics only",Official page or search,Indiana DLGF statewide improvement files by request,Indiana DLGF
+1218,Montgomery County,Indiana,18107,38633,"Free, basics only",Official page or search,Indiana DLGF statewide improvement files by request,Indiana DLGF
+438,Johnson County,Iowa,19103,160080,Partial (one city or sold homes only),Checked in the data,"County sales-analysis layer: bedrooms, baths, year built, area for sold homes only",Johnson County IA assessor (Sales Analysis)
+1966,Madison County,Iowa,19121,17161,"Not found (lookup sites, resellers)",Official page or search,Assessor property search only; vendors,Madison County IA
+1347,Harvey County,Kansas,20079,33642,"Not found (lookup sites, resellers)",Official page or search,Appraiser parcel search only; vendors,Harvey County KS
+568,Hardin County,Kentucky,21093,112826,"Not found (lookup sites, resellers)",Official page or search,PVA search on qPublic only,Hardin County KY
+1488,Logan County,Kentucky,21141,28467,"Not found (lookup sites, resellers)",Official page or search,PVA search only,Logan County KY
+165,East Baton Rouge Parish,Louisiana,22033,453022,"Not found (lookup sites, resellers)",Checked in the data,"Free tax roll has values, units, structure use and transfer date but no year built or size (no sale prices in Louisiana)",data.brla.gov EBRP Tax Roll
+347,Calcasieu Parish,Louisiana,22019,206861,"Not found (lookup sites, resellers)",Official page or search,Assessor search only; vendors,Calcasieu Parish LA
+1094,Washington Parish,Louisiana,22117,45090,"Not found (lookup sites, resellers)",Official page or search,Assessor search; GIS by subscription,Washington Parish LA
+552,Androscoggin County,Maine,23001,115272,"Free, basics only",Checked in the data,"Maine statewide organized-towns parcels: residential area, last sale price (fill not checked)",Maine GeoLibrary parcels
+400,Charles County,Maryland,24017,174478,"Free, basics only",Checked in the data,Maryland SDAT statewide + county parcels (year built),MD iMAP
+308,Barnstable County,Massachusetts,25001,232570,"Free, basics only",Checked in the data,MassGIS statewide,MassGIS
+253,Ingham County,Michigan,26065,290427,Paid or permission,Official page or search,County equalization sells data under an enhanced-access fee policy,Ingham County MI
+492,Calhoun County,Michigan,26025,133785,"Not found (lookup sites, resellers)",Official page or search,No county bulk found; vendors,Calhoun County MI
+1158,Mecosta County,Michigan,26107,41947,"Not found (lookup sites, resellers)",Official page or search,County equalization; no bulk found; vendors,Mecosta County MI
+204,Anoka County,Minnesota,27003,376840,"Free, basics only",Checked in the data,Minnesota compiled parcels: year built and finished sq ft on 85% of Anoka parcels,MnGeo plan_parcels_open
+800,Crow Wing County,Minnesota,27035,68642,"Not found (lookup sites, resellers)",Checked in the data,In the Minnesota compiled layer but no building facts; county layer has impervious area only,MnGeo + Crow Wing GIS
+331,Harrison County,Mississippi,28047,213730,"Not found (lookup sites, resellers)",Official page or search,County search; state copy of the land roll dates from 2016,Harrison County MS
+1169,Washington County,Mississippi,28151,41181,"Not found (lookup sites, resellers)",Official page or search,Assessor search (Delta Computer Systems) only,Washington County MS
+238,Greene County,Missouri,29077,307942,"Not found (lookup sites, resellers)",Official page or search,Assessor search portal only,Greene County MO
+588,Franklin County,Missouri,29071,107256,"Not found (lookup sites, resellers)",Official page or search,Assessor search and GIS map only; vendors,Franklin County MO
+1702,Morgan County,Missouri,29141,22399,"Not found (lookup sites, resellers)",Official page or search,Assessor office; no download found; vendors,Morgan County MO
+2318,Carbon County,Montana,30009,11498,"Free, basics only",Checked in the data,Montana statewide: earliest year built per parcel (year only),Montana DOC
+912,Carson City,Nevada,32510,58148,"Not found (lookup sites, resellers)",Official page or search,Per-parcel inquiry only; Nevada's statewide parcel layer is restricted,Carson City NV
+1411,Coos County,New Hampshire,33007,31094,"Not found (lookup sites, resellers)",Official page or search,Municipal assessors; vendors only,Coos County NH towns
+263,Atlantic County,New Jersey,34001,279114,"Free, basics only",Checked in the data,"NJ MOD-IV: year built, sale price (no size)",NJOGIS
+751,Lea County,New Mexico,35025,75151,"Not found (lookup sites, resellers)",Official page or search,Assessor map viewer and GIS hub parcels; no building facts found (no sale prices in New Mexico),Lea County NM
+216,Rockland County,New York,36087,348144,"Free, with bedrooms/baths",Checked in the data,"NY State public parcels: year built 91%, bedrooms 68%",NYS Tax Parcels Public
+362,Broome County,New York,36007,196397,"Free, with bedrooms/baths",Checked in the data,"NY State public parcels: year built 75%, bedrooms 69%",NYS Tax Parcels Public
+742,Clinton County,New York,36019,77871,"Not found (lookup sites, resellers)",Official page or search,Not in NY State public layer; Image Mate lookups only,Clinton County NY
+193,Forsyth County,North Carolina,37067,398143,"Free, basics only",Checked in the data,"North Carolina Emergency Management statewide building layer: parcel-derived year built on 140,740 of 202,178 buildings (70%), heated sq ft 55%; the county itself has lookups only",NC Emergency Management NC Risk Building Footprints
+297,Cabarrus County,North Carolina,37025,244925,"Not found (lookup sites, resellers)",Checked in the data,County open-data tax parcels carry values and sale prices but no building facts (2005 and 2010 archive layers had year built); North Carolina's statewide building layer is mostly modeled here (15% of buildings have a parcel-derived year built),Cabarrus County open data + NC Emergency Management buildings
+419,Brunswick County,North Carolina,37019,167112,"Free, basics only",Checked in the data,County tax parcels: actual year built,Brunswick County NC GIS
+636,Lincoln County,North Carolina,37109,97611,"Free, with bedrooms/baths",Checked in the data,"County GIS publishes free CSVs: improvements (year built on 93% of records, finished area, bedrooms, full/half baths, fireplaces, basement) and sales","Lincoln County NC GIS downloads (improvements.zip, sales.zip)"
+1087,Davie County,North Carolina,37059,45383,"Not found (lookup sites, resellers)",Checked in the data,County parcels carry values and sale dates only; North Carolina's statewide building layer has no parcel-derived values here (modeled only),Davie County GIS + NC Emergency Management buildings
+2103,McKenzie County,North Dakota,38053,14782,"Not found (lookup sites, resellers)",Official page or search,County GIS parcels; no building facts found,McKenzie County ND
+231,Lorain County,Ohio,39093,322030,"Not found (lookup sites, resellers)",Official page or search,Per-parcel auditor search shows year built and bedrooms; no bulk found,Lorain County OH
+377,Medina County,Ohio,39103,184625,"Free, basics only",Official page or search,"Auditor's free download page lists a CAMA file of dwellings, buildings, additions and features (pipe-delimited) plus parcel and transfer files; fields not opened because the auditor's site certificate has expired",Medina County Auditor Available Downloads
+659,Tuscarawas County,Ohio,39157,92048,"Not found (lookup sites, resellers)",Official page or search,Parcel shapefile from tax map office; no characteristics found,Tuscarawas County OH
+1152,Fulton County,Ohio,39051,42028,"Not found (lookup sites, resellers)",Official page or search,Auditor real estate search only; vendors,Fulton County OH
+664,Wagoner County,Oklahoma,40145,91257,"Not found (lookup sites, resellers)",Official page or search,Assessor search (Spatialest) only,Wagoner County OK
+2388,Johnston County,Oklahoma,40069,10293,"Not found (lookup sites, resellers)",Official page or search,Assessor portal only,Johnston County OK
+337,Deschutes County,Oregon,41017,211535,"Free, with bedrooms/baths",Checked in the data,"County taxlots: year built, bedrooms, bathrooms, garage sq ft",Deschutes County GIS
+156,York County,Pennsylvania,42133,471240,"Not found (lookup sites, resellers)",Official page or search,Assessment lookup site; GIS hub parcels without assessment fields found,York County PA
+229,Northampton County,Pennsylvania,42095,322989,"Free, with bedrooms/baths",Seen in a re-published copy,"County offers lookups only (Vision); a City of Bethlehem layer re-publishes county CAMA fields for all 122,379 county parcels: year built, living area, bedrooms, full/half baths, rooms, sale price",Northampton County via City of Bethlehem
+358,Butler County,Pennsylvania,42019,199341,"Not found (lookup sites, resellers)",Official page or search,GIS maps and parcel search only; vendors,Butler County PA
+586,Adams County,Pennsylvania,42001,107914,"Not found (lookup sites, resellers)",Official page or search,GIS map and lookups only; vendors,Adams County PA
+403,Kent County,Rhode Island,44003,172450,"Not found (lookup sites, resellers)",Official page or search,Municipal assessor lookups (Vision) only,Kent County RI towns
+184,Horry County,South Carolina,45051,413391,"Not found (lookup sites, resellers)",Official page or search,No county bulk found; vendors,Horry County SC
+352,Beaufort County,South Carolina,45013,201775,"Not found (lookup sites, resellers)",Official page or search,GIS parcel search only; vendors,Beaufort County SC
+1447,Williamsburg County,South Carolina,45089,29865,"Not found (lookup sites, resellers)",Official page or search,Assessor site and parcel map only; vendors,Williamsburg County SC
+203,Rutherford County,Tennessee,47149,376996,"Not found (lookup sites, resellers)",Official page or search,Assessor GIS service has owners only (no CAMA); lookups,Rutherford County TN
+561,Bradley County,Tennessee,47011,113782,"Free, with bedrooms/baths",Checked in the data,"County parcel layer: year built, building sq ft, bedrooms, baths, sale price",Bradley County TN GIS
+1106,Fayette County,Tennessee,47047,44476,"Not found (lookup sites, resellers)",Official page or search,Assessor site and state property viewer lookups only,Fayette County TN
+172,Cameron County,Texas,48061,431874,"Free, basics only",Official page or search,Texas statewide parcels carry year built; appraisal-district export not checked (no sale prices in Texas),TxGIO StratMap
+228,Lubbock County,Texas,48303,327394,"Free, basics only",Official page or search,Texas statewide year built; CAD export not checked,TxGIO StratMap
+295,Smith County,Texas,48423,249091,"Free, basics only",Official page or search,Texas statewide year built; CAD export not checked,TxGIO StratMap
+411,Ector County,Texas,48135,170022,"Free, basics only",Official page or search,Texas statewide year built; CAD export not checked,TxGIO StratMap
+662,Victoria County,Texas,48469,91949,"Free, basics only",Official page or search,Texas statewide year built; CAD export not checked,TxGIO StratMap
+974,Atascosa County,Texas,48013,52783,"Free, basics only",Official page or search,Texas statewide year built; CAD export not checked,TxGIO StratMap
+1831,Calhoun County,Texas,48057,19942,"Free, basics only",Official page or search,Texas statewide year built; CAD export not checked,TxGIO StratMap
+344,Washington County,Utah,49053,207943,"Free, basics only",Checked in the data,"Utah state LIR parcels: year built, building sq ft (no sale prices in Utah)",UGRC LIR
+163,Virginia Beach city,Virginia,51810,454808,"Not found (lookup sites, resellers)",Official page or search,Property search tool has bedrooms/baths/year built per parcel; no bulk download confirmed,Virginia Beach VA
+288,Chesapeake city,Virginia,51550,254997,"Not found (lookup sites, resellers)",Official page or search,No assessor download found,Chesapeake VA
+551,Hanover County,Virginia,51085,115309,"Not found (lookup sites, resellers)",Official page or search,Real estate lookups; county GIS download not confirmed,Hanover County VA
+1098,Charlottesville city,Virginia,51540,44767,"Free, with bedrooms/baths",Checked in the data,"City open data: residential details with year built, square footage, bedrooms, full baths",Charlottesville Real Estate (Residential Details)
+2143,Madison County,Virginia,51113,14252,"Free, with bedrooms/baths",Seen in a re-published copy,"County source not found (vendors sell the county file); the Rappahannock-Rapidan Regional Commission layer re-publishes county assessment data: year built, gross area, bedrooms, full baths, sale price",Rappahannock-Rapidan Regional Commission copy
+496,Skagit County,Washington,53057,132736,"Free, with bedrooms/baths",Checked in the data,"County's own assessor tax parcel service: bedrooms on 38,548 of 83,004 parcels, year built on 49,062, living area, plumbing, sale price",geo.skagitcountywa.gov Tax Parcels
+582,Monongalia County,West Virginia,54061,108697,"Free, basics only",Checked in the data,"West Virginia's statewide parcel summary (WV GIS Technical Center, county assessor data, tax year 2026): year built on 41,424 of 65,497 Monongalia parcels (63%), stories, style, grade",services.wvgis.wvu.edu WV_Parcels ParcelSummary
+182,Waukesha County,Wisconsin,55133,417029,"Not found (lookup sites, resellers)",Checked in the data,"County parcel map service and downloads carry values and owners only, no building facts; Wisconsin statewide parcels carry values only",Waukesha County Web Tax Parcel
+531,La Crosse County,Wisconsin,55063,121060,"Not found (lookup sites, resellers)",Official page or search,Older county export and statewide parcels carry assessment values only,La Crosse County WI + Wisconsin statewide parcels
+1109,Douglas County,Wisconsin,55031,44276,"Not found (lookup sites, resellers)",Official page or search,Wisconsin statewide parcels carry values only; city GIS for Superior,Douglas County WI

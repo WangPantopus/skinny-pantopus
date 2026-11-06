@@ -1,0 +1,83 @@
+Source ID,Property type,Accounts,Measure,Observed
+FL,House,6111807,effective area,6106983
+FL,Condo,1616522,effective area,1611419
+FL,Apartment,18136,effective area,18078
+FL,Office,59771,effective area,59618
+MA,House,1414937,reported building area,1292370
+MA,Townhouse,700,reported building area,694
+MA,Condo,293085,reported building area,270966
+MA,Apartment,5587,reported building area,5403
+MA,Office,12656,reported building area,12083
+BOS,House,27517,Confirmed owner-occupied Y,23186
+BOS,House,27517,Parking positive,24005
+BOS,House,27517,Beds baths living together,27508
+BOS,House,27517,All six hero tiles,27491
+BOS,Townhouse,2919,Confirmed owner-occupied Y,2056
+BOS,Townhouse,2919,Parking positive,956
+BOS,Townhouse,2919,Beds baths living together,2919
+BOS,Townhouse,2919,All six hero tiles,2917
+BOS,Condo,74229,Confirmed owner-occupied Y,37323
+BOS,Condo,74229,Parking positive,31212
+BOS,Condo,74229,Beds baths living together,70968
+BOS,Condo,74229,Parking count on the unit account; assignment unverified,74220
+BOS,Apartment,1472,Confirmed owner-occupied Y,31
+BOS,Apartment,1472,Parking positive,6
+BOS,Office,873,Confirmed owner-occupied Y,0
+BOS,Office,873,Parking positive,2
+IL,House,852245,Exterior-measured building area,852238
+IL,House,852245,Externally counted chimney flues,0
+IL,Townhouse,72621,Exterior-measured building area,72620
+IL,Townhouse,72621,Externally counted chimney flues,0
+IL,Condo,372656,Beds baths living together,53073
+NY,House,312722,Reported garage floor allocation,12
+NY,House,312722,Tax lot number,312722
+NY,Apartment,61726,Reported garage floor allocation,1949
+NY,Apartment,61726,Tax lot number,61726
+NY,Office,7166,Reported garage floor allocation,486
+NY,Office,7166,Tax lot number,7166
+PA,House,27135,Exterior condition,27130
+PA,House,27135,Garage spaces,17694
+PA,House,27135,"Source-reported bathroom count, half-bath handling unresolved",11925
+PA,Townhouse,328745,Exterior condition,328724
+PA,Townhouse,328745,Garage spaces,98929
+PA,Townhouse,328745,"Source-reported bathroom count, half-bath handling unresolved",307571
+PA,Condo,31515,Exterior condition,31511
+PA,Condo,31515,Garage spaces,7261
+PA,Condo,31515,"Source-reported bathroom count, half-bath handling unresolved",30851
+PA,Apartment,2679,Exterior condition,2678
+PA,Apartment,2679,Garage spaces,0
+PA,Office,666,Exterior condition,648
+PA,Office,666,Garage spaces,0
+WA,House,470599,Garage component area,333368
+WA,House,470599,Total baths incl three-quarter,470599
+WA,House,470599,Beds baths living together,470354
+WA,House,470599,All six hero tiles,470353
+WA,Townhouse,33466,Garage component area,20563
+WA,Townhouse,33466,Total baths incl three-quarter,33466
+WA,Townhouse,33466,Beds baths living together,33443
+WA,Townhouse,33466,All six hero tiles,33443
+WA,Apartment,6995,Unit count,6995
+WA,Apartment,6995,Average unit area,6995
+TX,House,539442,CDU combined condition/desirability/utility,539025
+TX,House,539442,Beds baths living together,529843
+TX,House,539442,All six hero tiles,336866
+TX,Townhouse,21317,CDU combined condition/desirability/utility,21294
+TX,Townhouse,21317,Beds baths living together,20609
+TX,Townhouse,21317,All six hero tiles,12051
+TX,Condo,40930,CDU combined condition/desirability/utility,40884
+TX,Condo,40930,Beds baths living together,37705
+TX,Apartment,2599,Unit count,2599
+TX,Office,3608,Unit count,179
+CA,House,1489004,reported main area,1479339
+CA,House,1489004,improvement lines,1480148
+CA,House,1489004,"Source-reported bathroom count, half-bath handling unresolved",1468894
+CA,Townhouse,272,reported main area,271
+CA,Townhouse,272,improvement lines,271
+CA,Townhouse,272,"Source-reported bathroom count, half-bath handling unresolved",271
+CA,Condo,256917,reported main area,256456
+CA,Condo,256917,improvement lines,256464
+CA,Condo,256917,"Source-reported bathroom count, half-bath handling unresolved",255883
+CA,Apartment,67697,reported main area,67683
+CA,Apartment,67697,improvement lines,67697
+CA,Office,13956,reported main area,13616
+CA,Office,13956,improvement lines,13654

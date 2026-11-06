@@ -1,0 +1,40 @@
+Source ID,Place,Class,Distinct assessment records,Fields observed anywhere in cohort,Mean recovered fields,Beds + total baths + living area on same record,All six hero tiles on same record,Roll
+FL,Florida statewide,House,6111807,16,15.2762,,,2026 NAL; 64 final + 3 preliminary
+FL,Florida statewide,Condo,1616522,13,12.4294,,,2026 NAL; 64 final + 3 preliminary
+FL,Florida statewide,Apartment,18136,16,15.4400,,,2026 NAL; 64 final + 3 preliminary
+FL,Florida statewide,Office,59771,17,16.0280,,,2026 NAL; 64 final + 3 preliminary
+MA,"MassGIS, outside Boston",House,1414937,16,14.6221,,,"Latest file per town, FY2018–27"
+MA,"MassGIS, outside Boston",Townhouse,700,14,13.9257,,,"Latest file per town, FY2018–27"
+MA,"MassGIS, outside Boston",Condo,293085,12,10.8737,,,"Latest file per town, FY2018–27"
+MA,"MassGIS, outside Boston",Apartment,5587,13,12.6606,,,"Latest file per town, FY2018–27"
+MA,"MassGIS, outside Boston",Office,12656,14,12.2312,,,"Latest file per town, FY2018–27"
+BOS,Boston,House,27517,29,28.7250,27508,27491,FY2026
+BOS,Boston,Townhouse,2919,28,27.6906,2919,2917,FY2026
+BOS,Boston,Condo,74229,21,20.3625,70968,,FY2026
+BOS,Boston,Apartment,1472,21,16.8743,,,FY2026
+BOS,Boston,Office,873,21,16.2257,,,FY2026
+IL,Cook County,House,852245,26,25.3955,,,Tax year 2026
+IL,Cook County,Townhouse,72621,26,25.5776,,,Tax year 2026
+IL,Cook County,Condo,372656,16,12.5173,53073,,Tax year 2026
+NY,New York City,House,312722,16,15.9385,,,PLUTO 26v2
+NY,New York City,Apartment,61726,16,15.9797,,,PLUTO 26v2
+NY,New York City,Office,7166,16,15.9703,,,PLUTO 26v2
+PA,Philadelphia,House,27135,21,17.6545,,,"Current OPA snapshot, Nov 5, 2026"
+PA,Philadelphia,Townhouse,328745,21,17.8790,,,"Current OPA snapshot, Nov 5, 2026"
+PA,Philadelphia,Condo,31515,18,14.8267,,,"Current OPA snapshot, Nov 5, 2026"
+PA,Philadelphia,Apartment,2679,14,13.5741,,,"Current OPA snapshot, Nov 5, 2026"
+PA,Philadelphia,Office,666,14,13.5045,,,"Current OPA snapshot, Nov 5, 2026"
+WA,King County,House,470599,27,25.7445,470354,470353,"Assessor extracts, Oct 30, 2026"
+WA,King County,Townhouse,33466,27,25.5987,33443,33443,"Assessor extracts, Oct 30, 2026"
+WA,King County,Apartment,6995,19,18.6606,,,"Assessor extracts, Oct 30, 2026"
+WA,King County,Office,3337,21,19.6734,,,"Assessor extracts, Oct 30, 2026"
+TX,Dallas County,House,539442,29,27.7286,529843,336866,"2026 certified file, current supplement"
+TX,Dallas County,Townhouse,21317,29,27.5024,20609,12051,"2026 certified file, current supplement"
+TX,Dallas County,Condo,40930,21,20.8177,37705,,"2026 certified file, current supplement"
+TX,Dallas County,Apartment,2599,20,19.7707,,,"2026 certified file, current supplement"
+TX,Dallas County,Office,3608,21,19.9964,,,"2026 certified file, current supplement"
+CA,Los Angeles County,House,1489004,15,14.8172,,,2025 assessment roll
+CA,Los Angeles County,Townhouse,272,15,14.9081,,,2025 assessment roll
+CA,Los Angeles County,Condo,256917,15,14.8911,,,2025 assessment roll
+CA,Los Angeles County,Apartment,67697,14,13.4732,,,2025 assessment roll
+CA,Los Angeles County,Office,13956,15,14.1003,,,2025 assessment roll
