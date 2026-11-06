@@ -546,6 +546,16 @@ function buildProfileFromAttomResponses(home, { detailData, avmData, trendData }
 }
 
 /**
+ * What anyone but the confirmed owner reads of a profile: the Home's facts. The value is the owner's, as on Place.
+ * A list of what may go out, so a new value field never reaches them by default.
+ */
+function factsOnly(profile) {
+  const facts = ['home_id', 'address_summary', 'county_record', 'household_fields', 'year_built', 'sqft', 'bedrooms',
+    'bathrooms', 'lot_sqft', 'property_type', 'house', 'cached_at', 'source', 'provenance'];
+  return Object.fromEntries(facts.filter((field) => field in profile).map((field) => [field, profile[field]]));
+}
+
+/**
  * Build a fallback PropertyProfile from Home table data alone.
  * Used when ATTOM API data is unavailable.
  */
@@ -1189,6 +1199,7 @@ async function getAddressAttomPropertyDetail(addressId) {
 
 module.exports = {
   getProfile,
+  factsOnly,
   getHomeAttomPropertyDetail,
   getCachedAttomValue,
   CACHE_TTL_DAYS,

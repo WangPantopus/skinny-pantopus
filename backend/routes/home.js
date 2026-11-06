@@ -5580,9 +5580,22 @@ router.get('/:id/timeline', verifyToken, async (req, res) => {
   }
 });
 
+const NO_PROPERTY_VALUE = Object.freeze({
+  estimated_value: null,
+  value_range_low: null,
+  value_range_high: null,
+  value_confidence: null,
+  zip_median_sale_price_trend: null,
+  year_built: null,
+  sqft: null,
+  last_updated: null,
+  source: 'unavailable',
+});
+
 /**
  * GET /api/homes/:id/property-value
- * Returns property valuation data from ATTOM/cache.
+ * The Home's value is its confirmed owner's, as on Place. Anyone else who can open the Home gets an answer with no
+ * value (not a refusal: apps in the stores re-read the Home's access on a 403).
  */
 router.get('/:id/property-value', verifyToken, async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
@@ -5590,24 +5603,13 @@ router.get('/:id/property-value', verifyToken, async (req, res) => {
     const { id: homeId } = req.params;
     const userId = req.user.id;
 
-    const result = await intelligenceAuthority.withCurrentAccess({ homeId, actorId: userId }, async () => {
+    const result = await intelligenceAuthority.withCurrentAccess({ homeId, actorId: userId }, async (access) => {
+      if (!access.isOwner) return NO_PROPERTY_VALUE;
       const { profile, source } = await getPropertyProfile(homeId);
 
       if (source === 'error') throw Object.assign(new Error('Current property information could not be loaded.'),
         { statusCode: 503, code: 'HOME_PROPERTY_UNAVAILABLE' });
-      if (!profile) {
-        return {
-          estimated_value: null,
-          value_range_low: null,
-          value_range_high: null,
-          value_confidence: null,
-          zip_median_sale_price_trend: null,
-          year_built: null,
-          sqft: null,
-          last_updated: null,
-          source: 'unavailable',
-        };
-      }
+      if (!profile) return NO_PROPERTY_VALUE;
 
       return recordVocabulary.propertyValue({
         estimated_value: profile.estimated_value || null,
