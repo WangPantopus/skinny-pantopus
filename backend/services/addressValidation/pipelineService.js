@@ -13,6 +13,13 @@ const { compareParcelIntelligence } = require('./parcelShadowComparison');
 const decisionEngine = require('./addressDecisionEngine');
 const canonicalAddressService = require('./canonicalAddressService');
 const addressVerificationObservability = require('./addressVerificationObservability');
+const {
+  usesGooglePostal,
+  postalShadowEnabled,
+  postalFromGoogle,
+  keepTypedUnit,
+  postalCategories,
+} = require('./postalAdapter');
 
 const COMMERCIAL_LINE1_KEYWORDS = /\b(tower|towers|plaza|center|centre|building|bldg|complex|mall|atrium|pavilion|professional\s+(?:building|center|centre|park)|office|offices|warehouse|showroom|clinic|medical|hospital|bank|store|shop|salon)\b/i;
 const COMMERCIAL_LINE2_KEYWORDS = /\b(suite|ste|floor|fl|office|rm|room)\b/i;
@@ -41,6 +48,15 @@ const STREET_SUFFIXES = new Set([
   'trail', 'trl',
   'highway', 'hwy',
   'loop',
+]);
+// From Google's own answer, the map place types that say what a place is. "premise" and
+// "street_address" only say how exact the match was, so they are no evidence of a home.
+const GOOGLE_NON_HOME_PLACE_TYPES = new Set([
+  'store', 'restaurant', 'shopping_mall', 'supermarket', 'bank', 'gas_station', 'car_dealer', 'car_repair',
+  'gym', 'hair_care', 'laundry', 'lawyer', 'dentist', 'doctor', 'hospital', 'pharmacy', 'post_office',
+  'insurance_agency', 'real_estate_agency', 'travel_agency', 'accounting', 'establishment', 'food', 'finance',
+  'health', 'point_of_interest', 'lodging', 'school', 'university', 'stadium', 'government_office',
+  'event_venue', 'library', 'museum', 'airport', 'church',
 ]);
 const INSTITUTIONAL_PATTERNS = [
   { type: 'school', regex: /\b(?:elementary|middle|high|charter|prep(?:aratory)?|academy)\s+school\b/i },
@@ -100,6 +116,10 @@ function inferInstitutionalPlaceTypes(text) {
 }
 
 function derivePlaceClassification(input, google, smarty) {
+  const googlePostal = smarty?.source === 'google';
+  const googleNonHomeTypes = googlePostal
+    ? (google?.place_types || []).filter((type) => GOOGLE_NON_HOME_PLACE_TYPES.has(type))
+    : [];
   const line1 = (google?.normalized?.line1 || input?.line1 || '').trim();
   const line2 = (google?.normalized?.line2 || input?.line2 || '').trim();
   const strippedLine1 = stripLeadingStreetNumber(line1);
@@ -115,9 +135,11 @@ function derivePlaceClassification(input, google, smarty) {
   const hasInstitutionalHint = institutionalTypes.length > 0;
 
   const hasCommercialHint = (!line1LooksLikeStreetName && COMMERCIAL_LINE1_KEYWORDS.test(strippedLine1))
-    || COMMERCIAL_LINE2_KEYWORDS.test(line2);
+    || COMMERCIAL_LINE2_KEYWORDS.test(line2)
+    || (googlePostal && smarty.home_and_business);
   const hasResidentialHint = (!line1LooksLikeStreetName && RESIDENTIAL_LINE1_KEYWORDS.test(strippedLine1))
-    || RESIDENTIAL_LINE2_KEYWORDS.test(line2);
+    || RESIDENTIAL_LINE2_KEYWORDS.test(line2)
+    || (googlePostal && smarty.home_and_business);
 
   const googlePlaceTypes = [];
   if (hasResidentialHint || smarty?.rdi_type === 'residential') googlePlaceTypes.push('premise');
@@ -128,6 +150,7 @@ function derivePlaceClassification(input, google, smarty) {
   if (hasInstitutionalHint) {
     googlePlaceTypes.push(...institutionalTypes, 'establishment');
   }
+  googlePlaceTypes.push(...googleNonHomeTypes);
 
   let parcelType = 'unknown';
   if (smarty?.commercial_mailbox) {
@@ -145,7 +168,11 @@ function derivePlaceClassification(input, google, smarty) {
     buildingType = 'mixed_use';
   } else if (parcelType === 'commercial') {
     buildingType = 'commercial';
-  } else if (smarty?.missing_secondary || smarty?.dpv_match_code === 'S') {
+  } else if (
+    smarty?.missing_secondary
+    || smarty?.record_type === 'H'
+    || (!googlePostal && smarty?.dpv_match_code === 'S')
+  ) {
     buildingType = 'multi_unit';
   } else if (parcelType === 'residential') {
     buildingType = line2 ? 'multi_unit' : 'single_family';
@@ -187,7 +214,26 @@ function buildStoredDecisionInputs(address) {
       ? []
       : topLevelPlaceTypes;
 
-  const smarty = address ? {
+  const googlePostal = usesGooglePostal();
+  const smarty = address ? (googlePostal ? {
+    source: 'google',
+    inconclusive: false,
+    dpv_match_code: raw.dpv_match_code || address.dpv_match_code || '',
+    rdi_type: raw.rdi_type || (address.rdi_type === 'business' ? 'commercial' : address.rdi_type) || 'unknown',
+    home_and_business: raw.home_and_business === true,
+    missing_secondary: raw.missing_secondary ?? address.missing_secondary_flag ?? false,
+    unconfirmed_secondary: raw.unconfirmed_secondary === true,
+    commercial_mailbox: raw.commercial_mailbox ?? address.commercial_mailbox_flag ?? null,
+    vacant_flag: raw.vacant_flag ?? null,
+    no_stat: raw.no_stat ?? null,
+    footnotes: raw.footnotes || [],
+    record_type: raw.record_type || null,
+    carrier_route_type: raw.carrier_route_type || null,
+    po_box_flag: raw.po_box_flag ?? null,
+    po_box_only_zip: raw.po_box_only_zip === true,
+    coming_soon: raw.coming_soon === true,
+    usps_suspended: raw.usps_suspended === true,
+  } : {
     inconclusive: false,
     dpv_match_code: raw.dpv_match_code || address.dpv_match_code || '',
     rdi_type: raw.rdi_type || address.rdi_type || 'unknown',
@@ -195,7 +241,7 @@ function buildStoredDecisionInputs(address) {
     commercial_mailbox: raw.commercial_mailbox ?? address.commercial_mailbox_flag ?? false,
     vacant_flag: raw.vacant_flag || false,
     footnotes: raw.footnotes || [],
-  } : null;
+  }) : null;
 
   const google = geocodeGranularity ? {
     normalized: {
@@ -208,7 +254,10 @@ function buildStoredDecisionInputs(address) {
       lng: address.geocode_lng,
     },
     granularity: geocodeGranularity,
-    missing_component_types: address.missing_secondary_flag ? ['subpremise'] : [],
+    missing_component_types: googlePostal && Array.isArray(raw.missing_component_types)
+      ? raw.missing_component_types
+      : (address.missing_secondary_flag ? ['subpremise'] : []),
+    ...(googlePostal && raw.street_number ? { components: { street_number: raw.street_number } } : {}),
     verdict: address.google_verdict || {},
   } : null;
 
@@ -357,6 +406,37 @@ async function lookupExistingHouseholdByHash(addressHash) {
   };
 }
 
+/**
+ * Shadow mode: what Google's answer alone would decide, counted by category. Nothing people see
+ * changes, and nothing from Smarty goes in the count.
+ */
+async function recordPostalShadow(input, googleResult, addressId, trigger) {
+  try {
+    const google = keepTypedUnit(googleResult, input);
+    const postal = postalFromGoogle(google);
+    const verdict = decisionEngine.classify({
+      google,
+      smarty: postal,
+      place: derivePlaceClassification(input, google, postal),
+      postal_source: 'google',
+    });
+    await addressVerificationObservability.recordPostalShadow({
+      addressId,
+      categories: postalCategories(postal, verdict),
+      trigger,
+    });
+  } catch (error) {
+    logger.warn('pipelineService.recordPostalShadow failed', { error: error.message });
+  }
+}
+
+/** Shadow mode where the live check can't run: Google's answer is counted, the answer to the person doesn't change. */
+async function runPostalShadowOnly(input, trigger) {
+  if (!postalShadowEnabled() || !googleProvider.isAvailable()) return;
+  const googleResult = await googleProvider.validate(input);
+  if (googleResult) await recordPostalShadow(input, googleResult, null, trigger);
+}
+
 async function runValidationPipeline(input, options = {}) {
   const {
     includeHousehold = true,
@@ -390,11 +470,13 @@ async function runValidationPipeline(input, options = {}) {
     });
   }
 
+  const googlePostal = usesGooglePostal();
   let googleResult = null;
   if (googleProvider.isAvailable()) {
     const googleStartedAt = Date.now();
     try {
       googleResult = await googleProvider.validate(input);
+      if (googlePostal) googleResult = keepTypedUnit(googleResult, input);
       pushProviderCall({
         provider: 'google_address_validation',
         status: googleResult?.normalized ? 'ok' : 'empty_or_failed',
@@ -431,7 +513,27 @@ async function runValidationPipeline(input, options = {}) {
   }
 
   let smartyResult = null;
-  if (smartyProvider.isAvailable() && googleResult?.normalized) {
+  if (googlePostal) {
+    if (googleResult?.normalized) {
+      smartyResult = postalFromGoogle(googleResult);
+      pushProviderCall({
+        provider: 'google_usps',
+        status: smartyResult.dpv_match_code ? 'ok' : 'no_answer',
+        latency_ms: 0,
+        from_cache: false,
+        details: {
+          dpv_match_code: smartyResult.dpv_match_code,
+          rdi_type: smartyResult.rdi_type,
+          missing_secondary: smartyResult.missing_secondary,
+          unconfirmed_secondary: smartyResult.unconfirmed_secondary,
+          usps_suspended: smartyResult.usps_suspended,
+        },
+      });
+      if (smartyResult.usps_suspended) {
+        logger.error('Google reports USPS checks are suspended for this account');
+      }
+    }
+  } else if (smartyProvider.isAvailable() && googleResult?.normalized) {
     const smartyStartedAt = Date.now();
     try {
       smartyResult = await smartyProvider.verify(googleResult.normalized);
@@ -713,10 +815,12 @@ async function runValidationPipeline(input, options = {}) {
     use_provider_parcel_for_classification: getRolloutFlag('enforceParcelProviderClassification'),
     provider_parcel_max_age_days: addressConfig.parcelIntel.cacheDays,
     household,
+    ...(googlePostal ? { postal_source: 'google' } : {}),
   });
 
   let canonicalAddress = null;
-  if (googleResult?.normalized) {
+  // A PO box has no street line to key a home address row on.
+  if (googleResult?.normalized && (!googlePostal || googleResult.normalized.line1)) {
     const { data } = await canonicalAddressService.findOrCreate(
       googleResult.normalized,
       {
@@ -738,6 +842,10 @@ async function runValidationPipeline(input, options = {}) {
     trigger,
   });
 
+  if (!googlePostal && postalShadowEnabled() && googleResult) {
+    await recordPostalShadow(input, googleResult, canonicalAddress?.id || null, trigger);
+  }
+
   return {
     verdict,
     address_id: canonicalAddress?.id || null,
@@ -754,5 +862,6 @@ module.exports = {
   derivePlaceClassification,
   buildStoredDecisionInputs,
   lookupExistingHouseholdByHash,
+  runPostalShadowOnly,
   runValidationPipeline,
 };

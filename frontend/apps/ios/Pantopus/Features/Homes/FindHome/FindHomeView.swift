@@ -95,7 +95,7 @@ public struct FindHomeView: View {
     private var searchHeader: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
             HStack(spacing: Spacing.s2) {
-                Icon(.search, size: 18, color: Theme.Color.appTextSecondary)
+                Icon(.search, size: 18, color: Theme.Color.appTextSecondary).allowsHitTesting(false)
                 TextField(
                     "Search address (street + city + zip)",
                     text: Binding(
@@ -116,22 +116,21 @@ public struct FindHomeView: View {
                     Button { viewModel.clearQuery() } label: {
                         Icon(.x, size: 16, color: Theme.Color.appTextSecondary)
                             .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Clear search")
                     .accessibilityIdentifier("findHomeSearchClear")
                 }
             }
-            .padding(.horizontal, Spacing.s3)
-            .padding(.vertical, Spacing.s3)
+            .padding(Spacing.s3)
+            .typesInFieldOnTap($searchFocused)
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
                     .stroke(Theme.Color.appBorder, lineWidth: 1)
             }
-            // Clearing the field keeps typing.
-            .keepsKeyboardOnTap()
 
             if case let .idle(hint) = viewModel.state, let hint {
                 Text(hint)
@@ -341,6 +340,7 @@ public struct FindHomeView: View {
                     .autocorrectionDisabled()
                     .padding(.horizontal, Spacing.s3)
                     .frame(height: 44)
+                    .typesInFieldOnTap()
                     .background(Theme.Color.appSurface)
                     .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                     .overlay {

@@ -434,6 +434,7 @@ private struct NotesGroup: View {
                 .font(Theme.Font.body)
                 .padding(Spacing.s3)
                 .frame(minHeight: 96, alignment: .topLeading)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: Radii.md))
                 .overlay(

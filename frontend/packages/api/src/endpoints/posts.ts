@@ -108,6 +108,8 @@ export interface PlaceEligibility {
   eligible: boolean;
   readOnly: boolean;
   reason?: string | null;
+  /** Which way in counted: `resident`, `business`, `gps` or `photo`. */
+  basis?: string | null;
   trustLevel?: string;
 }
 
@@ -117,6 +119,12 @@ export async function checkPlaceEligibility(params: {
   gpsTimestamp?: string;
   gpsLatitude?: number;
   gpsLongitude?: number;
+  /** The draft's attachment taken nearest the place. */
+  mediaLatitude?: number;
+  mediaLongitude?: number;
+  mediaCapturedAt?: string;
+  /** Alerts and Lost & Found count only an attachment from the last 48 hours. */
+  postType?: PostType;
 }): Promise<PlaceEligibility> {
   return get('/api/posts/place-eligibility', params);
 }
@@ -224,6 +232,9 @@ export async function createPost(data: {
   longitude?: number;
   locationName?: string;
   locationAddress?: string;
+  // The place picker's row: its id (`osm:…` records the post as OpenStreetMap's) and its kind.
+  geocodePlaceId?: string;
+  geocodeAccuracy?: string;
   radiusMiles?: number;
   tags?: string[];
   // Feed redesign fields
@@ -260,6 +271,8 @@ export async function createPost(data: {
   gpsTimestamp?: string;
   gpsLatitude?: number;
   gpsLongitude?: number;
+  // Where the attachments were taken: evidence for the Place check, like the GPS fix.
+  mediaLocations?: Array<{ latitude: number; longitude: number; capturedAt?: string | null }>;
   // v1.2: Social layer fields
   purpose?: string;
   profileVisibilityScope?: 'public' | 'connections' | 'local_context' | 'hidden';

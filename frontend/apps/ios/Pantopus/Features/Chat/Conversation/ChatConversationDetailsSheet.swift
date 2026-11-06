@@ -288,6 +288,7 @@ struct ChatReportUserSheet: View {
                         .font(.system(size: 13.5))
                         .lineLimit(3...6)
                         .padding(Spacing.s3)
+                        .typesInFieldOnTap()
                         .background(Theme.Color.appSurfaceSunken)
                         .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
                         .accessibilityIdentifier("chatReportDetails")

@@ -67,6 +67,7 @@ struct BorderedTextField<Field: View>: View {
                 .padding(.horizontal, Spacing.s3)
                 .padding(.vertical, Spacing.s2)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .typesInFieldOnTap()
                 .background(Theme.Color.appSurface)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay(

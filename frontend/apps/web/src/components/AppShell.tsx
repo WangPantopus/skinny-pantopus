@@ -26,6 +26,7 @@ import { HomePermissionsProvider, useHomePermissions } from '@/components/home/u
 import { businessAccessQuery } from '@/components/business/useBusinessData';
 import { useConversationEvents } from '@/lib/conversationEvents';
 import type { PostComposerSubmitData } from '@/components/feed/PostComposer';
+import { withFreshFix } from '@/lib/freshPostFix';
 import { identityCopy } from '@/lib/identityLabels';
 import PrerenderSuspense from '@/components/first-content/PrerenderSuspense';
 
@@ -410,7 +411,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     try {
       const { mediaFiles, ...composerData } = data;
       const postData = { ...composerData } as Parameters<typeof api.posts.createPost>[0];
-      const res = await api.posts.createPost(postData);
+      const res = await api.posts.createPost(await withFreshFix(postData));
       const newPost = res.post;
       if (typeof newPost?.id !== 'string' || !newPost.id.trim()) {
         throw new Error('Post could not be confirmed. Try again.');
@@ -690,8 +691,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
        *  MAIN CONTENT
        * ═══════════════════════════════════════════════════════ */}
       {/* Phones: pb-20 clears the tab bar; where the quick-actions button floats
-          above it (its top edge 144 px up), pb-40 lets the last row scroll clear. */}
-      <main key="content" className={`pt-14 min-h-screen${offsetSlides ? ' transition-[margin-left] duration-200 ease-in-out' : ''} relative z-0${showMobileTabs ? (routeHasFab(pathname) ? ' pb-40' : ' pb-20') : ''}`} style={contentStyle}>
+          above it (its top edge 144 px up), pb-40 lets the last row scroll clear.
+          z-0 makes this a stacking context, so nothing inside rises above the header, tab bar or floating
+          buttons. A dialog that stays in here sets data-covers-shell, which suspends that while it's open. */}
+      <main key="content" className={`pt-14 min-h-screen${offsetSlides ? ' transition-[margin-left] duration-200 ease-in-out' : ''} relative z-0 has-[[data-covers-shell]]:z-auto${showMobileTabs ? (routeHasFab(pathname) ? ' pb-40' : ' pb-20') : ''}`} style={contentStyle}>
         {offlineNotice}
         {children}
       </main>

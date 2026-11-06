@@ -11,12 +11,21 @@
 
 const logger = require('../../utils/logger');
 const addressConfig = require('../../config/addressVerification');
+const { usesGooglePostal } = require('./postalAdapter');
 
 /** @typedef {import('./types').RawAddressInput} RawAddressInput */
 /** @typedef {import('./types').NormalizedAddress} NormalizedAddress */
 /** @typedef {import('./types').GoogleValidationResult} GoogleValidationResult */
 
 const API_BASE = 'https://addressvalidation.googleapis.com/v1:validateAddress';
+
+// When Google is the only postal source: one quick retry after a fast failure, inside the same
+// deadline, and during an outage nobody waits out the timeout on every check.
+const RETRY_PAUSE_MIN_MS = 50;
+const RETRY_PAUSE_SPREAD_MS = 100;
+const RETRY_MIN_BUDGET_MS = 500;
+const CIRCUIT_FAILURES = 5;
+const CIRCUIT_OPEN_MS = 30000;
 
 /**
  * Google Address Validation Provider
@@ -27,6 +36,8 @@ const API_BASE = 'https://addressvalidation.googleapis.com/v1:validateAddress';
 class GoogleAddressValidationProvider {
   constructor() {
     this.apiKey = addressConfig.google.apiKey;
+    this.consecutiveFailures = 0;
+    this.circuitOpenUntil = 0;
   }
 
   /**
@@ -50,20 +61,64 @@ class GoogleAddressValidationProvider {
     }
 
     const requestBody = this._buildRequest(input);
+    const timeoutMs = addressConfig.google.timeoutMs;
 
+    if (!usesGooglePostal()) {
+      const { data } = await this._post(requestBody, timeoutMs);
+      return data ? this._parseResponse(data) : null;
+    }
+
+    if (Date.now() < this.circuitOpenUntil) {
+      logger.warn('Google Address Validation skipped: too many recent failures');
+      return null;
+    }
+
+    const deadline = Date.now() + timeoutMs;
+    let outcome = await this._post(requestBody, timeoutMs);
+    if (outcome.retryable) {
+      const pause = RETRY_PAUSE_MIN_MS + Math.floor(Math.random() * RETRY_PAUSE_SPREAD_MS);
+      const left = deadline - Date.now() - pause;
+      if (left >= RETRY_MIN_BUDGET_MS) {
+        await new Promise((resolve) => setTimeout(resolve, pause));
+        outcome = await this._post(requestBody, left);
+      }
+    }
+
+    const parsed = outcome.data ? this._parseResponse(outcome.data) : null;
+    if (parsed) {
+      this.consecutiveFailures = 0;
+    } else {
+      this.consecutiveFailures += 1;
+      if (this.consecutiveFailures >= CIRCUIT_FAILURES) {
+        this.circuitOpenUntil = Date.now() + CIRCUIT_OPEN_MS;
+        this.consecutiveFailures = 0;
+      }
+    }
+    return parsed;
+  }
+
+  /**
+   * One request to Google. `retryable` marks a fast failure worth one more try.
+   *
+   * @param {object} requestBody
+   * @param {number} timeoutMs
+   * @returns {Promise<{data: object|null, retryable: boolean}>}
+   * @private
+   */
+  async _post(requestBody, timeoutMs) {
     let res;
     try {
       res = await fetch(`${API_BASE}?key=${this.apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
-        signal: AbortSignal.timeout(addressConfig.google.timeoutMs),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (err) {
       logger.error('Google Address Validation API request failed', {
         error: err.message,
       });
-      return null;
+      return { data: null, retryable: err.name !== 'TimeoutError' && err.name !== 'AbortError' };
     }
 
     if (!res.ok) {
@@ -72,20 +127,17 @@ class GoogleAddressValidationProvider {
         status: res.status,
         body: text.slice(0, 500),
       });
-      return null;
+      return { data: null, retryable: res.status === 429 || res.status >= 500 };
     }
 
-    let data;
     try {
-      data = await res.json();
+      return { data: await res.json(), retryable: false };
     } catch (err) {
       logger.error('Google Address Validation API: invalid JSON response', {
         error: err.message,
       });
-      return null;
+      return { data: null, retryable: false };
     }
-
-    return this._parseResponse(data);
   }
 
   /**
@@ -144,6 +196,12 @@ class GoogleAddressValidationProvider {
       granularity: verdict.geocodeGranularity || googleAddress.addressGranularity || 'OTHER',
       missing_component_types: missingTypes,
       place_id: geocode.placeId || result.metadata?.placeId || null,
+      place_types: (geocode.placeTypes || []).map(String),
+      metadata: {
+        residential: result.metadata?.residential ?? null,
+        business: result.metadata?.business ?? null,
+        po_box: result.metadata?.poBox ?? null,
+      },
       verdict: {
         inputGranularity: verdict.inputGranularity || null,
         validationGranularity: verdict.validationGranularity || null,
@@ -229,16 +287,27 @@ class GoogleAddressValidationProvider {
    * @private
    */
   _extractUspsData(uspsData) {
+    // Y, N, or absent: absent is unknown, never false.
+    const yesNo = (value) => (value === 'Y' ? true : value === 'N' ? false : null);
+
     return {
       dpv_match_code: uspsData.dpvConfirmation || null,
+      dpv_footnote: uspsData.dpvFootnote || null,
       carrier_route: uspsData.carrierRoute || null,
-      carrier_route_type: uspsData.carrierRouteType || null,
-      dpv_vacant: uspsData.dpvVacant === 'Y',
-      dpv_cmra: uspsData.dpvCmra === 'Y',
-      post_office_city: uspsData.postOfficeCityStateInfo?.city || null,
-      post_office_state: uspsData.postOfficeCityStateInfo?.state || null,
+      carrier_route_type: uspsData.carrierRoute ? uspsData.carrierRoute.charAt(0) : null,
+      dpv_vacant: yesNo(uspsData.dpvVacant),
+      dpv_cmra: yesNo(uspsData.dpvCmra),
+      dpv_no_stat: yesNo(uspsData.dpvNoStat),
+      dpv_no_stat_reason: uspsData.dpvNoStatReasonCode ?? null,
+      address_record_type: uspsData.addressRecordType || null,
+      post_office_city: uspsData.postOfficeCity || null,
+      post_office_state: uspsData.postOfficeState || null,
       fips_county_code: uspsData.fipsCountyCode || null,
       ews_flag: uspsData.ewsNoMatch || false,
+      po_box_only_zip: uspsData.poBoxOnlyPostalCode === true,
+      cass_processed: uspsData.cassProcessed ?? null,
+      // Google fills this when it has stopped USPS checks for the account.
+      suspended: !!uspsData.errorMessage,
     };
   }
 }

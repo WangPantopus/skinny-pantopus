@@ -194,6 +194,7 @@ struct PlanAskSheet: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, Spacing.s3)
                 .frame(minHeight: 78, alignment: .topLeading)
+                .typesInFieldOnTap($noteFocused)
                 .background(RoundedRectangle(cornerRadius: Radii.md, style: .continuous).fill(Theme.Color.appSurface))
                 .overlay(RoundedRectangle(cornerRadius: Radii.md, style: .continuous).stroke(Theme.Color.appBorderStrong, lineWidth: 1))
                 .onChange(of: note) { _, new in

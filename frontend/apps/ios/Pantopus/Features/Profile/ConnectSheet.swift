@@ -117,6 +117,7 @@ struct ConnectSheet: View {
                     .accessibilityHidden(true)
             }
         }
+        .typesInFieldOnTap($noteFocused)
         .background(Theme.Color.appSurface)
         .overlay(
             RoundedRectangle(cornerRadius: Radii.lg, style: .continuous)

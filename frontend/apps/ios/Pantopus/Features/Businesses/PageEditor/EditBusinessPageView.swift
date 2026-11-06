@@ -480,14 +480,11 @@ public struct EditBusinessPageLoadedView: View {
     private var locationSection: some View {
         EditBusinessSection(overline: "Location") {
             VStack(alignment: .leading, spacing: Spacing.s3) {
-                BizField(
-                    label: "Address",
-                    required: true,
+                BusinessAddressField(
                     field: content.location.address,
                     state: content.location.error.map { .error($0) } ?? .valid,
-                    trailing: .mapPin,
-                    identifier: "editBusinessPage.field.address"
-                ) { onFieldChange(.address, $0) }
+                    onFieldChange: onFieldChange
+                )
                 BizField(
                     label: "City",
                     required: true,
@@ -706,6 +703,7 @@ struct BizField: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.Color.appTextSecondary)
                         .padding(.leading, 10)
+                        .allowsHitTesting(false)
                 }
                 TextField(
                     field.placeholder,
@@ -724,8 +722,10 @@ struct BizField: View {
                 .accessibilityLabel(a11yLabel)
                 .accessibilityIdentifier(identifier ?? "")
                 trailingIcon
+                    .allowsHitTesting(false)
             }
             .frame(minHeight: 44)
+            .typesInFieldOnTap()
             .background(Theme.Color.appSurface)
             .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
             .overlay(
@@ -812,9 +812,11 @@ private struct BizTextarea: View {
                     Text("\(field.current.count) / \(charLimit)")
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(Theme.Color.appTextMuted)
+                        .allowsHitTesting(false)
                 }
             }
             .padding(12)
+            .typesInFieldOnTap()
         }
         .frame(minHeight: 124)
         .accessibilityElement(children: .contain)

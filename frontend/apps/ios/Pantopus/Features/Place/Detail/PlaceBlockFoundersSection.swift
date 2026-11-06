@@ -43,6 +43,9 @@ final class PlaceBlockFoundersViewModel {
     var recipientCity = ""
     var recipientState = ""
     var recipientZip = ""
+    /// Suggestions under the street field, nearest this home first: the
+    /// people you invite live on your street.
+    let addressSuggestions = AddressSuggestions()
     let homeId: String
     private let api: APIClient
 
@@ -52,6 +55,9 @@ final class PlaceBlockFoundersViewModel {
     }
 
     func load() async {
+        if addressSuggestions.near == nil {
+            addressSuggestions.near = await AddressSuggestions.homePoint(homeId: homeId)
+        }
         do {
             let response: BlockStatusResponse = try await api.request(
                 BlockFoundersEndpoints.status(homeId: homeId)
@@ -77,6 +83,18 @@ final class PlaceBlockFoundersViewModel {
               state.count == 2, state.allSatisfy(\.isLetter),
               Self.isZip(zip) else { return nil }
         return BlockInviteRecipient(line1: line1, city: city, state: state, zip: zip)
+    }
+
+    /// A picked suggestion fills the whole address; a state that isn't a
+    /// two-letter code is left for the sender to type.
+    func chooseAddressSuggestion(_ suggestion: GeoSuggestion) async {
+        guard let address = await addressSuggestions.choose(suggestion) else { return }
+        if let street = address.address, !street.isEmpty { recipientLine1 = street }
+        if let city = address.city, !city.isEmpty { recipientCity = city }
+        let state = (address.state ?? "").trimmingCharacters(in: .whitespaces)
+        recipientState = state.count == 2 && state.allSatisfy(\.isLetter) ? state.uppercased() : ""
+        if let zip = address.zipcode, !zip.isEmpty { recipientZip = zip }
+        inviteError = nil
     }
 
     static func isZip(_ raw: String) -> Bool {
