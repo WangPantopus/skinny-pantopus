@@ -608,14 +608,22 @@ function MailVerifySuccess({ onContinue }: { onContinue: () => void }) {
 // LOCKED / EXPIRED ERROR SCREEN
 // ═══════════════════════════════════════════════════════════
 
+const MAIL_OUTCOME_COPY = {
+  returned: { heading: 'Your postcard came back', body: 'Your postcard came back undeliverable. Check the address and send another, or verify another way.' },
+  rerouted: { heading: 'Your postcard was re-routed', body: 'USPS re-routed your postcard, so its code won’t work. Check the address and send another, or verify another way.' },
+  failed: { heading: 'We couldn’t mail your postcard', body: 'We couldn’t print or mail your postcard. Check the address and send another, or verify another way.' },
+};
+
 function MailVerifyError({
   errorType,
+  mailOutcome,
   error,
   onResend,
   onSwitchMethod,
   onBack,
 }: {
   errorType: 'expired' | 'locked' | 'network' | null;
+  mailOutcome: keyof typeof MAIL_OUTCOME_COPY | null;
   error: string | null;
   onResend: () => void;
   onSwitchMethod?: () => void;
@@ -634,10 +642,10 @@ function MailVerifyError({
           )}
           <div>
             <h3 className="text-lg font-semibold text-app-text">
-              {errorType === 'locked' ? 'Too many attempts' : 'Code expired'}
+              {errorType === 'locked' ? 'Too many attempts' : mailOutcome ? MAIL_OUTCOME_COPY[mailOutcome].heading : 'Code expired'}
             </h3>
             <p className="text-sm text-app-text-secondary mt-1">
-              {error}
+              {mailOutcome ? MAIL_OUTCOME_COPY[mailOutcome].body : error}
             </p>
           </div>
         </div>
@@ -649,7 +657,7 @@ function MailVerifyError({
               onClick={onResend}
               className="w-full px-4 py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-black transition-colors"
             >
-              Request a new code
+              {mailOutcome ? 'Send another postcard' : 'Request a new code'}
             </button>
           )}
 
@@ -724,6 +732,7 @@ export default function MailVerificationFlow({
     return (
       <MailVerifyError
         errorType={mail.errorType as 'expired' | 'locked' | 'network' | null}
+        mailOutcome={mail.mailOutcome}
         error={mail.error}
         onResend={mail.resendCode}
         onSwitchMethod={onSwitchMethod}

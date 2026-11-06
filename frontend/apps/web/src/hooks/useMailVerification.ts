@@ -50,6 +50,8 @@ export type MailVerificationState = {
   error: string | null;
   /** Error type for conditional rendering */
   errorType: 'wrong_code' | 'expired' | 'locked' | 'network' | null;
+  /** Why an expired attempt ended, when the mail ended it */
+  mailOutcome: 'returned' | 'rerouted' | 'failed' | null;
   /** Locked until (for locked state) */
   lockedUntil: string | null;
   /** The claim returned on success */
@@ -79,6 +81,7 @@ export function useMailVerification({ addressId, unit, normalized }: InitParams)
     attemptsRemaining: null,
     error: null,
     errorType: null,
+    mailOutcome: null,
     lockedUntil: null,
     claim: null,
     cooldownSeconds: 0,
@@ -126,6 +129,7 @@ export function useMailVerification({ addressId, unit, normalized }: InitParams)
         maxResends: resp.max_resends,
         error: null,
         errorType: null,
+        mailOutcome: null,
       }));
       if (resp.cooldown_until) {
         startCooldownTimer(resp.cooldown_until);
@@ -158,6 +162,7 @@ export function useMailVerification({ addressId, unit, normalized }: InitParams)
         ...(resp.status === 'expired' || resp.status === 'locked' ? {
           phase: 'error' as const,
           errorType: resp.status,
+          mailOutcome: resp.mail_outcome ?? null,
         } : {}),
         deliveryUnknown: resp.delivery_unknown === true,
         expiresAt: resp.expires_at,
@@ -172,6 +177,16 @@ export function useMailVerification({ addressId, unit, normalized }: InitParams)
   }, [state.verificationId, startCooldownTimer]);
 
   // ── Send code (initial) ───────────────────────────────────
+  // A card can come back while this screen sits open, so look again when the person returns to it.
+  useEffect(() => {
+    if (state.phase !== 'pending' || !state.verificationId) return undefined;
+    const look = () => {
+      if (document.visibilityState === 'visible') void refreshDeliveryStatus();
+    };
+    document.addEventListener('visibilitychange', look);
+    return () => document.removeEventListener('visibilitychange', look);
+  }, [state.phase, state.verificationId, refreshDeliveryStatus]);
+
   const sendCode = useCallback(async () => {
     setState((prev) => ({ ...prev, phase: 'sending', error: null, errorType: null }));
 
@@ -303,6 +318,7 @@ export function useMailVerification({ addressId, unit, normalized }: InitParams)
       attemptsRemaining: null,
       error: null,
       errorType: null,
+      mailOutcome: null,
       lockedUntil: null,
       claim: null,
       cooldownSeconds: 0,

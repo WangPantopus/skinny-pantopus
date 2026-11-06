@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Mail, ShieldCheck } from 'lucide-react';
 import { usePostalVerification } from '@/components/homes/postcard/usePostalVerification';
-import { postalMessage, triesLeft, validMailingAddress, type MailingAddress } from '@/components/homes/postcard/postcardModel';
+import { MAIL_STATE_COPY, postalMessage, triesLeft, validMailingAddress, type MailingAddress } from '@/components/homes/postcard/postcardModel';
 import { residencyRequestLabel } from '@/components/homes/residencyProgressModel';
 
 const emptyAddress = (): MailingAddress => ({ line1: '', line2: '', city: '', state: '', postal_code: '', country: 'US' });
@@ -14,6 +14,13 @@ const button = 'min-h-11 rounded-xl border border-app-border px-4 py-3 text-sm f
 const primary = `${button} w-full bg-emerald-700 text-white hover:bg-emerald-800`;
 const panel = 'space-y-4 rounded-2xl border border-app-border bg-app-surface p-5';
 const inputStyle = 'mt-1 min-h-11 w-full rounded-lg border border-app-border bg-app-background px-3 py-2 text-app-text';
+/** The ways on when mail can't prove the address. Each opens a page that already exists. */
+function NextSteps({ homeId, addressWrong = true }: { homeId: string; addressWrong?: boolean }) {
+  return <div className="grid gap-3 sm:grid-cols-2">
+    <Link className={`${button} block text-center`} href={`/app/homes/${homeId}/verify-residency`}>Verify another way</Link>
+    {addressWrong && <Link className={`${button} block text-center`} href={`/app/homes/new?joinHome=${homeId}`}>This address is wrong</Link>}
+  </div>;
+}
 function Address({ address }: { address: MailingAddress }) {
   return <div className="break-words text-sm text-app-text-secondary">
     <p className="font-semibold text-app-text">{address.line1}</p>{address.line2 && <p>{address.line2}</p>}
@@ -37,6 +44,9 @@ function VerifyPostcardContent() {
   const retainedAddress = pending?.kind === 'mail' ? (JSON.parse(pending.request_json) as { address: MailingAddress }).address : null;
   const update = (key: keyof MailingAddress, value: string) => { setAddress(previous => ({ ...previous, [key]: value })); setConfirmed(false); };
   const unavailable = !flow.ready || flow.blocked;
+  const mailState = status?.postcard?.mail_state;
+  const mailCopy = mailState ? MAIL_STATE_COPY[mailState] : undefined;
+  const mailEnded = mailState === 'returned' || mailState === 'rerouted' || mailState === 'failed';
   return <main className="mx-auto max-w-lg space-y-6 px-4 py-6 pb-28 text-app-text" aria-busy={busy}>
     <Link href={`/app/homes/${homeId}/residency`} className="inline-block min-h-11 py-2 text-sm font-semibold text-app-text-secondary">← Residency status</Link>
     <header className="flex items-start gap-3">
@@ -79,17 +89,20 @@ function VerifyPostcardContent() {
       {progress?.request && <section className={panel}><p className="text-xs font-semibold uppercase tracking-wide text-app-text-secondary">Your Home’s address</p>
         <p className="break-words text-sm">{residencyRequestLabel(progress.request)}</p></section>}
       {status.postcard && <section className={panel}>
-        <h2 className="text-lg font-semibold">{status.postcard.status === 'verified' ? 'Address verified by mail' : status.postcard.status === 'expired' ? status.postcard.attempts_remaining === 0 ? 'No tries left for this postcard' : 'Postcard code expired'
+        <h2 className="text-lg font-semibold">{mailCopy ? mailCopy.heading : status.postcard.status === 'verified' ? 'Address verified by mail' : status.postcard.status === 'expired' ? status.postcard.attempts_remaining === 0 ? 'No tries left for this postcard' : 'Postcard code expired'
           : status.postcard.status === 'cancelled' ? 'Postcard no longer active' : 'Your postcard'}</h2>
+        {mailCopy && status.restriction !== 'POSTCARD_RETURNED_LIMIT' && <p className="text-sm text-app-text-secondary">{mailCopy.body}</p>}
         {status.request && <><p className="text-xs font-semibold uppercase tracking-wide text-app-text-secondary">Mailing address</p><Address address={status.request.address} /></>}
-        {!['verified', 'expired', 'cancelled'].includes(status.postcard.status) && <p className="text-sm text-app-text-secondary">{({ not_started: 'This postcard hasn’t been sent yet.',
+        {!mailCopy && !['verified', 'expired', 'cancelled'].includes(status.postcard.status) && <p className="text-sm text-app-text-secondary">{({ not_started: 'This postcard hasn’t been sent yet.',
           accepted: 'Your postcard is on its way.',
           unknown: 'We couldn’t confirm the postcard was sent. It may already be on its way; checking again won’t send another.',
           rejected: 'The mail service couldn’t send this postcard. Check the address and request another.' })[status.postcard.delivery]}</p>}
-        <p className="text-sm text-app-text-secondary">Postcard reference: {status.postcard.id.slice(-8)} · Code expiry: {new Date(status.postcard.expires_at).toLocaleDateString()}</p>
+        <p className="text-sm text-app-text-secondary">Postcard reference: {status.postcard.id.slice(-8)}{!mailEnded && ` · Code expiry: ${new Date(status.postcard.expires_at).toLocaleDateString()}`}</p>
         {status.can_resume && <button className={primary} disabled={busy} onClick={() => void flow.resumeMail()}>Send the postcard</button>}
+        {(mailEnded || mailState === 'delayed') && <NextSteps homeId={homeId} addressWrong={mailEnded} />}
       </section>}
       {status.restriction && <p role="status" className="rounded-xl border border-app-border p-4 text-sm">{postalMessage(status.restriction)}</p>}
+      {status.restriction === 'POSTCARD_RETURNED_LIMIT' && !mailEnded && <NextSteps homeId={homeId} />}
       {status.can_verify && <form className={panel} onSubmit={event => { event.preventDefault(); void flow.verify(code); }}>
         <h2 className="text-lg font-semibold">Enter your postcard code</h2>
         <p className="text-sm text-app-text-secondary">Enter the code printed on the postcard.</p>
@@ -112,7 +125,7 @@ function VerifyPostcardContent() {
         <p className="text-sm text-app-text-secondary">Country: United States</p>
         <label className="flex min-h-11 items-start gap-3 text-sm"><input type="checkbox" className="mt-1 h-5 w-5 shrink-0" checked={confirmed}
           disabled={busy} onChange={event => setConfirmed(event.target.checked)} /><span>I confirm the street and apartment above are the address I want to verify.</span></label>
-        <button className={primary} disabled={busy || !confirmed || !validMailingAddress(address)}>Request postcard</button>
+        <button className={primary} disabled={busy || !confirmed || !validMailingAddress(address)}>{mailEnded ? 'Send another postcard' : 'Request postcard'}</button>
       </form>}
       <section className={panel}>
         <div className="flex items-start gap-2"><ShieldCheck className="h-5 w-5 shrink-0 text-emerald-700" aria-hidden="true" />
