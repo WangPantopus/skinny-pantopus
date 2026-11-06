@@ -991,6 +991,13 @@ function resolveHomeCoordinates(home) {
   return { latitude: null, longitude: null };
 }
 
+// The Place check for a Home post by the Home's id (creating a post already has the Home's row).
+async function homePlaceCheck(homeId, latitude, longitude) {
+  const { data: home, error } = await supabaseAdmin.from('Home').select('location').eq('id', homeId).maybeSingle();
+  if (error) throw error;
+  return canHomePostToPlace({ home: resolveHomeCoordinates(home), targetLatitude: latitude, targetLongitude: longitude });
+}
+
 // A poster is a visitor when every Home of their household is more than ~35 miles
 // (0.5° of latitude or longitude) from where they post; with no such Home they aren't one.
 // The household is the one shared rule (householdHomeIds: trusted, unexpired occupancies,
@@ -1333,7 +1340,7 @@ router.post('/', verifyToken, validate(createPostSchema), async (req, res) => {
     if (!isCurator && !pulse && isPlacePost && effectiveLatitude != null && effectiveLongitude != null) {
       const eligibility = isHomeIdentityPost
         ? canHomePostToPlace({
-          homeLocation: homeContext.home.location,
+          home: resolveHomeCoordinates(homeContext.home),
           targetLatitude: effectiveLatitude,
           targetLongitude: effectiveLongitude,
         })
@@ -2269,18 +2276,14 @@ router.get('/place-eligibility', verifyToken, async (req, res) => {
     if (homeId) {
       // The same access POST / asks for. Without it the answer can't depend on the Home: it would say how far any Home
       // is from any point.
-      const { hasAccess } = UUID_RE.test(String(homeId))
+      const { hasAccess } = typeof homeId === 'string' && UUID_RE.test(homeId)
         ? await checkHomePermission(homeId, userId, 'home.view') : { hasAccess: false };
       if (!hasAccess) {
         return res.json({
           eligible: false, readOnly: true, reason: 'You do not have access to post from this home', basis: null, trustLevel: 'remote_viewer',
         });
       }
-      const { data: home, error: homeError } = await supabaseAdmin.from('Home').select('location').eq('id', homeId).maybeSingle();
-      if (homeError) throw homeError;
-      const homeCheck = canHomePostToPlace({
-        homeLocation: home?.location, targetLatitude: parseFloat(latitude), targetLongitude: parseFloat(longitude),
-      });
+      const homeCheck = await homePlaceCheck(homeId, parseFloat(latitude), parseFloat(longitude));
       return res.json({
         eligible: homeCheck.eligible,
         readOnly: homeCheck.readOnly,
@@ -3047,11 +3050,7 @@ router.patch('/:id', verifyToken, validate(updatePostSchema), async (req, res) =
       }
       // A Home post stays in its Home's area, even where its author also lives or works.
       if (existing.post_as === 'home' && existing.home_id) {
-        const { data: home, error: homeError } = await supabaseAdmin.from('Home').select('location').eq('id', existing.home_id).maybeSingle();
-        if (homeError) throw homeError;
-        const homeCheck = canHomePostToPlace({
-          homeLocation: home?.location, targetLatitude: Number(movedTo.latitude), targetLongitude: Number(movedTo.longitude),
-        });
+        const homeCheck = await homePlaceCheck(existing.home_id, Number(movedTo.latitude), Number(movedTo.longitude));
         if (!homeCheck.eligible) return res.status(403).json({ error: homeCheck.reason });
       }
       const trust = await computeTrustState(userId, Number(movedTo.latitude), Number(movedTo.longitude));

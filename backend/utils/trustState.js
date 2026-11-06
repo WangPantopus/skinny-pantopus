@@ -597,14 +597,13 @@ function canPostToPlace({
  * come into it, so near the Home this works from anywhere and far from it nothing gets it through.
  *
  * @param {object} params
- * @param {*} params.homeLocation - the Home's own `location`
+ * @param {{ latitude: number|null, longitude: number|null }} params.home - the Home's own location
  * @param {number} params.targetLatitude
  * @param {number} params.targetLongitude
  * @returns {{ eligible: boolean, readOnly: boolean, basis?: 'resident', reason?: string }}
  */
-function canHomePostToPlace({ homeLocation, targetLatitude, targetLongitude }) {
-  const home = parsePostGISPoint(homeLocation);
-  if (!home) {
+function canHomePostToPlace({ home, targetLatitude, targetLongitude }) {
+  if (home.latitude == null || home.longitude == null) {
     return {
       eligible: false,
       readOnly: true,
