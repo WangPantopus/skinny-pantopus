@@ -52,6 +52,20 @@
 - Session `make-attom-lookups-non-b` (started by the founder Nov 5, its own worktree): makes ATTOM lookups
   non-blocking and remembers "no record" answers; it confirms its plan with the founder first. Not part of #3418.
 
+## PR #3433 (Codex, `docs/research/provider-replacement/`) compared, Nov 5 evening
+
+The two packages complement each other. #3433 is the stronger engineering base: a consumer-by-consumer code audit,
+a 46-field fill matrix by property type from 14.66M assessment records in eight states, an identity contract (exact
+unit, building only, ambiguous, unsupported), a rights register, a cost model, service objectives and mail
+reliability rules. #3418 is the national coverage map (all 150 largest counties, a 100-county sample, 56%/22% of
+Americans), the source register with links and prices, the live ATTOM flow findings, and the unit floor-plan approach.
+Adopt from #3433 before any build: the Phase 1 regression it found (DPV `D` with footnote `N1` and a blank DPV
+reach `OK`; the missing-unit flag comes from `CC`), the value-mapping bugs (assessed total shown as an estimate and
+as an area median; an unobserved trend defaulting to flat; two different AVM confidence paths), and keeping vendor
+copies out of evaluation sets. Conflict to settle with the founder: #3433 records $0 current ATTOM spend, while this
+handoff records that the plan allows keeping records; if it is the free evaluation, its published terms forbid
+keeping data past 24 hours and production display.
+
 ## Waiting on the founder
 
 Asked in chat on Nov 5 (~22:00 UTC), no answer yet:
