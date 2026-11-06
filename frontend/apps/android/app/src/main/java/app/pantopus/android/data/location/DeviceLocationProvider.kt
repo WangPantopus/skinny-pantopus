@@ -10,6 +10,7 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
@@ -51,16 +52,19 @@ class DeviceLocationProvider internal constructor(
         }
         if (timeoutMillis <= 0) return null
         val cancellation = CancellationTokenSource()
+        var lastKnown: CachedCoordinate? = null
         val result =
             try {
                 withTimeoutOrNull(timeoutMillis) {
+                    // A first GPS fix can take longer than the budget, so a recent last fix is read alongside it.
+                    val lastKnownRead = launch { lastKnown = fusedClient.lastLocation.await()?.validated() }
                     // Explicit user acquisition must also work when GPS is the only source.
                     val fresh =
                         fusedClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancellation.token)
                             .await()?.validated()
-                    if (!permissionGranted()) return@withTimeoutOrNull null
-                    fresh ?: fusedClient.lastLocation.await()?.validated()
-                }
+                    if (fresh == null) lastKnownRead.join() else lastKnownRead.cancel()
+                    fresh ?: lastKnown
+                } ?: lastKnown
             } catch (_: SecurityException) {
                 cached = null
                 null
