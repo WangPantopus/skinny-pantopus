@@ -857,7 +857,7 @@ open class AddHomeWizardViewModel
                     )
                 if (!addressIsCurrent(revision)) return
                 val verdictStatus = validation.verdict.status
-                if (verdictStatus !in CONTINUING_STATUSES && !(verdictStatus == "MISSING_UNIT" && attestingNoUnit)) {
+                if (verdictStatus !in continuingStatuses && !(verdictStatus == "MISSING_UNIT" && attestingNoUnit)) {
                     _state.update {
                         it.copy(
                             errorMessage = addressValidationMessage(verdictStatus, validation.verdict.reasons.orEmpty()),
@@ -956,7 +956,7 @@ open class AddHomeWizardViewModel
             }
         }
 
-        private val CONTINUING_STATUSES = setOf("OK", "MIXED_USE", "CONFLICT", "UNIT_NOT_CONFIRMED", "POSTAL_PENDING")
+        private val continuingStatuses = setOf("OK", "MIXED_USE", "CONFLICT", "UNIT_NOT_CONFIRMED", "POSTAL_PENDING")
 
         private fun addressValidationMessage(
             status: String,
