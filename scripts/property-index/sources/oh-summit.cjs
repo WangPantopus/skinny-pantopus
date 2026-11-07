@@ -85,7 +85,7 @@ async function dwellings(work) {
       bedrooms: count(row.BD, 15),
       ...(full ? bathFacts(full + (half || 0) * 0.5, 30) : {}),
       ...(full && half ? { half_baths: half } : {}),
-      stories: floors && floors <= 6 && (floors * 2) % 1 === 0 ? floors : null,
+      stories: floors >= 1 && floors <= 6 && (floors * 2) % 1 === 0 ? floors : null,
       living_sqft: living && living < 30000 ? living : null,
     };
     if (!found.has(row.PARCEL)) found.set(row.PARCEL, []);

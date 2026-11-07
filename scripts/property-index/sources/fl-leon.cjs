@@ -64,7 +64,7 @@ async function* build({ work, today }) {
       bedrooms: count(row.BEDROOM, 15),
       ...(full ? bathFacts(full + (half || 0) * 0.5, 30) : {}),
       ...(full && half ? { half_baths: half } : {}),
-      stories: stories > 0 && stories <= 6 && (stories * 2) % 1 === 0 ? stories : null,
+      stories: stories >= 1 && stories <= 6 && (stories * 2) % 1 === 0 ? stories : null,
       living_sqft: heated && heated < 30000 ? heated : null,
       exterior_walls: WALLS[row.EXTWALL] || null,
       roof_cover: ROOFS[row.ROOFCOVER] || null,

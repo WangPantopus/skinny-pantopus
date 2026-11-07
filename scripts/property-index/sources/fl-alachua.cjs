@@ -42,7 +42,7 @@ async function* build({ work, today }) {
     if (!DWELLING.has(type) && !(type === ZERO_LOT && /ZERO LOT/i.test(row.Imprv_Desc))) continue;
     const stories = number(row.Stories);
     improvements.set(`${row.Parcel}|${row.Imprv_ID}`, {
-      parcel: row.Parcel, heated: positive(row.Heated_SquareFeet), stories: stories > 0 && stories <= 6 && (stories * 2) % 1 === 0 ? stories : null, walls: null,
+      parcel: row.Parcel, heated: positive(row.Heated_SquareFeet), stories: stories >= 1 && stories <= 6 && (stories * 2) % 1 === 0 ? stories : null, walls: null,
     });
   }
   for await (const row of zipTable(zip, 'ImprvAttributes.txt', ['Parcel', 'Imprv_ID', 'Imprv_Attribute', 'Imprv_Attr_Desc', 'Imprv_Attr_Units'], { delimiter: '\t', quoted: false })) {

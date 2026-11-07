@@ -64,7 +64,7 @@ async function* build({ work, today }) {
     dwellings.set(word(row.ParcelID), [{
       bedrooms: beds && beds <= 15 && Number.isInteger(beds) ? beds : null,
       ...bathFacts(number(row.Baths), 20),
-      stories: stories > 0 && stories <= 6 && (stories * 2) % 1 === 0 ? stories : null,
+      stories: stories >= 1 && stories <= 6 && (stories * 2) % 1 === 0 ? stories : null,
       living_sqft: finished && finished < 30000 ? finished : null,
       exterior_walls: WALLS[home.ExteriorWallDescription] || null,
       roof_cover: ROOFS[home.RoofCoverDescription] || null,

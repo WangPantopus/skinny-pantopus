@@ -14,7 +14,7 @@ const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
 
 // Counties read by their own connector.
-const OWN_CONNECTOR = new Set(['12001', '12011', '12057', '12073', '12085', '12086', '12097', '12115', '12117']);
+const OWN_CONNECTOR = new Set(['12001', '12011', '12057', '12073', '12085', '12086', '12097', '12109', '12115', '12117']);
 // [county, the Department's county number, FIPS]
 const COUNTIES = [
   ['Alachua', 11, '12001'],
