@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -122,8 +124,11 @@ fun OwnerTopBar(
 
 /**
  * A10.7 — live-status dot + "Edited …" meta + a "View as neighbor" eye button
- * that flips into preview mode. Mirrors iOS `OwnerLiveBar`.
+ * that flips into preview mode. Mirrors iOS `OwnerLiveBar`. One line as
+ * designed; when large text leaves no room, the button moves under the status
+ * rather than shrinking to a letter per line.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OwnerLiveBar(
     isLive: Boolean,
@@ -133,30 +138,37 @@ fun OwnerLiveBar(
     Column(
         modifier = Modifier.fillMaxWidth().background(PantopusColors.appSurface).testTag("businessOwner.liveBar"),
     ) {
-        Row(
+        FlowRow(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.s4, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(7.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.s2),
         ) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(if (isLive) PantopusColors.success else PantopusColors.appTextMuted),
-            )
-            Text(
-                text = if (isLive) "Page is live" else "Draft",
-                color = PantopusColors.appText,
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Box(modifier = Modifier.size(3.dp).clip(CircleShape).background(PantopusColors.appTextMuted))
-            Text(text = editedMeta, color = PantopusColors.appTextSecondary, fontSize = 11.5.sp)
+            Row(
+                modifier = Modifier.align(Alignment.CenterVertically),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(if (isLive) PantopusColors.success else PantopusColors.appTextMuted),
+                )
+                Text(
+                    text = if (isLive) "Page is live" else "Draft",
+                    color = PantopusColors.appText,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Box(modifier = Modifier.size(3.dp).clip(CircleShape).background(PantopusColors.appTextMuted))
+                Text(text = editedMeta, color = PantopusColors.appTextSecondary, fontSize = 11.5.sp)
+            }
             Box(modifier = Modifier.weight(1f))
             Row(
                 modifier =
                     Modifier
+                        .align(Alignment.CenterVertically)
                         .clip(RoundedCornerShape(Radii.md))
                         .border(1.dp, PantopusColors.appBorder, RoundedCornerShape(Radii.md))
                         .background(PantopusColors.appSurface)

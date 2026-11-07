@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -164,16 +163,18 @@ fun BusinessTeamScreen(
             }
         }
 
+        // Both measure from the top of the tab bar (or its strip), which already sits below this screen; the list's
+        // closing space keeps its last row clear of the button.
         if (inviteEnabled) {
             InviteFab(
                 onClick = { sheet = TeamSheet.Invite },
-                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(Spacing.s4),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(Spacing.s4),
             )
         }
 
         InviteLinkToast(
             handoff = inviteLink,
-            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 96.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp),
         )
     }
 
