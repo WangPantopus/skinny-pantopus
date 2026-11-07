@@ -13,7 +13,7 @@ calls.
 
 | Vendor | What Pantopus calls | Caller | Longest wait | Where results are kept, and for how long | Production |
 |---|---|---|---|---|---|
-| ATTOM (free trial) | Property API `/property/detail`, `/attomavm/detail`, `/salestrend/snapshot` | [`propertyIntelligenceService.js`][pis] 26-28 | 10 s per call (31) | Five copies; property detail forever (65), value and ZIP trend 30 days (30) | Key and trial dates are founder-only facts |
+| ATTOM | Property API `/property/detail`, `/attomavm/detail`, `/salestrend/snapshot` | [`propertyIntelligenceService.js`][pis] 26-28 | 10 s per call (31) | Five copies; property detail forever (65), value and ZIP trend 30 days (30) | Key and trial dates are founder-only facts |
 | Smarty | US Street API (one candidate, enhanced match) | [`smartyProvider.js`][smarty] 118-131 | 2.5 s, after Google's 2.5 s ([config][avcfg] 62, 74) | `HomeAddress.validation_raw_response`, reused 90 days ([config][avcfg] 122) | No key since Oct 9 ([NEXT_STEPS][next] 72, 195) |
 | Google Address Validation | `validateAddress` with USPS CASS on | [`googleProvider.js`][google] 110 | 2.5 s | `HomeAddress` columns and stored decision inputs, no expiry | No key since Oct 9 |
 | Lob | `POST /v1/postcards`; signed delivery webhooks | [`lobMailProvider.js`][lob] 134, 258; [`lobWebhook.js`][lobhook] | Up to 3 attempts with an idempotency key (207) | `HomePostcardCode`, `MailVerificationJob`, `BlockInvite` rows | No key since Oct 9; hosted servers refuse to mail without it ([`mailVendorService.js`][mailvendor] 45-48) |
@@ -47,9 +47,7 @@ All five are read before ATTOM is asked (database first, the founder's Nov 1 dir
 | Shared copy of each ATTOM answer | `ExternalFeedCache`, one row per request, no expiry | [`cacheHelper.js`][cache] 132-192 |
 | The built profile | `PropertyIntelligenceCache`, 30 days, served stale when ATTOM is down | [`pis`][pis] 535-590, 844-847 |
 
-The operator prefill script ([`prefill-provider-cache.js`][prefill]) is a sixth call path (dry run by default). Its
-November 1-2 run saved 195 trial responses from 200 attempts (#3433's review, page 11). The published trial terms
-allow none of these copies to live past 24 hours (see [cost-and-rights.md](cost-and-rights.md#5-attom-free-trial)).
+The operator prefill script ([`prefill-provider-cache.js`][prefill]) is a sixth call path (dry run by default).
 
 ### Who reads it
 
@@ -87,7 +85,7 @@ On master, a first lookup holds the screen: Add Home waits for property suggesti
 details waits, the Pulse composer and the AI profile wait. Place's Your home card and the exemption check give up after
 3.5 s and show a retryable error while the lookup finishes in the background. A value older than 30 days is asked again
 before the page answers. "No record" answers are never saved ([`cacheHelper.js`][cache] 132;
-[`placeSectionCache.js`][psc] 28-29), so an unknown address is asked, and counted against the trial, on every visit.
+[`placeSectionCache.js`][psc] 28-29), so an unknown address is asked on every visit.
 Duplicate lookups merge only inside one server process (`responseFlights`, [`cacheHelper.js`][cache] 104).
 
 PR #3439 (session `make-attom-lookups-non-b`, started by the founder; merged and released after this re-check, master
@@ -241,10 +239,9 @@ returned card leaves the person waiting until the code expires. The older addres
 
 ## Not checked
 
-- Which keys production and staging hold, the ATTOM trial's start date, and whether the account has any agreement
-  beyond the published trial terms (founder-only facts).
+- Which keys production and staging hold, and ATTOM's agreement (founder-only facts).
 - How many ATTOM, Smarty and Google copies the hosted databases keep.
-- Live vendor answers (no paid or trial calls were made for this package), old store builds' exact versions in use,
+- Live vendor answers (no vendor calls were made for this package), old store builds' exact versions in use,
   physical phones.
 
 [master]: https://github.com/WangPantopus/skinny-pantopus/tree/ffd28e60a1d9478342351a15fa588d09d4e20466
