@@ -1,8 +1,8 @@
 'use strict';
 // Summit County, Ohio: the Fiscal Office's public tax parcels. No terms are stated on the service. Year built, finished floor area,
 // floors and values on residential parcels. Owner and mailing columns are in the layer and never asked for. Bedrooms and baths
-// come from the dwelling file (SC710_DWELL) among the Fiscal Office's free CAMA downloads, matched by parcel; its owner and
-// mailing files aren't downloaded. The layer has no ZIP for a site, so the county's ZIPs come from the Census. Assessed values
+// come from the dwelling file (SC710_DWELL) and lot size from the land file (SC709_LAND), among the Fiscal Office's free CAMA
+// downloads, matched by parcel; its owner and mailing files aren't downloaded. The layer has no ZIP for a site, so the county's ZIPs come from the Census. Assessed values
 // are Ohio's 35% of market.
 
 const path = require('node:path');
@@ -68,13 +68,18 @@ const count = (text, most) => {
   return value && value <= most && Number.isInteger(value) ? value : null;
 };
 
-/** Each parcel's dwellings (one card each) from the CAMA dwelling file: BD bedrooms, BTH full baths, FXH half baths, ST floors, SFLA living area. */
-async function dwellings(work) {
-  const page = execFileSync('curl', ['-fsSL', '-A', USER_AGENT, '--max-time', '60', '--retry', '3', DOWNLOADS], { encoding: 'utf8', maxBuffer: 1 << 25 });
-  const link = /href="([^"]*SC710_DWELL[^"]*\.zip)"/i.exec(page)?.[1];
-  if (!link) throw new Error('The data downloads page no longer links the dwelling file');
-  const zip = path.join(work, 'oh-summit', 'dwell.zip');
+/** One of the CAMA downloads the data downloads page links, by its table's name (SC710_DWELL), downloaded once. */
+function camaFile(work, page, table) {
+  const link = new RegExp(`href="([^"]*${table}[^"]*\\.zip)"`, 'i').exec(page)?.[1];
+  if (!link) throw new Error(`The data downloads page no longer links ${table}`);
+  const zip = path.join(work, 'oh-summit', `${table}.zip`);
   download(new URL(link, DOWNLOADS).href, zip);
+  return zip;
+}
+
+/** Each parcel's dwellings (one card each) from the CAMA dwelling file: BD bedrooms, BTH full baths, FXH half baths, ST floors, SFLA living area. */
+async function dwellings(work, page) {
+  const zip = camaFile(work, page, 'SC710_DWELL');
   const found = new Map();
   for await (const row of zipTable(zip, 'SC710_DWELL.CSV', ['PARCEL', 'CARD', 'BD', 'BTH', 'FXH', 'ST', 'SFLA'])) {
     const full = count(row.BTH, 20);
@@ -94,6 +99,20 @@ async function dwellings(work) {
   return found;
 }
 
+/** Each parcel's land in square feet from the CAMA land file: the sum of its land lines' SQF (front-foot lines carry it too). */
+async function lots(work, page) {
+  const zip = camaFile(work, page, 'SC709_LAND');
+  const found = new Map();
+  for await (const row of zipTable(zip, 'SC709_LAND.CSV', ['PARCEL', 'SQF'])) {
+    const sqft = positive(row.SQF);
+    if (sqft) found.set(row.PARCEL, (found.get(row.PARCEL) || 0) + sqft);
+  }
+  return found;
+}
+
+// 2,000 acres: a larger sum is a land record that isn't one lot.
+const MOST_LOT_SQFT = 2000 * 43560;
+
 async function* build({ work }) {
   const about = await getJson(`${LAYER}?f=json`, 'The layer\'s description');
   const asOf = isoDate(about.editingInfo?.dataLastEditDate || about.editingInfo?.lastEditDate);
@@ -110,11 +129,24 @@ async function* build({ work }) {
     }
   }
   log(`${COUNTY}: ${records.length} parcels, ${noAddress} without a street number`);
-  const counts = fillHomes(records, await dwellings(work));
+  const page = execFileSync('curl', ['-fsSL', '-A', USER_AGENT, '--max-time', '60', '--retry', '3', DOWNLOADS], { encoding: 'utf8', maxBuffer: 1 << 25 });
+  const counts = fillHomes(records, await dwellings(work, page));
   log(describe(COUNTY, counts));
+  // A lot is the parcel's: a house's or a building's, never a condo unit's (its land is common).
+  const land = await lots(work, page);
+  let lotted = 0;
+  for (const { kind, facts } of records) {
+    if ((kind !== 'property' && kind !== 'building') || facts.lot_sqft || facts.lot_acres) continue;
+    const sqft = land.get(facts.parcel_number);
+    if (sqft && sqft < MOST_LOT_SQFT) {
+      facts.lot_sqft = Math.round(sqft);
+      lotted += 1;
+    }
+  }
+  log(`${COUNTY}: ${lotted} homes and buildings gained a lot size from the land file`);
   for (const building of condoBuildings(records, { fips: FIPS, county: COUNTY })) records.push(building);
   yield {
-    fips: FIPS, state: 'OH', name: COUNTY, publisher: 'Summit County Fiscal Office', dataset: 'tax parcels and CAMA dwelling data', method: 'county', source: 'oh-summit', as_of: asOf, stale_after_days: 730, extra_zips: zipsByCounty(work, ['39']).get(FIPS) || [], records,
+    fips: FIPS, state: 'OH', name: COUNTY, publisher: 'Summit County Fiscal Office', dataset: 'tax parcels and CAMA dwelling and land data', method: 'county', source: 'oh-summit', as_of: asOf, stale_after_days: 730, extra_zips: zipsByCounty(work, ['39']).get(FIPS) || [], records,
   };
 }
 
@@ -123,6 +155,6 @@ module.exports = {
   dictionary: {
     layer: [LAYER],
     dwellings: DOWNLOADS,
-    facts: { bedrooms: 'SC710_DWELL BD', full_baths: 'SC710_DWELL BTH', half_baths: 'SC710_DWELL FXH', bathrooms: 'BTH + FXH / 2', year_built: 'RESYRBLT', living_sqft: 'RESFLRAREA', gross_sqft: 'RESFLRAREA', stories: 'FLOORCOUNT', market_value: 'cntmarval', market_land_value: 'LNDVALUE', market_building_value: 'bldgvalue', assessed_value: 'CNTASSDVAL', legal_description: 'PRPRTYDSCRP', municipality: 'CVTTXDSCRP' },
+    facts: { bedrooms: 'SC710_DWELL BD', full_baths: 'SC710_DWELL BTH', half_baths: 'SC710_DWELL FXH', bathrooms: 'BTH + FXH / 2', lot_sqft: 'SC709_LAND SQF, summed by parcel', year_built: 'RESYRBLT', living_sqft: 'RESFLRAREA', gross_sqft: 'RESFLRAREA', stories: 'FLOORCOUNT', market_value: 'cntmarval', market_land_value: 'LNDVALUE', market_building_value: 'bldgvalue', assessed_value: 'CNTASSDVAL', legal_description: 'PRPRTYDSCRP', municipality: 'CVTTXDSCRP' },
   },
 };
