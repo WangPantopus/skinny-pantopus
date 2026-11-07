@@ -1492,13 +1492,7 @@ class ChatConversationViewModel
                             if (entry.error != null) failedClientIds.add(entry.clientId) else failedClientIds.remove(entry.clientId)
                             if (entry.refused) refusedClientIds.add(entry.clientId) else refusedClientIds.remove(entry.clientId)
                         }
-                        val failure = outboxFailureNotice(unconfirmed)
-                        if (failure != null) {
-                            _sendLimitNotice.value = failure
-                        } else if (_sendLimitNotice.value == outboxNotice) {
-                            _sendLimitNotice.value = null
-                        }
-                        outboxNotice = failure
+                        showOutboxNotice(unconfirmed)
                         if (held.isNotEmpty() || _state.value is ChatConversationUiState.Loaded) rebuild()
                     }
                 }
@@ -1527,18 +1521,26 @@ class ChatConversationViewModel
         }
 
         /**
-         * Why the newest send the outbox holds can't go now: a final failure (refused or failed) or a rate limit's wait.
-         * A send it retries on its own (a server error, a timeout, offline) raises none: "Please try again" while it
-         * retries asks people to send it twice. A refusal reads as a direct send's does ([markRefused]): the outbox keeps
-         * a 403's message, which is the server's own sentence or, when the body had none, the generic 403 copy.
+         * Show why the newest send the outbox holds can't go now: a final failure (refused or failed) or a rate limit's
+         * wait. A send it retries on its own (a server error, a timeout, offline) raises nothing: "Please try again"
+         * while it retries asks people to send it twice. A refusal reads as a direct send's does ([markRefused]): the
+         * outbox keeps a 403's message, which is the server's own sentence or, when the body had none, the generic 403
+         * copy. The notice clears once no such send is held, unless it came from somewhere else.
          */
-        private fun outboxFailureNotice(held: List<ChatOutboxEntry>): String? {
-            val entry = held.lastOrNull { it.error != null && (it.terminal || it.rateLimited) } ?: return null
-            return if (entry.refused) {
-                entry.error.takeUnless { it == NetworkError.Forbidden.message } ?: SEND_REFUSED_NOTICE
-            } else {
-                entry.error
+        private fun showOutboxNotice(held: List<ChatOutboxEntry>) {
+            val entry = held.lastOrNull { it.error != null && (it.terminal || it.rateLimited) }
+            val failure =
+                when {
+                    entry == null -> null
+                    entry.refused -> entry.error.takeUnless { it == NetworkError.Forbidden.message } ?: SEND_REFUSED_NOTICE
+                    else -> entry.error
+                }
+            if (failure != null) {
+                _sendLimitNotice.value = failure
+            } else if (_sendLimitNotice.value == outboxNotice) {
+                _sendLimitNotice.value = null
             }
+            outboxNotice = failure
         }
 
         /**
