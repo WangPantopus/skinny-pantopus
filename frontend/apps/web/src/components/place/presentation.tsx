@@ -244,7 +244,8 @@ const SECTION_CONFIG: Record<PlaceSectionId, SectionConfig> = {
       const val = money(d.estimated_value);
       if (d.value_card?.summary) parts.push(d.value_card.summary);
       else if (val) parts.push(`est. value ${val}`);
-      return { value: parts.join(' · ') || 'Property details on file' };
+      // A home with only an estimate has nothing on file: the estimate says what it is.
+      return { value: parts.join(' · ') || d.estimate?.title || 'Property details on file' };
     },
   },
   home_systems: {
