@@ -66,6 +66,7 @@ const Joi = require('joi');
 const logger = require('../utils/logger');
 const { escapeIlike } = require('../utils/escapeIlike');
 const { geocodeAddress } = require('../utils/geocoding');
+const { timezoneFromCoordinates, validTimezone } = require('../utils/timezone');
 const { validateBusinessAddress, PUBLIC_LOCATION_COLUMNS, toPublicBusinessLocation } = require('../services/businessAddressService');
 const { computeAddressHash } = require('../utils/normalizeAddress');
 const { isPublicStorageUrl } = require('../services/s3Service');
@@ -451,6 +452,21 @@ async function bootstrapOwnerSeat(businessUserId, actorId) {
   }
 }
 
+// The create wizard saves its address without coordinates. Looking the address up once gives the location its time
+// zone, so the profile and Discover read its hours where it is. The coordinates aren't saved: this path doesn't run
+// the address checks (household conflicts) that the locations route runs before it saves a location's coordinates.
+async function fillLocationTimezone(locationId, { address, city, state, zipcode, country }) {
+  const geo = await geocodeAddress(address, city, state, zipcode, country);
+  const timezone = geo && timezoneFromCoordinates(geo.latitude, geo.longitude, null);
+  if (!timezone) return;
+  const { error } = await supabaseAdmin
+    .from('BusinessLocation')
+    .update({ timezone })
+    .eq('id', locationId)
+    .is('timezone', null);
+  if (error) throw error;
+}
+
 // A repeat of this person's own create (a phone's silent re-send, or a retry after a lost reply) finds the business it
 // made: the username is a business with these same name and email details, made in the last half hour, owned by this
 // person and not yet published. The create then answers as the first one did, so the app goes on to its logo and
@@ -783,6 +799,12 @@ router.post('/create-full', verifyToken, validate(createBusinessFullSchema), asy
     calculateAndStoreCompleteness(businessUserId).catch((err) => {
       logger.error('Post-creation completeness calculation failed', { businessUserId, error: err.message });
     });
+
+    if (data.location_id) {
+      fillLocationTimezone(data.location_id, location).catch((err) => {
+        logger.error('Post-creation location time zone failed', { businessUserId, error: err.message });
+      });
+    }
 
     await writeAuditLog(businessUserId, actorId, 'create_business', 'User', businessUserId, { username, name, method: 'create-full' });
 
@@ -1811,7 +1833,6 @@ router.post('/:businessId/locations', verifyToken, validate(createLocationSchema
       state: body.state || null,
       zipcode: body.zipcode || null,
       country: body.country || 'US',
-      timezone: body.timezone || null,
       phone: body.phone || null,
       email: body.email || null,
       // Decision engine fields
@@ -1850,6 +1871,10 @@ router.post('/:businessId/locations', verifyToken, validate(createLocationSchema
         logger.warn('Geocoding returned no result — location will be invisible in map discovery', { businessId, address: body.address, city: body.city });
       }
     }
+
+    // Hours are read in the location's own time zone (Discover's open state, the apps' profile).
+    const coords = parsePostGISPoint(locationData.location);
+    locationData.timezone = timezoneFromCoordinates(coords?.latitude, coords?.longitude, validTimezone(body.timezone));
 
     // Geocode provenance
     locationData.geocode_provider = resolvedProvider;
@@ -1980,7 +2005,7 @@ router.patch('/:businessId/locations/:locationId', verifyToken, validate(updateL
     // stored address, so an address edit is re-validated below.
     const { data: existingLoc } = await supabaseAdmin
       .from('BusinessLocation')
-      .select('geocode_mode, address, address2, city, state, zipcode')
+      .select('geocode_mode, address, address2, city, state, zipcode, location, timezone')
       .eq('id', locationId)
       .eq('business_user_id', businessId)
       .single();
@@ -2067,6 +2092,17 @@ router.patch('/:businessId/locations/:locationId', verifyToken, validate(updateL
       updateData.geocode_place_id = body.geocode_place_id || null;
       updateData.geocode_source_flow = 'business_location_edit';
       updateData.geocode_created_at = new Date().toISOString();
+    }
+
+    // A missing time zone is filled from the coordinates, and a moved location's zone follows its new coordinates
+    // unless the saved zone still applies there. A zone sent in the body is left as sent.
+    if (!('timezone' in body)) {
+      const savedZone = validTimezone(existingLoc?.timezone);
+      let coords = null;
+      if (locationChanging) coords = parsePostGISPoint(updateData.location);
+      else if (!savedZone) coords = parsePostGISPoint(existingLoc?.location);
+      const zone = coords && timezoneFromCoordinates(coords.latitude, coords.longitude, savedZone);
+      if (zone && zone !== existingLoc?.timezone) updateData.timezone = zone;
     }
 
     // Handle primary flag
