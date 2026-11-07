@@ -11,7 +11,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.AlertDialog
@@ -2319,10 +2322,16 @@ private val SAVED_PAGE_OFFLINE_STRIP_ROUTES =
     )
 
 /**
- * Screens where the tab bar stays while their page scrolls, as on iPhone: a chat and a piece of mail keep their own bar
- * (the composer, the letter's actions) just above it, and the Plans map has no page to scroll.
+ * Screens where the tab bar stays while their page scrolls, as on iPhone: a piece of mail keeps its own bar (the
+ * letter's actions) just above it, and the Plans map has no page to scroll.
  */
-private val TAB_BAR_STAYS_ROUTES = setOf(ChildRoutes.CHAT_CONVERSATION, ChildRoutes.MAILBOX_ITEM_DETAIL, PantopusRoute.Plans.path)
+private val TAB_BAR_STAYS_ROUTES = setOf(ChildRoutes.MAILBOX_ITEM_DETAIL, PantopusRoute.Plans.path)
+
+/**
+ * Screens with no tab bar, as on iPhone: a conversation has the whole window (founder request 2026-11-06), and its
+ * Back returns to the screen underneath, where the bar is.
+ */
+private val NO_TAB_BAR_ROUTES = setOf(ChildRoutes.CHAT_CONVERSATION)
 
 /** Where the first-run notices may show: nothing else is asking there. */
 private val NOTICE_ROUTES = setOf(PantopusRoute.Place.path, PantopusRoute.Today.path)
@@ -2392,7 +2401,8 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
     // The tab bar slides away while a page scrolls down (founder request 2026-10-30, as on iPhone), never while
     // TalkBack explores the screen. Every new screen, tab or step back starts with it in view.
     val tabBarScroll = remember { TabBarScrollState() }
-    val tabBarSlides = !rememberTouchExplorationEnabled() && backStackEntry?.destination?.route !in TAB_BAR_STAYS_ROUTES
+    val showsTabBar = backStackEntry?.destination?.route !in NO_TAB_BAR_ROUTES
+    val tabBarSlides = !rememberTouchExplorationEnabled() && showsTabBar && backStackEntry?.destination?.route !in TAB_BAR_STAYS_ROUTES
     val tabBarScrollConnection = rememberTabBarScrollConnection(tabBarScroll, enabled = tabBarSlides)
     LaunchedEffect(backStackEntry) { tabBarScroll.show() }
     // Plans is a tab only while its switch is on, and the bar follows the switch while the app runs.
@@ -2969,7 +2979,17 @@ fun RootTabScreen(inboxBadgeCount: Int = 0) {
                     OfflineBannerHost(isOffline = true, modifier = Modifier.statusBarsPadding()) { }
                 }
             },
-            bottomBar = {
+            bottomBar = bottomBar@{
+                if (!showsTabBar) {
+                    // The chat's composer color runs on under the system navigation area.
+                    Spacer(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(PantopusColors.appSurface)
+                            .navigationBarsPadding(),
+                    )
+                    return@bottomBar
+                }
                 PantopusBottomBar(
                     selected = currentRoute,
                     badges = badges,

@@ -3322,6 +3322,8 @@ public struct HubTabRoot: View {
                 },
                 onBack: { Task { @MainActor in pop() } }
             )
+            // The whole screen has no tab bar; beside the Mailbox, the bar stays.
+            .hidesTabBar(!mailSideBySide)
         case .menu:
             SettingsView(
                 onClose: { Task { @MainActor in pop() } },

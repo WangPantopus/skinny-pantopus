@@ -63,6 +63,7 @@ public struct PlansTabRoot: View {
                                 .ignoresSafeArea(.container, edges: columnIgnores(beside: beside))
                         }
                 }
+                .environment(\.plansListBesideMap, beside)
                 .frame(width: beside ? SideBySideColumnWidth.nearby.ideal : nil)
                 if beside {
                     PlansMapBeside(viewModel: map, selectedId: planBesideMap, onOpen: openFromMap)
