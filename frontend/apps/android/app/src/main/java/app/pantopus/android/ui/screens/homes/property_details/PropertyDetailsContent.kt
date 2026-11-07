@@ -2,6 +2,10 @@
 
 package app.pantopus.android.ui.screens.homes.property_details
 
+import app.pantopus.android.data.api.models.homes.HouseholdCountyPageDto
+import app.pantopus.android.data.api.models.homes.HouseholdFactDto
+import app.pantopus.android.data.api.models.homes.HouseholdGroupDto
+import app.pantopus.android.data.api.models.homes.HouseholdQuestionDto
 import app.pantopus.android.ui.components.SourcePillTone
 import app.pantopus.android.ui.theme.PantopusIcon
 
@@ -42,6 +46,23 @@ data class PropertyRecordSection(
     val note: String? = null,
 )
 
+/** What the household has said and can say, as the server sends it. Empty parts draw nothing. */
+data class PropertyHouseholdContent(
+    /** "From your household", where there's no record to set it beside. */
+    val sections: List<PropertyRecordSection> = emptyList(),
+    val groups: List<HouseholdGroupDto> = emptyList(),
+    val questions: List<HouseholdQuestionDto> = emptyList(),
+    val countyPage: HouseholdCountyPageDto? = null,
+) {
+    fun groupForSection(id: String): HouseholdGroupDto? = groups.firstOrNull { it.sectionId == id }
+
+    /** A card of its own: nothing in the record to sit under. */
+    val addDetails: List<HouseholdGroupDto>
+        get() = groups.filter { it.sectionId == null }
+
+    fun fact(key: String): HouseholdFactDto? = groups.flatMap { it.facts }.firstOrNull { it.key == key }
+}
+
 /** Status pill configuration for one verification source. */
 data class SourcePillSpec(
     val label: String,
@@ -73,6 +94,8 @@ data class PropertyDetailsContent(
     val recordFooter: String? = null,
     val verification: List<VerificationSource>,
     val banner: MismatchBannerData? = null,
+    /** Null for anyone the household's facts aren't for, and from a server that doesn't send them. */
+    val household: PropertyHouseholdContent? = null,
 )
 
 /** Observed state for the screen. */
