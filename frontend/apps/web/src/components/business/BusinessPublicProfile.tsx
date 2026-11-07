@@ -22,6 +22,7 @@ import { compareHoursRows, formatHoursInterval, PublicBlock } from './PublicBloc
 import UserAvatarLink from '@/components/user/UserAvatarLink';
 import UserIdentityLink from '@/components/user/UserIdentityLink';
 import { EndorsementSummary, EndorsementButton } from '@/components/endorsement';
+import { CATEGORY_MAP } from '@/components/discover/constants';
 import { toast } from '@/components/ui/toast-store';
 import { authPageHref } from '@/lib/auth-utils';
 import { queryKeys } from '@/lib/query-keys';
@@ -291,7 +292,7 @@ export default function BusinessPublicProfile({ username, currentUser, initialSl
                       key={i}
                       className="inline-flex items-center rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-700 border border-violet-200"
                     >
-                      {cat}
+                      {CATEGORY_MAP[cat] || cat}
                     </span>
                   ))}
                 </div>

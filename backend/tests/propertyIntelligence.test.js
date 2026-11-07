@@ -107,14 +107,12 @@ function setupFromSequence(cacheResult, homeResult) {
   mockFrom.mockImplementation((table) => {
     if (table === 'PropertyIntelligenceCache') {
       if (callCount === 0) {
-        // First call: cache read (select)
+        // First call: cache read (select), once at any age
         callCount++;
         const chain = {
           select: jest.fn().mockReturnValue({
             eq: jest.fn().mockReturnValue({
-              gt: jest.fn().mockReturnValue({
-                maybeSingle: jest.fn().mockResolvedValue(cacheResult),
-              }),
+              maybeSingle: jest.fn().mockResolvedValue(cacheResult),
             }),
           }),
           upsert: jest.fn().mockResolvedValue({ error: null }),

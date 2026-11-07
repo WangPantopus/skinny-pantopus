@@ -570,7 +570,8 @@ describe('GET /api/homes/:id/intelligence', () => {
     expect(s.your_home.source).toBe('Details you entered');
     expect(s.your_home.data.bedrooms).toBe(3);
     expect(s.your_home.data.estimated_value).toBeNull();
-    expect(propertyIntelligenceService.getProfile).toHaveBeenCalledWith(HOME_ID);
+    // Handed the Home row Place already read, so it isn't read again.
+    expect(propertyIntelligenceService.getProfile).toHaveBeenCalledWith(HOME_ID, expect.objectContaining({ home: expect.objectContaining({ id: HOME_ID }) }));
   });
 
   test('with an ATTOM key, Your Home composes exact property facts', async () => {
@@ -599,7 +600,8 @@ describe('GET /api/homes/:id/intelligence', () => {
     expect(s.your_home.status).toBe('ready');
     expect(s.your_home.data.estimated_value).toBe(612000);
     expect(s.your_home.data.year_built).toBe(1979);
-    expect(propertyIntelligenceService.getProfile).toHaveBeenCalledWith(HOME_ID);
+    // Handed the Home row Place already read, so it isn't read again.
+    expect(propertyIntelligenceService.getProfile).toHaveBeenCalledWith(HOME_ID, expect.objectContaining({ home: expect.objectContaining({ id: HOME_ID }) }));
   });
 
   test('a single failing source degrades only its section (no 500)', async () => {
