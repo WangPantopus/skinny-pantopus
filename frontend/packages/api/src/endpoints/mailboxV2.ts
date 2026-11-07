@@ -135,6 +135,9 @@ export interface MailCard {
   /** Sealed until Christmas morning: its note stays on the server until then. */
   sealed_until: string | null;
   sealed: boolean;
+  /** Its public page, /cards/<slug>, and the colour of the cloth it lies on (launch key card_table). */
+  slug?: string | null;
+  table?: string | null;
 }
 
 export interface MailPackage {
