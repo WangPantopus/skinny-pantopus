@@ -11,6 +11,7 @@
 //  delete against `backend/routes/posts.js`.
 //
 
+import CoreLocation
 import Foundation
 import Logging
 import Observation
@@ -1008,6 +1009,7 @@ public final class PulseFeedViewModel {
     }
 
     private func applyFirstPage(_ response: FeedResponse, area: FeedArea, query: FeedQuery, viewingLocation: ViewingLocationDTO?) {
+        if query != lastQuery { listReplacements += 1 }
         lastArea = area
         lastQuery = query
         loadedItems = response.posts
@@ -1186,24 +1188,41 @@ public final class PulseFeedViewModel {
             }
             fixIsTheOnlyArea = !read.homes.contains { $0.latitude != nil && $0.longitude != nil }
         }
-        if let resolvedLatitude, let resolvedLongitude {
-            return (FeedArea(latitude: resolvedLatitude, longitude: resolvedLongitude), nil)
-        }
-        if let cached = locationProvider.cachedCoordinate() {
-            resolvedLatitude = cached.latitude
-            resolvedLongitude = cached.longitude
-            return (FeedArea(latitude: cached.latitude, longitude: cached.longitude), nil)
-        }
+        // Where the device is now, on every first page: the tab keeps this model while its owner moves around. The
+        // last fix stands in when there is no new one.
+        var fix = locationProvider.cachedCoordinate()
         // Asking for location is "Use my location"'s job. Opening Pulse uses a fresh fix only when it needs no prompt.
-        // While the server can fall back to the person's Home that wait is brief: a slow GPS fix must not hold up the
-        // feed. With no Home, the fix is the only area there is, so it keeps the usual window.
-        if locationProvider.canLocateWithoutAsking,
-           let fresh = await locationProvider.requestCurrent(timeoutSeconds: fixIsTheOnlyArea ? 4 : passiveLocationTimeoutSeconds) {
-            resolvedLatitude = fresh.latitude
-            resolvedLongitude = fresh.longitude
-            return (FeedArea(latitude: fresh.latitude, longitude: fresh.longitude), nil)
+        // While the server can fall back to the person's Home (or the last fix stands in) that wait is brief: a slow
+        // GPS fix must not hold up the feed. With neither, the fix is the only area there is, so it keeps the usual window.
+        if fix == nil, locationProvider.canLocateWithoutAsking {
+            let onlyArea = fixIsTheOnlyArea && resolvedLatitude == nil
+            fix = await locationProvider.requestCurrent(timeoutSeconds: onlyArea ? 4 : passiveLocationTimeoutSeconds)
         }
-        return (FeedArea(latitude: nil, longitude: nil), nil)
+        if let fix { remember(fix) }
+        guard let resolvedLatitude, let resolvedLongitude else { return (FeedArea(latitude: nil, longitude: nil), nil) }
+        return (FeedArea(latitude: resolvedLatitude, longitude: resolvedLongitude), nil)
+    }
+
+    /// A move this far reads around the new point: about a twentieth of the
+    /// 100 miles the server reads around a fix.
+    private static let movedMeters: CLLocationDistance = 8000
+
+    /// Bumped when another query's first page replaces the list (the device
+    /// moved to a new area, or a filter changed): the list starts at its top,
+    /// even when the reader was far down the old one.
+    public private(set) var listReplacements = 0
+
+    /// Keeps a new fix once it is `movedMeters` from the last one. Closer, it
+    /// is the fix's own wobble, and a new point would read a new area, and
+    /// drop the list, on every return.
+    private func remember(_ fix: UserCoordinate) {
+        if let resolvedLatitude, let resolvedLongitude {
+            let last = CLLocation(latitude: resolvedLatitude, longitude: resolvedLongitude)
+            let here = CLLocation(latitude: fix.latitude, longitude: fix.longitude)
+            guard here.distance(from: last) >= Self.movedMeters else { return }
+        }
+        resolvedLatitude = fix.latitude
+        resolvedLongitude = fix.longitude
     }
 
     /// With location allowed, "Set an area" isn't the last word: a first fix can take longer than a read waits (GPS
