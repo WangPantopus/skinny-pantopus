@@ -19,6 +19,7 @@ import java.util.concurrent.TimeUnit
 internal object EditBusinessPageMapper {
     private val dayLabels = listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
     private const val DESCRIPTION_CHAR_LIMIT = 600
+    private const val HOURS_PER_DAY = 24
 
     /** `updateLocationSchema` requires `address` to be at least 3 chars. */
     private const val MIN_STREET_LENGTH = 3
@@ -245,88 +246,79 @@ internal object EditBusinessPageMapper {
         return null
     }
 
+    /** The whole week for `PUT …/hours`, which replaces what is saved; null when no row changed. */
     fun hoursPayload(state: EditBusinessPageHoursState): List<SetBusinessHoursDayRequest>? {
-        val rows =
-            when (state) {
-                is EditBusinessPageHoursState.Rows -> state.rows
-                is EditBusinessPageHoursState.QuickApply -> state.rows
-            }
-        if (!rows.any { it.isDirty }) return null
-        val payload = mutableListOf<SetBusinessHoursDayRequest>()
-        dayLabels.forEachIndexed { index, label ->
-            val row =
-                rows.firstOrNull { it.dayLabel == label || it.id == label.lowercase(Locale.US) }
-                    ?: return@forEachIndexed
-            when (val rowState = row.state) {
-                is EditBusinessPageHoursRow.State.Open -> {
-                    val open = parseDisplayTime(rowState.openLabel) ?: return@forEachIndexed
-                    val close = parseDisplayTime(rowState.closeLabel) ?: return@forEachIndexed
-                    payload +=
-                        SetBusinessHoursDayRequest(
-                            dayOfWeek = index,
-                            openTime = open,
-                            closeTime = close,
-                            isClosed = false,
-                        )
-                }
-                EditBusinessPageHoursRow.State.Closed ->
-                    payload +=
-                        SetBusinessHoursDayRequest(
-                            dayOfWeek = index,
-                            isClosed = true,
-                        )
-                EditBusinessPageHoursRow.State.NotSet -> Unit
-            }
-        }
-        return payload.ifEmpty { null }
+        if (!state.rows.any { it.isDirty }) return null
+        return state.rows.mapNotNull(::hoursRequest).ifEmpty { null }
     }
 
-    private fun mapHours(hours: List<BusinessHoursDto>): EditBusinessPageHoursState {
-        if (hours.isEmpty()) {
-            return EditBusinessPageHoursState.QuickApply(
-                rows =
-                    dayLabels.map { label ->
-                        EditBusinessPageHoursRow(
-                            id = label.lowercase(Locale.US),
-                            dayLabel = label,
-                            state = EditBusinessPageHoursRow.State.NotSet,
-                        )
-                    },
-            )
+    private fun hoursRequest(row: EditBusinessPageHoursRow): SetBusinessHoursDayRequest? {
+        val day = dayLabels.indexOfFirst { it == row.dayLabel || it.lowercase(Locale.US) == row.id }
+        if (day < 0) return null
+        val source = row.source
+        if (!row.isDirty && source != null) {
+            return SetBusinessHoursDayRequest(day, source.openTime, source.closeTime, source.isClosed == true, source.notes)
         }
-        val byDay = hours.associateBy { it.dayOfWeek }
+        return when (val state = row.state) {
+            is EditBusinessPageHoursRow.State.Open ->
+                SetBusinessHoursDayRequest(
+                    dayOfWeek = day,
+                    openTime = apiTime(state.openLabel, source?.openTime),
+                    closeTime = apiTime(state.closeLabel, source?.closeTime),
+                    isClosed = false,
+                    notes = source?.notes,
+                )
+            EditBusinessPageHoursRow.State.Closed -> SetBusinessHoursDayRequest(day, isClosed = true, notes = source?.notes)
+            EditBusinessPageHoursRow.State.NotSet -> null
+        }
+    }
+
+    /** The saved value when the label still reads the same, so an edit to one end keeps the other's seconds. */
+    private fun apiTime(
+        label: String,
+        saved: String?,
+    ): String? = saved?.takeIf { formatApiTime(it) == label } ?: parseDisplayTime(label)
+
+    /** The rows after one row's hours change; putting the saved hours back clears its dirty mark. */
+    fun withRowHours(
+        rows: List<EditBusinessPageHoursRow>,
+        saved: List<EditBusinessPageHoursRow>,
+        id: String,
+        value: EditBusinessPageHoursRow.State,
+    ): List<EditBusinessPageHoursRow> {
+        val selected = rows.firstOrNull { it.id == id } ?: return rows
+        val day = selected.dayLabel
+        // Closed and open all day answer for the whole day, so they replace its other intervals.
+        val replacesDay = value == EditBusinessPageHoursRow.State.Closed || value.isAllDay
+        val kept = rows.filterNot { replacesDay && it.dayLabel == day && it.id != id }
+        val intervalsChanged = kept.count { it.dayLabel == day } != saved.count { it.dayLabel == day }
+        return kept.map { row ->
+            if (row.id == id) {
+                val savedState = row.source?.let(::hoursState)
+                val sameAsSaved = savedState != null && (value == savedState || (value.isAllDay && savedState.isAllDay))
+                row.copy(state = value, isDirty = intervalsChanged || !sameAsSaved)
+            } else {
+                row
+            }
+        }
+    }
+
+    fun mapHours(hours: List<BusinessHoursDto>): EditBusinessPageHoursState {
+        val byDay = hours.groupBy { it.dayOfWeek }
         val rows =
-            dayLabels.mapIndexed { index, label ->
-                val row = byDay[index]
-                when {
-                    row == null ->
+            dayLabels.flatMapIndexed { index, label ->
+                val id = label.lowercase(Locale.US)
+                val intervals = byDay[index].orEmpty().sortedBy { it.openTime.orEmpty() }
+                if (intervals.isEmpty()) {
+                    listOf(EditBusinessPageHoursRow(id = id, dayLabel = label, state = EditBusinessPageHoursRow.State.NotSet))
+                } else {
+                    intervals.mapIndexed { offset, row ->
                         EditBusinessPageHoursRow(
-                            id = label.lowercase(Locale.US),
+                            id = if (offset == 0) id else "$id-$offset",
                             dayLabel = label,
-                            state = EditBusinessPageHoursRow.State.NotSet,
+                            state = hoursState(row),
+                            source = row,
                         )
-                    row.isClosed == true ->
-                        EditBusinessPageHoursRow(
-                            id = label.lowercase(Locale.US),
-                            dayLabel = label,
-                            state = EditBusinessPageHoursRow.State.Closed,
-                        )
-                    else -> {
-                        val open = formatApiTime(row.openTime)
-                        val close = formatApiTime(row.closeTime)
-                        if (open != null && close != null) {
-                            EditBusinessPageHoursRow(
-                                id = label.lowercase(Locale.US),
-                                dayLabel = label,
-                                state = EditBusinessPageHoursRow.State.Open(open, close),
-                            )
-                        } else {
-                            EditBusinessPageHoursRow(
-                                id = label.lowercase(Locale.US),
-                                dayLabel = label,
-                                state = EditBusinessPageHoursRow.State.NotSet,
-                            )
-                        }
                     }
                 }
             }
@@ -337,6 +329,17 @@ internal object EditBusinessPageMapper {
             rows = rows,
             footerHint = "Tap a day to edit its hours. Save to apply your changes.",
         )
+    }
+
+    private fun hoursState(row: BusinessHoursDto): EditBusinessPageHoursRow.State {
+        if (row.isClosed == true) return EditBusinessPageHoursRow.State.Closed
+        val open = formatApiTime(row.openTime)
+        val close = formatApiTime(row.closeTime)
+        return if (open != null && close != null) {
+            EditBusinessPageHoursRow.State.Open(open, close)
+        } else {
+            EditBusinessPageHoursRow.State.NotSet
+        }
     }
 
     fun mapServices(catalog: List<BusinessCatalogItemDto>): EditBusinessPageServicesState {
@@ -486,6 +489,7 @@ internal object EditBusinessPageMapper {
         if (value.isNullOrBlank()) return null
         val parts = value.split(":")
         val hour = parts.firstOrNull()?.toIntOrNull() ?: return value
+        if (hour == HOURS_PER_DAY) return EditBusinessPageHoursRow.END_OF_DAY_LABEL
         val minute = parts.getOrNull(1)?.take(2) ?: "00"
         val period = if (hour >= 12) "PM" else "AM"
         val hour12 = if (hour % 12 == 0) 12 else hour % 12
@@ -494,6 +498,7 @@ internal object EditBusinessPageMapper {
 
     private fun parseDisplayTime(value: String): String? {
         val trimmed = value.trim().uppercase(Locale.US)
+        if (trimmed == EditBusinessPageHoursRow.END_OF_DAY_LABEL) return trimmed
         val formats = listOf("h:mm a", "h:mma", "HH:mm", "H:mm")
         for (format in formats) {
             try {

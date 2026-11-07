@@ -55,6 +55,7 @@ async function answer(address, { stateFile: readState, recordsAt, suppressions: 
 
   const query = { ...parsed, zip, city: cityKey(address.city) };
   const suppressions = await readSuppressions();
+  const zipNamed = new Set();
   const answers = await Promise.all(counties.map(async (fips) => {
     const county = stateFile.jurisdictions[fips];
     const here = { jurisdiction: fips, release: county.release, ...facts };
@@ -62,17 +63,19 @@ async function answer(address, { stateFile: readState, recordsAt, suppressions: 
     if (county.stale_after && Date.now() > Date.parse(county.stale_after)) return { match: 'stale', reason: 'release_past_date', ...here };
     if (suppressions?.hashes?.includes(suppressionHash(suppressions.salt, fips, query))) return { match: 'restricted', ...here };
     const records = complete(fips, await recordsAt(fips, county.release, sortKey(parsed)));
+    if (zip && records.some((record) => record.address.zip === zip)) zipNamed.add(fips);
     return { ...identity.resolve(query, records), ...here };
   }));
   answers.sort((a, b) => MATCH_RANK[a.match] - MATCH_RANK[b.match]);
   // Two counties with something at this line: a ZIP across a county line, and the line in both. Not ours to pick,
   // and one county's clean answer doesn't outrank the other's "which one?".
   const claiming = answers.filter(({ match }) => ['exact', 'building_only', 'ambiguous'].includes(match));
-  // Only one of them says this ZIP on its record: the other just has no ZIP on file, and that isn't a second place.
-  const namesZip = claiming.filter(({ record }) => zip && record?.address?.zip === zip);
+  // Only one of them says this ZIP on its records: the other just has no ZIP on file, and that isn't a second place. A county
+  // that asks "which one?" names no single record, so its records at this line say whether it names the ZIP.
+  const namesZip = claiming.filter(({ jurisdiction }) => zipNamed.has(jurisdiction));
   if (claiming.length > 1 && namesZip.length === 1) return namesZip[0];
   if (claiming.length > 1) return { match: 'ambiguous', reason: 'two_counties', jurisdiction: claiming[0].jurisdiction, ...facts };
   return answers[0];
 }
 
-module.exports = { answer, complete };
+module.exports = { answer, complete, suppressionHash };

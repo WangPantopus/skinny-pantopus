@@ -312,15 +312,18 @@ async function notifyProbationDisputeToReview({ caseId, home }) {
  * @param {object} [params.home] The Home row (city, state): city only is printed.
  * @returns {Promise<boolean>} true when an email was handed to the mailer.
  */
-async function notifyRecordProblemToReview({ caseId, home }) {
+async function notifyRecordProblemToReview({ caseId, home, floorPlan = false }) {
   const to = recipients();
   if (!to.length || !caseId) return false;
 
   const where = [home && home.city, home && home.state].filter(Boolean).join(', ') || 'unknown area';
-  const subject = `[Pantopus] County record problem to review · ${where}`;
+  const subject = `[Pantopus] ${floorPlan ? 'Floor plan' : 'County record'} problem to review · ${where}`;
   const resolve = `POST /api/admin/address-review/${caseId}/resolve`;
+  const lead = floorPlan
+    ? "A resident says their building's floor plan isn't their layout. Nothing on their page changed."
+    : 'A household says something on its county record looks wrong. Nothing on their page changed.';
   const text = [
-    'A household says something on its county record looks wrong. Nothing on their page changed.',
+    lead,
     '',
     `Case: ${caseId}`,
     `Area: ${where}`,
@@ -328,7 +331,7 @@ async function notifyRecordProblemToReview({ caseId, home }) {
     `Close it: ${resolve} with {"outcome": "approved"} if the record is wrong, "rejected" if it's right, or "dismissed".`,
     'Open cases: GET /api/admin/address-review/queue',
   ].join('\n');
-  const html = `<p>A household says something on its county record looks wrong. Nothing on their page changed.</p>
+  const html = `<p>${lead}</p>
 <ul><li>Case: <code>${caseId}</code></li><li>Area: ${where}</li></ul>
 <p>Close it: <code>${resolve}</code></p>`;
 
@@ -341,5 +344,35 @@ async function notifyRecordProblemToReview({ caseId, home }) {
   }
 }
 
+/**
+ * A building's floor-plan sheet has come in. Nothing reaches a screen until a release is built from it.
+ *
+ * @param {object} params
+ * @param {string} params.caseId
+ * @param {string} [params.area] City and state: no street line.
+ * @param {object} [params.summary] How many plans and units it names.
+ * @returns {Promise<boolean>} true when an email was handed to the mailer.
+ */
+async function notifyFloorPlanSheetToReview({ caseId, area, summary }) {
+  const to = recipients();
+  if (!to.length || !caseId) return false;
+
+  const where = area || 'unknown area';
+  const counts = `${summary?.plans ?? 0} plans, ${summary?.mapped_units ?? 0} units named`;
+  const subject = `[Pantopus] Floor-plan sheet to review · ${where}`;
+  const lead = 'A building sent its floor-plan sheet. Check it and its permission before building a release; nothing is on any screen yet.';
+  const text = [lead, '', `Case: ${caseId}`, `Area: ${where}`, `Sheet: ${counts}`, '', 'Open cases: GET /api/admin/address-review/queue'].join('\n');
+  const html = `<p>${lead}</p>
+<ul><li>Case: <code>${caseId}</code></li><li>Area: ${where}</li><li>Sheet: ${counts}</li></ul>`;
+
+  try {
+    await emailService.sendEmail({ to: to.join(','), subject, text, html });
+    return true;
+  } catch (err) {
+    logger.warn('adminAlerts: floor plan sheet email failed (non-fatal)', { caseId, error: err.message });
+    return false;
+  }
+}
+
 module.exports = { notifyClaimToReview, notifyClaimInfoSent, notifyReportToReview, notifyRemovalVoteToReview,
-  notifyAddressWatchCase, notifyProbationDisputeToReview, notifyRecordProblemToReview, recipients };
+  notifyAddressWatchCase, notifyProbationDisputeToReview, notifyRecordProblemToReview, notifyFloorPlanSheetToReview, recipients };

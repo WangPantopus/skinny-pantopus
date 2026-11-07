@@ -1,0 +1,506 @@
+{
+  "updated": "November 7, 2026",
+  "groups": [
+    {
+      "title": "National sources",
+      "sources": [
+        {
+          "id": "nad",
+          "publisher": "U.S. Department of Transportation, the U.S. Census Bureau, and the state, local and tribal partners of the National Address Database",
+          "url": "https://www.transportation.gov/gis/national-address-database",
+          "license": "U.S. government work, no copyright",
+          "license_url": "https://maps.dot.gov/dotgis/NationalAddressDatabaseMetadata.xml",
+          "dataset": "National Address Database. Used to answer one person about their own address, never as a mailing list."
+        },
+        {
+          "id": "us-structures",
+          "publisher": "Oak Ridge National Laboratory and the Federal Emergency Management Agency",
+          "url": "https://gis-fema.hub.arcgis.com/pages/usa-structures",
+          "license": "U.S. government work",
+          "dataset": "USA Structures"
+        },
+        {
+          "id": "us-structures#nsi",
+          "publisher": "U.S. Army Corps of Engineers",
+          "url": "https://www.hec.usace.army.mil/confluence/nsi",
+          "license": "U.S. government work",
+          "dataset": "National Structure Inventory. Its sizes and stories are modeled, not measured."
+        },
+        {
+          "id": "us-acs",
+          "publisher": "U.S. Census Bureau",
+          "url": "https://www.census.gov/programs-surveys/acs",
+          "license": "U.S. government work",
+          "dataset": "American Community Survey 5-year tables, ZIP code areas and county boundaries"
+        },
+        {
+          "id": "us-fhfa",
+          "publisher": "Federal Housing Finance Agency",
+          "url": "https://www.fhfa.gov/data/hpi/datasets?tab=annual-house-price-indexes",
+          "license": "U.S. government work",
+          "dataset": "FHFA House Price Index, annual ZIP code and county files. An area's price change, never a home's value."
+        }
+      ]
+    },
+    {
+      "title": "County, city and state records",
+      "sources": [
+        {
+          "id": "co-adams",
+          "publisher": "Adams County, Colorado",
+          "url": "https://www.arcgis.com/home/item.html?id=3309d11bc608475d82ac8b749779a907",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/",
+          "dataset": "Parcels, property improvements, values and sales"
+        },
+        {
+          "id": "va-charlottesville",
+          "publisher": "City of Charlottesville, Virginia",
+          "url": "https://opendata.charlottesville.org",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/",
+          "dataset": "Real estate tables"
+        },
+        {
+          "id": "co-denver",
+          "publisher": "City of Denver Open Data Catalog",
+          "url": "http://data.denvergov.org",
+          "license": "CC BY 3.0",
+          "license_url": "http://creativecommons.org/licenses/by/3.0/",
+          "dataset": "Real property residential characteristics, sales and parcels"
+        },
+        {
+          "id": "wi-milwaukee",
+          "publisher": "City of Milwaukee, Wisconsin",
+          "url": "https://data.milwaukee.gov/dataset/mprop",
+          "license": "CC BY",
+          "license_url": "http://www.opendefinition.org/licenses/cc-by",
+          "dataset": "Master Property File"
+        },
+        {
+          "id": "ca-los-angeles",
+          "publisher": "County of Los Angeles",
+          "url": "https://egis-lacounty.hub.arcgis.com",
+          "license": "County of Los Angeles Terms of Use",
+          "license_url": "https://egis-lacounty.hub.arcgis.com/pages/terms-of-use",
+          "statement": "County of Los Angeles. 2026. LA County Parcel [dataset]. County of Los Angeles, California, Enterprise GIS Repository. Accessed November 7, 2026. https://egis-lacounty.hub.arcgis.com."
+        },
+        {
+          "id": "ga-dekalb",
+          "publisher": "DeKalb County GIS, Georgia",
+          "url": "https://www.arcgis.com/home/item.html?id=1181deaadec047478dd7e91f3d94c69d",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/",
+          "dataset": "Tax parcels"
+        },
+        {
+          "id": "dc-dc",
+          "publisher": "District of Columbia",
+          "url": "https://opendata.dc.gov",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/",
+          "dataset": "Office of Tax and Revenue's appraisal and tax tables, on DC GIS"
+        },
+        {
+          "id": "or-rlis",
+          "publisher": "Metro, Oregon",
+          "url": "https://rlisdiscovery.oregonmetro.gov",
+          "license": "RLIS Open Database End User License Agreement",
+          "license_url": "https://rlisdiscovery.oregonmetro.gov/pages/open-database-license",
+          "statement": "Regional Land Information System data are a product of Metro and made publicly available according to the license agreement found in https://rlisdiscovery.oregonmetro.gov/pages/open-database-license."
+        },
+        {
+          "id": "nc-onemap",
+          "publisher": "NC OneMap",
+          "url": "https://www.nconemap.gov",
+          "license": "NC OneMap terms",
+          "license_url": "https://www.nconemap.gov/pages/terms",
+          "statement": "NC OneMap (2019). North Carolina Department of Information Technology, Government Data Analytics Center, Center for Geographic Information and Analysis. Available at www.nconemap.gov."
+        },
+        {
+          "id": "nj-modiv",
+          "publisher": "NJ Office of Information Technology, Office of GIS (NJOGIS)",
+          "url": "https://www.arcgis.com/home/item.html?id=533599bbfbaa4748bf39faf1375a8a9c",
+          "license": "Acknowledgement requested",
+          "dataset": "Parcels and MOD-IV Composite of New Jersey"
+        },
+        {
+          "id": "nc-onemap#buildings",
+          "publisher": "North Carolina Floodplain Mapping Program, NC Emergency Management",
+          "url": "https://www.arcgis.com/home/item.html?id=d5f0fd023d8e4025b7a4b5167add2001",
+          "license": "Acknowledgement requested",
+          "dataset": "NC Risk Building Footprints"
+        },
+        {
+          "id": "ny-parcels#pluto",
+          "publisher": "NYC Department of City Planning",
+          "url": "https://www.nyc.gov/content/planning/pages/resources/datasets/mappluto-pluto-change",
+          "license": "NYC Open Data Terms of Use",
+          "license_url": "https://opendata.cityofnewyork.us/overview/#termsofuse",
+          "dataset": "PLUTO"
+        },
+        {
+          "id": "ca-san-diego",
+          "publisher": "San Diego County Assessor, derived from SanGIS",
+          "url": "https://www.sangis.org",
+          "license": "SanGIS End User Agreement",
+          "dataset": "Parcels. Derived from SanGIS data, changed by Pantopus, and not an original SanGIS product."
+        },
+        {
+          "id": "ut-lir",
+          "publisher": "Utah Geospatial Resource Center and Utah's county assessors",
+          "url": "https://www.arcgis.com/home/item.html?id=69477c1143924bc9990cdb930b033fb5",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/",
+          "dataset": "Land Information Records parcels"
+        }
+      ]
+    },
+    {
+      "title": "Address points",
+      "note": "These files come to us from their publishers, or through OpenAddresses and the Overture Maps Foundation, which distribute them.",
+      "sources": [
+        {
+          "id": "us/co/adams",
+          "publisher": "Adams County, Colorado",
+          "url": "https://data-adcogov.opendata.arcgis.com/datasets/a6f481d1db6c4d1c980c05c90f84eb2a_0/about",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/co/archuleta",
+          "publisher": "Archuleta County, Colorado",
+          "url": "https://www.archuletacounty.gov",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "overture:us/ga/clarke",
+          "publisher": "Athens-Clarke County GIS, Georgia",
+          "url": "https://data-athensclarke.opendata.arcgis.com/datasets/AthensClarke::acc-address-point/about",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/co/boulder",
+          "publisher": "Boulder County, Colorado",
+          "url": "https://opendata-bouldercounty.hub.arcgis.com",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/wi/calumet",
+          "publisher": "Calumet County, Wisconsin",
+          "url": "https://gis-calumet.hub.arcgis.com/datasets/1a3692b039074fbfa0a19cfc57adce76_3/about",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/ia/cerro_gordo",
+          "publisher": "Cerro Gordo County, Iowa",
+          "url": "https://data-cgco-gis.hub.arcgis.com/",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "us/ga/city_of_alpharetta",
+          "publisher": "City of Alpharetta, Georgia",
+          "url": "https://alphagis.alpharetta.ga.us/arcgis/rest/services/OpenData/AddressPoints_OD/FeatureServer",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/ca/city_of_bakersfield",
+          "publisher": "City of Bakersfield, California",
+          "url": "https://bakersfielddatalibrary-cob.opendata.arcgis.com/datasets/cob::addresses/about",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "overture:us/id/ada",
+          "publisher": "City of Boise, Idaho",
+          "url": "https://opendata.cityofboise.org/",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/tx/city_of_college_station",
+          "publisher": "City of College Station, Texas",
+          "url": "https://data-cstx.opendata.arcgis.com/datasets/CSTX::structures/about",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/ga/city_of_johns_creek",
+          "publisher": "City of Johns Creek, Georgia",
+          "url": "https://hub.arcgis.com/datasets/JohnsCreekGA::address-points/about",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/nc/lenoir",
+          "publisher": "City of Kinston, North Carolina",
+          "url": "https://services5.arcgis.com/oHyVM17u2FMyV4oB/arcgis/rest/services/AddressPoints/FeatureServer",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "us/ca/city_of_manteca",
+          "publisher": "City of Manteca, California",
+          "url": "https://data-manteca.opendata.arcgis.com/datasets/acc9d3bebd83446a995487287976cfdb_21/about",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/fl/city_of_miami",
+          "publisher": "City of Miami, Department of Innovation and Technology, GIS Team, Florida",
+          "url": "https://datahub-miamigis.opendata.arcgis.com/datasets/f12e4de69f2a474a8c29c8e8664f75c2",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/ca/city_of_mountain_view",
+          "publisher": "City of Mountain View, California",
+          "url": "https://data-mountainview.opendata.arcgis.com/datasets/MountainView::address-points/about",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "us/ok/city_of_norman",
+          "publisher": "City of Norman GIS Services Division, Oklahoma",
+          "url": "https://www.normanok.gov/your-government/departments/planning-and-community-development/gis-services",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "us/fl/city_of_west_palm_beach",
+          "publisher": "City of West Palm Beach, Florida",
+          "url": "https://www.arcgis.com/home/item.html?id=62ae1236c4f2481cbe23968627cd3fc0",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "us/va/city_of_winchester",
+          "publisher": "City of Winchester, Virginia",
+          "url": "https://www.arcgis.com/home/item.html?id=d631909df1c549fa9b78136dce10ebda",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "overture:us/ca/los_angeles",
+          "publisher": "County of Los Angeles",
+          "url": "https://data.lacounty.gov/datasets/cams-export-data/about",
+          "license": "County of Los Angeles Terms of Use",
+          "license_url": "https://egis-lacounty.hub.arcgis.com/pages/terms-of-use"
+        },
+        {
+          "id": "us/pa/dauphin",
+          "publisher": "Dauphin County Information Technology and Tax Assessment, Pennsylvania",
+          "url": "https://data-dauphinco.opendata.arcgis.com/datasets/dauphinco::parcel-boundaries",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "overture:us/ga/dekalb",
+          "publisher": "DeKalb County, Georgia",
+          "url": "https://dekalbinsights-dekalbgis.opendata.arcgis.com/datasets/DeKalbGIS::address-6/about",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/ne/omaha",
+          "publisher": "Douglas County GIS, Nebraska",
+          "url": "https://data.dogis.org/datasets/address-points-1",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "us/nm/dona_ana",
+          "publisher": "Doña Ana County GIS Division, New Mexico",
+          "url": "https://www.arcgis.com/home/item.html?id=e80209522bcd4aa685175bb374df7ed6",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "us/ks/riley_county",
+          "publisher": "Esri Community Maps Contributors; Riley County, Kansas",
+          "url": "https://www.arcgis.com/home/item.html?id=3d3d612b0d9d48dba4279e1a1442f88e",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/va/warrenton",
+          "publisher": "Fauquier County GIS and Town of Warrenton, Virginia",
+          "url": "https://www.arcgis.com/home/item.html?id=0aea88cc41f04b0ea2fa6b845a5dee45",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "us/ky/boone",
+          "publisher": "GIS Services Division, Boone County Planning Commission, Kentucky",
+          "url": "https://www.boonecountygis.com/",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "us/oh/greene",
+          "publisher": "Greene County GIS, Ohio",
+          "url": "https://www.greenecountyohio.gov/249/GIS",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "us/va/henrico",
+          "publisher": "Henrico County GIS Office, Virginia",
+          "url": "https://data-henrico.opendata.arcgis.com/datasets/Henrico::master-address-points-2",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "overture:us/fl/hillsborough",
+          "publisher": "Hillsborough County, Florida",
+          "url": "https://gis2017-01-10t133755357z-hillsborough.opendata.arcgis.com/datasets/hillsborough::site-address-points/about",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/in/statewide",
+          "publisher": "Indiana Geographic Information Office",
+          "url": "https://www.indianamap.org/datasets/9b222d07cc164eb384a24742cbf1d274_0/explore",
+          "license": "Citation requested",
+          "dataset": "Address Points of Indiana"
+        },
+        {
+          "id": "us/or/jackson",
+          "publisher": "Jackson County GIS, Oregon",
+          "url": "https://www.jacksoncountyor.gov",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/or/klamath",
+          "publisher": "Klamath County GIS, Oregon",
+          "url": "https://services.arcgis.com/H6Mh1bySxR4oHx6x/ArcGIS/rest/services/KC_Taxlots/FeatureServer",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "us/ky/jefferson",
+          "publisher": "LOJIC (Louisville/Jefferson County Information Consortium), Kentucky",
+          "url": "https://data.lojic.org/",
+          "license": "PDDL, asks for credit",
+          "license_url": "https://www.lojic.org/data/liability-statement"
+        },
+        {
+          "id": "us/me/statewide",
+          "publisher": "Maine Emergency Services Communication Bureau",
+          "url": "https://maine.hub.arcgis.com/datasets/27e5daf37f1f4e5c8231d6e3989835c4_0/about",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "overture:us/fl/manatee",
+          "publisher": "Manatee County, Florida",
+          "url": "https://public-manateegis.opendata.arcgis.com/datasets/manateegis::address-points-1/about",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/pa/mckean",
+          "publisher": "McKean County GIS, Pennsylvania",
+          "url": "https://www.mckeancountypa.gov/departments/gis/index.php",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "us/il/mclean",
+          "publisher": "McLean County GIS Consortium, Illinois",
+          "url": "https://www.mcgis.org/datasets/McLeanGIS::addresses/about",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/md/montgomery",
+          "publisher": "Montgomery County, Maryland",
+          "url": "https://data.montgomerycountymd.gov/terms-of-use",
+          "license": "Asks for credit",
+          "statement": "The data made available here has been modified for use from its original source, which is Montgomery County, Maryland."
+        },
+        {
+          "id": "overture:us/ny/city_of_new_york",
+          "publisher": "NYC Department of City Planning",
+          "url": "https://data.cityofnewyork.us/City-Government/AddressPoint/uf93-f8nk",
+          "license": "NYC Open Data Terms of Use",
+          "license_url": "https://opendata.cityofnewyork.us/overview/#termsofuse"
+        },
+        {
+          "id": "overture:us/or/statewide",
+          "publisher": "Oregon GeoHub",
+          "url": "https://geohub.oregon.gov/datasets/oregon-geo::oregon-address-points/about",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "us/va/prince_william",
+          "publisher": "Prince William County GIS, Virginia",
+          "url": "https://gisweb.pwcva.gov/arcgis/rest/services/AGOL/AGOL/MapServer/14",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "us/va/roanoke",
+          "publisher": "Roanoke County, Virginia",
+          "url": "https://data.roanokecountyva.gov",
+          "license": "CC BY"
+        },
+        {
+          "id": "us/mn/sibley",
+          "publisher": "Sibley County GIS, Minnesota",
+          "url": "https://www.sibleycounty.gov/371/Maps-Geographic-Information-System-GIS",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "us/mi/semcog",
+          "publisher": "Southeast Michigan Council of Governments (SEMCOG)",
+          "url": "https://maps-semcog.opendata.arcgis.com/datasets/c9bd1139cb15497084c328315a2c0c84",
+          "license": "SEMCOG Copyright License Agreement",
+          "license_url": "https://maps-semcog.opendata.arcgis.com/pages/copyright-license-agreement",
+          "statement": "Copyright (c) 2024 SEMCOG. All Rights Reserved. Reproduction or Use Without Permission is Prohibited."
+        },
+        {
+          "id": "us/ny/suffolk",
+          "publisher": "Suffolk County GIS, New York",
+          "url": "https://opendata.suffolkcountyny.gov/datasets/SuffolkGIS::site-address-point/about",
+          "license": "CC BY 3.0",
+          "license_url": "https://creativecommons.org/licenses/by/3.0/"
+        },
+        {
+          "id": "us/ny/sullivan",
+          "publisher": "Sullivan County GIS, New York",
+          "url": "https://gis.sullivanny.us",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "us/ma/city_of_dedham",
+          "publisher": "Town of Dedham GIS Division, Massachusetts",
+          "url": "https://www.dedhamma.gov/town-departments/engineering/gis/gis-data-disclaimer",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "us/ma/city_of_easton",
+          "publisher": "Town of Easton, Massachusetts",
+          "url": "https://addressing-eastonma.hub.arcgis.com/",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "us/ut/statewide",
+          "publisher": "Utah Geospatial Resource Center",
+          "url": "https://opendata.gis.utah.gov/datasets/utah::utah-address-points/about",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/vt/statewide",
+          "publisher": "Vermont Enhanced 911 Board and VCGI",
+          "url": "https://geodata.vermont.gov/datasets/VCGI::vt-data-e911-site-locations-address-points-1/about",
+          "license": "Asks for credit"
+        },
+        {
+          "id": "overture:us/wi/waupaca",
+          "publisher": "Waupaca County, Wisconsin",
+          "url": "https://data2017-04-05t135915451z-waupacacounty.opendata.arcgis.com/datasets/waupacacounty::addresses/about",
+          "license": "CC BY 4.0",
+          "license_url": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+          "id": "us/wi/wood",
+          "publisher": "Wood County, Wisconsin",
+          "url": "https://opendata.woodcogis.com/datasets/WoodWI::addresses-1/about",
+          "license": "CC BY 3.0",
+          "license_url": "https://creativecommons.org/licenses/by/3.0/"
+        }
+      ]
+    }
+  ]
+}

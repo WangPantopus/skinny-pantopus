@@ -434,6 +434,7 @@ app.use('/api/homes', require('./routes/homeDocumentFiles')); // Authenticated p
 app.use('/api/homes', require('./routes/placeIntelligence')); // Place dashboard contract (/:id/intelligence)
 app.use('/api/homes', require('./routes/residencyLetters')); // Server-attested residency letters (/:id/residency-letters)
 app.use('/api/admin/address-review', require('./routes/adminAddressReview')); // SCN-11: manual_review queue
+app.use('/api/floor-plan-sheets', require('./routes/floorPlanSheets')); // A building's floor-plan sheet, sent for review
 app.use('/api/homes', require('./routes/residencyClaims')); // Scoped live residency claims (/:id/residency-claims)
 app.use('/api/homes', require('./routes/fridgeCards'));   // 911-ready household cards (/:id/fridge-cards)
 app.use('/api/homes', require('./routes/mailboxCheck'));  // Mailbox reality check (/:id/mailbox-check)

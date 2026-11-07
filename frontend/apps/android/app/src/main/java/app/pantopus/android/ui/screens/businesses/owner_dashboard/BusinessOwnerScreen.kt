@@ -213,7 +213,7 @@ fun BusinessOwnerScreen(
                                         )
                                     OwnerViewMode.Preview ->
                                         OwnerPreviewFrame(
-                                            content = current.content.publicProfile,
+                                            content = current.content.previewProfile,
                                             onExit = { mode = OwnerViewMode.Owner },
                                         )
                                     // Drawn by the outer frame; nothing here while it fades in.
