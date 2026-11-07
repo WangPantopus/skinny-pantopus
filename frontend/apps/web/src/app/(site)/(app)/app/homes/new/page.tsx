@@ -110,9 +110,9 @@ const STEPS = [
 ];
 
 // While the county record can't be read yet, Add Home asks again after 2 s, then twice as long each time up to
-// 30 s, for half an hour. Each ask waits up to 8 s on the server, so a long outage costs one ask about every 40 s.
+// 15 s, for half an hour. Each ask waits up to 8 s on the server, so a long outage costs one ask about every 23 s.
 const LOOKUP_RETRY_FIRST_MS = 2_000;
-const LOOKUP_RETRY_MOST_MS = 30_000;
+const LOOKUP_RETRY_MOST_MS = 15_000;
 const LOOKUP_RETRY_FOR_MS = 30 * 60_000;
 
 export default function NewHomePage() {
