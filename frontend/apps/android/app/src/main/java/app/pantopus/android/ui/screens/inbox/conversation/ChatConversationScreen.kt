@@ -438,7 +438,7 @@ fun ChatConversationScreen(
         }
 
     // The chat sits on the keyboard: pad the bottom by the keyboard height
-    // minus the space already below the chat (the tab bar).
+    // minus the space already below the chat (the system navigation area).
     KeyboardResizeEffect()
     val density = LocalDensity.current
     val rootView = LocalView.current.rootView
