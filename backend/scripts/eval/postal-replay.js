@@ -221,6 +221,8 @@ const AGREES = {
   vacant: (r) => (r.reasons || []).includes('USPS_VACANT'),
   unknown: (r) => r.status === 'POSTAL_PENDING',
   new_construction: (r) => r.status === 'POSTAL_PENDING' || r.status === 'OK',
+  // Someone may live at an APO, FPO or DPO box. It never auto-verifies; a card that arrives is the proof.
+  military: (r) => ['OK', 'MIXED_USE', 'POSTAL_PENDING'].includes(r.status),
 };
 
 function truthReport(casesFile, answersFile) {
