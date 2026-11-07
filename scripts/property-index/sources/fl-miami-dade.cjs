@@ -2,8 +2,9 @@
 // Miami-Dade County, Florida: the Property Appraiser's Property Point View on the county's open data site. It gives this county the
 // bedrooms and baths the state's roll lacks. The county provides it "as is". Owner and mailing columns are in the layer and never asked
 // for. Florida's protected people's records are the Appraiser's to withhold; none of the owner columns are read here. ASSESSED_VAL_CUR
-// is the assessed value, capped by law, so it's never a market value. Florida's just value stays with the state's roll. The same roll, as the
-// Appraiser files it with the state (fl-roll.cjs), says what the point view doesn't: effective year built, buildings and tax district.
+// is the assessed value, capped by law, so it's never a market value, and it's the Appraiser's working figure for next year's roll. The
+// same roll, as the Appraiser files it with the state (fl-roll.cjs), says what the point view doesn't: this year's certified just value
+// (the county's own market value) with the assessed value beside it, effective year built, buildings and tax district.
 
 const path = require('node:path');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
@@ -90,8 +91,12 @@ async function* build({ work }) {
       records.push(record);
     }
   }
+  const filedRoll = await countyRoll(work, FIPS);
   const roll = new Map();
-  for (const record of (await countyRoll(work, FIPS)).records) if (record.kind !== 'building') roll.set(record.facts.parcel_number, record.facts);
+  for (const record of filedRoll.records) if (record.kind !== 'building') roll.set(record.facts.parcel_number, record.facts);
+  // A record's values come from one roll and one year, so the market value and the assessed value beside it agree.
+  const valueSource = `${filedRoll.publisher}’s ${filedRoll.dataset}`;
+  const VALUES = ['market_value', 'market_land_value', 'assessed_value', 'taxable_value', 'value_year'];
   let joined = 0;
   for (const record of records) {
     const filed = roll.get(record.facts.parcel_number);
@@ -101,6 +106,11 @@ async function* build({ work }) {
     if (lives) put(record.facts, 'effective_year_built', filed.effective_year_built);
     if (lives && filed.buildings_on_parcel > 1) record.facts.buildings_on_parcel = filed.buildings_on_parcel;
     put(record.facts, 'tax_code_area', filed.tax_code_area);
+    if (filed.market_value && filed.value_year) {
+      for (const name of VALUES) delete record.facts[name];
+      for (const name of VALUES) put(record.facts, name, filed[name]);
+      record.facts.value_source = valueSource;
+    }
   }
   log(`${COUNTY}: ${records.length} folios, ${noAddress} without a street number, ${joined} on the state's roll`);
   for (const building of condoBuildings(records, { fips: FIPS, county: COUNTY })) records.push(building);
