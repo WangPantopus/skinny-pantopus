@@ -737,7 +737,7 @@ function ExemptionCard({ data, reason }: { data: PlaceExemptionCheckData; reason
             <Chip label={state.chip} variant={state.variant} />
           </div>
           <div className="text-[12.5px] text-app-text-muted mt-0.5">
-            {notChecked ? 'Your state’s program' : <>From the county assessor&apos;s parcel record</>}
+            {notChecked ? 'Your state’s program' : 'From this parcel’s public record'}
           </div>
         </div>
       </div>
