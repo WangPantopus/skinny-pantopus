@@ -22,6 +22,20 @@ function download(url, file) {
   fs.renameSync(partial, file);
 }
 
+/**
+ * A stream's lines, with the consumer setting the pace. readline's iterator throws "readline was closed" when a slow
+ * consumer falls behind and the stream ends: that lost the end of a table in checks that write as they read.
+ */
+async function* streamLines(stream) {
+  let rest = '';
+  for await (const chunk of stream) {
+    const lines = (rest + chunk).split('\n');
+    rest = lines.pop();
+    for (const line of lines) yield line.endsWith('\r') ? line.slice(0, -1) : line;
+  }
+  if (rest) yield rest;
+}
+
 /** A quoted CSV line's fields ("" inside quotes is one quote). Lines with a line break inside quotes aren't expected. */
 function splitQuoted(line, delimiter) {
   const fields = [];
@@ -63,7 +77,7 @@ async function* zipTable(zip, member, columns, { delimiter = ',', quoted = true,
   unzip.stdout.setEncoding(encoding);
   let positions = null;
   let rows = 0;
-  for await (const line of readline.createInterface({ input: unzip.stdout, crlfDelay: Infinity })) {
+  for await (const line of streamLines(unzip.stdout)) {
     const fields = quoted && line.includes('"') ? splitQuoted(line, delimiter) : line.split(delimiter);
     if (!positions) {
       const header = fields.map((name) => name.replace(/^\ufeff/, '').trim());
@@ -132,4 +146,4 @@ async function* cachedLayer(file, url, fields) {
   }
 }
 
-module.exports = { download, zipTable, zipMembers, splitQuoted, mapLayer, cachedLayer, USER_AGENT };
+module.exports = { download, zipTable, zipMembers, streamLines, splitQuoted, mapLayer, cachedLayer, USER_AGENT };

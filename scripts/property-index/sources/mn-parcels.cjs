@@ -12,6 +12,8 @@ const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
 
 const SERVICE = 'https://enterprise.gisdata.mn.gov/aghost/rest/services/us_mn_state_mngeo/plan_parcels_open/FeatureServer';
+// Counties read by their own connector.
+const OWN_CONNECTOR = new Set(['27123']);
 const COLUMNS = ['county_pin', 'state_pin', 'anumberpre', 'anumber', 'anumbersuf', 'st_pre_dir', 'st_pre_typ', 'st_name', 'st_pos_typ', 'st_pos_dir', 'sub_type1', 'sub_id1', 'sub_id2', 'zip', 'ctu_name', 'postcomm', 'co_name', 'acres_deed', 'acres_poly',
   'emv_land', 'emv_bldg', 'emv_total', 'tax_year', 'mkt_year', 'useclass1', 'dwell_type', 'home_style', 'fin_sq_ft', 'garage', 'garagesqft', 'basement', 'heating', 'cooling', 'year_built', 'num_units', 'sale_date', 'sale_value', 'school_dst', 'plat_name'];
 
@@ -87,7 +89,7 @@ async function* build({ work }) {
   if (counties.length < 40) throw new Error(`Only ${counties.length} counties are marked open`);
   for (const { countyfips: code, countyname: name, acqdate: acquired } of counties.sort((a, b) => a.countyfips.localeCompare(b.countyfips))) {
     const fips = `27${code}`;
-    if (only.length && !only.includes(fips)) continue;
+    if (OWN_CONNECTOR.has(fips) || (only.length && !only.includes(fips))) continue;
     const county = `${name} County`;
     const records = [];
     const seen = new Set();

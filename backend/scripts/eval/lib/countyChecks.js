@@ -58,9 +58,66 @@ const floridaCheck = (county, file, extra = []) => ({
   map: [['year_built', 'ACT_YR_BLT'], ['lot_sqft', 'LND_SQFOOT', (a, b) => Math.abs(a - b) <= Math.max(50, b * 0.05)], ...extra],
 });
 
+// Denton's nightly table, published beside its export. It holds next year's roll, so values aren't compared.
+async function* dentonNightly() {
+  const zip = path.join(process.env.PROPERTY_CHECK_WORK || '.', 'tx-denton', 'nightly_appraisals.zip');
+  download('https://dentoncad.net/data/_uploaded/files/datafiles/gis/nightly_appraisals.zip', zip);
+  yield* zipTable(zip, 'nightly_appraisals.csv', ['pid', 'imprvActualYearBuilt', 'imprvMainArea', 'legalAcreage']);
+}
+
+// Travis's improvement detail file, published apart from its export: the largest improvement on each account.
+async function* travisDetails() {
+  const zip = path.join(process.env.PROPERTY_CHECK_WORK || '.', 'tx-travis', 'improvement_detail.zip');
+  download('https://traviscad.org/wp-content/largefiles/improvement_detail_2026.zip', zip);
+  const accounts = new Map();
+  for (const member of zipMembers(zip)) {
+    for await (const row of zipTable(zip, member, ['pID', 'pImprovementID', 'imprvDetailType', 'area', 'actualYearBuilt'])) {
+      const code = row.imprvDetailType.toUpperCase();
+      const floor = /^(1ST|2ND|3RD|\dTH)$/.test(code);
+      if (!floor && code !== '252') continue;
+      let account = accounts.get(row.pID);
+      if (!account) accounts.set(row.pID, account = new Map());
+      let held = account.get(row.pImprovementID);
+      if (!held) account.set(row.pImprovementID, held = { pID: String(Math.trunc(Number(row.pID))), area: 0, built: 0, beds: '' });
+      if (floor) {
+        held.area += Number(row.area) || 0;
+        const built = Math.trunc(Number(row.actualYearBuilt));
+        if (built > 1000 && (!held.built || built < held.built)) held.built = built;
+      } else held.beds = Math.trunc(Number(row.area)) || '';
+    }
+  }
+  for (const account of accounts.values()) yield [...account.values()].sort((a, b) => b.area - a.area)[0];
+}
+
 module.exports = {
-  'fl-miami-dade': floridaCheck('12086', 'Dade 23 Final NAL 2026.zip', [['living_sqft', 'TOT_LVG_AREA', near(1)]]),
-  'fl-broward': floridaCheck('12011', 'Broward 16 Final NAL 2026.zip', [['living_sqft', 'TOT_LVG_AREA', near(1)], ['market_value', 'JV', moneyNear]]),
+  'tx-denton-own': {
+    county: '48121',
+    rows: dentonNightly,
+    id: (row) => row.pid,
+    map: [['year_built', 'imprvActualYearBuilt'], ['living_sqft', 'imprvMainArea', near(1)], ['lot_acres', 'legalAcreage', near(0.01)]],
+  },
+  'tx-travis-own': {
+    county: '48453',
+    rows: travisDetails,
+    id: (row) => row.pID,
+    map: [['year_built', 'built'], ['living_sqft', 'area', near(1)], ['bedrooms', 'beds']],
+  },
+  // Last year's table: what rarely changes in a year.
+  'tx-collin-own': {
+    county: '48085',
+    rows: () => socrataRows('data.texas.gov', 'vffy-snc6', ['geoid', 'imprvyearbuilt', 'imprvmainarea', 'landsizeacres']),
+    id: (row) => row.geoid,
+    map: [['year_built', 'imprvyearbuilt'], ['living_sqft', 'imprvmainarea', near(1)], ['lot_acres', 'landsizeacres', near(0.01)]],
+  },
+  // The county's copy from the district, 2019: what rarely changes since.
+  'tx-bexar-own': {
+    county: '48029',
+    rows: () => layerRows('https://maps.bexar.org/arcgis/rest/services/Parcels/MapServer/0', ['PropID', 'GBA', 'LglAcres'], { oid: 'OBJECTID' }),
+    id: (row) => String(row.PropID).trim(),
+    map: [['living_sqft', 'GBA', near(1)], ['lot_acres', 'LglAcres', near(0.01)]],
+  },
+  'fl-miami-dade': floridaCheck('12086', 'Dade 23 Final NAL 2026.zip', [['living_sqft', 'TOT_LVG_AREA', near(1)], ['gross_sqft', 'TOT_LVG_AREA', near(1)]]),
+  'fl-broward': floridaCheck('12011', 'Broward 16 Final NAL 2026.zip', [['living_sqft', 'TOT_LVG_AREA', near(1)], ['gross_sqft', 'TOT_LVG_AREA', near(1)], ['market_value', 'JV', moneyNear]]),
   // The county's published 2023 sales: what rarely changes since.
   'co-adams': {
     county: '08001',

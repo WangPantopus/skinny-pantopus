@@ -14,6 +14,8 @@ const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
 
 // [county, the Department's county number, FIPS, its file in the roll's folder]
+// Counties read by their own connector.
+const OWN_CONNECTOR = new Set(['12011', '12086']);
 const COUNTIES = [
   ['Alachua', 11, '12001', 'Alachua%2011%20Final%20NAL%20YEAR.zip'],
   ['Baker', 12, '12003', 'Baker%2012%20Final%20NAL%20YEAR.zip'],
@@ -166,7 +168,7 @@ async function* build({ work, today = new Date() }) {
   const year = today.getMonth() >= 9 ? today.getFullYear() : today.getFullYear() - 1;
   const only = (process.env.PROPERTY_INDEX_ONLY || '').split(',').filter(Boolean);
   for (const county of COUNTIES) {
-    if (only.length && !only.includes(county[2])) continue;
+    if (OWN_CONNECTOR.has(county[2]) || (only.length && !only.includes(county[2]))) continue;
     yield buildCounty(work, year, county);
     fs.rmSync(path.join(work, 'fl-roll', `${county[1]}.zip`), { force: true });
   }
