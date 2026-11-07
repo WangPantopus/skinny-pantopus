@@ -24,8 +24,13 @@ const parsePostGISPoint = require('../utils/parsePostGISPoint');
 
 // ── Constants ────────────────────────────────────────────────
 
-/** Keywords suggesting a multi-tenant commercial building. */
-const MULTI_TENANT_KEYWORDS = /\b(tower|towers|plaza|center|centre|building|bldg|complex|mall|atrium|pavilion|suites|offices|professional\s+(?:building|center|centre|park))\b/i;
+/**
+ * Keywords suggesting a multi-tenant commercial building, where they name the building: at the end of the
+ * street line, or before a comma, "#", or a building number or letter ("1 World Trade Center", "100 Main St
+ * Tower 2"). Followed by another word, a keyword is part of the street's name ("60 Centre St", "Town Center Dr"),
+ * which says nothing about suites.
+ */
+const MULTI_TENANT_KEYWORDS = /\b(tower|towers|plaza|center|centre|building|bldg|complex|mall|atrium|pavilion|suites|offices|professional\s+(?:building|center|centre|park))\b(?=[\s.]*(?:$|[,#\d]|[a-z]\b))/i;
 
 /** Known CMRA business name patterns (case-insensitive). */
 const CMRA_BUSINESS_NAMES = [
