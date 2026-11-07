@@ -28,11 +28,20 @@ const TOWNS = new Map(Object.entries(LINKED).flatMap(([fips, county]) => Object.
 // How a county's site writes the number it takes in a link, from the record's own parcel number.
 const PARCEL_FORMS = {
   digits: (parcel) => parcel.replace(/\D/g, ''),
+  // Letters and digits only, as Seminole writes 11-20-30-5KB-0000-0070 in a link.
+  alnum: (parcel) => parcel.replace(/[^0-9A-Za-z]/g, '').toUpperCase(),
   // A number the state's file writes as 3141.0.
   whole: (parcel) => parcel.replace(/\.0+$/, ''),
   as_is: (parcel) => parcel,
   // Allegheny's search box: the first ten characters, lowercase.
   lower10: (parcel) => parcel.slice(0, 10).toLowerCase(),
+  // New York's 26-digit town-and-parcel key, with a dash after the town's six digits (Monroe's portal).
+  swis_dash: (parcel) => (/^\d{26}$/.test(parcel) ? `${parcel.slice(0, 6)}-${parcel.slice(6)}` : ''),
+  // Jackson County's Ascend: 17 digits written 99-999-99-99-99-9-99-999.
+  ascend17: (parcel) => {
+    const digits = parcel.replace(/\D/g, '');
+    return digits.length === 17 ? [2, 3, 2, 2, 2, 1, 2, 3].reduce((out, size) => ({ text: [...out.text, digits.slice(out.at, out.at + size)], at: out.at + size }), { text: [], at: 0 }).text.join('-') : '';
+  },
 };
 
 async function countyFrom({ jurisdiction, state, lat, lng }, states = STATES) {
