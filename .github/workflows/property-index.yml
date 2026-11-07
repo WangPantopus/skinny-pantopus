@@ -11,7 +11,7 @@ on:
     # Clark County writes its file on Tuesdays.
     - cron: "23 13 * * 3"
     - cron: "41 14 9 * *"
-    # The statewide files, in groups that fit one run.
+    # The statewide files, in groups that fit one run. Not tx-stratmap: its site refuses GitHub's servers. Not nc-onemap yet: no new states for now.
     - cron: "17 3 10 * *"
     - cron: "17 3 11 * *"
     - cron: "17 3 12 * *"
@@ -140,7 +140,7 @@ jobs:
       - name: Build and publish
         if: github.event_name != 'workflow_dispatch' || inputs.action == 'build'
         env:
-          SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-stratmap tx-harris tx-tarrant ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels nc-onemap wv-parcels me-parcels mt-cadastral') || 'tx-dallas fl-roll' }}
+          SOURCES: ${{ inputs.sources || (github.event.schedule == '23 13 * * 3' && 'wa-clark') || (github.event.schedule == '17 3 10 * *' && 'ma-massgis ct-cama md-sdat nj-modiv ny-parcels') || (github.event.schedule == '17 3 11 * *' && 'tx-harris tx-tarrant tx-williamson ut-lir') || (github.event.schedule == '17 3 12 * *' && 'mn-parcels wv-parcels me-parcels mt-cadastral') || 'tx-dallas fl-roll' }}
           # A run someone started by hand may bring back a file that was rolled back; the schedule never does.
           REPUBLISH: ${{ github.event_name == 'workflow_dispatch' && '--republish' || '' }}
         run: |
