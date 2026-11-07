@@ -117,6 +117,9 @@ module.exports = {
     map: [['living_sqft', 'GBA', near(1)], ['lot_acres', 'LglAcres', near(0.01)]],
   },
   'fl-miami-dade': floridaCheck('12086', 'Dade 23 Final NAL 2026.zip', [['living_sqft', 'TOT_LVG_AREA', near(1)], ['gross_sqft', 'TOT_LVG_AREA', near(1)]]),
+  'fl-hillsborough': floridaCheck('12057', 'Hillsborough 39 Final NAL 2026.zip', [['living_sqft', 'TOT_LVG_AREA', near(1)], ['market_value', 'JV', moneyNear]]),
+  'fl-sarasota': floridaCheck('12115', 'Sarasota 68 Final NAL 2026.zip', [['living_sqft', 'TOT_LVG_AREA', near(1)], ['market_value', 'JV', moneyNear]]),
+  'fl-seminole': floridaCheck('12117', 'Seminole 69 Final NAL 2026.zip', [['living_sqft', 'TOT_LVG_AREA', near(1)], ['market_value', 'JV', moneyNear]]),
   'fl-broward': floridaCheck('12011', 'Broward 16 Final NAL 2026.zip', [['living_sqft', 'TOT_LVG_AREA', near(1)], ['gross_sqft', 'TOT_LVG_AREA', near(1)], ['market_value', 'JV', moneyNear]]),
   // The county's published 2023 sales: what rarely changes since.
   'co-adams': {

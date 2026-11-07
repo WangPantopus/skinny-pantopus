@@ -21,7 +21,7 @@ const COLUMNS = ['pin', 'rolltype', 'assessment_year', 'street_address_1', 'stre
 function useOf(code, hasUnit) {
   const use = String(code ?? '').toUpperCase();
   if (/GARAGE|STORAGE/.test(use)) return ['other', null];
-  if (/CONDO|CO-OP/.test(use)) return hasUnit ? ['unit', use.includes('CO-OP') ? 'co_op' : 'condo'] : ['property', 'townhouse'];
+  if (/CONDO|CO-OP/.test(use)) return hasUnit ? ['unit', 'condo'] : ['property', 'townhouse'];
   if (/TOWNHOME/.test(use)) return hasUnit ? ['unit', 'condo'] : ['property', 'townhouse'];
   if (/MANUFACT|MOBILE/.test(use)) return ['property', 'mobile_home'];
   if (/TWO FAMILY|THREE FAMILY|TRIPLEX|DUPLEX|DOUBLE/.test(use)) return ['building', 'multi_unit'];

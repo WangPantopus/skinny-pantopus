@@ -26,6 +26,7 @@ function useOf(code, hasUnit) {
   return ['other', null];
 }
 
+const BASEMENT = { Full: 'Full basement', Partial: 'Partial basement', 'Partial fin': 'Partial basement, finished', Finished: 'Finished basement', Unfinished: 'Unfinished basement', 'Slab/pier': 'Slab or pier', Crawl: 'Crawl space' };
 const said = (text) => {
   const value = word(text);
   return value && !/^(none|no central)$/i.test(value) ? value : null;
@@ -59,7 +60,7 @@ function fromRow(row) {
     if (full || half) facts.bathrooms = (full || 0) + (half || 0) * 0.5;
     put(facts, 'kitchens', positive(row.numberofkitchens));
     put(facts, 'fireplaces', positive(row.numberoffireplaces));
-    put(facts, 'foundation', said(row.basementtype));
+    put(facts, 'foundation', BASEMENT[String(row.basementtype ?? '').trim()]);
     if (/^yes$/i.test(row.centralair || '')) facts.cooling = 'Central air';
   } else if (kind === 'building') put(facts, 'gross_sqft', positive(row.squarefeetlivingarea));
   put(facts, 'water_source', said(row.watersupply));
