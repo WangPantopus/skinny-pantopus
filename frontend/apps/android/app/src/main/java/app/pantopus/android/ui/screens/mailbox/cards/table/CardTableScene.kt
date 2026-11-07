@@ -527,7 +527,9 @@ private fun penLine(
 ) {
     val paint = paints.text
     paint.reset()
+    // A paint's reset keeps its alignment and letter spacing.
     paint.textAlign = Paint.Align.LEFT
+    paint.letterSpacing = 0f
     paint.isAntiAlias = true
     paint.typeface = pen
     paint.textSize = size

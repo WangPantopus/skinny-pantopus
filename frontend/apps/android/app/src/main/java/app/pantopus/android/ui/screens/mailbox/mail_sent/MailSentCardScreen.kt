@@ -229,6 +229,7 @@ private fun SentCardPage(
             knownLink = null,
             fromFirst = (card.envelope?.from?.takeIf { it.isNotBlank() } ?: "someone").trim().substringBefore(' '),
             copyWords = "Copy link again",
+            canShare = false,
         )
     }
     Trail(card, first, zone)
@@ -577,7 +578,7 @@ private fun linkTrailTitle(
             if (step.done) {
                 "${card.toName?.takeIf { it.isNotBlank() } ?: "Someone"} opened your link and has your card"
             } else {
-                "Someone opens your link and joins"
+                "Someone opens your link"
             }
         "returned" -> "Nobody opened your link in 90 days"
         else -> null

@@ -10,11 +10,13 @@ import android.view.WindowManager
 import androidx.activity.ComponentDialog
 import androidx.activity.OnBackPressedCallback
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCompositionContext
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalView
@@ -31,7 +33,8 @@ import java.util.UUID
 /**
  * A window over the app that truly fills the screen, under the status and navigation bars and the camera's cut-out, with
  * no fade or dim of its own. Compose's own Dialog sizes its window to the screen less the bars, so it can't be this.
- * What's composed inside keeps its place when the phone turns or the system closes the app, as any screen's does.
+ * What's composed inside keeps its place with the screen under the window: going to a profile and back, the phone
+ * turning and the system closing the app all find it where it was.
  */
 @Composable
 internal fun FullScreenWindow(
@@ -43,6 +46,7 @@ internal fun FullScreenWindow(
     val latestContent by rememberUpdatedState(content)
     val latestDismiss by rememberUpdatedState(onDismissRequest)
     val saveId = rememberSaveable { UUID.randomUUID().toString() }
+    val screenState = LocalSaveableStateRegistry.current
     val dialog =
         remember(parentView) {
             ComponentDialog(parentView.context, android.R.style.Theme_Translucent_NoTitleBar).apply {
@@ -50,13 +54,15 @@ internal fun FullScreenWindow(
                 val composeView =
                     ComposeView(context).apply {
                         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
-                        // What it remembers goes with the screen under it, not with this window.
+                        // Its lifecycle and view models are the screen's under it, not this window's.
                         setViewTreeLifecycleOwner(parentView.findViewTreeLifecycleOwner())
                         setViewTreeViewModelStoreOwner(parentView.findViewTreeViewModelStoreOwner())
                         setViewTreeSavedStateRegistryOwner(parentView.findViewTreeSavedStateRegistryOwner())
                         setTag(androidx.compose.ui.R.id.compose_view_saveable_id_tag, "CardTableWindow:$saveId")
                         setParentCompositionContext(composition)
-                        setContent { latestContent() }
+                        setContent {
+                            CompositionLocalProvider(LocalSaveableStateRegistry provides screenState) { latestContent() }
+                        }
                     }
                 setContentView(composeView)
                 // The table is always dark, in light mode and dark mode, so the bars' icons over it are light.

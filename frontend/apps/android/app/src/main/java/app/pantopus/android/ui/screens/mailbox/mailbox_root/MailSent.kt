@@ -366,7 +366,7 @@ object MailSentWords {
         val posted = card.envelope?.postmarkedOn?.let { runCatching { LocalDate.parse(it.take(10)) }.getOrNull() }
         val from = card.envelope?.from?.takeIf { it.isNotBlank() } ?: "You"
         val named = card.toName?.takeIf { it.isNotBlank() }
-        val to = if (card.byLink && card.status != "claimed") "Whoever opens it" else named ?: "them"
+        val to = if (card.byLink && card.status != "claimed") "Their name" else named ?: "them"
         val state = if (card.sealed) "sealed until Christmas morning" else "in its envelope"
         return MailPieceModel(
             id = card.id,

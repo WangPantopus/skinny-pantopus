@@ -102,7 +102,8 @@ class CardLinkViewModel
 
 /**
  * A card by link that's still waiting: the link itself, Copy link (or "Copy link again" on a card sent earlier), and
- * Share, which opens the phone's own sheet with a line that says who it's from.
+ * Share, which opens the phone's own sheet with a line that says who it's from. [canShare] is off on Sent, whose own
+ * Share is the card's picture.
  */
 @Composable
 internal fun CardLinkBox(
@@ -111,6 +112,7 @@ internal fun CardLinkBox(
     fromFirst: String,
     copyWords: String,
     modifier: Modifier = Modifier,
+    canShare: Boolean = true,
     viewModel: CardLinkViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -149,13 +151,15 @@ internal fun CardLinkBox(
                 busy = state.reading,
                 modifier = Modifier.weight(1f).testTag("cardLinkCopy"),
             )
-            CardButton(
-                "Share",
-                onClick = { viewModel.withLink(cardId) { link -> shareLink(context, link, fromFirst) } },
-                kind = CardButtonKind.Paper,
-                icon = PantopusIcon.Share,
-                modifier = Modifier.weight(1f).testTag("cardLinkShare"),
-            )
+            if (canShare) {
+                CardButton(
+                    "Share",
+                    onClick = { viewModel.withLink(cardId) { link -> shareLink(context, link, fromFirst) } },
+                    kind = CardButtonKind.Paper,
+                    icon = PantopusIcon.Share,
+                    modifier = Modifier.weight(1f).testTag("cardLinkShare"),
+                )
+            }
         }
         state.said?.let {
             Text(

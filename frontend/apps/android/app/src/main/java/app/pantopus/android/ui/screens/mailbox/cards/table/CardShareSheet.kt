@@ -24,15 +24,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -144,7 +149,14 @@ private fun ShareSheetBody(
                 .testTag("cardShareScrim"),
         contentAlignment = Alignment.BottomCenter,
     ) {
-        BoxWithConstraints(modifier = Modifier.widthIn(max = 520.dp).fillMaxWidth()) {
+        // At the largest text it can fill the screen, and stays clear of the status bar and the camera's cut-out.
+        BoxWithConstraints(
+            modifier =
+                Modifier
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                    .widthIn(max = 520.dp)
+                    .fillMaxWidth(),
+        ) {
             val shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
             Column(
                 modifier =
@@ -662,9 +674,21 @@ private fun composeEmail(
             putExtra(Intent.EXTRA_SUBJECT, if (mine) "A Christmas card I sent" else "Look what came in the mail")
             val opening = if (mine) "I sent this Christmas card on Pantopus." else "I got this Christmas card on Pantopus."
             putExtra(Intent.EXTRA_TEXT, "$opening You can send one too: $link")
-            selector = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:"))
         }
-    context.startActivity(Intent.createChooser(send, "Email this card"))
+    // Each mail app by name: a chooser with a mailto selector finds no apps at all on recent Android.
+    val apps =
+        context.packageManager
+            .queryIntentActivities(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:")), 0)
+            .map { it.activityInfo.packageName }
+            .distinct()
+            .map { Intent(send).setPackage(it) }
+    val first = apps.firstOrNull() ?: throw ActivityNotFoundException()
+    if (apps.size == 1) {
+        context.startActivity(first)
+    } else {
+        val others = apps.drop(1).toTypedArray()
+        context.startActivity(Intent.createChooser(first, "Email this card").putExtra(Intent.EXTRA_INITIAL_INTENTS, others))
+    }
 }
 
 private fun openFacebookSharer(

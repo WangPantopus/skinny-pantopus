@@ -252,7 +252,7 @@ private fun LinkLook(
     preview.linkPage?.let { page ->
         LookSection("The page your link opens", horizontal = Spacing.s3) { LinkPagePicture(page, zone) }
     }
-    val envelope = lookEnvelope(preview, "Whoever opens it", card)
+    val envelope = lookEnvelope(preview, "Their name", card)
     val state = if (sealed) "sealed until Christmas morning" else "in its envelope"
     val spoken = "Christmas card from $from, $state."
     LookSection("After they join", horizontal = Spacing.s3) {

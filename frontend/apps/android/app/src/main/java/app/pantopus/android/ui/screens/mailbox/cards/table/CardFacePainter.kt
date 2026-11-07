@@ -267,6 +267,7 @@ internal class CardFacePainter(
         canvas.drawPath(wave, line)
         val bold = Typeface.create(Typeface.SERIF, Typeface.BOLD)
         text.reset()
+        text.letterSpacing = 0f
         text.isAntiAlias = true
         text.typeface = bold
         text.textAlign = Paint.Align.CENTER
@@ -327,9 +328,8 @@ internal class CardFacePainter(
     ): PenNote {
         val kept = noteCache
         if (kept != null && kept.note == face.note && kept.number == face.number && kept.u == u) return kept
-        text.reset()
-        text.textAlign = Paint.Align.LEFT
-        text.typeface = art.pen
+        // Measured with what it's drawn with; a paint's reset keeps its alignment and letter spacing.
+        textStyle(art.pen, u * 6f, PantopusColors.tablePen)
         return PenNote.lay(face.note, face.number, u, text).also { noteCache = it }
     }
 
