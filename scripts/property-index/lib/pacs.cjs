@@ -12,9 +12,15 @@ const cut = (line, start, end) => line.slice(start - 1, end).trim();
 const amount = (text) => Number(text) || 0;
 const accountOf = (line) => cut(line, 1, 12).replace(/^0+/, '');
 
+// A zip can hold more than one run of a table (Kaufman's holds a small one and the whole roll): the largest is the roll.
+function memberOf(zip, table) {
+  const wanted = new RegExp(`(^|/|_)(${table}|${LONG_NAMES[table]})\\.TXT$`, 'i');
+  const listed = execFileSync('unzip', ['-l', zip], { encoding: 'utf8', maxBuffer: 1 << 24 }).split('\n').map((line) => /^\s*(\d+)\s+\S+\s+\S+\s+(.*?)\s*$/.exec(line)).filter(Boolean);
+  return listed.filter(([, , name]) => wanted.test(name)).sort((a, b) => Number(b[1]) - Number(a[1]))[0]?.[2];
+}
+
 async function* lines(zip, table) {
-  const names = execFileSync('unzip', ['-Z1', zip], { encoding: 'utf8', maxBuffer: 1 << 24 }).split('\n');
-  const member = names.find((name) => new RegExp(`(^|/|_)(${table}|${LONG_NAMES[table]})\\.TXT$`, 'i').test(name));
+  const member = memberOf(zip, table);
   if (!member) throw new Error(`The export has no ${table} file`);
   const child = spawn('unzip', ['-p', zip, member], { stdio: ['ignore', 'pipe', 'ignore'] });
   child.stdout.setEncoding('latin1');
@@ -23,9 +29,16 @@ async function* lines(zip, table) {
 
 /** Real property and mobile homes, without a protected person's account. Stops at a file that doesn't fit the layout. */
 async function* properties(zip, stats = {}) {
+  let full = 0;
   for await (const line of lines(zip, 'PROP')) {
+    full = full || line.length;
     const type = cut(line, 13, 17);
-    if (line.length < 4860 || !/^0?\d{4}$/.test(cut(line, 18, 22)) || !/^(R|P|MH|MN|A)$/.test(type)) throw new Error(`A property line doesn't fit the layout (${line.length} characters)`);
+    if (line.length < 4860 || !/^0?\d{4}$/.test(cut(line, 18, 22)) || !/^(R|P|MH|MN|A)$/.test(type)) {
+      // A line break inside a field cuts a record into pieces (Kaufman's file has three such records). More than a few means the layout moved.
+      stats.broken = (stats.broken || 0) + 1;
+      if (line.length < full && stats.broken <= 30) continue;
+      throw new Error(`A property line doesn't fit the layout (${line.length} characters)`);
+    }
     if (type !== 'R' && type !== 'MH') continue;
     if (line[989] === 'T' || line[2568] === 'T' || line[4858] === 'T' || PROTECTED.test(cut(line, 609, 678))) {
       stats.protected = (stats.protected || 0) + 1;
