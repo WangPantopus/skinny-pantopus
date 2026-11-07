@@ -560,6 +560,16 @@ function buildProfileFromAttomResponses(home, { detailData, avmData, trendData }
 const COUNTY_VALUE_FACTS = ['market_value', 'assessed_value', 'taxable_value', 'value_year', 'sale_price', 'sale_date', 'sale_month'];
 
 /**
+ * What anyone but the confirmed owner reads of a profile: the Home's facts. The value is the owner's, as on Place.
+ * A list of what may go out, so a new value field never reaches them by default.
+ */
+function factsOnly(profile) {
+  const facts = ['home_id', 'address_summary', 'county_record', 'household_fields', 'year_built', 'sqft', 'bedrooms',
+    'bathrooms', 'lot_sqft', 'property_type', 'house', 'cached_at', 'source', 'provenance'];
+  return Object.fromEntries(facts.filter((field) => field in profile).map((field) => [field, profile[field]]));
+}
+
+/**
  * A PropertyProfile from a Home's copy of its county record: the same fields
  * every screen already reads, with where they came from. Bedrooms, baths and size
  * show the household's own entry first (a person may know better than the roll,
@@ -1297,6 +1307,7 @@ async function getAddressAttomPropertyDetail(addressId) {
 
 module.exports = {
   getProfile,
+  factsOnly,
   getHomeAttomPropertyDetail,
   getCachedAttomValue,
   CACHE_TTL_DAYS,

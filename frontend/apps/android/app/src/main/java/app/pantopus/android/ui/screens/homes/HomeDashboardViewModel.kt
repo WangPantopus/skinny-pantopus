@@ -329,6 +329,8 @@ class HomeDashboardViewModel
 
         fun can(permission: String): Boolean = visible && authority.isCurrent && accessUnexpired() && accessData?.can(permission) == true
 
+        fun isOwner(): Boolean = visible && authority.isCurrent && accessUnexpired() && accessData?.isOwner == true
+
         fun canPerform(action: String): Boolean {
             if (!visible || !authority.isCurrent || !accessUnexpired()) return false
             if (action == "add_task") return canCreateTask
