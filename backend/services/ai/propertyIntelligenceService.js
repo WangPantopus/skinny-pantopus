@@ -29,6 +29,8 @@ const syncChanged = require('../syncChangedService');
 const propertyRecordsConfig = require('../../config/propertyRecords');
 const propertyRecords = require('../propertyRecords');
 const homeRecords = require('../propertyRecords/homeRecord');
+const { changeNicheData } = require('../homeNicheData');
+const householdFacts = require('../householdFacts');
 
 const ATTOM_BASE = 'https://api.gateway.attomdata.com/propertyapi/v1.0.0';
 const ATTOM_RAW_CACHE_TABLE = 'AttomPropertyCache';
@@ -391,20 +393,14 @@ async function persistAttomPropertyDetailOnHome(home, attomPayload) {
   if (home.niche_data === undefined) return false;
   if (getStoredAttomPropertyDetail(home)) return false;
 
-  const nicheData = home.niche_data && typeof home.niche_data === 'object'
-    ? { ...home.niche_data }
-    : {};
-  nicheData.attom_property_detail = attomPayload;
-
-  const { error } = await supabaseAdmin
-    .from('Home')
-    .update({ niche_data: nicheData })
-    .eq('id', home.id);
-
-  if (error) {
-    logger.warn('Home ATTOM payload persist failed', { homeId: home.id, error: error.message });
+  let nicheData;
+  try {
+    nicheData = await changeNicheData(home.id, (stored) => ({ ...stored, attom_property_detail: attomPayload }));
+  } catch (err) {
+    logger.warn('Home ATTOM payload persist failed', { homeId: home.id, error: err.message });
     return false;
   }
+  if (!nicheData) return false;
 
   home.niche_data = nicheData;
   return true;
@@ -597,7 +593,7 @@ function buildProfileFromRecord(home, copy) {
     // Whole numbers: the apps in the stores decode these as integers, and a county may write 1234.5.
     const figure = ownFirst ? own ?? county : county ?? own ?? null;
     shown[field] = typeof figure === 'number' && field !== 'bathrooms' ? Math.round(figure) : figure;
-    if (own != null && (county == null || (ownFirst && own !== county))) householdFields.push(field);
+    if (own != null && (county == null || (ownFirst && !householdFacts.columnAgrees(field, own, county)))) householdFields.push(field);
   }
   const provenance = homeRecords.provenanceOf(copy);
   const value = copy.match === 'parcel_only' ? null : facts.market_value ?? null;
@@ -618,7 +614,8 @@ function buildProfileFromRecord(home, copy) {
     assessed_value: facts.assessed_value ?? null,
     zip_median_value: null,
     zip_median_sale_price_trend: null,
-    house: houseFromRecord(copy),
+    // Today's house is drawn the way the household says it is.
+    house: houseFromRecord({ ...copy, facts: householdFacts.factsWithEntries(copy.facts, home.niche_data) }),
     cached_at: `${copy.as_of}T12:00:00.000Z`,
     source: 'record',
     provenance: householdFields.length ? { ...provenance, label: `${provenance.label}, with details you entered` } : provenance,
@@ -638,6 +635,7 @@ function buildProfileFromRecord(home, copy) {
  * Used when ATTOM API data is unavailable.
  */
 function buildFallbackProfile(home) {
+  const ownFacts = householdFacts.factsWithEntries({}, home.niche_data);
   return {
     home_id: home.id,
     address_summary: `${home.city}, ${home.state} ${home.zipcode}`,
@@ -659,7 +657,7 @@ function buildFallbackProfile(home) {
     value_confidence: null,
     zip_median_value: null,
     zip_median_sale_price_trend: null,
-    house: null,
+    house: Object.keys(ownFacts).length ? houseFromRecord({ facts: ownFacts }) : null,
     cached_at: new Date().toISOString(),
     source: 'fallback',
   };

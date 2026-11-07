@@ -44,6 +44,8 @@ const propertySuggestionsService = require('../services/ai/propertySuggestionsSe
 const recordVocabulary = require('../services/recordVocabulary');
 const propertyIntelligenceService = require('../services/ai/propertyIntelligenceService');
 const homeRecords = require('../services/propertyRecords/homeRecord');
+const householdFacts = require('../services/householdFacts');
+const addressReviewService = require('../services/addressValidation/addressReviewService');
 const { encodeGeohash } = require('../utils/geohash');
 const { HOME_ISSUE_LIST, HOME_BILL_LIST, HOME_PACKAGE_LIST } = require('../utils/columns');
 const { excludeHiddenHomeActivity } = require('../utils/featureFlags');
@@ -203,7 +205,20 @@ const updateHomeSchema = Joi.object({
   parking_instructions: Joi.string().max(2000).allow('', null),
   visibility: Joi.string().valid(...VISIBILITY_TYPES),
   amenities: Joi.object(),
+  // A household's own word on its Home's facts (services/householdFacts.js).
+  household_facts: Joi.array().items(Joi.object({
+    key: Joi.string().max(40),
+    group: Joi.string().max(40),
+    action: Joi.string().valid('confirm', 'correct', 'undo').required(),
+    value: Joi.alternatives().try(Joi.string().max(200), Joi.number()),
+  }).xor('key', 'group')).min(1).max(40),
 }).min(1);
+
+const recordProblemSchema = Joi.object({
+  section: Joi.string().max(40).required(),
+  field: Joi.string().max(80).allow(null, ''),
+  note: Joi.string().trim().max(500).allow(null, ''),
+});
 
 const attachDetachSchema = Joi.object({
   userId: Joi.string().uuid().required()
@@ -1230,6 +1245,9 @@ async function prepareHomeCreate(req, { selectAddress = false } = {}) {
       ...(attomPropertyDetail ? { niche_data: { attom_property_detail: attomPropertyDetail } } : {}),
       ...(countyRecord?.whole ? { niche_data: { property_record: countyRecord.whole } } : {}),
     };
+    // Who and when for what the form sent, beside the record. Beside ATTOM's copy, the form's prefill can't be told from an entry.
+    const addedFacts = attomPropertyDetail ? null : householdFacts.fromAddHome({ values: homeData, copy: countyRecord?.copy, actorId: userId });
+    if (addedFacts) homeData.niche_data = { ...homeData.niche_data, household_facts: addedFacts };
 
     // Add location if provided.
     //
@@ -2072,25 +2090,47 @@ router.get('/', verifyToken, async (req, res) => {
  * PATCH /api/homes/:id
  * Update home details (owner only)
  */
+// `required`: the household asked for this and is told if it fails; a plain edit's who and when never fails the edit.
+async function commitFactChange(factChange, { homeId, actorId, required }) {
+  try {
+    await factChange.commit();
+  } catch (error) {
+    logger.warn('Home facts not saved', { homeId, error: error.message });
+    if (required) throw error;
+    return;
+  }
+  // A fact the record keeps showing, where the household disagrees: a person looks at it.
+  for (const conflict of factChange.conflicts) {
+    await addressReviewService.flagRecordProblem({ homeId, userId: actorId, reason: { kind: 'household_conflict', ...conflict, at: new Date().toISOString() } });
+  }
+}
+
 router.patch('/:id', verifyToken, requireSharedHomeContent, validate(updateHomeSchema), async (req, res) => {
   try {
-    const fields = { ...req.body };
+    const { household_facts: asked, ...fields } = req.body;
     if (typeof fields.name === 'string' && !fields.name.trim()) fields.name = null;
-    // The same transaction as Settings rechecks current authority after taking
-    // the Home lock, preserves address identity, and audits the whole edit.
-    const { data, error } = await supabaseAdmin.rpc('update_home_settings', {
-      p_home_id: req.params.id, p_actor_id: req.user.id, p_fields: fields, p_preferences: {},
-    });
-    if (error || !data || typeof data.ok !== 'boolean') {
-      return res.status(503).json({ error: 'The home change could not be confirmed. Reload before trying again.' });
-    }
-    if (!data.ok) {
-      if (data.code === 'HOME_ADDRESS_CHANGE_REQUIRED') {
-        return res.status(409).json({ error: 'The address and unit identify this home. Add a new home for a different address.', code: data.code });
+    const factChange = await homeDetailService.factChange({ homeId: req.params.id, actorId: req.user.id, asked, fields });
+    Object.assign(fields, factChange?.columns);
+    if (Object.keys(fields).length) {
+      // The same transaction as Settings rechecks current authority after taking
+      // the Home lock, preserves address identity, and audits the whole edit.
+      const { data, error } = await supabaseAdmin.rpc('update_home_settings', {
+        p_home_id: req.params.id, p_actor_id: req.user.id, p_fields: fields, p_preferences: {},
+      });
+      if (error || !data || typeof data.ok !== 'boolean') {
+        return res.status(503).json({ error: 'The home change could not be confirmed. Reload before trying again.' });
       }
-      const status = { HOME_SETTINGS_INVALID: 400, HOME_NOT_FOUND: 404, HOME_SETTINGS_DENIED: 403 }[data.code] || 503;
-      return res.status(status).json({ error: status === 400 ? 'Invalid home details.' : 'Current permission to change this home could not be confirmed.', code: data.code });
+      if (!data.ok) {
+        if (data.code === 'HOME_ADDRESS_CHANGE_REQUIRED') {
+          return res.status(409).json({ error: 'The address and unit identify this home. Add a new home for a different address.', code: data.code });
+        }
+        const status = { HOME_SETTINGS_INVALID: 400, HOME_NOT_FOUND: 404, HOME_SETTINGS_DENIED: 403 }[data.code] || 503;
+        return res.status(status).json({ error: status === 400 ? 'Invalid home details.' : 'Current permission to change this home could not be confirmed.', code: data.code });
+      }
+    } else if (factChange?.changed.length) {
+      await writeAuditLog(req.params.id, req.user.id, 'home_facts_updated', 'Home', req.params.id, { fields: factChange.changed });
     }
+    if (factChange) await commitFactChange(factChange, { homeId: req.params.id, actorId: req.user.id, required: Boolean(asked) });
     // Use the same permission-filtered projection as GET; a successful edit
     // must not expose private fields that the editor cannot normally read.
     const { home } = await homeDetailService.detail(req.params.id, req.user.id);
@@ -2098,6 +2138,16 @@ router.patch('/:id', verifyToken, requireSharedHomeContent, validate(updateHomeS
   } catch (err) {
     homeDetailService.sendError(res, err);
   }
+});
+
+/**
+ * POST /api/homes/:id/record-problem
+ * "Report a problem" on a fact the household can't correct: it reaches Pantopus review
+ * and nothing on the page changes.
+ */
+router.post('/:id/record-problem', verifyToken, requireSharedHomeContent, validate(recordProblemSchema), async (req, res) => {
+  try { res.json(await homeDetailService.reportRecordProblem(req.params.id, req.user.id, req.body)); }
+  catch (err) { homeDetailService.sendError(res, err); }
 });
 
 /**
