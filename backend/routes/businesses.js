@@ -453,8 +453,8 @@ async function bootstrapOwnerSeat(businessUserId, actorId) {
 }
 
 // The create wizard saves its address without coordinates. Looking the address up once gives the location its time
-// zone, so the profile and Discover read its hours where it is. The coordinates aren't saved: this path doesn't run
-// the address checks (household conflicts) that the locations route runs before it saves a location's coordinates.
+// zone, so the profile and Discover read its hours where it is. The coordinates aren't saved: the wizard's location
+// has never had a map pin, and giving it one is a visible change of its own.
 async function fillLocationTimezone(locationId, { address, city, state, zipcode, country }) {
   const geo = await geocodeAddress(address, city, state, zipcode, country);
   const timezone = geo && timezoneFromCoordinates(geo.latitude, geo.longitude, null);
@@ -465,6 +465,34 @@ async function fillLocationTimezone(locationId, { address, city, state, zipcode,
     .eq('id', locationId)
     .is('timezone', null);
   if (error) throw error;
+}
+
+// What the create wizard is told when its address fails the checks the locations route runs. The phone wizards show
+// the sentence under Create; nothing has been created, so the owner can change the address or skip it.
+const WIZARD_ADDRESS_IN_USE = 'This address is already used by a home or business on Pantopus. '
+  + 'Go back and change it, or tap Skip location for now.';
+const WIZARD_ADDRESS_UNCHECKED = 'We couldn\'t check this address just now. '
+  + 'Try again in a moment, or tap Skip location for now.';
+const WIZARD_ADDRESS_REJECTIONS = {
+  po_box: 'A PO box can\'t be a business location. Go back and enter the street address, or tap Skip location for now.',
+  cmra_detected: 'A mailbox store address can\'t be a business location. '
+    + 'Go back and enter the street address, or tap Skip location for now.',
+  undeliverable: 'We couldn\'t find this address. Go back and check it, or tap Skip location for now.',
+  // The wizard has no suite field.
+  need_suite: 'This building needs a suite number, which this step can\'t take yet. '
+    + 'Tap Skip location for now and add the address from your business\'s Locations page.',
+  service_error: WIZARD_ADDRESS_UNCHECKED,
+};
+
+function wizardAddressRefusal(verdict) {
+  const status = verdict?.decision?.status;
+  if (status === 'conflict') {
+    // A household table that couldn't be read counts as a conflict (fail closed); the owner hears the check didn't run.
+    const unchecked = (verdict.decision.reasons || []).includes('household_check_unavailable');
+    return { status: 409, code: 'ADDRESS_CONFLICT', error: unchecked ? WIZARD_ADDRESS_UNCHECKED : WIZARD_ADDRESS_IN_USE };
+  }
+  const error = WIZARD_ADDRESS_REJECTIONS[status];
+  return error ? { status: 422, code: 'ADDRESS_REJECTED', error } : null;
 }
 
 // A repeat of this person's own create (a phone's silent re-send, or a retry after a lost reply) finds the business it
@@ -745,6 +773,24 @@ router.post('/create-full', verifyToken, validate(createBusinessFullSchema), asy
           is_closed: h.is_closed || false,
         }))
       : null;
+
+    // 5b) CRIT-01, the wizard half: the locations route runs the address decision engine (household conflict
+    // included) before it saves an address, but the wizard's location went straight into the RPC, so a business
+    // made at a stranger's verified home published their street. The address now takes the same gate before
+    // anything is created. need_suite is refused too: that verdict returns before the household check runs.
+    if (location) {
+      const verdict = await validateBusinessAddress({
+        address: location.address,
+        city: location.city,
+        state: location.state || '',
+        zipcode: location.zipcode || '',
+        country: location.country || 'US',
+        // No business exists yet, so a location already listed at this address is another business's.
+        business_user_id: null,
+      });
+      const refusal = wizardAddressRefusal(verdict);
+      if (refusal) return res.status(refusal.status).json({ error: refusal.error, code: refusal.code });
+    }
 
     // 6) Atomic creation via RPC
     const { data, error: rpcErr } = await supabaseAdmin.rpc('create_business_full', {
