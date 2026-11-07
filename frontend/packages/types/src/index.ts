@@ -164,6 +164,9 @@ export type {
   BillTrendData,
   PropertyValueData,
   RecordProvenance,
+  HomeValueCard,
+  HomeValueCardRow,
+  HomeAreaTrend,
   HomeTimelineItem,
 } from './homeIntelligence';
 

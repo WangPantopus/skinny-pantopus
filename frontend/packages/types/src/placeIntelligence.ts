@@ -20,7 +20,7 @@
 // ============================================================
 
 // ─── Trust ladder — the user model (§3) ──────────────────────
-import type { RecordProvenance } from './homeIntelligence';
+import type { HomeValueCard, RecordProvenance } from './homeIntelligence';
 
 export type PlaceTier = 'T0' | 'T1' | 'T2' | 'T3' | 'T4';
 
@@ -1033,6 +1033,8 @@ export interface PlaceYourHomeData {
   value_source?: string | null;
   /** What the value is when the record says ("County market value"). */
   value_title?: string | null;
+  /** The value block in the server's words, the confirmed owner's. A build reads this first. */
+  value_card?: HomeValueCard | null;
 }
 
 // ════════════════════════════════════════════════════════════

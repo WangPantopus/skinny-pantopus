@@ -15,6 +15,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import * as api from '@pantopus/api';
 import type { LucideIcon } from 'lucide-react';
+import { HomeValueCardRows } from '@/components/home/PropertyValueCard';
 import type { PlaceIntelligence, PlaceYourHomeData, PlaceHomeSystemsData, PlaceHomeSystem } from '@pantopus/types';
 import {
   Calendar,
@@ -77,6 +78,20 @@ function FactsCard({ data }: { data: PlaceYourHomeData }) {
 }
 
 function ValueCard({ data }: { data: PlaceYourHomeData }) {
+  if (data.value_card) {
+    const card = data.value_card;
+    return (
+      <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-[18px]">
+        <div className="text-[13px] font-semibold text-app-text-secondary">{card.title}</div>
+        {card.value ? (
+          <div className="text-[34px] leading-10 font-bold -tracking-[0.02em] text-app-text mt-1">{card.value}</div>
+        ) : (
+          <div className="text-[13px] text-app-text-muted mt-1">{card.empty_message}</div>
+        )}
+        <HomeValueCardRows card={card} />
+      </div>
+    );
+  }
   const value = usd(data.estimated_value);
   const low = usd(data.value_low);
   const high = usd(data.value_high);
@@ -91,46 +106,29 @@ function ValueCard({ data }: { data: PlaceYourHomeData }) {
 }
 
 // Assessment + the tax-appeal INFORMATIONAL layer (#2). Strictly
-// educational by design (legal gate): it compares the county's
-// assessment with the market estimate and explains that appeals
-// exist — never a savings figure, never advice.
+// educational by design (legal gate): it explains that appeals exist, never
+// a savings figure, never advice, and no comparison with a market value here:
+// many states assess at a share of value by law, so a gap says nothing.
 function AssessmentCard({ data }: { data: PlaceYourHomeData }) {
   const assessed = usd(data.assessed_value);
   if (!assessed) return null;
 
-  const hasBoth =
-    data.assessed_value != null &&
-    data.estimated_value != null &&
-    data.estimated_value > 0;
-  const diffPct = hasBoth
-    ? Math.round(((data.assessed_value! - data.estimated_value!) / data.estimated_value!) * 100)
-    : 0;
-  const comparison = !hasBoth
-    ? null
-    : Math.abs(diffPct) <= 5
-      ? 'Your assessment is in line with the market estimate above.'
-      : diffPct > 0
-        ? `Your assessment runs about ${diffPct}% above the market estimate — assessments above market are the usual basis for an appeal.`
-        : `Your assessment runs about ${Math.abs(diffPct)}% below the market estimate.`;
-
   return (
     <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm px-4 py-3.5">
-      <div className="flex items-center gap-3">
-        <span className="w-[34px] h-[34px] rounded-[9px] bg-app-home-bg flex items-center justify-center shrink-0">
-          <Landmark size={18} strokeWidth={2} className="text-app-home" />
-        </span>
-        <div className="flex-1 min-w-0">
-          <div className="text-[15px] font-semibold text-app-text">Assessed value</div>
-          <div className="text-[12.5px] text-app-text-muted mt-0.5">Latest county tax roll</div>
+      {/* The server's card already shows the figure with its year. */}
+      {data.value_card ? null : (
+        <div className="flex items-center gap-3 mb-2.5">
+          <span className="w-[34px] h-[34px] rounded-[9px] bg-app-home-bg flex items-center justify-center shrink-0">
+            <Landmark size={18} strokeWidth={2} className="text-app-home" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="text-[15px] font-semibold text-app-text">Assessed value</div>
+            <div className="text-[12.5px] text-app-text-muted mt-0.5">Latest county tax roll</div>
+          </div>
+          <div className="text-base font-semibold text-app-text">{assessed}</div>
         </div>
-        <div className="text-base font-semibold text-app-text">{assessed}</div>
-      </div>
-      {comparison ? (
-        <div className="text-[13px] text-app-text-strong leading-[19px] mt-3 pt-3 border-t border-app-border-subtle">
-          {comparison}
-        </div>
-      ) : null}
-      <div className="text-[12px] text-app-text-muted leading-[17px] mt-2.5">
+      )}
+      <div className="text-[12px] text-app-text-muted leading-[17px]">
         Every county lets homeowners appeal an assessment they believe is too high — usually a form and an
         evidence window each year. Search &ldquo;{'assessment appeal'}&rdquo; with your county&apos;s name for the process.
         Informational only, not tax advice.
@@ -441,7 +439,9 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
                 <LockedCard icon={Landmark} title="Estimated value" reason="Available once your ownership is confirmed." cta="Confirm ownership" />
               </>
             ) : null}
-            {home?.provenance ? (
+            {valueAccess === 'shown' && data?.value_card ? (
+              data.value_card.source ? <SourceNote name={data.value_card.source} /> : null
+            ) : home?.provenance ? (
               valueAccess === 'shown' && data?.value_source ? <SourceNote name={data.value_source} /> : null
             ) : data && home?.source ? <SourceNote name={home.source} asOf={fmtMonthYear(home.as_of) ? `as of ${fmtMonthYear(home.as_of)}` : undefined} /> : null}
 
@@ -477,7 +477,7 @@ export default function YourHomeDetail({ intelligence, homeId }: { intelligence:
         {valueAccess === 'shown' ? (
           <InfoNote>
             {/* A value that names its source is the county's own, with no model of ours in it. */}
-            Values are informational, drawn from public records{data?.value_source ? '' : ' and a pricing model'}. They aren&apos;t an appraisal, a guarantee, or an offer to buy or lend.
+            Values are informational, drawn from public records{data?.value_card || data?.value_source ? '' : ' and a pricing model'}. They aren&apos;t an appraisal, a guarantee, or an offer to buy or lend.
           </InfoNote>
         ) : null}
       </div>
