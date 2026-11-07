@@ -17,7 +17,7 @@ import Foundation
 public enum EditBusinessPageFieldKey: String, Sendable {
     case name, tagline, category, price, description
     case phone, email, website, bookingLink
-    case address, city, state, zip
+    case address, suite, city, state, zip
 }
 
 /// Shown when the only pending edits are media the editor can't upload yet.
@@ -35,6 +35,12 @@ private let countryCodePrefix = "+1"
 
 /// Save aborted with a message the user should see verbatim.
 private struct SaveFailure: Error {
+    let message: String
+}
+
+/// The address check refused the location (409 conflict, 422 rejected). Its
+/// reason shows under Address as well as in the toast; the edits stay.
+private struct LocationRefusal: Error {
     let message: String
 }
 
@@ -511,7 +517,7 @@ public final class EditBusinessPageViewModel {
                 bookingLink: field.updating(current: value),
                 replaceBookingLink: true
             )
-        case .address, .city, .state, .zip:
+        case .address, .suite, .city, .state, .zip:
             next = EditBusinessPageMapper.copy(
                 content,
                 location: updatedLocation(content.location, key: key, value: value)
@@ -521,7 +527,7 @@ public final class EditBusinessPageViewModel {
     }
 
     private func canEdit(_ key: EditBusinessPageFieldKey) -> Bool {
-        canEditProfile && (![.address, .city, .state, .zip].contains(key) || canEditLocation)
+        canEditProfile && (![.address, .suite, .city, .state, .zip].contains(key) || canEditLocation)
     }
 
     /// Applies an address-component edit while leaving the other
@@ -533,6 +539,7 @@ public final class EditBusinessPageViewModel {
     ) -> EditBusinessPageLocation {
         EditBusinessPageLocation(
             address: key == .address ? location.address.updating(current: value) : location.address,
+            suite: key == .suite ? location.suite.updating(current: value) : location.suite,
             city: key == .city ? location.city.updating(current: value) : location.city,
             state: key == .state ? location.state.updating(current: value) : location.state,
             zip: key == .zip ? location.zip.updating(current: value) : location.zip,
@@ -780,6 +787,14 @@ public final class EditBusinessPageViewModel {
             state = .loaded(EditBusinessPageMapper.withRecomputedMode(saved))
             if let successToast { toastMessage = successToast }
             return true
+        } catch let refusal as LocationRefusal {
+            if case let .loaded(current) = state {
+                state = .loaded(
+                    EditBusinessPageMapper.copy(current, location: current.location.withError(refusal.message))
+                )
+            }
+            toastMessage = refusal.message
+            return false
         } catch let failure as SaveFailure {
             accessError = failure.message
             toastMessage = nil
@@ -806,13 +821,19 @@ public final class EditBusinessPageViewModel {
             throw SaveFailure(message: noLocationMessage)
         }
         try requireSession()
-        _ = try await api.request(
-            BusinessesEndpoints.updateLocation(
-                businessId: businessId,
-                locationId: locationId,
-                body: EditBusinessPageMapper.locationPayload(from: content.location)
+        do {
+            _ = try await api.request(
+                BusinessesEndpoints.updateLocation(
+                    businessId: businessId,
+                    locationId: locationId,
+                    body: EditBusinessPageMapper.locationPayload(from: content.location)
+                )
             )
-        )
+        } catch let error as APIError {
+            guard case let .clientError(status, _) = error, status == 409 || status == 422,
+                  let message = error.errorDescription else { throw error }
+            throw LocationRefusal(message: message)
+        }
     }
 
     private func pushHours(_ content: EditBusinessPageContent) async throws {
@@ -1112,6 +1133,7 @@ private extension EditBusinessPageLocation {
     var cleaned: EditBusinessPageLocation {
         EditBusinessPageLocation(
             address: address.cleaned,
+            suite: suite.cleaned,
             city: city.cleaned,
             state: state.cleaned,
             zip: zip.cleaned,
@@ -1125,6 +1147,7 @@ private extension EditBusinessPageLocation {
     var reverted: EditBusinessPageLocation {
         EditBusinessPageLocation(
             address: address.reverted,
+            suite: suite.reverted,
             city: city.reverted,
             state: state.reverted,
             zip: zip.reverted,
@@ -1138,6 +1161,7 @@ private extension EditBusinessPageLocation {
     func withError(_ message: String?) -> EditBusinessPageLocation {
         EditBusinessPageLocation(
             address: address,
+            suite: suite,
             city: city,
             state: state,
             zip: zip,

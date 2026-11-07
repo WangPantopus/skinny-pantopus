@@ -653,9 +653,16 @@ private extension EditBusinessPageLoadedView {
             VStack(alignment: .leading, spacing: Spacing.s3) {
                 BusinessAddressField(
                     field: content.location.address,
+                    suite: content.location.suite,
                     state: content.location.error.map { .error($0) } ?? .valid,
                     onFieldChange: onFieldChange
                 )
+                BizField(
+                    label: "Suite / unit",
+                    hint: "Optional",
+                    field: content.location.suite,
+                    identifier: "editBusinessPage.field.suite"
+                ) { onFieldChange(.suite, $0) }
                 BizField(
                     label: "City",
                     required: true,

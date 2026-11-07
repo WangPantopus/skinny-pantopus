@@ -106,6 +106,7 @@ enum EditBusinessPageMapper {
     private static func locationEditCount(_ content: EditBusinessPageContent) -> Int {
         var count = 0
         if content.location.address.isDirty { count += 1 }
+        if content.location.suite.isDirty { count += 1 }
         if content.location.city.isDirty { count += 1 }
         if content.location.state.isDirty { count += 1 }
         if content.location.zip.isDirty { count += 1 }
@@ -238,10 +239,13 @@ enum EditBusinessPageMapper {
     /// address parts it receives (`backend/routes/businesses.js:1811`), so a
     /// partial body would relocate the pin from a partial address. Every
     /// component therefore travels whenever any one of them changed, keeping
-    /// the geocode input a complete, coherent address.
+    /// the geocode input a complete, coherent address. The suite travels
+    /// too, empty when the box is: left out, the route would check the new
+    /// address with the saved suite and keep it.
     static func locationPayload(from location: EditBusinessPageLocation) -> UpdateBusinessLocationRequest {
         UpdateBusinessLocationRequest(
             address: trimmed(location.address.current),
+            address2: trimmed(location.suite.current),
             city: trimmed(location.city.current),
             state: trimmed(location.state.current),
             zipcode: trimmed(location.zip.current)
@@ -426,6 +430,7 @@ enum EditBusinessPageMapper {
     private static func locationState(_ location: BusinessLocationDTO?) -> EditBusinessPageLocation {
         EditBusinessPageLocation(
             address: field(location?.address, placeholder: "Street address"),
+            suite: field(location?.address2, placeholder: "Suite 200, Unit B"),
             city: field(location?.city, placeholder: "City"),
             state: field(location?.state, placeholder: "State"),
             zip: field(location?.zipcode, placeholder: "ZIP"),
