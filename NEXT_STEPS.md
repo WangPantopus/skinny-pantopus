@@ -294,6 +294,14 @@ Sessions you start for one job (Instant Screens, Nearby Plans, single fixes) wor
   - Settings: leaving Notifications within 600 ms of changing a row other than the Push switch loses the change (reproduced on Android; iOS has the same timer).
 - [ ] Not checked anywhere: physical phones, real Apple and Google delivery, the hosted schedulers, email and SMS delivery, the browser's own alert popup.
 
+**Face ID only where it matters (your call, November 6).**
+
+- [x] Opening Pantopus no longer asks for Face ID. Wallet, Payments & payouts, Mail and access codes ask instead, at most once every 5 minutes, and again when someone comes back after 5 minutes away. Withdrawals, deleting an account and removing a device ask every time, as they did. Paying with a saved card asks nothing, as it did. ([iPhone 3598](https://github.com/WangPantopus/skinny-pantopus/pull/3598), [Android 3601](https://github.com/WangPantopus/skinny-pantopus/pull/3601))
+- [x] The old switch said "Require Face ID for sensitive actions" and really locked the whole app. It is now "Lock Pantopus when I leave the app", off for everyone until they turn it on again, and nothing offers it any more.
+- [x] The iPhone's dead-end lock screen ("User interaction required.") is gone: with the lock on, Face ID comes up by itself on coming back.
+- [ ] Not covered by the Mail check: the Mail badge, notification text, and rows elsewhere that mention new mail.
+- [ ] Not checked: physical phones, and on Android a real fingerprint or PIN passing the check (the emulator's real prompt was shown and cancelled; passing used a local test hook).
+
 **Still open. The brief builds the default until you decide.**
 
 - [ ] Confirm the September 26 promise and pilot shape: "Know what matters for your home, and stay on top of it"; first-time homeowners in Vancouver, Camas and Washougal; five households, then 30 to 50, for eight weeks each. Default: as written.
@@ -820,7 +828,7 @@ The September acceptance backlog ([REMAINING_WORK](docs/REMAINING_WORK_2026-09-1
 
 The plan, decisions and status are in [docs/research/provider-replacement/](docs/research/provider-replacement/README.md). Builders keep going without asking; the steps below are yours and hold nothing up, except that county data stays off screens until each county's switch is on.
 
-- [ ] **ATTOM's free trial ended November 4. By about November 18:** take `ATTOM_API_KEY` out of `.env.prod` and `.env.staging`, restart, and run the purge on every hosted database at the same time (with the key gone, stored copies still show until the purge); delete local copies; confirm the end date from ATTOM's notice; sign the affidavit ([steps](docs/research/provider-replacement/cost-and-rights.md#5-attom-free-trial)).
+- [ ] ATTOM and Clark County: your steps, in order, are on your private list, outside Git.
 - [ ] Send the public-records letters and pay fees of $500 or less ([requests](docs/research/provider-replacement/public-records-requests.md)).
 - [ ] Reader key and settings on the servers, then each county's live switch.
 - [ ] `ADDRESS_POSTAL_PROVIDER=google` in staging, then production with the Google key.

@@ -99,23 +99,22 @@ class SensitiveScreenAuthenticationTest {
     @Test
     fun transientFailurePreservesAppLockPreferenceAndCover() {
         status = BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE
-        every { prefs.getBoolean("appLock.first.enabled", false) } returns true
-        every { prefs.getString("appLock.first.setupPrompt", null) } returns "enabled"
+        every { prefs.getBoolean("appLock.first.onLeave", false) } returns true
         manager.configure("first")
         assertTrue(manager.preferenceEnabled.value)
         assertTrue(manager.isLocked.value)
-        verify(exactly = 0) { editor.putBoolean("appLock.first.enabled", false) }
+        verify(exactly = 0) { editor.putBoolean("appLock.first.onLeave", false) }
     }
 
     @Test
     fun confirmedCredentialRemovalKeepsExistingAppLockPolicy() {
         status = BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED
         every { keyguard.isDeviceSecure } returns false
-        every { prefs.getBoolean("appLock.first.enabled", false) } returns true
+        every { prefs.getBoolean("appLock.first.onLeave", false) } returns true
         manager.configure("first")
         assertFalse(manager.preferenceEnabled.value)
         assertFalse(manager.isLocked.value)
-        verify(exactly = 1) { editor.putBoolean("appLock.first.enabled", false) }
+        verify(exactly = 1) { editor.putBoolean("appLock.first.onLeave", false) }
     }
 
     @Test
@@ -168,7 +167,7 @@ class SensitiveScreenAuthenticationTest {
                     async {
                         when (operation) {
                             "unlock" -> manager.unlockIfNeeded(activity)
-                            "enable" -> manager.setEnabled(true, activity, AppLockManager.EnableSource.PostLoginPrompt)
+                            "enable" -> manager.setEnabled(true, activity)
                             "presence" -> manager.verifyPresence(activity, "Continue")
                             else -> manager.verifySensitiveAction(activity, "Withdraw")
                         }

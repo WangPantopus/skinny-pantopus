@@ -39,9 +39,11 @@ interface ReportModalProps {
   onClose: () => void;
   onSubmit: (reason: string, details?: string) => Promise<void>;
   entityType: 'post' | 'gig' | 'listing' | 'user' | 'message';
+  /** Its stacking layer, when it opens over something above the app (the card on the table). */
+  layerClassName?: string;
 }
 
-export default function ReportModal({ open, onClose, onSubmit, entityType }: ReportModalProps) {
+export default function ReportModal({ open, onClose, onSubmit, entityType, layerClassName = 'z-[60]' }: ReportModalProps) {
   const [reason, setReason] = useState<ReportReason | typeof LISTING_REPORT_REASONS[number]['value'] | ''>('');
   const [details, setDetails] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -88,7 +90,7 @@ export default function ReportModal({ open, onClose, onSubmit, entityType }: Rep
   };
 
   return createPortal(
-    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={handleClose}>
+    <div className={`fixed inset-0 bg-black/50 ${layerClassName} flex items-center justify-center p-4`} onClick={handleClose}>
       <div
         className="bg-app-surface rounded-2xl max-w-md w-full shadow-xl"
         role="dialog"

@@ -668,7 +668,7 @@ function buildFallbackProfile(home) {
 /**
  * A row saved before the value mappings were fixed: its "ZIP median" was the home's
  * assessed total, and that total could also be its estimate. The default "flat"
- * can't be told apart from a measured one; those rows go with ATTOM's purge.
+ * can't be told apart from a measured one.
  */
 function withoutOldMappings(profile) {
   if (!profile?.zip_median_value) return profile;
