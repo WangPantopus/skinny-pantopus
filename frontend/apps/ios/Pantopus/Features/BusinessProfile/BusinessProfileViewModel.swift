@@ -541,18 +541,24 @@ extension BusinessProfileViewModel {
         let weekday = calendar.component(.weekday, from: now) - 1
         let minutesNow = calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now)
         let byDay = Dictionary(grouping: rows) { max(0, min(6, $0.dayOfWeek)) }
+        let today = byDay[weekday] ?? []
 
+        if today.contains(where: { isAllDay($0) }) {
+            return BusinessOpenState(isOpen: true, statusLabel: "Open now", statusDetail: "Open 24 hours", chipLabel: "Open now")
+        }
         // Overnight hours belong to the day the business opened, even when
         // the following day's own schedule is closed.
-        if let previous = byDay[(weekday + 6) % 7]?.first,
-           previous.isClosed != true,
-           let open = minutes(previous.openTime),
-           let close = minutes(previous.closeTime),
-           close < open, minutesNow < close {
-            return openState(closingAt: previous.closeTime)
+        let intervals = openIntervals(byDay[(weekday + 6) % 7] ?? [], dayOffset: -1) + openIntervals(today, dayOffset: 0)
+        if let close = closingTime(of: intervals, at: minutesNow) {
+            return BusinessOpenState(
+                isOpen: true,
+                statusLabel: "Open now",
+                statusDetail: "Closes \(formatTime(close))",
+                chipLabel: "Open now"
+            )
         }
-        if let today = byDay[weekday]?.first, let state = todayOpenState(today, minutesNow: minutesNow) {
-            return state
+        if let next = intervals.filter({ $0.start > minutesNow }).min(by: { $0.start < $1.start }) {
+            return closedState(opening: "today", at: next.openTime)
         }
         if let next = nextOpening(byDay: byDay, weekday: weekday) {
             return next
@@ -560,50 +566,66 @@ extension BusinessProfileViewModel {
         return BusinessOpenState(isOpen: false, statusLabel: "Closed", statusDetail: "Hours vary", chipLabel: "Closed")
     }
 
-    private func todayOpenState(_ today: BusinessHoursDTO, minutesNow: Int) -> BusinessOpenState? {
-        guard today.isClosed != true,
-              let openM = minutes(today.openTime),
-              let closeM = minutes(today.closeTime) else { return nil }
-        if isAllDay(today) {
-            return BusinessOpenState(isOpen: true, statusLabel: "Open now", statusDetail: "Open 24 hours", chipLabel: "Open now")
-        }
-        if minutesNow >= openM, closeM < openM || minutesNow < closeM {
-            return openState(closingAt: today.closeTime)
-        }
-        if minutesNow < openM {
-            return BusinessOpenState(
-                isOpen: false,
-                statusLabel: "Closed now",
-                statusDetail: "Opens today at \(formatTime(today.openTime ?? ""))",
-                chipLabel: "Closed · opens \(formatTime(today.openTime ?? ""))"
-            )
-        }
-        return nil
+    /// One saved interval, in minutes from today's midnight: yesterday's start
+    /// below zero, and an overnight interval ends past 24 hours.
+    private struct OpenInterval {
+        let start: Int
+        let end: Int
+        let openTime: String
+        let closeTime: String
     }
 
-    private func openState(closingAt time: String?) -> BusinessOpenState {
+    private func openIntervals(_ rows: [BusinessHoursDTO], dayOffset: Int) -> [OpenInterval] {
+        let day = 24 * 60
+        return rows.compactMap { row in
+            guard row.isClosed != true,
+                  let openTime = row.openTime, let open = minutes(openTime),
+                  let closeTime = row.closeTime, let close = minutes(closeTime) else { return nil }
+            return OpenInterval(
+                start: open + dayOffset * day,
+                end: (close < open ? close + day : close) + dayOffset * day,
+                openTime: openTime,
+                closeTime: closeTime
+            )
+        }
+    }
+
+    /// When the business next closes, or nil when no interval covers `minute`.
+    /// Intervals that overlap or touch count as one: 9–2 and 12–5 close at 5.
+    private func closingTime(of intervals: [OpenInterval], at minute: Int) -> String? {
+        let covering = intervals.filter { $0.start <= minute && minute < $0.end }
+        guard var last = covering.max(by: { $0.end < $1.end }) else { return nil }
+        for interval in intervals.sorted(by: { $0.start < $1.start })
+            where interval.start <= last.end && interval.end > last.end {
+            last = interval
+        }
+        return last.closeTime
+    }
+
+    private func closedState(opening whenLabel: String, at time: String) -> BusinessOpenState {
         BusinessOpenState(
-            isOpen: true,
-            statusLabel: "Open now",
-            statusDetail: "Closes \(formatTime(time ?? ""))",
-            chipLabel: "Open now"
+            isOpen: false,
+            statusLabel: "Closed now",
+            statusDetail: "Opens \(whenLabel) at \(formatTime(time))",
+            chipLabel: "Closed · opens \(formatTime(time))"
         )
     }
 
     private func nextOpening(byDay: [Int: [BusinessHoursDTO]], weekday: Int) -> BusinessOpenState? {
         for offset in 1...7 {
             let day = (weekday + offset) % 7
-            guard let row = byDay[day]?.first, row.isClosed != true,
-                  let open = row.openTime, minutes(open) != nil else { continue }
-            let whenLabel = offset == 1 ? "tomorrow" : fullDayName(day)
-            return BusinessOpenState(
-                isOpen: false,
-                statusLabel: "Closed now",
-                statusDetail: "Opens \(whenLabel) at \(formatTime(open))",
-                chipLabel: "Closed · opens \(formatTime(open))"
-            )
+            guard let open = earliestOpening(byDay[day] ?? []) else { continue }
+            return closedState(opening: offset == 1 ? "tomorrow" : fullDayName(day), at: open)
         }
         return nil
+    }
+
+    private func earliestOpening(_ rows: [BusinessHoursDTO]) -> String? {
+        let openings = rows.compactMap { row -> (minute: Int, time: String)? in
+            guard row.isClosed != true, let time = row.openTime, let minute = minutes(time) else { return nil }
+            return (minute, time)
+        }
+        return openings.min { $0.minute < $1.minute }?.time
     }
 
     /// 00:00–23:59, or a `24:00` close: the editor's "Open 24 hours".
