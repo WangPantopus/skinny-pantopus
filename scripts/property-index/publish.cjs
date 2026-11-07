@@ -142,6 +142,7 @@ function publish(store, { out, republish, acceptFalls = false, bulk = false, min
   let refused = 0;
   for (const [state, built] of byState) {
     const stateFile = readState(store, state);
+    const rolledBackBefore = Object.fromEntries(Object.entries(stateFile.jurisdictions).map(([fips, county]) => [fips, county.rolled_back_at]));
     let changed = false;
     for (const entry of built) {
       const serving = stateFile.jurisdictions[entry.fips];
@@ -170,6 +171,10 @@ function publish(store, { out, republish, acceptFalls = false, bulk = false, min
       log(`${entry.fips}: ${entry.release} ready (${entry.records} records)`);
     }
     if (changed) {
+      // A rollback doesn't wait for a build, so one may have landed while this state's files uploaded. It stays.
+      for (const [fips, county] of Object.entries(readState(store, state).jurisdictions)) {
+        if (county.rolled_back_at && county.rolled_back_at !== rolledBackBefore[fips]) stateFile.jurisdictions[fips] = county;
+      }
       store.putJson(statePath(state), withMaps({ ...stateFile, updated_at: new Date().toISOString() }, stateFile.jurisdictions));
       log(`${state}: switched over`);
     }
