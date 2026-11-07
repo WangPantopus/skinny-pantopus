@@ -378,6 +378,9 @@ export interface HubTodayWeather {
   condition_label: string;
   high_f: number | null;
   low_f: number | null;
+  /** Today's sunrise and sunset (UTC ISO); null when the provider gave none. Absent from older servers. */
+  sunrise_utc?: string | null;
+  sunset_utc?: string | null;
   precipitation_next_6h: boolean;
   precipitation_start_at: string | null;
 }

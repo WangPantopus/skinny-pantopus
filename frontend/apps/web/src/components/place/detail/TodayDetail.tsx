@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import * as api from '@pantopus/api';
 import type { LucideIcon } from 'lucide-react';
@@ -23,6 +23,8 @@ import type {
   PlaceSunriseSunsetData,
   PlaceGoodDayData,
   PlaceAddressCalendarData,
+  PlaceBlockDensityData,
+  PlaceYourHomeData,
   GoodDayVerdict,
   WeatherConditionCode,
   AirQualityCategory,
@@ -47,6 +49,8 @@ import {
 import { SectionCard, DetailHeader, DetailSectionLabel, SourceNote, ComingSoonRow } from '@/components/archetypes/place';
 import { findPlaceSection, detailAddress } from './sections';
 import AddressCalendarCard from './AddressCalendarCard';
+import SkyCard from '@/components/sky/SkyCard';
+import type { TodaySkyInput } from '@/components/sky/todaySky';
 import { fmtSunDay, fmtTime, statusToState } from './format';
 
 // ── Weather glyphs — condition → lucide icon + token tint ────
@@ -87,33 +91,14 @@ function fmtDay(iso: string, isToday: boolean): string {
   return d.toLocaleDateString('en-US', { weekday: 'short' });
 }
 
-// ── Now / current conditions ────────────────────────────────
-function NowCard({ data }: { data: PlaceWeatherData }) {
-  return (
-    <div className="bg-app-surface border border-app-border rounded-2xl shadow-sm p-[18px]">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="text-[13px] font-semibold text-app-text-secondary">Now</div>
-          <div className="flex items-start gap-0.5 mt-0.5">
-            <span className="text-[56px] font-light leading-[60px] -tracking-[0.03em] text-app-text">{Math.round(data.current_temp_f)}</span>
-            <span className="text-[24px] font-light text-app-text mt-1.5">°</span>
-          </div>
-          {data.condition_label ? (
-            <div className="text-[15px] font-semibold text-app-text-strong mt-0.5">{data.condition_label}</div>
-          ) : null}
-        </div>
-        <div className="flex flex-col items-end gap-2.5">
-          <span className="w-[54px] h-[54px] rounded-[15px] bg-app-warning-bg border border-app-warning-light flex items-center justify-center">
-            <WxGlyph code={data.condition_code} size={30} />
-          </span>
-          <div className="text-right text-[13.5px] text-app-text-secondary leading-[19px]">
-            {data.high_f != null && data.low_f != null ? <div>H {Math.round(data.high_f)}° · L {Math.round(data.low_f)}°</div> : null}
-            {data.feels_like_f != null ? <div>Feels like {Math.round(data.feels_like_f)}°</div> : null}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+// ── Now / current conditions, over the living sky ───────────
+function NowCard({ data, sky, at }: { data: PlaceWeatherData; sky: TodaySkyInput; at: number }) {
+  const chips: string[] = [];
+  if (data.high_f != null && data.low_f != null) chips.push(`H ${Math.round(data.high_f)}° · L ${Math.round(data.low_f)}°`);
+  if (data.feels_like_f != null) chips.push(`Feels like ${Math.round(data.feels_like_f)}°`);
+  // From 15 mph, as on the apps.
+  if (data.wind_mph != null && Math.round(data.wind_mph) >= 15) chips.push(`Wind ${Math.round(data.wind_mph)} mph`);
+  return <SkyCard input={sky} at={at} temp={data.current_temp_f} label={data.condition_label} chips={chips} className="rounded-2xl shadow-sm" />;
 }
 
 // ── Hourly strip ────────────────────────────────────────────
@@ -462,6 +447,33 @@ export default function TodayDetail({
   const alertsReady = alerts && (alerts.status === 'ready' || alerts.status === 'stale' || alerts.status === 'partial') && alerts.data;
   const sunReady = sun && (sun.status === 'ready' || sun.status === 'stale' || sun.status === 'partial') && sun.data;
 
+  // The Weather box's sky reads what this page already has: the home and the block's density bucket
+  // come from their own sections, and locked or unavailable ones leave the scene's first house and no lights.
+  const yourHome = findPlaceSection(intelligence, 'your_home')?.data as PlaceYourHomeData | null | undefined;
+  const density = findPlaceSection(intelligence, 'block_density')?.data as PlaceBlockDensityData | null | undefined;
+  const sky = useMemo<TodaySkyInput | null>(() => {
+    if (!weatherReady) return null;
+    const data = weather!.data as PlaceWeatherData;
+    const sunData = sunReady ? sun!.data as PlaceSunriseSunsetData : null;
+    const air = aqiReady ? aqi!.data as PlaceAirQualityData : null;
+    return {
+      condition: data.condition_code,
+      tempF: data.current_temp_f,
+      sunrise: sunData?.sunrise_utc ?? sunData?.sunrise,
+      sunset: sunData?.sunset_utc ?? sunData?.sunset,
+      timeZone: sunData?.time_zone,
+      windMph: data.wind_mph,
+      windFrom: data.wind_direction,
+      hourly: data.hourly,
+      air: air ? { index: air.index, pollutant: air.dominant_pollutant } : null,
+      pickups: calendarData?.upcoming,
+      house: yourHome?.house,
+      homeType: yourHome?.home_type,
+      density: density?.bucket,
+    };
+    // The sections' data objects change only with a new read.
+  }, [weather, sun, aqi, weatherReady, sunReady, aqiReady, calendarData, yourHome, density]);
+
   return (
     <>
       {embedded ? (
@@ -474,7 +486,7 @@ export default function TodayDetail({
         <DetailSectionLabel>Weather</DetailSectionLabel>
         {weatherReady ? (
           <div className="flex flex-col gap-2.5">
-            <NowCard data={weather!.data as PlaceWeatherData} />
+            <NowCard data={weather!.data as PlaceWeatherData} sky={sky!} at={Date.parse(intelligence.generated_at)} />
             <HourlyStrip data={weather!.data as PlaceWeatherData} />
             <ForecastList data={weather!.data as PlaceWeatherData} />
           </div>
