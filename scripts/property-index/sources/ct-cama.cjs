@@ -64,8 +64,10 @@ const REGION_NAMES = {
   '09160': 'Northwest Hills', '09170': 'South Central Connecticut', '09180': 'Southeastern Connecticut', '09190': 'Western Connecticut',
 };
 const REGION_OF = new Map(Object.entries(REGIONS).flatMap(([fips, towns]) => towns.map((town) => [town.toUpperCase(), fips])));
-// The state's town numbers are the towns in alphabetical order.
-const TOWNS_BY_NUMBER = [...REGION_OF.keys()].sort();
+// The state's town codes are the towns in alphabetical order with the spaces left out: Eastford is 39, East Granby 40.
+const squeezed = (town) => town.replace(/ /g, '');
+const TOWN_CODES = [...REGION_OF.keys()].sort((a, b) => (squeezed(a) < squeezed(b) ? -1 : 1));
+const CODE_OF = new Map(TOWN_CODES.map((town, i) => [town, i + 1]));
 
 const COLUMNS = ['pid', 'town_id', 'location', 'address_number', 'street_name', 'unit', 'property_city', 'property_zip', 'assessed_total', 'assessed_building', 'assessed_land', 'appraised_total', 'appraised_building', 'appraised_land',
   'valuation_year', 'land_acres', 'zone', 'state_use', 'state_use_description', 'style_desc', 'grade_desc', 'condition_description', 'neighborhood', 'ayb', 'eyb', 'gross_area_of_primary_building', 'living_area', 'stories',
@@ -93,11 +95,12 @@ const number = (text) => positive(String(text ?? '').replace(/,/g, ''));
 // Some towns write the house number as a decimal, "12.0" (Darien, Hartland): the house is 12.
 const wholeHouse = (text) => String(text ?? '').trim().replace(/^(\d+)\.0+(?=\s|$)/, '$1');
 
+// A row's town is the one it names. Its code is only the fallback: the 2026 file gives a town whose name holds another town's
+// name that town's code (Manchester and Colchester have Chester's, West Hartford Hartford's) and leaves eight towns without one.
 function townOf(row) {
-  const byNumber = TOWNS_BY_NUMBER[Number(row.town_id) - 1];
-  if (byNumber) return byNumber;
   const city = String(row.property_city ?? '').trim().toUpperCase();
-  return REGION_OF.has(city) ? city : null;
+  if (REGION_OF.has(city)) return city;
+  return TOWN_CODES[Number(row.town_id) - 1] || null;
 }
 
 function fromRow(row, fips, county, town) {
@@ -169,7 +172,8 @@ function fromRow(row, fips, county, town) {
     if (document) facts.sale_document = `Book ${document[1]}, Page ${document[2]}`;
   }
   return {
-    id: `pp:${kind}:${fips}:${TOWNS_BY_NUMBER.indexOf(town) + 1}-${facts.parcel_number}`, kind, home_type: homeType,
+    // Parcel numbers are each town's own: the town's code keeps two towns' parcels apart.
+    id: `pp:${kind}:${fips}:${CODE_OF.get(town)}-${facts.parcel_number}`, kind, home_type: homeType,
     address: { ...parsed, city: town, zip: zipCode(row.property_zip) }, facts,
   };
 }
