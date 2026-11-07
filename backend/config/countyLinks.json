@@ -1847,6 +1847,14 @@
    "ref": "Columbia Property Appraiser",
    "was_http": true
   },
+  "12027": {
+   "name": "DeSoto County",
+   "url": "https://www.desotopa.com/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "DeSoto Property Appraiser",
+   "was_http": true
+  },
   "12031": {
    "name": "Duval County",
    "url": "https://paopropertysearch.coj.net/Basic/Search.aspx",
@@ -3487,6 +3495,14 @@
    "ref": "Franklin Property Valuation",
    "was_http": true
   },
+  "21083": {
+   "name": "Graves County",
+   "url": "https://gravespva.com/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Graves Property Valuation",
+   "was_http": true
+  },
   "21093": {
    "name": "Hardin County",
    "url": "https://qpublic.schneidercorp.com/Application.aspx?App=HardinCountyKY&PageType=Search",
@@ -4286,6 +4302,13 @@
    "ref": "Blue Earth Assessor",
    "was_http": true
   },
+  "27017": {
+   "name": "Carlton County",
+   "url": "https://www.co.carlton.mn.us/149/Assessor",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Carlton Assessor"
+  },
   "27019": {
    "name": "Carver County",
    "url": "https://gis.co.carver.mn.us/publicparcel/",
@@ -4365,6 +4388,13 @@
    "kind": "search",
    "src": "netr",
    "ref": "Kandiyohi Assessor"
+  },
+  "27085": {
+   "name": "McLeod County",
+   "url": "https://www.mcleodcountymn.gov/departments/assessor/index.php",
+   "kind": "search",
+   "src": "netr",
+   "ref": "McLeod Assessor"
   },
   "27099": {
    "name": "Mower County",
@@ -4716,6 +4746,14 @@
    "ref": "Johnson Assessor",
    "was_http": true
   },
+  "29105": {
+   "name": "Laclede County",
+   "url": "https://lacledecountymissouri.org/index.php?page=assessor",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Laclede Assessor",
+   "was_http": true
+  },
   "29109": {
    "name": "Lawrence County",
    "url": "https://lawrencecountymoassessor.com/",
@@ -4987,6 +5025,155 @@
    "ref": "Strafford Assessor",
    "was_http": true
   },
+  "34001": {
+   "name": "Atlantic County",
+   "url": "https://www.taxdatahub.com/622e0489f94ca0ce44f394e3/Atlantic",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Atlantic Board of Taxation"
+  },
+  "34003": {
+   "name": "Bergen County",
+   "url": "https://taxrecords-nj.com/pub/cgi/prc6.cgi?district=0200&ms_user=ctb02",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Bergen Board of Taxation"
+  },
+  "34005": {
+   "name": "Burlington County",
+   "url": "https://www.taxdatahub.com/623af8995103551060110abc/Burlington",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Burlington Board of Taxation"
+  },
+  "34007": {
+   "name": "Camden County",
+   "url": "https://www.taxdatahub.com/60d088c3d3501df3b0e45ddb/camden-county",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Camden Board of Taxation"
+  },
+  "34009": {
+   "name": "Cape May County",
+   "url": "https://www.taxdatahub.com/657a206f5d46892e873bebbc/Cape%20May%20County",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Cape May Board of Taxation"
+  },
+  "34011": {
+   "name": "Cumberland County",
+   "url": "https://taxrecords-nj.com/pub/cgi/prc6.cgi?district=0600&ms_user=ctb06",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Cumberland Board of Taxation"
+  },
+  "34013": {
+   "name": "Essex County",
+   "url": "https://www.taxdatahub.com/6229fbf0ce4aef911f9de7bc/Essex%20County",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Essex Board of Taxation"
+  },
+  "34015": {
+   "name": "Gloucester County",
+   "url": "https://taxrecords-nj.com/pub/cgi/prc6.cgi?district=0801&ms_user=ctb08",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Gloucester Board of Taxation"
+  },
+  "34017": {
+   "name": "Hudson County",
+   "url": "https://taxrecords-nj.com/pub/cgi/prc6.cgi?district=0901&ms_user=ctb09",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Hudson Board of Taxation"
+  },
+  "34019": {
+   "name": "Hunterdon County",
+   "url": "https://www.taxdatahub.com/646b64e46d792f76cc9268bd/Hunterdon%20County",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Hunterdon Board of Taxation"
+  },
+  "34021": {
+   "name": "Mercer County",
+   "url": "https://pip.mercercounty.org/mapsearch",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Mercer Board of Taxation",
+   "was_http": true
+  },
+  "34023": {
+   "name": "Middlesex County",
+   "url": "https://www.taxdatahub.com/623085dd284c51d4d32ff9fe/Middlesex%20County",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Middlesex Board of Taxation"
+  },
+  "34025": {
+   "name": "Monmouth County",
+   "url": "https://oprs.co.monmouth.nj.us/oprs/External.aspx?iId=13",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Monmouth Board of Taxation"
+  },
+  "34027": {
+   "name": "Morris County",
+   "url": "https://mcweb1.co.morris.nj.us/MCTaxBoard/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Morris Board of Taxation",
+   "was_http": true
+  },
+  "34029": {
+   "name": "Ocean County",
+   "url": "https://tax.co.ocean.nj.us/frmTaxBoardTaxListSearch",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Ocean Board of Taxation"
+  },
+  "34031": {
+   "name": "Passaic County",
+   "url": "https://www.taxdatahub.com/63c530ebf420705a76375c34/Passaic%20County",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Passaic Board of Taxation"
+  },
+  "34033": {
+   "name": "Salem County",
+   "url": "https://taxrecords-nj.com/pub/cgi/prc6.cgi?district=1701&ms_user=ctb17",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Salem Board of Taxation"
+  },
+  "34035": {
+   "name": "Somerset County",
+   "url": "https://www.taxdatahub.com/62322899fa390ea73997514b/Somerset%20County",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Somerset Board of Taxation"
+  },
+  "34037": {
+   "name": "Sussex County",
+   "url": "https://taxrecords-nj.com/pub/cgi/prc6.cgi?district=1901&ms_user=ctb19",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Sussex Board of Taxation"
+  },
+  "34039": {
+   "name": "Union County",
+   "url": "https://taxrecords-nj.com/pub/cgi/prc6.cgi?district=2001&ms_user=ctb20",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Union Board of Taxation"
+  },
+  "34041": {
+   "name": "Warren County",
+   "url": "https://taxrecords-nj.com/pub/cgi/prc6.cgi?district=2101&ms_user=ctb21",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Warren Board of Taxation"
+  },
   "35001": {
    "name": "Bernalillo County",
    "url": "https://assessor.bernco.gov/public.access/search/commonsearch.aspx?mode=realprop",
@@ -5176,6 +5363,13 @@
    "kind": "search",
    "src": "netr",
    "ref": "Erie Real Property Tax Service"
+  },
+  "36031": {
+   "name": "Essex County",
+   "url": "https://essexcounty.prosgar.com/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Essex Real Property Tax Service"
   },
   "36033": {
    "name": "Franklin County",
@@ -5654,6 +5848,13 @@
    "src": "netr",
    "ref": "Johnston Assessor"
   },
+  "37105": {
+   "name": "Lee County",
+   "url": "https://taxaccess.leecountync.gov/PT/search/commonsearch.aspx?mode=realprop",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Lee Tax Administration"
+  },
   "37109": {
    "name": "Lincoln County",
    "url": "https://nc-lincolncounty.civicplus.com/97/Individual-Property-Listing",
@@ -5714,6 +5915,13 @@
    "src": "netr",
    "ref": "Pender Assessor"
   },
+  "37145": {
+   "name": "Person County",
+   "url": "https://www.bttaxpayerportal.com/ITSPublicPR/TaxBillSearch",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Person Tax Administration"
+  },
   "37147": {
    "name": "Pitt County",
    "url": "https://property.spatialest.com/nc/pitt",
@@ -5727,6 +5935,13 @@
    "kind": "search",
    "src": "netr",
    "ref": "Randolph Assessor"
+  },
+  "37153": {
+   "name": "Richmond County",
+   "url": "https://www.richmondnctax.com/taxes.html",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Richmond Tax Administration"
   },
   "37155": {
    "name": "Robeson County",
@@ -5765,6 +5980,13 @@
    "src": "netr",
    "ref": "Stanly Assessor",
    "was_http": true
+  },
+  "37169": {
+   "name": "Stokes County",
+   "url": "https://www.stokescountytax.com/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Stokes Tax Administration"
   },
   "37171": {
    "name": "Surry County",
@@ -5981,6 +6203,13 @@
    "src": "netr",
    "ref": "Crawford Auditor",
    "was_http": true
+  },
+  "39035": {
+   "name": "Cuyahoga County",
+   "url": "https://myplace.cuyahogacounty.gov/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Cuyahoga Fiscal Officer"
   },
   "39037": {
    "name": "Darke County",
@@ -6810,6 +7039,13 @@
    "src": "netr",
    "ref": "Chester Assessor"
   },
+  "42031": {
+   "name": "Clarion County",
+   "url": "https://www.co.clarion.pa.us/government/departments/assessment/index.php",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Clarion Assessor"
+  },
   "42033": {
    "name": "Clearfield County",
    "url": "https://clearfieldpa.devnetwedge.com/",
@@ -7518,6 +7754,13 @@
    "kind": "search",
    "src": "netr",
    "ref": "Lawrence Assessor"
+  },
+  "47103": {
+   "name": "Lincoln County",
+   "url": "https://assessment.cot.tn.gov/TPAD",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Lincoln Assessor"
   },
   "47105": {
    "name": "Loudon County",
@@ -8459,6 +8702,44 @@
    "ref": "Culpeper Assessor",
    "was_http": true
   },
+  "51059": {
+   "name": "Fairfax County",
+   "url": "https://icare.fairfaxcounty.gov/Main/Home.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Fairfax Commissioner of Revenue",
+   "was_http": true
+  },
+  "51061": {
+   "name": "Fauquier County",
+   "url": "https://gis.vgsi.com/fauquierva/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Fauquier Commissioner of Revenue"
+  },
+  "51067": {
+   "name": "Franklin County",
+   "url": "https://data-franklincova.opendata.arcgis.com/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Franklin Commissioner of Revenue"
+  },
+  "51069": {
+   "name": "Frederick County",
+   "url": "https://www.fcva.us/departments/commissioner-of-the-revenue/real-estate-division",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Frederick Commissioner of Revenue",
+   "was_http": true
+  },
+  "51073": {
+   "name": "Gloucester County",
+   "url": "https://gis.vgsi.com/Gloucesterva/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Gloucester Commissioner of Revenue",
+   "was_http": true
+  },
   "51085": {
    "name": "Hanover County",
    "url": "https://www.hanovercounty.gov/Property/Real-Estate-Assessments/",
@@ -8489,6 +8770,57 @@
    "ref": "Isle of Wight Commissioner of Revenue (Assessment)",
    "was_http": true
   },
+  "51095": {
+   "name": "James City County",
+   "url": "https://www.jamescitycountyva.gov/385/Commissioner-of-the-Revenue",
+   "kind": "search",
+   "src": "netr",
+   "ref": "James City Commissioner of Revenue"
+  },
+  "51107": {
+   "name": "Loudoun County",
+   "url": "https://reparcelasmt.loudoun.gov/pt/search/commonsearch.aspx?mode=address",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Loudoun Commissioner of Revenue",
+   "was_http": true
+  },
+  "51109": {
+   "name": "Louisa County",
+   "url": "https://www.louisacounty.gov/160/Commissionerof-theRevenue",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Louisa Commissioner of Revenue"
+  },
+  "51121": {
+   "name": "Montgomery County",
+   "url": "https://realestate.montva.com/Main/Home.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Montgomery Commissioner of Revenue",
+   "was_http": true
+  },
+  "51137": {
+   "name": "Orange County",
+   "url": "https://octylerweb.orangecountyva.gov/MSS/citizens/RealEstate/Default.aspx?mode=new",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Orange Commissioner of Revenue"
+  },
+  "51143": {
+   "name": "Pittsylvania County",
+   "url": "https://www.pittsylvaniacountyva.gov/364/Commissioner-of-the-Revenue",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Pittsylvania Commissioner of Revenue"
+  },
+  "51149": {
+   "name": "Prince George County",
+   "url": "https://gis.vgsi.com/princegeorgeva/Search.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Prince George Commissioner of Revenue"
+  },
   "51153": {
    "name": "Prince William County",
    "url": "https://pwc.publicaccessnow.com/",
@@ -8504,12 +8836,63 @@
    "src": "netr",
    "ref": "Roanoke Real Estate Valuation"
   },
-  "51199": {
-   "name": "York County",
-   "url": "https://www.yorkcounty.gov/363/Real-Estate-Assessment",
+  "51165": {
+   "name": "Rockingham County",
+   "url": "https://www.rockinghamcountyva.gov/295/Commissioner-of-Revenue",
    "kind": "search",
    "src": "netr",
-   "ref": "York Real Estate Assessment Office"
+   "ref": "Rockingham Commissioner of Revenue"
+  },
+  "51171": {
+   "name": "Shenandoah County",
+   "url": "https://www.shenandoahcountyva.gov/224/Commissioner-of-Revenue",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Shenandoah Commissioner of Revenue"
+  },
+  "51177": {
+   "name": "Spotsylvania County",
+   "url": "https://www.spotsylvania.va.us/502/Assessment-Office",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Spotsylvania Commissioner of Revenue"
+  },
+  "51179": {
+   "name": "Stafford County",
+   "url": "https://va-stafford-assessor.publicaccessnow.com/PropertySearch.aspx",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Stafford Commissioner of Revenue",
+   "was_http": true
+  },
+  "51185": {
+   "name": "Tazewell County",
+   "url": "https://www.vamanet.com/cgi-bin/MAPSRCHPGM?LOCAL=TAZ",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Tazewell Commissioner of Revenue",
+   "was_http": true
+  },
+  "51187": {
+   "name": "Warren County",
+   "url": "https://www.warrencountyva.gov/162/Commissioner-of-the-Revenue",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Warren Commissioner of Revenue"
+  },
+  "51191": {
+   "name": "Washington County",
+   "url": "https://www.washcova.com/commissioner-of-the-revenue/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Washington Commissioner of Revenue"
+  },
+  "51199": {
+   "name": "York County",
+   "url": "https://www.yorkcounty.gov/458/Commissioner-of-the-Revenue",
+   "kind": "search",
+   "src": "netr",
+   "ref": "York Commissioner of Revenue"
   },
   "51510": {
    "name": "the City of Alexandria",
@@ -8533,6 +8916,14 @@
    "src": "netr",
    "ref": "Chesapeake City Assessor"
   },
+  "51590": {
+   "name": "the City of Danville",
+   "url": "https://www.danville-va.gov/524/Commissioner-of-Revenue",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Danville City Commissioner of Revenue",
+   "was_http": true
+  },
   "51650": {
    "name": "the City of Hampton",
    "url": "https://webgis3.hampton.gov/civquest/",
@@ -8540,12 +8931,27 @@
    "src": "netr",
    "ref": "Hampton City Assessor"
   },
+  "51660": {
+   "name": "the City of Harrisonburg",
+   "url": "https://gis.vgsi.com/harrisonburgva",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Harrisonburg Commissioner of Revenue"
+  },
   "51680": {
    "name": "the City of Lynchburg",
    "url": "https://mapviewer.lynchburgva.gov/ParcelViewer/Account/Logon",
    "kind": "search",
    "src": "netr",
    "ref": "Lynchburg City Assessor",
+   "was_http": true
+  },
+  "51683": {
+   "name": "the City of Manassas",
+   "url": "https://gis.vgsi.com/manassasva//",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Manassas City Commissioner of Revenue",
    "was_http": true
   },
   "51700": {
@@ -8576,6 +8982,20 @@
    "kind": "search",
    "src": "netr",
    "ref": "Richmond City Assessor"
+  },
+  "51770": {
+   "name": "the City of Roanoke",
+   "url": "https://gisre.roanokeva.gov/js/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Roanoke City Commissioner of Revenue"
+  },
+  "51800": {
+   "name": "the City of Suffolk",
+   "url": "https://property.spatialest.com/va/suffolk",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Suffolk City Commissioner of Revenue"
   },
   "51810": {
    "name": "the City of Virginia Beach",
