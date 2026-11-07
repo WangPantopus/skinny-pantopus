@@ -174,6 +174,8 @@ router.get('/user/:userId', async (req, res) => {
         reviewee_id,
         rating,
         comment,
+        owner_response,
+        owner_responded_at,
         media_urls,
         created_at,
         reviewer:User!Review_reviewer_id_fkey(id, username, name, first_name, last_name, profile_picture_url),
