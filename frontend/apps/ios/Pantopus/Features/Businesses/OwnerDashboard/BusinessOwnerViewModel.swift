@@ -38,6 +38,9 @@ public final class BusinessOwnerViewModel {
     private let defaults: UserDefaults
     private let logger = Logger(label: "app.pantopus.ios.BusinessOwner")
     private var readGeneration = 0
+    /// The public page behind `publicProfile`. It lives as long as the dashboard, so a refresh keeps the reviews it
+    /// already has until their new read answers.
+    private let profile: BusinessProfileViewModel
 
     /// Per-business dismissal flag for the founding banner. Mirrors RN's
     /// `AsyncStorage` key `pantopus_founding_dismissed_<businessId>`
@@ -69,6 +72,7 @@ public final class BusinessOwnerViewModel {
         self.client = client
         self.defaults = defaults
         injectedContent = content
+        profile = BusinessProfileViewModel(businessId: businessId, client: client)
     }
 
     public func load() async {
@@ -213,12 +217,12 @@ public final class BusinessOwnerViewModel {
         )
         // 1. Public render (primary) — reuse the Business Profile projection so
         //    the owner frame reads exactly the public page. This also gives the
-        //    not-found / error semantics for the whole screen.
-        let profileViewModel = BusinessProfileViewModel(businessId: businessId, client: client)
-        await profileViewModel.load()
+        //    not-found / error semantics for the whole screen. Only the page's
+        //    own reads count; its reviews load with the optional sections.
+        await profile.readPage()
         guard generation == readGeneration, !Task.isCancelled else { return }
         let publicProfile: BusinessProfileContent
-        switch profileViewModel.state {
+        switch profile.state {
         case let .loaded(content):
             publicProfile = content
         case .notFound:
@@ -267,6 +271,7 @@ public final class BusinessOwnerViewModel {
     }
 
     private enum AdditionalContent {
+        case publicProfile(BusinessProfileContent?)
         case insights(BusinessInsightsResponse?)
         case reviews([BusinessOwnerReviewDTO])
         case founding(OwnerFoundingOffer?)
@@ -274,6 +279,12 @@ public final class BusinessOwnerViewModel {
 
     private func loadAdditionalContent(generation: Int, includesFoundingOffer: Bool) async {
         await withTaskGroup(of: AdditionalContent.self) { group in
+            // The public page's reviews (`GET /api/users/id/:id`), which the preview shows.
+            group.addTask { [profile] in
+                await profile.readReviews()
+                guard case let .loaded(content) = await profile.state else { return .publicProfile(nil) }
+                return .publicProfile(content)
+            }
             group.addTask { [client, businessId] in
                 await .insights(try? client.request(BusinessesEndpoints.insights(businessId: businessId)))
             }
@@ -296,6 +307,8 @@ public final class BusinessOwnerViewModel {
                 // Merge into the current content so another section finishing
                 // cannot erase an optimistic review reply or a dismissed offer.
                 switch result {
+                case let .publicProfile(publicProfile):
+                    state = .loaded(current.withAdditionalContent(publicProfile: publicProfile))
                 case let .insights(insights):
                     state = .loaded(current.withAdditionalContent(insights: insightTiles(from: insights)))
                 case let .reviews(reviews):
