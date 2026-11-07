@@ -576,8 +576,36 @@ class EditAccessCodeFormViewModel
             val intent = previous ?: PendingAccessCreate(actorId, request, response.secrets.map { it.id }.toSet())
             pendingCreate = intent
             val result = homes.createHomeAccessSecret(homeId = homeId, request = intent.request, dispatchGuard = dispatchGuard)
-            if (result is NetworkResult.Failure && !result.error.creationMayHaveSucceeded()) pendingCreate = null
+            if (result !is NetworkResult.Failure) return result
+            if (result.error.code == HTTP_CONFLICT) return resolveConflict(intent, actorId, result)
+            if (!result.error.creationMayHaveSucceeded()) pendingCreate = null
             return result
+        }
+
+        /**
+         * OkHttp re-sends a request when a reused connection drops after sending it, so a conflict can be this
+         * create's own first attempt. A record counts only if it wasn't there before and matches exactly.
+         */
+        private suspend fun resolveConflict(
+            intent: PendingAccessCreate,
+            actorId: String,
+            conflict: NetworkResult.Failure,
+        ): NetworkResult<HomeAccessSecretResponse> {
+            val read = homes.getHomeAccessSecrets(homeId)
+            if (!session.confirmCurrent()) return NetworkResult.Failure(NetworkError.Unauthorized)
+            return when (read) {
+                // Still unknown: the pending intent stays, and the next Save checks again.
+                is NetworkResult.Failure -> read
+                is NetworkResult.Success -> {
+                    val saved = read.data.secrets.singleOrNull { intent.matches(it, homeId, actorId) }
+                    if (saved != null) {
+                        NetworkResult.Success(HomeAccessSecretResponse(saved))
+                    } else {
+                        pendingCreate = null
+                        conflict
+                    }
+                }
+            }
         }
 
         /** Removes this code for everyone it was shared with, guest pass pages included. */
@@ -745,6 +773,7 @@ class EditAccessCodeFormViewModel
 
         companion object {
             private const val TOAST_DURATION_MS = 1_800L
+            private const val HTTP_CONFLICT = 409
         }
     }
 
