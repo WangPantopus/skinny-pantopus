@@ -309,9 +309,10 @@ public struct FeedView: View {
         }
     }
 
-    /// The Nearby feed (the one with Ask) shows its posts or its empty state.
+    /// The Nearby feed (the one with Ask) shows its current posts or its empty
+    /// state: not a copy kept from before, and none waiting behind the pill.
     private var showsNearbyPosts: Bool {
-        guard asksPantopus, viewModel.surface == .pulse else { return false }
+        guard asksPantopus, viewModel.surface == .pulse, viewModel.showsCurrentPosts else { return false }
         switch viewModel.state {
         case .loaded, .empty: return true
         case .loading, .error: return false

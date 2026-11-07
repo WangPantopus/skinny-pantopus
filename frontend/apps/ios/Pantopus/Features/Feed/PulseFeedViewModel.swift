@@ -266,6 +266,14 @@ public final class PulseFeedViewModel {
     private var pendingFirstPage: PendingFirstPage?
     /// New posts waiting behind the pill; 0 hides it.
     public private(set) var newPostsCount = 0
+    /// The list shows what the server holds now: the last read reached it (not
+    /// a copy kept from before, nor a refresh that failed) and no new posts
+    /// wait behind the pill. Only then has the feed been seen.
+    public var showsCurrentPosts: Bool {
+        listIsCurrent && newPostsCount == 0
+    }
+
+    private var listIsCurrent = false
     /// Set by the list: its first card is on screen.
     public var isReadingAtTop = true
     /// The post the reader scrolled to the top of the list, and whether they are at the list's top instead: a fold
@@ -982,6 +990,7 @@ public final class PulseFeedViewModel {
             let confirmed = snapshot.isFresh && !snapshot.refreshFailed
             // A newer fetch (e.g. a filter tapped meanwhile) owns the list.
             guard generation == fetchGeneration else { return }
+            listIsCurrent = confirmed
             // New posts never move what someone is reading: below the top they
             // wait behind the pill; at the top (or on a pull) they slide in.
             if !force, !isReadingAtTop, case .loaded = state, query == lastQuery {
@@ -1005,6 +1014,7 @@ public final class PulseFeedViewModel {
             return
         } catch {
             guard generation == fetchGeneration else { return }
+            listIsCurrent = false
             let message = (error as? APIError)?.errorDescription ?? "Couldn't load posts."
             if areaResolved, case .loaded = state {
                 // Keep the posts on screen; a failed refresh only toasts.
@@ -1126,6 +1136,7 @@ public final class PulseFeedViewModel {
             viewingRadiusMiles = area.radiusMiles ?? 100
             onAreaResolved?(viewingLocation)
         }
+        listIsCurrent = copy.isFresh && !copy.refreshFailed
         applyFirstPage(copy.value, area: area, query: query, viewingLocation: viewingLocation)
     }
 
