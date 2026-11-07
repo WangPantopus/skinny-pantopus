@@ -576,6 +576,8 @@ public struct HubTabRoot: View {
     /// The mail screens' models while their routes are on the stack: a fold replaces the Mail tab's presentation,
     /// not its letters, searches and drafts.
     @State private var mailScreenModels = MailScreenModels()
+    /// The card table its mail screens open, shown from here so the halves of side-by-side Mail can redraw under it.
+    @State private var cardTableSlot = CardTableCoverSlot()
     /// The Mail tab shows two halves (the open Duo held sideways): what the Mailbox opens goes beside it.
     @State private var mailSideBySide = false
     /// The booklet beside the Mailbox laid open as two pages, the Mailbox stepping aside.
@@ -781,9 +783,11 @@ public struct HubTabRoot: View {
     public var body: some View {
         Group {
             tabStacks
+                .cardTableCoverSlot(cardTableSlot)
         }
         .onChange(of: path.routes) { old, routes in
             mailScreenModels.retain(routes)
+            cardTableSlot.keep { mailScreenModels.holds($0) }
             // Laid open, a booklet stays so while it's the piece open beside the Mailbox.
             if laidOpenBookletId != nil, laidOpenBookletId != path.openMailPieceId { laidOpenBookletId = nil }
             // Beside what it opened the Mailbox stays on screen: a card sent or a hold set shows on it now.

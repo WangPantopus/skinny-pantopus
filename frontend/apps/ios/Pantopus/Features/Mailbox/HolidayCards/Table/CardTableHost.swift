@@ -55,6 +55,69 @@ extension CardTableContent {
     }
 }
 
+/// Where a tab's root shows the card table. On the open Duo a cover presented from inside side-by-side Mail is shown
+/// again each time the halves redraw, and a sheet over it (Share, Who sent it) went and came back in a loop; the tab's
+/// root stays put, so the Mail screens hand it their page. Without one (another tab) a screen presents it itself.
+@MainActor @Observable
+final class CardTableCoverSlot {
+    struct Page: Identifiable {
+        let id: String
+        /// The model of the screen that opened it: the page goes when that screen leaves the stack.
+        let owner: AnyObject
+        let content: () -> AnyView
+        var onDismiss: () -> Void = {}
+    }
+
+    private(set) var page: Page?
+
+    /// Shows a page, or with nil takes down the one this owner put up.
+    func show(_ page: Page?, owner: AnyObject) {
+        if let page {
+            self.page = page
+        } else if let shown = self.page, shown.owner === owner {
+            self.page = nil
+            shown.onDismiss()
+        }
+    }
+
+    /// Takes the page down once the screen that opened it is gone.
+    func keep(while isKept: (AnyObject) -> Bool) {
+        guard let page, !isKept(page.owner) else { return }
+        var quiet = Transaction()
+        quiet.disablesAnimations = true
+        withTransaction(quiet) { self.page = nil }
+    }
+
+    fileprivate func dismissed() {
+        guard let page else { return }
+        show(nil, owner: page.owner)
+    }
+}
+
+private struct CardTableCoverSlotKey: EnvironmentKey {
+    static var defaultValue: CardTableCoverSlot? {
+        nil
+    }
+}
+
+extension EnvironmentValues {
+    /// The tab root's place for the card table; nil where the screen presents it itself.
+    var cardTableCoverSlot: CardTableCoverSlot? {
+        get { self[CardTableCoverSlotKey.self] }
+        set { self[CardTableCoverSlotKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// A tab's root: the card table its screens open shows from here, with no system animation.
+    func cardTableCoverSlot(_ slot: CardTableCoverSlot) -> some View {
+        environment(\.cardTableCoverSlot, slot)
+            .fullScreenCover(item: Binding(get: { slot.page }, set: { if $0 == nil { slot.dismissed() } })) { page in
+                page.content()
+            }
+    }
+}
+
 /// Which card the cover shows.
 private struct CardTableCoverItem: Identifiable {
     let id: String
@@ -66,6 +129,7 @@ struct MailCardTableCover: ViewModifier {
     let senderLink: (MailDetailContent) -> (title: String, open: () -> Void)?
     let onClose: () -> Void
 
+    @Environment(\.cardTableCoverSlot) private var slot
     @State private var item: CardTableCoverItem?
 
     func body(content: Content) -> some View {
@@ -74,15 +138,30 @@ struct MailCardTableCover: ViewModifier {
                 of: viewModel.cardTable == nil || viewModel.cardTableClosed,
                 initial: true
             ) { _, hidden in
-                var quiet = Transaction()
-                quiet.disablesAnimations = true
-                withTransaction(quiet) {
-                    item = hidden ? nil : viewModel.cardTable.map { CardTableCoverItem(id: viewModel.mailId, model: $0) }
-                }
+                present(hidden ? nil : viewModel.cardTable.map { CardTableCoverItem(id: viewModel.mailId, model: $0) })
             }
             .fullScreenCover(item: $item) { item in
-                MailCardTablePage(viewModel: viewModel, model: item.model, senderLink: senderLink, onClose: close)
+                tablePage(item)
             }
+    }
+
+    private func present(_ next: CardTableCoverItem?) {
+        var quiet = Transaction()
+        quiet.disablesAnimations = true
+        withTransaction(quiet) {
+            guard let slot else {
+                item = next
+                return
+            }
+            let page = next.map { next in
+                CardTableCoverSlot.Page(id: next.id, owner: viewModel) { AnyView(tablePage(next)) }
+            }
+            slot.show(page, owner: viewModel)
+        }
+    }
+
+    private func tablePage(_ item: CardTableCoverItem) -> MailCardTablePage {
+        MailCardTablePage(viewModel: viewModel, model: item.model, senderLink: senderLink, onClose: close)
     }
 
     private func close() {

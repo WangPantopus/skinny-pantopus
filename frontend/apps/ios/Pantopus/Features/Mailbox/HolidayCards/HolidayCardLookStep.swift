@@ -75,7 +75,7 @@ struct HolidayCardLookStep: View {
                 personSections
             }
         }
-        .modifier(CardTablePreviewCover(content: $tableContent, closeLabel: "Back to Look it over"))
+        .modifier(CardTablePreviewCover(content: $tableContent, owner: viewModel, closeLabel: "Back to Look it over"))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sendCardLook")
     }
