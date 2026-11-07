@@ -255,8 +255,8 @@ public struct PostReactions: Sendable, Hashable {
     /// read them (with its `likeCount` standing in once none are left), and
     /// its emoji for the viewer.
     public func confirmed(by response: PostLikeResponse) -> PostReactions {
-        let mine = response.liked ? response.reaction ?? self.mine : nil
-        return PostReactions(counts: response.reactions ?? counts, mine: mine, likeCount: response.likeCount)
+        let viewer = response.liked ? response.reaction ?? mine : nil
+        return PostReactions(counts: response.reactions ?? counts, mine: viewer, likeCount: response.likeCount)
     }
 
     /// What VoiceOver reads for them: "React" before anyone reacted, else
