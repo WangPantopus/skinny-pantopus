@@ -683,6 +683,8 @@ public final class PulseFeedViewModel {
         if let goingCount = change.goingCount { value.likeCount = goingCount }
         if let reactions = change.reactions { value.reactions = reactions }
         if let isSaved = change.isSaved { value.isSaved = isSaved }
+        if let isReposted = change.isReposted { value.isReposted = isReposted }
+        if let shareCount = change.shareCount { value.shareCount = shareCount }
         if let commentCount = change.commentCount { value.commentCount = commentCount }
         overrides[change.postId] = value
         actionRevision += 1

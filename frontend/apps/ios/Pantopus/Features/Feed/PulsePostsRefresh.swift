@@ -25,6 +25,9 @@ public struct PulsePostChange: Sendable {
     /// Every other post's emoji reactions.
     public var reactions: PostReactions?
     public var isSaved: Bool?
+    /// The viewer's repost, and the post's share count with it.
+    public var isReposted: Bool?
+    public var shareCount: Int?
     public var commentCount: Int?
 
     public init(postId: String) {
