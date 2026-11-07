@@ -14,6 +14,7 @@
 //   - mailPartyExpiry            → every minute (Phase 2)
 //   - earnRiskReview             → every 15 minutes (Phase 2)
 //   - vaultWeeklyDigest          → Mondays at 9:00 AM (Phase 2)
+//   - propertyRecordsDaily       → daily at 00:20 UTC (county lookups, vendor calls)
 //   - recomputeUtilityScores     → every 15 minutes (Social Layer)
 //   - monthlyReceiptJob          → 1st of month at 9:00 AM PT (17:00 UTC)
 //   - authRegistryPrune          → hourly at :50 (persistent login)
@@ -36,6 +37,7 @@ const mailInterruptNotification = require('./mailInterruptNotification');
 const mailPartyExpiry = require('./mailPartyExpiry');
 const earnRiskReview = require('./earnRiskReview');
 const vaultWeeklyDigest = require('./vaultWeeklyDigest');
+const propertyRecordsDaily = require('./propertyRecordsDaily');
 // Phase 3 jobs
 const vacationHoldExpiry = require('./vacationHoldExpiry');
 const ballotGuideLetters = require('./ballotGuideLetters');
@@ -319,6 +321,13 @@ function startJobs(options = {}) {
   // Summarizes vault activity: auto-filed items, unfiled items needing
   // attention, and storage stats per drawer.
   scheduleCron('0 9 * * 1', wrapJob('vaultWeeklyDigest', vaultWeeklyDigest), {
+    scheduled: true,
+    timezone: 'UTC',
+  });
+
+  // ─── County records: yesterday's lookups and vendor calls ───
+  // Runs just after each UTC day ends; the next hour's writes have landed by then.
+  scheduleCron('20 0 * * *', wrapJob('propertyRecordsDaily', propertyRecordsDaily), {
     scheduled: true,
     timezone: 'UTC',
   });

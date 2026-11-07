@@ -18,6 +18,7 @@
 const crypto = require('crypto');
 const logger = require('../../utils/logger');
 const router = require('./router');
+const counts = require('./counts');
 const reader = require('./reader');
 const identity = require('./identity');
 const { parse, sortKey, zip5, city: cityKey, stateCode } = require('./addressKey');
@@ -91,6 +92,7 @@ async function shadow(address) {
   try {
     const result = await lookup(address, { serves: (fips) => router.modeFor(fips) === 'shadow' });
     if (result.jurisdiction) {
+      counts.noteShadow(result.jurisdiction, result.match);
       logger.info('property_records.shadow', {
         fips: result.jurisdiction,
         match: result.match,

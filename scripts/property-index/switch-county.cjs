@@ -19,7 +19,7 @@ const { FACTS } = require('../../backend/services/propertyRecords/facts');
 const { stateOfCounty } = require('../../backend/services/propertyRecords/addressKey');
 const { log } = require('./lib/log.cjs');
 
-const opt = (name) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : ''; };
+const opt = (name) => { const i = process.argv.indexOf(name); return (i > 0 && process.argv[i + 1]) || ''; };
 const refuse = (why) => { console.error(why); process.exit(2); };
 
 const county = opt('--county').trim();

@@ -53,6 +53,7 @@ const nfipPremiumService = require('./nfipPremiumService');
 const { isConnecticutPlanningRegion } = require('../data/connecticutTowns');
 const exemptionCheckService = require('./exemptionCheckService');
 const propertyRecordsConfig = require('../config/propertyRecords');
+const homeRecords = require('./propertyRecords/homeRecord');
 const recordVocabulary = require('./recordVocabulary');
 const homeValueCard = require('./homeValueCard');
 const areaTrend = require('./propertyRecords/areaTrend');
@@ -1005,6 +1006,7 @@ async function composeYourHome(home, tier, viewerAccess, wantsRecordVocabulary =
     // Without ATTOM's key and with no county record, only what the household entered is shown, and no stored
     // ATTOM copy is read. The gap is ours, not the area's, so the copy doesn't blame the area.
     if (!process.env.ATTOM_API_KEY && !propertyRecordsConfig.enabled()) {
+      homeRecords.noteLookup('home', homeRecords.homeAddress(home), null);
       result = { profile: propertyIntelligenceService.buildFallbackProfile(home), source: 'fallback', lookup: null };
     } else {
       result = await propertyIntelligenceService.getProfile(home.id);
