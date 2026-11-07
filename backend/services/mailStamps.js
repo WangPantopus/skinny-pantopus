@@ -13,8 +13,14 @@ const BOOKS = [
   price_cents,
   currency: "usd",
 }));
-const enabled = () =>
-  process.env.MAIL_STAMPS_ENABLED === "true" &&
+const listed = (name, user) =>
+  !!user &&
+  (process.env[name] || "")
+    .split(",")
+    .some((id) => id.trim().toLowerCase() === user.toLowerCase());
+const enabled = (user) =>
+  (process.env.MAIL_STAMPS_ENABLED === "true" ||
+    listed("MAIL_STAMPS_PREVIEW_USERS", user)) &&
   areLaunchFeaturesEnabled(["mailbox", "holiday_cards"]);
 const book = (id) => BOOKS.find((b) => b.id === id);
 const failure = (
@@ -43,7 +49,7 @@ const googleAccount = (user) =>
   crypto.createHash("sha256").update(`pantopus-stamps:${user}`).digest("hex");
 async function appleToken() {
   const key = await importPKCS8(
-    process.env.MAIL_STAMPS_APPLE_KEY || "",
+    (process.env.MAIL_STAMPS_APPLE_KEY || "").replace(/\\n/g, "\n"),
     "ES256",
   );
   return new SignJWT({ bid: "com.pantopus.app" })
@@ -108,7 +114,10 @@ async function proof(provider, reference, user, productId) {
     if (!/^\d{1,40}$/.test(reference))
       throw failure("Invalid transaction.", 400);
     // Only decode data retrieved directly from Apple's authenticated HTTPS API, never client-supplied JWS.
-    const host = sandbox()
+    // App Review uses Sandbox even for a production binary. Only founder-designated
+    // review accounts may use that environment on a live backend; never auto-fallback.
+    const appleSandbox = sandbox() || listed("MAIL_STAMPS_APPLE_SANDBOX_USERS", user);
+    const host = appleSandbox
       ? "api.storekit-sandbox.apple.com"
       : "api.storekit.apple.com";
     const reply = await json(
@@ -124,7 +133,7 @@ async function proof(provider, reference, user, productId) {
       t.appAccountToken?.toLowerCase() !== user.toLowerCase() ||
       t.type !== "Consumable" ||
       t.quantity !== 1 ||
-      t.environment !== (sandbox() ? "Sandbox" : "Production")
+      t.environment !== (appleSandbox ? "Sandbox" : "Production")
     )
       throw failure("This purchase does not belong to this account.", 403);
     return { b, revoked: !!t.revocationDate };

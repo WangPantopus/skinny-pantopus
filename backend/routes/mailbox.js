@@ -1915,7 +1915,7 @@ async function checkCard(senderId, body, now) {
 
   const senderZone = (await mailDelivery.personTimeZone(senderId)) || mailDelivery.FALLBACK_TIME_ZONE;
   if (!holidayCards.seasonOpen(senderZone, now)) return refuse(410, 'Christmas cards are done for this year.', 'CARDS_CLOSED');
-  if (!mailStamps.enabled() && (await cardsSentToday(senderId, senderZone, now)).length) {
+  if (!mailStamps.enabled(senderId) && (await cardsSentToday(senderId, senderZone, now)).length) {
     return refuse(429, 'You’ve sent today’s card. You can send another tomorrow.', 'CARD_DAILY_LIMIT');
   }
 
@@ -1988,8 +1988,8 @@ router.get('/cards', verifyToken, async (req, res) => {
       next_round_at: mailDelivery.nextRound(timeZone, now).toISOString(),
       christmas_morning_at: holidayCards.christmasMorning(timeZone).toISOString(),
       time_zone: timeZone,
-      today: !mailStamps.enabled() && today ? holidayCards.sentSummary(today, now) : null,
-      postage_enabled: mailStamps.enabled(),
+      today: !mailStamps.enabled(senderId) && today ? holidayCards.sentSummary(today, now) : null,
+      postage_enabled: mailStamps.enabled(senderId),
     });
   } catch (err) {
     logger.error('Cards read error', { error: err.message, userId: req.user.id });
@@ -2084,7 +2084,7 @@ router.get('/cards/arrivals', verifyToken, async (req, res) => {
 router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) => {
   if (!cardsOn()) return sendCardsOff(res);
   const senderId = req.user.id;
-  if (mailStamps.enabled() && (!req.body.request_id || req.body.use_stamp !== true)) {
+  if (mailStamps.enabled(senderId) && (!req.body.request_id || req.body.use_stamp !== true)) {
     return res.status(409).json({
       error: 'Update Pantopus to send cards with digital stamps.',
       code: 'CARD_UPDATE_REQUIRED',
@@ -2113,8 +2113,8 @@ router.post('/cards', verifyToken, validate(sendCardSchema), async (req, res) =>
     const checked = await checkCard(senderId, req.body, now);
     if (checked.refusal) return res.status(checked.refusal.status).json(checked.refusal.body);
     const { design, message, arrival, senderZone, toUserId, toEmail, card, delivery } = checked;
-    if (requestId) card.request = { id: requestId, digest, ...(mailStamps.enabled() ? { settled_at: now.toISOString() } : {}) };
-    if (mailStamps.enabled()) card.postage_v1 = true;
+    if (requestId) card.request = { id: requestId, digest, ...(mailStamps.enabled(senderId) ? { settled_at: now.toISOString() } : {}) };
+    if (mailStamps.enabled(senderId)) card.postage_v1 = true;
     const byLink = Boolean(card.by_link);
     // A link's token comes from the row's id, so the id is known before the insert.
     const linkRowId = byLink ? (rowId || crypto.randomUUID()) : null;

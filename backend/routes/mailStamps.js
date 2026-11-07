@@ -36,7 +36,7 @@ router.get(
   })),
 );
 router.use("/checkout", (req, res, next) => {
-  if (!stamps.enabled()) return res.status(404).json({ error: "Not found" });
+  if (!stamps.enabled(req.user.id)) return res.status(404).json({ error: "Not found" });
   if (req.user.accountType === "business") {
     return res.status(403).json({
       error: "Stamp books are for personal accounts.",
