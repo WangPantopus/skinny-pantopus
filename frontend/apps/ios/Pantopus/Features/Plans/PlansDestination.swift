@@ -12,6 +12,7 @@ struct PlansDestination: View {
     let route: PlansRoute
     @Binding var path: [PlansRoute]
     let onHost: (PlansHostStart?) -> Void
+    @Environment(\.plansListBesideMap) private var besideMap
 
     var body: some View {
         Group {
@@ -64,6 +65,7 @@ struct PlansDestination: View {
                     onBack: { pop() }
                 )
                 .toolbar(.hidden, for: .navigationBar)
+                .hidesTabBar(!besideMap)
             }
         }
         // A link that replaces the screen on top (another plan) must start a
@@ -110,6 +112,7 @@ struct PlanChatScreen: View {
     @State private var profileUserId: String?
     /// A conversation with them, from their profile's Message.
     @State private var directMessage: InboxConversationDestination?
+    @Environment(\.plansListBesideMap) private var besideMap
 
     var body: some View {
         ChatConversationView(
@@ -129,6 +132,7 @@ struct PlanChatScreen: View {
             closedNote: route.closedNote
         ) { dismiss() })
         .toolbar(.hidden, for: .navigationBar)
+        .hidesTabBar(!besideMap)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planChat")
         .navigationDestination(item: $profileUserId) { userId in
@@ -150,6 +154,7 @@ struct PlanChatScreen: View {
                     mode: dest.kind
                 ) { directMessage = nil }
                     .toolbar(.hidden, for: .navigationBar)
+                    .hidesTabBar(!besideMap)
             }
         }
     }
