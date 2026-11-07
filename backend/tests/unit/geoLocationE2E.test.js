@@ -508,7 +508,7 @@ describe('Business location onboarding', () => {
       })
       .expect(422);
 
-    expect(res.body.error).toContain('undeliverable');
+    expect(res.body.verdict.decision.status).toBe('undeliverable');
   });
 });
 

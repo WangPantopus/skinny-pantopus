@@ -110,6 +110,15 @@ const CATALOG_ITEM_STATUSES = ['active', 'draft', 'archived'];
 const BUSINESS_LOCATION_TYPES = ['storefront', 'office', 'warehouse', 'home_based_private', 'service_area_only', 'mailing_only', 'unknown'];
 const LOCATION_INTENTS = ['CUSTOMER_FACING', 'OFFICE_NOT_PUBLIC', 'WAREHOUSE', 'HOME_BASED_PRIVATE', 'SERVICE_AREA_ONLY', 'MAILING_ONLY'];
 
+/** What an owner reads when the address check refuses a location; the apps show `error` as it is. */
+const ADDRESS_REFUSALS = {
+  need_suite: 'This address looks like a building with several businesses. Add your suite or unit.',
+  undeliverable: "We couldn't find this address. Check the street, city and ZIP.",
+  po_box: "A PO box can't be a business location. Use the street address where you work.",
+  cmra_detected: "A mailbox store address can't be a business location. Use the street address where you work.",
+  service_error: "We couldn't check this address right now. Try again in a minute.",
+};
+
 /** Rate limiter: 20 address validations per business per hour. */
 const addressValidationLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -1844,7 +1853,7 @@ router.post('/:businessId/locations', verifyToken, validate(createLocationSchema
     // Block on hard failures
     if (['need_suite', 'undeliverable', 'service_error'].includes(status)) {
       return res.status(422).json({
-        error: `Address validation failed: ${status}`,
+        error: ADDRESS_REFUSALS[status],
         verdict: stripRawData(verdict),
       });
     }
@@ -1852,7 +1861,7 @@ router.post('/:businessId/locations', verifyToken, validate(createLocationSchema
     // Block CMRA/PO Box unless explicitly mailing_only (which should use /mailing-address)
     if (['cmra_detected', 'po_box'].includes(status)) {
       return res.status(422).json({
-        error: `Address detected as ${status === 'cmra_detected' ? 'CMRA/virtual mailbox' : 'PO Box'}. Use the mailing address endpoint instead.`,
+        error: ADDRESS_REFUSALS[status],
         verdict: stripRawData(verdict),
       });
     }
@@ -2085,8 +2094,9 @@ router.patch('/:businessId/locations/:locationId', verifyToken, validate(updateL
       // Same hard-failure set the create route refuses.
       if (['need_suite', 'undeliverable', 'service_error', 'cmra_detected', 'po_box'].includes(verdictStatus)) {
         return res.status(422).json({
-          error: `Address validation failed: ${verdictStatus}`,
+          error: ADDRESS_REFUSALS[verdictStatus],
           code: 'ADDRESS_REJECTED',
+          reason: verdictStatus,
         });
       }
     }
