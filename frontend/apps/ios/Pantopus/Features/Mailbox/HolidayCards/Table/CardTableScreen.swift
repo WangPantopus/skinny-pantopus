@@ -14,8 +14,11 @@ import UIKit
 struct CardTableScreen: View {
     let model: CardTableModel
     let menuItems: [CardTableMenuItem]
+    /// The person sent this card, so sharing talks about their own note.
+    var isSender = false
     let onClose: () -> Void
 
+    @State private var isSharing = false
     @State private var wordsHeight: CGFloat = 0
     @State private var actHeight: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -58,7 +61,7 @@ struct CardTableScreen: View {
                     safeArea: safeArea,
                     contentWidth: layout.width,
                     onClose: onClose
-                ) {}
+                ) { isSharing = true }
                     .frame(width: screen.width, height: screen.height, alignment: .topLeading)
             }
             .frame(width: screen.width, height: screen.height, alignment: .topLeading)
@@ -71,6 +74,12 @@ struct CardTableScreen: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("cardTable")
         .task { await model.prepare() }
+        .sheet(isPresented: $isSharing) {
+            if let art = model.art {
+                CardTableShareSheet(content: model.content, art: art, picture: model.picture, isSender: isSender)
+            }
+        }
+        .onChange(of: isSharing) { _, sharing in model.setPaused(sharing) }
         .onAppear {
             model.reduceMotion = reduceMotion
             model.lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled

@@ -22,6 +22,8 @@ final class PersonalInviteLink {
 
     /// The link an invite shares right now.
     private(set) var url: URL = PersonalInviteLink.fallback
+    /// The person's invite code, for links that aren't the invite itself; nil until it's read.
+    private(set) var code: String?
 
     @ObservationIgnored private var account: String?
     @ObservationIgnored private var loaded = false
@@ -34,12 +36,14 @@ final class PersonalInviteLink {
             account = nil
             loaded = false
             url = Self.fallback
+            code = nil
             return
         }
         if newAccount != account {
             account = newAccount
             loaded = false
             url = Self.fallback
+            code = nil
         }
         if loaded { return }
         if let inFlight {
@@ -60,6 +64,7 @@ final class PersonalInviteLink {
         guard let link = dto.inviteUrl.flatMap(URL.init(string:)) ?? URL(string: InviteLinks.publicPageURLString(path: path))
         else { return }
         url = link
+        code = dto.inviteCode
         loaded = true
     }
 }

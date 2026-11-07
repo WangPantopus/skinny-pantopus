@@ -132,15 +132,30 @@ public extension View {
 /// Draft payload for the system mail composer. Carries a `mailtoURL`
 /// fallback for devices with no configured Mail account.
 public struct MailDraft: Identifiable, Hashable, Sendable {
+    /// A file on the message.
+    public struct Attachment: Hashable, Sendable {
+        public let data: Data
+        public let mimeType: String
+        public let fileName: String
+
+        public init(data: Data, mimeType: String, fileName: String) {
+            self.data = data
+            self.mimeType = mimeType
+            self.fileName = fileName
+        }
+    }
+
     public let id = UUID()
     public let recipients: [String]
     public let subject: String
     public let body: String
+    public let attachments: [Attachment]
 
-    public init(recipients: [String] = [], subject: String, body: String) {
+    public init(recipients: [String] = [], subject: String, body: String, attachments: [Attachment] = []) {
         self.recipients = recipients
         self.subject = subject
         self.body = body
+        self.attachments = attachments
     }
 
     /// `true` when the device has at least one Mail account configured.
@@ -178,6 +193,9 @@ public struct MailComposeSheet: UIViewControllerRepresentable {
         controller.setToRecipients(draft.recipients)
         controller.setSubject(draft.subject)
         controller.setMessageBody(draft.body, isHTML: false)
+        for attachment in draft.attachments {
+            controller.addAttachmentData(attachment.data, mimeType: attachment.mimeType, fileName: attachment.fileName)
+        }
         return controller
     }
 
