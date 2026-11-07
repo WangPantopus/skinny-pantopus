@@ -7,7 +7,8 @@
 //  published reply (violet left-border, "<Business> replied"); an
 //  unanswered one shows a "Reply" button that expands into an inline
 //  composer. Submitting stubs to local state in B3.2 (no review-reply
-//  backend) via the host's `onSubmit`.
+//  backend) via the host's `onSubmit`. The public page's review cards
+//  show a published reply in the same `ReviewReplyBox`.
 //
 //  Design reference: `docs/designs/A10/business-owner-frames.jsx`
 //  (OwnerReview).
@@ -83,44 +84,12 @@ struct ReviewReplyComposer: View {
 
     @ViewBuilder private var footer: some View {
         if let reply = review.reply {
-            repliedBox(reply)
+            ReviewReplyBox(title: "\(businessName) replied", reply: reply)
         } else if isComposing {
             composer
         } else {
             replyButton
         }
-    }
-
-    private func repliedBox(_ reply: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: Spacing.s1) {
-                Icon(.reply, size: 11, color: Theme.Color.businessDark)
-                Text("\(businessName) replied")
-                    .font(.system(size: 10.5, weight: .bold))
-                    .foregroundStyle(Theme.Color.businessDark)
-            }
-            Text(reply)
-                .pantopusTextStyle(.caption)
-                .foregroundStyle(Theme.Color.appTextStrong)
-                .lineSpacing(2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 9)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            Theme.Color.appSurfaceSunken,
-            in: RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
-        )
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(Theme.Color.businessSolid)
-                .frame(width: 2)
-                .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
-        }
-        .padding(.top, 3)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(businessName) replied: \(reply)")
     }
 
     private var replyButton: some View {
@@ -213,6 +182,45 @@ struct ReviewReplyComposer: View {
         fieldFocused = false
         isComposing = false
         onSubmit(text)
+    }
+}
+
+/// A business's published reply to a review, on its owner frame and on the public page.
+@MainActor
+struct ReviewReplyBox: View {
+    let title: String
+    let reply: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: Spacing.s1) {
+                Icon(.reply, size: 11, color: Theme.Color.businessDark)
+                Text(title)
+                    .font(.system(size: 10.5, weight: .bold))
+                    .foregroundStyle(Theme.Color.businessDark)
+            }
+            Text(reply)
+                .pantopusTextStyle(.caption)
+                .foregroundStyle(Theme.Color.appTextStrong)
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Theme.Color.appSurfaceSunken,
+            in: RoundedRectangle(cornerRadius: Radii.md, style: .continuous)
+        )
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(Theme.Color.businessSolid)
+                .frame(width: 2)
+                .clipShape(RoundedRectangle(cornerRadius: Radii.md, style: .continuous))
+        }
+        .padding(.top, 3)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(reply)")
     }
 }
 
