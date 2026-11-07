@@ -7,7 +7,7 @@
 const path = require('node:path');
 const { parse } = require('../../../backend/services/propertyRecords/addressKey');
 const { getJson, layerRows, cached } = require('../lib/services.cjs');
-const { year, isoDate, zipCode, realUnit } = require('../lib/addresses.cjs');
+const { year, isoDate, zipCode, realUnit, onRecord } = require('../lib/addresses.cjs');
 const { positive, put, word } = require('../lib/values.cjs');
 const { condoBuildings } = require('../lib/condos.cjs');
 const { log } = require('../lib/log.cjs');
@@ -42,7 +42,7 @@ function fromRow(row) {
   const [kind, homeType] = useOf(row, address.unit);
   const facts = { parcel_number: folio, county: COUNTY, fips: FIPS };
   const home = kind === 'property' || kind === 'unit';
-  put(facts, 'address_on_record', [line, word(row.TRUE_SITE_UNIT) && `UNIT ${word(row.TRUE_SITE_UNIT)}`].filter(Boolean).join(' '));
+  put(facts, 'address_on_record', onRecord(line, row.TRUE_SITE_UNIT));
   put(facts, 'land_use', word(row.DOR_DESC));
   put(facts, 'county_use_code', word(row.DOR_CODE_CUR));
   put(facts, 'subdivision', word(row.SUBDIVISION));
