@@ -26,7 +26,7 @@ public enum FeedSampleData {
             title: nil,
             body: "Anyone know a good dog-walker in Burnside? Our 1-year-old shepherd mix needs "
                 + "midday walks Tue/Thu and our regular just moved. References appreciated.",
-            reaction: PulseReaction(kind: .helpful, likeCount: 12),
+            reaction: emoji([.like: 7, .thanks: 5]),
             attendees: nil,
             userHasReacted: false
         ),
@@ -41,7 +41,7 @@ public enum FeedSampleData {
             title: nil,
             body: "Sourdough at 4th & Market is legit — family-run, opens at 7. "
                 + "The country loaf is gone by 10. Cash only.",
-            reaction: PulseReaction(kind: .helpful, likeCount: 30),
+            reaction: emoji([.love: 14, .like: 11, .haha: 5]),
             attendees: nil,
             userHasReacted: false
         ),
@@ -70,7 +70,7 @@ public enum FeedSampleData {
             intent: .lost,
             title: nil,
             body: "Tortoiseshell cat missing near Maple & 8th. Tag says \"Pippin\". Reward — please DM.",
-            reaction: PulseReaction(kind: .helpful, likeCount: 42),
+            reaction: emoji([.sad: 18, .like: 14, .thanks: 10]),
             attendees: nil,
             userHasReacted: false
         ),
@@ -85,7 +85,7 @@ public enum FeedSampleData {
             title: nil,
             body: "Street sweeping shifts to Thursdays starting next week. "
                 + "Move vehicles by 7am or get ticketed. Posted signs go up Wednesday.",
-            reaction: PulseReaction(kind: .helpful, likeCount: 127),
+            reaction: emoji([.like: 98, .wow: 29]),
             attendees: nil,
             userHasReacted: false
         )
@@ -104,7 +104,7 @@ public enum FeedSampleData {
             title: nil,
             body: "Croissants are back tomorrow at 7am — we finally have the oven part. "
                 + "First 30 are half-off for followers; just show this post at the counter.",
-            reaction: PulseReaction(kind: .helpful, likeCount: 64),
+            reaction: emoji([.love: 40, .celebrate: 24]),
             attendees: nil,
             userHasReacted: false
         ),
@@ -134,7 +134,7 @@ public enum FeedSampleData {
             title: nil,
             body: "Quick tip — if your shower's dripping right after you turn it off, it's almost always "
                 + "a 4-dollar cartridge. Don't pay anyone 300 to swap one. Reply if you want the part number.",
-            reaction: PulseReaction(kind: .helpful, likeCount: 48),
+            reaction: emoji([.thanks: 30, .like: 18]),
             attendees: nil,
             userHasReacted: false
         ),
@@ -149,7 +149,7 @@ public enum FeedSampleData {
             title: nil,
             body: "Street sweeping shifts to Thursdays starting next week. "
                 + "Move vehicles by 7am or get ticketed. Signs go up Wednesday.",
-            reaction: PulseReaction(kind: .helpful, likeCount: 340),
+            reaction: emoji([.like: 300, .wow: 40]),
             attendees: nil,
             userHasReacted: false
         ),
@@ -164,9 +164,14 @@ public enum FeedSampleData {
             title: nil,
             body: "The new ramen place on 8th is worth the hype. Tonkotsu is the move; skip the spicy miso. "
                 + "Tip: order at the counter, not the QR — it's faster.",
-            reaction: PulseReaction(kind: .helpful, likeCount: 92),
+            reaction: emoji([.love: 60, .like: 32]),
             attendees: nil,
             userHasReacted: false
         )
     ]
+
+    /// A card's emoji reactions in the frames: each emoji's count, shown most used first.
+    private static func emoji(_ counts: [PostReactionEmoji: Int]) -> PulseReaction {
+        PulseReaction(emoji: PostReactions(counts: counts.map { PostReactionCount(emoji: $0.key, count: $0.value) }))
+    }
 }

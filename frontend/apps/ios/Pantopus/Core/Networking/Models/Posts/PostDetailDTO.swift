@@ -1,5 +1,5 @@
-// DTOs for GET /api/posts/:id. Only likes are backed by the reaction API;
-// other displayed reaction styles remain read-only in the detail view.
+// DTOs for GET /api/posts/:id. A post's reactions (Going, or each emoji's
+// count and the viewer's own) are set through `POST /api/posts/:id/like`.
 
 import Foundation
 
@@ -228,6 +228,10 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
     public let creator: PostCreatorDTO?
     public let home: PostHomeRefDTO?
     public let userHasLiked: Bool
+    /// Each emoji's count, most used first (`PostReactions`); empty before anyone reacted and from older servers.
+    public let reactions: [PostReactionCount]
+    /// The viewer's own emoji; nil before they react and from older servers.
+    public let userReaction: PostReactionEmoji?
     public let userHasSaved: Bool
     public let userHasReposted: Bool
     public let comments: [PostCommentDTO]
@@ -304,6 +308,7 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         case viewCount = "view_count"
         case creator, home
         case userHasLiked, userHasSaved, userHasReposted
+        case reactions, userReaction
         case comments
         case visibility
         case audience
@@ -357,6 +362,8 @@ public struct PostDetailDTO: Decodable, Sendable, Hashable, Identifiable {
         creator = c.lenient(PostCreatorDTO.self, forKey: .creator)
         home = c.lenient(PostHomeRefDTO.self, forKey: .home)
         userHasLiked = c.lenient(Bool.self, forKey: .userHasLiked) ?? false
+        reactions = c.lossyList(PostReactionCount.self, forKey: .reactions)
+        userReaction = c.lenient(PostReactionEmoji.self, forKey: .userReaction)
         userHasSaved = c.lenient(Bool.self, forKey: .userHasSaved) ?? false
         userHasReposted = c.lenient(Bool.self, forKey: .userHasReposted) ?? false
         comments = c.lossyList(PostCommentDTO.self, forKey: .comments)
@@ -414,6 +421,8 @@ extension PostDetailDTO {
         creator = post.creator
         home = nil
         userHasLiked = post.userHasLiked
+        reactions = post.reactions
+        userReaction = post.userReaction
         userHasSaved = post.userHasSaved
         userHasReposted = post.userHasReposted
         comments = []

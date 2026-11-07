@@ -197,10 +197,10 @@ class MyPostsViewModelTest {
             .map { it.label }
 
         assertEquals(listOf("12 going", "5 replies"), labels("event", PulseIntent.Event))
-        assertEquals(listOf("12 helpful", "5 replies"), labels("recommendation", PulseIntent.Recommend))
-        assertEquals(listOf("5 replies", "12 celebrated"), labels("neighborhood_win", PulseIntent.NeighborhoodWin))
-        assertEquals(listOf("5 replies", "12 helpful"), labels("lost_found", PulseIntent.Lost))
-        assertEquals(listOf("1 reply", "1 helpful"), labels("ask_local", PulseIntent.Ask, likes = 1, replies = 1))
+        assertEquals(listOf("12 reactions", "5 replies"), labels("recommendation", PulseIntent.Recommend))
+        assertEquals(listOf("5 replies", "12 reactions"), labels("neighborhood_win", PulseIntent.NeighborhoodWin))
+        assertEquals(listOf("5 replies", "12 reactions"), labels("lost_found", PulseIntent.Lost))
+        assertEquals(listOf("1 reply", "1 reaction"), labels("ask_local", PulseIntent.Ask, likes = 1, replies = 1))
     }
 
     @Test

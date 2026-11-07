@@ -29,7 +29,10 @@ public struct PulsePostDetailLoadedContent: View {
     /// Beside the feed on a wide screen, the feed is the way back.
     @Environment(\.pulsePostShowsBack) private var showsBack
     private let onOpenProfile: @MainActor (String) -> Void
+    /// An Event's Going.
     private let onReactionTap: @MainActor () -> Void
+    /// An emoji picked or tapped under any other post.
+    private let onReactionPick: @MainActor (PostReactionEmoji) -> Void
     private let onSendTap: @MainActor () -> Void
     private let onShowMoreReplies: @MainActor () -> Void
     private let onCancelReply: (@MainActor () -> Void)?
@@ -57,6 +60,7 @@ public struct PulsePostDetailLoadedContent: View {
         onBack: @escaping @MainActor () -> Void = {},
         onOpenProfile: @escaping @MainActor (String) -> Void = { _ in },
         onReactionTap: @escaping @MainActor () -> Void = {},
+        onReactionPick: @escaping @MainActor (PostReactionEmoji) -> Void = { _ in },
         onSendTap: @escaping @MainActor () -> Void = {},
         onShowMoreReplies: @escaping @MainActor () -> Void = {},
         onCancelReply: (@MainActor () -> Void)? = nil,
@@ -82,6 +86,7 @@ public struct PulsePostDetailLoadedContent: View {
         self.onBack = onBack
         self.onOpenProfile = onOpenProfile
         self.onReactionTap = onReactionTap
+        self.onReactionPick = onReactionPick
         self.onSendTap = onSendTap
         self.onShowMoreReplies = onShowMoreReplies
         self.onCancelReply = onCancelReply
@@ -166,6 +171,7 @@ public struct PulsePostDetailLoadedContent: View {
                     intent: detail.intent,
                     reactions: detail.reactions,
                     onReactionTap: onReactionTap,
+                    onReactionPick: onReactionPick,
                     mediaLocationBadge: detail.post.locationName,
                     detailLine: detail.post.dealDetailLine ?? detail.post.lostFoundDetailLine ?? detail.post.alertDetailLine,
                     eventDetails: detail.post.eventDetails,

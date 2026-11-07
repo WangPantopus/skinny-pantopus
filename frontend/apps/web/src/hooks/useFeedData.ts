@@ -18,6 +18,7 @@ import { queryKeys } from '@/lib/query-keys';
 import { FEED_PAGE_SIZE, buildFeedKey, feedLocationKey } from '@/lib/feedKeys';
 import { useFirstPageRefresh } from '@/lib/firstPageRefresh';
 import { withFreshFix } from '@/lib/freshPostFix';
+import { reactedPostPatch, reactionFieldsOf, serverReactionPatch } from '@/components/feed/PostReactions';
 import type { SportsMode, TopicKey } from '@/constants/feedTopics';
 import { fetchMe } from '@/lib/me';
 
@@ -470,6 +471,39 @@ export function useFeedData({
     likeMutation.mutate({ postId, liked: !(postsRef.current.find((p) => p.id === postId)?.userHasLiked ?? false) });
   }, [likingIds, likeMutation]);
 
+  // ── Reaction mutation (optimistic with automatic rollback) ──
+  // The viewer's emoji on any post but an event (whose Going is the like above), or null to take it away.
+  const reactMutation = useMutation({
+    mutationFn: ({ postId, reaction }: { postId: string; reaction: string | null }) => api.posts.setReaction(postId, reaction),
+    onMutate: ({ postId, reaction }: { postId: string; reaction: string | null }) => {
+      setLikingIds((prev) => new Set(prev).add(postId));
+      const before = postsRef.current.find((p) => p.id === postId);
+      if (!before) return undefined;
+      updatePostsInCache((p) => (p.id === postId ? { ...p, ...reactedPostPatch(p, reaction) } : p));
+      return { previous: reactionFieldsOf(before) };
+    },
+    onSuccess: (res, { postId }) => {
+      // The server's answer wins in every cached list, as for likes; counts it couldn't read keep the ones shown.
+      patchPostInFeedCaches(queryClient, postId, serverReactionPatch(res, postsRef.current.find((p) => p.id === postId)?.reactions));
+    },
+    onError: (_err, { postId }, context) => {
+      if (context) updatePostsInCache((p) => (p.id === postId ? { ...p, ...context.previous } : p));
+      showToast("Couldn't update your reaction. Try again.");
+    },
+    onSettled: (_data, _err, { postId }) => {
+      setLikingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(postId);
+        return next;
+      });
+    },
+  });
+
+  const handleReact = useCallback((postId: string, reaction: string | null) => {
+    if (likingIds.has(postId)) return;
+    reactMutation.mutate({ postId, reaction });
+  }, [likingIds, reactMutation]);
+
   // ── Save mutation (optimistic with automatic rollback) ──
   const saveMutation = useMutation({
     // The state the person chose goes with the request, so a re-send can't flip it back.
@@ -624,6 +658,7 @@ export function useFeedData({
     handleSurfaceChange,
     handleCreatePost,
     handleLike,
+    handleReact,
     handleSave,
     handleDelete,
     handleHide,

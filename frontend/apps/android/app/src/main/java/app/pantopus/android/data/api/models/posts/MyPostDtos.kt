@@ -25,6 +25,10 @@ data class MyPostDto(
     @Json(name = "like_count") val likeCount: Int = 0,
     @Json(name = "comment_count") val commentCount: Int = 0,
     @Json(name = "userHasLiked") val userHasLiked: Boolean = false,
+    /** Each emoji's count, the most used first; missing from older servers. */
+    @Json(name = "reactions") val reactions: List<PostReactionCountDto>? = null,
+    /** The viewer's own emoji ("❤️"), or null; older servers leave it out. */
+    @Json(name = "userReaction") val userReaction: String? = null,
     @Json(name = "location_name") val locationName: String? = null,
     @Json(name = "event_date") val eventDate: String? = null,
     @Json(name = "event_venue") val eventVenue: String? = null,
@@ -46,6 +50,10 @@ data class MyPostDto(
 ) {
     /** A plan's own post: it's changed or cancelled from the plan, never edited, archived or deleted as a post. */
     val isPlanPost: Boolean get() = lifecycleMetadata?.plan == true
+
+    /** Its emoji reactions (an event's are its Going, counted in [likeCount]). */
+    val reactionSummary: PostReactionSummary
+        get() = PostReactionSummary.of(reactions, likeCount, userReaction, userHasLiked)
 }
 
 /** The author field a saved-post row shows (`author.displayName` on `GET /api/posts/saved`). */

@@ -1,6 +1,8 @@
 package app.pantopus.android.data.api.models.feed
 
 import app.pantopus.android.core.identity.MadeUpUsername
+import app.pantopus.android.data.api.models.posts.PostReactionCountDto
+import app.pantopus.android.data.api.models.posts.PostReactionSummary
 import app.pantopus.android.data.api.models.posts.permitsExternalPostShare
 import app.pantopus.android.data.api.models.pulse.PostLifecycleMetadata
 import com.squareup.moshi.Json
@@ -25,6 +27,10 @@ data class FeedPost(
     @Json(name = "comment_count") val commentCount: Int = 0,
     @Json(name = "share_count") val shareCount: Int = 0,
     @Json(name = "userHasLiked") val userHasLiked: Boolean = false,
+    /** Each emoji's count, the most used first; empty before anyone reacted, missing from older servers. */
+    @Json(name = "reactions") val reactions: List<PostReactionCountDto>? = null,
+    /** The viewer's own emoji ("❤️"), or null; older servers leave it out ([reactionSummary] reads a like as 👍). */
+    @Json(name = "userReaction") val userReaction: String? = null,
     @Json(name = "userHasSaved") val userHasSaved: Boolean = false,
     @Json(name = "userHasReposted") val userHasReposted: Boolean = false,
     /** Connections list only: which of the viewer's connections reposted the post. */
@@ -82,6 +88,10 @@ data class FeedPost(
 
     /** A plan's own post (Plans marks it `post_metadata.plan`): its event times are real moments. */
     val isPlanPost: Boolean get() = lifecycleMetadata?.plan == true
+
+    /** Its emoji reactions as the card shows them (an event's are its Going, counted in [likeCount]). */
+    val reactionSummary: PostReactionSummary
+        get() = PostReactionSummary.of(reactions, likeCount, userReaction, userHasLiked)
 }
 
 /** The viewer's connections who reposted a Connections post (`feedService.js` repostedByLines). */

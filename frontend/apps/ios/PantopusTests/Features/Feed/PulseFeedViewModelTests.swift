@@ -3,7 +3,7 @@
 //  PantopusTests
 //
 //  Covers the Pulse feed VM: load → loaded/empty/error, chip-row filter
-//  drives a refetch, optimistic reaction toggle (success + rollback).
+//  drives a refetch, optimistic emoji reaction (success + rollback).
 //
 
 import XCTest
@@ -190,16 +190,20 @@ final class PulseFeedViewModelTests: XCTestCase {
     func testTapReactionOptimisticallyIncrementsAndReconciles() async {
         SequencedURLProtocol.sequence = [
             .status(200, body: Self.feedJSON(Self.askPostJSON)),
-            .status(200, body: "{\"liked\":true,\"likeCount\":13,\"message\":\"Post liked\"}")
+            .status(200, body: """
+            {"message":"Reaction saved","liked":true,"likeCount":13,"reaction":"\u{2764}\u{FE0F}",
+             "reactions":[{"reaction":"👍","count":12},{"reaction":"\u{2764}\u{FE0F}","count":1}]}
+            """)
         ]
         let vm = makeVM()
         await vm.load()
-        await vm.tapReaction(postId: "p1")
+        await vm.pickReaction(postId: "p1", emoji: .love)
         guard case let .loaded(rows) = vm.state else {
             XCTFail("Expected .loaded")
             return
         }
         XCTAssertEqual(rows.first?.reaction.likeCount, 13)
+        XCTAssertEqual(rows.first?.reaction.emoji.mine, .love)
         XCTAssertTrue(rows.first?.userHasReacted ?? false)
     }
 
@@ -262,7 +266,7 @@ final class PulseFeedViewModelTests: XCTestCase {
         ]
         let vm = makeVM()
         await vm.load()
-        await vm.tapReaction(postId: "p1")
+        await vm.pickReaction(postId: "p1", emoji: .love)
         guard case let .loaded(rows) = vm.state else {
             XCTFail("Expected .loaded")
             return

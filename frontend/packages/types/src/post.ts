@@ -200,6 +200,10 @@ export interface Post {
   business_author?: PostCreator | null;
   home?: { id: string; address?: string | null; city: string; state?: string } | null;
   userHasLiked?: boolean;
+  /** Each reaction emoji's count, most used first (only emoji someone picked); missing from older servers. */
+  reactions?: { reaction: string; count: number }[];
+  /** The viewer's own reaction emoji, or null when they haven't reacted. */
+  userReaction?: string | null;
   userHasSaved?: boolean;
   userHasReposted?: boolean;
   /** Connections list only: the viewer's connections who reposted the post, the latest first (at most two names). */

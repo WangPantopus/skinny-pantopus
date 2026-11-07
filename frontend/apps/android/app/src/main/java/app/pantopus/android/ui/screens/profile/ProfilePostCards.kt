@@ -18,6 +18,9 @@ import androidx.compose.ui.unit.sp
 import app.pantopus.android.core.identity.ProfileChanges
 import app.pantopus.android.core.routing.DeepLinkRouter
 import app.pantopus.android.data.api.models.feed.FeedPost
+import app.pantopus.android.data.api.models.posts.PostReactionEmoji
+import app.pantopus.android.data.api.models.posts.PostReactionKind
+import app.pantopus.android.data.api.models.posts.PostReactionSummary
 import app.pantopus.android.data.api.net.NetworkResult
 import app.pantopus.android.data.api.net.displayMessage
 import app.pantopus.android.data.posts.PostsRepository
@@ -36,7 +39,7 @@ import kotlinx.coroutines.launch
 
 /**
  * A person's posts on their profile, drawn with the Pulse card (`PulsePostCard`): photos and
- * videos, event times, tappable links, Helpful, Save, Repost and the post menu (share, report).
+ * videos, event times, tappable links, emoji reactions (Going on an Event), Save, Repost and the post menu (share, report).
  * The rows come from `GET /api/posts/user/:id` (the feed's serializer) and each tap calls the
  * endpoint the Pulse feed calls for it (`PulseFeedViewModel`). Owned by [PublicProfileViewModel].
  */
@@ -78,6 +81,7 @@ class ProfilePostCards internal constructor(
     private data class Override(
         val hasReacted: Boolean? = null,
         val likeCount: Int? = null,
+        val reactions: PostReactionSummary? = null,
         val isSaved: Boolean? = null,
         val isReposted: Boolean? = null,
         val shareCount: Int? = null,
@@ -143,10 +147,51 @@ class ProfilePostCards internal constructor(
         _reportingPostId.value = null
     }
 
-    /** Helpful (or Going on an Event): `POST /api/posts/:id/like`, shown at once and rolled back on failure. */
+    /**
+     * An emoji picked on a card: it becomes the viewer's reaction, or takes theirs away when it already is
+     * (`POST /api/posts/:id/like` `{"reaction": …}`), shown at once and rolled back on failure.
+     */
+    fun chooseReaction(
+        postId: String,
+        emoji: PostReactionEmoji,
+    ) {
+        val post = rows.firstOrNull { it.id == postId } ?: return
+        if (PostReactionKind.fromPostType(post.postType) != PostReactionKind.Emoji || !liking.add(postId)) return
+        actionRevision++
+        val original = overrides[postId]?.reactions ?: post.reactionSummary
+        val originalHasReacted = overrides[postId]?.hasReacted ?: post.userHasLiked
+        val originalCount = overrides[postId]?.likeCount ?: post.likeCount
+        val next = original.afterPicking(emoji)
+        val optimistic = original.withMine(next)
+        put(postId) { it.copy(reactions = optimistic, hasReacted = next != null, likeCount = optimistic.total) }
+        scope.launch {
+            try {
+                when (val result = posts.setReaction(postId, next)) {
+                    is NetworkResult.Success ->
+                        put(postId) {
+                            it.copy(
+                                reactions = optimistic.settled(result.data),
+                                hasReacted = result.data.liked,
+                                likeCount = result.data.likeCount,
+                            )
+                        }
+                    is NetworkResult.Failure -> {
+                        put(postId) { it.copy(reactions = original, hasReacted = originalHasReacted, likeCount = originalCount) }
+                        onToast("Couldn't update your reaction. Try again.")
+                    }
+                }
+            } finally {
+                liking.remove(postId)
+                actionRevision++
+                rebuild()
+            }
+        }
+    }
+
+    /** Going on an Event: `POST /api/posts/:id/like`, shown at once and rolled back on failure. */
     fun tapReaction(postId: String) {
         val post = rows.firstOrNull { it.id == postId } ?: return
-        if (!liking.add(postId)) return
+        if (PostReactionKind.fromPostType(post.postType) != PostReactionKind.Going || !liking.add(postId)) return
         actionRevision++
         val original = overrides[postId]?.hasReacted ?: post.userHasLiked
         val originalCount = overrides[postId]?.likeCount ?: post.likeCount
@@ -304,6 +349,7 @@ class ProfilePostCards internal constructor(
                         base.copy(
                             hasReacted = value?.hasReacted ?: base.hasReacted,
                             likeCount = value?.likeCount ?: base.likeCount,
+                            reactions = value?.reactions ?: base.reactions,
                             isSaved = value?.isSaved ?: base.isSaved,
                             isReposted = value?.isReposted ?: base.isReposted,
                             shareCount = value?.shareCount ?: base.shareCount,
@@ -318,7 +364,10 @@ class ProfilePostCards internal constructor(
 /** What each control on a profile's Pulse card does; every callback takes the post's id. */
 data class ProfilePostCardActions(
     val onOpen: (String) -> Unit = {},
+    /** Going on an Event. */
     val onReact: (String) -> Unit = {},
+    /** The emoji picked in the card's reaction picker (every post but an Event). */
+    val onChooseReaction: (String, PostReactionEmoji) -> Unit = { _, _ -> },
     val onOptions: (String) -> Unit = {},
     val onToggleSave: (String) -> Unit = {},
     val onToggleRepost: (String) -> Unit = {},

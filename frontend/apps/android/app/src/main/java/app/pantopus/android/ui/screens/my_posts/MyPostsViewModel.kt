@@ -944,8 +944,8 @@ class MyPostsViewModel
                 }
 
             /**
-             * Engagement strip items: the replies and the post's reaction, named by its type as on its card ("X going",
-             * "X celebrated", "X helpful"). Events and recommendations lead with the reaction, the rest with replies.
+             * Engagement strip items: the replies and the post's reactions, counted as on its card ("3 reactions" beside
+             * the smile, an Event's "3 going"). Events and recommendations lead with the reactions, the rest with replies.
              */
             fun engagementItems(
                 dto: MyPostDto,
@@ -958,7 +958,8 @@ class MyPostsViewModel
                         label = "${dto.commentCount} ${if (dto.commentCount == 1) "reply" else "replies"}",
                     )
                 val kind = PostReactionKind.fromPostType(dto.postType)
-                val reaction = RowEngagementItem(id = kind.key, icon = kind.icon, label = kind.countText(dto.likeCount))
+                val count = if (kind == PostReactionKind.Going) dto.likeCount else dto.reactionSummary.total
+                val reaction = RowEngagementItem(id = kind.key, icon = kind.icon, label = kind.countText(count))
                 return when (intent) {
                     PulseIntent.Event, PulseIntent.Recommend -> listOf(reaction, replies)
                     PulseIntent.Ask,

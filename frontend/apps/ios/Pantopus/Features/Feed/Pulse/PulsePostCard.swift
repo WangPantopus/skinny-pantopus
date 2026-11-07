@@ -140,8 +140,8 @@ public struct PulsePostCardContent: Sendable, Hashable, Identifiable {
     public let body: String
     /// When and where an Event happens; nil on other posts.
     public let event: PulseEventDetails?
-    /// The post's one reaction (Helpful, Going, Celebrate) and its count. An
-    /// Event shows it as its attendee strip's "N going" and Going button.
+    /// The post's reaction: emoji reactions, or an Event's Going, which its
+    /// attendee strip shows as "N going" and the Going button.
     public let reaction: PulseReaction
     public let attendees: PulseAttendeeStrip?
     public let userHasReacted: Bool
@@ -250,9 +250,12 @@ public struct PulseAttendeeStrip: Sendable, Hashable {
 public struct PulsePostCard: View {
     /// The post open beside the feed on a wide screen: its card is tinted and marked selected.
     @Environment(\.selectedPulsePostId) private var selectedPostId
+    /// The emoji picker is open from the reaction pill.
+    @State private var showsReactionPicker = false
     private let content: PulsePostCardContent
     private let onTap: @MainActor () -> Void
-    private let onPrimaryReaction: @MainActor () -> Void
+    /// An emoji picked in the reaction picker (picking the viewer's own takes it away).
+    private let onPickReaction: @MainActor (PostReactionEmoji) -> Void
     private let onRSVP: (@MainActor () -> Void)?
     /// Opens the card's overflow menu (save / repost / share / hide /
     /// mute / report / delete). `nil` hides the affordance.
@@ -269,7 +272,7 @@ public struct PulsePostCard: View {
     public init(
         content: PulsePostCardContent,
         onTap: @escaping @MainActor () -> Void,
-        onPrimaryReaction: @escaping @MainActor () -> Void,
+        onPickReaction: @escaping @MainActor (PostReactionEmoji) -> Void,
         onRSVP: (@MainActor () -> Void)? = nil,
         onOverflow: (@MainActor () -> Void)? = nil,
         onDismissSeeded: (@MainActor () -> Void)? = nil,
@@ -279,7 +282,7 @@ public struct PulsePostCard: View {
     ) {
         self.content = content
         self.onTap = onTap
-        self.onPrimaryReaction = onPrimaryReaction
+        self.onPickReaction = onPickReaction
         self.onRSVP = onRSVP
         self.onOverflow = onOverflow
         self.onDismissSeeded = onDismissSeeded
@@ -436,8 +439,8 @@ public struct PulsePostCard: View {
     private var reactionStrip: some View {
         HStack(alignment: .center, spacing: 14) {
             // An Event's Going button sits in its attendee strip.
-            if content.attendees == nil || onRSVP == nil {
-                reactionPill(content.reaction)
+            if content.reaction.kind == .emoji {
+                reactionPill
             }
             // October 13's badge while the Pulse redesign, whose status words
             // replace it, is off (launch cut #11).
@@ -508,34 +511,6 @@ public struct PulsePostCard: View {
     /// the live feed has no per-attendee identity, fixtures echo the design).
     private static let attendeeTints: [FeedAvatarTint] = [.orange, .sky, .violet, .green]
 
-    /// The post's reaction: its kind's icon and word, and the count once
-    /// someone tapped it ("Helpful 3", like "Reply 3").
-    private func reactionPill(_ reaction: PulseReaction) -> some View {
-        let active = content.userHasReacted
-        return Button(action: onPrimaryReaction) { reactionLabel(reaction, active: active).hitArea(horizontal: 6, vertical: 12) }
-            .buttonStyle(.plain)
-            .opacity(content.actions.pending.contains(.reaction) ? 0.5 : 1)
-            .accessibilityLabel(reaction.accessibilityLabel)
-            .accessibilityAddTraits(active ? .isSelected : [])
-            .accessibilityIdentifier("pulseReaction_\(content.id)_\(reaction.kind.rawValue)")
-    }
-
-    private func reactionLabel(_ reaction: PulseReaction, active: Bool) -> some View {
-        HStack(spacing: Spacing.s1) {
-            Icon(reaction.kind.icon, size: 12, color: active ? Theme.Color.primary600 : Theme.Color.appTextSecondary)
-            HStack(spacing: 3) {
-                Text(reaction.kind.label)
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(active ? Theme.Color.primaryInk : Theme.Color.appTextSecondary)
-                if reaction.likeCount != 0 {
-                    Text("\(reaction.likeCount)")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(active ? Theme.Color.primaryInk : Theme.Color.appTextSecondary)
-                }
-            }
-        }
-    }
-
     private var a11yLabel: String {
         var parts = [content.authorName, content.chipLabel]
         if let repostedBy = content.repostedBy { parts.insert(repostedBy, at: 0) }
@@ -550,6 +525,7 @@ public struct PulsePostCard: View {
         if !content.media.isEmpty {
             parts.append("\(content.media.count) attached \(content.media.count == 1 ? "photo" : "photos")")
         }
+        parts += reactionsSpoken
         // A part that already ends a sentence keeps its own mark (as on Android): VoiceOver never hears "7..".
         return parts.reduce("") { label, part in
             guard let last = label.last else { return part }
@@ -631,12 +607,68 @@ private extension PulsePostCard {
         .accessibilityIdentifier("pulsePostSolvedBadge_\(content.id)")
     }
 
+    /// The post's emoji reactions (an Event's Going sits in its attendee
+    /// strip): a smile and "React" before anyone reacted, else up to three
+    /// emoji and how many reacted ("👍❤️😂 6"), in the active colour once the
+    /// viewer reacted. A tap opens the emoji picker from it.
+    var reactionPill: some View {
+        let reactions = content.reaction.emoji
+        let active = reactions.mine != nil
+        return Button(action: openReactionPicker) {
+            reactionPillLabel(reactions, active: active)
+                .hitArea(horizontal: 6, vertical: 12)
+        }
+        .buttonStyle(.plain)
+        .opacity(content.actions.pending.contains(.reaction) ? 0.5 : 1)
+        .accessibilityLabel(reactions.accessibilityLabel)
+        .accessibilityValue(reactions.accessibilityValue)
+        .accessibilityAddTraits(active ? .isSelected : [])
+        .accessibilityIdentifier("pulseReaction_\(content.id)")
+        .pulseReactionPicker(isPresented: $showsReactionPicker, selected: reactions.mine, onPick: onPickReaction)
+    }
+
+    @ViewBuilder
+    func reactionPillLabel(_ reactions: PostReactions, active: Bool) -> some View {
+        if reactions.isEmpty {
+            HStack(spacing: Spacing.s1) {
+                Icon(.smile, size: 12, color: Theme.Color.appTextSecondary)
+                Text(PostReactionKind.emoji.label)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(Theme.Color.appTextSecondary)
+            }
+        } else {
+            HStack(spacing: Spacing.s1) {
+                Text(reactions.cardEmoji.map(\.rawValue).joined())
+                    .font(.system(size: 13))
+                Text("\(reactions.total)")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(active ? Theme.Color.primaryInk : Theme.Color.appTextSecondary)
+            }
+        }
+    }
+
+    /// The pill's words for the card's label, since the card is one element
+    /// and its "React" action doesn't name the counts: "Reactions, 6: 3 Like,
+    /// 2 Love, 1 Haha" and "Your reaction: Love"; none before anyone reacted,
+    /// and none on an Event (its Going action names them).
+    var reactionsSpoken: [String] {
+        let reactions = content.reaction.emoji
+        guard content.reaction.kind == .emoji, !reactions.isEmpty else { return [] }
+        return [reactions.accessibilityLabel, reactions.accessibilityValue].filter { !$0.isEmpty }
+    }
+
+    /// Opens the emoji picker, unless the last pick is still on its way.
+    func openReactionPicker() {
+        guard !content.actions.pending.contains(.reaction) else { return }
+        showsReactionPicker = true
+    }
+
     /// The card's controls as VoiceOver actions, named as their buttons are.
     @ViewBuilder var cardActions: some View {
         if let onRSVP, content.attendees != nil {
             Button(content.reaction.accessibilityLabel, action: onRSVP)
-        } else {
-            Button(content.reaction.accessibilityLabel, action: onPrimaryReaction)
+        } else if content.reaction.kind == .emoji {
+            Button(PostReactionKind.emoji.label, action: openReactionPicker)
         }
         if let onToggleSave {
             Button(content.actions.isSaved ? "Remove bookmark" : "Save post", action: onToggleSave)

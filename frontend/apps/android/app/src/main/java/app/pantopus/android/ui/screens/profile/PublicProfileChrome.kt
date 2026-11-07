@@ -423,7 +423,7 @@ fun PublicProfilePostsFeed(
      */
     hiddenByBlock: Boolean = false,
     /**
-     * The Local profile's posts as Pulse cards (photos, video, links, Helpful, Save, Repost,
+     * The Local profile's posts as Pulse cards (photos, video, links, emoji reactions, Save, Repost,
      * the post menu). `null` keeps the plain cards.
      */
     pulseCards: List<PulsePostCardContent>? = null,
@@ -503,6 +503,7 @@ internal fun ProfilePulseCards(
                         onTap = { actions.onOpen(card.id) },
                         onPrimaryReaction = react,
                         onRSVP = react.takeIf { card.attendees != null },
+                        onReact = { emoji -> actions.onChooseReaction(card.id, emoji) },
                         onOverflow = { actions.onOptions(card.id) }.takeIf { profilePostHasOptions(card) },
                         onToggleSave = { actions.onToggleSave(card.id) },
                         onToggleRepost = { actions.onToggleRepost(card.id) },

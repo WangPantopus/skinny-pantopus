@@ -7,6 +7,7 @@ import * as api from '@pantopus/api';
 import type { Post } from '@pantopus/types';
 import { PostCard, PostDetailPanel } from '@/components/feed';
 import { patchPostInFeedCaches } from '@/hooks/useFeedData';
+import { reactedPostPatch, reactionFieldsOf, serverReactionPatch } from '@/components/feed/PostReactions';
 import { useProfilePin } from '@/hooks/useProfilePin';
 import ReportModal from '@/components/ui/ReportModal';
 import { toast } from '@/components/ui/toast-store';
@@ -105,6 +106,35 @@ export default function PostsTab({
     likeMutation.mutate({ postId, liked: !(posts.find((p) => p.id === postId)?.userHasLiked ?? false) });
   };
 
+  // An emoji on any post but an event (whose Going is the like above): shown at once, put back if refused.
+  const reactMutation = useMutation({
+    mutationFn: ({ postId, reaction }: { postId: string; reaction: string | null }) => api.posts.setReaction(postId, reaction),
+    onMutate: ({ postId, reaction }) => {
+      setLikingIds((prev) => new Set(prev).add(postId));
+      const before = posts.find((p) => p.id === postId);
+      if (!before) return undefined;
+      onPostsChange((prev) => prev.map((p) => (p.id === postId ? { ...p, ...reactedPostPatch(p, reaction) } : p)));
+      return { previous: reactionFieldsOf(before) };
+    },
+    onSuccess: (res, { postId }) => patch(postId, serverReactionPatch(res, posts.find((p) => p.id === postId)?.reactions)),
+    onError: (_err, { postId }, context) => {
+      if (context) onPostsChange((prev) => prev.map((p) => (p.id === postId ? { ...p, ...context.previous } : p)));
+      toast.error("Couldn't update your reaction. Please try again.");
+    },
+    onSettled: (_data, _err, { postId }) => {
+      setLikingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(postId);
+        return next;
+      });
+    },
+  });
+
+  const handleReact = (postId: string, reaction: string | null) => {
+    if (likingIds.has(postId)) return;
+    reactMutation.mutate({ postId, reaction });
+  };
+
   const handleSave = (postId: string) => {
     if (savingIds.current.has(postId)) return;
     savingIds.current.add(postId);
@@ -200,6 +230,7 @@ export default function PostsTab({
             key={post.id}
             post={post}
             onLike={handleLike}
+            onReact={handleReact}
             onComment={(id) => setDetailPostId(id)}
             onOpenDetail={(id) => setDetailPostId(id)}
             onSave={handleSave}

@@ -9,6 +9,8 @@ import app.pantopus.android.data.api.models.feed.FeedPostCreator
 import app.pantopus.android.data.api.models.feed.FeedResponse
 import app.pantopus.android.data.api.models.location.ViewingLocationPayload
 import app.pantopus.android.data.api.models.posts.PostLikeResponse
+import app.pantopus.android.data.api.models.posts.PostReactionCountDto
+import app.pantopus.android.data.api.models.posts.PostReactionEmoji
 import app.pantopus.android.data.api.models.sports.ActiveSportsEventsResponse
 import app.pantopus.android.data.api.net.NetworkError
 import app.pantopus.android.data.api.net.NetworkResult
@@ -301,13 +303,26 @@ class PulseFeedViewModelTest {
             coEvery {
                 repo.feedFirstPageStored(match { it.surface == "place" && it.postType == null }, any())
             } returns page(FeedResponse(listOf(askPost()), null))
-            coEvery { repo.toggleLike("p1", any()) } returns
-                NetworkResult.Success(PostLikeResponse(message = "ok", liked = true, likeCount = 13))
+            coEvery { repo.setReaction("p1", PostReactionEmoji.Love) } returns
+                NetworkResult.Success(
+                    PostLikeResponse(
+                        message = "Reaction saved",
+                        liked = true,
+                        likeCount = 13,
+                        reaction = PostReactionEmoji.Love.emoji,
+                        reactions =
+                            listOf(
+                                PostReactionCountDto(PostReactionEmoji.Like.emoji, 12),
+                                PostReactionCountDto(PostReactionEmoji.Love.emoji, 1),
+                            ),
+                    ),
+                )
             val vm = makeVm()
             vm.load()
-            vm.tapReaction("p1")
+            vm.chooseReaction("p1", PostReactionEmoji.Love)
             val loaded = vm.state.value as PulseFeedUiState.Loaded
             assertEquals(13, loaded.rows.first().reaction.likeCount)
+            assertEquals(PostReactionEmoji.Love, loaded.rows.first().reaction.summary.mine)
             assertTrue(loaded.rows.first().userHasReacted)
         }
 
@@ -316,10 +331,10 @@ class PulseFeedViewModelTest {
             coEvery {
                 repo.feedFirstPageStored(match { it.surface == "place" && it.postType == null }, any())
             } returns page(FeedResponse(listOf(askPost()), null))
-            coEvery { repo.toggleLike("p1", any()) } returns NetworkResult.Failure(NetworkError.Server(500, null))
+            coEvery { repo.setReaction("p1", any()) } returns NetworkResult.Failure(NetworkError.Server(500, null))
             val vm = makeVm()
             vm.load()
-            vm.tapReaction("p1")
+            vm.chooseReaction("p1", PostReactionEmoji.Love)
             val loaded = vm.state.value as PulseFeedUiState.Loaded
             assertEquals(12, loaded.rows.first().reaction.likeCount)
             assertFalse(loaded.rows.first().userHasReacted)

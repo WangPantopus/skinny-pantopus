@@ -37,7 +37,16 @@ public enum PulsePostDetailSampleData {
         )
     }
 
-    private static let resolvedReactions = PostReactionCounts(kind: .helpful, likeCount: 18, isOn: true)
+    private static let resolvedReactions = PostReactionCounts(
+        emoji: PostReactions(
+            counts: [
+                PostReactionCount(emoji: .love, count: 9),
+                PostReactionCount(emoji: .thanks, count: 6),
+                PostReactionCount(emoji: .like, count: 3)
+            ],
+            mine: .love
+        )
+    )
 
     private static let resolvedThread: [PostCommentRow] = [
         PostCommentRow(

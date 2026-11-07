@@ -327,7 +327,7 @@ struct PublicProfileLocalPostCard: View {
     private var reactionsRow: some View {
         HStack(spacing: Spacing.s3) {
             HStack(spacing: Spacing.s1) {
-                Icon(.lightbulb, size: 13, color: Theme.Color.appTextSecondary)
+                Icon(.smile, size: 13, color: Theme.Color.appTextSecondary)
                 Text("\(post.reactions)")
                     .font(.system(size: PantopusTextStyle.caption.size))
                     .foregroundStyle(Theme.Color.appTextSecondary)
@@ -448,7 +448,7 @@ struct PublicProfilePostsFeed: View {
     /// Your own profile shows only your latest few, then "See all".
     var maxCards: Int?
     /// The Local profile's posts as Pulse cards (photos, video, links,
-    /// Helpful, Save, Repost, the post menu). Nil keeps the plain cards.
+    /// reactions, Save, Repost, the post menu). Nil keeps the plain cards.
     var pulseCards: ProfilePostCardsModel?
     /// Opens a card's post page, as a tap on a Pulse card does.
     var onOpenPost: @MainActor (String) -> Void = { _ in }
@@ -523,10 +523,13 @@ struct PublicProfilePostsFeed: View {
     /// One post with the controls the Pulse feed gives it.
     private func pulseCard(_ card: PulsePostCardContent, model: ProfilePostCardsModel) -> PulsePostCard {
         let postId = card.id
-        let react: @MainActor () -> Void = { Task { await model.tapReaction(postId: postId) } }
+        let react: @MainActor (PostReactionEmoji) -> Void = { emoji in
+            Task { await model.pickReaction(postId: postId, emoji: emoji) }
+        }
+        let going: @MainActor () -> Void = { Task { await model.tapReaction(postId: postId) } }
         let save: @MainActor () -> Void = { Task { await model.toggleSave(postId: postId) } }
         let repost: @MainActor () -> Void = { Task { await model.toggleRepost(postId: postId) } }
-        let rsvp: (@MainActor () -> Void)? = card.attendees == nil ? nil : react
+        let rsvp: (@MainActor () -> Void)? = card.attendees == nil ? nil : going
         var options: (@MainActor () -> Void)?
         if model.hasOptions(card) {
             options = { model.overflowPostId = postId }
@@ -535,7 +538,7 @@ struct PublicProfilePostsFeed: View {
         return PulsePostCard(
             content: card,
             onTap: { open(postId) },
-            onPrimaryReaction: react,
+            onPickReaction: react,
             onRSVP: rsvp,
             onOverflow: options,
             onToggleSave: save,
