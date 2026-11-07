@@ -1445,6 +1445,13 @@
    "src": "netr",
    "ref": "McHenry Assessor"
   },
+  "17119": {
+   "name": "Madison County",
+   "url": "https://madisonil.devnetwedge.com/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Madison Assessor"
+  },
   "17197": {
    "name": "Will County",
    "url": "https://www.willcountysoa.com/PropertySearchPortal",
@@ -1706,6 +1713,13 @@
    "src": "netr",
    "ref": "Washington Assessor"
   },
+  "29047": {
+   "name": "Clay County",
+   "url": "https://gisweb.claycountymo.gov/ps/",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Clay Assessor"
+  },
   "29077": {
    "name": "Greene County",
    "url": "https://www.greenecountymo.org/assessor/index.php",
@@ -1893,10 +1907,19 @@
   },
   "37119": {
    "name": "Mecklenburg County",
-   "url": "https://cao.mecknc.gov/",
+   "url": "https://polaris3g.mecklenburgcountync.gov/",
+   "deep": "https://polaris3g.mecklenburgcountync.gov/pid/{parcel}",
+   "form": "digits",
+   "kind": "deep",
+   "src": "search-index",
+   "ref": "polaris3g.mecklenburgcountync.gov/pid/<8-digit parcel ID> pages listed by a search engine"
+  },
+  "37179": {
+   "name": "Union County",
+   "url": "https://unionnc.devnetwedge.com/",
    "kind": "search",
    "src": "netr",
-   "ref": "Mecklenburg Assessor"
+   "ref": "Union Assessor"
   },
   "37183": {
    "name": "Wake County",
@@ -2108,10 +2131,11 @@
   "42091": {
    "name": "Montgomery County",
    "url": "https://propertyrecords.montcopa.org/pt/forms/htmlframe.aspx?mode=content%2Fhome.htm",
-   "kind": "search",
-   "src": "netr",
-   "ref": "Montgomery Assessor",
-   "was_http": true
+   "deep": "https://propertyrecords.montcopa.org/PT/Datalets/Datalet.aspx?mode=&UseSearch=no&pin={parcel}",
+   "form": "digits",
+   "kind": "deep",
+   "src": "search-index",
+   "ref": "propertyrecords.montcopa.org/PT/Datalets/Datalet.aspx?mode=&UseSearch=no&pin=<12-digit PARID> pages listed by a search engine"
   },
   "42095": {
    "name": "Northampton County",
@@ -2148,6 +2172,13 @@
    "kind": "search",
    "src": "netr",
    "ref": "Providence City Assessor"
+  },
+  "45015": {
+   "name": "Berkeley County",
+   "url": "https://berkeleycountysc.gov/propcards/prop_card_search.php",
+   "kind": "search",
+   "src": "netr",
+   "ref": "Berkeley Assessor"
   },
   "45019": {
    "name": "Charleston County",
