@@ -118,25 +118,37 @@ function checkedOwners(homeId, owners) {
   return owners;
 }
 
+// Each active, verified occupant's SQL admission context (home_record_context), by user id, from one call. It goes out
+// alongside the members' read; a member it doesn't cover (they joined between the two) is checked on their own.
+function memberContexts(homeId) {
+  return settle(checked(db.rpc('home_member_record_contexts', { p_home_id: homeId })).then((found) => {
+    if (!Array.isArray(found) || found.some(row => !object(row) || !uuid(row.user_id))) throw failure();
+    return new Map(found.map(row => [row.user_id, row.context]));
+  }));
+}
+
 async function readMembers(homeId, { history = false } = {}) {
   let query = db.from('HomeOccupancy').select(`${MEMBER_FIELDS.join(', ')}, user:user_id ( ${SAFE_CREATOR_SELECT} )`)
     .eq('home_id', homeId).order('created_at').order('id');
   if (!history) query = query.eq('is_active', true).eq('verification_status', 'verified');
-  return shownMembers(homeId, await rows(query), { history });
+  const contexts = history ? null : memberContexts(homeId);
+  return shownMembers(homeId, await rows(query), { history, contexts });
 }
 
-// Member rows, each with its account (`user`), as the household list shows them.
-async function shownMembers(homeId, members, { history = false } = {}) {
+// Member rows, each with its account (`user`), as the household list shows them. `contexts`: memberContexts' read.
+async function shownMembers(homeId, members, { history = false, contexts = null } = {}) {
   if (members.some(member => !uuid(member.id) || member.home_id !== homeId || !uuid(member.user_id)
     || typeof member.is_active !== 'boolean' || typeof member.verification_status !== 'string'
     || typeof member.created_at !== 'string')) throw failure();
   const current = history ? members : members.filter(member => currentOccupancy(member) && resolveHomeRole(member));
+  const known = current.length && contexts ? settledValue(await contexts) : new Map();
   const projected = await Promise.all(current.map(async member => {
     let role = resolveHomeRole(member);
     if (!history) {
       // An active row can coexist with a revoked ownership pointer. Use the
       // same SQL admission fence and age ceiling as current Home reads.
-      const context = await checked(db.rpc('home_record_context', { p_home_id: homeId, p_user_id: member.user_id }));
+      const context = known.has(member.user_id) ? known.get(member.user_id)
+        : await checked(db.rpc('home_record_context', { p_home_id: homeId, p_user_id: member.user_id }));
       if (!object(context) || typeof context.allowed !== 'boolean' || typeof context.private !== 'boolean') throw failure();
       if (!context.allowed || context.private) return null;
       if (context.user_id !== member.user_id || !Object.hasOwn(ROLE_RANK, context.role)) throw failure();
@@ -211,23 +223,26 @@ function homeWithRows(homeId, actorId, access, columns) {
 }
 
 // The owners, members and claims of a homeWithRows read, checked as their own reads were. A Home that's gone has none,
-// as those reads found none.
-async function embeddedRows(homeId, access, home) {
+// as those reads found none. `contexts`: memberContexts' read, made alongside it for someone who may see members.
+async function embeddedRows(homeId, access, home, contexts) {
   if (home === null) return { owners: [], occupants: [], claims: [] };
   if (!object(home)) throw failure();
   const owners = checkedOwners(homeId, rowList(home.owners).map(owner => inOrder(owner, OWNER_FIELDS)));
-  const occupants = access.permissions.includes('members.view') ? await shownMembers(homeId, rowList(home.members)) : [];
+  const occupants = access.permissions.includes('members.view') ? await shownMembers(homeId, rowList(home.members), { contexts }) : [];
   const claims = checkedClaims(homeId, rowList(home.claims).map(claim => inOrder(claim, CLAIM_FIELDS)));
   return { owners, occupants, claims };
 }
 
 async function detail(homeId, actorId) {
   return authority.withCurrentAccess({ homeId, actorId }, async access => {
-    // Delete eligibility depends on nothing read here, so it goes out with the Home's read.
+    // Delete eligibility depends on nothing read here, so it goes out with the Home's read, as do the members' SQL
+    // contexts for someone who may see them.
+    const seesMembers = access.permissions.includes('members.view');
     const deleteRead = settle(deletion.deleteEligibility(homeId, actorId));
+    const contexts = seesMembers ? memberContexts(homeId) : null;
     const opening = homeWithRows(homeId, actorId, access, homeFields(access));
     const { home } = await readHome(homeId, access, { early: opening });
-    const { owners, occupants, claims } = await embeddedRows(homeId, access, await opening);
+    const { owners, occupants, claims } = await embeddedRows(homeId, access, await opening, contexts);
     const mine = owners.find(owner => owner.subject_type === 'user' && owner.subject_id === actorId && owner.owner_status === 'verified')
       || owners.find(owner => owner.subject_type === 'user' && owner.subject_id === actorId && owner.owner_status === 'pending');
     const visibleOwners = access.permissions.includes('ownership.view')
@@ -241,9 +256,10 @@ async function detail(homeId, actorId) {
     // The rows are read again in one read and compared in their old order. The primary owner's account and the names
     // of the people shown are read alongside (they're used only once the comparison holds); a failure is reported in
     // the same order as before.
+    const contextsAgain = seesMembers ? memberContexts(homeId) : null;
     const [ownerRead, rowsAgain, peopleRead] = await Promise.allSettled([
       primary && !memberAccount ? checked(db.from('User').select(SAFE_CREATOR_SELECT).eq('id', primary.subject_id).maybeSingle()) : null,
-      homeWithRows(homeId, actorId, access, ['id']).then(again => embeddedRows(homeId, access, again)),
+      homeWithRows(homeId, actorId, access, ['id']).then(again => embeddedRows(homeId, access, again, contextsAgain)),
       shownPeople(occupants, primary?.subject_id),
     ]);
     const ownerAccount = primary ? memberAccount || userRef(settledValue(ownerRead), primary.subject_id) : null;
