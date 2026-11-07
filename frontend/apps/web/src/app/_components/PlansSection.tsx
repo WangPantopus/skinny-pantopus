@@ -102,8 +102,8 @@ export default function PlansSection() {
           </div>
           <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: '#4A4452' }}>
             Hosts choose how people join: they approve each person, or let in verified neighbors, people they’ve hosted
-            before, or anyone nearby for walks and pickup games. Playdates need verified addresses and a public place, the
-            host approves each family, and a parent stays.
+            before, or anyone nearby for walks and pickup games. Playdates meet in a public place, the host approves each
+            family, and a parent stays.
           </p>
 
           <div className={styles.share}>

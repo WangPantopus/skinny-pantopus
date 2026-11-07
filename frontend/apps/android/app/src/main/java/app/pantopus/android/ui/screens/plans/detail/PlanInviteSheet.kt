@@ -224,9 +224,8 @@ private fun InviteHeader(
                 modifier = Modifier.testTag("planInviteClose"),
             )
         }
-        // A playdate still needs a verified address (founder decision, October 31), as on iOS.
-        val who = if (plan.isPlaydate) "Families with a verified address are" else "They're"
-        val start = "${plan.title}. $who in as soon as they say yes"
+        // Playdates too: no verified address is needed since November 7 (founder decision), as on iOS.
+        val start = "${plan.title}. They're in as soon as they say yes"
         Text(
             text = if (plan.isAtHome) "$start, and see your address then." else "$start.",
             style = PantopusTextStyle.small,

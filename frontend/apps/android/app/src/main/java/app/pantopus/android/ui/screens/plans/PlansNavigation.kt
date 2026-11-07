@@ -166,7 +166,6 @@ fun NavGraphBuilder.plansRoutes(
                 nav.popBackStack()
                 external.openNearby()
             },
-            onOpenVerification = external.openVerification,
         )
     }
 }

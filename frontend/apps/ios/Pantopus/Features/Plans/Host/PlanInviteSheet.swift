@@ -103,9 +103,8 @@ struct PlanInviteSheet: View {
     }
 
     private var subtitle: String {
-        // A playdate still needs a verified address (founder decision, October 31), as on Android.
-        let who = card.kind == .playdate ? "Families with a verified address are" : "They're"
-        let start = "\(card.title). \(who) in as soon as they say yes"
+        // Playdates too: no verified address is needed since November 7 (founder decision), as on Android.
+        let start = "\(card.title). They're in as soon as they say yes"
         return viewModel.atHome ? "\(start), and see your address then." : "\(start)."
     }
 
