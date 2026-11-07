@@ -3,9 +3,11 @@
 // the second publication, `id` is its parcel number, `map` is [our fact, its column, optional comparison]. A year-apart
 // vintage is only fair for facts that rarely change. It proves the connector read, joined and scaled each column right.
 
+const fs = require('fs');
 const path = require('path');
 const { download, zipTable, zipMembers } = require('../../../../scripts/property-index/lib/tables.cjs');
 const { layerRows, ckanRows, socrataRows, cached } = require('../../../../scripts/property-index/lib/services.cjs');
+const { dbfRows } = require('../../../../scripts/property-index/lib/dbf.cjs');
 
 const near = (tolerance) => (a, b) => Math.abs(Number(a) - Number(b)) <= tolerance;
 const moneyNear = (a, b) => Math.abs(Number(a) - Number(b)) <= Math.max(1, Number(b) * 0.001);
@@ -57,6 +59,15 @@ const floridaCheck = (county, file, extra = []) => ({
   id: (row) => String(row.PARCEL_ID ?? '').replace(/^'|'$/g, '').trim(),
   map: [['year_built', 'ACT_YR_BLT'], ['lot_sqft', 'LND_SQFOOT', (a, b) => Math.abs(a - b) <= Math.max(50, b * 0.05)], ...extra],
 });
+
+// The state's roll names Hillsborough's parcels by the county's other number: the county's file says which folio each is.
+async function* hillsboroughRoll() {
+  const dir = path.join(process.env.PROPERTY_CHECK_WORK || '.', 'fl-hillsborough');
+  const zip = path.join(dir, fs.readdirSync(dir).find((name) => name.startsWith('HCparcel_4_public')));
+  const folios = new Map();
+  for await (const row of dbfRows(zip, 'parcel_4_public.dbf', ['FOLIO', 'STRAP'])) folios.set(String(row.STRAP).trim(), row.FOLIO);
+  for await (const row of floridaRoll('Hillsborough 39 Final NAL 2026.zip')) yield { ...row, FOLIO: folios.get(String(row.PARCEL_ID ?? '').replace(/^'|'$/g, '').trim()) };
+}
 
 // Denton's nightly table, published beside its export. It holds next year's roll, so values aren't compared.
 async function* dentonNightly() {
@@ -117,7 +128,7 @@ module.exports = {
     map: [['living_sqft', 'GBA', near(1)], ['lot_acres', 'LglAcres', near(0.01)]],
   },
   'fl-miami-dade': floridaCheck('12086', 'Dade 23 Final NAL 2026.zip', [['living_sqft', 'TOT_LVG_AREA', near(1)], ['gross_sqft', 'TOT_LVG_AREA', near(1)]]),
-  'fl-hillsborough': floridaCheck('12057', 'Hillsborough 39 Final NAL 2026.zip', [['living_sqft', 'TOT_LVG_AREA', near(1)], ['market_value', 'JV', moneyNear]]),
+  'fl-hillsborough': { ...floridaCheck('12057', '', [['living_sqft', 'TOT_LVG_AREA', near(1)], ['market_value', 'JV', moneyNear]]), rows: hillsboroughRoll, id: (row) => row.FOLIO },
   'fl-sarasota': floridaCheck('12115', 'Sarasota 68 Final NAL 2026.zip', [['living_sqft', 'TOT_LVG_AREA', near(1)], ['market_value', 'JV', moneyNear]]),
   'fl-seminole': floridaCheck('12117', 'Seminole 69 Final NAL 2026.zip', [['living_sqft', 'TOT_LVG_AREA', near(1)], ['market_value', 'JV', moneyNear]]),
   'fl-broward': floridaCheck('12011', 'Broward 16 Final NAL 2026.zip', [['living_sqft', 'TOT_LVG_AREA', near(1)], ['gross_sqft', 'TOT_LVG_AREA', near(1)], ['market_value', 'JV', moneyNear]]),
