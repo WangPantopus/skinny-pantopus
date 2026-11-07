@@ -244,11 +244,12 @@ object BusinessProfileMapper {
         return scoped.ifEmpty { rows }
     }
 
+    /** By day, then by opening time: the hours reads order by day only. */
     private fun buildHours(
         rows: List<BusinessHoursDto>,
         weekday: Int,
     ): List<BusinessHoursRow> =
-        rows.sortedBy { it.dayOfWeek }.map { row ->
+        rows.sortedWith(compareBy<BusinessHoursDto> { it.dayOfWeek }.thenBy { minutes(it.openTime) ?: -1 }).map { row ->
             val dayIndex = row.dayOfWeek.coerceIn(0, 6)
             val isClosed = row.isClosed == true
             val overnight =

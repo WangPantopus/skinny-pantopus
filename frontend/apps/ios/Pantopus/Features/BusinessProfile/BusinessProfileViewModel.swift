@@ -507,8 +507,9 @@ extension BusinessProfileViewModel {
         return scoped.isEmpty ? rows : scoped
     }
 
+    /// By day, then by opening time: the hours reads order by day only.
     private func buildHours(from rows: [BusinessHoursDTO], weekday: Int) -> [BusinessHoursRow] {
-        rows.sorted { $0.dayOfWeek < $1.dayOfWeek }.map { row in
+        rows.sorted { ($0.dayOfWeek, minutes($0.openTime) ?? -1) < ($1.dayOfWeek, minutes($1.openTime) ?? -1) }.map { row in
             let dayIndex = max(0, min(6, row.dayOfWeek))
             let isClosed = row.isClosed == true
             let time = if isClosed {
