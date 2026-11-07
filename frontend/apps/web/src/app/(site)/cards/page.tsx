@@ -1,0 +1,35 @@
+// ============================================================
+// /cards — every Christmas card, where a shared picture's slip sends people
+// ("Send one at pantopus.com/cards"). Public and indexable. Hidden unless the
+// launch key card_table is on (src/lib/featureFlags.ts). ?ref= is the invite
+// code of whoever shared it, kept for sign-up.
+// ============================================================
+
+import type { Metadata, Viewport } from 'next';
+import { notFound } from 'next/navigation';
+import { APP_WEB_URL } from '@pantopus/utils';
+import { PublicCardsPage, PublicCardsTrouble } from '@/components/mailbox/cards/PublicCards';
+import { fetchPublicCardDesigns, shareRefFrom } from '@/lib/publicShare';
+
+const TITLE = 'Christmas cards you can send on Pantopus';
+const DESCRIPTION = 'Pick a card and send it to someone. It arrives with their morning mail, and they open it like real mail.';
+const IMAGE = { url: '/holiday-cards/share/christmas-2026-08-link.jpg', width: 1200, height: 630, alt: 'A Christmas card lying on its open envelope' };
+
+export const metadata: Metadata = {
+  metadataBase: new URL(APP_WEB_URL),
+  title: TITLE,
+  description: DESCRIPTION,
+  alternates: { canonical: '/cards' },
+  robots: { index: true, follow: true },
+  openGraph: { type: 'website', url: '/cards', siteName: 'Pantopus', title: TITLE, description: DESCRIPTION, images: [IMAGE] },
+  twitter: { card: 'summary_large_image', title: TITLE, description: DESCRIPTION, images: [IMAGE.url] },
+};
+
+export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#171e2d' };
+
+export default async function AllCardsPage({ searchParams }: { searchParams: Promise<{ ref?: string | string[] }> }) {
+  const { data, status } = await fetchPublicCardDesigns();
+  if (status === 404) notFound();
+  if (!data) return <PublicCardsTrouble />;
+  return <PublicCardsPage designs={data.designs} collections={data.collections ?? []} inviteCode={shareRefFrom((await searchParams).ref)} />;
+}

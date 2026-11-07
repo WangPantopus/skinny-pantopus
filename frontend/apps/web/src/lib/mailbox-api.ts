@@ -136,10 +136,10 @@ export async function sendHolidayCard(data: {
   design: string;
   message: string;
   arrival: HolidayCardArrival;
-  to: { user_id: string } | { email: string };
+  to: { user_id: string } | { email: string } | { link: true };
   /** The draft's request ID (packages/api sendHolidayCard). */
   request_id?: string;
-}): Promise<{ card: SentHolidayCard }> {
+}): Promise<{ card: SentHolidayCard; link?: string }> {
   return call(() => mailbox.sendHolidayCard(data));
 }
 

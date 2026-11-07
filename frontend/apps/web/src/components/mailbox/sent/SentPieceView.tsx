@@ -20,9 +20,13 @@ import useMailAddressee from '../useMailAddressee';
 import CardFront from '../cards/CardFront';
 import CardBack from '../cards/CardBack';
 import CardFlip from '../cards/CardFlip';
+import CardShareSheet from '../cards/CardShareSheet';
+import CardTable from '../cards/CardTable';
 import { askTakeBack, takeBackMessage } from '../cards/takeBack';
 import { shortDay, WAX } from '../cards/cardArt';
-import { sentEnvelope, sentFirst, sentStatusLine, trailLabel, trailWhen } from './sentWords';
+import CardLinkActions from '../cards/CardLinkActions';
+import { linkOpened, sentEnvelope, sentEnvelopeName, sentFirst, sentStatusLine, trailLabel, trailWhen } from './sentWords';
+import { launchFeatures } from '@/lib/featureFlags';
 
 const label = 'text-[11px] font-semibold uppercase leading-4 tracking-[0.06em] text-app-text-secondary';
 const shadow = 'rounded-[3px] shadow-[0_14px_30px_rgba(60,40,10,0.28)]';
@@ -61,6 +65,8 @@ export default function SentPieceView({ id }: { id: string }) {
   const takeBack = useTakeBackHolidayCard();
   const [showBack, setShowBack] = useState(false);
   const [takeBackError, setTakeBackError] = useState<string | null>(null);
+  const [onTable, setOnTable] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const backToSent = () => router.push('/app/mailbox/sent');
 
   if (isLoading) {
@@ -105,13 +111,16 @@ export default function SentPieceView({ id }: { id: string }) {
   const front = card.design ? (
     <CardFront design={card.design} caption={card.caption} paper={card.paper ?? '#f7eee0'} year={card.year ?? new Date(piece.sent_at).getFullYear()} mailedOn={piece.envelope.postmarked_on ?? piece.sent_at} className={shadow} />
   ) : null;
-  const back = <CardBack paper={card.paper ?? '#f7eee0'} fromName={piece.envelope.from} year={card.year ?? new Date(piece.sent_at).getFullYear()} message={piece.note} className={shadow} />;
+  const back = <CardBack number={card.number} paper={card.paper ?? '#f7eee0'} fromName={piece.envelope.from} year={card.year ?? new Date(piece.sent_at).getFullYear()} message={piece.note} className={shadow} />;
   const delivered = piece.status === 'delivered' || piece.status === 'claimed';
-  const theirMailbox = delivered ? `In ${first}’s Mailbox` : (piece.by_email ? 'Once they claim it' : `Addressed to ${first}`);
+  const byLinkUnopened = Boolean(piece.by_link) && !linkOpened(piece);
+  const theirMailbox = delivered
+    ? `In ${first}’s Mailbox`
+    : byLinkUnopened ? 'Once someone opens your link' : (piece.by_email ? 'Once they claim it' : `Addressed to ${first}`);
 
   const doTakeBack = async () => {
     const sentToday = calendarDay(new Date(piece.sent_at), timeZone) === calendarDay(new Date(), timeZone);
-    if (!(await askTakeBack({ byEmail: piece.by_email, sentToday }))) return;
+    if (!(await askTakeBack({ byEmail: piece.by_email, byLink: piece.by_link, sentToday }))) return;
     setTakeBackError(null);
     takeBack.mutate(piece.id, {
       onSuccess: () => { toast.success('You took your card back.'); router.push('/app/mailbox/sent'); },
@@ -122,18 +131,52 @@ export default function SentPieceView({ id }: { id: string }) {
 
   return (
     <div className="flex h-full flex-col md:overflow-hidden" data-testid="mailSentPiece">
+      {/* The same full-screen moment they have. Your own note is shown, so it opens as it did for them, seal or none. */}
+      {onTable && card.design ? (
+        <CardTable
+          card={{ design: card.design, number: card.number, caption: card.caption, paper: card.paper ?? '#f7eee0', table: card.table, year: card.year ?? new Date(piece.sent_at).getFullYear(), sealed: false }}
+          note={piece.note}
+          fromName={piece.envelope.from}
+          toName={sentEnvelopeName(piece)}
+          mailedOn={piece.envelope.postmarked_on || piece.sent_at}
+          closeLabel="Back to your card"
+          paused={sharing}
+          onShare={() => setSharing(true)}
+          onClose={() => setOnTable(false)}
+        />
+      ) : null}
+      {/* A card still sealed for them shares as the sealed envelope, here too: the surprise is theirs. */}
+      {sharing && card.design ? (
+        <CardShareSheet
+          details={{
+            card: { design: card.design, number: card.number, caption: card.caption, paper: card.paper ?? '#f7eee0', table: card.table, year: card.year ?? new Date(piece.sent_at).getFullYear(), sealed: piece.sealed },
+            note: piece.note,
+            fromName: piece.envelope.from,
+            mailedOn: piece.envelope.postmarked_on || piece.sent_at,
+          }}
+          slug={card.slug}
+          mine
+          onClose={() => setSharing(false)}
+        />
+      ) : null}
       <BackToSent onBack={backToSent} />
       <div className="flex-1 md:min-h-0 md:overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl px-4 pb-8 pt-1 md:px-7 md:pt-6">
-          <h2 className="text-2xl font-bold leading-8 tracking-tight text-app-text">Your {piece.kind === 'letter' ? 'letter' : 'card'} to {name}</h2>
+          <h2 className="text-2xl font-bold leading-8 tracking-tight text-app-text">{byLinkUnopened ? 'Your card by link' : <>Your {piece.kind === 'letter' ? 'letter' : 'card'} to {name}</>}</h2>
           <p className="mt-0.5 text-sm leading-5 text-app-text-secondary">Sent {shortDay(piece.sent_at)} · {sentStatusLine(piece)}</p>
 
           <div className="mt-5 grid gap-5 [grid-template-areas:'envelope'_'card'_'trail'_'take'] md:grid-cols-[340px_minmax(0,1fr)] md:[grid-template-areas:'envelope_trail'_'card_card'_'take_take']">
             <section aria-label={theirMailbox} className="[grid-area:envelope]">
               <h3 className={label}>{theirMailbox}</h3>
               <div className="mt-2.5 max-w-[358px]">
-                <MailPiece item={sentEnvelope(piece)} recipientName={piece.to_name || ''} opened={false} />
+                <MailPiece item={sentEnvelope(piece)} recipientName={sentEnvelopeName(piece)} opened={false} />
               </div>
+              {/* While nobody has opened it, its link can still be copied. */}
+              {piece.by_link && piece.can_take_back ? (
+                <div className="mt-3 max-w-[358px]">
+                  <CardLinkActions cardId={piece.id} fromName={piece.envelope.from} again />
+                </div>
+              ) : null}
             </section>
 
             {piece.kind === 'letter' ? (
@@ -147,6 +190,26 @@ export default function SentPieceView({ id }: { id: string }) {
               <div className="mt-3.5 grid max-w-[584px] items-start gap-5 md:grid-cols-2">
                 <div className="mx-auto w-full max-w-[300px] md:max-w-none">
                   {front ? <CardFlip showBack={showBack} front={front} back={back} /> : back}
+                  {front && launchFeatures.cardTable ? (
+                    <div className="mt-4 flex flex-wrap justify-center gap-2">
+                      <button
+                        type="button"
+                        data-testid="mailSentOnTable"
+                        onClick={() => setOnTable(true)}
+                        className={`${button} border border-[#d6cbb6] bg-[#fffdf8] px-5 text-[15px] text-[#374151] hover:bg-[#f5efe3] focus-visible:ring-[#8b1d1d]`}
+                      >
+                        See it the way they did
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="mailSentShare"
+                        onClick={() => setSharing(true)}
+                        className={`${button} border border-[#d6cbb6] bg-[#fffdf8] px-5 text-[15px] text-[#374151] hover:bg-[#f5efe3] focus-visible:ring-[#8b1d1d]`}
+                      >
+                        Share
+                      </button>
+                    </div>
+                  ) : null}
                   {front ? (
                     <div className="mt-4 flex justify-center md:hidden">
                       <button
@@ -201,7 +264,7 @@ export default function SentPieceView({ id }: { id: string }) {
                     <p className="text-sm font-semibold leading-5">Changed your mind?</p>
                     <p className="text-[13px] leading-[18px] text-[#4e5563]">
                       {piece.by_email
-                        ? 'You can take it back until they open it.'
+                        ? (piece.by_link ? 'You can take it back until someone opens it.' : 'You can take it back until they open it.')
                         : `It waits for the carrier until ${clock(piece.take_back_until)} ${shortDay(piece.take_back_until)} (your clock).`}
                     </p>
                   </div>

@@ -1,0 +1,51 @@
+/* The page a card's link opens (launch key card_table): the table in its default slate colour, the shut envelope, and
+   the words. Always dark, like the table. Sizes that follow large text are in rem; the page scrolls when they outgrow it. */
+.scene {
+  position: fixed; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; color-scheme: dark; background: #1c2233; color: var(--cream);
+  --cream: #f6ecd9; --cream-soft: rgba(246, 236, 217, 0.78); --cream-faint: rgba(246, 236, 217, 0.62);
+  --glass: rgba(24, 18, 16, 0.36); --glass-line: rgba(246, 236, 217, 0.22); --gold: #d8b76f; --ink: #2a1c14;
+  --serif: ui-serif, 'New York', Georgia, 'Times New Roman', serif;
+  font: 0.9375rem/1.35 -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+}
+.layers { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
+.table { position: absolute; inset: -14px; background-size: cover; background-position: 50% 50%; background-blend-mode: multiply; }
+.light { position: absolute; inset: -40px; background-size: 100% 100%; mix-blend-mode: soft-light; opacity: 0.88; }
+.vignette { position: absolute; inset: 0; background: radial-gradient(120% 88% at 46% 40%, rgba(0, 0, 0, 0) 44%, rgba(6, 3, 4, 0.46) 100%); }
+.grain { position: absolute; inset: 0; background-size: 128px 128px; opacity: 0.36; mix-blend-mode: overlay; }
+.column {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.25rem; min-height: 100%; width: 100%; max-width: 26.25rem; margin: 0 auto; box-sizing: border-box;
+  padding: max(1.5rem, env(safe-area-inset-top, 0px)) max(1.25rem, env(safe-area-inset-right, 0px)) max(1.5rem, env(safe-area-inset-bottom, 0px)) max(1.25rem, env(safe-area-inset-left, 0px));
+}
+.envelope { position: relative; width: min(66vw, 38dvh, 300px); aspect-ratio: 1200 / 1392; transform: rotate(-2.4deg); filter: drop-shadow(3px 8px 11px rgba(0, 0, 0, 0.55)); flex: none; }
+.envelope img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
+.envelope img.flap { height: auto; }
+.envelope img.wax { left: 35.2%; top: 26.3%; width: 29.6%; height: auto; }
+.words { width: 100%; text-align: center; }
+.words h1 { margin: 0; font: 400 1.75rem/1.2 var(--serif); text-wrap: balance; }
+.from { margin: 0.25rem 0 0; font: italic 1.125rem/1.3 var(--serif); color: var(--cream-soft); overflow-wrap: anywhere; }
+.badge { display: inline-block; margin-top: 0.5rem; padding: 0.1875rem 0.625rem; border-radius: 1rem; background: var(--glass); box-shadow: inset 0 0 0 0.5px var(--glass-line); font-size: 0.75rem; font-weight: 600; color: var(--cream-soft); }
+.sealed { margin: 0.5rem 0 0; font-size: 0.875rem; color: var(--cream-soft); }
+.actions { width: 100%; display: flex; flex-direction: column; gap: 0.625rem; }
+.actions h2 { margin: 0; text-align: center; font: 600 1.0625rem/1.3 -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif; }
+.line { margin: 0; text-align: center; font-size: 0.875rem; line-height: 1.4; color: var(--cream-soft); overflow-wrap: anywhere; }
+.small { margin: 0; text-align: center; font-size: 0.75rem; line-height: 1.4; color: var(--cream-faint); overflow-wrap: anywhere; }
+.small a { color: var(--cream); font-weight: 600; text-decoration: underline; }
+.scene .primary, .scene .secondary {
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; min-height: 3rem; padding: 0.5rem 1rem; box-sizing: border-box; border: 0; border-radius: 0.75rem; cursor: pointer;
+  font: 600 0.9375rem/1.2 -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif; text-decoration: none; transition: filter 0.15s ease;
+}
+.scene .primary { background: var(--cream); color: var(--ink); }
+.scene .secondary { background: var(--glass); box-shadow: inset 0 0 0 1px var(--glass-line); color: var(--cream); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.scene .primary:hover, .scene .secondary:hover { filter: brightness(1.08); }
+.scene .primary:disabled { opacity: 0.6; cursor: default; }
+.scene a:focus-visible, .scene button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.alert { padding: 0.75rem 0.875rem; border-radius: 0.75rem; background: rgba(24, 18, 16, 0.6); box-shadow: inset 0 0 0 0.5px var(--glass-line); font-size: 0.8125rem; line-height: 1.45; overflow-wrap: anywhere; }
+.alert b { font-weight: 600; }
+.status { display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-size: 0.875rem; color: var(--cream-soft); }
+
+/* Drawn inside Look it over: the same page in a frame, doing nothing. */
+.framed { position: relative; inset: auto; overflow: hidden; border-radius: 1.25rem; isolation: isolate; }
+.framed .layers { position: absolute; }
+.framed .column { min-height: 30rem; padding: 1.5rem 1.25rem; }
+.framed .envelope { width: min(52%, 190px); }
+.framed .primary, .framed .secondary { cursor: default; }

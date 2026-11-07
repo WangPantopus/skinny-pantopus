@@ -63,6 +63,10 @@ public enum LaunchFeature: String, CaseIterable, Sendable {
     /// four-step card flow. Needs `mailbox` on too. A card that comes is
     /// drawn as a card either way, as on the web.
     case holidayCards = "holiday_cards"
+    /// 13. The Christmas card on the table (founder decision, 2026-11-06): the
+    /// whole phone becomes the table where a card opens, a folded card on the
+    /// iPhone Duo, and sharing. Needs `mailbox` and `holiday_cards` on too.
+    case cardTable = "card_table"
 }
 
 /// Read-only switches for the features cut from the first launch.
@@ -128,6 +132,10 @@ public enum LaunchFeatures {
 
     public static var holidayCards: Bool {
         isEnabled(.holidayCards)
+    }
+
+    public static var cardTable: Bool {
+        isEnabled(.cardTable) && isEnabled(.mailbox) && isEnabled(.holidayCards)
     }
 
     /// Parses a comma-separated key list ("all" enables every feature).

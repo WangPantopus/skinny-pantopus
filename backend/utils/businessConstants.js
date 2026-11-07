@@ -6,7 +6,7 @@
 const RESERVED_USERNAMES = new Set([
   'search', 'map', 'new', 'api', 'admin', 'settings', 'public', 'private',
   'dashboard', 'discover', 'explore', 'login', 'signup', 'register', 'auth',
-  'account', 'help', 'support', 'about', 'terms', 'privacy', 'billing',
+  'account', 'help', 'support', 'about', 'terms', 'privacy', 'billing', 'cards',
   'team', 'inbox', 'chat', 'mail', 'mailbox', 'gigs', 'feed', 'pulse',
   'home', 'homes', 'businesses', 'business', 'notifications', 'profile',
   'pantopus', 'app', 'status', 'docs', 'blog', 'press', 'careers', 'verify',

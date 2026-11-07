@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const crypto = require('crypto');
 const supabaseAdmin = require('../config/supabaseAdmin');
@@ -2006,6 +2007,35 @@ router.get('/cards/designs', (req, res) => {
     designs: holidayCards.DESIGNS.map(({ id, number, slug, caption, paper, collection, table }) =>
       ({ id, number, slug, caption, paper, collection, table })),
   });
+});
+
+// POST /cards/shared: how sharing is used, nothing else. A hand can't share faster than this.
+const cardSharedLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 120,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => `card-shared-${req.user?.id}`,
+  message: { error: 'Too many at once. Try again later.', code: 'CARD_SHARED_LIMIT' },
+});
+const cardSharedSchema = Joi.object({
+  design: Joi.string().max(64).required(),
+  kind: Joi.string().valid('instagram', 'facebook', 'email', 'link', 'save', 'more').required(),
+  format: Joi.string().valid('story', 'post', 'link').required(),
+  with_note: Joi.boolean().required(),
+});
+
+/**
+ * POST /api/mailbox/cards/shared  { design, kind, format, with_note }
+ * Someone shared a card (launch key card_table): a count for the founder of whether sharing works. The picture and note
+ * stay on their device; this records only which picture and how. Answers 204.
+ */
+router.post('/cards/shared', verifyToken, cardSharedLimiter, validate(cardSharedSchema), async (req, res) => {
+  if (!cardTableOn()) return sendCardsOff(res);
+  const { design, kind, format, with_note: withNote } = req.body;
+  if (!holidayCards.designById(design)) return res.status(400).json({ error: 'Pick one of the Christmas cards.', code: 'CARD_DESIGN_UNKNOWN' });
+  await logMailEvent('holiday_card_shared', null, req.user.id, { design, kind, format, withNote });
+  return res.status(204).end();
 });
 
 /**

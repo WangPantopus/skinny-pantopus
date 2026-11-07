@@ -27,12 +27,12 @@ export interface EscrowedMailView {
     previewText: string | null;
     mailType: string | null;
     outcomeDescription: string | null;
-    /** The address or number the letter was sent to, masked (j***@example.com). */
+    /** The address or number the letter was sent to, masked (j***@example.com). Empty for a card sent by link: any account can open it. */
     sentTo: string;
     createdAt: string;
     expiresAt: string | null;
     /** A Christmas card: the page says only that it is one (no picture, no note), and whether it's sealed. */
-    card?: { holiday: string; year: number; sealed: boolean } | null;
+    card?: { holiday: string; year: number; sealed: boolean; by_link?: boolean } | null;
   };
 }
 
