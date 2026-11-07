@@ -54,6 +54,17 @@ public struct EditAccessCodeFormView: View {
     }
 
     public var body: some View {
+        // A new code shows nothing yet; only an existing one asks.
+        if viewModel.isEditing {
+            SensitiveScreenGuard(reason: AccessCodesCopy.guardReason, onRejected: onClose) {
+                form
+            }
+        } else {
+            form
+        }
+    }
+
+    private var form: some View {
         FormShell(
             title: viewModel.isEditing && canShowContent && !viewModel.canManage ? "Access code" : viewModel.title,
             // Save appears only once the current read allows changes, as on Android.

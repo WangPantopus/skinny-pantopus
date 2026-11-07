@@ -2,10 +2,10 @@
 //  AppLockPreferenceTests.swift
 //  PantopusTests
 //
-//  The app-lock `enabled` preference now lives in the Keychain (it must
-//  survive a reinstall — design §8), with a one-time migration from the
-//  legacy `UserDefaults` key. Uses a throw-away defaults suite and the
-//  in-memory secure store; never touches the real Keychain.
+//  The whole-app lock's preference lives in the Keychain (it must survive a
+//  reinstall — design §8). The old "sensitive actions" switch's settings are
+//  dropped. Uses a throw-away defaults suite and the in-memory secure store;
+//  never touches the real Keychain.
 //
 
 import XCTest
@@ -36,47 +36,43 @@ final class AppLockPreferenceTests: XCTestCase {
     func testDefaultIsOffAndWritesNothing() {
         let manager = makeManager()
         XCTAssertFalse(manager.isEnabled(forUserID: "u_1"))
-        XCTAssertNil(store.get(SecureStoreKey.appLockEnabled("u_1")))
+        XCTAssertNil(store.get(SecureStoreKey.appLockOnLeave("u_1")))
         XCTAssertNil(defaults.object(forKey: "appLock.u_1.enabled"))
     }
 
-    func testLegacyUserDefaultsValueIsMigratedIntoTheKeychainOnce() {
+    func testOldSwitchNoLongerLocksTheAppAndIsForgotten() throws {
+        try store.set("1", for: SecureStoreKey.retiredAppLockEnabled("u_1"))
         defaults.set(true, forKey: "appLock.u_1.enabled")
+        defaults.set("enabled", forKey: "appLock.u_1.setupPrompt")
         let manager = makeManager()
 
-        XCTAssertTrue(manager.isEnabled(forUserID: "u_1"))
-        XCTAssertEqual(store.get(SecureStoreKey.appLockEnabled("u_1")), "1", "copied into the Keychain")
-        XCTAssertNil(defaults.object(forKey: "appLock.u_1.enabled"), "legacy copy removed")
+        manager.configure(userID: "u_1")
 
-        // A later legacy write (older build downgrade) no longer wins.
-        defaults.set(false, forKey: "appLock.u_1.enabled")
-        XCTAssertTrue(manager.isEnabled(forUserID: "u_1"), "the Keychain is the single source of truth")
-    }
-
-    func testLegacyFalseIsMigratedAsFalse() {
-        defaults.set(false, forKey: "appLock.u_1.enabled")
-        let manager = makeManager()
-        XCTAssertFalse(manager.isEnabled(forUserID: "u_1"))
-        XCTAssertEqual(store.get(SecureStoreKey.appLockEnabled("u_1")), "0")
+        XCTAssertFalse(manager.preferenceEnabled)
+        XCTAssertFalse(manager.isLocked)
+        XCTAssertNil(store.get(SecureStoreKey.retiredAppLockEnabled("u_1")))
         XCTAssertNil(defaults.object(forKey: "appLock.u_1.enabled"))
+        XCTAssertNil(defaults.object(forKey: "appLock.u_1.setupPrompt"))
     }
 
     func testKeychainValueIsPerUser() throws {
-        try store.set("1", for: SecureStoreKey.appLockEnabled("u_1"))
+        try store.set("1", for: SecureStoreKey.appLockOnLeave("u_1"))
         let manager = makeManager()
         XCTAssertTrue(manager.isEnabled(forUserID: "u_1"))
         XCTAssertFalse(manager.isEnabled(forUserID: "u_2"))
-        XCTAssertEqual(SecureStoreKey.appLockEnabled("u_1"), "appLockEnabled.u_1", "CONTRACT client storage key")
+        XCTAssertEqual(SecureStoreKey.appLockOnLeave("u_1"), "appLockOnLeave.u_1", "CONTRACT client storage key")
     }
 
-    func testClearPreferenceRemovesBothCopies() throws {
-        try store.set("1", for: SecureStoreKey.appLockEnabled("u_1"))
+    func testClearPreferenceRemovesEveryCopy() throws {
+        try store.set("1", for: SecureStoreKey.appLockOnLeave("u_1"))
+        try store.set("1", for: SecureStoreKey.retiredAppLockEnabled("u_1"))
         defaults.set(true, forKey: "appLock.u_1.enabled")
         let manager = makeManager()
 
         manager.clearPreference(forUserID: "u_1")
 
-        XCTAssertNil(store.get(SecureStoreKey.appLockEnabled("u_1")))
+        XCTAssertNil(store.get(SecureStoreKey.appLockOnLeave("u_1")))
+        XCTAssertNil(store.get(SecureStoreKey.retiredAppLockEnabled("u_1")))
         XCTAssertNil(defaults.object(forKey: "appLock.u_1.enabled"))
         XCTAssertFalse(manager.isEnabled(forUserID: "u_1"))
     }
