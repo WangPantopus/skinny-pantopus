@@ -1594,6 +1594,7 @@ Write these as `KEY=value` lines (no quotes, one line each) into
 |---|---|---|---|
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | staging project | production project | Supabase → Project Settings → API |
 | `DATABASE_URL` | session pooler URI, port 5432, ending `?sslmode=verify-full&sslrootcert=/app/config/certificates/supabase-prod-ca-2021.crt` | same, production | Supabase → Connect → Session pooler (the direct host is IPv6 only) |
+| `DIRECT_DB_READS` (optional) | `shadow`, then `on` | unset (off); `shadow` once staging runs `on`, then `on` when its summaries show no differences | `backend/config/directDb.js`: the Home permission check reads Postgres over `DATABASE_URL` instead of the Data API (about 5 ms instead of 90) |
 | `PUBLIC_API_BASE_URL` | `https://staging-api.pantopus.com` | `https://api.pantopus.com` | D1 |
 | `APP_URL`, `AUTH_REDIRECT_URL`, `WEB_APP_URL`, `CLIENT_URL`, `FRONTEND_URL`, `PUBLIC_WEB_URL`, `WEB_BASE_URL` | `https://staging.pantopus.com` | `https://pantopus.com` | web address |
 | `APP_URLS` (allowed web origins) | `https://staging.pantopus.com` | `https://pantopus.com,https://www.pantopus.com` | |
