@@ -1079,12 +1079,14 @@ public struct FeedView: View {
             // Whether the reader is at the top decides if new posts slide in or
             // wait behind the pill: where this marker is in the scroll view, not
             // whether it appeared (a pushed post coming back re-appears it).
-            // The list starts below the header, which it scrolls under.
+            // The header's height reaches the list as its safe area, where the
+            // scroll view's coordinates start: 0 is the list's top, just under
+            // the header, whatever its height (at the top this marker is at 12).
             Color.clear
                 .frame(height: 1)
                 .id(Self.listTopID)
-                .onGeometryChange(for: Bool.self) { [threshold = headerHeight - Self.topSlack] proxy in
-                    proxy.frame(in: .scrollView).minY > threshold
+                .onGeometryChange(for: Bool.self) { proxy in
+                    proxy.frame(in: .scrollView).minY > -Self.topSlack
                 } action: { atTop in
                     viewModel.isReadingAtTop = atTop
                 }
