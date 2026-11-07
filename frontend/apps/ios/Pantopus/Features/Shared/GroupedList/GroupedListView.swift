@@ -36,9 +36,11 @@ public struct GroupedListView<DataSource: GroupedListDataSource>: View {
 
     public var body: some View {
         VStack(spacing: Spacing.s0) {
-            topBar
             content
         }
+        // The rows scroll under the bar, which slides away while they scroll
+        // down and comes back near the top (founder request 2026-11-07).
+        .scrollAwayHeader { topBar }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Theme.Color.appBg)
         .task { await dataSource.load() }

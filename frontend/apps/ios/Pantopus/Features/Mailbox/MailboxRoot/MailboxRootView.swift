@@ -41,9 +41,10 @@ public struct MailboxRootView: View {
     }
 
     public var body: some View {
-        VStack(spacing: Spacing.s0) {
-            // The header stays put; the mailbox and the mail scroll under it.
-            topBar
+        // The mailbox and the mail scroll under the header, which slides away
+        // while they scroll down and comes back near the top (founder request
+        // 2026-11-07).
+        Group {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: Spacing.s0) {
@@ -77,6 +78,7 @@ public struct MailboxRootView: View {
                 .modifier(MailboxPlaceKeeper(model: viewModel, openPieceId: openPieceId, proxy: proxy))
             }
         }
+        .scrollAwayHeader { topBar }
         .overlay(alignment: .bottomTrailing) {
             // Writing letters (Mail extras, off for the first launch).
             if let fab = viewModel.fab {
