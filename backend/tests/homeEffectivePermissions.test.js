@@ -314,12 +314,14 @@ test('Home detail does not reconstruct owner authority for a minor from HomeOwne
     created_at: '2026-09-10T00:00:00Z', user: { id: USER, username: 'household-handle' } });
   db.seedTable('HomeOwner', [{ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2', home_id: HOME,
     subject_id: USER, subject_type: 'user', owner_status: 'verified', is_primary_owner: true, verification_tier: 'strong' }]);
+  const context = async () => {
+    const access = await getUserAccess(HOME, USER);
+    return { allowed: true, private: false, user_id: USER, role: access.effective_role_base, permissions: access.permissions };
+  };
   db.setRpcMock(async name => {
-    if (name === 'home_record_context') {
-      const access = await getUserAccess(HOME, USER);
-      return { data: { allowed: true, private: false, user_id: USER,
-        role: access.effective_role_base, permissions: access.permissions }, error: null };
-    }
+    if (name === 'home_record_context') return { data: await context(), error: null };
+    // Every active, verified occupant's context in one call: here, the teen alone.
+    if (name === 'home_member_record_contexts') return { data: [{ user_id: USER, context: await context() }], error: null };
     if (name === 'home_delete_eligibility') return { data: { allowed: false, code: 'HOME_DELETE_ACCESS_DENIED' }, error: null };
     return { data: null, error: { message: 'Unexpected RPC' } };
   });
