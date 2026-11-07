@@ -58,6 +58,13 @@ enum class LaunchFeature(
      * today's card. It needs [MAILBOX] on too. Cards that arrive draw as cards whenever the server sends them.
      */
     HOLIDAY_CARDS("holiday_cards"),
+
+    /**
+     * 13. The Christmas card on the table (founder decision, 2026-11-06): a card opens full screen on its own table, in
+     * its own light, with the real envelope, wax seal and paper; sharing it; and sending one by link. It needs [MAILBOX]
+     * and [HOLIDAY_CARDS] on too. With it off, cards look and work as they did.
+     */
+    CARD_TABLE("card_table"),
 }
 
 /**
@@ -89,6 +96,7 @@ object LaunchFeatures {
     val mailbox: Boolean get() = isEnabled(LaunchFeature.MAILBOX)
     val pulseRedesign: Boolean get() = isEnabled(LaunchFeature.PULSE_REDESIGN)
     val holidayCards: Boolean get() = isEnabled(LaunchFeature.HOLIDAY_CARDS)
+    val cardTable: Boolean get() = isEnabled(LaunchFeature.CARD_TABLE) && mailbox && holidayCards
 
     /** Parses a comma-separated key list ("all" enables every feature). */
     fun parse(raw: String?): Set<LaunchFeature> {

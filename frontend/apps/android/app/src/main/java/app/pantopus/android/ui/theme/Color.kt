@@ -347,6 +347,72 @@ object PantopusColors {
     /** The red envelope's grain — white at 5%. */
     val cardEnvelopeGrain = Color(0x0DFFFFFF)
 
+    // The Christmas card on the table (launch key `card_table`, 2026-11-06), the sample's numbers. The table is always
+    // dark, in light mode and dark mode, like a photo viewer.
+
+    /** The default cloth's colour, slate — `#3B4C6E`. */
+    val tableSlate = Color(0xFF3B4C6E)
+
+    /** The table's night behind everything — `#141013` — and the words on it: cream `#F6ECD9` at 100%, 74% and 50%. */
+    val tableNight = Color(0xFF141013)
+    val tableCream = Color(0xFFF6ECD9)
+    val tableCreamSoft = Color(0xBDF6ECD9)
+    val tableCreamFaint = Color(0x80F6ECD9)
+
+    /** The round and pill buttons' glass: `rgb(24 18 16 / 36%)`, edged cream at 16%. */
+    val tableGlass = Color(0x5C181210)
+    val tableGlassLine = Color(0x29F6ECD9)
+
+    /** A toast `rgb(24 18 16 / 88%)`, the ⋯ menu `rgb(28 22 20 / 94%)`, the sideways tip's cover `rgb(10 8 8 / 88%)`. */
+    val tableToast = Color(0xE0181210)
+    val tableMenu = Color(0xF01C1614)
+    val tableTipCover = Color(0xE00A0808)
+
+    /** The share sheet `#211B19` over `rgb(6 4 4 / 58%)`; its controls in cream at 8%, 10%, 14% and 18%. */
+    val tableSheet = Color(0xFF211B19)
+    val tableSheetScrim = Color(0x94060404)
+    val tableCream8 = Color(0x14F6ECD9)
+    val tableCream10 = Color(0x1AF6ECD9)
+    val tableCream14 = Color(0x24F6ECD9)
+    val tableCream18 = Color(0x2EF6ECD9)
+
+    /** Gold: the focus ring and CHRISTMAS CARD `#D8B76F`; the stamped "Do not open until Christmas" `#ECD7A4`. */
+    val tableGold = Color(0xFFD8B76F)
+    val tableGoldInk = Color(0xFFECD7A4)
+
+    /** The envelope's names in the pen: to `#FBEED2`, from `#F4E2BF`; the to-name's edge `rgb(60 8 10 / 50%)`. */
+    val tableEnvelopeTo = Color(0xFFFBEED2)
+    val tableEnvelopeFrom = Color(0xFFF4E2BF)
+    val tableEnvelopeToEdge = Color(0x803C080A)
+
+    /** The day printed on the envelope's postmark: `rgb(19 13 15 / 80%)`. */
+    val tablePostmarkDay = Color(0xCC130D0F)
+
+    /** The back of the card: the pen `#1B2A5C`, its rules `rgb(74 84 118 / 20%)`, FROM `#6A5F52`, the foot `#8A7F70`. */
+    val tablePen = Color(0xFF1B2A5C)
+    val tableRule = Color(0x334A5476)
+    val tableFromInk = Color(0xFF6A5F52)
+    val tableFootInk = Color(0xFF8A7F70)
+
+    /** The card's face: its printing's postmark ink at 86%, the picture's hairline `rgb(70 50 20 / 25%)`, edges at 20%. */
+    val tablePostmarkInk = Color(0xDBB2413A)
+    val tablePictureLine = Color(0x40463214)
+    val tableEdgeShade = Color(0x336E501E)
+
+    /** The light: the vignette's edge `rgb(6 3 4 / 46%)`; the window's warm wash on phones without soft light. */
+    val tableVignette = Color(0x75060304)
+
+    /** The bands of light: the sheen `rgb(255 250 235 / 50%)` and `/ 10%`, the gold's glint `rgb(255 238 186 / 90%)`. */
+    val tableSheen = Color(0x80FFFAEB)
+    val tableSheenTail = Color(0x1AFFFAEB)
+    val tableGlint = Color(0xE6FFEEBA)
+    val tableGlintEdge = Color(0x00FFE8AA)
+
+    /** The paper slip on a shared picture: paper `#F4EAD6`, its name `#3A2F26`, its line `#5B4D3F`. */
+    val tableSlip = Color(0xFFF4EAD6)
+    val tableSlipName = Color(0xFF3A2F26)
+    val tableSlipLine = Color(0xFF5B4D3F)
+
     // Ballot illustration — mirrors iOS `Ballot/*` in the asset catalog.
 
     /**
